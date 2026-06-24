@@ -1,13 +1,25 @@
 [package]
 name = "catgraph-dl"
-description = "Categorical Deep Learning substrate (Gavranović et al., ICML 2024)"
+description = "Categorical Deep Learning substrate: Para 2-category, monad/F-(co)algebras, free-monad RNN unrolling, comonoid weight tying. Anchored to Gavranović et al., 'Categorical Deep Learning is an Algebraic Theory of All Architectures' (ICML 2024)."
+keywords = ["category-theory", "deep-learning", "para-category", "monad", "f-algebra"]
+categories = ["mathematics", "science"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
-[features]
-default = []
-
 [dependencies]
+catgraph = { workspace = true }
+catgraph-applied = { workspace = true }
+either.workspace = true
+# DeepCausality substrate — DEPS-ONLY, reserved for the eventual
+# `endofunctor::EndoFunctor` → `deep_causality_haft` HKT/Arrow migration
+# (deferred; tracked as a follow-up issue). NOT imported in any `catgraph-dl`
+# source file — `rg deep_causality src` is doc-only. Rig `Zero`/`One` are
+# inherited transitively from `catgraph-applied`'s `Rig`.
+deep_causality_num = { workspace = true }
+deep_causality_haft = { workspace = true }
+
+[dev-dependencies]
+proptest.workspace = true
