@@ -1,6 +1,8 @@
 [package]
 name = "catgraph-physics"
-description = "Wolfram-physics extensions for catgraph (DPO rewriting, multiway, branchial)"
+description = "Wolfram-physics extensions for catgraph: hypergraph DPO rewriting, multiway evolution, gauge theory, branchial spectral analysis, discrete-time interval algebra"
+keywords = ["hypergraph", "multiway", "rewriting", "spectral", "wolfram-physics"]
+categories = ["mathematics", "science", "simulation"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +10,22 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-default = []
+default = ["parallel"]
+# Pass-through of `catgraph/parallel`. This crate has no direct rayon sites yet,
+# but `--no-default-features` consumers expect the transitive catgraph build to
+# be single-threaded too.
+parallel = ["catgraph/parallel"]
 
 [dependencies]
+catgraph = { workspace = true }
+rustworkx-core.workspace = true
+nalgebra.workspace = true
+petgraph = "0.8"
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+
+[[bench]]
+name = "wasserstein_bench"
+harness = false
