@@ -283,6 +283,14 @@ dependencies = [
 [[package]]
 name = "catgraph-physics"
 version = "0.1.0"
+dependencies = [
+ "catgraph",
+ "criterion",
+ "nalgebra",
+ "petgraph",
+ "proptest",
+ "rustworkx-core",
+]
 
 [[package]]
 name = "cc"
