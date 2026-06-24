@@ -1,6 +1,8 @@
 [package]
 name = "catgraph"
-description = "Strict Fong & Spivak (2019) Hypergraph Categories — core"
+description = "Category-theoretic graph structures: cospans, spans, Frobenius algebras, and morphisms in symmetric monoidal categories — strict Fong-Spivak 2019"
+keywords = ["category-theory", "cospan", "monoidal", "frobenius", "operad"]
+categories = ["mathematics", "science", "data-structures"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +10,44 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-default = []
+default = ["parallel", "rustworkx"]
+# `parallel` enables rayon-based data parallelism at a few hot call sites
+# (named_cospan::find_nodes_by_name_predicate, frobenius::hflip). Disable for
+# single-threaded `wasm32-wasip1`; keep on for `-threads` and native targets.
+parallel = ["dep:rayon"]
+# `rustworkx` gates the petgraph-backed APIs (`Cospan::to_graph`,
+# `NamedCospan::to_graph`, `MorphismSystem`). `--no-default-features` drops the
+# transitive rustworkx-core + ndarray + serde chain for slim / WASM builds.
+rustworkx = ["dep:rustworkx-core"]
 
 [dependencies]
+either.workspace = true
+itertools.workspace = true
+permutations.workspace = true
+rayon = { workspace = true, optional = true }
+rustworkx-core = { workspace = true, optional = true }
+log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
+thiserror = "2"
+union-find = "0.4"
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+rand.workspace = true
+env_logger = "0.11"
+
+[[example]]
+name = "cospan"
+required-features = ["rustworkx"]
+
+[[example]]
+name = "frobenius"
+required-features = ["rustworkx"]
+
+[[bench]]
+name = "pushout"
+harness = false
+
+[[bench]]
+name = "pullback"
+harness = false

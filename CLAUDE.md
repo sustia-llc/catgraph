@@ -7,8 +7,9 @@ Category-theoretic graph structures in Rust — strict Fong & Spivak,
 
 ```sh
 cargo build  --workspace
-cargo test   --workspace          # every change: green before merge
-cargo clippy --workspace --all-targets -- -W clippy::pedantic
+cargo test   --workspace                                  # every change: green before merge
+cargo clippy --workspace --all-targets -- -D warnings     # the CI gate (default lints)
+cargo clippy --workspace --all-targets -- -W clippy::pedantic   # advisory local pass (non-gating)
 cargo fmt    --all --check
 ```
 

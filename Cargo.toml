@@ -29,13 +29,13 @@ deep_causality_haft = "=0.3.3"
 
 # --- math / graph — numeric-only, NOT an algebraic substrate ---
 # (members opt in with `{ workspace = true, optional = true }`; `optional` is illegal here.)
-nalgebra       = "0.34"   # field-bounded paths only
+nalgebra       = "0.35"   # field-bounded paths only
 permutations   = "0.1"    # backs braiding — DC Arrow has none
-rustworkx-core = "0.17"
+rustworkx-core = "0.18"
 
 # --- general ---
-either       = "1.15"
-itertools    = "0.14"
+either       = "1.6.1"
+itertools    = "0.15"
 num          = "0.4"   # narrowed to BigInt / Complex / ToPrimitive / pow (NOT Zero/One — those come from DC)
 rand         = "0.10"
 rayon        = "1.12"
