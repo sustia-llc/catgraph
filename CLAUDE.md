@@ -21,7 +21,9 @@ catgraph (F&S core) ─▶ catgraph-applied ─▶ catgraph-magnitude
 ```
 
 `deep_causality_num` / `deep_causality_haft` pinned `=0.3.3` (fallback git rev `b1aba1e`).
-Adopted incrementally from Phase 2; not all crates depend on them yet.
+`catgraph-applied` + `catgraph-magnitude` depend on `deep_causality_num` (`Zero`/`One`
+only); `catgraph-dl` carries `num` + `haft` **deps-only** (reserved for the
+EndoFunctor→haft migration, #12); `catgraph` (core) + `catgraph-physics` are DC-free.
 
 ## Paper anchors
 
@@ -41,4 +43,7 @@ Adopted incrementally from Phase 2; not all crates depend on them yet.
 
 Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-> **Status:** active reboot. The proven crates land phase-by-phase; this skeleton is Phase 0.
+> **Status:** crate migration complete — all five proven crates (core / applied /
+> magnitude / physics / dl) landed on the thin DC substrate (Phases 0–5, merged).
+> Phase 6 (`catgraph-syntax`, Arrow frontend) is a deferred milestone (#5). Open
+> follow-ups + audit/README reconciliation tracked as GitHub issues (e.g. #7).
