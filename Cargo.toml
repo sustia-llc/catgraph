@@ -1,0 +1,46 @@
+[workspace]
+resolver = "2"
+members = [
+    "catgraph",
+    "catgraph-applied",
+    "catgraph-magnitude",
+    "catgraph-physics",
+    "catgraph-dl",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["sustia-llc"]
+repository = "https://github.com/sustia-llc/catgraph"
+
+[workspace.dependencies]
+# --- intra-workspace (path wins locally; version present for a future publish) ---
+catgraph           = { path = "catgraph",           version = "0.1.0", default-features = false }
+catgraph-applied   = { path = "catgraph-applied",   version = "0.1.0" }
+catgraph-magnitude = { path = "catgraph-magnitude", version = "0.1.0" }
+
+# --- DeepCausality thin substrate — PIN EXACT (DC is 0.x, churning).
+#     Fallback: { git = "https://github.com/deepcausality-rs/deep_causality", rev = "b1aba1e" }
+#     Inert until a member opts in (Phase 2+); not fetched at Phase 0.
+deep_causality_num  = "=0.3.3"
+deep_causality_haft = "=0.3.3"
+
+# --- math / graph — numeric-only, NOT an algebraic substrate ---
+# (members opt in with `{ workspace = true, optional = true }`; `optional` is illegal here.)
+nalgebra       = "0.34"   # field-bounded paths only
+permutations   = "0.1"    # backs braiding — DC Arrow has none
+rustworkx-core = "0.17"
+
+# --- general ---
+either       = "1.15"
+itertools    = "0.14"
+num          = "0.4"   # narrowed to BigInt / Complex / ToPrimitive / pow (NOT Zero/One — those come from DC)
+rand         = "0.10"
+rayon        = "1.12"
+rust_decimal = "1"
+
+# --- dev ---
+proptest  = "1"
+criterion = { version = "0.8", features = ["html_reports"] }
