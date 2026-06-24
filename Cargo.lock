@@ -264,6 +264,14 @@ dependencies = [
 [[package]]
 name = "catgraph-dl"
 version = "0.1.0"
+dependencies = [
+ "catgraph",
+ "catgraph-applied",
+ "deep_causality_haft",
+ "deep_causality_num",
+ "either",
+ "proptest",
+]
 
 [[package]]
 name = "catgraph-magnitude"
@@ -457,6 +465,12 @@ name = "crunchy"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
+
+[[package]]
+name = "deep_causality_haft"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9deeb116ca39f26de64ea24a9d817906d5b517160e6088425bbf1c2218d3fa0"
 
 [[package]]
 name = "deep_causality_num"
