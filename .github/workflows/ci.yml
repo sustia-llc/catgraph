@@ -9,6 +9,33 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+      # Phase-2 re-substrate guard: `Zero`/`One` resolve through
+      # `deep_causality_num`. This catches num's `One`/`Zero` being brought into
+      # scope as usable identities — unaliased braced/single imports (incl.
+      # multi-line, via `-U`) AND qualified call sites (`num::Zero::zero()`,
+      # `<T as num::Zero>`). `\bnum::` is anchored so `deep_causality_num::` is
+      # not matched, and the `(?!\s+as)` lookahead skips deliberately *aliased*
+      # forms (z.rs's `One as NumOne` for inner BigInt arithmetic), so z.rs
+      # needs no exclusion and a future *unaliased* stray there is still caught.
+      # Only temperley_lieb.rs + linear_combination.rs legitimately import num's
+      # unaliased One/Zero (the num::Complex<i32> coefficient substrate); the
+      # real invariant is enforced at compile time by
+      # catgraph-applied/tests/rig_dc_substrate.rs — this guard is a supplement.
+      - name: grep-guard num::{One,Zero}
+        run: |
+          matches=$(rg -n -U -P \
+            -e '\bnum::\{[^}]*\b(?:One|Zero)\b(?!\s+as)' \
+            -e '\buse\s+num::(?:One|Zero)\b' \
+            -e '\bnum::(?:One|Zero)::' \
+            -e '\bas\s+num::(?:One|Zero)\b' \
+            catgraph-applied/src \
+            -g '!temperley_lieb.rs' -g '!linear_combination.rs' || true)
+          if [ -n "$matches" ]; then
+            echo "::error::num's One/Zero used outside the re-substrate exception list:"
+            echo "$matches"
+            exit 1
+          fi
+          echo "grep-guard ok: no stray num::{One,Zero}"
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
