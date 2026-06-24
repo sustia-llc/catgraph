@@ -1,6 +1,8 @@
 [package]
 name = "catgraph-applied"
-description = "Applied category-theory extensions for catgraph (Fong & Spivak 2018)"
+description = "Applied category theory extensions for catgraph: Petri nets, E_n operads, Temperley-Lieb, wiring diagrams, linear combinations, props, operad algebras and functors"
+keywords = ["category-theory", "operad", "petri-net", "temperley-lieb", "wiring-diagram"]
+categories = ["mathematics", "science", "data-structures"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +10,63 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-default = []
+default = ["parallel", "rustworkx"]
+# `parallel` enables rayon + rayon_cond::CondIterator at the two HashMap
+# `into_par_iter` sites in linear_combination and the two `par_bridge` sites
+# in temperley_lieb::non_crossing. With the feature off, those sites fall
+# back to plain `.into_iter()`. Phase W.1.
+parallel = ["dep:rayon", "dep:rayon-cond", "catgraph/parallel"]
+# `f64-rig` exposes the mat_f64 module: nalgebra bridge for MatR<F64Rig>
+# (determinant, try_inverse, DMatrix roundtrip). Opt-in; off by default to
+# keep the nalgebra compile cost out of the way for Tropical / Bool / user
+# rigs that can't use field-specific operations anyway.
+f64-rig = ["dep:nalgebra"]
+# `rustworkx` enables the `temperley_lieb` module which depends on
+# `rustworkx-core::petgraph` for the connectivity check at the heart of
+# `BrauerMorphism::compose`. Default-on for source-compatibility with
+# existing consumers. Opt-out via `default-features = false` for slim
+# builds that only need rigs, props, enrichment, or magnitude substrate.
+rustworkx = ["dep:rustworkx-core"]
+# `internal-bench` — Benchmark-only: exposes internal APIs
+# (`CongruenceClosure::atom_canonical_for_bench`) for bench fixtures
+# only. **NOT public API.** Drives the `presentation::atom_canonical_n*`
+# group in `benches/presentation_bench.rs`. Opt-in only (NOT in `default`).
+internal-bench = []
 
 [dependencies]
+catgraph = { workspace = true }
+deep_causality_num = { workspace = true }
+either.workspace = true
+itertools.workspace = true
+nalgebra = { workspace = true, optional = true }
+# `num` is narrowed to BigInt / Complex / ToPrimitive / pow ONLY — Zero/One are
+# re-sourced from `deep_causality_num` (Phase 2 re-substrate). A CI grep-guard
+# keeps `num::{Zero,One}` from creeping back outside the documented exception
+# list (z.rs, temperley_lieb.rs, petri_net.rs, e2_operad.rs).
+num.workspace = true
+permutations.workspace = true
+rand.workspace = true
+rayon = { workspace = true, optional = true }
+rayon-cond = { version = "0.4", optional = true }
+rust_decimal.workspace = true
+rustworkx-core = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+
+[[bench]]
+name = "rayon_thresholds"
+harness = false
+
+[[bench]]
+name = "mat_ops_bench"
+harness = false
+
+[[bench]]
+name = "functor_bench"
+harness = false
+
+[[bench]]
+name = "presentation_bench"
+harness = false

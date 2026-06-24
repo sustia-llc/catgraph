@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 0db4c28f0ff1aa66fd440dbe18ed67395c5311edf0870d962c467fd3a40af6eb # shrinks to a = Compose(Compose(Generator(F), Generator(F)), Compose(Identity(1), Generator(F))), b = Identity(1), c = Compose(Compose(Generator(F), Generator(F)), Generator(F))
+cc 9803108153568be41b37602a16406aabf5cfe0c64b1b3e6997287b87375c90fd # shrinks to f = Compose(Braid(1, 1), Braid(1, 1)), g = Compose(Compose(Generator(F), Generator(F)), Compose(Generator(F), Generator(F))), h = Tensor(Generator(F), Identity(1)), k = Compose(Identity(1), Generator(F))
