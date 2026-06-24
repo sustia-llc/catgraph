@@ -1,6 +1,8 @@
 [package]
 name = "catgraph-magnitude"
-description = "Magnitude of enriched categories + magnitude homology (Bradley–Vigneaux 2025; Leinster)"
+description = "Magnitude of enriched categories for catgraph: Lawvere metric spaces, Tsallis entropy, Möbius inversion, and BV 2025 closed-form magnitude"
+keywords = ["category-theory", "magnitude", "entropy", "enriched-category", "information-theory"]
+categories = ["mathematics", "science"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +10,35 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-default = []
+# `rustworkx` propagates the flag down to both `catgraph` and
+# `catgraph-applied` (pulling rustworkx-core + petgraph + ndarray transitively).
+# Default-on; opt-out via `default-features = false` for a slim pure-math build.
+default = ["rustworkx"]
+rustworkx = ["catgraph/rustworkx", "catgraph-applied/rustworkx"]
+# Dev-only cross-validation against `events555/modularsnf` (marker feature;
+# gates compilation of tests/snf_modularsnf_integer_oracle.rs).
+modularsnf-oracle = []
 
 [dependencies]
+catgraph = { workspace = true }
+catgraph-applied = { workspace = true }
+deep_causality_num = { workspace = true }
+# `num` is kept for `BigInt` + `ToPrimitive` only (integer-exact SNF / CRT lift
+# and BigInt→i64 rank recovery). DC has no arbitrary-precision BigInt, so the
+# custom integer SNF (Storjohann + Newman) and `Z(BigInt)` stay on `num`.
+# Rig `Zero`/`One` come from `deep_causality_num` (inherited via the `Rig` bound).
+num.workspace = true
+primal = "0.3"
+
+[dev-dependencies]
+proptest.workspace = true
+criterion.workspace = true
+# Dev-only oracle for tests/snf_modularsnf_integer_oracle.rs (gated by the
+# `modularsnf-oracle` feature). Cargo disallows optional dev-deps, so these are
+# unconditional; the test source is `#![cfg(feature = "modularsnf-oracle")]`.
+modularsnf = { git = "https://github.com/events555/modularsnf", rev = "d62535e" }
+ndarray = "0.16"
+
+[[bench]]
+name = "magnitude_bench"
+harness = false
