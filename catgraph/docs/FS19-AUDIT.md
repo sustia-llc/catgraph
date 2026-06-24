@@ -13,6 +13,8 @@
 > `catgraph-magnitude`, `catgraph-physics`, and `catgraph-dl`. The FS 2019 core (`cospan`,
 > `span`, `named_cospan`, `frobenius/`, `compact_closed`, `cospan_algebra`,
 > `hypergraph_category`, `hypergraph_functor`, `equivalence`, `finset`, `monoidal`) is fully intact.
+>
+> **⚠️ Reboot note (2026-06-24).** Written pre-reboot; the version stamps (Phase 0.5, catgraph v0.10.x–v0.12.0, the test-count `520 passed`, the Release-history references) predate the reboot to `sustia-llc/catgraph` (workspace pinned `0.1.0`, GitHub-issue tracked). Coverage content is current: Phase 2 (#1) realized **Ex 2.16** in sibling `catgraph-applied::mat_kron` (+ partial `trace`), reflected in the tables below. Holistic version reconciliation is tracked in #7.
 
 **Status legend:**
 - ✅ DONE — implemented and tested
@@ -27,7 +29,7 @@
 | §1 Introduction | 6 | 2 | 0 | 1 | 9 |
 | §2.1 Cospan-algebras | 3 | 2 | 2 | 0 | 7 |
 | §2.2 Frobenius monoids | 3 | 2 | 2 | 1 | 8 |
-| §2.3 Hypergraph categories | 3 | 6 | 2 | 2 | 13 |
+| §2.3 Hypergraph categories | 4 | 6 | 1 | 2 | 13 |
 | §2.4 Critiques | 0 | 0 | 2 | 0 | 2 |
 | §2.5 Operads | 0 | 0 | 0 | 1 | 1 |
 | §3.1 Compact closed | 7 | 0 | 0 | 0 | 7 |
@@ -37,11 +39,11 @@
 | §4.1 H → A direction | 5 | 2 | 2 | 1 | 10 |
 | §4.2 A → H direction | 5 | 1 | 1 | 1 | 8 |
 | §4.3 The equivalence | 1 | 1 | 2 | 1 | 5 |
-| **TOTAL** | **37** | **21** | **25** | **10** | **93** |
+| **TOTAL** | **38** | **21** | **24** | **10** | **93** |
 
 **Headline numbers (after Phase 0.5):**
-- **40% DONE / 23% PARTIAL / 27% MISSING / 11% N/A**
-- Of the 25 missing items: 6 are §3.3 (explicitly deferred), 6 are LinRel/non-strict examples (deferred), 3 are §3.4 strictification (deferred), and most of the remainder are cross-Λ functoriality items that require parametric-Λ machinery beyond catgraph's type system.
+- **41% DONE / 23% PARTIAL / 26% MISSING / 11% N/A**
+- Of the 24 missing items: 6 are §3.3 (explicitly deferred), 5 are LinRel/non-strict examples (deferred; Ex 2.16 FdVect is no longer here — realized in `catgraph-applied::mat_kron`, Phase 2 #1), 3 are §3.4 strictification (deferred), and most of the remainder are cross-Λ functoriality items that require parametric-Λ machinery beyond catgraph's type system.
 - **Phase 0.5 closed 5 gaps + 1 bonus**: Prop 3.4 (explicit comp cospan form), Prop 4.6 (initiality proptest), compose_names_direct, Lemma 4.3 (A_F natural transformation), Lemma 4.9 (F_α io functor), plus a bug fix to `two_layer_simplify` that let `permutation_automatic` come out of `#[ignore]`.
 
 ## Per-section detail
@@ -54,7 +56,7 @@
 | Eq 2: Frobenius generator decomposition | ✅ | frobenius/operations.rs | from_decomposition |
 | Eq 3: alternative wiring | ➖ | — | visual variant of Eq 2 |
 | Eq 4: cospan A→N←B for the running example | ✅ | named_cospan.rs::new | core type |
-| Eq 5: hierarchy of category types (cat → mon → traced → hyper) | ⚠️ | — | implicit; no explicit `TracedMonoidalCategory` layer (CLAUDE.md says "OK because hypergraph subsumes it") |
+| Eq 5: hierarchy of category types (cat → mon → traced → hyper) | ⚠️ | — | implicit; no explicit `TracedMonoidalCategory` layer in core (CLAUDE.md says "OK because hypergraph subsumes it"). Sibling `catgraph-applied::trace` provides a concrete partial trace over the Kronecker HC (Phase 2 #1). |
 | Eq 6: operadic substitution as a compositional view | ✅ | operadic.rs (trait) | impl currently in wiring_diagram.rs — **Phase 3 note:** `wiring_diagram.rs` moves to `catgraph-applied`; the `Operadic` *trait* stays in catgraph core |
 | Eq 7: labeled cospan diagram (m → p ← n) | ✅ | cospan.rs | core type |
 | Eq 8: Hyp_OF(Λ) ≅ Lax(Cospan_Λ, Set) | ✅ | equivalence.rs | morphism direction via CospanAlgebraMorphism + roundtrip tests |
@@ -101,7 +103,7 @@
 | Ex 2.14: Cospan(C) for C with colimits as hypergraph cat | ⚠️ | — | only Cospan_Λ on FinSet_Λ, not general Cospan(C) |
 | Ex 2.15: Span(C) when C^op has limits | ⚠️ | span.rs | only Span on FinSet_Λ |
 | Ex 2.15: Rel as hypergraph cat | ⚠️ | span.rs::Rel | Rel exists; HypergraphCategory impl missing |
-| Ex 2.16: FdVect with chosen basis as hypergraph cat | ❌ | — | not implemented |
+| Ex 2.16: FdVect with chosen basis as hypergraph cat | ✅ | sibling `catgraph-applied::mat_kron` | Kronecker/Hadamard genuine HC over a rig (Phase 2 #1); Hadamard SCFM μ/δ/η/ε as inherent generators, speciality δ;μ=id (n=2,3,5). Realized in the applied crate, not core. |
 | Remark 2.17: unit coherence is a NEW axiom vs older defs | ➖ | — | theoretical |
 | Prop 2.18: strict case ⟹ unit coherence automatic | ✅ | — | catgraph relies on this implicitly (cospans are strict) |
 | Ex 2.19: non-strict counterexample requiring unit coherence | ❌ | — | not implemented |
@@ -234,8 +236,9 @@ Flat bulleted index of every ❌ MISSING entry across the per-section tables abo
 ### §2.3 Hypergraph categories
 
 - Hyp 2-category (with monoidal nat trans as 2-morphisms) — **[different-target-category]** (1-categorical vs 2-categorical)
-- Ex 2.16: FdVect with chosen basis as hypergraph cat — **[different-target-category]**
 - Ex 2.19: non-strict counterexample requiring unit coherence — **[different-target-category]**
+
+*(Ex 2.16 FdVect-with-chosen-basis is no longer missing — realized in sibling `catgraph-applied::mat_kron`, Phase 2 #1.)*
 
 ### §2.4 Critiques
 
@@ -289,11 +292,11 @@ Flat bulleted index of every ❌ MISSING entry across the per-section tables abo
 | Disposition class | Count | Resolution |
 |---|---|---|
 | paper-acknowledged | 6 (all of §3.3) | Stay missing. Paper says explicitly: this is fibration analysis, not needed for Thm 1.2. |
-| different-target-category | 11 (§2.2 LinRel, §2.3 Hyp 2-cat + FdVect + Ex 2.19, §2.4 LinRel, §3.4 strictification, §4.3 LinRel) | Stay missing in catgraph. Would require LinRel / FdVect / 2-categorical machinery — a different crate's job. |
+| different-target-category | 10 (§2.2 LinRel, §2.3 Hyp 2-cat + Ex 2.19, §2.4 LinRel, §3.4 strictification, §4.3 LinRel) | Stay missing in catgraph core. Would require LinRel / 2-categorical machinery — a different crate's job. (Ex 2.16 FdVect was here; now realized in sibling `catgraph-applied::mat_kron`, Phase 2 #1.) |
 | cross-Λ-parametric | 5 (§2.1 Eq 9 + Prop 2.1, §3.2 Cor 3.13 + Cor 3.15, §4.3 naturality in Λ) | Stay missing until Rust's type system grows parametric-over-Lambda traits, OR catgraph adds runtime-dispatched cross-Λ machinery (out of scope for the slim baseline). |
 | universal-property-API | 1 (§3.2 Thm 3.14) | Could be added without new machinery — but only if a concrete consumer surfaces the need. Currently no consumer demand. |
 
-**Net assessment of the table above:** of 23 ❌ items, **22 are structurally outside catgraph's scope** (different category / parametric Λ / paper-acknowledged fibration). The single discretionary item is **Thm 3.14 universal-property API**, which is dormant by choice, not by mathematical obstacle.
+**Net assessment of the table above:** of 22 ❌ items, **21 are structurally outside catgraph core's scope** (different category / parametric Λ / paper-acknowledged fibration). The single discretionary item is **Thm 3.14 universal-property API**, which is dormant by choice, not by mathematical obstacle.
 
 ## Critical findings
 
@@ -325,7 +328,7 @@ The `#[ignore]`'d `permutation_automatic` test in `frobenius/operations.rs` was 
 - §3.3 io/ff factorization (entire section, 6 items) — paper itself notes this is for fibration analysis; not needed for Thm 1.2
 - §3.4 strictification (Thm 3.22) — implicit since catgraph works in OF case; making it explicit requires 2-category machinery
 - Thm 3.14 universal property — paper-deferred
-- LinRel examples (2.10, 2.11, 2.16, 2.20, 2.21, 4.14) — paper-deferred
+- LinRel examples (2.10, 2.11, 2.20, 2.21, 4.14) — paper-deferred
 - Cross-Λ functoriality (Prop 2.1, Cor 3.13, Cor 3.15) — would require parametric Λ machinery beyond catgraph's current type system
 
 ### Items that are implicit / "morally correct" but not explicit

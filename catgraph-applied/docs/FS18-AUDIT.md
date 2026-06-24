@@ -8,6 +8,8 @@
 > **Note on scope:** *Seven Sketches* is a 334-page textbook covering seven topics in applied CT. Only **Chapters 4, 5, and 6** contain formal content relevant to catgraph-applied's modules. Chapters 1–3 (orders, enrichment, databases) and Chapter 7 (toposes) establish foundational CT that catgraph core already provides or that is outside catgraph's scope entirely.
 >
 > **Relationship to catgraph core audit:** The core catgraph crate tracks Fong & Spivak's *Hypergraph Categories* (arXiv:1806.08304v3, 2019) — the research paper that formalizes the §6.3 content into a full equivalence theorem. See [`catgraph/docs/FS19-AUDIT.md`](../../catgraph/docs/FS19-AUDIT.md) for the core audit. This audit covers the *textbook* content that goes beyond that paper: decorated cospans, operads and their algebras, props, signal flow, and wiring diagrams for monoidal/compact-closed/hypergraph categories.
+>
+> **⚠️ Reboot note (2026-06-24).** This audit was written in the pre-reboot tsondru workspace. Its version stamps (catgraph-applied v0.5.2, catgraph v0.12.0, the Release-history table) and the `catgraph-coalition` / `catgraph-magnitude` external references predate the reboot to `sustia-llc/catgraph` (workspace now pinned `0.1.0`, GitHub-issue tracked, release ceremony dropped). The *coverage content* below is current: Phase 2 (#1) re-substrated `Rig` onto `deep_causality_num` and added `mat_kron` (Ex 2.16) + `trace`, reflected inline. Holistic version reconciliation is tracked in #7.
 
 **Status legend:**
 - ✅ DONE — implemented and tested
@@ -84,7 +86,7 @@
 
 | Item | Status | Location | Notes |
 |---|---|---|---|
-| Def 5.36: rig (semiring) | ✅ | catgraph-applied::rig | `Rig` trait (blanket impl over `num_traits::{Zero,One}` + Add + Mul) + 4 concrete instances: `BoolRig` (∨,∧), `UnitInterval` ([0,1] Viterbi), `Tropical` ([0,∞], min, +), `F64Rig`. `verify_rig_axioms` + `BaseChange<UnitInterval>` for `Tropical`. Shipped in catgraph-applied v0.5.0. |
+| Def 5.36: rig (semiring) | ✅ | catgraph-applied::rig | `Rig` trait (blanket impl over `deep_causality_num::{Zero,One}` + Add + Mul; re-substrated from the `num` crate in Phase 2 #1 — `Rig` stays a native semiring, never a DC `Ring`) + 4 concrete instances: `BoolRig` (∨,∧), `UnitInterval` ([0,1] Viterbi), `Tropical` ([0,∞], min, +), `F64Rig`. `verify_rig_axioms` + `BaseChange<UnitInterval>` for `Tropical`. Shipped in catgraph-applied v0.5.0. |
 | Def 5.45: SFG_R = Free(G_R) (signal flow graphs as free prop) | ✅ | catgraph-applied::sfg | `SignalFlowGraph<R>` with 5 primitive generators from Eq 5.52 (Copy 1→2, Discard 1→0, Add 2→1, Zero 0→1, Scalar(r) 1→1) plus derived `copy_n`/`discard_n`. Shipped in catgraph-applied v0.5.0. |
 | Def 5.50: Mat(R) prop of R-matrices | ✅ | catgraph-applied::mat | `MatR<R>` pure-rig matrix prop. F&S convention: morphism m→n is m×n matrix. Composable/Monoidal/SymmetricMonoidalMorphism over any `Rig`; block_diagonal tensor. `mat_f64` nalgebra bridge behind opt-in `f64-rig` feature. Shipped in catgraph-applied v0.5.0. |
 | Thm 5.53: prop functor S: SFG_R → Mat(R) | ✅ | catgraph-applied::sfg_to_mat | `sfg_to_mat` structural recursion over `PropExpr<SfgGenerator<R>>`; generator table matches Eq 5.52 exactly. Functoriality (S(f∘g) = S(f)·S(g), S(f⊗g) = S(f)⊕S(g)) verified on all 4 rigs via 13 integration tests. Shipped in catgraph-applied v0.5.0. |
@@ -314,7 +316,9 @@ This section maps every catgraph workspace module to its paper provenance (or la
 | `linear_combination.rs` | — | §5.3.1 (rig infrastructure) | — | Free R-module R[T]. Provides the coefficient algebra that [FS18] §5.3 presupposes. Not a formal item in either paper — it's algebraic infrastructure. |
 | `e1_operad.rs` | — | §6.5 Rough Def 6.91 | May [May72], Boardman-Vogt [BV73] | Little-intervals operad. [FS18] §6.5 defines operads abstractly; the *specific* E₁ operad is from the algebraic topology literature. |
 | `e2_operad.rs` | — | §6.5 Rough Def 6.91 | May [May72], Boardman-Vogt [BV73] | Little-disks operad. Same: abstract operad definition from [FS18], specific E₂ construction from homotopy theory. |
-| `rig.rs` | — | §5.3.1 Def 5.36 | num_traits (blanket) | `Rig` trait + BoolRig, UnitInterval, Tropical, F64Rig. v0.5.0. |
+| `rig.rs` | — | §5.3.1 Def 5.36 | deep_causality_num (blanket) | `Rig` trait + BoolRig, UnitInterval, Tropical, F64Rig. v0.5.0; `Zero`/`One` re-sourced from `deep_causality_num` in Phase 2 (#1). |
+| `mat_kron.rs` | §2.3 Ex 2.16 | — | Kissinger 2015 (FdVect HC) | `MatKron<R>` Kronecker-tensor **genuine hypergraph category** over a rig; Hadamard SCFM (μ/δ/η/ε) as inherent generators on native `Monoidal`/`Composable`/`SymmetricMonoidalMorphism`; speciality δ;μ=id (n=2,3,5). Phase 2 (#1). |
+| `trace.rs` | §2.6 | — | — | Partial trace `Tr_X(f)` built from the `mat_kron` cup/cap generators (strict Kronecker; no associators). Phase 2 (#1). |
 | `prop/presentation/mod.rs` | — | §5.2 Def 5.33 | — | `Presentation<G>` with 9-rule SMC canonical form + user equations; `NormalizeEngine` selector (Structural / CongruenceClosure) + `eq_mod_functorial<F>` method (v0.5.2). File split out of a single `prop/presentation.rs` in v0.5.1 when the CC backend landed. v0.5.0/v0.5.1/v0.5.2. |
 | `sfg.rs` | — | §5.3 Def 5.45 | — | `SignalFlowGraph<R>` free prop on G_R generators. v0.5.0. |
 | `mat.rs` | — | §5.3 Def 5.50 | — | `MatR<R>` pure-rig matrix prop. v0.5.0. |
