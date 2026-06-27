@@ -10,7 +10,7 @@
 //! - [`wiring_diagram`] — operadic substitution on named cospans
 //! - [`petri_net`] — place/transition nets with cospan bridge
 //! - [`temperley_lieb`] — Temperley-Lieb / Brauer algebra via perfect matchings
-//!   (requires `rustworkx` feature; default-on; opt-out via `default-features = false`)
+//!   (composition connectivity via the zero-dep `ultragraph` substrate)
 //! - [`linear_combination`] — formal linear combinations over a coefficient ring
 //!   (used internally by `temperley_lieb`)
 //! - [`e1_operad`] — little-intervals operad (E₁)
@@ -80,7 +80,6 @@ pub mod prop;
 pub mod rig;
 pub mod sfg;
 pub mod sfg_to_mat;
-#[cfg(feature = "rustworkx")]
 pub mod temperley_lieb;
 pub mod trace;
 pub mod wiring_diagram;

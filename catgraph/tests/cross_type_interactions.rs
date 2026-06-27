@@ -140,45 +140,7 @@ fn named_cospan_operations_match_inner_cospan() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Cospan to_graph node and edge counts
-// ---------------------------------------------------------------------------
-
-#[cfg(feature = "rustworkx")]
-#[test]
-fn cospan_to_graph_produces_correct_counts() {
-    // Cospan with:
-    //   middle = ['A', 'B', 'C']  (3 middle nodes)
-    //   left   = [0, 1, 2]        (3 left boundary nodes, each -> distinct middle)
-    //   right  = [0, 2]           (2 right boundary nodes)
-    // Total graph nodes: 3 (middle) + 3 (left) + 2 (right) = 8
-    // Total graph edges: 3 (left->middle) + 2 (right->middle) = 5
-    let cospan: Cospan<char> = Cospan::new(vec![0, 1, 2], vec![0, 2], vec!['A', 'B', 'C']);
-
-    let (left_nodes, middle_nodes, right_nodes, graph) =
-        cospan.to_graph(|_lambda| ("node", "edge"));
-
-    assert_eq!(left_nodes.len(), 3, "left boundary node count");
-    assert_eq!(middle_nodes.len(), 3, "middle node count");
-    assert_eq!(right_nodes.len(), 2, "right boundary node count");
-    assert_eq!(graph.node_count(), 8, "total node count (3+3+2)");
-    assert_eq!(graph.edge_count(), 5, "total edge count (3+2)");
-
-    // Cospan where multiple boundary nodes share the same middle target.
-    //   middle = ['X']
-    //   left   = [0, 0, 0]   (3 left nodes all mapping to middle 0)
-    //   right  = [0]          (1 right node mapping to middle 0)
-    let fan: Cospan<char> = Cospan::new(vec![0, 0, 0], vec![0], vec!['X']);
-
-    let (fan_left, fan_mid, fan_right, fan_graph) = fan.to_graph(|_| ("n", "e"));
-    assert_eq!(fan_left.len(), 3);
-    assert_eq!(fan_mid.len(), 1);
-    assert_eq!(fan_right.len(), 1);
-    assert_eq!(fan_graph.node_count(), 5, "1 middle + 3 left + 1 right");
-    assert_eq!(fan_graph.edge_count(), 4, "3 left edges + 1 right edge");
-}
-
-// ---------------------------------------------------------------------------
-// 5. Permutation cospan via from_permutation
+// 4. Permutation cospan via from_permutation
 // (LinearCombination ring axioms moved to catgraph-applied::tests::linear_combination_coverage)
 // ---------------------------------------------------------------------------
 

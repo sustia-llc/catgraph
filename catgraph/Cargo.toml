@@ -10,22 +10,21 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-default = ["parallel", "rustworkx"]
+default = ["parallel"]
 # `parallel` enables rayon-based data parallelism at a few hot call sites
 # (named_cospan::find_nodes_by_name_predicate, frobenius::hflip). Disable for
 # single-threaded `wasm32-wasip1`; keep on for `-threads` and native targets.
 parallel = ["dep:rayon"]
-# `rustworkx` gates the petgraph-backed APIs (`Cospan::to_graph`,
-# `NamedCospan::to_graph`, `MorphismSystem`). `--no-default-features` drops the
-# transitive rustworkx-core + ndarray + serde chain for slim / WASM builds.
-rustworkx = ["dep:rustworkx-core"]
 
 [dependencies]
 either.workspace = true
 itertools.workspace = true
 permutations.workspace = true
 rayon = { workspace = true, optional = true }
-rustworkx-core = { workspace = true, optional = true }
+# `ultragraph` backs `MorphismSystem`'s dependency-graph toposort (acyclicity
+# check in `add_definition_composite` + resolution order in `fill_black_boxes`),
+# replacing the former petgraph/rustworkx-core path with a zero-dep substrate.
+ultragraph = { workspace = true }
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 thiserror = "2"
 union-find = "0.4"
@@ -38,11 +37,9 @@ env_logger = "0.11"
 
 [[example]]
 name = "cospan"
-required-features = ["rustworkx"]
 
 [[example]]
 name = "frobenius"
-required-features = ["rustworkx"]
 
 [[bench]]
 name = "pushout"

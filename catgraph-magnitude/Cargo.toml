@@ -10,11 +10,10 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-# `rustworkx` propagates the flag down to both `catgraph` and
-# `catgraph-applied` (pulling rustworkx-core + petgraph + ndarray transitively).
-# Default-on; opt-out via `default-features = false` for a slim pure-math build.
-default = ["rustworkx"]
-rustworkx = ["catgraph/rustworkx", "catgraph-applied/rustworkx"]
+# magnitude no longer needs a `rustworkx` feature: both `catgraph` and
+# `catgraph-applied` are on the zero-dep `ultragraph` substrate (Track A), so
+# there is no petgraph-backed flag left to forward.
+default = []
 # Dev-only cross-validation against `events555/modularsnf` (marker feature;
 # gates compilation of tests/snf_modularsnf_integer_oracle.rs).
 modularsnf-oracle = []
