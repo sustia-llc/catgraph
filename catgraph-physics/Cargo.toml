@@ -10,17 +10,23 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-default = ["parallel"]
+default = ["parallel", "rustworkx"]
 # Pass-through of `catgraph/parallel`. This crate has no direct rayon sites yet,
 # but `--no-default-features` consumers expect the transitive catgraph build to
 # be single-threaded too.
 parallel = ["catgraph/parallel"]
+# `rustworkx` gates `multiway::branchial_analysis` — the petgraph + rustworkx-core
+# graph algorithms (greedy coloring, k-core, articulation points) on branchial
+# graphs. Default-on for source-compatibility; opt out via `default-features =
+# false` to drop the rustworkx-core → petgraph + ndarray chain for slim / WASM
+# builds (issue #10; parity with the sibling crates' slim-build opt-out).
+rustworkx = ["dep:rustworkx-core", "dep:petgraph"]
 
 [dependencies]
 catgraph = { workspace = true }
-rustworkx-core.workspace = true
+rustworkx-core = { workspace = true, optional = true }
 nalgebra.workspace = true
-petgraph = "0.8"
+petgraph = { version = "0.8", optional = true }
 
 [dev-dependencies]
 criterion.workspace = true
