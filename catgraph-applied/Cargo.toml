@@ -10,7 +10,7 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-default = ["parallel", "rustworkx"]
+default = ["parallel"]
 # `parallel` enables rayon + rayon_cond::CondIterator at the two HashMap
 # `into_par_iter` sites in linear_combination and the two `par_bridge` sites
 # in temperley_lieb::non_crossing. With the feature off, those sites fall
@@ -21,12 +21,6 @@ parallel = ["dep:rayon", "dep:rayon-cond", "catgraph/parallel"]
 # keep the nalgebra compile cost out of the way for Tropical / Bool / user
 # rigs that can't use field-specific operations anyway.
 f64-rig = ["dep:nalgebra"]
-# `rustworkx` enables the `temperley_lieb` module which depends on
-# `rustworkx-core::petgraph` for the connectivity check at the heart of
-# `BrauerMorphism::compose`. Default-on for source-compatibility with
-# existing consumers. Opt-out via `default-features = false` for slim
-# builds that only need rigs, props, enrichment, or magnitude substrate.
-rustworkx = ["dep:rustworkx-core"]
 # `internal-bench` — Benchmark-only: exposes internal APIs
 # (`CongruenceClosure::atom_canonical_for_bench`) for bench fixtures
 # only. **NOT public API.** Drives the `presentation::atom_canonical_n*`
@@ -49,7 +43,9 @@ rand.workspace = true
 rayon = { workspace = true, optional = true }
 rayon-cond = { version = "0.4", optional = true }
 rust_decimal.workspace = true
-rustworkx-core = { workspace = true, optional = true }
+# `temperley_lieb` composition connectivity (zero-dep DC graph substrate;
+# replaced rustworkx-core/petgraph 2026-06-27, Track A).
+ultragraph = { workspace = true }
 
 [dev-dependencies]
 criterion.workspace = true

@@ -129,7 +129,7 @@ See `examples/wasi_smoke_core.rs` for a minimal cospan-composition smoke test.
 
 ## Dependencies
 
-- `rustworkx-core` (optional, default-on via `rustworkx` feature) — graph algorithms
+- `ultragraph` — zero-dependency directed-graph substrate backing `MorphismSystem`'s dependency-graph topological sort
 - `itertools` — iterator utilities
 - `either` — Left/Right sum type for bipartite node types
 - `permutations` — permutation type for symmetric monoidal braiding

@@ -3,7 +3,6 @@
 //! Verifies that operations produce correct results at sizes above
 //! their rayon parallelism thresholds. Does not test performance.
 
-#![cfg(feature = "rustworkx")]
 
 use catgraph::category::{Composable, HasIdentity};
 use catgraph_applied::{linear_combination::LinearCombination, temperley_lieb::BrauerMorphism};

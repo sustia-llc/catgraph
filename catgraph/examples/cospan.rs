@@ -215,11 +215,11 @@ fn mutation() {
 }
 
 // ============================================================================
-// Map and Graph Conversion
+// Map
 // ============================================================================
 
-fn map_and_graph() {
-    println!("=== Map and Graph Conversion ===\n");
+fn map_demo() {
+    println!("=== Map ===\n");
 
     let c = Cospan::new(vec![0, 1], vec![0], vec!['a', 'b']);
 
@@ -227,23 +227,6 @@ fn map_and_graph() {
     let mapped = c.map(|ch| ch.to_ascii_uppercase());
     println!("original middle  = {:?}", c.middle());
     println!("mapped middle    = {:?}", mapped.middle());
-
-    // Convert to petgraph
-    let (left_nodes, middle_nodes, right_nodes, graph) =
-        c.to_graph(|ch| (format!("node:{ch}"), format!("edge:{ch}")));
-    println!("\nto_graph:");
-    println!("  left nodes   = {} ({:?})", left_nodes.len(), left_nodes);
-    println!(
-        "  middle nodes = {} ({:?})",
-        middle_nodes.len(),
-        middle_nodes
-    );
-    println!("  right nodes  = {} ({:?})", right_nodes.len(), right_nodes);
-    println!(
-        "  graph nodes  = {}, edges = {}",
-        graph.node_count(),
-        graph.edge_count()
-    );
     println!();
 }
 
@@ -254,5 +237,5 @@ fn main() {
     monoidal_product();
     permutation_morphisms();
     mutation();
-    map_and_graph();
+    map_demo();
 }

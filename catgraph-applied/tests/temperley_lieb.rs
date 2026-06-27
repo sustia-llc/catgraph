@@ -1,4 +1,3 @@
-#![cfg(feature = "rustworkx")]
 
 use catgraph::category::{Composable, HasIdentity};
 use catgraph::monoidal::Monoidal;

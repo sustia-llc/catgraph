@@ -28,14 +28,26 @@ substrate (numeric backends kept optional).
   `NameAlgebra` (§4.1).
 - The §4 equivalence `Hyp_OF ≅ Cospan-Alg` — Theorem 1.2 in its per-Λ form
   (= Thm 4.13), with Lemmas 4.3 / 4.9 and `CospanToFrobeniusFunctor` (Prop 3.8).
-- `rustworkx` (default-on) feature gating the petgraph-backed APIs; `parallel`
-  (default-on) feature for rayon at hot call sites. `--no-default-features`
-  yields a slim, single-threaded WASI-compatible build.
+- `MorphismSystem` dependency-graph acyclicity (`add_definition_composite`) and
+  bottom-up resolution order (`fill_black_boxes`) run on the zero-dependency
+  `ultragraph` graph substrate (DeepCausality) via `topological_sort`. `parallel`
+  (default-on) feature for rayon at hot call sites. `--no-default-features` yields
+  a slim, single-threaded WASI-compatible build.
+
+### Changed
+
+- Graph substrate moved from `rustworkx-core`/`petgraph` to the zero-dependency
+  `ultragraph` (DeepCausality) for `MorphismSystem` dependency resolution, dropping
+  the `rustworkx-core` → `ndarray` + `serde` transitive chain from this crate. The
+  `rustworkx` feature is removed (no slim-vs-full split remains). The speculative
+  `Cospan::to_graph` / `NamedCospan::to_graph` petgraph exports — which had no
+  in-crate consumers — were removed; they will be reintroduced shaped to a real
+  consumer if one materializes.
 
 ### Notes
 
-- Test posture: 520 (247 unit + 273 integration); slim `--no-default-features`
-  build: 502. Zero `unsafe`.
+- Test posture: 517 (default and `--no-default-features` now identical — removing
+  the `rustworkx` feature collapsed the prior split). Zero `unsafe`.
 - Permanently-deferred paper items (cross-Λ functoriality, strictification,
   §3.3 io/ff factorization, the global Grothendieck form, LinRel examples) are
   catalogued in [`docs/FS19-AUDIT.md`](docs/FS19-AUDIT.md).

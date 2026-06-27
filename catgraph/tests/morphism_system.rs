@@ -1,8 +1,7 @@
 //! Integration tests for `MorphismSystem` DAG-based resolution.
 //!
 //! These tests exercise `add_definition_composite` and `fill_black_boxes`,
-//! which require the `rustworkx` feature (petgraph-backed `DiGraph`).
-#![cfg(feature = "rustworkx")]
+//! backed by the zero-dependency `ultragraph` topological sort.
 
 use catgraph::errors::CatgraphError;
 use catgraph::frobenius::{Contains, InterpretableMorphism, MorphismSystem};

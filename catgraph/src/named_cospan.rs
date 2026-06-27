@@ -474,68 +474,6 @@ where
         }
     }
 
-    /// Convert to a petgraph `Graph`, decorating boundary nodes with port names.
-    ///
-    /// `lambda_decorator` provides `(node_weight, edge_weight)` from labels.
-    /// `port_decorator` further modifies boundary node weights using their port names.
-    ///
-    /// Requires the `rustworkx` feature (enabled by default).
-    ///
-    /// **Divergence note:** the entire method is absent from slim
-    /// (`--no-default-features`) builds — consumers calling `to_graph` get
-    /// a compile-time error (no method found) rather than a runtime
-    /// `CatgraphError`. This is intentional: the return type embeds
-    /// `rustworkx_core` types directly, so there is no sentinel value the
-    /// no-feature path could return. By contrast, methods whose return
-    /// types are feature-independent return a runtime
-    /// `CatgraphError::Interpret` on the no-feature path.
-    ///
-    /// # Panics
-    ///
-    /// Panics if internal graph node indices are invalid (should not occur with well-formed cospans).
-    #[cfg(feature = "rustworkx")]
-    #[allow(clippy::type_complexity)]
-    pub fn to_graph<T, U, F, G>(
-        &self,
-        lambda_decorator: F,
-        port_decorator: G,
-    ) -> (
-        Vec<
-            rustworkx_core::petgraph::stable_graph::NodeIndex<
-                rustworkx_core::petgraph::stable_graph::DefaultIx,
-            >,
-        >,
-        Vec<
-            rustworkx_core::petgraph::stable_graph::NodeIndex<
-                rustworkx_core::petgraph::stable_graph::DefaultIx,
-            >,
-        >,
-        Vec<
-            rustworkx_core::petgraph::stable_graph::NodeIndex<
-                rustworkx_core::petgraph::stable_graph::DefaultIx,
-            >,
-        >,
-        rustworkx_core::petgraph::prelude::Graph<T, U>,
-    )
-    where
-        F: Fn(Lambda) -> (T, U),
-        G: Fn(&mut T, Either<LeftPortName, RightPortName>),
-        RightPortName: Clone,
-    {
-        let (left_nodes, middle_nodes, right_nodes, mut graph) =
-            self.cospan.to_graph(lambda_decorator);
-        for (left_idx, left_node) in left_nodes.iter().enumerate() {
-            let cur_left_weight = graph.node_weight_mut(*left_node).unwrap();
-            let cur_left_name = Left(self.left_names[left_idx].clone());
-            port_decorator(cur_left_weight, cur_left_name);
-        }
-        for (right_idx, right_node) in right_nodes.iter().enumerate() {
-            let cur_right_weight = graph.node_weight_mut(*right_node).unwrap();
-            let cur_right_name = Right(self.right_names[right_idx].clone());
-            port_decorator(cur_right_weight, cur_right_name);
-        }
-        (left_nodes, middle_nodes, right_nodes, graph)
-    }
 }
 
 impl<Lambda, LeftPortName, RightPortName> NamedCospan<Lambda, LeftPortName, RightPortName>
@@ -888,26 +826,6 @@ mod test {
         // Permute right side
         cospan.permute_side(&p, true);
         assert_eq!(cospan.right_names(), &vec![4, 3]);
-    }
-
-    #[cfg(feature = "rustworkx")]
-    #[test]
-    fn named_cospan_to_graph() {
-        let cospan: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0, 1], vec![0], vec!['a', 'b'], vec![1, 2], vec![3]);
-
-        let (left_nodes, middle_nodes, right_nodes, graph) = cospan.to_graph(
-            |c| (c.to_string(), "edge".to_string()),
-            |weight, name| match name {
-                Left(n) => *weight = format!("L{n}"),
-                Right(n) => *weight = format!("R{n}"),
-            },
-        );
-
-        assert_eq!(left_nodes.len(), 2);
-        assert_eq!(middle_nodes.len(), 2);
-        assert_eq!(right_nodes.len(), 1);
-        assert!(graph.node_count() >= 3);
     }
 
     #[test]
