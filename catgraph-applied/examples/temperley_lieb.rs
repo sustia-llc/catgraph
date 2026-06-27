@@ -4,10 +4,8 @@
 //! composition, dagger (involution), tensor product (monoidal),
 //! simplification, and the braid relation (Yang-Baxter equation).
 //!
-//! Requires the `rustworkx` feature (default-on). Build with
-//! `cargo run --example temperley_lieb -p catgraph-applied`.
+//! Build with `cargo run --example temperley_lieb -p catgraph-applied`.
 
-#![cfg(feature = "rustworkx")]
 
 use catgraph::category::{Composable, HasIdentity};
 use catgraph::monoidal::Monoidal;

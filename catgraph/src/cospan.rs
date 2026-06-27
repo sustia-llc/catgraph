@@ -315,83 +315,6 @@ where
             self.middle.iter().map(|l| f(*l)).collect(),
         )
     }
-
-    /// Convert to a petgraph `Graph`. Returns `(left_nodes, middle_nodes, right_nodes, graph)`.
-    ///
-    /// `lambda_decorator` maps each label to `(node_weight, edge_weight)`.
-    ///
-    /// Requires the `rustworkx` feature (enabled by default). Disable via
-    /// `--no-default-features` to obtain a slim build without the
-    /// `rustworkx-core` + `ndarray` + `serde` transitive dep chain.
-    ///
-    /// **Divergence note:** the entire method is absent from slim
-    /// (`--no-default-features`) builds — consumers calling `to_graph` get
-    /// a compile-time error (no method found) rather than a runtime
-    /// `CatgraphError`. This is intentional: the return type embeds
-    /// `rustworkx_core` types directly, so there is no sentinel value the
-    /// no-feature path could return. By contrast, methods like
-    /// `MorphismSystem::add_definition_composite` whose return types are
-    /// feature-independent return a runtime
-    /// `CatgraphError::Interpret { "...requires the rustworkx feature" }`
-    /// on the no-feature path.
-    #[cfg(feature = "rustworkx")]
-    #[allow(clippy::type_complexity)]
-    pub fn to_graph<T, U, F>(
-        &self,
-        lambda_decorator: F,
-    ) -> (
-        Vec<
-            rustworkx_core::petgraph::stable_graph::NodeIndex<
-                rustworkx_core::petgraph::stable_graph::DefaultIx,
-            >,
-        >,
-        Vec<
-            rustworkx_core::petgraph::stable_graph::NodeIndex<
-                rustworkx_core::petgraph::stable_graph::DefaultIx,
-            >,
-        >,
-        Vec<
-            rustworkx_core::petgraph::stable_graph::NodeIndex<
-                rustworkx_core::petgraph::stable_graph::DefaultIx,
-            >,
-        >,
-        rustworkx_core::petgraph::prelude::Graph<T, U>,
-    )
-    where
-        F: Fn(Lambda) -> (T, U),
-    {
-        use rustworkx_core::petgraph::{
-            prelude::Graph,
-            stable_graph::{DefaultIx, NodeIndex},
-        };
-        let mut graph = Graph::<T, U>::new();
-
-        let all_middle_nodes: Vec<_> = self
-            .middle
-            .iter()
-            .map(|mid| graph.add_node(lambda_decorator(*mid).0))
-            .collect();
-
-        let mut all_left_nodes = Vec::with_capacity(self.left.len());
-        for cur_left_target in &self.left {
-            let (node_dec, edge_dec) = lambda_decorator(self.middle[*cur_left_target]);
-            let cur_left_node: NodeIndex<DefaultIx> = graph.add_node(node_dec);
-            all_left_nodes.push(cur_left_node);
-            graph.add_edge(cur_left_node, all_middle_nodes[*cur_left_target], edge_dec);
-        }
-        let mut all_right_nodes = Vec::with_capacity(self.right.len());
-        for cur_right_target in &self.right {
-            let (node_dec, edge_dec) = lambda_decorator(self.middle[*cur_right_target]);
-            let cur_right_node: NodeIndex<DefaultIx> = graph.add_node(node_dec);
-            all_right_nodes.push(cur_right_node);
-            graph.add_edge(
-                cur_right_node,
-                all_middle_nodes[*cur_right_target],
-                edge_dec,
-            );
-        }
-        (all_left_nodes, all_middle_nodes, all_right_nodes, graph)
-    }
 }
 
 /// Fold-compose a chain of cospans into a single composite cospan.
@@ -771,41 +694,6 @@ mod test {
         assert_eq!(cospan.middle.len(), 3);
         assert_eq!(cospan.left, vec![0, 1, 2, 1]);
         assert_eq!(cospan.middle, vec![1, 2, 3]);
-    }
-
-    #[cfg(feature = "rustworkx")]
-    #[test]
-    fn ugly_cospan() {
-        use super::Cospan;
-        use either::{Left, Right};
-        use rustworkx_core::petgraph::Graph;
-        let mut cospan = Cospan::<bool>::empty();
-        cospan.add_boundary_node(Right(Right(false)));
-        cospan.add_boundary_node(Right(Right(true)));
-        cospan.add_middle(true);
-        cospan.add_boundary_node(Right(Right(true)));
-        cospan.add_boundary_node(Right(Right(false)));
-        cospan.add_boundary_node(Right(Left(4)));
-        cospan.add_middle(true);
-        cospan.add_boundary_node(Right(Right(true)));
-        cospan.add_boundary_node(Left(Left(1)));
-        cospan.add_boundary_node(Left(Left(2)));
-        cospan.add_boundary_node(Left(Left(3)));
-        cospan.add_boundary_node(Left(Left(3)));
-        cospan.add_boundary_node(Left(Left(1)));
-        cospan.add_boundary_node(Left(Left(2)));
-        cospan.add_boundary_node(Left(Left(5)));
-        cospan.add_boundary_node(Left(Left(3)));
-        cospan.add_boundary_node(Left(Left(6)));
-        let (_, _, _, _g): (_, _, _, Graph<bool, ()>) = cospan.to_graph(|z| (z, ()));
-        assert_eq!(cospan.right.len(), 6);
-        assert_eq!(cospan.right, vec![0, 1, 3, 4, 4, 6]);
-        assert_eq!(cospan.left.len(), 9);
-        assert_eq!(cospan.left, vec![1, 2, 3, 3, 1, 2, 5, 3, 6]);
-        assert_eq!(
-            cospan.middle,
-            vec![false, true, true, true, false, true, true]
-        );
     }
 
     #[test]

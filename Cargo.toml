@@ -32,6 +32,12 @@ deep_causality_haft = "=0.3.3"
 nalgebra       = "0.35"   # field-bounded paths only
 permutations   = "0.1"    # backs braiding — DC Arrow has none
 rustworkx-core = "0.18"
+# `ultragraph` (DeepCausality zero-dep graph substrate) backs the connectivity /
+# toposort sites in `catgraph` (MorphismSystem) + `catgraph-applied` (Temperley-Lieb
+# composition), having replaced rustworkx-core/petgraph there (Track A, 2026-06-27).
+# rustworkx-core remains only in `catgraph-physics` (coloring + k-core have no
+# ultragraph equivalent; see issue #10).
+ultragraph     = "0.9"
 
 # --- general ---
 either       = "1.6.1"

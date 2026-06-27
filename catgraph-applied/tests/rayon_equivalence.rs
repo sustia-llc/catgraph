@@ -1,5 +1,4 @@
 #![allow(clippy::similar_names)] // `seq_*`/`par_*` binding pairs are the point of these tests
-#![cfg(feature = "rustworkx")]
 
 //! Parallel-vs-sequential equivalence tests for catgraph-applied.
 //!
