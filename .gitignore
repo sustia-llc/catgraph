@@ -2,3 +2,6 @@
 **/*.rs.bk
 *.pdb
 .DS_Store
+
+# Internal design/planning docs (not for the public repo)
+/.claude/docs/
