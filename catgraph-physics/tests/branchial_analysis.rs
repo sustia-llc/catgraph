@@ -2,6 +2,10 @@
     clippy::cast_possible_truncation,  // test fixture sizes are small and fit in i32
     clippy::cast_possible_wrap,
 )]
+// Exercises the rustworkx-gated `branchial_coloring` / `branchial_core_numbers`
+// (issue #10); excluded from `--no-default-features` builds. `BranchialSpectrum`
+// remains covered by the inline unit tests in `branchial_spectrum.rs`.
+#![cfg(feature = "rustworkx")]
 
 //! Integration tests for branchial analysis on real multiway evolutions.
 

@@ -11,6 +11,10 @@
 //! - [`wasserstein_1`]: Transportation simplex W₁ optimal transport solver
 
 pub mod branchial;
+// petgraph/rustworkx-core graph algorithms (coloring, k-core, articulation
+// points) — gated so `--no-default-features` drops the rustworkx-core → ndarray
+// chain, matching the slim-build opt-out the sibling crates offer (issue #10).
+#[cfg(feature = "rustworkx")]
 pub mod branchial_analysis;
 pub mod branchial_spectrum;
 pub mod curvature;
@@ -22,6 +26,7 @@ pub use branchial::{
     BranchialGraph, BranchialStepStats, BranchialSummary, branchial_parallel_step_pairs,
     extract_branchial_foliation, find_all_merge_points,
 };
+#[cfg(feature = "rustworkx")]
 pub use branchial_analysis::{
     branchial_articulation_points, branchial_coloring, branchial_core_numbers,
 };
