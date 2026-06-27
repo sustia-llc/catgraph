@@ -240,6 +240,34 @@ impl LmCategory {
             t > 0.0,
             "magnitude(t) requires t > 0; behavior at t = {t} is unspecified per BV 2025 §3"
         );
+        let space = self.enriched_space()?;
+        let mag: F64Rig = magnitude(&space, t)?;
+        Ok(mag.0)
+    }
+
+    /// Build the `[0, ∞]`-enriched Lawvere metric space `d(x, y) = −ln π(y | x)`
+    /// over `0..n` (`NodeId` = position in [`objects`](Self::objects)), per the
+    /// **BV 2025 §2.10–2.17 prefix-extension semantics** (BTV 2021 §5 metric view).
+    ///
+    /// - `d(i, i) = 0` (identity axiom).
+    /// - For every directed extension path `i = x₀ → … → x_k = j` in the
+    ///   transition table, `π(j | i) = ∏_ℓ π(x_{ℓ+1} | x_ℓ)` (BV 2025 Eq 6) and
+    ///   `d(i, j) = −ln π(j | i)`.
+    /// - When no such path exists the distance is left unset, and
+    ///   [`LawvereMetricSpace::distance`] reports `Tropical(+∞)` (i.e.
+    ///   `π(j | i) = 0`; BV 2025 §2.15).
+    ///
+    /// Shared substrate: [`magnitude`](Self::magnitude) lifts it through the
+    /// Möbius sum; [`yoneda`](Self::yoneda) reads its rows as representable
+    /// copresheaves (BTV 2021). **The transition table must be acyclic** for the
+    /// result to satisfy BV 2025's tree-poset structure.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::Composition`] if the per-source BFS frontier cap
+    /// (`n*n` steps) is exhausted — defense-in-depth against malformed inputs
+    /// (cycles / `prob > 1.0`) that bypass [`add_transition`](Self::add_transition).
+    pub fn enriched_space(&self) -> Result<LawvereMetricSpace<NodeId>, CatgraphError> {
         let n = self.objects.len();
         let objects: Vec<NodeId> = (0..n).collect();
         let mut space = LawvereMetricSpace::new(objects);
@@ -277,7 +305,7 @@ impl LmCategory {
                 if steps_remaining == 0 {
                     return Err(CatgraphError::Composition {
                         message: format!(
-                            "LmCategory::magnitude BFS frontier cap of {frontier_cap} \
+                            "LmCategory::enriched_space BFS frontier cap of {frontier_cap} \
                              steps exhausted from source {i}; check the transition \
                              table for cycles or `prob > 1.0` entries that bypass \
                              add_transition validation"
@@ -318,7 +346,6 @@ impl LmCategory {
             }
         }
 
-        let mag: F64Rig = magnitude(&space, t)?;
-        Ok(mag.0)
+        Ok(space)
     }
 }
