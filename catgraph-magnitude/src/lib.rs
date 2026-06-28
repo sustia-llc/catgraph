@@ -100,6 +100,10 @@ pub mod weighted_cospan;
 pub mod yoneda;
 pub use yoneda::{Copresheaf, semantic_distance, semantic_distance_sym, semantic_hom};
 
+// Deterministic-transition rank — `MH_1(ℓ=0)` = #covering distance-0 (π=1)
+// transitions (a BV 2025 / Leinster–Shulman structural invariant; see module).
+pub mod determinism;
+
 // Phase 6F (v0.2.0) — chain-sum Möbius via Leinster 2013 Prop 2.1.3.
 pub mod mobius_chains;
 
