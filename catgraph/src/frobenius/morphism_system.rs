@@ -132,8 +132,7 @@ where
         // "freeze = compile": algorithms run only on the frozen CSR graph.
         g.freeze();
 
-        Ok(g
-            .topological_sort()?
+        Ok(g.topological_sort()?
             .map(|order| order.into_iter().map(|id| labels[id].clone()).collect()))
     }
 
@@ -153,11 +152,11 @@ where
         new_def: GeneralBlackBoxed,
     ) -> Result<(), CatgraphError> {
         let contained = new_def.contained_labels();
-        let order =
-            self.resolve_order(Some((&new_name, &contained)))
-                .map_err(|e| CatgraphError::Interpret {
-                    context: format!("Dependency graph construction failed: {e:?}"),
-                })?;
+        let order = self
+            .resolve_order(Some((&new_name, &contained)))
+            .map_err(|e| CatgraphError::Interpret {
+                context: format!("Dependency graph construction failed: {e:?}"),
+            })?;
         if order.is_none() {
             return Err(CatgraphError::Interpret {
                 context: format!(

@@ -125,7 +125,10 @@ pub fn copresheaf_from_space(space: &LawvereMetricSpace<NodeId>, x: NodeId) -> C
             (-d).exp()
         })
         .collect();
-    Copresheaf { base: x, extensions }
+    Copresheaf {
+        base: x,
+        extensions,
+    }
 }
 
 /// Asymmetric semantic hom `L̂(a, b) = inf_c min{1, b(c) / a(c)} ∈ [0, 1]`
@@ -185,12 +188,7 @@ mod tests {
     /// Toy autoregressive LM over `⊥ → {a, b} → c`:
     ///   π(a|⊥)=0.6, π(b|⊥)=0.4 (terminal mass 0); π(c|a)=1.0; b terminal.
     fn toy() -> LmCategory {
-        let mut m = LmCategory::new(vec![
-            "⊥".into(),
-            "a".into(),
-            "b".into(),
-            "c".into(),
-        ]);
+        let mut m = LmCategory::new(vec!["⊥".into(), "a".into(), "b".into(), "c".into()]);
         m.add_transition("⊥", "a", 0.6).unwrap();
         m.add_transition("⊥", "b", 0.4).unwrap();
         m.add_transition("a", "c", 1.0).unwrap();
