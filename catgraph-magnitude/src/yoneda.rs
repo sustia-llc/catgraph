@@ -114,9 +114,19 @@ impl LmCategory {
 
 /// Read row `x` of an enriched space as a copresheaf (probability form,
 /// `π = exp(−d)`). Unset distances are `Tropical(+∞)` ⇒ `0.0`.
+///
+/// # Panics
+///
+/// Panics if `x` is not an object of `space` (`x >= space.size()`); an
+/// out-of-range row has no meaning as a copresheaf. [`LmCategory::yoneda`]
+/// always passes a validated `base`, so this fires only on direct misuse.
 #[must_use]
 pub fn copresheaf_from_space(space: &LawvereMetricSpace<NodeId>, x: NodeId) -> Copresheaf {
     let n = space.size();
+    assert!(
+        x < n,
+        "copresheaf_from_space: object index {x} out of range (space has {n} objects)"
+    );
     let extensions = (0..n)
         .map(|y| {
             let Tropical(d) = space.distance(&x, &y); // d(x, y) = −ln π(y | x)
@@ -139,11 +149,15 @@ pub fn copresheaf_from_space(space: &LawvereMetricSpace<NodeId>, x: NodeId) -> C
 /// Computed in probability form, so the `b / 0 ≥ 1` convention (Eq 6) needs no
 /// `∞` handling: an `a(c) = 0` term contributes the monoidal unit `1.0`.
 ///
-/// Precondition: `a` and `b` are copresheaves over the *same* [`LmCategory`]
-/// (identical object indexing); a length mismatch is a `debug_assert`.
+/// # Panics
+///
+/// Panics if `a` and `b` are copresheaves over different [`LmCategory`]
+/// instances (mismatched object counts) — the infimum over contexts is only
+/// defined when both share one object indexing. A silent `zip`-truncation
+/// would otherwise return a mathematically wrong (too-large) hom in release.
 #[must_use]
 pub fn semantic_hom(a: &Copresheaf, b: &Copresheaf) -> f64 {
-    debug_assert_eq!(
+    assert_eq!(
         a.extensions.len(),
         b.extensions.len(),
         "semantic_hom: copresheaves must share one LmCategory's object indexing"
