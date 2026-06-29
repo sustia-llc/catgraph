@@ -473,7 +473,6 @@ where
             right_names: self.right_names.clone(),
         }
     }
-
 }
 
 impl<Lambda, LeftPortName, RightPortName> NamedCospan<Lambda, LeftPortName, RightPortName>

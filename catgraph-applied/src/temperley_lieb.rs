@@ -262,9 +262,8 @@ impl Mul for ExtendedPerfectMatching {
         // (δ-power) count via an `ultragraph` connected-components pass; see
         // [`connectivity::resolve`]. The graph is well-formed by construction, so
         // the `ultragraph` operations cannot fail.
-        connectivity::resolve(&self, &rhs).expect(
-            "invariant: ultragraph composition on a well-formed Brauer diagram cannot fail",
-        )
+        connectivity::resolve(&self, &rhs)
+            .expect("invariant: ultragraph composition on a well-formed Brauer diagram cannot fail")
     }
 }
 
@@ -913,8 +912,7 @@ mod connectivity {
         let rhs_pairs = &rhs.0.3.pairs;
         assert_eq!(rhs_dom, self_cod, "composition dom/cod mismatch");
 
-        let mut g: UltraGraph<()> =
-            UltraGraph::with_capacity(self_dom + self_cod + rhs_cod, None);
+        let mut g: UltraGraph<()> = UltraGraph::with_capacity(self_dom + self_cod + rhs_cod, None);
         let mut node_idcs: Vec<Option<usize>> = vec![None; self_dom + self_cod + rhs_cod];
 
         // self diagram: a fresh node per endpoint, one bidirectional edge per pair.
@@ -987,7 +985,9 @@ mod connectivity {
             c.self_dom,
             c.rhs_cod,
             new_delta_power,
-            PerfectMatching { pairs: final_matching },
+            PerfectMatching {
+                pairs: final_matching,
+            },
         )))
     }
 
@@ -1018,7 +1018,12 @@ mod connectivity {
     }
 
     /// Map a composite-diagram endpoint id to its graph node index.
-    fn endpoint_node(node_idcs: &[Option<usize>], i: usize, self_dom: usize, self_cod: usize) -> usize {
+    fn endpoint_node(
+        node_idcs: &[Option<usize>],
+        i: usize,
+        self_dom: usize,
+        self_cod: usize,
+    ) -> usize {
         node_idcs[if i < self_dom { i } else { i + self_cod }]
             .expect("invariant: endpoint node index populated during graph construction")
     }
