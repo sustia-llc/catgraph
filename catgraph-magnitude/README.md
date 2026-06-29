@@ -7,6 +7,7 @@ Anchored to:
 - [Leinster & Shulman, *Magnitude homology of enriched categories and metric spaces* (2017)](https://arxiv.org/abs/1711.00802) — §2 chain complex over Lawvere metric spaces.
 - [Leinster, *The magnitude of metric spaces* (2013)](https://arxiv.org/abs/1012.5857) — Möbius / weighting / scatteredness primitives.
 - [Leinster, *The Euler characteristic of a category* (2008)](https://arxiv.org/abs/math/0610260) — Cor 1.5 integer-exact Möbius for finite circuit-free categories.
+- [Bradley, Terilla & Vlassopoulos, *An enriched category theory of language* (2021)](https://arxiv.org/abs/2106.07890) — representable copresheaf semantics (Yoneda embedding) + asymmetric semantic internal hom (Lemma 2 Eq 11 / §5 metric).
 
 **Status:** v0.5.0 (ZAlgebra consumer-side rename + closed-form Möbius cross-check fixture + bidirectional `verify_mobius_recursion` harness, co-released with catgraph-applied v0.6.0 at workspace umbrella v0.14.0). v0.4.0 shipped Leinster 2008 Cor 1.5 integer-exact Möbius + multi-prime CRT integer SNF lift. v0.3.0 shipped BV 2025 Prop 3.14 magnitude-homology Euler-characteristic identity.
 
@@ -46,11 +47,18 @@ v0.5.0 also adds:
 - A closed-form cross-check fixture asserting `mobius_function_via_chains_exact` matches the analytical Möbius value on a 4-element poset.
 - `verify_mobius_recursion` — a bidirectional harness asserting the Leinster 2008 Def 1.1 recursion identity in both directions on integer-exact Möbius output.
 
+On `main` (unreleased) — a semantic + determinism layer over `LmCategory`:
+- **`yoneda`** (#19) — `LmCategory::yoneda(name)` gives the representable copresheaf `L(x, −)` as a `Copresheaf` (meaning-as-distribution over continuations, `π = exp(−d)`). `semantic_hom` / `semantic_distance` are the **asymmetric** BTV 2021 internal hom `inf_c min{1, b(c)/a(c)}` and its `−ln` distance (`semantic_distance_sym` for a non-canonical symmetric variant). BTV 2021 Lemma 2 Eq 11 / §5.
+- **`determinism`** (#20) — `LmCategory::deterministic_transition_rank()` = `rank MH₁(ℓ = 0)` = the number of covering `π = 1` (deterministic) transitions: a structural memorisation count, **not** a coherence/hallucination signal. BV 2025 / LS 2017.
+
 ## API surface (v0.5.0)
 
 | Symbol | Paper anchor | Notes |
 |---|---|---|
 | `LmCategory` | BV 2025 §3 | Materialized BYO-LM transition table |
+| `LmCategory::yoneda(name)` → `Copresheaf` | BTV 2021 (Yoneda) | Representable copresheaf `L(x, −)`, `π = exp(−d)` (unreleased, #19) |
+| `semantic_hom` / `semantic_distance` / `semantic_distance_sym` | BTV 2021 Lemma 2 Eq 11 / §5 | Asymmetric semantic internal hom + its `−ln` distance (sym variant non-canonical) (unreleased, #19) |
+| `LmCategory::deterministic_transition_rank()` → `usize` | BV 2025 / LS 2017 §2 | `rank MH₁(ℓ=0)` = #covering deterministic (`π=1`) transitions (unreleased, #20) |
 | `magnitude<Q>(space, t)` | BV 2025 §3.5 Eq (7) | Möbius sum at scale `t` |
 | `mobius_function<Q>(space)` | Leinster 2013 §1.1 Lemma 1.1.4 | `ζ⁻¹` via Gaussian elimination (field-fast path) |
 | `mobius_function_via_chains<Q>(space)` | Leinster 2013 Prop 2.1.3 | Chain-sum via von-Neumann series (scattered-space precondition) |

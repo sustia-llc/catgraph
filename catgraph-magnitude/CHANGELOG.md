@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **BTV 2021 Yoneda semantic embedding** (`yoneda` module, #19). `LmCategory::yoneda(name)`
+  returns the representable copresheaf `L(x, −)` in probability form as a `Copresheaf`
+  (`base` / `extension_to` / `distance_to` / `support` / `extensions`, `π = exp(−d)`) —
+  meaning-as-distribution over continuations (Bradley–Terilla–Vlassopoulos 2021,
+  arXiv:2106.07890). Adds the **asymmetric** semantic internal hom
+  `semantic_hom(a, b) = inf_c min{1, b(c)/a(c)}` (BTV 2021 Lemma 2 Eq 11; internal hom
+  Eq 6) and `semantic_distance(a, b) = −ln semantic_hom(a, b)` (§5; kept asymmetric per
+  BTV "symmetry not required"), plus a non-canonical symmetric `semantic_distance_sym`.
+  The shared `LmCategory::enriched_space()` builder was extracted out of `magnitude()`
+  (no behaviour change; BV 2025 acceptance tests pass unchanged). Re-exported at the
+  crate root: `Copresheaf`, `semantic_hom`, `semantic_distance`, `semantic_distance_sym`.
+
+- **`LmCategory::deterministic_transition_rank()`** (`determinism` module, #20). The rank
+  of the first magnitude homology `MH₁` at grade `ℓ = 0`. Since the LS 2017 interior-only
+  boundary gives `∂_1 = 0` (so `MH₁(ℓ) = C₁(ℓ) / im ∂₂`), this counts the *covering*
+  deterministic transitions — `π = 1` forced continuations / memorisation — of the LM
+  transition graph. A structural invariant (BV 2025 / Leinster–Shulman 2017), **not** a
+  coherence or hallucination detector (the earlier MH₁-as-obstruction framing was
+  falsified and dropped). Reuses `chain_complex::{ChainIndex, magnitude_homology_rank}`;
+  no new dependencies.
+
 ## [0.5.0] - 2026-05-13
 
 Co-releases with **catgraph-applied v0.6.0** at workspace umbrella `v0.14.0`.
