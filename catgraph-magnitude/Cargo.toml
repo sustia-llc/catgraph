@@ -35,7 +35,7 @@ criterion.workspace = true
 # Dev-only oracle for tests/snf_modularsnf_integer_oracle.rs (gated by the
 # `modularsnf-oracle` feature). Cargo disallows optional dev-deps, so these are
 # unconditional; the test source is `#![cfg(feature = "modularsnf-oracle")]`.
-modularsnf = { git = "https://github.com/events555/modularsnf", rev = "d62535e" }
+modularsnf = { git = "https://github.com/events555/modularsnf", rev = "7eda45d" }
 ndarray = "0.16"
 
 [[bench]]

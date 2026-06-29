@@ -94,6 +94,12 @@ pub mod lm_category;
 pub mod magnitude;
 pub mod weighted_cospan;
 
+// D2 — BTV 2021 Yoneda embedding `x ↦ L(x, −)`: representable copresheaves
+// (meaning-as-distribution) over the LM-enriched category + the asymmetric
+// semantic hom/distance (BTV 2021 Lemma 2 Eq 11 / §5).
+pub mod yoneda;
+pub use yoneda::{Copresheaf, semantic_distance, semantic_distance_sym, semantic_hom};
+
 // Phase 6F (v0.2.0) — chain-sum Möbius via Leinster 2013 Prop 2.1.3.
 pub mod mobius_chains;
 

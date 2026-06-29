@@ -1,4 +1,3 @@
-
 use catgraph::category::{Composable, HasIdentity};
 use catgraph::monoidal::Monoidal;
 use catgraph_applied::temperley_lieb::BrauerMorphism;

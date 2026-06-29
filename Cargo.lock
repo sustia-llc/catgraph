@@ -855,8 +855,8 @@ checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
 
 [[package]]
 name = "modularsnf"
-version = "0.4.0"
-source = "git+https://github.com/events555/modularsnf?rev=d62535e#d62535ef6261f12e676a7ab3e9ab0dc1b894e23d"
+version = "0.5.0"
+source = "git+https://github.com/events555/modularsnf?rev=7eda45d#7eda45d334c96f1b168b748dd27e1cddcaa26711"
 dependencies = [
  "ndarray",
 ]

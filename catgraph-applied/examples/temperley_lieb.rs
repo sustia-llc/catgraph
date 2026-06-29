@@ -6,7 +6,6 @@
 //!
 //! Build with `cargo run --example temperley_lieb -p catgraph-applied`.
 
-
 use catgraph::category::{Composable, HasIdentity};
 use catgraph::monoidal::Monoidal;
 use catgraph_applied::temperley_lieb::BrauerMorphism;
