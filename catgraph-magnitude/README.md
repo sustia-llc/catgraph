@@ -124,6 +124,7 @@ cargo run --example integer_mobius        # Leinster 2008 Cor 1.5 integer-exact 
 - ✅ **v0.3.1** (2026-05-10): Phase G review patch — `snf_rank_over_zp` panic → `Result`; `RankQ` rename + generic-mono coupling docs; citation corrections.
 - ✅ **v0.4.0** (2026-05-13): Leinster 2008 Cor 1.5 integer-exact Möbius (`mobius_function_via_chains_exact<N, Q: Ring + Integer>` over `PosetCategory<N>`) + multi-prime CRT SNF lift (`smith_normal_form_integer` with Newman 1972 §1.4 Thm II.9 chain rebalance) + `Integer` trait + `Z(BigInt)` newtype substrate from cg-applied v0.5.6.
 - ✅ **v0.5.0** (2026-05-13): `Integer` → `ZAlgebra` consumer-side rename (co-release with cg-applied v0.6.0 at workspace umbrella v0.14.0) + closed-form Möbius cross-check fixture + bidirectional `verify_mobius_recursion` harness + path β + path γ first walks.
+- 🔜 **v0.6.0** (unreleased, on `main`): BTV 2021 Yoneda semantic embedding (`yoneda` — representable copresheaf `L(x, −)` + asymmetric semantic hom/distance, #19) + `LmCategory::deterministic_transition_rank` (`rank MH₁(ℓ=0)` = covering deterministic transitions, #20).
 
 ## License
 
