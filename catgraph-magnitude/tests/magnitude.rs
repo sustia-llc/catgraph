@@ -168,8 +168,23 @@ proptest! {
 
         let mu_zeta = mu.matmul(&zeta).unwrap();
         let zeta_mu = zeta.matmul(&mu).unwrap();
-        assert_is_identity(&mu_zeta, 1e-9, "μ * ζ");
-        assert_is_identity(&zeta_mu, 1e-9, "ζ * μ");
+
+        // The residual of `μ·ζ − I` grows like ε·‖μ‖: each entry is a sum of
+        // products `μ_ik · ζ_kj` (ζ_kj ≤ 1), so round-off scales with the
+        // magnitude of the inverse, which is large when ζ is ill-conditioned.
+        // A flat absolute bound therefore flakes on unlucky random fixtures
+        // (e.g. n=3 gave a 4.6e-9 residual). Scale by ‖μ‖_max with a 1e-7 base
+        // — still ~7 orders tighter than the O(1) residual a real inversion
+        // bug would produce.
+        let mu_max = mu
+            .entries()
+            .iter()
+            .flat_map(|row| row.iter())
+            .map(|c| c.0.abs())
+            .fold(1.0_f64, f64::max);
+        let tol = 1e-7 * mu_max;
+        assert_is_identity(&mu_zeta, tol, "μ * ζ");
+        assert_is_identity(&zeta_mu, tol, "ζ * μ");
     }
 }
 
