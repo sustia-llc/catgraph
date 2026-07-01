@@ -3,5 +3,6 @@
 *.pdb
 .DS_Store
 
-# Internal design/planning docs (not for the public repo)
-/.claude/docs/
+# Private AI-context artifacts (symlinked to tsondru-notes; not for the public repo)
+/.claude/
+/CLAUDE.local.md
