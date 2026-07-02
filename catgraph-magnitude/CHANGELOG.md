@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Stable consumer entry point `coalition_value`** (`coalition` module, #23).
+  `coalition_value(agents, couplings, members) -> Result<f64, CatgraphError>` =
+  `coalition_magnitude_from_couplings(agents, couplings, members, 1.0)` — the
+  stability-contracted scalar downstream decision policies call (koalisi #5's
+  `MagnitudePolicy`, A/B'd against tira/aif's `−G`). Semantics =
+  effective-member diversity (skeletalized magnitude); `t = 1` is the pinned
+  canonical arm (#22 pins it — the `t`-sweep is an experiment axis of the
+  downstream A/B harness, not a knob on this API). Re-exported at the crate
+  root. Errors inherited verbatim from `coalition_magnitude_from_couplings`.
+- `tests/coalition_consumer.rs` (#23) — the cross-crate **K1 → K2** consumer
+  path exercised end to end: `catgraph_applied::Hypergraph` coalition members →
+  `VertexIndex`→agent-index mapping → couplings → `coalition_value`. Pins the
+  chain fixture (`a→b 0.7, b→c 0.5 ⇒ Mag(1) = 1.8`), the
+  `coalition_value == coalition_magnitude_from_couplings(.., 1.0)` identity, the
+  dedup-before-magnitude contract (duplicate members rejected until deduped),
+  and the skeletalization seam (mutual-`1.0` pair ⇒ `Mag = 1.0`).
 - **Enriched-coalition magnitude surface** (`coalition` module, #22; gemini-spec
   §IV.5). Reads a coalition as a **cospan-weighted subgraph of an enriched
   category** — agents = objects, inter-agent couplings = `UnitInterval` (`[0,1]`)

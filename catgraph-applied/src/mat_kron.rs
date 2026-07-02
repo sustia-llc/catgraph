@@ -4,10 +4,10 @@
 //!
 //! This is a concrete (semantic) re-expression onto catgraph's **native**
 //! [`Monoidal`] / [`Composable`] / [`SymmetricMonoidalMorphism`] traits. It is
-//! a sibling carrier to [`MatR`](crate::mat::MatR): both wrap the same
+//! a sibling carrier to [`MatR`]: both wrap the same
 //! row-major matrix data, but
 //!
-//! | | [`MatR`](crate::mat::MatR) (`Mat(R)`) | [`MatKron`] (`MatKron(R)`) |
+//! | | [`MatR`] (`Mat(R)`) | [`MatKron`] (`MatKron(R)`) |
 //! |---|---|---|
 //! | Tensor `a ⊗ b` | `a + b` (block-diagonal ⊕) | `a · b` (Kronecker) |
 //! | Monoidal unit | object `0` | object `1` |

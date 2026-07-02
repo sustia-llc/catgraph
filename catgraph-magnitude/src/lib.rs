@@ -47,7 +47,8 @@
 //!   [`EnrichedCategory`]`<UnitInterval>`; [`coalition_magnitude`] is its
 //!   diversity `Mag(tA|members)` via the BV 2025 §3.5 Eq 7 Möbius sum (`t=1`
 //!   canonical arm) and [`coalition_magnitude_from_couplings`] the plain-data
-//!   entry point (seed of #23 `coalition_value`).
+//!   entry point. [`coalition_value`] is the **stable consumer API** (#23): the
+//!   pinned `t = 1` scalar the downstream koalisi `MagnitudePolicy` calls.
 //! - [`semantic`] — comparison / clustering over the BTV 2021 Yoneda embedding:
 //!   [`LmCategory::yoneda_all`](lm_category::LmCategory::yoneda_all) (batch
 //!   meanings), [`k_nearest_from`] / [`k_nearest_to`] (bidirectional
@@ -127,7 +128,9 @@ pub mod determinism;
 // category; its diversity is `Mag(tA|members)` (BV 2025 §3.5 Eq 7 / Thm 3.10 +
 // BTV 2021 [0,1] enrichment). The `t = 1` arm is the Shannon-diversity default.
 pub mod coalition;
-pub use coalition::{Coalition, coalition_magnitude, coalition_magnitude_from_couplings};
+pub use coalition::{
+    Coalition, coalition_magnitude, coalition_magnitude_from_couplings, coalition_value,
+};
 
 // Phase 6F (v0.2.0) — chain-sum Möbius via Leinster 2013 Prop 2.1.3.
 pub mod mobius_chains;
