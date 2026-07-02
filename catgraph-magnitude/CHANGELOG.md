@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.1.0] - 2026-07-01
+
+First monorepo release: workspace-wide tag `v0.1.0` (supersedes the pre-reboot
+crate-scoped version lineage below). The coalition semantic-layer handoff to
+downstream koalisi (#19–#23).
+
 ### Added
 
 - **Stable consumer entry point `coalition_value`** (`coalition` module, #23).
@@ -1031,7 +1037,8 @@ Both BV 2025 verifications pass at v0.1.0:
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/tsondru/catgraph/compare/catgraph-magnitude-v0.5.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.1.0...HEAD
+[workspace-v0.1.0]: https://github.com/sustia-llc/catgraph/releases/tag/v0.1.0
 [0.5.0]: https://github.com/tsondru/catgraph/compare/catgraph-magnitude-v0.4.0...catgraph-magnitude-v0.5.0
 [0.4.0]: https://github.com/tsondru/catgraph/compare/catgraph-magnitude-v0.3.1...catgraph-magnitude-v0.4.0
 [0.3.1]: https://github.com/tsondru/catgraph/compare/catgraph-magnitude-v0.3.0...catgraph-magnitude-v0.3.1
