@@ -500,6 +500,41 @@ where
     coalition_magnitude(&coalition, t)
 }
 
+/// **The stable consumer entry point** (#23): coalition diversity as a single
+/// scalar, at the pinned canonical scale `t = 1`.
+///
+/// Equivalent to [`coalition_magnitude_from_couplings`]`(agents, couplings,
+/// members, 1.0)`. This is the stability-contracted scalar downstream decision
+/// policies call — koalisi #5's `MagnitudePolicy` A/Bs it against tira/aif's
+/// `−G`. The semantics are **effective-member diversity**: the magnitude of the
+/// coalition's *skeletal* Lawvere metric space (perfectly-coupled members
+/// quotiented — see the [module docs](crate::coalition)).
+///
+/// `t = 1` is the pinned canonical arm (#22 pins it; its Shannon tie is the
+/// derivative `d/dt Mag|_{t=1} = Σ_x H(p_x)`, BV 2025 §3.14 Cor). The `t`-sweep
+/// (`t = 2` collision proxy, `t → ∞` cardinality limit) is an experiment axis of
+/// the downstream A/B harness, **not** a knob on this stable API — callers who
+/// need other scales reach for [`coalition_magnitude_from_couplings`] directly.
+///
+/// Couplings are `(from_idx, to_idx, prob)` triples over `agents`; `members` are
+/// indices into `agents`.
+///
+/// # Errors
+///
+/// Inherited verbatim from [`coalition_magnitude_from_couplings`]: out-of-range
+/// member/coupling indices, self-couplings, probabilities outside `[0, 1]`,
+/// empty/duplicate/unknown members, or a singular `t`-scaled zeta.
+pub fn coalition_value<O>(
+    agents: &[O],
+    couplings: &[(usize, usize, f64)],
+    members: &[usize],
+) -> Result<f64, CatgraphError>
+where
+    O: Copy + Eq + std::hash::Hash + Debug + 'static,
+{
+    coalition_magnitude_from_couplings(agents, couplings, members, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -812,5 +847,21 @@ mod tests {
         assert!(
             coalition_magnitude_from_couplings(&agents, &[(0, 1, 1.5)], &members, 1.0).is_err()
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Stable entry point coalition_value == coalition_magnitude_from_couplings
+    // at the pinned t = 1 arm (chain fixture).
+    // -----------------------------------------------------------------------
+    #[test]
+    fn coalition_value_is_t1_from_couplings() {
+        let agents = ["a", "b", "c"];
+        let couplings = [(0usize, 1usize, 0.7_f64), (1, 2, 0.5)];
+        let members = [0usize, 1, 2];
+
+        let via_value = coalition_value(&agents, &couplings, &members).unwrap();
+        let via_t1 =
+            coalition_magnitude_from_couplings(&agents, &couplings, &members, 1.0).unwrap();
+        assert!((via_value - via_t1).abs() < EPS);
     }
 }

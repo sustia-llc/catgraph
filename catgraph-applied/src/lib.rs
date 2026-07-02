@@ -44,6 +44,11 @@
 //! - [`trace`] — partial trace `Tr_X(f) : A → B` from the compact-closed
 //!   structure of [`mat_kron`] (F&S 2019 §2.6); strict tensor, no
 //!   associators/unitors required
+//! - [`hypergraph`] — a CRUD hypergraph container (`Hypergraph<V, HE>`), the
+//!   zero-dependency K1 backend for the downstream koalisi coalition layer
+//!   (sustia-llc/koalisi#4), with a `hyperedge_as_cospan` categorical view (the
+//!   identity cospan over the member index list) back to
+//!   [`catgraph::cospan::Cospan`] (v0.6.x)
 //!
 //! ## Relationship to catgraph
 //!
@@ -66,6 +71,7 @@ pub mod e1_operad;
 pub mod e2_operad;
 pub mod enriched;
 pub mod graphical_linalg;
+pub mod hypergraph;
 pub mod integer;
 pub mod lawvere_metric;
 pub mod linear_combination;
@@ -90,3 +96,7 @@ pub mod z;
 // convenience-path convention). Long path `use
 // catgraph_applied::integer::ZAlgebra;` remains valid.
 pub use integer::ZAlgebra;
+
+// Convenience re-exports for the K1 hypergraph container (koalisi#4 consumer
+// surface). Long paths `catgraph_applied::hypergraph::…` remain valid.
+pub use hypergraph::{HyperedgeIndex, Hypergraph, HypergraphError, VertexIndex};

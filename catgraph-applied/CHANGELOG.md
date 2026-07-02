@@ -9,6 +9,54 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **`hypergraph` module — a CRUD hypergraph container** (`Hypergraph<V, HE>`,
+  #23). The zero-dependency replacement for the yamafaktory `hypergraph` crate
+  (v4.2.0) that the downstream **koalisi** coalition layer (sustia-llc/koalisi#4)
+  re-backs its `TemporalHypergraph` on — catgraph has hypergraph *categories*
+  (`Cospan`/`HypergraphCategory`), not an n-ary hyperedge data structure, so this
+  supplies the operations koalisi calls, **with adapted signatures** where the
+  K1 re-back improves on yamafaktory (add/get/update/remove vertex + hyperedge,
+  `reverse_hyperedge`, `join_hyperedges`, `contract_hyperedge_vertices`, counts,
+  **infallible** clears — koalisi's `clear_hyperedges()?` drops the `?` — plus a
+  borrowing `hyperedge_vertices` and sorted iteration accessors). Plain
+  `Vec`/`HashMap` + monotonic counters, **zero new dependencies**, coalition
+  scale.
+  - **Three load-bearing semantics:** stable, **never-reused** monotonic indices
+    (`VertexIndex`/`HyperedgeIndex` — koalisi's event log replays raw indices,
+    even across `clear`); hyperedges are **ordered** `Vec<VertexIndex>` with
+    duplicate vertices allowed; `Copy` weights returned **by value**.
+  - **Deliberate divergences from yamafaktory v4.2.0:** no-op updates (unchanged
+    vertex/hyperedge weight or unchanged member list) return `Ok` instead of
+    erroring — this makes `CoalitionManager::try_join_coalition`'s documented
+    re-join idempotency ("idempotent if `agent` is already a member") true;
+    infallible clears; generic bounds **relaxed** to `Copy + Eq + Debug` (no
+    `Display`/`Into<usize>`/`Hash`); **no serde** (consumer wraps its own).
+  - `add_hyperedge` is **idempotent** on an identical `(ordered vertices,
+    weight)` pair, returning the **smallest** matching index (deterministic even
+    after a `remove_vertex` cascade collapses two edges to the same key);
+    `remove_vertex` **cascades** (sole-vertex edges removed, multi-vertex edges
+    filtered); `contract_hyperedge_vertices` replaces occurrences then collapses
+    **adjacent** `target` runs (empty to-contract set = true no-op);
+    `join_hyperedges` keeps the **first** edge's weight and discards tail weights
+    (matches yamafaktory exactly).
+  - **Categorical view** `hyperedge_as_cospan(idx)` reads a hyperedge as the
+    **identity cospan over its member index list** (`Cospan<VertexIndex>`,
+    middle = member identities, not weights). Under the `WeightedCospan`
+    implied-edge reading its edges are all `(i, j)` member pairs — the coupling
+    slots the magnitude layer fills — so it is a handle for cospan-level
+    composition *within applied*, **not** a shortcut into the magnitude layer.
+    The real consumer path is `get_hyperedge_vertices` → koalisi maps
+    capabilities→couplings → `coalition_value` (dedup members first — the
+    magnitude layer rejects duplicates). Re-exported at the crate root:
+    `catgraph_applied::{Hypergraph, HypergraphError, VertexIndex, HyperedgeIndex}`.
+- `examples/agent_hypergraph.rs` (#23) — a worked agent-coalition registry over
+  the K1 `Hypergraph`: the full coalition lifecycle (member read, join with the
+  no-op re-join divergence, leave, merge, dissolve, agent-removal cascade, index
+  stability) plus the `hyperedge_as_cospan` categorical view. Self-asserting;
+  catgraph-applied-only (does not depend on catgraph-magnitude).
+
 ## [0.6.0] - 2026-05-13
 
 Co-released with **catgraph-magnitude v0.5.0** at workspace umbrella **v0.14.0**.

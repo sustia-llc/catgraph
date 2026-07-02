@@ -33,6 +33,7 @@ This crate packages applied-CT modules that build on catgraph's strict Fong-Spiv
 | `lawvere_metric` | `LawvereMetricSpace<T>` over `Tropical` — triangle-inequality verifier + `-ln π` embedding from `UnitInterval` (Lawvere 1973; v0.5.1) |
 | `integer` | `ZAlgebra` trait (sealed) — `Rig` extension with `Neg + Sub + from_i64` for rings carrying integer-exact arithmetic. Canonical ring-homomorphism ℤ → R (Bourbaki *Algèbre* Ch. I §8). Renamed from `Integer` at v0.6.0 (was `Integer` at v0.5.6) |
 | `z` | `Z(BigInt)` newtype — arbitrary-precision `ZAlgebra + Ring` instance using `num-bigint`. Substrate for integer-exact Möbius and multi-prime CRT SNF lift in catgraph-magnitude (v0.5.6) |
+| `hypergraph` | `Hypergraph<V, HE>` — zero-dependency CRUD hypergraph container (K1 backend for the downstream koalisi coalition layer, sustia-llc/koalisi#4). Stable never-reused `VertexIndex`/`HyperedgeIndex`, ordered duplicate-allowing hyperedge lists, `Copy` weights by value; idempotent `add_hyperedge` (smallest matching index), cascading `remove_vertex`, `join`/`reverse`/`contract`; `hyperedge_as_cospan` categorical view = the identity cospan over the member index list (`Cospan<VertexIndex>`; a composition handle within applied, not the magnitude consumer path — that path is `get_hyperedge_vertices` → couplings → `coalition_value`, dedup first). Deliberate yamafaktory v4.2.0 divergences: no-op updates return `Ok` (makes `try_join_coalition` idempotency true), infallible clears, bounds relaxed to `Copy + Eq + Debug`, no serde (#23; unreleased) |
 
 ### New in v0.6.0 (BREAKING)
 
@@ -188,6 +189,12 @@ cargo build --lib -p catgraph-applied --target wasm32-wasip1 --no-default-featur
 
 See `examples/wasi_smoke_applied.rs` for a minimal `LinearCombination`
 multiplication smoke test exercising the `CondIterator` parallel arm.
+
+See `examples/agent_hypergraph.rs` for a worked agent-coalition registry over
+the K1 `Hypergraph` — the full coalition lifecycle (member read, join with the
+no-op re-join divergence, leave, merge, dissolve, agent-removal cascade, index
+stability) plus the `hyperedge_as_cospan` categorical view. Run with
+`cargo run -p catgraph-applied --example agent_hypergraph`.
 
 ## License
 

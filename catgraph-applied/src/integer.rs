@@ -140,7 +140,7 @@ pub(crate) mod private {
 /// and the **proximate** compile failure becomes an unsatisfied
 /// `private::Sealed` supertrait bound (rustc emits a diagnostic of the
 /// form *"`ZAlgebra` is a sealed trait, because to implement it you
-/// also need to implement [`Sealed`], which is not accessible"*).
+/// also need to implement `Sealed`, which is not accessible"*).
 /// External impls fail at the seal, not at the orphan rule.
 ///
 /// ```compile_fail
