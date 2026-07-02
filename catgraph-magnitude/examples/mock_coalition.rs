@@ -10,9 +10,11 @@
 //!
 //! No `SurrealDB`, no tokio, no async — pure-math demo of the analysis surface
 //! shipped at v0.3.0 (BV 2025 Prop 3.14 acceptance gate + per-`(k, ℓ)`
-//! `magnitude_homology_rank` cell report). The companion `catgraph-coalition`
-//! crate wires this into live-query agent transport, but everything below runs
-//! on the transport-free API directly.
+//! `magnitude_homology_rank` cell report). The `coalition` module (#22) turns
+//! this manual construction into the `Coalition` / `coalition_magnitude` surface
+//! (restrict-then-close + skeletalize); downstream `koalisi` wires that into
+//! live agent transport. Everything below runs on the transport-free API
+//! directly.
 //!
 //! ## Paper anchor
 //!
@@ -392,5 +394,6 @@ fn main() {
     println!("Key design point (BV 2025 §3.7 Remark):");
     println!("  WeightedCospan accepts cycles (general interaction graph view).");
     println!("  LmCategory requires acyclicity (BV 2025 prefix-poset view, Thm 3.10).");
-    println!("  Phase 6B (catgraph-coalition) bridges the two via SurrealDB live queries.");
+    println!("  The `coalition` module (#22) bridges the two: Coalition::from_enriched");
+    println!("  restrict-then-closes couplings into a magnitude-ready space; koalisi consumes it.");
 }
