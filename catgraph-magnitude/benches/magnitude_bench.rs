@@ -14,6 +14,10 @@
 //! because the matrix is dense (all prefix-pair distances are finite for a
 //! connected chain).  Expect ~8× increase per 2× n at sizes above 100.
 
+use std::hint::black_box;
+
+use catgraph_magnitude::coalition_eval::CoalitionEvaluator;
+use catgraph_magnitude::coalition_value;
 use catgraph_magnitude::lm_category::LmCategory;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
@@ -73,5 +77,92 @@ fn bench_magnitude(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_magnitude);
+/// Number of candidates swept against the fixed coalition in the incremental
+/// benchmark (per the #31 brief: ~8 candidates per sweep).
+const SWEEP_CANDIDATES: usize = 8;
+
+/// `(agents, couplings, members)` for a coalition fixture — a `usize` agent
+/// pool with a sparse coupling table and a member-index subset.
+type CoalitionFixture = (Vec<usize>, Vec<(usize, usize, f64)>, Vec<usize>);
+
+/// Deterministic coalition fixture: `m` members plus [`SWEEP_CANDIDATES`]
+/// candidate agents, over a dense random coupling table (same inline LCG as
+/// [`build_chain_lm`]). Agents are `usize` indices `0..(m + SWEEP_CANDIDATES)`;
+/// members are `0..m`; candidates are `m..(m + SWEEP_CANDIDATES)`.
+///
+/// Couplings avoid `1.0` so no skeletal merge collapses the members (keeping
+/// the `k = m` skeleton the fast path is measured on).
+fn build_coalition_fixture(m: usize, seed: u64) -> CoalitionFixture {
+    let n = m + SWEEP_CANDIDATES;
+    let mut state = seed | 1;
+    let mut next = || -> f64 {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        // Map into (0.05, 0.95] — bounded away from 0 (dense closure) and 1
+        // (no perfect-coupling merges).
+        0.05 + 0.90 * ((state >> 33) as f64) / ((1u64 << 31) as f64)
+    };
+
+    let agents: Vec<usize> = (0..n).collect();
+    let mut couplings: Vec<(usize, usize, f64)> = Vec::new();
+    for i in 0..n {
+        for j in 0..n {
+            if i != j {
+                couplings.push((i, j, next()));
+            }
+        }
+    }
+    let members: Vec<usize> = (0..m).collect();
+    (agents, couplings, members)
+}
+
+/// #31 incremental-magnitude benchmark: a fixed coalition `S`, sweep
+/// [`SWEEP_CANDIDATES`] candidates, comparing
+/// - **fresh**: two full [`coalition_value`] evaluations per candidate
+///   (`Mag(S)` recomputed each time + `Mag(S ∪ {x})`), vs
+/// - **evaluator**: one [`CoalitionEvaluator`] built once, then
+///   [`CoalitionEvaluator::value_with`] per candidate.
+fn bench_incremental(c: &mut Criterion) {
+    let mut group = c.benchmark_group("coalition_incremental");
+
+    for &m in &[4usize, 8, 16] {
+        let (agents, couplings, members) = build_coalition_fixture(m, 0xA11CE);
+        let candidates: Vec<usize> = (m..(m + SWEEP_CANDIDATES)).collect();
+
+        // (a) Fresh: two full evaluations per candidate.
+        group.bench_with_input(BenchmarkId::new("fresh_sweep", m), &m, |b, _| {
+            b.iter(|| {
+                let mut acc = 0.0_f64;
+                for &cand in &candidates {
+                    let base = coalition_value(&agents, &couplings, &members)
+                        .expect("base coalition must evaluate");
+                    let mut members_x = members.clone();
+                    members_x.push(cand);
+                    let with = coalition_value(&agents, &couplings, &members_x)
+                        .expect("candidate coalition must evaluate");
+                    acc += base + with;
+                }
+                black_box(acc)
+            });
+        });
+
+        // (b) Evaluator: build once, incremental value_with per candidate.
+        group.bench_with_input(BenchmarkId::new("evaluator_sweep", m), &m, |b, _| {
+            b.iter(|| {
+                let ev = CoalitionEvaluator::new(&agents, &couplings, &members, 1.0)
+                    .expect("base coalition must evaluate");
+                let mut acc = ev.base_value();
+                for &cand in &candidates {
+                    acc += ev.value_with(cand).expect("candidate must evaluate");
+                }
+                black_box(acc)
+            });
+        });
+    }
+
+    group.finish();
+}
+
+criterion_group!(benches, bench_magnitude, bench_incremental);
 criterion_main!(benches);
