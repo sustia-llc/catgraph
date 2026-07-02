@@ -110,6 +110,30 @@ impl LmCategory {
         let space = self.enriched_space()?;
         Ok(copresheaf_from_space(&space, base))
     }
+
+    /// The full Yoneda image: the representable copresheaf `L(x, −)` of every
+    /// object, in object order (BTV 2021) — the batch counterpart to
+    /// [`yoneda`](Self::yoneda) (#21).
+    ///
+    /// Builds the shared [`enriched_space`](Self::enriched_space) **once** and
+    /// reads all `n` rows via [`copresheaf_from_space`] — computing all meanings
+    /// via `n` separate `yoneda(name)` calls would materialize the `n × n`
+    /// space `n` times.
+    ///
+    /// Object names must be unique (the [`LmCategory::new`] invariant):
+    /// `yoneda(name)` resolves names first-match, so under duplicate names the
+    /// positional row `yoneda_all()[i]` and `yoneda(objects()[i])` disagree.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`enriched_space`](Self::enriched_space)'s BFS-cap failure on
+    /// malformed transition tables (`prob > 1.0` entries that bypass
+    /// [`add_transition`](Self::add_transition) validation).
+    pub fn yoneda_all(&self) -> Result<Vec<Copresheaf>, CatgraphError> {
+        let space = self.enriched_space()?;
+        let n = space.size();
+        Ok((0..n).map(|x| copresheaf_from_space(&space, x)).collect())
+    }
 }
 
 /// Read row `x` of an enriched space as a copresheaf (probability form,
