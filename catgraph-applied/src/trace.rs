@@ -12,8 +12,8 @@
 //! ```
 //!
 //! This is a concrete (semantic) re-expression on the native
-//! [`Composable`](catgraph::category::Composable) /
-//! [`Monoidal`](catgraph::monoidal::Monoidal) traits, with the compact-closed
+//! [`Composable`] / [`Monoidal`](catgraph::monoidal::Monoidal) traits, with
+//! the compact-closed
 //! cup/cap realized as inherent generators on [`MatKron`].
 
 use catgraph::{category::Composable, errors::CatgraphError};
