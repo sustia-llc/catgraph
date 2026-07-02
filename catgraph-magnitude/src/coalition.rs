@@ -223,8 +223,10 @@ where
         let space = build_skeletal_space(&closed, &reps);
 
         debug_assert!(
-            space.triangle_inequality_holds(),
-            "coalition closure must satisfy the triangle inequality by construction"
+            space.triangle_inequality_holds_within(crate::TRIANGLE_FLOAT_TOL),
+            "coalition closure must satisfy the triangle inequality by construction \
+             (within float tolerance TRIANGLE_FLOAT_TOL — the −ln lift of a max-product \
+             closure differs from the summed-log bound by ULPs)"
         );
 
         Ok(Self {
@@ -847,6 +849,51 @@ mod tests {
         assert!(
             coalition_magnitude_from_couplings(&agents, &[(0, 1, 1.5)], &members, 1.0).is_err()
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Issue #29 regression: non-dyadic couplings must not trip the
+    // triangle-inequality debug_assert in `from_enriched`. The skeletal space
+    // stores d = −ln(closed[i][j]); for a multi-hop closure closed[a][c] =
+    // closed[a][b]·closed[b][c], so d(a,c) = −ln(product) while the summed
+    // bound is (−ln closed[a][b]) + (−ln closed[b][c]) — the two differ by ULPs
+    // of `ln`/multiplication rounding. Pre-fix, the STRICT `dxz > sum` assert
+    // panics in DEBUG on realistic couplings (e.g. 1/7·1/9 chains); post-fix
+    // the tolerant `triangle_inequality_holds_within(TRIANGLE_FLOAT_TOL)` check
+    // accepts them. This test runs under `cargo test` (debug), so it exercises
+    // the debug_assert directly — pre-fix it panics inside `from_enriched`.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn non_dyadic_couplings_do_not_trip_triangle_assert() {
+        let agents = ["a", "b", "c", "d"];
+        // Grid of non-dyadic couplings (i/7, j/9, k/11), all in (0, 1), over a
+        // 4-agent chain a→b→c→d so the closure builds genuine multi-hop −ln
+        // products (closed a→c, a→d, b→d).
+        for i in 1..7u32 {
+            for j in 1..9u32 {
+                for k in 1..11u32 {
+                    let p = f64::from(i) / 7.0;
+                    let q = f64::from(j) / 9.0;
+                    let r = f64::from(k) / 11.0;
+                    let cat = hommap(&agents, &[("a", "b", p), ("b", "c", q), ("c", "d", r)]);
+
+                    // Construction runs the (post-fix tolerant) triangle-
+                    // inequality debug_assert on the closed table.
+                    let coalition = Coalition::from_enriched(&cat, &agents)
+                        .expect("non-dyadic chain coalition must construct");
+
+                    // Never a panic: magnitude is either finite-Ok or a
+                    // well-formed Err (singular ζ) — but construction reaching
+                    // here at all is the regression under test.
+                    if let Ok(mag) = coalition_magnitude(&coalition, 1.0) {
+                        assert!(
+                            mag.is_finite(),
+                            "coupling ({i}/7, {j}/9, {k}/11): Mag(1) = {mag} must be finite"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // -----------------------------------------------------------------------
