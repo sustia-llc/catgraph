@@ -6,6 +6,12 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+## [workspace-v0.1.0] - 2026-07-01
+
+First monorepo release: workspace-wide tag `v0.1.0` (supersedes the pre-reboot
+crate-scoped version lineage below). The coalition semantic-layer handoff to
+downstream koalisi.
+
 The reboot workspace is being assembled phase by phase toward `0.1.0`. This crate
 — the strict implementation of Fong & Spivak, *Hypergraph Categories* (2019) —
 is carried intact from prior work into a fresh five-crate workspace built on a
@@ -52,4 +58,5 @@ substrate (numeric backends kept optional).
   §3.3 io/ff factorization, the global Grothendieck form, LinRel examples) are
   catalogued in [`docs/FS19-AUDIT.md`](docs/FS19-AUDIT.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.1.0...HEAD
+[workspace-v0.1.0]: https://github.com/sustia-llc/catgraph/releases/tag/v0.1.0
