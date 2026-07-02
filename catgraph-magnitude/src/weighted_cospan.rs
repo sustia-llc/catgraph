@@ -209,10 +209,14 @@ where
     /// # Errors
     ///
     /// Returns [`CatgraphError::Composition`] when triangle inequality is
-    /// violated for some triple `(x, y, z)`.
+    /// violated for some triple `(x, y, z)` by more than a small absolute
+    /// float tolerance (`TRIANGLE_FLOAT_TOL`, `1e-9` in the distance/log
+    /// domain). The tolerance absorbs the ULP-scale noise from the
+    /// `−ln`-of-product vs sum-of-`−ln` rewrite; genuine violations (orders of
+    /// magnitude above the tolerance) still surface as `Err`.
     pub fn into_validated_metric_space(self) -> Result<LawvereMetricSpace<NodeId>, CatgraphError> {
         let space = self.into_metric_space();
-        if space.triangle_inequality_holds() {
+        if space.triangle_inequality_holds_within(crate::TRIANGLE_FLOAT_TOL) {
             Ok(space)
         } else {
             Err(CatgraphError::Composition {
