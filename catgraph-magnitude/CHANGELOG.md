@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Semantic comparison / clustering over the Yoneda embedding** (`semantic`
+  module, #21). Consumer layer over `yoneda` (#19) that ranks and groups whole
+  texts by their meanings (Bradley–Terilla–Vlassopoulos 2021, arXiv:2106.07890;
+  Lemma 2 Eq 11 hom / §5 asymmetry). Adds `LmCategory::yoneda_all()` — the full
+  Yoneda image (one `Copresheaf` per object) from a **single**
+  `enriched_space()` pass rather than `n` per-object rebuilds. Adds
+  `k_nearest_from` / `k_nearest_to` — the `k` nearest meanings to a query in
+  **both** directions of the asymmetric `semantic_distance` (BTV keep the
+  Lawvere generalized metric, so "query's nearest" ≠ "nearest to query"); `∞`
+  distances are rankable (sort last via `f64::total_cmp`, `NodeId` tie-break),
+  self is excluded, `k > len` returns all. Adds `cluster_semantic_sym` —
+  single-linkage threshold clustering (connected components where
+  `semantic_distance_sym(a, b) <= epsilon`) via plain union-find, O(n²)
+  distance evaluations; labelled a **symmetric convenience** over the
+  non-canonical `semantic_distance_sym` (mutually-unreachable meanings sit at
+  `∞` and never merge). Deterministic output (members ascending, clusters by
+  smallest member). New worked example `examples/semantic_comparison.rs`
+  (bidirectional nearest-meaning ranking + ≥2 nontrivial clusters, with
+  assertions). Re-exported at the crate root: `k_nearest_from`, `k_nearest_to`,
+  `cluster_semantic_sym`. No new dependencies.
+
 - **BTV 2021 Yoneda semantic embedding** (`yoneda` module, #19). `LmCategory::yoneda(name)`
   returns the representable copresheaf `L(x, −)` in probability form as a `Copresheaf`
   (`base` / `extension_to` / `distance_to` / `support` / `extensions`, `π = exp(−d)`) —

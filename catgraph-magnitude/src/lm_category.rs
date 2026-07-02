@@ -60,8 +60,21 @@ impl LmCategory {
     /// and transitions both start empty; populate via
     /// [`add_transition`](Self::add_transition) and
     /// [`mark_terminating`](Self::mark_terminating).
+    ///
+    /// **Object names must be unique.** Transitions are keyed by name and
+    /// [`yoneda`](Self::yoneda) resolves names first-match, so a duplicated
+    /// name corrupts the name→index map (last-wins) and makes the positional
+    /// [`yoneda_all`](Self::yoneda_all) disagree with per-name `yoneda`.
+    ///
+    /// # Panics
+    ///
+    /// Debug-only: panics on duplicate object names.
     #[must_use]
     pub fn new(objects: Vec<String>) -> Self {
+        debug_assert!(
+            objects.iter().collect::<HashSet<_>>().len() == objects.len(),
+            "LmCategory object names must be unique"
+        );
         Self {
             objects,
             terminating: HashSet::new(),
@@ -252,21 +265,37 @@ impl LmCategory {
     /// - `d(i, i) = 0` (identity axiom).
     /// - For every directed extension path `i = x₀ → … → x_k = j` in the
     ///   transition table, `π(j | i) = ∏_ℓ π(x_{ℓ+1} | x_ℓ)` (BV 2025 Eq 6) and
-    ///   `d(i, j) = −ln π(j | i)`.
+    ///   `d(i, j) = −ln π(j | i)`; when several paths reach `j`, the
+    ///   **highest-probability path wins** (see below).
     /// - When no such path exists the distance is left unset, and
     ///   [`LawvereMetricSpace::distance`] reports `Tropical(+∞)` (i.e.
     ///   `π(j | i) = 0`; BV 2025 §2.15).
     ///
     /// Shared substrate: [`magnitude`](Self::magnitude) lifts it through the
     /// Möbius sum; [`yoneda`](Self::yoneda) reads its rows as representable
-    /// copresheaves (BTV 2021). **The transition table must be acyclic** for the
-    /// result to satisfy BV 2025's tree-poset structure.
+    /// copresheaves (BTV 2021).
+    ///
+    /// # Cyclic tables and the max-probability-path contract
+    ///
+    /// **Acyclicity is required only by [`magnitude`](Self::magnitude)** — BV
+    /// 2025's tree-poset hypothesis (Thm 3.10). `enriched_space` itself is
+    /// well-defined on any [`add_transition`](Self::add_transition)-legal table,
+    /// including cyclic (mutually-reachable) ones: `d(i, j)` is the
+    /// max-probability path from `i` to `j`, computed by a strict-improvement
+    /// label-correcting relaxation. Termination is guaranteed because a node is
+    /// only revisited when its path probability strictly improves and edge
+    /// probabilities are `≤ 1` — traversing a cycle never increases the product
+    /// (a `prob = 1.0` cycle re-derives an equal value, which is *not* a strict
+    /// improvement, so it does not oscillate). The semantic layer
+    /// ([`yoneda_all`](Self::yoneda_all), `cluster_semantic_sym`, #21) relies on
+    /// this contract to model mutual reachability (synonymy).
     ///
     /// # Errors
     ///
     /// Returns [`CatgraphError::Composition`] if the per-source BFS frontier cap
     /// (`n*n` steps) is exhausted — defense-in-depth against malformed inputs
-    /// (cycles / `prob > 1.0`) that bypass [`add_transition`](Self::add_transition).
+    /// (`prob > 1.0` entries) that bypass
+    /// [`add_transition`](Self::add_transition) validation.
     pub fn enriched_space(&self) -> Result<LawvereMetricSpace<NodeId>, CatgraphError> {
         let n = self.objects.len();
         let objects: Vec<NodeId> = (0..n).collect();
@@ -287,9 +316,13 @@ impl LmCategory {
 
         // Forward-extension closure. For each source `i`, BFS through the
         // transition table, accumulating the multiplicative probability.
-        // `best[j]` records the best (highest-probability) path so far —
-        // the LM tree-poset structure ensures uniqueness, but in case of
-        // a malformed (DAG-with-rejoin) input we keep the highest weight.
+        // `best[j]` records the best (highest-probability) path so far — the
+        // documented max-probability-path contract (see rustdoc above). On the
+        // acyclic tree-poset tables magnitude() needs, the path is unique; on
+        // DAG-with-rejoin or cyclic tables the highest weight wins, and the
+        // strict `>` improvement test below is what guarantees termination
+        // (equal-probability rederivations, e.g. a prob = 1.0 cycle, do not
+        // re-enter the frontier).
         //
         // BFS termination cap (v0.1.1): at most `n * n` step transitions per
         // source. A well-formed acyclic LM yields O(n) steps; the n² cap is

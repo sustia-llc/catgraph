@@ -156,6 +156,26 @@ fn from_transition_log_propagates_validation_error() {
     );
 }
 
+/// The documented max-probability-path contract on cyclic tables: a
+/// `prob = 1.0` two-cycle (`A ⇄ B`, both directions certain) is
+/// `add_transition`-legal, must terminate (the strict-improvement relaxation
+/// treats the equal-probability rederivation as a non-improvement, not an
+/// oscillation), and must yield `d(A, B) = d(B, A) = −ln 1 = 0`.
+#[test]
+fn enriched_space_prob_one_two_cycle_terminates_with_zero_distance() {
+    let mut m = LmCategory::new(vec!["A".into(), "B".into()]);
+    m.add_transition("A", "B", 1.0).unwrap();
+    m.add_transition("B", "A", 1.0).unwrap();
+
+    let space = m
+        .enriched_space()
+        .expect("prob = 1.0 two-cycle must not exhaust the BFS frontier cap");
+    let d_ab = space.distance(&0, &1).0;
+    let d_ba = space.distance(&1, &0).0;
+    assert_eq!(d_ab, 0.0, "d(A, B) must be −ln 1 = 0");
+    assert_eq!(d_ba, 0.0, "d(B, A) must be −ln 1 = 0");
+}
+
 // ---------------------------------------------------------------------------
 // Eq 4.3 bounds proptest — sanity check on random LMs
 // ---------------------------------------------------------------------------
