@@ -172,3 +172,19 @@ pub use ring::Ring;
 /// the Shannon branch and the central difference collapses to identically
 /// zero. Recommended `h = 1e-4` — see crate-level docs.
 pub const TSALLIS_SHANNON_EPS: f64 = 1e-6;
+
+/// Absolute tolerance for triangle-inequality checks on `−ln`-derived
+/// distances, in the distance (log) domain.
+///
+/// The max-product transitive closure guarantees `π(x, z) ≥ π(x, y)·π(y, z)`
+/// exactly, but the lifted distance inequality is checked as
+/// `−ln π(x, z) ≤ (−ln π(x, y)) + (−ln π(y, z))`, where the right side rewrites
+/// a `−ln` of a product as a sum of `−ln`s. Those two forms differ by a few
+/// ULPs of `ln`/multiplication rounding, so on non-dyadic couplings (e.g.
+/// `1/3`, `2/5`) an exact check can spuriously fail. `1e-9` sits orders of
+/// magnitude above that ULP noise yet orders below any genuine violation.
+///
+/// Consumed via
+/// [`LawvereMetricSpace::triangle_inequality_holds_within`](catgraph_applied::lawvere_metric::LawvereMetricSpace::triangle_inequality_holds_within)
+/// in [`coalition`] and [`weighted_cospan`].
+pub(crate) const TRIANGLE_FLOAT_TOL: f64 = 1e-9;

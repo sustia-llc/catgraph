@@ -103,13 +103,61 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
     ///
     /// Returns `true` iff the inequality holds everywhere.
     ///
+    /// Exact (zero-tolerance) check — equivalent to
+    /// [`triangle_inequality_holds_within`](Self::triangle_inequality_holds_within)`(0.0)`.
+    /// Callers whose distances are derived from `−ln` of floating-point
+    /// products (where `−ln(a·b)` and `(−ln a)+(−ln b)` differ by ULPs) should
+    /// prefer the tolerant variant — see its docs.
+    ///
+    /// # Complexity
+    ///
+    /// `O(n³)` where `n = self.objects.len()`. Intended for small finite
+    /// spaces and test fixtures; not suitable for large metric spaces.
+    #[must_use]
+    pub fn triangle_inequality_holds(&self) -> bool {
+        self.triangle_inequality_holds_within(0.0)
+    }
+
+    /// Check the triangle inequality `d(x, z) ≤ d(x, y) + d(y, z) + tol` over
+    /// all triples `(x, y, z) ∈ objects³`, tolerating an absolute slack of
+    /// `tol` in the distance (log) domain.
+    ///
+    /// Returns `true` iff `d(x, z) ≤ d(x, y) + d(y, z) + tol` everywhere; a
+    /// triple is a violation iff `d(x, z) > d(x, y) + d(y, z) + tol`.
+    ///
+    /// # Why a tolerance
+    ///
+    /// When distances are the `−ln` lift of `[0, 1]`-valued couplings (BTV
+    /// 2021 §1.4), a max-product transitive closure guarantees the *product*
+    /// inequality `π(x, z) ≥ π(x, y)·π(y, z)` exactly, but the corresponding
+    /// distance inequality is `−ln π(x, z) ≤ −ln(π(x, y)·π(y, z))`. Evaluating
+    /// the right side as `(−ln π(x, y)) + (−ln π(y, z))` — a log-of-product
+    /// rewritten as a sum-of-logs — differs from `−ln(π(x, y)·π(y, z))` by a
+    /// few ULPs of `ln` and multiplication rounding. On non-dyadic couplings
+    /// (e.g. `1/3`, `2/5`) that ULP noise can push `d(x, z)` a hair above the
+    /// summed bound, spuriously failing the exact check even though the space
+    /// is a valid Lawvere metric by construction. A small absolute `tol`
+    /// (orders of magnitude above the ULP noise, orders below any genuine
+    /// violation) absorbs it.
+    ///
+    /// `tol` is an absolute slack in the distance / log domain (the same units
+    /// as the stored `Tropical` values). Passing `tol = 0.0` reproduces the
+    /// exact check of [`triangle_inequality_holds`](Self::triangle_inequality_holds).
+    ///
+    /// # Infinity semantics
+    ///
+    /// Preserved from the exact check. If `sum = +∞` (some leg unreachable),
+    /// then `sum + tol = +∞`, so `d(x, z) > +∞` is never true and no triple is
+    /// a violation. If `d(x, z) = +∞` while the sum is finite, `+∞ > finite`
+    /// holds and the triple is a violation.
+    ///
     /// # Complexity
     ///
     /// `O(n³)` where `n = self.objects.len()`. Intended for small finite
     /// spaces and test fixtures; not suitable for large metric spaces.
     #[must_use]
     #[allow(clippy::similar_names)]
-    pub fn triangle_inequality_holds(&self) -> bool {
+    pub fn triangle_inequality_holds_within(&self, tol: f64) -> bool {
         for x in &self.objects {
             for y in &self.objects {
                 for z in &self.objects {
@@ -122,8 +170,10 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
                     // The triangle inequality `d(x,z) ≤ d(x,y) + d(y,z)` is
                     // the ordinary `≤` on `[0, ∞]`, i.e. ordering on the
                     // underlying `f64` — distinct from the rig's additive
-                    // order (which is `min`, not `≤`).
-                    if dxz.0 > sum.0 {
+                    // order (which is `min`, not `≤`). `tol` is absolute slack
+                    // in this log domain; `sum.0 = +∞ ⇒ sum.0 + tol = +∞ ⇒`
+                    // never a violation.
+                    if dxz.0 > sum.0 + tol {
                         return false;
                     }
                 }
