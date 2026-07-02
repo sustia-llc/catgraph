@@ -9,6 +9,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Enriched-coalition magnitude surface** (`coalition` module, #22; gemini-spec
+  §IV.5). Reads a coalition as a **cospan-weighted subgraph of an enriched
+  category** — agents = objects, inter-agent couplings = `UnitInterval` (`[0,1]`)
+  hom-objects (BTV 2021, arXiv:2106.07890), coalition diversity = `Mag(tA|members)`
+  via the BV 2025 §3.5 Eq 7 Möbius sum (arXiv:2501.06662; Thm 3.10's Tsallis
+  closed form is the acyclic tree-poset special case — coalitions may be cyclic,
+  which Eq 7 handles). `Coalition<O>` wraps a `WeightedCospan<O, UnitInterval>`
+  over the members and stores a **derived, immutable** skeletal
+  `LawvereMetricSpace` built once at construction. `Coalition::from_enriched`
+  applies:
+  - **restrict-then-close** — restrict to member homs first, then max-product
+    transitive closure through **member nodes only** (dense Bellman–Ford, `m−1`
+    rounds; exact for weights `≤ 1` since the optimal path is simple and cycles
+    never improve). Coupling mediated through a non-member does **not** count.
+    The closure makes composition `A(i,j)·A(j,k) ≤ A(i,k)` hold, so the triangle
+    inequality holds by construction under the `−ln` lift.
+  - **skeletalization** — members with `A(x,y)=A(y,x)=1.0` (distance `0` both
+    ways) are quotiented on the **closed** table (Kolmogorov quotient; magnitude
+    is skeleton-invariant, Leinster 2008 / 2013). This removes the singular-ζ
+    "identical rows" degeneracy that would otherwise make a perfectly-coupled
+    coalition error at every `t`; other singular configurations still return
+    `Err`. `effective_members()` reports the skeleton size and `member_classes()`
+    the per-member class index; the full member cospan is retained for the
+    boundary story.
+
+  `coalition_magnitude(coalition, t)` reads the cached skeletal space (no
+  per-call allocation) and calls `magnitude::<F64Rig>` — `t = 1` is the
+  canonical arm (its Shannon tie is the derivative `d/dt Mag|_{t=1}=ΣH(p_x)`,
+  BV 2025 §3.14 Cor, not the `t=1` value), `t = 2` a collision proxy, `t → ∞` a
+  cardinality-like limit. `coalition_magnitude_from_couplings(agents, couplings,
+  members, t)` is the plain-data entry point — validates member indices first,
+  then coupling indices, rejects self-coupling triples `(i,i,_)` (the identity
+  axiom fixes the diagonal), validates probs ∈ `[0,1]` via `UnitInterval::new` —
+  the seed of C3's stable `coalition_value` (#23). Hand-computed acceptance
+  tests: chain (`A(a,c)=0.35`, cross-checks `LmCategory::magnitude` to 1e-9),
+  diamond (`A(a,d)=max(0.30, 0.36)=0.36`, hand-derived `Mag(1)=1.90` via
+  back-substitution on the upper-triangular ζ), restrict-before-close pin, cyclic
+  couplings (`Mag(1)=4/3`), skeletalization (mutual-1.0 pair → 1 effective agent,
+  `Mag=1`; 1.0 three-cycle collapses via the closed table; two clones + one ≡ the
+  2-member coalition; asymmetric-1.0 not merged), singleton (`Mag=1` at any `t`),
+  construction errors (empty / unknown / duplicate member; self-coupling), and
+  `t ≥ 1` monotonicity bounds. New worked example
+  `examples/coalition_magnitude.rs` (5-agent table, two overlapping coalitions,
+  restrict-then-close `∞` demo, self-asserting). Re-exported at the crate root:
+  `Coalition`, `coalition_magnitude`, `coalition_magnitude_from_couplings`.
+  No new dependencies.
+
 - **Semantic comparison / clustering over the Yoneda embedding** (`semantic`
   module, #21). Consumer layer over `yoneda` (#19) that ranks and groups whole
   texts by their meanings (Bradley–Terilla–Vlassopoulos 2021, arXiv:2106.07890;
