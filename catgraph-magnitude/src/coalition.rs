@@ -278,6 +278,18 @@ where
     pub fn member_classes(&self) -> &[usize] {
         &self.member_classes
     }
+
+    /// Borrow the derived **skeletal** Lawvere metric space (one object per
+    /// `~`-class) that [`coalition_magnitude`] inverts.
+    ///
+    /// `pub(crate)` so [`crate::coalition_eval`] (#31) can cache its base `μ`
+    /// off this exact space instead of re-skeletalizing the extracted closed
+    /// table — the two would agree, but reuse keeps the base value bit-identical
+    /// and saves the rebuild.
+    #[must_use]
+    pub(crate) fn space(&self) -> &LawvereMetricSpace<NodeId> {
+        &self.space
+    }
 }
 
 /// Dense max-product transitive closure of the `m × m` generator matrix.
@@ -337,12 +349,24 @@ fn bellman_ford_closure(generators: &[Vec<f64>], m: usize) -> Vec<Vec<f64>> {
 /// (`d(x,z) ≤ d(x,y) + d(y,z) = 0`), so union-find over the mutual-`1.0` pairs
 /// yields a well-defined partition. The `== 1.0` test is exact: a product of
 /// couplings equals `1.0` iff every factor is `1.0`.
+///
+/// # Preconditions
+///
+/// `closed` must be a max-product **closed** `m × m` table: diagonal exactly
+/// `1.0`, entries in `[0, 1]`, and the triangle inequality holding under the
+/// `−ln` lift. Callers pass either [`bellman_ford_closure`]'s output or a
+/// bordered extension of it ([`crate::coalition_eval`]'s slow path); the exact
+/// `== 1.0` equivalence test relies on the closedness (a raw generator table,
+/// where a `1.0` two-hop product isn't yet materialized, would mis-quotient).
 // The symmetric pair scan reads BOTH `closed[i][j]` and `closed[j][i]`, and the
 // second loop indexes `parent`/`member_classes` while consuming a union-find
 // `find` — an iterator-by-value rewrite doesn't apply (mirrors the module-level
 // allow in `magnitude.rs`).
+//
+// `pub(crate)` for reuse by [`crate::coalition_eval`] (#31): the incremental
+// slow path re-skeletalizes the bordered table with this exact helper.
 #[allow(clippy::needless_range_loop)]
-fn skeletal_classes(closed: &[Vec<f64>], m: usize) -> (Vec<usize>, Vec<usize>) {
+pub(crate) fn skeletal_classes(closed: &[Vec<f64>], m: usize) -> (Vec<usize>, Vec<usize>) {
     let mut parent: Vec<usize> = (0..m).collect();
     for i in 0..m {
         for j in (i + 1)..m {
@@ -382,7 +406,23 @@ fn uf_find(parent: &mut [usize], mut x: usize) -> usize {
 /// table, using each class's representative row: `d(a, b) = −ln closed[rep_a][rep_b]`
 /// (`+∞` when the coupling is `0`). Quotient distances are well-defined — any
 /// representative gives the same value (Kolmogorov quotient of a pseudometric).
-fn build_skeletal_space(closed: &[Vec<f64>], reps: &[usize]) -> LawvereMetricSpace<NodeId> {
+///
+/// `pub(crate)` for reuse by [`crate::coalition_eval`] (#31): the incremental
+/// slow path builds its skeletal space with this exact helper, so incremental
+/// evaluation shares the fresh-path metric.
+///
+/// # Preconditions
+///
+/// `closed` must be a max-product **closed** table (diagonal exactly `1.0`,
+/// entries in `[0, 1]`, triangle inequality holding under the `−ln` lift), and
+/// `reps` the class representatives [`skeletal_classes`] returned for it — each
+/// `reps[a]` a valid row/column index into `closed`. The Kolmogorov-quotient
+/// well-definedness (any representative gives the same distance) holds only for
+/// such a closed table.
+pub(crate) fn build_skeletal_space(
+    closed: &[Vec<f64>],
+    reps: &[usize],
+) -> LawvereMetricSpace<NodeId> {
     let k = reps.len();
     LawvereMetricSpace::from_distance_fn(k, |a, b| {
         let p = closed[reps[a]][reps[b]];
@@ -460,6 +500,51 @@ pub fn coalition_magnitude_from_couplings<O>(
 where
     O: Copy + Eq + std::hash::Hash + Debug + 'static,
 {
+    let (cat, member_objs, _map) = build_coupling_category(
+        agents,
+        couplings,
+        members,
+        "coalition_magnitude_from_couplings",
+    )?;
+    let coalition = Coalition::from_enriched(&cat, &member_objs)?;
+    coalition_magnitude(&coalition, t)
+}
+
+/// Shared validation + [`HomMap`](crate::HomMap) construction for the plain-data
+/// coalition entry points (#31 dedup).
+///
+/// Validates in the order [`coalition_magnitude_from_couplings`] fixed — member
+/// indices first, then per coupling: index range, self-loop rejection, and
+/// `prob ∈ [0, 1]` via [`UnitInterval::new`] — using `ctx` as the error-message
+/// prefix so each caller keeps its own message text. Returns the built
+/// `HomMap`, the resolved member objects, and a `(from, to) → prob` map of the
+/// validated couplings **incident to a member** (either endpoint in `members`),
+/// last-write-wins on duplicates (matching [`HomMap::set_hom`](crate::HomMap)'s
+/// overwrite). [`coalition_magnitude_from_couplings`] ignores the map;
+/// [`crate::coalition_eval`] reads it to border a candidate against a member.
+///
+/// # Errors
+///
+/// [`CatgraphError::Composition`] for an out-of-range member index, an
+/// out-of-range coupling index, a self-coupling, or (propagated) a probability
+/// outside `[0, 1]`.
+#[allow(clippy::type_complexity)]
+pub(crate) fn build_coupling_category<O>(
+    agents: &[O],
+    couplings: &[(usize, usize, f64)],
+    members: &[usize],
+    ctx: &str,
+) -> Result<
+    (
+        crate::HomMap<O, UnitInterval>,
+        Vec<O>,
+        HashMap<(usize, usize), f64>,
+    ),
+    CatgraphError,
+>
+where
+    O: Copy + Eq + std::hash::Hash + Debug + 'static,
+{
     let n = agents.len();
 
     // Validate member indices FIRST — cheap, and avoids building the HomMap on
@@ -471,35 +556,38 @@ where
                 .get(idx)
                 .copied()
                 .ok_or_else(|| CatgraphError::Composition {
-                    message: format!(
-                        "coalition_magnitude_from_couplings: member index {idx} out of range for {n} agents"
-                    ),
+                    message: format!("{ctx}: member index {idx} out of range for {n} agents"),
                 })
         })
         .collect::<Result<_, _>>()?;
 
+    let member_set: std::collections::HashSet<usize> = members.iter().copied().collect();
+
     let mut cat = crate::HomMap::<O, UnitInterval>::new(agents.to_vec());
+    let mut coupling_map: HashMap<(usize, usize), f64> = HashMap::new();
     for &(i, j, p) in couplings {
         if i >= n || j >= n {
             return Err(CatgraphError::Composition {
-                message: format!(
-                    "coalition_magnitude_from_couplings: coupling index ({i}, {j}) out of range for {n} agents"
-                ),
+                message: format!("{ctx}: coupling index ({i}, {j}) out of range for {n} agents"),
             });
         }
         if i == j {
             return Err(CatgraphError::Composition {
                 message: format!(
-                    "coalition_magnitude_from_couplings: self-coupling ({i}, {i}, {p}) — the identity axiom fixes the diagonal to 1.0, so a self-coupling would be silently ignored"
+                    "{ctx}: self-coupling ({i}, {i}, {p}) — the identity axiom fixes the diagonal to 1.0, so a self-coupling would be silently ignored"
                 ),
             });
         }
         let ui = UnitInterval::new(p)?;
         cat.set_hom(agents[i], agents[j], ui);
+        // Only member-incident couplings are ever read downstream (a candidate
+        // borders against members), so store just those — O(m·n), not O(n²).
+        if member_set.contains(&i) || member_set.contains(&j) {
+            coupling_map.insert((i, j), ui.value());
+        }
     }
 
-    let coalition = Coalition::from_enriched(&cat, &member_objs)?;
-    coalition_magnitude(&coalition, t)
+    Ok((cat, member_objs, coupling_map))
 }
 
 /// **The stable consumer entry point** (#23): coalition diversity as a single

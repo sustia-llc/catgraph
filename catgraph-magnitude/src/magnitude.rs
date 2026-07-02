@@ -44,6 +44,37 @@ pub(crate) fn materialize_objects(space: &LawvereMetricSpace<NodeId>) -> Vec<Nod
         .collect()
 }
 
+/// The single zeta kernel: `ζ = exp(−d)` from a **scaled** Lawvere distance `d`.
+///
+/// The one place the `exp(−distance)` embedding lives. [`mobius_function`],
+/// [`weighting`], and [`coweighting`] all build their zeta entries through this,
+/// and [`crate::coalition_eval`]'s incremental border reuses it (as
+/// `zeta_from_scaled_distance(t · −ln π)`) so its similarities are ULP-identical
+/// to the cached inversion. `d = +∞` (unset / probability-0) ⇒ `exp(−∞) = 0`.
+#[inline]
+pub(crate) fn zeta_from_scaled_distance(d: f64) -> f64 {
+    (-d).exp()
+}
+
+/// Build the `t`-scaled copy of a Lawvere metric space: every recorded distance
+/// multiplied by `t` (unset `Tropical(+∞)` preserved by `f64` infinity
+/// arithmetic). This is the scaling [`magnitude`] Möbius-inverts; factored out
+/// so [`crate::coalition_eval`] caches its base `μ` through the identical loop.
+pub(crate) fn scaled_space(
+    space: &LawvereMetricSpace<NodeId>,
+    t: f64,
+) -> LawvereMetricSpace<NodeId> {
+    let objects: Vec<NodeId> = materialize_objects(space);
+    let mut scaled = LawvereMetricSpace::new(objects.clone());
+    for a in &objects {
+        for b in &objects {
+            let d = space.distance(a, b);
+            scaled.set_distance(*a, *b, crate::Tropical(t * d.0));
+        }
+    }
+    scaled
+}
+
 /// Tsallis q-entropy `H_t(p) = (1 − Σ pᵢᵗ) / (t − 1)` for `t ≠ 1`.
 ///
 /// At `t = 1` the limit is Shannon entropy `H₁(p) = -Σ pᵢ ln pᵢ`. Tsallis
@@ -169,7 +200,7 @@ where
             // exp(0) = 1. f64::exp handles both correctly.
             for j in 0..n {
                 let d = space.distance(&objects[i], &objects[j]);
-                let zeta_ij: f64 = (-d.0).exp();
+                let zeta_ij: f64 = zeta_from_scaled_distance(d.0);
                 row.push(Q::from(zeta_ij));
             }
             // Right half: identity.
@@ -267,20 +298,9 @@ pub fn magnitude<Q>(space: &LawvereMetricSpace<NodeId>, t: f64) -> Result<Q, Cat
 where
     Q: Ring + Div<Output = Q> + From<f64>,
 {
-    // Materialize the object list once, in deterministic Vec<NodeId> order.
-    let objects: Vec<NodeId> = materialize_objects(space);
-
-    // Build a t-scaled copy: distance(a, b) = t · old(a, b). Unset distances
-    // (`Tropical(+∞)`) are preserved by `f64` infinity arithmetic.
-    let mut scaled = LawvereMetricSpace::new(objects.clone());
-    for a in &objects {
-        for b in &objects {
-            let d = space.distance(a, b);
-            scaled.set_distance(*a, *b, crate::Tropical(t * d.0));
-        }
-    }
-
-    // Möbius-invert and sum every entry of the resulting `n × n` matrix.
+    // Build the t-scaled copy and Möbius-invert it. `scaled_space` is shared
+    // with `coalition_eval`'s base-μ cache so both scale distances identically.
+    let scaled = scaled_space(space, t);
     let mu = mobius_function::<Q>(&scaled)?;
     let n = mu.rows();
     let mut sum = Q::zero();
@@ -341,7 +361,7 @@ where
             let mut row: Vec<Q> = Vec::with_capacity(n + 1);
             for j in 0..n {
                 let d = space.distance(&objects[i], &objects[j]);
-                let zeta_ij: f64 = (-d.0).exp();
+                let zeta_ij: f64 = zeta_from_scaled_distance(d.0);
                 row.push(Q::from(zeta_ij));
             }
             row.push(Q::one());
@@ -428,7 +448,7 @@ where
             for j in 0..n {
                 // Transposed: row i, col j ↦ ζ(objects[j], objects[i]).
                 let d = space.distance(&objects[j], &objects[i]);
-                let zeta_ji: f64 = (-d.0).exp();
+                let zeta_ji: f64 = zeta_from_scaled_distance(d.0);
                 row.push(Q::from(zeta_ji));
             }
             row.push(Q::one());

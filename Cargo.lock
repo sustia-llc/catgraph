@@ -225,7 +225,7 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "catgraph"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "either",
@@ -243,7 +243,7 @@ dependencies = [
 
 [[package]]
 name = "catgraph-applied"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "catgraph",
  "criterion",
@@ -263,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "catgraph-dl"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "catgraph",
  "catgraph-applied",
@@ -275,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "catgraph-magnitude"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "catgraph",
  "catgraph-applied",
@@ -290,7 +290,7 @@ dependencies = [
 
 [[package]]
 name = "catgraph-physics"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "catgraph",
  "criterion",
