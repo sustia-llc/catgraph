@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.2.0] - 2026-07-02
+
+Incremental coalition magnitude for the decision hot path (#31, PR #32).
+
+### Added
+
+- **`CoalitionEvaluator`** (`coalition_eval` module) — caches a base coalition
+  `S` (closed coupling table, skeletal `t`-scaled Möbius inverse, weighting /
+  coweighting) so per-candidate `Mag(S ∪ {x})` queries skip the O(m³) fresh
+  closure and, on the fast path, the O(k³) inversion: an O(m²) closure border
+  plus the bordered-Schur update `Mag′ = Mag + (1−p)(1−q)/s`. Near-singular
+  borders (`|s|` within `SCHUR_SLOW_FALLBACK_TOL`) and candidates that improve
+  interior couplings or merge skeletal classes fall back to a slow path that
+  re-skeletalizes the bordered table (still skipping the fresh closure).
+  ~6×/6×/4.4× per 8-candidate sweep at m = 4/8/16 vs two fresh
+  `coalition_value` calls per candidate.
+- **`coalition_value_delta(agents, couplings, members, candidate)`** — one-shot
+  `(Mag(S), Mag(S ∪ {x}))` pair at the pinned `t = 1` arm.
+- **`INCREMENTAL_REL_TOL`** (re-exported at the crate root) — the #31-amendment
+  numerical contract: base value bit-identical to fresh, incremental values
+  within 1e-9 relative, rank-order identity over candidate sweeps. The leave
+  path stays fresh (max-product closures do not downdate).
+
+### Changed
+
+- Internal (no public-surface change): one shared validation / scaling / ζ-kernel
+  code path (`build_coupling_category`, `scaled_space`,
+  `zeta_from_scaled_distance`) now backs both fresh and incremental evaluation,
+  keeping the two routes in lockstep by construction.
+
 ## [workspace-v0.1.0] - 2026-07-01
 
 First monorepo release: workspace-wide tag `v0.1.0` (supersedes the pre-reboot
@@ -1037,7 +1067,8 @@ Both BV 2025 verifications pass at v0.1.0:
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.2.0...HEAD
+[workspace-v0.2.0]: https://github.com/sustia-llc/catgraph/compare/v0.1.1...v0.2.0
 [workspace-v0.1.0]: https://github.com/sustia-llc/catgraph/releases/tag/v0.1.0
 [0.5.0]: https://github.com/tsondru/catgraph/compare/catgraph-magnitude-v0.4.0...catgraph-magnitude-v0.5.0
 [0.4.0]: https://github.com/tsondru/catgraph/compare/catgraph-magnitude-v0.3.1...catgraph-magnitude-v0.4.0
