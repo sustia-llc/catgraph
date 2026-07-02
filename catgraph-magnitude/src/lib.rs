@@ -132,6 +132,14 @@ pub use coalition::{
     Coalition, coalition_magnitude, coalition_magnitude_from_couplings, coalition_value,
 };
 
+// #31 — incremental coalition magnitude: a [`CoalitionEvaluator`] caches the
+// base coalition's closed table + skeletal ζ⁻¹ once, then answers per-candidate
+// `Mag(S ∪ {x})` queries in O(m² + k²) (bordered Schur update) instead of two
+// O(m³ + k³) fresh evaluations. [`coalition_value_delta`] is the paired-
+// evaluation entry point at the pinned `t = 1` arm.
+pub mod coalition_eval;
+pub use coalition_eval::{CoalitionEvaluator, INCREMENTAL_REL_TOL, coalition_value_delta};
+
 // Phase 6F (v0.2.0) — chain-sum Möbius via Leinster 2013 Prop 2.1.3.
 pub mod mobius_chains;
 
