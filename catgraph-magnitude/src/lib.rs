@@ -41,6 +41,11 @@
 //! - [`magnitude`](magnitude::magnitude) — magnitude via Möbius sum.
 //! - [`LmCategory`](lm_category::LmCategory) — materialized language-model
 //!   transition table with `Mag(tM)` per BV 2025 Thm 3.10.
+//! - [`semantic`] — comparison / clustering over the BTV 2021 Yoneda embedding:
+//!   [`LmCategory::yoneda_all`](lm_category::LmCategory::yoneda_all) (batch
+//!   meanings), [`k_nearest_from`] / [`k_nearest_to`] (bidirectional
+//!   nearest-meaning ranking, asymmetric per BTV §5), and
+//!   [`cluster_semantic_sym`] (symmetric single-linkage convenience) (#21).
 //!
 //! ## Substrate
 //!
@@ -99,6 +104,12 @@ pub mod weighted_cospan;
 // semantic hom/distance (BTV 2021 Lemma 2 Eq 11 / §5).
 pub mod yoneda;
 pub use yoneda::{Copresheaf, semantic_distance, semantic_distance_sym, semantic_hom};
+
+// #21 — semantic text comparison/clustering over the Yoneda embedding: batch
+// Yoneda image (`yoneda_all`), bidirectional k-nearest ranking, and symmetric
+// single-linkage clustering (BTV 2021 Lemma 2 Eq 11 / §5 asymmetry).
+pub mod semantic;
+pub use semantic::{cluster_semantic_sym, k_nearest_from, k_nearest_to};
 
 // Deterministic-transition rank — `MH_1(ℓ=0)` = #covering distance-0 (π=1)
 // transitions (a BV 2025 / Leinster–Shulman structural invariant; see module).
