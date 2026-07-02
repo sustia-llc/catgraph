@@ -51,6 +51,7 @@ On `main` (unreleased) — a semantic + determinism layer over `LmCategory`:
 - **`yoneda`** (#19) — `LmCategory::yoneda(name)` gives the representable copresheaf `L(x, −)` as a `Copresheaf` (meaning-as-distribution over continuations, `π = exp(−d)`). `semantic_hom` / `semantic_distance` are the **asymmetric** BTV 2021 internal hom `inf_c min{1, b(c)/a(c)}` and its `−ln` distance (`semantic_distance_sym` for a non-canonical symmetric variant). BTV 2021 Lemma 2 Eq 11 / §5.
 - **`determinism`** (#20) — `LmCategory::deterministic_transition_rank()` = `rank MH₁(ℓ = 0)` = the number of covering `π = 1` (deterministic) transitions: a structural memorisation count, **not** a coherence/hallucination signal. BV 2025 / LS 2017.
 - **`semantic`** (#21) — comparison / clustering over the Yoneda embedding. `LmCategory::yoneda_all()` gives every meaning from one `enriched_space()` pass; `k_nearest_from` / `k_nearest_to` rank the nearest meanings to a query in **both** directions of the asymmetric BTV distance (they differ — BTV §5); `cluster_semantic_sym` is a symmetric single-linkage **convenience** over the non-canonical `semantic_distance_sym` (mutually-unreachable meanings never merge). BTV 2021 Lemma 2 Eq 11 / §5.
+- **`coalition`** (#22) — enriched-coalition magnitude surface (gemini-spec §IV.5). A coalition is a **member-restricted, max-product-closed, perfectly-coupled-quotiented** cospan-weighted subgraph of an enriched category (agents = objects, couplings = `UnitInterval` homs); `coalition_magnitude(coalition, t)` is its diversity `Mag(tA|members)` via the BV 2025 §3.5 Eq 7 Möbius sum (`t = 1` canonical arm, `t = 2` collision proxy, `t → ∞` cardinality-like; Möbius sum is cyclic-safe — Thm 3.10's closed form is the acyclic special case). `Coalition::from_enriched` restricts to member homs, closes through member nodes only (couplings via non-members do not count), then skeletalizes members that are perfectly coupled both ways (distance 0) so a fully-coupled coalition reports 1 effective agent instead of a singular ζ — `effective_members()` / `member_classes()` expose the quotient. `coalition_magnitude_from_couplings` is the plain-data entry point (seed of #23 `coalition_value`). BV 2025 §3.5 Eq 7 + BTV 2021 `[0,1]` enrichment + Leinster 2008/2013 skeleton invariance.
 
 ## API surface (v0.5.0)
 
@@ -63,6 +64,9 @@ On `main` (unreleased) — a semantic + determinism layer over `LmCategory`:
 | `LmCategory::yoneda_all()` → `Vec<Copresheaf>` | BTV 2021 (Yoneda) | All meanings from one `enriched_space()` pass, object order (unreleased, #21) |
 | `k_nearest_from` / `k_nearest_to` | BTV 2021 §5 | Bidirectional nearest-meaning ranking over the asymmetric `semantic_distance` (unreleased, #21) |
 | `cluster_semantic_sym` | BTV 2021 §5 (sym convenience) | Single-linkage threshold clustering over the non-canonical `semantic_distance_sym` (unreleased, #21) |
+| `Coalition<O>` + `Coalition::from_enriched(cat, members)` | BV 2025 §3.5 + BTV 2021 (gemini-spec §IV.5) | Restrict-then-close + skeletalize cospan-weighted subgraph; `effective_members()` / `member_classes()` expose the perfectly-coupled quotient (unreleased, #22) |
+| `coalition_magnitude(coalition, t)` → `f64` | BV 2025 §3.5 Eq (7) | Coalition diversity `Mag(tA\|members)` (Möbius sum, cyclic-safe); `t=1` canonical arm (unreleased, #22) |
+| `coalition_magnitude_from_couplings(agents, couplings, members, t)` | BV 2025 §3.5 (gemini-spec §IV.5) | Plain-data entry point; seed of #23 `coalition_value` (unreleased, #22) |
 | `magnitude<Q>(space, t)` | BV 2025 §3.5 Eq (7) | Möbius sum at scale `t` |
 | `mobius_function<Q>(space)` | Leinster 2013 §1.1 Lemma 1.1.4 | `ζ⁻¹` via Gaussian elimination (field-fast path) |
 | `mobius_function_via_chains<Q>(space)` | Leinster 2013 Prop 2.1.3 | Chain-sum via von-Neumann series (scattered-space precondition) |
@@ -117,6 +121,7 @@ cargo run --example mock_coalition        # 5-agent WeightedCospan + 3-agent LmC
 cargo run --example prop_3_14_acceptance  # BV 2025 Prop 3.14 magnitude-homology Euler-char identity (v0.3.0)
 cargo run --example integer_mobius        # Leinster 2008 Cor 1.5 integer-exact Möbius via Z(BigInt) (v0.4.0)
 cargo run --example semantic_comparison   # BTV 2021 nearest-meaning ranking (both directions) + clustering (#21)
+cargo run --example coalition_magnitude   # §IV.5 coalition diversity Mag(tA|members) + restrict-then-close pin (#22)
 ```
 
 ## Roadmap
@@ -129,7 +134,7 @@ cargo run --example semantic_comparison   # BTV 2021 nearest-meaning ranking (bo
 - ✅ **v0.3.1** (2026-05-10): Phase G review patch — `snf_rank_over_zp` panic → `Result`; `RankQ` rename + generic-mono coupling docs; citation corrections.
 - ✅ **v0.4.0** (2026-05-13): Leinster 2008 Cor 1.5 integer-exact Möbius (`mobius_function_via_chains_exact<N, Q: Ring + Integer>` over `PosetCategory<N>`) + multi-prime CRT SNF lift (`smith_normal_form_integer` with Newman 1972 §1.4 Thm II.9 chain rebalance) + `Integer` trait + `Z(BigInt)` newtype substrate from cg-applied v0.5.6.
 - ✅ **v0.5.0** (2026-05-13): `Integer` → `ZAlgebra` consumer-side rename (co-release with cg-applied v0.6.0 at workspace umbrella v0.14.0) + closed-form Möbius cross-check fixture + bidirectional `verify_mobius_recursion` harness + path β + path γ first walks.
-- 🔜 **v0.6.0** (unreleased, on `main`): BTV 2021 Yoneda semantic embedding (`yoneda` — representable copresheaf `L(x, −)` + asymmetric semantic hom/distance, #19) + `LmCategory::deterministic_transition_rank` (`rank MH₁(ℓ=0)` = covering deterministic transitions, #20) + semantic comparison/clustering over the Yoneda embedding (`semantic` — `yoneda_all` + bidirectional `k_nearest_from`/`k_nearest_to` + `cluster_semantic_sym`, #21).
+- 🔜 **v0.6.0** (unreleased, on `main`): BTV 2021 Yoneda semantic embedding (`yoneda` — representable copresheaf `L(x, −)` + asymmetric semantic hom/distance, #19) + `LmCategory::deterministic_transition_rank` (`rank MH₁(ℓ=0)` = covering deterministic transitions, #20) + semantic comparison/clustering over the Yoneda embedding (`semantic` — `yoneda_all` + bidirectional `k_nearest_from`/`k_nearest_to` + `cluster_semantic_sym`, #21) + enriched-coalition magnitude surface (`coalition` — `Coalition::from_enriched` restrict-then-close + skeletalize + `coalition_magnitude`/`coalition_magnitude_from_couplings`, gemini-spec §IV.5, #22).
 
 ## License
 
