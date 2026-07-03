@@ -46,6 +46,7 @@ num          = "0.4"   # narrowed to BigInt / Complex / ToPrimitive / pow (NOT Z
 rand         = "0.10"
 rayon        = "1.12"
 rust_decimal = "1"
+thiserror    = "2"     # workspace error-derive pattern (CatgraphError, HypergraphError — #28)
 
 # --- dev ---
 proptest  = "1"

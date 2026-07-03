@@ -179,67 +179,47 @@ impl From<HyperedgeIndex> for usize {
 ///
 /// Non-generic (unlike yamafaktory's error, which is parameterized by the weight
 /// types) — each variant carries the offending index or a reason so the caller
-/// can diagnose the failure without re-inspecting the graph. Follows the tone of
-/// `catgraph`'s `CatgraphError` (contextual, structured variants) but is
-/// implemented by hand (`Display` + [`std::error::Error`]) — no `thiserror`, no
-/// new dependency.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// can diagnose the failure without re-inspecting the graph. Derived with
+/// `thiserror`, matching `catgraph`'s `CatgraphError` pattern (#28); the
+/// `Display` strings are unchanged from the original hand-rolled impl.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum HypergraphError {
     /// No vertex with this index exists (removed, or never added).
+    #[error("hypergraph error: vertex {0} not found")]
     VertexNotFound(VertexIndex),
     /// No hyperedge with this index exists (removed, or never added).
+    #[error("hypergraph error: hyperedge {0} not found")]
     HyperedgeNotFound(HyperedgeIndex),
     /// A hyperedge was requested with an empty vertex list (not allowed — a
     /// hyperedge must connect at least one vertex).
+    #[error("hypergraph error: a hyperedge must have at least one vertex")]
     HyperedgeNoVertices,
     /// [`join_hyperedges`](Hypergraph::join_hyperedges) needs at least two
     /// distinct, existing hyperedges (fewer than two, or a repeated index).
+    #[error("hypergraph error: join requires at least two distinct, existing hyperedges")]
     InvalidJoin,
     /// [`contract_hyperedge_vertices`](Hypergraph::contract_hyperedge_vertices)
     /// was given a target or a to-contract vertex that is not currently a member
     /// of the hyperedge's list.
+    #[error("hypergraph error: invalid contraction: {reason}")]
     InvalidContraction {
         /// Human-readable reason (which vertex, which hyperedge).
         reason: String,
     },
     /// One or more referenced vertices do not exist (add/update-hyperedge with an
     /// unknown vertex). Carries the offending indices.
+    #[error("hypergraph error: vertices not found: [{}]", join_indices(.0))]
     VerticesNotFound(Vec<VertexIndex>),
 }
 
-impl Display for HypergraphError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::VertexNotFound(v) => write!(f, "hypergraph error: vertex {v} not found"),
-            Self::HyperedgeNotFound(e) => write!(f, "hypergraph error: hyperedge {e} not found"),
-            Self::HyperedgeNoVertices => {
-                write!(
-                    f,
-                    "hypergraph error: a hyperedge must have at least one vertex"
-                )
-            }
-            Self::InvalidJoin => write!(
-                f,
-                "hypergraph error: join requires at least two distinct, existing hyperedges"
-            ),
-            Self::InvalidContraction { reason } => {
-                write!(f, "hypergraph error: invalid contraction: {reason}")
-            }
-            Self::VerticesNotFound(vs) => {
-                write!(f, "hypergraph error: vertices not found: [")?;
-                for (i, v) in vs.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{v}")?;
-                }
-                write!(f, "]")
-            }
-        }
-    }
+/// Comma-join for [`HypergraphError::VerticesNotFound`]'s `Display` — keeps the
+/// derived message byte-identical to the original hand-rolled `[v0, v1, …]` form.
+fn join_indices(vs: &[VertexIndex]) -> String {
+    vs.iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
-
-impl std::error::Error for HypergraphError {}
 
 /// A CRUD hypergraph over `Copy` vertex weights `V` and hyperedge weights `HE`.
 ///

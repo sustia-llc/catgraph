@@ -26,7 +26,7 @@ rayon = { workspace = true, optional = true }
 # replacing the former petgraph/rustworkx-core path with a zero-dep substrate.
 ultragraph = { workspace = true }
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
-thiserror = "2"
+thiserror.workspace = true
 union-find = "0.4"
 
 [dev-dependencies]
