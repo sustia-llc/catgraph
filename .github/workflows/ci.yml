@@ -40,3 +40,18 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       - run: cargo test -p catgraph --no-default-features
+
+  # #11: the slow BV 2025 Prop 3.14 acceptance fixture
+  # (euler_char_identity::fixture_3_5point_path_t_2_5) is ignored under
+  # debug_assertions ("30s release / 15+ min debug"), so the debug
+  # `cargo test --workspace` above never exercises it. This targeted
+  # release run covers it. Deliberately NOT `--workspace --release --
+  # --ignored`: the cc_completeness_tracking_* diagnostics (#15) and the
+  # #14 known-gap test are ignored because they FAIL by design.
+  release-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p catgraph-magnitude --release --test euler_char_identity

@@ -99,7 +99,7 @@ fn fixture_2_3point_line_t_3() {
 
 #[cfg_attr(
     debug_assertions,
-    ignore = "30s release / 15+ min debug; see feedback_cg_mag_release_mode_required.md"
+    ignore = "30s release / 15+ min debug; covered by the CI release-test job (#11)"
 )]
 #[test]
 fn fixture_3_5point_path_t_2_5() {
