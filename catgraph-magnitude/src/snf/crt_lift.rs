@@ -1,4 +1,4 @@
-//! §1.10 — Multi-prime CRT integer SNF lift.
+//! Multi-prime CRT integer SNF lift.
 //!
 //! Algorithm overview:
 //! 1. Compute Hadamard bound `H(A) = ∏_i ||a_i||_2`.
@@ -95,7 +95,7 @@ pub fn hadamard_bound(a: &[Vec<i64>]) -> Result<u128, CatgraphError> {
 /// - More than `k_max` primes would be required.
 /// - The target `2 · bound` overflows `u128`.
 /// - The `(2^30, 2^31)` range is exhausted before the target is reached
-///   (vanishingly unlikely for v0.4.0 fixture sizes — there are
+///   (vanishingly unlikely for the shipped fixture sizes — there are
 ///   ~50 million such primes).
 ///
 /// # Panics
@@ -174,10 +174,10 @@ pub fn select_primes_for_bound(bound: u128, k_max: usize) -> Result<Vec<i64>, Ca
 /// - Any prime ≤ 0.
 /// - Product `∏ p_i` overflows `i128`.
 /// - Modular inverse `(P/p_i)⁻¹ mod p_i` is undefined (e.g. non-coprime
-///   primes — would be a programmer error since the §1.10 caller selects
+///   primes — would be a programmer error since the caller selects
 ///   distinct primes from `(2^30, 2^31)`).
 /// - Final reconstructed value exceeds `i64` range (similarly defensive;
-///   v0.4.0 consumers operate on bounded magnitude-homology fixtures).
+///   consumers operate on bounded magnitude-homology fixtures).
 pub fn crt_reconstruct_signed(primes: &[i64], residues: &[i64]) -> Result<i64, CatgraphError> {
     if primes.len() != residues.len() {
         return Err(CatgraphError::Composition {
@@ -218,7 +218,7 @@ pub fn crt_reconstruct_signed(primes: &[i64], residues: &[i64]) -> Result<i64, C
         x = (x + r_m_minv).rem_euclid(product);
     }
 
-    // Sign-symmetric lift. The §1.10 caller picks primes > 2, so `product`
+    // Sign-symmetric lift. The caller picks primes > 2, so `product`
     // is odd and `half = (product − 1) / 2` (integer division); the strict
     // `x > half` is canonical (no off-by-one on `x == half`).
     let half = product / 2;
@@ -244,8 +244,8 @@ pub fn crt_reconstruct_signed(primes: &[i64], residues: &[i64]) -> Result<i64, C
 /// Returns `(U, V, S)` over ℤ such that `U · A · V = S` with `S` diagonal
 /// and `s_0 | s_1 | ... | s_r` over ℤ (the classical integer SNF).
 ///
-/// Composes the three §1.10 substrate primitives ([`hadamard_bound`],
-/// [`select_primes_for_bound`], [`crt_reconstruct_signed`]) with the v0.3.x
+/// Composes the three substrate primitives ([`hadamard_bound`],
+/// [`select_primes_for_bound`], [`crt_reconstruct_signed`]) with the
 /// modular [`smith_normal_form`](super::smith_normal_form), plus a final
 /// **integer chain rebalance** step that normalises the CRT-lifted diagonal
 /// into canonical Smith form via the elementary-divisor / determinantal-divisor
@@ -278,10 +278,9 @@ pub fn crt_reconstruct_signed(primes: &[i64], residues: &[i64]) -> Result<i64, C
 ///    `s_k = gcd(d_0, …, d_{r−1}) / (s_0 · … · s_{k−1})` is a fold
 ///    over per-step GCDs; implementation detail in `integer_chain_rebalance`
 ///    (private fn).
-/// 7. **Return U + V from the first good prime** — a v0.4.0 simplification.
-///    Full per-entry CRT for U + V folds to v0.5.0+ forward-look (TBD
-///    section; consumers requesting integer-exact U + V will surface the
-///    need).
+/// 7. **Return U + V from the first good prime** — a simplification.
+///    Full per-entry CRT for U + V is deferred (#35; consumers requesting
+///    integer-exact U + V will surface the need).
 ///
 /// # Why the chain rebalance is needed
 ///
@@ -305,8 +304,8 @@ pub fn crt_reconstruct_signed(primes: &[i64], residues: &[i64]) -> Result<i64, C
 /// `Ok((U, V, S))` with shapes `(rows × rows, cols × cols, rows × cols)`.
 /// `S` is in integer Smith Normal Form with non-negative invariant factors
 /// on the principal diagonal and zeros elsewhere. `U` + `V` are the
-/// modular transforms from the first good prime (v0.4.0 simplification;
-/// full per-entry CRT for `U` + `V` defers to v0.5.0).
+/// modular transforms from the first good prime (a simplification;
+/// full per-entry CRT for `U` + `V` is deferred, #35).
 ///
 /// # Edge cases
 ///
@@ -320,14 +319,14 @@ pub fn crt_reconstruct_signed(primes: &[i64], residues: &[i64]) -> Result<i64, C
 /// - [`hadamard_bound`] error (matrix too large or too dense for `f64` /
 ///   `u128` accumulation).
 /// - [`select_primes_for_bound`] error (more than `k_max = 16` primes
-///   needed for the lift; vanishingly unlikely for v0.4.0 fixtures, but
+///   needed for the lift; vanishingly unlikely for the shipped fixtures, but
 ///   surfaced rather than silently truncated).
 /// - All selected primes are "bad" (rank inconsistent across all 16
 ///   primes). Defensively unreachable: it would require every prime in
 ///   `(2^30, 2^31)` to divide an invariant factor of `A`, which has
 ///   measure zero for any fixed matrix.
 /// - [`crt_reconstruct_signed`] error (e.g. final value exceeds `i64`
-///   range — defensive; v0.4.0 magnitude-homology fixtures stay well
+///   range — defensive; the magnitude-homology fixtures stay well
 ///   under `i64::MAX`).
 /// - [`smith_normal_form`](super::smith_normal_form) error propagated
 ///   from the per-prime call (non-rectangular input, non-positive modulus
@@ -349,11 +348,11 @@ pub fn crt_reconstruct_signed(primes: &[i64], residues: &[i64]) -> Result<i64, C
 ///
 /// # References
 ///
-/// Storjohann (2000) §7 + Bradley-Vigneaux 2025 v0.4.0 forward-look §1.10
-/// (algorithm sketch) augmented with Newman (1972) §1.4 Thm II.9 integer
+/// Storjohann (2000) §7 + Bradley-Vigneaux 2025 (algorithm sketch)
+/// augmented with Newman (1972) §1.4 Thm II.9 integer
 /// chain rebalance via determinantal divisors. Cross-validated dev-only
 /// against `events555/modularsnf` at SHA `d62535e` under the
-/// `modularsnf-oracle` feature flag (T15).
+/// `modularsnf-oracle` feature flag.
 pub fn smith_normal_form_integer(
     a: &[Vec<i64>],
 ) -> Result<(Vec<Vec<i64>>, Vec<Vec<i64>>, Vec<Vec<i64>>), CatgraphError> {
@@ -429,8 +428,7 @@ pub fn smith_normal_form_integer(
     }
 
     // 8. Return U + V from the first good prime (cheaper than per-entry
-    //    CRT; v0.5.0+ forward-look (TBD section) captures per-entry CRT
-    //    for U + V).
+    //    CRT; per-entry CRT for U + V is deferred).
     let (_, u_ref, v_ref, _) = &per_prime[0];
     Ok((u_ref.clone(), v_ref.clone(), s_lifted))
 }
@@ -453,22 +451,21 @@ pub fn smith_normal_form_integer(
 /// ```
 ///
 /// We compute `D_k` incrementally as `gcd` over `k`-subset products. For
-/// the small `r ≤ ~20` cases in v0.4.0 magnitude-homology fixtures, the
-/// `2^r` subset enumeration is acceptable; v0.5.0+ forward-look (TBD
-/// section) would hoist this to a polynomial dynamic-programming pass if
-/// needed.
+/// the small `r ≤ ~20` cases in the magnitude-homology fixtures, the
+/// `2^r` subset enumeration is acceptable; a polynomial dynamic-programming
+/// pass would hoist this if needed.
 ///
 /// Returns absolute values throughout (canonical Smith form has
 /// non-negative invariant factors).
 ///
 /// # Errors
 ///
-/// - Subset product overflows `i128` during `D_k` accumulation. For
-///   v0.4.0 magnitude-homology fixtures (`r ≤ 20`, CRT-lifted entries
+/// - Subset product overflows `i128` during `D_k` accumulation. For the
+///   magnitude-homology fixtures (`r ≤ 20`, CRT-lifted entries
 ///   bounded by `|det(A)|`) this is unreachable, but the explicit error
 ///   prevents a silent wrap from corrupting an invariant factor.
 /// - An invariant factor `s_k` exceeds `i64` range. Defensive: for the
-///   v0.4.0 magnitude-homology consumer, individual factors are bounded
+///   magnitude-homology consumer, individual factors are bounded
 ///   by `|det(A)|` which fits comfortably in i64.
 ///
 /// Worked example (Wikipedia 3×3): pre-rebalance diag `(2, 6, 52)` (taking
@@ -504,8 +501,8 @@ fn integer_chain_rebalance(diag: &[i64]) -> Result<Vec<i64>, CatgraphError> {
         let mut g: i128 = 0;
         let mut overflow: Option<(usize, usize)> = None;
         // Enumerate all k-subsets of {0, …, nz_len-1} via combinations.
-        // For nz_len ≤ ~20 (v0.4.0 fixture size) this is ≤ ~1M iterations.
-        // M-1 ride-along: use `checked_mul` so a subset-product overflow
+        // For nz_len ≤ ~20 (the shipped fixture size) this is ≤ ~1M iterations.
+        // Use `checked_mul` so a subset-product overflow
         // surfaces as an explicit error rather than `saturating_mul`'s
         // silent `i128::MAX` (which would corrupt the gcd downstream).
         enumerate_subsets(nz_len, k, &mut |subset| {
@@ -528,7 +525,7 @@ fn integer_chain_rebalance(diag: &[i64]) -> Result<Vec<i64>, CatgraphError> {
                 message: format!(
                     "integer_chain_rebalance: i128 overflow during D_{k_bad} subset-product \
                      accumulation at index {i_bad} (nonzero[{i_bad}]={}); \
-                     escalate to BigInt-native rebalance (v0.5.0+ forward-look TBD)",
+                     escalate to BigInt-native rebalance",
                     nonzero[i_bad]
                 ),
             });
@@ -540,14 +537,14 @@ fn integer_chain_rebalance(diag: &[i64]) -> Result<Vec<i64>, CatgraphError> {
     let mut chain: Vec<i64> = Vec::with_capacity(r);
     for window in det_divisors.windows(2) {
         let s_k = window[1] / window[0];
-        // M-2 ride-along: surface s_k > i64::MAX as an explicit error rather
+        // Surface s_k > i64::MAX as an explicit error rather
         // than the previous `unwrap_or(i64::MAX)` silent saturation. For
-        // v0.4.0 magnitude-homology fixtures s_k divides |det(A)| which is
+        // the magnitude-homology fixtures s_k divides |det(A)| which is
         // i64-bounded; the explicit error defends against future regressions.
         let s_k_i64 = i64::try_from(s_k).map_err(|_| CatgraphError::Composition {
             message: format!(
                 "integer_chain_rebalance: invariant factor {s_k} exceeds i64 range; \
-                 escalate to BigInt-native rebalance (v0.5.0+ forward-look TBD)"
+                 escalate to BigInt-native rebalance"
             ),
         })?;
         chain.push(s_k_i64);
@@ -574,9 +571,9 @@ fn gcd_i128(a: i128, b: i128) -> i128 {
 /// invoking `f` on each subset as a borrowed `&[usize]`. Used by
 /// [`integer_chain_rebalance`] for determinantal-divisor enumeration.
 ///
-/// For `n ≤ ~20` (v0.4.0 magnitude-homology fixture size), `C(n, k) ≤ ~1M`
-/// is acceptable. v0.5.0 forward-look §2.4 covers the polynomial DP
-/// alternative if larger fixtures land.
+/// For `n ≤ ~20` (the magnitude-homology fixture size), `C(n, k) ≤ ~1M`
+/// is acceptable. A polynomial DP alternative would apply if larger
+/// fixtures land.
 fn enumerate_subsets<F>(n: usize, k: usize, f: &mut F)
 where
     F: FnMut(&[usize]),

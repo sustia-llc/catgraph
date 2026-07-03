@@ -1,10 +1,10 @@
-//! Phase DL-1 scaffold smoke test (updated for DL-2 Agent C bodies).
+//! Scaffold smoke test.
 //!
 //! Confirms the public API surface compiles and that the five
 //! architecture wrappers, the F-(co)algebra newtypes, the free-monad
 //! recursive carriers, and the `Para` type-level handle all instantiate.
 //!
-//! Phase DL-2 Agent C: `FreeMnd<F, Z>` now requires `F: EndoFunctor`
+//! `FreeMnd<F, Z>` requires `F: EndoFunctor`
 //! (GAT-based object-map encoding). The endofunctor placeholders below
 //! gain trivial `EndoFunctor` impls so the type-level instantiations
 //! still work — for `Stream`, `Mealy`, and `GroupAction` we use a unit
@@ -22,7 +22,7 @@ use catgraph_dl::free_monad::{CofreeCmnd, EndoFunctor, FreeMnd};
 
 // Type-level placeholders for the F-algebra-side endofunctors. The
 // `Apply<X> = ()` projections are deliberately trivial — these names are
-// reserved for DL-3+ semantic bodies and the smoke test only checks the
+// reserved for future semantic bodies and the smoke test only checks the
 // type-level witnesses still construct.
 struct StreamEndo<O>(core::marker::PhantomData<O>);
 struct MealyEndo<I, O>(core::marker::PhantomData<(I, O)>);
@@ -81,7 +81,7 @@ fn recursive_nn_constructs() {
 fn mealy_cell_constructs() {
     let cell: MealyCell<f32, u32, fn((f32, u32)) -> fn(u8) -> (u8, u32), u8, u8> =
         MealyCell::new(0.25_f32, |(_p, _s)| {
-            // Identity-ish next: ignored at Phase DL-1.
+            // Identity-ish next: ignored.
             |i| (i, 0_u32)
         });
     assert_eq!(cell.parameter, 0.25);
@@ -120,12 +120,12 @@ fn monad_algebra_constructs() {
 
 #[test]
 fn free_monad_witnesses_construct() {
-    // FreeMnd(1 + A × −) ≅ List in CDL Example B.19. DL-2: the `new()`
+    // FreeMnd(1 + A × −) ≅ List in CDL Example B.19. The `new()`
     // compatibility constructor produces `Pure(Z::default())`.
     let _free: FreeMnd<ListEndo<u8>, ()> = FreeMnd::new();
     let _free_tree: FreeMnd<TreeEndo<u8>, ()> = FreeMnd::new();
 
-    // DL-2: `CofreeCmnd::new` now takes `(head, tail)`. For the smoke
+    // `CofreeCmnd::new` takes `(head, tail)`. For the smoke
     // test we use the trivial `Apply<X> = ()` projections of the stream/
     // Mealy endofunctors so `tail = ()` is a valid construction.
     let _cofree_stream: CofreeCmnd<StreamEndo<u8>, ()> = CofreeCmnd::new((), ());

@@ -7,7 +7,7 @@
 //! - `cell_0 : P → S` — initial hidden state.
 //! - `cell_1 : P × A × S → S` — the recurrent cell.
 //!
-//! ## Phase DL-2 Agent E — `unroll`
+//! ## `unroll`
 //!
 //! [`FoldingRnn::unroll`] is the unique algebra homomorphism
 //! `(P, List(A)) → S` from the *initial* algebra of the free monad
@@ -28,8 +28,7 @@ use core::marker::PhantomData;
 ///
 /// CDL Example I.1.
 ///
-/// **Phase DL-1 scaffold:** opaque struct holding the parameter and the
-/// pair of cell maps.
+/// Opaque struct holding the parameter and the pair of cell maps.
 #[derive(Debug, Clone)]
 pub struct FoldingRnn<P, S, Cell0, Cell1, A> {
     /// The parameter object `P`.

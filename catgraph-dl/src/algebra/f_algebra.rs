@@ -19,10 +19,10 @@ use super::group_action::EndoFunctor;
 /// `structure_map` is a closure or function value implementing
 /// `F(Carrier) → Carrier`.
 ///
-/// **Phase DL-1 scaffold:** opaque struct holding the carrier and the
-/// structure-map closure. **Phase DL-2** adds [`FAlgebraHom`] for
-/// homomorphisms-of-algebras and the commuting-square verification entry
-/// point [`FAlgebraHom::verify_commutes`].
+/// Opaque struct holding the carrier and the structure-map closure.
+/// [`FAlgebraHom`] provides homomorphisms-of-algebras and the
+/// commuting-square verification entry point
+/// [`FAlgebraHom::verify_commutes`].
 #[derive(Debug, Clone)]
 pub struct FAlgebra<F, A, S> {
     /// The carrier object `A`.

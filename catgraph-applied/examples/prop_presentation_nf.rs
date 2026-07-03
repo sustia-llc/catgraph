@@ -1,5 +1,5 @@
 //! Prop presentations + Joyal-Street string-diagram NF + congruence-closure
-//! decision engine + the v0.5.2 Functorial closure of FS18 §5.4 Thm 5.60.
+//! decision engine + the Functorial closure of FS18 §5.4 Thm 5.60.
 //!
 //! This example is the canonical demonstration of FS18 §5.4 Thm 5.60 closure
 //! semantics in `catgraph-applied`. It walks the six surfaces that constitute
@@ -9,8 +9,8 @@
 //!    over `Sig::A, Sig::B : 1 → 1`, exercising `Free::generator`,
 //!    `Free::compose`, `Free::tensor`, `Free::identity`, `Free::braid`, plus
 //!    the [`PropExpr::source`] / [`PropExpr::target`] arity accessors.
-//! 2. The two `NormalizeEngine` variants ([`Structural`] = v0.5.0 syntactic
-//!    rewriter; [`CongruenceClosure`] = v0.5.1 default) running against the
+//! 2. The two `NormalizeEngine` variants ([`Structural`] = syntactic
+//!    rewriter; [`CongruenceClosure`] = default) running against the
 //!    same equation set. Surfaces the overlapping-equation killer-case
 //!    behaviour where `Structural` can return `None` (false negative from
 //!    depth-bound) but `CongruenceClosure` always returns a definite verdict.
@@ -25,30 +25,30 @@
 //!    [`verify_sfg_to_mat_is_full_and_faithful`] — a pair the default
 //!    [`CongruenceClosure`] engine fails to identify but the
 //!    [`Presentation::eq_mod_functorial`] semantic path resolves correctly
-//!    to `Some(true)` by Baez-Erbele 2015. This is the v0.5.2 §5.4 closure
+//!    to `Some(true)` by Baez-Erbele 2015. This is the §5.4 closure
 //!    surface in operation.
 //! 5. [`PresentedProp::quotient_representative`] showing the canonical
 //!    representative of an equivalence class as a wrapper around
 //!    `Presentation::normalize`.
 //! 6. Direct [`smc_nf::nf`] + [`smc_nf::from_string_diagram`] round-trip
 //!    on a sample `PropExpr` — the Layer-1 Joyal-Street string-diagram NF
-//!    substrate that `Presentation::eq_mod` short-circuits through (v0.5.2
+//!    substrate that `Presentation::eq_mod` short-circuits through (the
 //!    hybrid path: NF check first, CC fallback). Inspects the intermediate
 //!    [`StringDiagram`] / [`Layer`] / [`Atom`] surface directly without a
 //!    `Presentation` wrapper.
 //!
 //! # Paper-correctness pivot at §4
 //!
-//! The plan-narrative framed §4 as a 3-engine comparison
+//! One might expect §4 to be a 3-engine comparison
 //! (`Layer1` / `KnuthBendix` / `Functorial`) on a single custom signature.
-//! Actual API state at v0.6.0:
+//! The actual API state:
 //!
 //! - [`NormalizeEngine`] has **exactly two variants** — `Structural` and
-//!   `CongruenceClosure` (default since v0.5.1). There is no `Layer1` or
+//!   `CongruenceClosure` (default). There is no `Layer1` or
 //!   `KnuthBendix` variant; the Layer-1 Joyal-Street NF runs as a
 //!   short-circuit *inside* the `CongruenceClosure` engine (see
 //!   `Presentation::eq_mod` rustdoc), and full Knuth-Bendix completion is
-//!   v0.5.3+ research.
+//!   tracked in issue #15.
 //! - [`MatrixNFFunctor<R>`] implements [`CompleteFunctor<G>`] only for
 //!   `G = SfgGenerator<R>` — its underlying [`sfg_to_mat`] is hard-wired
 //!   to the 5-generator signal-flow signature (FS18 §5.3 Eq 5.52). The
@@ -58,7 +58,7 @@
 //!   prop, not on every PROP).
 //!
 //! So §4 keeps the *shape* of the side-by-side comparison (anchor, count,
-//! resolve-via-stronger-engine, mirroring T3's `mat_operations.rs::§5`
+//! resolve-via-stronger-engine, mirroring `mat_operations.rs::§5`
 //! `verify_sfg_to_mat_is_full_and_faithful` diptych) but switches to
 //! `SfgGenerator<BoolRig>`, the carrier where the comparison is well-defined.
 //! §1-§3 and §5-§6 remain on the simple custom `Sig` signature.
@@ -75,7 +75,7 @@
 //!   - §5.4 Thm 5.60 — `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)` (full + faithful).
 //! - **Baez & Erbele 2015** *Categories in Control* (Theory and Applications
 //!   of Categories 30) — proves FS18 §5.4 Thm 5.60. The
-//!   [`MatrixNFFunctor`] is the v0.5.2 realisation of this theorem's
+//!   [`MatrixNFFunctor`] is the realisation of this theorem's
 //!   decision procedure in the catgraph-applied surface.
 //! - **Joyal & Street 1991** *The geometry of tensor calculus I, II* — the
 //!   string-diagram normal form algorithm implemented in
@@ -204,17 +204,17 @@ fn main() {
     // axioms. The two `NormalizeEngine` variants take different routes to
     // decide that quotient equality:
     //
-    //   - Structural (v0.5.0): bounded structural rewriting (depth = 32 by
+    //   - Structural: bounded structural rewriting (depth = 32 by
     //     default). May return `Ok(None)` on overlapping equation sets
     //     because the rewriter oscillates and hits the depth bound.
     //
-    //   - CongruenceClosure (v0.5.1+ default, hybrid since v0.5.2): runs the
+    //   - CongruenceClosure (default, hybrid): runs the
     //     Layer-1 Joyal-Street NF as a structural-equality short-circuit
     //     FIRST, then falls back to the Downey-Sethi-Tarjan 1980
     //     congruence-closure engine seeded with SMC-pre-normalised equations.
     //     Always returns a definite `Ok(Some(_))`.
     //
-    // Headline contrast: the v0.5.0 overlapping-equations killer case
+    // Headline contrast: the overlapping-equations killer case
     // `A ; A = B  AND  A = C`. Under Structural with a tight depth bound,
     // normalization may not converge or may yield distinct normal forms for
     // semantically equal expressions. Under CongruenceClosure, congruence
@@ -223,7 +223,7 @@ fn main() {
 
     let mut pres_struct = Presentation::<Sig>::with_engine(NormalizeEngine::Structural);
     // Exercise set_engine on a no-op rebind; method needed for surface coverage
-    // (path β v0.6.0 Group E lists Presentation::set_engine as a separate item).
+    // (set_engine is a separate public-surface item).
     pres_struct.set_engine(NormalizeEngine::Structural);
     assert_eq!(pres_struct.engine(), NormalizeEngine::Structural);
 
@@ -447,7 +447,7 @@ fn main() {
     // -------- §6. Direct nf<G> + from_string_diagram<G> round-trip ----------
     //
     // The Layer-1 Joyal-Street NF substrate that `Presentation::eq_mod`'s
-    // v0.5.2 hybrid path short-circuits through (see `eq_mod` rustdoc). Build
+    // hybrid path short-circuits through (see `eq_mod` rustdoc). Build
     // an SMC-coherence-trivial pair, lower both to `StringDiagram` via
     // [`smc_nf::nf`], confirm they share the same NF (Joyal-Street totality
     // claim from `nf` rustdoc), then round-trip one back to `PropExpr` via
@@ -471,7 +471,7 @@ fn main() {
     // Inspect a single Layer + Atom: the NF for A should be one layer
     // containing one Atom::Generator(Sig::A). The explicit type ascriptions
     // demonstrate that Layer<G> and Atom<G> are public re-exports reachable
-    // from downstream code (path β v0.6.0 Group E coverage).
+    // from downstream code.
     if let Some(layer) = sd_rhs.layers.first() {
         let l: &Layer<Sig> = layer;
         println!("  First layer atom count: {}", l.atoms.len());

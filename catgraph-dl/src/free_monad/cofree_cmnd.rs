@@ -13,7 +13,7 @@
 //! with a `Box`-indirected `tail` — every constructor at the value level
 //! stores a finite witness. (Truly infinite `CofreeCmnd` values, e.g. for
 //! `F = Stream`, would need `Lazy` / `Thunk` indirection; that is out of
-//! scope for DL-2.)
+//! scope for the current surface.)
 //!
 //! ## Recursion encoding
 //!

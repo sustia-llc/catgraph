@@ -2,7 +2,7 @@
 //!
 //! Builds two single-place nets, tensors them into a 2-transition Petri
 //! net, applies a codomain transposition, and prints the before/after
-//! codomain ordering. Shipped in catgraph-applied v0.3.1.
+//! codomain ordering.
 
 use catgraph::category::Composable;
 use catgraph::monoidal::{Monoidal, SymmetricMonoidalMorphism};

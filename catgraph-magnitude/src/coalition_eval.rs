@@ -338,7 +338,7 @@ impl CoalitionEvaluator {
     /// **Slow path** (improvement or merge). Border the *closed* table —
     /// `closed′[i][j] = max(closed[i][j], c[i]·r[j])`, last row/col from `c`/`r`,
     /// corner `1.0` — then re-skeletalize and re-invert with the crate's shared
-    /// [`magnitude`](crate::magnitude::magnitude) helpers on the `(m+1)`-point
+    /// [`crate::magnitude::magnitude`] helpers on the `(m+1)`-point
     /// space. This still skips the `O(m³)` fresh closure (the cached table plus
     /// `x`'s borders are its full closure) and inherits correctness from the
     /// shared helpers.

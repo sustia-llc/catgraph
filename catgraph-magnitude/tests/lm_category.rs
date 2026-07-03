@@ -2,7 +2,7 @@
 //!
 //! The two paper-anchored acceptance tests (Thm 3.10 closed form, Cor 3.14
 //! Shannon recovery) live in `tests/bv_2025_acceptance.rs` so they appear as
-//! a distinct test binary in `cargo test` output — they are the v0.1.0
+//! a distinct test binary in `cargo test` output — they are the
 //! acceptance gate and visibility matters.
 
 // `usize → f64` casts on small-state-count test fixtures are precision-safe.
@@ -81,10 +81,10 @@ fn magnitude_smoke_tree_lm() {
 }
 
 // ---------------------------------------------------------------------------
-// v0.1.1 add_transition Result error paths
+// add_transition Result error paths
 // ---------------------------------------------------------------------------
 
-/// v0.1.1: `add_transition` returns `Err` when `from` is not in `objects`.
+/// `add_transition` returns `Err` when `from` is not in `objects`.
 #[test]
 fn add_transition_unknown_from_state_errors() {
     let mut m = LmCategory::new(vec!["A".into(), "B".into()]);
@@ -92,7 +92,7 @@ fn add_transition_unknown_from_state_errors() {
     assert!(err.is_err(), "unknown from-state must error, got {err:?}");
 }
 
-/// v0.1.1: `add_transition` returns `Err` when `to` is not in `objects`.
+/// `add_transition` returns `Err` when `to` is not in `objects`.
 #[test]
 fn add_transition_unknown_to_state_errors() {
     let mut m = LmCategory::new(vec!["A".into(), "B".into()]);
@@ -100,7 +100,7 @@ fn add_transition_unknown_to_state_errors() {
     assert!(err.is_err(), "unknown to-state must error, got {err:?}");
 }
 
-/// v0.1.1: `add_transition` returns `Err` when `prob ∉ [0, 1]` — release-mode
+/// `add_transition` returns `Err` when `prob ∉ [0, 1]` — release-mode
 /// promotion of the previous debug-only assertion.
 #[test]
 fn add_transition_prob_out_of_range_errors() {
@@ -113,7 +113,7 @@ fn add_transition_prob_out_of_range_errors() {
     assert!(m.add_transition("A", "B", 1.0).is_ok());
 }
 
-/// v0.1.1 (S1.2): `add_transition` rejects non-trivial self-loops by
+/// `add_transition` rejects non-trivial self-loops by
 /// construction; BV 2025 §3 hypothesis forbids them.
 #[test]
 fn add_transition_self_loop_errors() {
@@ -123,8 +123,8 @@ fn add_transition_self_loop_errors() {
     assert!(m.add_transition("A", "A", 0.0).is_ok());
 }
 
-/// v0.1.1: `from_transition_log` reconstructs an LM from an append-only
-/// log of `(from, to, prob)` triples, mirroring Phase 6C `magnitude_history`
+/// `from_transition_log` reconstructs an LM from an append-only
+/// log of `(from, to, prob)` triples, mirroring `magnitude_history`
 /// replay-from-event-log semantics.
 #[test]
 fn from_transition_log_replays_lm() {
@@ -143,7 +143,7 @@ fn from_transition_log_replays_lm() {
     );
 }
 
-/// v0.1.1: `from_transition_log` propagates validation errors from
+/// `from_transition_log` propagates validation errors from
 /// `add_transition` — invalid log entries fail-fast.
 #[test]
 fn from_transition_log_propagates_validation_error() {

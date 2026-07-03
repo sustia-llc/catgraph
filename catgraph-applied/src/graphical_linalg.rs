@@ -201,10 +201,9 @@ where
 
     // Primary bucket = matrix image under S. Within each bucket, two
     // expressions are a faithfulness-violation witness iff they are NOT
-    // equal modulo the presentation. The v0.5.1 change: within-bucket
-    // partitioning now uses Presentation::eq_mod (which routes through the
-    // default CongruenceClosure engine), replacing the v0.5.0 pattern of
-    // format-string bucketing on normalize() output.
+    // equal modulo the presentation. Within-bucket partitioning uses
+    // Presentation::eq_mod (which routes through the default
+    // CongruenceClosure engine).
     let mut by_matrix: std::collections::HashMap<String, Vec<SignalFlowGraph<R>>> =
         std::collections::HashMap::new();
     for expr in &expressions {

@@ -33,9 +33,9 @@
 //!
 //! [test]: ../../../../tests/algebra_homomorphisms.rs
 //
-// Phase DL-2 reconciliation: `EndoFunctor` is now canonical in
-// `crate::endofunctor`; this module re-exports it for backward
-// compatibility with the `catgraph_dl::algebra::EndoFunctor` path.
+// `EndoFunctor` is canonical in `crate::endofunctor`; this module re-exports
+// it for backward compatibility with the `catgraph_dl::algebra::EndoFunctor`
+// path.
 
 use core::marker::PhantomData;
 
@@ -91,8 +91,7 @@ impl Group for Z2Group {
 /// CDL Example 2.4. The `Apply<X>` GAT projects to the Rust tuple
 /// `(G, X)` — the same encoding used in
 /// [`tests/scaffold_smoke.rs`][smoke]'s `GroupActionEndo<G>` placeholder
-/// (the placeholder is replaced wholesale by this real implementation
-/// once Phase DL-2 closes).
+/// (the placeholder was replaced wholesale by this real implementation).
 ///
 /// `fmap(g, f)` lifts the morphism on the second slot only — the group
 /// element is preserved untouched. This is the standard "constant on the

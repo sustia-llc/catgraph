@@ -6,16 +6,16 @@
 //! - [`ChainIndex`]: `(k, ℓ)`-bucketed index per LS 2017 §2 grading.
 //! - [`boundary_matrix<Q>`]: alternating-sum drop-one-vertex face map.
 //!
-//! ## v0.4.0 §1.18 widening
+//! ## Pseudo-metric widening
 //!
-//! [`Chain::is_finite_in`] now accepts pseudo-metric spaces (LS 2017
-//! Ex 2.9) — distinct points may have zero distance. The previous
-//! v0.3.x `d > 0.0` clause is dropped; widening is monotone for strict
-//! metrics (all v0.3.x acceptance fixtures continue to pass).
+//! [`Chain::is_finite_in`] accepts pseudo-metric spaces (LS 2017
+//! Ex 2.9) — distinct points may have zero distance. There is no
+//! `d > 0.0` clause; the widening is monotone for strict
+//! metrics (the acceptance fixtures continue to pass).
 //!
-//! ## v0.4.0 §1.12 split
+//! ## Module split
 //!
-//! Phase E rank-recovery + acceptance gate live in the sibling
+//! Rank-recovery + acceptance gate live in the sibling
 //! [`homology`] submodule. Public API surface is preserved via the
 //! re-exports below; external callers continue to import through
 //! `chain_complex::{magnitude_homology_rank, euler_char_identity_at}`.
@@ -38,7 +38,7 @@ use crate::weighted_cospan::NodeId;
 /// Simplicity (consecutive entries distinct) is enforced at construction.
 /// Finite-distance and simplicity (`+∞` rejected; distinct consecutive points
 /// required) is checked by [`Chain::is_finite_in`]. Pseudo-metric `d == 0`
-/// between distinct points is accepted post-v0.4.0 §1.18 (LS 2017 Def 3.3).
+/// between distinct points is accepted (LS 2017 Def 3.3).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Chain {
     points: Vec<NodeId>,
@@ -91,15 +91,13 @@ impl Chain {
     /// (no `+∞` edge) AND consists of pairwise-distinct consecutive points
     /// (LS 2017 Def 3.3 simplicity).
     ///
-    /// **v0.4.0 widening (§1.18).** The previous v0.3.x form additionally
-    /// required `d > 0.0` between consecutive points, which rejected
-    /// pseudo-metric `[0, ∞]`-categories (LS 2017 Example 2.9) where distinct
-    /// objects may have zero distance before skeletal collapse. v0.4.0 drops
-    /// the `d > 0.0` clause; pseudo-metric spaces now enumerate correctly.
-    /// The widening is **monotone for strict metrics** (LS 2017 Example 2.7):
-    /// on a strict metric `d = 0` only when points coincide, which is already
-    /// rejected by the `win[0] != win[1]` clause, so all v0.3.x acceptance
-    /// fixtures continue to pass verbatim.
+    /// **Pseudo-metric widening.** There is no `d > 0.0` requirement between
+    /// consecutive points; pseudo-metric `[0, ∞]`-categories (LS 2017
+    /// Example 2.9), where distinct objects may have zero distance before
+    /// skeletal collapse, enumerate correctly. The widening is **monotone for
+    /// strict metrics** (LS 2017 Example 2.7): on a strict metric `d = 0` only
+    /// when points coincide, which is already rejected by the `win[0] != win[1]`
+    /// clause, so the acceptance fixtures continue to pass verbatim.
     #[must_use]
     pub fn is_finite_in(&self, space: &LawvereMetricSpace<NodeId>) -> bool {
         for win in self.points.windows(2) {
@@ -118,7 +116,7 @@ impl Chain {
 /// Enumerate all simple chains of degree ≤ `max_degree` in a Lawvere metric
 /// space. Output includes degree-0 chains (single points) up through
 /// degree-`max_degree` chains. Filters out chains containing any consecutive
-/// pair with infinite distance (v0.4.0 §1.18: pseudo-metric `d == 0` between
+/// pair with infinite distance (pseudo-metric `d == 0` between
 /// distinct points is accepted; see [`Chain::is_finite_in`]).
 ///
 /// Complexity: `O(n^(max_degree + 1))` worst case for an `n`-element space.
@@ -152,7 +150,7 @@ pub fn enumerate_chains(space: &LawvereMetricSpace<NodeId>, max_degree: usize) -
                 continue; // simplicity
             }
             let d = space.distance(&last, &next).0;
-            // finite-distance restriction (v0.4.0 §1.18: pseudo-metric d == 0
+            // finite-distance restriction (pseudo-metric d == 0
             // between distinct points accepted)
             if !d.is_finite() {
                 continue;
@@ -255,10 +253,8 @@ impl ChainIndex {
     /// because `chains_at` re-bucketises via `(ell / tolerance).round()` —
     /// which is the inverse of the reconstruction. ULP error on the round-trip
     /// is at most one tolerance step, immaterial for the `e^(−ℓ)` weighting in
-    /// [`euler_char_identity_at`] at v0.3.0/v0.3.1 fixture sizes
+    /// [`euler_char_identity_at`] at the shipped fixture sizes
     /// (n ≤ 5, distances `[1.0, 4.0]`).
-    ///
-    /// Documented v0.3.1 per Phase G code-quality reviewer M-3.
     #[must_use]
     pub fn grades(&self) -> &[f64] {
         &self.grades

@@ -1,14 +1,13 @@
-//! Phase DL-2 Agent D — F-algebra/coalgebra homomorphism acceptance tests.
+//! F-algebra/coalgebra homomorphism acceptance tests.
 //!
 //! CDL Definitions 2.5 and B.2; CDL Example 2.6 (the Geometric-Deep-
-//! Learning recovery). These tests exercise the bodies landed in Phase
-//! DL-2 for:
+//! Learning recovery). These tests exercise the bodies for:
 //!
 //! - [`FAlgebraHom::verify_commutes`] — the F-algebra commuting square
 //!   `f ∘ a = b ∘ F(f)`.
 //! - [`FCoalgebraHom::verify_commutes`] — the dual coalgebra square.
 //! - [`MonadAlgebraHom`] — construction smoke (unit + multiplication
-//!   coherence is a documented obligation, not machine-checked at DL-2).
+//!   coherence is a documented obligation, not machine-checked).
 //!
 //! Each test consolidates several related assertions in one function (per
 //! project TDD convention — quality over quantity).
@@ -144,7 +143,7 @@ fn identity_is_an_f_algebra_homomorphism() {
 /// The "happens-to-vanish" assertion is the key dual: it shows that
 /// `verify_commutes` is a *necessary* but not sufficient check —
 /// individual samples may satisfy the square without the full map being
-/// a homomorphism. The acceptance harness in CDL §3 (and our DL-3 work)
+/// a homomorphism. The acceptance harness in CDL §3 (and future work)
 /// would lift this to property-tested form.
 #[test]
 fn non_equivariant_projection_fails_commuting_square() {
@@ -383,7 +382,7 @@ fn coalgebra_hom_identity_smoke() {
 
 /// **MonadAlgebraHom — construction smoke.** CDL Definition 2.3.
 ///
-/// Phase DL-2 does not machine-check unit + multiplication coherence
+/// The crate does not machine-check unit + multiplication coherence
 /// (documented obligation on `MonadAlgebraHom::new`). This test
 /// instantiates a `MonadAlgebraHom` for the group-action monad
 /// `Z2 × −` on `Vec<f64>` and:
@@ -392,7 +391,7 @@ fn coalgebra_hom_identity_smoke() {
 ///    (`MonadAlgebra::new(FAlgebra::new(...))` and
 ///    `MonadAlgebraHom::new(FAlgebraHom::new(...))`).
 /// 2. Calls `verify_commutes` through the embedded `algebra_hom`
-///    field — exercising the only law that *is* machine-checked at DL-2.
+///    field — exercising the only law that *is* machine-checked.
 /// 3. Confirms the wrapped `FAlgebra` carrier is preserved through
 ///    construction.
 #[test]
@@ -429,7 +428,7 @@ fn monad_algebra_hom_construction_and_commuting_square() {
     > = MonadAlgebraHom::new(f_hom);
 
     // Identity always satisfies the F-algebra square (the only law
-    // machine-checked at DL-2). Sweep both group elements.
+    // machine-checked). Sweep both group elements.
     for (g, x) in [
         (Z2Group(false), vec![1.0_f64, -2.0, 3.0]),
         (Z2Group(true), vec![1.0_f64, -2.0, 3.0]),

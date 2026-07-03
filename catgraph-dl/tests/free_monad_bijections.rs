@@ -1,4 +1,4 @@
-//! Phase DL-2 Agent C — `FreeMnd` ⇄ `Vec` and `FreeMnd` ⇄ `BinaryTree`
+//! `FreeMnd` ⇄ `Vec` and `FreeMnd` ⇄ `BinaryTree`
 //! bijection acceptance tests.
 //!
 //! CDL Examples B.19 + B.20. We verify that the two concrete encodings of
@@ -10,8 +10,7 @@
 //!
 //! ## Test taxonomy
 //!
-//! Five consolidated tests, one per acceptance bullet from the DL-2 Agent C
-//! brief:
+//! Five consolidated tests, one per acceptance criterion:
 //!
 //! 1. `vec_round_trip_proptest` — proptest-driven round trip for `Vec<u32>`
 //!    in both directions.

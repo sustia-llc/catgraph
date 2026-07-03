@@ -35,9 +35,8 @@
 //! during construction or destruction of `FreeMnd`. A violator produces a
 //! type-system-legal but mathematically meaningless free monad.
 
-// Phase DL-2 reconciliation: `EndoFunctor` is canonical in
-// `crate::endofunctor`. Re-exported here for backward compatibility
-// with the `catgraph_dl::free_monad::EndoFunctor` path.
+// `EndoFunctor` is canonical in `crate::endofunctor`. Re-exported here for
+// backward compatibility with the `catgraph_dl::free_monad::EndoFunctor` path.
 pub use crate::endofunctor::EndoFunctor;
 
 /// The free monad `FreeMnd(F)(Z) = Fix(X ↦ F(X) + Z)`.
@@ -87,9 +86,9 @@ impl<F: EndoFunctor, Z> FreeMnd<F, Z> {
 }
 
 // `Default` over `Z: Default` — produces `Pure(Z::default())`. This keeps
-// the Phase DL-1 `FreeMnd::new()` constructor surface usable by
+// the `FreeMnd::new()` compatibility constructor surface usable by
 // `tests/scaffold_smoke.rs::free_monad_witnesses_construct`, where every
-// reference uses `Z = ()` (i.e. the unit terminator). DL-2 callers should
+// reference uses `Z = ()` (i.e. the unit terminator). Callers should
 // prefer the explicit `pure` / `roll` constructors.
 impl<F: EndoFunctor, Z: Default> Default for FreeMnd<F, Z> {
     fn default() -> Self {
@@ -98,9 +97,9 @@ impl<F: EndoFunctor, Z: Default> Default for FreeMnd<F, Z> {
 }
 
 impl<F: EndoFunctor, Z: Default> FreeMnd<F, Z> {
-    /// Phase DL-1 compatibility constructor — `Pure(Z::default())`.
+    /// Compatibility constructor — `Pure(Z::default())`.
     ///
-    /// Bodies in DL-2 prefer the explicit [`FreeMnd::pure`] / [`FreeMnd::roll`]
+    /// Prefer the explicit [`FreeMnd::pure`] / [`FreeMnd::roll`]
     /// constructors which carry actual data. This entry point is retained
     /// solely to keep `tests/scaffold_smoke.rs` compiling.
     #[must_use]

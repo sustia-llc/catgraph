@@ -7,17 +7,16 @@
 //!
 //! ## Scope
 //!
-//! Five public modules — surfaces shipped in Phase DL-2 (v0.2.0) and
-//! refined in Phase DL-3 (v0.3.x). The crate is types + (co)algebra wrappers
+//! Five public modules. The crate is types + (co)algebra wrappers
 //! over `(Set, ×, 1)` by default; non-`(Set, ×, 1)` `MonoidalCategory`
-//! instances are deferred to Phase DL-4+ when a downstream consumer surfaces.
+//! instances are deferred until a downstream consumer surfaces.
 //!
 //! - [`para`] — the 2-category `Para`(M, C). Objects of `C`, 1-morphisms
 //!   `(P ∈ M, f : P ▶ X → Y)`, 2-morphisms = reparameterizations
 //!   `r : P' → P`. CDL §3.1. Concrete `(Set, ×, 1)` instance via
 //!   [`para::SetMonoidal`] / [`para::SetActegory`]; downstream `(Set, ×, 1)`-
 //!   flavoured ZSTs opt into the canonical bodies via
-//!   [`para::SetCategoryDefaults`] (v0.3.0).
+//!   [`para::SetCategoryDefaults`].
 //! - [`algebra`] — `FAlgebra<F>`, `FCoalgebra<F>`, `MonadAlgebra<M>` plus
 //!   homomorphism wrappers `FAlgebraHom` / `FCoalgebraHom` /
 //!   `MonadAlgebraHom` with caller-attested `verify_commutes`. The
@@ -42,7 +41,7 @@
 //! ## Substrate
 //!
 //! Re-exports the Tier 3 enrichment infrastructure from `catgraph-applied`
-//! v0.5.x — [`Rig`], [`UnitInterval`], [`Tropical`], [`F64Rig`], [`BoolRig`],
+//! — [`Rig`], [`UnitInterval`], [`Tropical`], [`F64Rig`], [`BoolRig`],
 //! [`EnrichedCategory`], [`HomMap`], [`LawvereMetricSpace`].
 //!
 //! ## Relationship to other workspace members
@@ -53,22 +52,22 @@
 //!   coherence witness `μ : Q ⊗ (P ▶ X) → (Q ⊗ P) ▶ X`.
 //! - **`catgraph-magnitude`** — orthogonal; magnitude is a scalar invariant
 //!   (Möbius sum over a `Ring`-enriched category), Para is the 2-category of
-//!   parametric morphisms. Future bridge: `catgraph-magnitude` v0.2.0
+//!   parametric morphisms. Future bridge: `catgraph-magnitude`
 //!   Para-over-Rig actegory-enriched magnitude (deferred).
 //! - **`catgraph-physics`** — `evolution_cospan` is a *deterministic
 //!   projection* of a Para F-algebra trajectory; `FreeMnd(F)` specialises to
 //!   cospan chains when `F` is the cospan-step endofunctor. Cross-reference
 //!   only; no code shared.
 //!
-//! ## Deferred surfaces (Phase DL-4+)
+//! ## Deferred surfaces
 //!
 //! Surfaces explicitly held until a downstream consumer surfaces a need.
-//! See `.claude/refactor/current-plan.md` (workspace) and the v0.4.0 forward-
-//! look section of `CLAUDE.md` for the full deferred list. Highlights:
+//! See the "Deferred surfaces" section of the crate README for the full
+//! list. Highlights:
 //!
 //! - **Non-`(Set, ×, 1)` `MonoidalCategory` instances** — R-module actegory,
 //!   hyperdoctrine, vector-bundle, fibration-based. Trait surface admits
-//!   them; concrete instances deferred. The v0.3.0 [`para::SetCategoryDefaults`]
+//!   them; concrete instances deferred. The [`para::SetCategoryDefaults`]
 //!   sub-trait closes the boilerplate gap for `(Set, ×, 1)`-flavoured ZSTs
 //!   only.
 //! - **The Hopf-fibration / carry-operation construction** — private
@@ -76,7 +75,7 @@
 //!   CAREFUL section below for the 2026-05-06 evidence update.
 //! - **Truly-infinite final-coalgebra semantics** for [`architectures::UnfoldingRnn`]
 //!   (lazy / `Iterator` / `tokio_stream::Stream` carrier). Bounded-depth
-//!   `unroll_to_vec` ships in v0.2.0; lazy variant deferred.
+//!   `unroll_to_vec` is the shipped surface; lazy variant deferred.
 //! - **First-class `NaturalTransformation<F, G>` / `Pointed<F>` / `Container<F>`**
 //!   types. Documented obligations only; land if a consumer surfaces.
 //! - **Symbiogenesis / Levin bioelectric / active inference / cellular-

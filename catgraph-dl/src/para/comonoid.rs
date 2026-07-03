@@ -6,10 +6,10 @@
 //! (`ε : P → I`, the counit) — the essence of weight tying — *is* the
 //! comonoid structure on the parameter object.
 //!
-//! ## Consumption pathway (catgraph-coalition v0.4.0+)
+//! ## Consumption pathway (catgraph-coalition)
 //!
-//! **Layering invariant.** Per `catgraph-dl/CLAUDE.md` "⚠️ CAREFUL — Para
-//! is upstream of Quantale": `catgraph-coalition`'s `Quantale` marker trait
+//! **Layering invariant — `Para` is upstream of Quantale.**
+//! `catgraph-coalition`'s `Quantale` marker trait
 //! widens to a full actegory action by **importing**
 //! [`catgraph_dl::para::Actegory`](super::Actegory) — never by defining
 //! `Actegory` inside `catgraph-coalition`. Any pressure to define
@@ -18,7 +18,7 @@
 //! action by writing `impl Actegory<SetMonoidal> for QuantaleActegory` in
 //! its own source tree, pulling the trait from this crate.
 //!
-//! **What coalition v0.4.0 will look like at the call site.** A
+//! **What a coalition caller will look like at the call site.** A
 //! coalition-flavoured caller defines an `impl Actegory<SetMonoidal> for
 //! QuantaleActegory` (with non-trivial action semantics in the coalition's
 //! mental model — Tropical-flavoured min-weights, free-monoid concatenation,
@@ -27,8 +27,8 @@
 //! `f(((p1, p2), x))` consumes a paired parameter, and calls
 //! [`tie_weights::<C, P, _, X, Y>(parameter_tied, untied)`](tie_weights) to
 //! collapse the paired parameter into a single shared `P` (where `C` is the
-//! actegory — e.g. `QuantaleActegory` in coalition v0.4.0). The cg-dl
-//! `tie_weights` is parametric over the actegory; the coalition v0.4.0
+//! actegory — e.g. `QuantaleActegory` in a coalition caller). The cg-dl
+//! `tie_weights` is parametric over the actegory; the coalition
 //! caller does not need any cg-dl change to consume it.
 //!
 //! **What the [`Actegory`](super::Actegory) ▶ widening means for
@@ -40,12 +40,12 @@
 //! parameter-substitution closure through the action without re-touching
 //! the actegory's tensor structure. Cross-reference to
 //! `tests/coalition_consumption_simulation.rs` (in the cg-dl crate) for the
-//! in-tree end-to-end simulation of the coalition v0.4.0 caller —
+//! in-tree end-to-end simulation of the coalition caller —
 //! defines a local `MockQuantale` ZST playing the role of the future
 //! `QuantaleActegory` and exercises the full `tie_weights` pipeline
 //! without a coalition dep.
 //!
-//! ## Trait surface (Phase DL-2)
+//! ## Trait surface
 //!
 //! [`Comonoid<M>`] is a uniform-structure trait: an implementor witnesses
 //! that *every* object of the parameter category `M` carries the same shape
@@ -74,9 +74,9 @@
 //! ## Weight tying
 //!
 //! The free function [`tie_weights`] is the consumer-facing API (used by
-//! `catgraph-coalition` v0.4.0). It takes a
+//! `catgraph-coalition`). It takes a
 //! `ParaMorphism<SetMonoidal, C, (P, P), F>` for any
-//! `C: Actegory<SetMonoidal>` (v0.4.0 widening; v0.3.x was hardcoded to
+//! `C: Actegory<SetMonoidal>` (the current API; the earlier surface was hardcoded to
 //! `SetActegory`) — a 1-morphism whose parameter object is a tensor pair —
 //! and returns the diagonal-tied 1-morphism with parameter `P` and action
 //! `λ(p, x). f(((p, p), x))`. The categorical content is exactly applying
@@ -175,7 +175,7 @@ impl Comonoid<SetMonoidal> for DiagonalComonoid<SetMonoidal> {
 /// resulting morphism has both formerly-independent parameter slots driven
 /// by a single `p`.
 ///
-/// v0.4.0 widens this from the v0.3.x `SetActegory`-bound function to
+/// The current API widens this from the earlier `SetActegory`-bound function to
 /// `C: Actegory<SetMonoidal>`. The diagonal `Δ : P → (P, P)` is exact in
 /// `(Set, ×, 1)`; for richer actegories `C` the body is structurally
 /// agnostic — it constructs `Δ` as a `Reparameterization<SetMonoidal, …>`
@@ -184,7 +184,7 @@ impl Comonoid<SetMonoidal> for DiagonalComonoid<SetMonoidal> {
 /// actegory's tensor structure.
 ///
 /// This is the *consumer-facing* weight-tying API used by
-/// `catgraph-coalition` v0.5.0+ (per workspace plan slot 2). The
+/// `catgraph-coalition` (per workspace plan slot 2). The
 /// `catgraph-coalition` caller defines an
 /// `impl Actegory<SetMonoidal> for {UnitIntervalQ, TropicalQ,
 /// QuantaleDefault}` and calls
@@ -195,8 +195,8 @@ impl Comonoid<SetMonoidal> for DiagonalComonoid<SetMonoidal> {
 ///
 /// # Type parameters
 ///
-/// - `C` — the actegory of `Para(SetMonoidal, C)`. v0.4.0 widening: any
-///   `C: Actegory<SetMonoidal>` is accepted; v0.3.x was hardcoded to
+/// - `C` — the actegory of `Para(SetMonoidal, C)`. The current API accepts any
+///   `C: Actegory<SetMonoidal>`; the earlier surface was hardcoded to
 ///   `SetActegory`. Placed at LEFTMOST position so callers using inference
 ///   (`tie_weights(p, untied)` with full inference) work unchanged; callers
 ///   using explicit turbofish move from 4-parameter

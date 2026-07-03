@@ -71,13 +71,11 @@ impl<R> Reparameterization<SetMonoidal, R> {
     /// (caller-supplied), since `r` is a function from `P'` to `P` and the
     /// `Para` morphism carries its parameter object at the value level.
     ///
-    /// v0.4.0 widens this from the v0.3.x `SetActegory`-bound impl to
+    /// The current API widens this from the earlier `SetActegory`-bound impl to
     /// `C: Actegory<SetMonoidal>`. The body is structurally agnostic to the
     /// actegory — it threads the user-supplied substitution closure through
     /// the action's parameter slot without re-touching the actegory's
-    /// tensor structure. See the workspace plan slot 1 design doc
-    /// (`.claude/docs/2026-05-10-catgraph-dl-v0.4.0-design.md` §2.1) for
-    /// the widening rationale.
+    /// tensor structure.
     ///
     /// # Examples
     ///
@@ -89,8 +87,8 @@ impl<R> Reparameterization<SetMonoidal, R> {
     ///
     /// # Type parameters
     ///
-    /// - `C` — the actegory of `Para(SetMonoidal, C)`. v0.4.0 widening:
-    ///   any `C: Actegory<SetMonoidal>` is accepted; v0.3.x was hardcoded
+    /// - `C` — the actegory of `Para(SetMonoidal, C)`. The current API accepts
+    ///   any `C: Actegory<SetMonoidal>`; the earlier surface was hardcoded
     ///   to `SetActegory`.
     /// - `PNew` — the new (codomain-of-`r` upstream, domain-of-the-result)
     ///   parameter type `P'`.

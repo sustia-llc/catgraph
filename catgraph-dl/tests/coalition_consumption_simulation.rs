@@ -1,18 +1,18 @@
-//! Simulation of `catgraph-coalition` v0.4.0's consumption pathway for
+//! Simulation of `catgraph-coalition`'s consumption pathway for
 //! [`catgraph_dl::para::tie_weights`]. cg-dl has no coalition dep; the test
-//! defines a local `MockQuantale` ZST playing the role of v0.4.0's actegory.
+//! defines a local `MockQuantale` ZST playing the role of the coalition's actegory.
 //!
 //! Three purposes:
 //! 1. Smoke-test the documented consumption pathway end-to-end.
 //! 2. Catch future API drift on `tie_weights` — any signature change breaks
 //!    this simulated caller.
-//! 3. Provide a copy-paste template for v0.4.0's first integration test.
+//! 3. Provide a copy-paste template for the coalition's first integration test.
 //!
 //! ## Pathway recap
 //!
-//! Per the cg-dl `comonoid.rs` "Consumption pathway" rustdoc + the cg-dl
-//! `CLAUDE.md` "⚠️ CAREFUL — Para is upstream of Quantale" caveat,
-//! `catgraph-coalition` v0.4.0 will:
+//! Per the cg-dl `comonoid.rs` "Consumption pathway" rustdoc and its
+//! "Para is upstream of Quantale" layering invariant,
+//! `catgraph-coalition` will:
 //!
 //! 1. **Import** `catgraph_dl::para::Actegory` (never re-define it locally).
 //! 2. Define `impl Actegory<SetMonoidal> for QuantaleActegory` with the
@@ -25,24 +25,24 @@
 //!
 //! ## Why this test uses both `MockQuantale` and `SetActegory`
 //!
-//! As of v0.4.0 `tie_weights` is parametric over the actegory
-//! (`C: Actegory<SetMonoidal>`); v0.2.0/v0.3.x were `SetActegory`-bound. This
-//! test was authored against the v0.3.x bound and retains `SetActegory` as a
+//! `tie_weights` is parametric over the actegory
+//! (`C: Actegory<SetMonoidal>`); an earlier surface was `SetActegory`-bound. This
+//! test was authored against the earlier bound and retains `SetActegory` as a
 //! *conservative caller choice* at the actual `tie_weights` call site to
-//! preserve the v0.3.x acceptance shape; the simulation therefore:
+//! preserve the earlier acceptance shape; the simulation therefore:
 //!
 //! - Defines `MockQuantale` to demonstrate *pattern (i)*: this is the shape
-//!   of the actegory definition coalition v0.5.0 will write in its own crate.
+//!   of the actegory definition the coalition will write in its own crate.
 //! - Builds a `ParaMorphism<SetMonoidal, SetActegory, (P, P), F>` and calls
 //!   `tie_weights::<SetActegory, …>` end-to-end — exercises the real
 //!   consumption API on the simplest actegory.
 //! - Cross-validates that `MockQuantale::act` matches `SetActegory::act`
 //!   pointwise for the Cartesian action shape, demonstrating the pathway
-//!   is structure-agnostic — i.e. coalition v0.5.0 can swap the call site
+//!   is structure-agnostic — i.e. the coalition can swap the call site
 //!   to `tie_weights::<QuantaleActegory, …>(parameter_tied, untied)` without
 //!   changing the body.
 //!
-//! When coalition v0.5.0 lands, the `MockQuantale` block lifts verbatim into
+//! When the coalition crate lands, the `MockQuantale` block lifts verbatim into
 //! `catgraph-coalition::actegory` as the body of `impl Actegory<SetMonoidal>
 //! for QuantaleActegory`, and the call site swaps from `<SetActegory, …>` to
 //! `<QuantaleActegory, …>` — no cg-dl-side change required.
@@ -54,7 +54,7 @@ use catgraph_dl::para::{
 /// Stand-in for `catgraph_coalition::Quantale`'s eventual actegory body.
 ///
 /// Action is `(P, X) ↦ (P, X)` — Cartesian product, same shape as
-/// [`SetActegory`]. In the actual v0.4.0 caller the action would carry
+/// [`SetActegory`]. In the actual coalition caller the action would carry
 /// Tropical-flavoured min-weight semantics, BTV21 free-monoid concatenation,
 /// or similar non-trivial structure; cg-dl is structure-agnostic so the
 /// simulation uses trivial Cartesian.
@@ -82,7 +82,7 @@ impl Actegory<SetMonoidal> for MockQuantale {
     }
 }
 
-/// Simulates the coalition v0.4.0 caller end-to-end.
+/// Simulates the coalition caller end-to-end.
 ///
 /// Asserts:
 /// 1. The `MockQuantale` actegory implementation is well-formed — `act`
@@ -94,7 +94,7 @@ impl Actegory<SetMonoidal> for MockQuantale {
 ///    action evaluated at `(3, 5)` returns `3 + 3 + 5 = 11`.
 /// 3. `MockQuantale::act` and `SetActegory::act` agree pointwise on the
 ///    Cartesian-action shape, demonstrating the pathway is structure-
-///    agnostic — the v0.4.0 caller's actegory choice does not change the
+///    agnostic — the coalition caller's actegory choice does not change the
 ///    `tie_weights` arithmetic.
 #[test]
 fn tie_weights_consumption_pathway_simulation() {
@@ -106,9 +106,9 @@ fn tie_weights_consumption_pathway_simulation() {
     assert_eq!(mock.act(7_i64, 5_i64), (7, 5));
     assert_eq!(mock.compose_action(2_i64, 3_i64, 5_i64), ((2, 3), 5));
 
-    // (2) Exercise tie_weights end-to-end. We use SetActegory here because
-    //     v0.2.0 tie_weights is SetActegory-bound; the actegory choice is
-    //     orthogonal to the diagonal collapse. For the v0.4.0 caller this
+    // (2) Exercise tie_weights end-to-end. We use SetActegory here as a
+    //     conservative caller choice; the actegory choice is
+    //     orthogonal to the diagonal collapse. For the coalition caller this
     //     line becomes ParaMorphism<SetMonoidal, QuantaleActegory, …>.
     let untied: ParaMorphism<SetMonoidal, SetActegory, (i64, i64), _> =
         ParaMorphism::new((0_i64, 0_i64), |((p1, p2), x): ((i64, i64), i64)| {
@@ -132,7 +132,7 @@ fn tie_weights_consumption_pathway_simulation() {
 
     // (3) Cross-validate: MockQuantale::act and SetActegory::act agree
     //     pointwise. Confirms the Cartesian-action shape is uniform across
-    //     any (Set, ×, 1)-flavoured actegory and the v0.4.0 caller's choice
+    //     any (Set, ×, 1)-flavoured actegory and the coalition caller's choice
     //     of QuantaleActegory does not perturb the tie_weights output.
     for (p, x) in [(0_i64, 0_i64), (1, 2), (-3, 5)] {
         assert_eq!(

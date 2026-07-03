@@ -1,4 +1,4 @@
-//! Tests for the v0.5.5 mutable `MatR<Q>` API (substrate for cg-mag v0.3.0 SNF).
+//! Tests for the mutable `MatR<Q>` API (substrate for cg-mag SNF).
 //!
 //! All `assert_eq!` here compare exact-bit-pattern `f64` values written and
 //! immediately read back (no arithmetic in between); strict equality is correct

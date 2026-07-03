@@ -68,7 +68,7 @@ fn cc_congruence_through_tensor() {
 
 #[test]
 fn cc_overlapping_equations_converge() {
-    // The v0.5.0 killer case: overlapping scalar equations must join.
+    // The killer case: overlapping scalar equations must join.
     // Simulate with: A ; A = B, A = C. Then A ; C = A ; A = B, so A ; C = B.
     let mut cc = CongruenceClosure::<G>::new(&[
         (Free::<G>::compose(g(G::A), g(G::A)).unwrap(), g(G::B)),

@@ -1,7 +1,7 @@
 //! [`WeightedCospan<Lambda, Q>`] — `catgraph::Cospan<Lambda>` decorated with
 //! per-edge weights drawn from a rig `Q`.
 //!
-//! Phase 6A.1 of the catgraph-magnitude roadmap. The newtype wraps the F&S
+//! The newtype wraps the F&S
 //! 2019 cospan with a sparse [`HashMap<(NodeId, NodeId), Q>`] of weights, one
 //! per implied edge. The "implied edges" of a cospan are the bipartite
 //! product of left-leg targets and right-leg targets via the apex (middle)
@@ -10,7 +10,7 @@
 //! When `Q = UnitInterval`, [`WeightedCospan::into_metric_space`] lifts the
 //! weighted cospan into a [`LawvereMetricSpace<NodeId>`] via the `-ln π`
 //! embedding (Lawvere 1973; BTV 2021 §1.4). The general `Q` case is deferred
-//! to v0.2.0 — magnitude over arbitrary rigs needs a base-change choice that
+//! — magnitude over arbitrary rigs needs a base-change choice that
 //! is not unique.
 //!
 //! ## Type aliases
@@ -18,7 +18,7 @@
 //! - [`ProbCospan<Lambda>`] = `WeightedCospan<Lambda, UnitInterval>` —
 //!   probability-weighted; the BV 2025 §3 LM transition-weight setting.
 //! - [`TropCospan<Lambda>`] = `WeightedCospan<Lambda, Tropical>` —
-//!   distance-weighted; the v0.2.0 tropical-magnitude path.
+//!   distance-weighted; the tropical-magnitude path.
 
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -40,7 +40,7 @@ use crate::{LawvereMetricSpace, Rig, Tropical, UnitInterval};
 ///
 /// If a follow-up needs a side-aware coordinate (e.g. a `(Side, usize)`
 /// enum to distinguish "node reached via left leg" vs. "node reached via
-/// right leg"), we'll introduce it in v0.1.1 — v0.1.0 stays minimal.
+/// right leg"), a follow-up can introduce it; the alias stays minimal.
 pub type NodeId = usize;
 
 /// A [`Cospan<Lambda>`] decorated with per-edge weights in a rig `Q`.
@@ -180,7 +180,7 @@ where
     }
 
     /// Lift the weighted cospan into a [`LawvereMetricSpace<NodeId>`] AND
-    /// validate the Lawvere metric axioms (v0.1.1).
+    /// validate the Lawvere metric axioms.
     ///
     /// Performs the same `-ln π` embedding as
     /// [`into_metric_space`](Self::into_metric_space), then runs the
@@ -195,14 +195,14 @@ where
     /// the BV 2025 §2.15 prefix-extension setting, the equality
     /// `d(x, z) = d(x, y) + d(y, z)` holds along the unique forward path —
     /// stronger than the inequality. This implementation does the upper
-    /// bound only; v0.2.0+ may add an opt-in tree-additivity equality check
-    /// (a TODO tracks the perf opportunity once Phase 6C surfaces a
-    /// concrete profile).
+    /// bound only; an opt-in tree-additivity equality check may be added
+    /// later (a TODO tracks the perf opportunity once a concrete profile
+    /// surfaces).
     ///
     /// **Identity axiom.** Same caveat as
     /// [`into_metric_space`](Self::into_metric_space) — callers must seed
     /// `(i, i)` self-weights to `1.0` to satisfy `d(x, x) = 0`. The diagonal
-    /// is NOT validated here; the v0.5.4 [`hom`](catgraph_applied::lawvere_metric::LawvereMetricSpace)
+    /// is NOT validated here; the [`hom`](catgraph_applied::lawvere_metric::LawvereMetricSpace)
     /// diagonal default does not affect the underlying `distance` table
     /// that this scan reads.
     ///
@@ -230,14 +230,14 @@ where
 
 /// Probability-weighted cospan: edges carry [`UnitInterval`] weights.
 ///
-/// The Phase 6A.3 `LmCategory` realization of BV 2025 §3 language-model
+/// The `LmCategory` realization of BV 2025 §3 language-model
 /// transitions stores its weights in a `ProbCospan<NodeId>` (or a closely
 /// related materialized table).
 pub type ProbCospan<Lambda> = WeightedCospan<Lambda, UnitInterval>;
 
 /// Distance-weighted cospan: edges carry [`Tropical`] weights directly.
 ///
-/// Used in the v0.2.0 tropical-magnitude path, where Möbius inversion is
+/// Used in the tropical-magnitude path, where Möbius inversion is
 /// performed in the (min, +) semiring rather than via a base-change from
 /// `UnitInterval`.
 pub type TropCospan<Lambda> = WeightedCospan<Lambda, Tropical>;

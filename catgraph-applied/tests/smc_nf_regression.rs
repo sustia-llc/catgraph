@@ -1,11 +1,6 @@
 //! Paper-cited SMC-coherence regression tests for the Layer 1 NF.
 //!
-//! **TDD state (Phase C0):** Most tests FAIL because the `smc_nf` step
-//! functions are stubs. Phase C1 implements each step, turning tests green
-//! one paper-axiom at a time.
-//!
-//! Source: reconciled from the 4 dpcs notes (JS-I, JS-II, Selinger, JS-Braided)
-//! per `.claude/v0.5.2-dpcs/notes/00-reconciliation.md` §4.5 (18-test inventory).
+//! Source: reconciled from the 4 dpcs notes (JS-I, JS-II, Selinger, JS-Braided).
 //!
 //! Each test's docstring cites the primary paper + section/theorem. When an
 //! equation is justified by multiple papers, the primary citation is chosen
@@ -82,9 +77,9 @@ mod joyal_street_part_i_regression {
     /// pad-and-zip construction (paper §4 p. 69–70) produces identical
     /// `Vec<Layer<G>>` for both sides.
     ///
-    /// **This is the equation the v0.5.1 `apply_smc_rules` bottom-up
+    /// **This is the equation the plain `apply_smc_rules` bottom-up
     /// rewriter could not canonicalize** — the motivating failure mode for
-    /// the v0.5.2 Joyal-Street rewrite.
+    /// the Joyal-Street rewrite.
     #[test]
     fn ch1_thm_1_2_s4_interchange() {
         let f: PropExpr<TestSig> = Generator(TestSig::F);
@@ -171,10 +166,10 @@ mod joyal_street_part_i_regression {
         assert_eq!(nf(&lhs), nf(&rhs));
     }
 
-    /// JS-I Ch 1 §4 Thm 1.2 (p. 71) reassoc-then-interchange motivating case
-    /// from v0.5.1 session-state: the rewriter needs to re-associate a
+    /// JS-I Ch 1 §4 Thm 1.2 (p. 71) reassoc-then-interchange motivating case:
+    /// the rewriter needs to re-associate a
     /// Tensor tree to *expose* the bifunctoriality equation, then apply
-    /// interchange. The v0.5.1 pre-pass could only do one of those at a
+    /// interchange. The plain pre-pass could only do one of those at a
     /// time; the Joyal-Street NF closes both in one shot because
     /// `pad_and_zip` is associative and interchange is structural.
     ///
@@ -206,7 +201,7 @@ mod joyal_street_ii_regression {
     /// `σ ; (f ⊗ id_1) ; σ = id_1 ⊗ f` via surgery — replace the
     /// `σ ; σ` sandwich with `id_2` inside a rectangle.
     ///
-    /// Closure of this pattern is exactly the v0.5.1-round-1 adversarial
+    /// Closure of this pattern is exactly the round-1 adversarial
     /// finding (the braid-conjugation gap) — captured cleanly by `nf`
     /// applying involution + naturality in tandem.
     #[test]

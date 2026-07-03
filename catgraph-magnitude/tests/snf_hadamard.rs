@@ -1,5 +1,5 @@
 //! Hadamard bound calculator: `H(A) = ∏_i ||a_i||_2`.
-//! Used by §1.10 multi-prime CRT to size the prime product.
+//! Used by the multi-prime CRT lift to size the prime product.
 
 use catgraph_magnitude::snf::crt_lift::hadamard_bound;
 

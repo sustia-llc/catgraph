@@ -117,8 +117,8 @@ fn is_identity_partition_false_for_same_length_non_identity_map() {
 
 #[test]
 fn corel_clone_and_debug_smoke() {
-    // v0.12.1 H.0.5 — `Corel<Lambda>` derives `Clone` and `Debug`. Phase 6B
-    // (catgraph-coalition) needs both: snapshot APIs clone weighted cospans,
+    // `Corel<Lambda>` derives `Clone` and `Debug`. Downstream coalition work
+    // needs both: snapshot APIs clone weighted cospans,
     // tracing emits `Debug` on logged values.
     let c = Corel::<char>::new(Cospan::new(vec![0], vec![1], vec!['a', 'b'])).unwrap();
     let cloned = c.clone();

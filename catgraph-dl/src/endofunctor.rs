@@ -2,9 +2,8 @@
 //! used by both [`crate::algebra`] (F-algebras and their homomorphisms)
 //! and [`crate::free_monad`] (recursive `FreeMnd`/`CofreeCmnd`).
 //!
-//! This module is the canonical home of `EndoFunctor` after the Phase
-//! DL-2 reconciliation. Agents C and D both introduced near-identical
-//! local copies (one in `algebra/group_action.rs`, one in
+//! This module is the canonical home of `EndoFunctor`. Two near-identical
+//! local copies once existed (one in `algebra/group_action.rs`, one in
 //! `free_monad/free_mnd.rs`); both have been replaced with re-exports
 //! pointing here.
 //!

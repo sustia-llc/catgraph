@@ -1,8 +1,8 @@
-//! SMC string-diagram normal form (Layer 1 of the v0.5.2 normalizer).
+//! SMC string-diagram normal form (Layer 1 of the normalizer).
 //!
 //! # Role
 //!
-//! This module replaces the `apply_smc_rules` pre-pass from v0.5.1 with a
+//! This module provides, in place of the plain `apply_smc_rules` pre-pass, a
 //! **Joyal-Street string-diagram normal form**: a total function
 //! [`PropExpr`] → [`StringDiagram`] such that two expressions are SMC-equal
 //! iff their NF values are structurally equal. The sibling
@@ -11,9 +11,6 @@
 //! SMC axioms.
 //!
 //! # Algorithm (5 steps + empty-braid normalization)
-//!
-//! See `.claude/v0.5.2-dpcs/notes/00-reconciliation.md` for the cross-paper
-//! reconciliation, convention decisions, and termination argument.
 //!
 //! - **Step 0** — `normalize_empty_braids`: `Braid(0, n) → Identity(n)`.
 //! - **Step 1** — `hexagon_expand`: `σ_{m,n}` (m+n > 2) → bricks of `Braid(1,1)`.
@@ -387,7 +384,7 @@ fn braid_at_position<G: PropSignature>(i: usize, n_total: usize) -> Vec<Atom<G>>
 /// - `X ; Identity(n)  →  X` with `X.target == n` — right identity-compose
 /// - `Braid(m, n) ; Braid(n, m)  →  Identity(m+n)` — symmetric involution (S)
 ///
-/// The generalization beyond bare involution is load-bearing: the v0.5.1
+/// The generalization beyond bare involution is load-bearing: the
 /// faithfulness tests' blocking case `(σ ⊗ id) ; (σ ⊗ id) = id_3` only
 /// closes when each column reduces independently (σ;σ=id in column 0;
 /// id;id=id in column 1), which is this step's job.
@@ -871,7 +868,7 @@ fn apply_braid_layer_to_perm<G: PropSignature>(layer: &Layer<G>, perm: &mut [usi
 ///
 /// (a) **Intra-layer identity merging** — adjacent `Atom::Identity(m)` and
 /// `Atom::Identity(n)` within the same layer fuse to `Atom::Identity(m+n)`.
-/// This is the v0.5.1 Rule 9 generalized (n-ary identity flattening).
+/// This is Rule 9 generalized (n-ary identity flattening).
 ///
 /// (b) **Inter-layer identity absorption** — a layer consisting entirely of
 /// `Atom::Identity` atoms absorbs into either neighbor when a non-identity

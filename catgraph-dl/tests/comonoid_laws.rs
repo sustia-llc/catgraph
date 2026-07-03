@@ -1,9 +1,9 @@
-//! Phase DL-2 Agent B — Comonoid coherence laws + weight-tying smoke.
+//! Comonoid coherence laws + weight-tying smoke.
 //!
 //! CDL Theorem G.10. These tests exercise the `DiagonalComonoid` body for
 //! the concrete monoidal category `(Set, ×, 1)` (i.e. [`SetMonoidal`]) and
 //! the consumer-facing `tie_weights` helper used by
-//! `catgraph-coalition` v0.4.0.
+//! `catgraph-coalition`.
 //!
 //! ## Laws verified
 //!

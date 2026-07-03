@@ -2,7 +2,7 @@
 
 > **Paper:** Fong & Spivak, *Hypergraph Categories* (arXiv:1806.08304v3, 18 Jan 2019)
 > **Library:** `catgraph` (strict F&S 2019 core)
-> **Method:** re-read paper, cross-check each numbered item against source; spot-check all ✅/⚠️ location claims; run the test suite (520 passed / 0 failed / 0 ignored).
+> **Method:** re-read paper, cross-check each numbered item against source; spot-check all ✅/⚠️ location claims; run the full test suite green.
 >
 > **Scope.** This crate is the strict F&S 2019 surface only. `Corel<Λ>` (the dual of `Rel`,
 > FS 2018 Ex 6.64) lives here for substrate-locality and is therefore not represented in the
@@ -14,7 +14,7 @@
 > `span`, `named_cospan`, `frobenius/`, `compact_closed`, `cospan_algebra`,
 > `hypergraph_category`, `hypergraph_functor`, `equivalence`, `finset`, `monoidal`) is fully intact.
 >
-> **⚠️ Reboot note (2026-06-24).** Written pre-reboot; the version stamps (Phase 0.5, catgraph v0.10.x–v0.12.0, the test-count `520 passed`, the Release-history references) predate the reboot to `sustia-llc/catgraph` (workspace pinned `0.1.0`, GitHub-issue tracked). Coverage content is current: Phase 2 (#1) realized **Ex 2.16** in sibling `catgraph-applied::mat_kron` (+ partial `trace`), reflected in the tables below. Holistic version reconciliation is tracked in #7.
+> **Provenance.** Authored pre-reboot; the version framing has been reconciled to the reboot's phase/issue model per #7 (workspace-wide version, GitHub-issue tracked). Coverage content was verified current post-reboot: Phase 2 (issue #1, PR #6) realized **Ex 2.16** in sibling `catgraph-applied::mat_kron` (+ partial `trace`), reflected in the tables below.
 
 **Status legend:**
 - ✅ DONE — implemented and tested
@@ -41,10 +41,10 @@
 | §4.3 The equivalence | 1 | 1 | 2 | 1 | 5 |
 | **TOTAL** | **38** | **21** | **24** | **10** | **93** |
 
-**Headline numbers (after Phase 0.5):**
+**Headline numbers:**
 - **41% DONE / 23% PARTIAL / 26% MISSING / 11% N/A**
 - Of the 24 missing items: 6 are §3.3 (explicitly deferred), 5 are LinRel/non-strict examples (deferred; Ex 2.16 FdVect is no longer here — realized in `catgraph-applied::mat_kron`, Phase 2 #1), 3 are §3.4 strictification (deferred), and most of the remainder are cross-Λ functoriality items that require parametric-Λ machinery beyond catgraph's type system.
-- **Phase 0.5 closed 5 gaps + 1 bonus**: Prop 3.4 (explicit comp cospan form), Prop 4.6 (initiality proptest), compose_names_direct, Lemma 4.3 (A_F natural transformation), Lemma 4.9 (F_α io functor), plus a bug fix to `two_layer_simplify` that let `permutation_automatic` come out of `#[ignore]`.
+- **Five gaps + one bonus are closed**: Prop 3.4 (explicit comp cospan form), Prop 4.6 (initiality proptest), compose_names_direct, Lemma 4.3 (A_F natural transformation), Lemma 4.9 (F_α io functor), plus a bug fix to `two_layer_simplify` that let `permutation_automatic` come out of `#[ignore]`.
 
 ## Per-section detail
 
@@ -57,7 +57,7 @@
 | Eq 3: alternative wiring | ➖ | — | visual variant of Eq 2 |
 | Eq 4: cospan A→N←B for the running example | ✅ | named_cospan.rs::new | core type |
 | Eq 5: hierarchy of category types (cat → mon → traced → hyper) | ⚠️ | — | implicit; no explicit `TracedMonoidalCategory` layer in core (CLAUDE.md says "OK because hypergraph subsumes it"). Sibling `catgraph-applied::trace` provides a concrete partial trace over the Kronecker HC (Phase 2 #1). |
-| Eq 6: operadic substitution as a compositional view | ✅ | operadic.rs (trait) | impl currently in wiring_diagram.rs — **Phase 3 note:** `wiring_diagram.rs` moves to `catgraph-applied`; the `Operadic` *trait* stays in catgraph core |
+| Eq 6: operadic substitution as a compositional view | ✅ | operadic.rs (trait) | concrete impl in `catgraph-applied::wiring_diagram`; the `Operadic` *trait* stays in catgraph core |
 | Eq 7: labeled cospan diagram (m → p ← n) | ✅ | cospan.rs | core type |
 | Eq 8: Hyp_OF(Λ) ≅ Lax(Cospan_Λ, Set) | ✅ | equivalence.rs | morphism direction via CospanAlgebraMorphism + roundtrip tests |
 | Thm 1.1: every hypergraph cat ≅ OF (coherence) | ⚠️ | — | catgraph works inside Cospan_Λ which IS objectwise-free, but never proves the general equivalence Hyp ≃ Hyp_OF |
@@ -119,7 +119,7 @@
 
 (motivational discussion, no theorems)
 
-**Phase 3 reconciliation note:** catgraph's concrete operadic machinery — `wiring_diagram.rs`, `e1_operad.rs`, `e2_operad.rs`, `temperley_lieb.rs`, `linear_combination.rs`, `petri_net.rs` — is **not** part of the F&S 2019 paper's numbered content. These modules will relocate to `catgraph-applied` (workspace sibling). The core `Operadic` trait (`operadic.rs`) stays in catgraph as the abstract interface. See "Reconciliation with catgraph-applied" section below.
+**Reconciliation note:** catgraph's concrete operadic machinery — `wiring_diagram.rs`, `e1_operad.rs`, `e2_operad.rs`, `temperley_lieb.rs`, `linear_combination.rs`, `petri_net.rs` — is **not** part of the F&S 2019 paper's numbered content, and now lives in `catgraph-applied` (workspace sibling). The core `Operadic` trait (`operadic.rs`) stays in catgraph as the abstract interface. See "Reconciliation with catgraph-applied" section below.
 
 ### §3.1 Self-dual compact closed
 
@@ -300,10 +300,9 @@ Flat bulleted index of every ❌ MISSING entry across the per-section tables abo
 
 ## Critical findings
 
-### Phase 0.5 completed (2026-04-11)
+### Closed gaps
 
-All five items listed in the previous audit have been closed for catgraph v0.10.4,
-and remain closed in v0.10.5 and v0.10.6:
+All five items listed in the previous audit are closed and remain closed:
 
 1. **Lemma 4.3** — ✅ `cospan_algebra::functor_induced_algebra_map` lifts any hypergraph functor to a cospan-algebra morphism; `tests/cospan_algebra.rs` verifies naturality, monoidality, and unit preservation for both `RelabelingFunctor` and `CospanToFrobeniusFunctor`.
 
@@ -317,7 +316,7 @@ and remain closed in v0.10.5 and v0.10.6:
 
 ### Bonus: two_layer_simplify bug fix
 
-The `#[ignore]`'d `permutation_automatic` test in `frobenius/operations.rs` was uncovered during Phase 0.5. Root cause: Rule 2 (braiding cancellation) in `FrobeniusLayer::two_layer_simplify` used `[Identity(b2), Identity(a2)]` for the next-layer replacement, preserving the layer's *input* types but flipping its *output* types — breaking the coupling with adjacent layers. Fix: swap to `[Identity(a2), Identity(b2)]` so `next_layer.right_type` is preserved. Stress test (`from_permutation_compose_probe`, 270 random witnesses over n∈[2,10]) now passes.
+The `#[ignore]`'d `permutation_automatic` test in `frobenius/operations.rs` was uncovered while closing these gaps. Root cause: Rule 2 (braiding cancellation) in `FrobeniusLayer::two_layer_simplify` used `[Identity(b2), Identity(a2)]` for the next-layer replacement, preserving the layer's *input* types but flipping its *output* types — breaking the coupling with adjacent layers. Fix: swap to `[Identity(a2), Identity(b2)]` so `next_layer.right_type` is preserved. Stress test (`from_permutation_compose_probe`, 270 random witnesses over n∈[2,10]) now passes.
 
 ### Items intentionally deferred
 
@@ -342,9 +341,9 @@ These are correct but could be made explicit for catgraph-as-paper-implementatio
 5. **Prop 3.16** — implicit in design
 6. **Lemma 4.11, Cor 4.12** — implicit; would benefit from test assertions matching the paper's exact formulas
 
-### The "compose_names" shortcut (audit finding confirmed, resolved 2026-04-11)
+### The "compose_names" shortcut (audit finding confirmed, resolved)
 
-Historical note — this was the original finding that drove Gap 5 in Phase 0.5:
+Historical note — this was the original finding that drove the compose_names_direct gap:
 
 `compact_closed.rs::compose_names` used to be a "shortcut" that went back to morphisms via `unname → compose → name`. Mathematically equivalent to Prop 3.3's `(f̂ ⊗ ĝ) ; comp^Y_{X,Z}` formula, but didn't exhibit it structurally — defeating the §3.1 demonstration that you can compose at the name level without going back to morphisms.
 
@@ -352,7 +351,7 @@ Historical note — this was the original finding that drove Gap 5 in Phase 0.5:
 
 ## What does "Theorem 1.2 is implemented" actually mean for catgraph?
 
-**catgraph v0.13.0 implements Theorem 1.2 in its per-Λ form (which is Thm 4.13)**, with full bidirectional functoriality (Lemmas 4.3 and 4.9), all six structural cospans of §4.2, and Props 3.1–3.4 on compact closed structure, using `PartitionAlgebra` and `NameAlgebra` as worked examples. This has been the case since v0.10.4 (Phase 0.5); no v0.10.5/v0.10.6/v0.11.0/v0.12.0/v0.13.0 change has moved coverage in either direction.
+**catgraph implements Theorem 1.2 in its per-Λ form (which is Thm 4.13)**, with full bidirectional functoriality (Lemmas 4.3 and 4.9), all six structural cospans of §4.2, and Props 3.1–3.4 on compact closed structure, using `PartitionAlgebra` and `NameAlgebra` as worked examples.
 
 **catgraph does NOT implement:**
 - The global Grothendieck-construction form (Thm 4.16) — `Hyp_OF ≅ Cospan-Alg` as 1-categories with naturality across Λ
@@ -361,15 +360,15 @@ Historical note — this was the original finding that drove Gap 5 in Phase 0.5:
 
 These require either the Grothendieck construction or parametric-Λ machinery beyond catgraph's current type system, and are permanently deferred.
 
-## Reconciliation with catgraph-applied (Phase 3 and beyond)
+## Reconciliation with catgraph-applied
 
-catgraph core (v0.11.0 target) tracks the Fong-Spivak 2019 *Hypergraph Categories* paper strictly. A second, complementary applied-CT track is planned for the workspace sibling `catgraph-applied`, aligning with a different (TBD) F&S applied category theory paper whose audit docs will be added when that work begins.
+catgraph core tracks the Fong-Spivak 2019 *Hypergraph Categories* paper strictly. The complementary applied-CT track lives in the workspace sibling `catgraph-applied`, anchored to Fong & Spivak 2018 (*Seven Sketches in Compositionality*); its section-by-section audit is [`catgraph-applied/docs/FS18-AUDIT.md`](../../catgraph-applied/docs/FS18-AUDIT.md).
 
-### Current catgraph modules that are **not** part of F&S 2019 numbered content
+### Modules that are **not** part of F&S 2019 numbered content
 
-These stay in catgraph until Phase 3, then relocate to `catgraph-applied`. They do not appear in the audit tables above because the 2019 paper does not cover them. The audit's coverage percentages are unaffected by the move.
+These live in `catgraph-applied` (relocated from the pre-reboot core). They do not appear in the audit tables above because the 2019 paper does not cover them. The audit's coverage percentages are unaffected by the move.
 
-| Module | Nature | Paper relationship | Phase 3 destination |
+| Module | Nature | Paper relationship | Home crate |
 |---|---|---|---|
 | `wiring_diagram.rs` | Operadic substitution impl | Referenced by Eq 6 as an illustration, but the F&S paper does not develop wiring diagrams formally | `catgraph-applied` |
 | `e1_operad.rs` | 1D little-intervals operad | Not in F&S 2019 (§2.5 is motivational on operads but makes no formal claim) | `catgraph-applied` |
@@ -380,7 +379,7 @@ These stay in catgraph until Phase 3, then relocate to `catgraph-applied`. They 
 
 The **`Operadic` trait** (`src/operadic.rs`) is the abstract interface referenced by Eq 6 and stays in catgraph core. Only the concrete implementations move.
 
-### catgraph-applied audit (Phase 5 — completed 2026-04-16)
+### catgraph-applied audit
 
 The applied-CT audit is anchored to Fong & Spivak, *Seven Sketches in Compositionality* (arXiv:1803.05316v3, 2018). See [`catgraph-applied/docs/FS18-AUDIT.md`](../../catgraph-applied/docs/FS18-AUDIT.md) for the full section-by-section audit covering:
 
@@ -406,6 +405,6 @@ No duplication of F&S primitives in catgraph-applied — it depends on catgraph.
 
 Release history for this crate is in [`../CHANGELOG.md`](../CHANGELOG.md); infrastructure consumed by the applied-CT crate is cross-linked there.
 
-## Canonical release-notes paragraph (durable; applies to every release since v0.11.0)
+## Canonical release-notes paragraph (durable)
 
-"catgraph implements Theorem 1.2 in its per-Λ form (Thm 4.13), with full bidirectional functoriality (Lemmas 4.3 and 4.9), all six structural cospans of §4.2, and Propositions 3.1–3.4 on compact closed structure directly verified. The global Grothendieck-construction form (Thm 4.16), the 2-categorical strictification (Thm 1.1), §3.3 io/ff factorization, and cross-Λ functoriality are intentionally deferred as requiring machinery beyond catgraph's current scope. Non-F&S modules live in sibling crates: Gorard's functorial irreducibility framework in `irreducible`, Wolfram-physics extensions (hypergraph DPO rewriting, gauge theory, multiway evolution, branchial analysis) in `catgraph-physics`, and applied-CT extensions (Petri nets, wiring diagrams, E_n operads, Temperley-Lieb, props, rigs, SFGs, MatR, enrichment) in `catgraph-applied`."
+"catgraph implements Theorem 1.2 in its per-Λ form (Thm 4.13), with full bidirectional functoriality (Lemmas 4.3 and 4.9), all six structural cospans of §4.2, and Propositions 3.1–3.4 on compact closed structure directly verified. The global Grothendieck-construction form (Thm 4.16), the 2-categorical strictification (Thm 1.1), §3.3 io/ff factorization, and cross-Λ functoriality are intentionally deferred as requiring machinery beyond catgraph's current scope. Non-F&S modules live in sibling crates: Wolfram-physics extensions (hypergraph DPO rewriting, gauge theory, multiway evolution, branchial analysis, irreducibility indicators) in `catgraph-physics`, and applied-CT extensions (Petri nets, wiring diagrams, E_n operads, Temperley-Lieb, props, rigs, SFGs, MatR, enrichment) in `catgraph-applied`. Gorard's functorial irreducibility framework lives downstream in the external `irreducible` repo, which consumes `catgraph` / `catgraph-applied` / `catgraph-physics`."

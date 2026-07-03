@@ -1,7 +1,7 @@
 //! Weighting + coweighting primitive tests (Leinster 2013 §1.1 Def 1.1.1 + Lemma 1.1.2 + Lemma 1.1.4).
 //!
-//! v0.2.0 acceptance for the foundational (co)weighting primitives that
-//! v0.1.x bypassed in favour of the more restrictive matrix-inversion path.
+//! Acceptance for the foundational (co)weighting primitives that the
+//! matrix-inversion path bypasses in favour of its more restrictive route.
 
 use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 use catgraph_applied::rig::{F64Rig, Tropical};

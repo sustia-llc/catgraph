@@ -1,4 +1,4 @@
-//! Phase 6A.1 acceptance tests for [`WeightedCospan<Lambda, Q>`].
+//! Acceptance tests for [`WeightedCospan<Lambda, Q>`].
 //!
 //! Three test arms:
 //!
@@ -155,7 +155,7 @@ fn absent_edge_weight_is_zero_tropical() {
     assert!(w.0.is_infinite() && w.0 > 0.0);
 }
 
-/// v0.1.1: `into_validated_metric_space` returns `Ok` when the resulting
+/// `into_validated_metric_space` returns `Ok` when the resulting
 /// metric satisfies the triangle inequality. Three-node fixture with
 /// dyadic probabilities, identity-axiom diagonal seeded.
 #[test]
@@ -177,7 +177,7 @@ fn into_validated_metric_space_accepts_valid_lm_v0_1_1() {
     assert!(lms.is_ok(), "valid LM should pass validation, got {lms:?}");
 }
 
-/// v0.1.1: `into_validated_metric_space` returns `Err` on a triangle-
+/// `into_validated_metric_space` returns `Err` on a triangle-
 /// inequality violation. Construct an LM where d(0, 2) is much smaller than
 /// d(0, 1) + d(1, 2) — i.e. prob(0, 2) is much larger than prob(0, 1) *
 /// prob(1, 2), which would imply a "shortcut" path the chain product

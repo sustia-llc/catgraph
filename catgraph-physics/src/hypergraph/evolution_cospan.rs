@@ -42,8 +42,7 @@ impl HypergraphEvolution {
         // TODO(rayon-1.12): candidate for `par_array_windows::<2>()` from
         // the new `ParallelSlice` API. `build_cospan_for_pair` performs a
         // pushout (union-find) per pair, so there's real per-pair work —
-        // benchable on long deterministic paths. See
-        // `~/.claude/summaries/rayon-summary-0.md`.
+        // benchable on long deterministic paths.
         path.windows(2)
             .map(|w| self.build_cospan_for_pair(w[0], w[1]))
             .collect()

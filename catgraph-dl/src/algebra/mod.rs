@@ -8,25 +8,23 @@
 //! emerge as the unique algebra homomorphism from the initial algebra
 //! `List(A)` (CDL Remark 2.13).
 //!
-//! ## Phase DL-2 status
+//! ## Status
 //!
-//! - [`FAlgebra`], [`FCoalgebra`], [`MonadAlgebra`] — Phase DL-1
-//!   structure-map wrappers.
-//! - [`FAlgebraHom`] / [`FCoalgebraHom`] / [`MonadAlgebraHom`] — Phase
-//!   DL-2 homomorphism types with caller-driven `verify_commutes`
+//! - [`FAlgebra`], [`FCoalgebra`], [`MonadAlgebra`] — structure-map
+//!   wrappers.
+//! - [`FAlgebraHom`] / [`FCoalgebraHom`] / [`MonadAlgebraHom`] —
+//!   homomorphism types with caller-driven `verify_commutes`
 //!   entry points (CDL Definition 2.5 + dual).
 //! - [`EndoFunctor`] / [`Group`] / [`Z2Group`] / [`GroupActionEndo`] —
-//!   Phase DL-2 group-action monad witness for the **CDL Example 2.6
+//!   the group-action monad witness for the **CDL Example 2.6
 //!   Geometric-Deep-Learning recovery**: F-algebra homomorphisms over
 //!   `F = G × −` are exactly `G`-equivariant maps.
 //!
-//! ## Coordination note (Phase DL-2 cleanup)
+//! ## `EndoFunctor` location
 //!
-//! The [`EndoFunctor`] trait is currently **defined locally** in the
-//! private `group_action` submodule. Agent C of Phase DL-2 is defining
-//! the same shape in `free_monad/`. The parent agent will deduplicate
-//! by lifting `EndoFunctor` to a shared `endofunctor` module after both
-//! agents land — see the TODO at the top of `algebra/group_action.rs`.
+//! The [`EndoFunctor`] trait is canonical in [`crate::endofunctor`] and
+//! re-exported through the private `group_action` submodule for this
+//! module's consumers.
 
 mod coalgebra;
 mod f_algebra;

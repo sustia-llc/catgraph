@@ -1,4 +1,4 @@
-//! §1.20 round-trip API: `smith_normal_form_matr<R: IntegerLikeRig>` wraps
+//! Round-trip API: `smith_normal_form_matr<R: IntegerLikeRig>` wraps
 //! the `Vec<Vec<i64>>` backend for `MatR<R>` consumers. Tests verify
 //! round-trip identity over both `F64Rig` and `Z(BigInt)` inputs.
 

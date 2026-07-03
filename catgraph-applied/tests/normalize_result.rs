@@ -1,4 +1,4 @@
-//! Tests for the v0.5.1 `NormalizeResult` struct semantics.
+//! Tests for the `NormalizeResult` struct semantics.
 
 use catgraph_applied::prop::presentation::Presentation;
 use catgraph_applied::prop::{Free, PropExpr, PropSignature};

@@ -20,8 +20,8 @@
 //!
 //! Equality on [`PropExpr`] is **structural** — two expressions are equal
 //! iff their trees match. Equivalence modulo the SMC axioms (interchange,
-//! unitors, braiding naturality) is deferred to v0.5.0 alongside the Tier 3
-//! presentation / equations type (`Def 5.33`). For v0.4.0, `Free(G)` gives
+//! unitors, braiding naturality) is handled by the presentation / equations
+//! type (`Def 5.33`); see the [`presentation`] module. `Free(G)` gives
 //! a faithful pre-quotient representation: every morphism of the free prop
 //! has a `PropExpr` witness, but distinct witnesses may represent the same
 //! morphism.
@@ -44,9 +44,9 @@ use permutations::Permutation;
 /// source arity [`PropSignature::source`] and target arity
 /// [`PropSignature::target`], both natural numbers.
 ///
-/// # v0.5.1 supertrait widening
+/// # Supertrait bounds
 ///
-/// As of v0.5.1 `PropSignature` requires `Eq + Hash` in addition to
+/// `PropSignature` requires `Eq + Hash` in addition to
 /// `Clone + PartialEq + Debug`. These bounds are needed by the
 /// [`presentation::kb::CongruenceClosure`] decision procedure, which uses `G`
 /// as a `HashMap` key in its term graph. Migration:
@@ -110,7 +110,7 @@ impl<G: PropSignature> PropExpr<G> {
 }
 
 /// Marker type for the *prop itself* (the category). Values of `Prop<G>` are
-/// [`PropExpr<G>`]. See module docs for the v0.4.0 equality caveat.
+/// [`PropExpr<G>`]. See module docs for the equality caveat.
 pub struct Prop<G: PropSignature>(PhantomData<G>);
 
 /// Smart-constructor namespace producing well-formed [`PropExpr<G>`] values
@@ -230,7 +230,7 @@ impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
         // F&S 2018 does not give a canonical decomposition of arbitrary permutations
         // into braids of the free prop; a faithful implementation would compute a
         // Bubblesort-style decomposition using the `permutations` crate's cycle
-        // structure. For v0.5.0 we return Identity(n) — explicitly documenting that
+        // structure. We return Identity(n) — explicitly documenting that
         // this does NOT preserve the permutation's action. Callers that need faithful
         // permutation representations should use `MatR::permutation_matrix` directly
         // via the Mat(R) prop, which bypasses PropExpr entirely.

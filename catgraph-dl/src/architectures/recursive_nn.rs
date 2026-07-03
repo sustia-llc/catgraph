@@ -4,7 +4,7 @@
 //! `(P, cell) ∈ Para(Set)(A + S², S)`. Splits via
 //! `P × (A + S²) ≅ P + P × A × S²` into:
 //!
-//! - `cell_0 : P × A → S` — leaf map (Phase DL-1 scaffold spelled it as
+//! - `cell_0 : P × A → S` — leaf map (an earlier scaffold spelled it as
 //!   `P → S`; the actual recursive-NN initial algebra leaves carry an
 //!   `A` payload, so the cell-1 four-arg shape stays consistent with the
 //!   smoke test's `(P, A, S, S)` signature).
@@ -15,7 +15,7 @@
 //! Unrolling processes binary trees with shared parameters (CDL Example
 //! J.3); the tree structure is the initial algebra of `A + (−)²`.
 //!
-//! ## Phase DL-2 Agent E — `unroll`
+//! ## `unroll`
 //!
 //! [`RecursiveNn::unroll`] is the unique algebra homomorphism
 //! `(P, BinaryTree(A)) → S` from the initial algebra of the free monad
@@ -32,7 +32,7 @@ use crate::free_monad::tree_endo::BinaryTree;
 ///
 /// CDL Example I.2.
 ///
-/// **Phase DL-1 scaffold:** opaque struct.
+/// Opaque struct.
 #[derive(Debug, Clone)]
 pub struct RecursiveNn<P, S, Cell0, Cell1, A> {
     /// The parameter object `P`.

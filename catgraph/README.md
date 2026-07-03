@@ -59,7 +59,7 @@ Features implementing structures from [Fong & Spivak, *Hypergraph Categories*](h
 - Thm 1.1 strictification / coherence (Hyp ≃ Hyp_OF)
 - §3.3 io/ff factorization (Lemma 3.19, Prop 3.20, Cor 3.21)
 - Thm 4.16 global Grothendieck form (per-Λ Thm 4.13 suffices)
-- LinRel examples (Ex 2.10, 2.11, 2.16, 2.20, 2.21, 4.14)
+- LinRel examples (Ex 2.10, 2.11, 2.20, 2.21, 4.14) — Ex 2.16 (FdVect) is realized in `catgraph-applied::mat_kron`
 
 ## Core: Cospans and Spans
 

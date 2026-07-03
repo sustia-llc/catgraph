@@ -1,5 +1,5 @@
 //! Integration tests for `DecoratedCospan::compose` invoking
-//! `D::pushforward` through the pushout quotient (v0.3.1).
+//! `D::pushforward` through the pushout quotient.
 
 use catgraph::category::Composable;
 use catgraph::cospan::Cospan;
@@ -120,7 +120,7 @@ fn t2_2_trivial_pushforward_is_unit() {
 
 #[test]
 fn t2_3_decorated_cospan_pushforward_through_quotient() {
-    // H.4 / v0.5.4: integration test pinning that DecoratedCospan::compose
+    // integration test pinning that DecoratedCospan::compose
     // routes the combined decoration through D::pushforward using the
     // quotient from Cospan::compose_with_quotient. Constructed so that the
     // quotient observably collapses a multi-vertex apex into a smaller one,
@@ -200,7 +200,7 @@ fn t2_3_decorated_cospan_pushforward_through_quotient() {
 #[test]
 fn t2_4_petri_decoration_collapsed_quotient_preserves_transition_count() {
     // Quotient collapses both apex elements to 0, pushforward is a no-op
-    // on transition count. Regression-guards the v0.3.0 behaviour that
+    // on transition count. Regression-guards the behaviour that
     // composition preserves all transitions across the pushout.
     use catgraph_applied::petri_net::{PetriDecoration, Transition};
     use rust_decimal::Decimal;

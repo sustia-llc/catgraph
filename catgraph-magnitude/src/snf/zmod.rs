@@ -6,7 +6,7 @@
 //! `events555/modularsnf` at SHA `d62535e`.
 //!
 //! All helpers are `pub` for use by the `snf::echelon` and `snf::band`
-//! modules (Phase C, Tasks 13–15) and by the integration test suite under
+//! modules and by the integration test suite under
 //! `tests/snf_*.rs`. `cargo test --lib snf::zmod` exercises them through
 //! the in-module test suite below.
 

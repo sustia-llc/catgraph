@@ -1,5 +1,5 @@
 //! Integration tests for `Cospan::compose_with_quotient` — the additive
-//! pushout-quotient API added in v0.11.3.
+//! pushout-quotient API.
 
 use std::collections::HashSet;
 
@@ -83,8 +83,8 @@ fn t1_3_roundtrip_with_plain_compose() {
     }
 }
 
-// v0.12.1 H.0.5 additions — exercise the non-parallel quotient cases that
-// Phase 5.5's `compose_with_quotient` was added to fix. The pre-v0.12.1
+// Additions exercising the non-parallel quotient cases that
+// `compose_with_quotient` was added to fix. The earlier
 // regression set above is all parallel/identity-shaped (single shared element
 // per apex); these cover quotient surjectivity and multi-element collisions.
 

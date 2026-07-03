@@ -66,7 +66,7 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
     /// `d(x, x) = 0`. To satisfy the Lawvere metric identity axiom, callers
     /// must include `((x, x), Tropical(0.0))` for every object `x` in the
     /// iterator — or rely on the [`hom`](EnrichedCategory::hom) diagonal
-    /// default added in v0.5.4 (returns `Tropical::one() = Tropical(0.0)`
+    /// default (returns `Tropical::one() = Tropical(0.0)`
     /// when `a == b` and no entry was set).
     ///
     /// **Duplicate keys.** Last-write-wins, mirroring [`HashMap::insert`]
@@ -182,14 +182,14 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
         true
     }
 
-    /// Number of objects. **v0.5.5 addition.** Substrate for chain enumeration
+    /// Number of objects. Substrate for chain enumeration
     /// in `catgraph-magnitude::chain_complex`.
     #[must_use]
     pub fn size(&self) -> usize {
         self.objects.len()
     }
 
-    /// Read-only access to the underlying object list. **v0.5.5 addition.**
+    /// Read-only access to the underlying object list.
     ///
     /// # Name resolution
     ///
@@ -256,7 +256,7 @@ impl LawvereMetricSpace<usize> {
     /// closure. Equivalent to the `new(0..n) + set_distance` loop, but more
     /// ergonomic for fixtures.
     ///
-    /// **v0.5.5 addition.** Substrate for `catgraph-magnitude::chain_complex`
+    /// Substrate for `catgraph-magnitude::chain_complex`
     /// test fixtures.
     ///
     /// # Caller obligations
@@ -287,7 +287,7 @@ where
     /// Hom-object `hom(a, b)` in the `Tropical`-enriched view of the metric
     /// space.
     ///
-    /// **Diagonal default (v0.5.4).** When `a == b`, returns `Tropical::one() =
+    /// **Diagonal default.** When `a == b`, returns `Tropical::one() =
     /// Tropical(0.0)` — the multiplicative identity in min-plus, which is the
     /// Lawvere metric identity axiom `d(x, x) = 0`. This default fires only
     /// when no explicit `set_distance(x, x, _)` has been recorded; an explicit

@@ -16,9 +16,8 @@
 //! 2. **`CondIterator`-level** — direct `parallel=true` vs `parallel=false`
 //!    equivalence on map+collect and `.any()`, isolating the toggle itself.
 //!
-//! Pattern borrowed from the rayon crate's own test suite (see
-//! `~/.claude/summaries/rayon-summary-0.md` — "Deterministic parallel-vs-sequential
-//! equivalence" is the canonical rayon test idiom).
+//! Pattern borrowed from the rayon crate's own test suite — the
+//! "Deterministic parallel-vs-sequential equivalence" idiom.
 
 use catgraph::category::{Composable, HasIdentity};
 use catgraph_applied::{linear_combination::LinearCombination, temperley_lieb::BrauerMorphism};

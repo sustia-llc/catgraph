@@ -155,7 +155,7 @@ fn cospan_roundtrip_preserves_structure() {
 }
 
 // ============================================================================
-// v0.3.1 Tier 1.1 — direct PetriNet::permute_side tests
+// direct PetriNet::permute_side tests
 // ============================================================================
 
 #[cfg(test)]
@@ -249,7 +249,7 @@ mod v0_3_1_braiding {
 }
 
 // ============================================================================
-// v0.3.1 Tier 1.1 — Transition::relabel arc dedup tests
+// Transition::relabel arc dedup tests
 // ============================================================================
 
 #[cfg(test)]
