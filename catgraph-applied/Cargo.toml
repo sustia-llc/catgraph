@@ -43,6 +43,9 @@ rand.workspace = true
 rayon = { workspace = true, optional = true }
 rayon-cond = { version = "0.4", optional = true }
 rust_decimal.workspace = true
+# Workspace error-derive pattern (already in the tree via catgraph core's
+# CatgraphError; adopted for HypergraphError per #28 — no new lockfile entry).
+thiserror.workspace = true
 # `temperley_lieb` composition connectivity (zero-dep DC graph substrate;
 # replaced rustworkx-core/petgraph 2026-06-27, Track A).
 ultragraph = { workspace = true }
