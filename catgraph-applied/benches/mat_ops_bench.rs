@@ -1,23 +1,21 @@
-//! Bench groups for `MatR<R>` + the v0.5.5 mutable row/column API +
+//! Bench groups for `MatR<R>` + the mutable row/column API +
 //! `MatR::block_diagonal`.
 //!
 //! Paper anchors:
 //! - **FS18 §5.3 Def 5.50** — `MatR<R>` as the pure-rig matrix prop.
 //!   Fong-Spivak, *Seven Sketches in Compositionality* (arXiv:1803.05316v3).
 //! - **Storjohann 2000 §7** — the mutable row/column API is the perf
-//!   substrate for the Smith Normal Form pipeline shipped in
-//!   `catgraph-magnitude` v0.3.x / v0.4.x (`snf::{band, bidiagonal, mod}`).
+//!   substrate for the Smith Normal Form pipeline in
+//!   `catgraph-magnitude` (`snf::{band, bidiagonal, mod}`).
 //!
-//! Closes A-1 from `catgraph-applied/.claude/docs/BENCHES-COVERAGE.md`
-//! v0.6.0 — the foundational `mat_ops` bench file that the cg-mag A-1
-//! SNF benches will reference to isolate the SNF-internal cost from
+//! The foundational `mat_ops` bench file that the cg-mag
+//! SNF benches reference to isolate the SNF-internal cost from
 //! the underlying matrix-op cost.
 //!
 //! ## Bench-size bracket
 //!
-//! - **`matmul` groups: `n ∈ {8, 16, 32, 64, 128}`.** n=128 added 2026-05-15
-//!   per the `math:nalgebra-applied` specialist's T3 A-1 finding: the
-//!   LAPACK-vs-pure-Rust crossover for f64 dense matmul sits at ~n=64. The
+//! - **`matmul` groups: `n ∈ {8, 16, 32, 64, 128}`.** n=128 covers the
+//!   LAPACK-vs-pure-Rust crossover for f64 dense matmul, which sits at ~n=64. The
 //!   earlier bracket `{8, 16, 32, 64}` topped out exactly at the
 //!   crossover, missing the regime where a hypothetical future LAPACK
 //!   bridge would unambiguously win on FFI-overhead. n=128 adds one data
@@ -26,14 +24,13 @@
 //!   (`MatR::matmul` triple loop with `R::clone()` per `mul` per cell);
 //!   the `BoolRig` clone-contrast variant isolates the Copy-vs-Clone cost.
 //!   The `n=128` f64 measurement serves as the **pre-LAPACK regression
-//!   baseline** for future `mat_f64` LAPACK-bridge work (see
-//!   `catgraph-applied/.claude/docs/FORWARD-LOOK.md` §2.14). When that
+//!   baseline** for future `mat_f64` LAPACK-bridge work. When that
 //!   bridge lands, this measurement becomes the "before" half of the
 //!   speedup ratio.
 //!
 //! - **`mutable_ops` + `block_diagonal` groups: `n ∈ {8, 16, 32}`.** These
 //!   characterise a different perf regime — in-place state transitions on
-//!   the v0.5.5 mutable API (cg-mag SNF substrate) and tensor structure
+//!   the mutable API (cg-mag SNF substrate) and tensor structure
 //!   cost (`sfg_to_mat` Tensor-node hot path) respectively. Neither hits
 //!   the LAPACK crossover, so the smaller bracket is sufficient.
 //!
@@ -140,7 +137,7 @@ fn bench_matmul_bool(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
-// Group 2 — `mat_ops::mutable_ops` (v0.5.5 in-place API; cg-mag SNF substrate)
+// Group 2 — `mat_ops::mutable_ops` (in-place API; cg-mag SNF substrate)
 // ---------------------------------------------------------------------------
 
 /// Run the fixed Storjohann-style sequence on `m`:

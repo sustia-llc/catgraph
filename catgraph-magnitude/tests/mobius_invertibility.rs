@@ -1,7 +1,7 @@
 //! Tests for `chain_count_signed_graded` (per-grade signed chain-count
-//! diagnostic; renamed v0.4.0 §1.19 from `mobius_chains_graded`) and
+//! diagnostic; renamed from `mobius_chains_graded`) and
 //! `is_mobius_invertible_at` (Leinster 2013 §2.1 scatteredness threshold
-//! check). Task 22 of the v0.3.0 magnitude-homology plan.
+//! check).
 
 use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 use catgraph_applied::rig::F64Rig;

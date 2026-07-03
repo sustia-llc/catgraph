@@ -3,14 +3,14 @@
 //! Rust port of `modularsnf/src/band.rs` (Apache-2.0 from `events555/modularsnf`
 //! SHA `d62535e`).
 //!
-//! Storage is `Vec<Vec<i64>>` (workspace stays ndarray-free per design doc §2.4).
+//! Storage is `Vec<Vec<i64>>` (workspace stays ndarray-free).
 //!
 //! Reduces an upper b-banded matrix to bandwidth ⌊b/2⌋ + 1, iteratively
 //! reaching bi-diagonal (b = 2). Two subroutines:
 //! - `triang` (Lemma 7.3): clears upper triangle of a sub-block via column ops.
 //! - `shift` (Lemma 7.4): chases fill-in down the diagonal.
 //!
-//! Also exports `matmul_mod` as `pub`; consumed by `snf::diagonal` (Task 16) and
+//! Also exports `matmul_mod` as `pub`; consumed by `snf::diagonal` and
 //! integration tests (e.g. `tests/snf_band.rs` unimodular-invariant assertions).
 
 #![allow(
@@ -30,7 +30,7 @@ use crate::snf::zmod::{posmod, posmod_i128};
 /// `a` is `m × k`, `b` is `k × p`, output is `m × p`. All entries are reduced
 /// to canonical `[0, n)` form via `posmod_i128`.
 ///
-/// `pub` for reuse by `snf::diagonal` (Task 16) and integration tests; ported
+/// `pub` for reuse by `snf::diagonal` and integration tests; ported
 /// here as a ride-along since `band` is the first consumer.
 #[must_use]
 pub fn matmul_mod(a: &[Vec<i64>], b: &[Vec<i64>], n: i64) -> Vec<Vec<i64>> {

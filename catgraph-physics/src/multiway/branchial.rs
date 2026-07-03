@@ -215,7 +215,7 @@ pub fn branchial_parallel_step_pairs<S: Clone + Hash, T: Clone>(
     // TODO(rayon-1.12): candidate for `par_array_windows::<2>()` from the
     // new `ParallelSlice` API if `foliation.len()` is large enough. Per-pair
     // work is cheap here (filter/map over nodes), so a bench is needed before
-    // swapping — see `~/.claude/summaries/rayon-summary-0.md`.
+    // swapping.
     foliation
         .windows(2)
         .map(|pair| {

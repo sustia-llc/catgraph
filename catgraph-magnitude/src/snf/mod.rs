@@ -3,7 +3,7 @@
 //! Algorithmic reference: `events555/modularsnf` at SHA `d62535e`. Algorithm
 //! doc at upstream `docs/algorithm.md`. License Apache-2.0.
 //!
-//! Public surface (Phase C, v0.3.0):
+//! Public surface:
 //! - [`phase_1_to_bidiagonal`] — compose echelon + iterated band reduction
 //!   into a single bi-diagonalisation pass.
 
@@ -128,7 +128,7 @@ pub fn phase_1_to_bidiagonal(
 /// over the quotient ring `Z/nZ`, which is the correct object for:
 ///
 /// - rank computation modulo `n` (caller picks `n` prime → `rank_p`),
-/// - magnitude-homology rank recovery (Phase E `magnitude_homology_rank`
+/// - magnitude-homology rank recovery (`magnitude_homology_rank`
 ///   uses single-prime SNF + majority vote across primes),
 /// - any consumer that operates internally over `Z/nZ`.
 ///
@@ -143,11 +143,9 @@ pub fn phase_1_to_bidiagonal(
 ///
 /// Consumers wanting the integer SNF (full invariant-factor structure, not
 /// just rank) need either a Hadamard-bound modulus or multi-prime CRT
-/// reconstruction; both are deferred to v0.4.0 forward-look §1.10. For
-/// integer rank recovery in v0.3.x, the Phase E
+/// reconstruction; both are deferred (#35). For integer rank recovery, the
 /// `chain_complex::magnitude_homology_rank` consumer uses single-prime SNF
-/// over a Mersenne prime + majority vote across primes (see Phase E plan
-/// Task 21).
+/// over a Mersenne prime + majority vote across primes.
 ///
 /// # Algorithm
 ///
@@ -286,8 +284,7 @@ pub fn smith_normal_form(
     Ok((u, v, s))
 }
 
-/// Round-trip wrapper around [`smith_normal_form`] for `MatR<R>` inputs
-/// (v0.4.0 §1.20).
+/// Round-trip wrapper around [`smith_normal_form`] for `MatR<R>` inputs.
 ///
 /// `MatR<R>` → `Vec<Vec<i64>>` (via [`IntegerLikeRig::to_i64`]) →
 /// [`smith_normal_form`] → `MatR<R>` (via `R::from(i64)`).
@@ -318,8 +315,7 @@ pub fn smith_normal_form(
 ///
 /// # References
 ///
-/// v0.4.0 §1.20 (plan: `.claude/plans/2026-05-12-catgraph-magnitude-v0.4.0-phase-h.md`).
-/// Substrate for v0.4.0 §1.10 (multi-prime CRT integer SNF lift).
+/// Substrate for the multi-prime CRT integer SNF lift.
 pub fn smith_normal_form_matr<R>(
     m: &MatR<R>,
     n: &R,

@@ -16,13 +16,13 @@
 //! comonoid `Δ_P : P → P × P` (CDL Theorem G.10 — lax algebras for `Para(T)`
 //! induce comonoids).
 //!
-//! ## Phase DL-2 status
+//! ## Status
 //!
 //! Bodies present for the concrete `M = (Set, ×, 1)` actegory acting on
 //! `Set` by Cartesian product — see [`SetMonoidal`] / [`SetActegory`].
 //! [`ParaMorphism::compose`] and [`Reparameterization::apply`] have
 //! Set-specialised implementations. Other monoidal categories are
-//! deferred to DL-3+.
+//! deferred.
 //!
 //! ## Closure convention
 //!

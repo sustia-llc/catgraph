@@ -15,12 +15,11 @@
 //! over ℓ gives `n · ((n − 1) · e^(−d_min_scaled))^k`, and the geometric
 //! tail from `k = max_degree + 1` collapses to the closed form above.
 //!
-//! See `.claude/docs/2026-05-07-catgraph-magnitude-v0.4.0-forward-look.md`
-//! §1.15 for the perf-fix story; the `1e-9` floor accounts for accumulated
+//! The `1e-9` floor accounts for accumulated
 //! rounding in `magnitude::magnitude`'s Möbius matrix-inverse Gaussian
-//! elimination at the v0.3.0 fixture sizes (`n ≤ 5`). Tighten if v0.4.0
-//! pushes `n` past ~16, where the elimination's worst-case error growth
-//! becomes load-bearing.
+//! elimination at the shipped fixture sizes (`n ≤ 5`). Tighten if a future
+//! fixture pushes `n` past ~16, where the elimination's worst-case error
+//! growth becomes load-bearing.
 
 use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 use catgraph_applied::rig::F64Rig;
@@ -28,7 +27,7 @@ use catgraph_magnitude::chain_complex::euler_char_identity_at;
 use catgraph_magnitude::weighted_cospan::NodeId;
 
 /// Floor for accumulated rounding noise in the Möbius matrix-inverse path
-/// (`n × n` Gaussian elimination over `F64Rig`, with `n ≤ 5` for v0.3.0
+/// (`n × n` Gaussian elimination over `F64Rig`, with `n ≤ 5` for the shipped
 /// fixtures). f64 epsilon is `~2.22e-16`; `1e-9` carries ~7 orders of
 /// magnitude of safety margin against the worst-case elimination error
 /// growth at this `n` regime.
@@ -40,7 +39,7 @@ fn analytical_residual_bound(n: usize, d_min_scaled: f64, max_degree: usize) -> 
     assert!(n >= 2, "trivial space; acceptance test does not apply");
     #[allow(
         clippy::cast_precision_loss,
-        reason = "n ≤ 5 in v0.3.0 fixtures; trivially fits f64 mantissa"
+        reason = "n ≤ 5 in the shipped fixtures; trivially fits f64 mantissa"
     )]
     let n_f = n as f64;
     let r = (n_f - 1.0) * (-d_min_scaled).exp();
@@ -53,7 +52,7 @@ fn analytical_residual_bound(n: usize, d_min_scaled: f64, max_degree: usize) -> 
     #[allow(
         clippy::cast_possible_wrap,
         clippy::cast_possible_truncation,
-        reason = "max_degree ≤ 4 in v0.3.0 fixtures; powi argument trivially fits i32"
+        reason = "max_degree ≤ 4 in the shipped fixtures; powi argument trivially fits i32"
     )]
     let exponent = (max_degree + 1) as i32;
     n_f * r.powi(exponent) / (1.0 - r)

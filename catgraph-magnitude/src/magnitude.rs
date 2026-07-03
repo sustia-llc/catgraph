@@ -1,18 +1,18 @@
-//! Magnitude functions — Phases 6A.2 + 6A.3 + 6F.
+//! Magnitude functions.
 //!
 //! - [`tsallis_entropy`] — Tsallis q-entropy with Shannon-recovery special
 //!   case at `t = 1` (BV 2025 §3 / Tsallis 1988).
 //! - [`mobius_function`] — Möbius inversion `ζ · μ = I` over a ring (Leinster
-//!   2013 / Leinster-Shulman §2). v0.1.0 implements the matrix-inverse path
+//!   2013 / Leinster-Shulman §2). Implements the matrix-inverse path
 //!   via Gaussian elimination, requiring `Q: Ring + Div + From<f64>`.
 //! - [`magnitude`] — magnitude `Mag(tM) = Σᵢⱼ μ_t[i][j]` of a Lawvere metric
 //!   space at scale `t`, computed by Möbius-inverting the t-scaled zeta
 //!   matrix and summing all entries (BV 2025 §3.5, Eq 7).
 //! - [`weighting`] / [`coweighting`] — paper-foundational (co)weighting
-//!   primitives (Leinster 2013 §1.1 Def 1.1.1). v0.2.0 addition.
+//!   primitives (Leinster 2013 §1.1 Def 1.1.1).
 //! - [`is_scattered`] — Leinster Def 2.1.2 predicate `d(a,b) > log(#A−1)`,
 //!   the convergence precondition for the chain-sum Möbius formula in
-//!   [`crate::mobius_chains`]. v0.2.0 addition.
+//!   [`crate::mobius_chains`].
 //!
 //! ## Module-level lints
 //!
@@ -21,7 +21,7 @@
 //! `clippy::needless_range_loop` would suggest iterating-by-value, but we
 //! need indexed writes back into `aug[r][k]`, so the index `k` is the
 //! primary loop variable, not just a counter. Module-level `#![allow]` below
-//! removes 6 per-site duplicates (v0.2.1 reviewer #3 Minor #6).
+//! removes 6 per-site duplicates.
 #![allow(clippy::needless_range_loop)]
 
 use std::ops::Div;
@@ -38,7 +38,6 @@ use catgraph_applied::mat::MatR;
 /// `<LawvereMetricSpace<NodeId> as crate::EnrichedCategory<crate::Tropical>>::objects(space).collect()`
 /// FQN dispatch repeated across `mobius_function`, `magnitude`, `weighting`,
 /// `coweighting`, `is_scattered`, and `mobius_chains::mobius_function_via_chains`.
-/// Added in v0.2.1 per the post-Phase-6F three-reviewer pass.
 pub(crate) fn materialize_objects(space: &LawvereMetricSpace<NodeId>) -> Vec<NodeId> {
     <LawvereMetricSpace<NodeId> as crate::EnrichedCategory<crate::Tropical>>::objects(space)
         .collect()
@@ -84,8 +83,8 @@ pub(crate) fn scaled_space(
 ///
 /// **Shannon special case.** When `|t − 1| < TSALLIS_SHANNON_EPS` (= `1e-6`),
 /// the function returns `-Σ pᵢ ln pᵢ` directly to avoid catastrophic
-/// cancellation in the `(1 − Σ pᵢᵗ) / (t − 1) ≈ 0/0` regime. Per Phase 6A
-/// execution plan amend 5: the Cor 3.14 finite-difference step `h` MUST
+/// cancellation in the `(1 − Σ pᵢᵗ) / (t − 1) ≈ 0/0` regime. The Cor 3.14
+/// finite-difference step `h` MUST
 /// satisfy `h > TSALLIS_SHANNON_EPS`; otherwise both `f(1+h)` and `f(1−h)`
 /// evaluate the Shannon branch and the central difference collapses
 /// identically to zero.
@@ -105,9 +104,9 @@ pub(crate) fn scaled_space(
 /// q-entropy family is defined for `q > 0`). At `t < 0`, `0.0_f64.powf(t)`
 /// returns `+∞` and propagates to the sum, polluting the result with
 /// non-finite values; at `t = 0`, the Tsallis formula degenerates to
-/// `(1 − n) / (−1)` for any non-zero distribution. v0.2.1 adds a
-/// `debug_assert!(t > 0.0)` entry guard mirroring `LmCategory::magnitude`'s
-/// v0.1.1 documentary check (per H.3 verdict #4 and v0.2.0 reviewer #3 I-2).
+/// `(1 − n) / (−1)` for any non-zero distribution. A
+/// `debug_assert!(t > 0.0)` entry guard mirrors `LmCategory::magnitude`'s
+/// documentary check.
 /// Callers operating in release mode with `t ≤ 0` get the documented NaN /
 /// `+∞` pollution; the function does not return `Result` to keep the hot path
 /// branch-free.
@@ -151,17 +150,17 @@ pub fn tsallis_entropy(p: &[f64], t: f64) -> f64 {
 /// `ζ[i][j] = exp(-d(objects[i], objects[j]))` embedded into `Q` via
 /// `Q::from(_: f64)`. Here `d` is the Lawvere distance carried by `space`.
 ///
-/// **Bound: `Q: Ring + Div + From<f64>` — i.e. `Q` is a (commutative) field
-/// for v0.1.0.** Gaussian elimination needs additive inverses (the `Ring`
+/// **Bound: `Q: Ring + Div + From<f64>` — i.e. `Q` is a (commutative)
+/// field.** Gaussian elimination needs additive inverses (the `Ring`
 /// bound, supplied by `Neg + Sub`) AND multiplicative inverses (the `Div`
 /// bound, supplied by `Q / Q → Q`). Among the workspace's four concrete
 /// rigs only [`crate::F64Rig`] satisfies all three; [`crate::BoolRig`],
 /// [`crate::UnitInterval`], and [`crate::Tropical`] are excluded. The
-/// chain-sum variant `mobius_function_via_chains<Q: Rig>` per Leinster-
-/// Shulman's explicit formula is deferred to v0.2.0 — see crate root docs.
+/// chain-sum variant `mobius_function_via_chains` per Leinster-
+/// Shulman's explicit formula relaxes this — see crate root docs.
 ///
 /// **Conversion `f64 → Q`.** The zeta matrix entries `exp(-d(i, j))` are
-/// computed in `f64` then converted to `Q` via `Q::from(_)`. v0.1.0's only
+/// computed in `f64` then converted to `Q` via `Q::from(_)`. The only
 /// `Ring + Div`-satisfying rig is `F64Rig`, which has the conversion
 /// trivially.
 ///
@@ -313,7 +312,7 @@ where
 }
 
 // ============================================================================
-// v0.2.0 — Phase 6F additions: weighting, coweighting, is_scattered
+// weighting, coweighting, is_scattered
 // ============================================================================
 
 /// Weighting on a Lawvere metric space's similarity matrix ζ.
@@ -327,7 +326,7 @@ where
 /// **Bound: `Q: Ring + Div + From<f64>`** — same algebraic surface as
 /// [`mobius_function`]. The right-hand side `u_I` and the Gaussian-elimination
 /// solve are both performed in `Q`. Among the workspace's four concrete rigs
-/// only [`crate::F64Rig`] satisfies all three in v0.2.0.
+/// only [`crate::F64Rig`] satisfies all three.
 ///
 /// **Relationship to [`mobius_function`].** When ζ is invertible, the unique
 /// weighting equals the j-th row sum of `μ = ζ⁻¹` (Leinster Lemma 1.1.4):
@@ -403,8 +402,7 @@ where
     }
 
     // The last column of the row-reduced augmented matrix is `w`. Direct
-    // indexing reads safer than `nth(n).expect(...)` after `into_iter()`
-    // (v0.2.1 reviewer #1 I-1 — ergonomics fix).
+    // indexing reads safer than `nth(n).expect(...)` after `into_iter()`.
     Ok(aug.into_iter().map(|mut row| row.swap_remove(n)).collect())
 }
 
@@ -543,11 +541,9 @@ pub fn is_scattered(space: &LawvereMetricSpace<NodeId>) -> bool {
 /// the per-row infinity-norm of `M` is at most `(n − 1) · e^(−t · min) ≤ 1 − ε`,
 /// giving the von-Neumann convergence criterion.
 ///
-/// In v0.3.0 this function checked `t > log(n − 1)` (assuming `min_{a≠b} d ≥ 1`).
-/// In v0.3.1 the citation is corrected per Phase G paper-audit reviewer
-/// finding (I-2): Prop 2.4.17 was a transcription error; the threshold
-/// is the §2.1 scatteredness threshold (Def 2.1.2) plus Prop 2.1.3 chain-sum
-/// convergence.
+/// The threshold is the §2.1 scatteredness threshold (Def 2.1.2) plus
+/// Prop 2.1.3 chain-sum convergence, not Prop 2.4.17 (an earlier revision
+/// cited Prop 2.4.17 in error).
 ///
 /// This is **conservative**: returning `false` here does not prove `tM` is
 /// non-invertible (the predicate merely fails the cheap scatteredness
@@ -599,12 +595,10 @@ pub fn is_mobius_invertible_at(space: &LawvereMetricSpace<NodeId>, t: f64) -> bo
 /// is the pair with the violating direction (`a → b` if that direction failed,
 /// otherwise the `b → a` direction).
 ///
-/// **v0.3.0 substrate hook.** Per the Phase 6F three-reviewer pass (Rust A-2),
-/// the v0.3.0 magnitude-homology chain complex will use the violator pairs as
-/// boundary-map kernel generators (the pairs at scatteredness boundary
-/// correspond to chain complex elements with non-trivial `H_{0,ℓ}` for some
-/// `ℓ`). v0.2.1 ships only the diagnostic predicate; v0.3.0 will consume it
-/// in the chain-complex construction.
+/// **Substrate hook.** The magnitude-homology chain complex uses the
+/// violator pairs as boundary-map kernel generators (the pairs at the
+/// scatteredness boundary correspond to chain-complex elements with
+/// non-trivial `H_{0,ℓ}` for some `ℓ`).
 ///
 /// # Examples
 ///

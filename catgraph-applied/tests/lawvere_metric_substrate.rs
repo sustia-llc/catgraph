@@ -1,4 +1,4 @@
-//! Tests for v0.5.5 `LawvereMetricSpace` substrate (`size`, `objects`, `from_distance_fn`).
+//! Tests for the `LawvereMetricSpace` substrate (`size`, `objects`, `from_distance_fn`).
 
 #![allow(clippy::float_cmp)]
 

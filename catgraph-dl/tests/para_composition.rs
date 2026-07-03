@@ -1,6 +1,6 @@
-//! Phase DL-2 Agent A — `Para(SetMonoidal, SetActegory)` composition tests.
+//! `Para(SetMonoidal, SetActegory)` composition tests.
 //!
-//! CDL §3.1. These tests exercise the body landed in Phase DL-2 for the
+//! CDL §3.1. These tests exercise the body for the
 //! concrete monoidal category `(Set, ×, 1)` acting on `Set` by Cartesian
 //! product. They are the regression harness for:
 //!

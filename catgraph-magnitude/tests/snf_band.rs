@@ -33,9 +33,9 @@ fn band_reduction_halves_bandwidth() {
         "bandwidth should at least halve (got b={b}, b_new={b_new})"
     );
     assert_eq!(m_new.len(), m.len());
-    // Unimodular invariant: U · M · V ≡ M_new (mod n). Layered defense — Task 15
-    // exercises this again at the chain-integration level, but locking the
-    // contract at the band-reduction layer catches regressions early.
+    // Unimodular invariant: U · M · V ≡ M_new (mod n). Layered defense — the
+    // chain-integration tests exercise this again at a higher level, but locking
+    // the contract at the band-reduction layer catches regressions early.
     let um = matmul_mod(&u_step, &m, n);
     let umv = matmul_mod(&um, &v_step, n);
     assert_eq!(umv, m_new, "unimodular invariant U @ M @ V == M_new failed");

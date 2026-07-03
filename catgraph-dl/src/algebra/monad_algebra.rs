@@ -13,10 +13,10 @@
 //! monad-algebra homomorphisms — the categorical recovery of Geometric
 //! Deep Learning.
 //!
-//! **Phase DL-2 scaffold:** Construction wrappers + the
-//! commuting-square verifier inherited via the underlying [`FAlgebraHom`]
-//! check. Coherence with `η` and `μ` is a **documented obligation**, not
-//! a machine-checked invariant — see [`MonadAlgebraHom`] below.
+//! Construction wrappers + the commuting-square verifier inherited via the
+//! underlying [`FAlgebraHom`] check. Coherence with `η` and `μ` is a
+//! **documented obligation**, not a machine-checked invariant — see
+//! [`MonadAlgebraHom`] below.
 
 use core::marker::PhantomData;
 
@@ -25,7 +25,8 @@ use super::f_algebra::{FAlgebra, FAlgebraHom};
 /// An algebra `(A, a : M(A) → A)` for a monad `M`.
 ///
 /// CDL Definition 2.3. The implementor must guarantee compatibility with
-/// the monad unit and multiplication; this is checked in Phase DL-2.
+/// the monad unit and multiplication; this is a documented obligation,
+/// not machine-checked (see [`MonadAlgebraHom`]).
 #[derive(Debug, Clone)]
 pub struct MonadAlgebra<M, A, S> {
     /// The underlying F-algebra. `M` is reused as the endofunctor name.
@@ -35,7 +36,7 @@ pub struct MonadAlgebra<M, A, S> {
 
 impl<M, A, S> MonadAlgebra<M, A, S> {
     /// Wrap an F-algebra as a monad algebra. The caller is responsible for
-    /// the unit + associativity laws (verification arrives in Phase DL-2).
+    /// the unit + associativity laws (not machine-checked).
     pub fn new(algebra: FAlgebra<M, A, S>) -> Self {
         Self {
             algebra,
@@ -54,7 +55,7 @@ impl<M, A, S> MonadAlgebra<M, A, S> {
 /// 1. **The F-algebra commuting square** —
 ///    `f ∘ a = b ∘ M(f)` (CDL Definition 2.5). This is the same square
 ///    checked by [`FAlgebraHom::verify_commutes`], and is the only law
-///    machine-checked in Phase DL-2.
+///    machine-checked here.
 ///
 /// 2. **Monad unit + multiplication coherence** — `f` must additionally
 ///    respect the monad's unit `η` and multiplication `μ`. Concretely,
@@ -76,10 +77,10 @@ impl<M, A, S> MonadAlgebra<M, A, S> {
 ///    unit); the right diagram is the monad-algebra associativity that
 ///    every algebra independently must satisfy.
 ///
-/// **Phase DL-2 scope:** only the F-algebra square (point 1) is
+/// **Scope:** only the F-algebra square (point 1) is
 /// machine-checked. The unit + multiplication coherence (point 2) is a
 /// **documented obligation**: the type system witnesses construction but
-/// does not verify these laws. Future phases (DL-3+) will add a
+/// does not verify these laws. A future addition will add a
 /// `Monad` trait carrying `η`, `μ`, and the corresponding verification
 /// entry points.
 ///
@@ -101,7 +102,7 @@ impl<M, A, S> MonadAlgebra<M, A, S> {
 #[derive(Debug, Clone)]
 pub struct MonadAlgebraHom<M, A, B, FromS, ToS, MapS> {
     /// The underlying F-algebra homomorphism. The F-algebra commuting
-    /// square is the only law machine-checked at Phase DL-2.
+    /// square is the only law machine-checked here.
     pub algebra_hom: FAlgebraHom<M, A, B, FromS, ToS, MapS>,
     _phantom: PhantomData<M>,
 }
@@ -119,7 +120,7 @@ impl<M, A, B, FromS, ToS, MapS> MonadAlgebraHom<M, A, B, FromS, ToS, MapS> {
     /// 2. `f ∘ a ∘ M(a) = f ∘ a ∘ μ_A` (compatibility with monad
     ///    multiplication).
     ///
-    /// Phase DL-3+ will introduce a `Monad` trait carrying `η` and `μ`
+    /// A future addition will introduce a `Monad` trait carrying `η` and `μ`
     /// and add machine-checked verifiers for these laws. For now they are
     /// **caller-attested** — construction does not enforce them.
     pub fn new(algebra_hom: FAlgebraHom<M, A, B, FromS, ToS, MapS>) -> Self {

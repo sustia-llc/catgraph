@@ -1,4 +1,4 @@
-//! §1.17 Leinster 2008 Cor 1.5 substrate — `PosetCategory<NodeId>` input type.
+//! Leinster 2008 Cor 1.5 substrate — `PosetCategory<NodeId>` input type.
 //!
 //! Tests the four constructor / validator paths:
 //! - `from_partial_order` over a 3-chain `0 ≤ 1 ≤ 2`,

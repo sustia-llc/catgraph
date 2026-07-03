@@ -5,7 +5,7 @@
 //! provides the concrete instance [`SetMonoidal`] — the monoidal category
 //! `(Set, ×, 1)` with object-level tensor `(A, B) ↦ (A, B)` and unit
 //! `1 = ()`. CDL takes `(Set, ×, 1)` as the default and it is the only
-//! instance shipped in Phase DL-2.
+//! instance currently shipped.
 //!
 //! ## HKT shape
 //!
@@ -16,9 +16,9 @@
 //!
 //! Coherence isomorphisms (associator, unitors) are exposed as method
 //! signatures on values; for `SetMonoidal` they are concrete tuple
-//! re-associations and are exact (not "up to iso"). Future DL-3+ instances
+//! re-associations and are exact (not "up to iso"). Future instances
 //! over richer monoidal categories will need these slots, so the trait
-//! surface is widened now to keep DL-2 → DL-3 a non-breaking transition for
+//! surface is widened now to keep their addition a non-breaking transition for
 //! [`SetMonoidal`] consumers.
 //!
 //! Closure convention across the `para` module: `Fn((P, X)) -> Y`
@@ -31,7 +31,7 @@
 //! `associate`, `left_unitor`, `right_unitor`) take `&self` even though the
 //! only shipped instance ([`SetMonoidal`]) is a zero-sized type for which
 //! the receiver is unobservable. The `&self` slot is a deliberate
-//! future-proofing choice: DL-3+ instances over richer monoidal categories
+//! future-proofing choice: future instances over richer monoidal categories
 //! will carry **runtime data** — an `R`-module instance carries its base
 //! ring; a hyperdoctrine instance carries the fibration's projection map; a
 //! vector-bundle instance carries its connection. Freezing the trait surface
@@ -43,8 +43,8 @@
 //! witnesses, which use static dispatch exclusively (`VecWitness::fmap(v,
 //! f)`, not `v.fmap(f)`, with the witness as a type-level token never
 //! instantiated). HAFT itself accommodates runtime payload via a separate
-//! `Context` type parameter — e.g. `Adjunction<L, R, Context>` (unified
-//! v0.3.0, replacing `BoundedAdjunction`) and the `Effect5::Fixed{1..4}`
+//! `Context` type parameter — e.g. `Adjunction<L, R, Context>` (unified,
+//! replacing `BoundedAdjunction`) and the `Effect5::Fixed{1..4}`
 //! payload slots. cg-dl's [`MonoidalCategory`] folds the equivalent
 //! runtime-payload role into the `&self` receiver instead of carrying a
 //! separate `Context` parameter — so the divergence is in the *placement*
@@ -61,13 +61,13 @@
 //! hyperdoctrine / vector-bundle slot, picking up `&self` payload where
 //! HAFT would use a `Context` type parameter.
 //!
-//! **Rationale validation (v0.4.0):** the coalition v0.5.0
+//! **Rationale validation:** a downstream coalition
 //! `impl Actegory<SetMonoidal>` for `UnitIntervalQ` / `TropicalQ` /
-//! `QuantaleDefault` is the first downstream consumer expected to carry
+//! `QuantaleDefault` is the first consumer expected to carry
 //! runtime data (Tropical zero / one for the underlying min-plus
 //! semiring; BTV21 free-monoid generator references; Lawvere-metric
-//! embedding parameter). v0.4.0 commits to the `&self` slot for
-//! future-proofing; the audit checkpoint fires at coalition v0.5.0
+//! embedding parameter). The shipped surface commits to the `&self` slot for
+//! future-proofing; the audit checkpoint fires at that consumer's
 //! post-shipping review and either ratifies the choice or opens a
 //! follow-up to consider static dispatch. See
 //! [`AUDIT-CHECKPOINT-v0.4.0.md`](../../docs/AUDIT-CHECKPOINT-v0.4.0.md)
@@ -155,15 +155,15 @@ pub trait MonoidalCategory {
 ///
 /// Downstream users opting into the `(Set, ×, 1)` blanket via
 /// [`SetCategoryDefaults`] must ALSO `impl Sealed for MyMonoidal {}` —
-/// the dual-impl requirement is the v0.4.0 "soft seal" that surfaces the
+/// the dual-impl requirement is the "soft seal" that surfaces the
 /// commitment-to-`(Set, ×, 1)` decision at the impl site. See the
-/// "## ⚠️ Soft-seal (v0.4.0)" section in [`SetCategoryDefaults`]'s
+/// "## ⚠️ Soft-seal" section in [`SetCategoryDefaults`]'s
 /// rustdoc for the full rationale.
 pub mod private {
     /// Sealing trait for [`super::SetCategoryDefaults`]. Implementing this
     /// trait signals deliberate commitment to the canonical
     /// `(Set, ×, 1)`-flavoured `MonoidalCategory` body supplied by the
-    /// blanket impl. See the "## ⚠️ Soft-seal (v0.4.0)" section in
+    /// blanket impl. See the "## ⚠️ Soft-seal" section in
     /// [`super::SetCategoryDefaults`]'s rustdoc.
     pub trait Sealed {}
 }
@@ -184,7 +184,7 @@ pub mod private {
 /// users defining a fresh `(Set, ×, 1)`-flavoured naming-witness ZST get
 /// `MonoidalCategory` for free without reproducing the bodies.
 ///
-/// ## `: Sized` bound (v0.3.1)
+/// ## `: Sized` bound
 ///
 /// The trait carries a `: Sized` supertrait bound. This is a soft witness
 /// that the trait is intended for **zero-sized witness types** (or other
@@ -196,31 +196,30 @@ pub mod private {
 /// shipping call sites: [`SetMonoidal`] is a unit struct (`Sized` via the
 /// default `Sized` bound); the doctest's `MyMonoidal` is too.
 ///
-/// ## ⚠️ Soft-seal (v0.4.0)
+/// ## ⚠️ Soft-seal
 ///
 /// `SetCategoryDefaults` carries a `: private::Sealed` supertrait bound.
 /// Downstream users must `impl Sealed for MyMonoidal {}` AND
 /// `impl SetCategoryDefaults for MyMonoidal {}` (two impls) to opt into
-/// the `(Set, ×, 1)` blanket. The dual-impl requirement is the v0.4.0
+/// the `(Set, ×, 1)` blanket. The dual-impl requirement is the
 /// commitment-signalling mechanism: a downstream user who writes only
 /// `impl SetCategoryDefaults for MyMonoidal {}` (without the parallel
 /// `Sealed` impl) gets a clear `Sealed: not satisfied` diagnostic at the
 /// impl site, rather than the harder-to-diagnose
 /// `conflicting implementations of MonoidalCategory` coherence error
-/// that the v0.3.1 conflict-guard caveat (below) warns about.
+/// that the conflict-guard caveat (below) warns about.
 ///
-/// Rationale: the v0.3.1 `Sized`-only bound let a downstream user collide
+/// Rationale: the earlier `Sized`-only bound let a downstream user collide
 /// `impl SetCategoryDefaults for MyType {}` + a hand-rolled
 /// `impl MonoidalCategory for MyType { ... }` and discover the
 /// coherence error LATE (the diagnostic does not name
-/// `SetCategoryDefaults` as the proximal cause). The v0.4.0 soft-seal
+/// `SetCategoryDefaults` as the proximal cause). The soft-seal
 /// surfaces the commitment at compile time at the impl site, where the
 /// fix is local and the diagnostic is direct. See
-/// [`private::Sealed`] for the trait; see the workspace plan slot 1
-/// design doc (`.claude/docs/2026-05-10-catgraph-dl-v0.4.0-design.md`
-/// §2.3) for the option-(a) sealing rationale + the rejected alternatives.
+/// [`private::Sealed`] for the trait. The sealing approach (option (a))
+/// was chosen over the rejected alternatives.
 ///
-/// ## ⚠️ Conflict-guard caveat (v0.3.1; superseded by v0.4.0 soft-seal but still valid)
+/// ## ⚠️ Conflict-guard caveat (superseded by the soft-seal but still valid)
 ///
 /// **Implementing `SetCategoryDefaults` for a type commits the type to the
 /// canonical `(Set, ×, 1)` `MonoidalCategory` body via the blanket impl.**
@@ -233,7 +232,7 @@ pub mod private {
 /// ```
 ///
 /// will hit a `conflicting implementations of trait MonoidalCategory for
-/// type MyType` compile error from the trait-coherence checker (the v0.4.0
+/// type MyType` compile error from the trait-coherence checker (the
 /// soft-seal does not prevent this third case — a deliberate `Sealed`
 /// impl + a deliberate hand-rolled `MonoidalCategory` impl is the bypass
 /// path the seal does not block). The diagnostic does not name
@@ -247,7 +246,7 @@ pub mod private {
 /// ## Implementation note (option (γ-ii))
 ///
 /// At design phase, three options were considered for supplying the default
-/// bodies (see `.claude/docs/2026-05-06-catgraph-dl-v0.3.0-design.md` §2.2):
+/// bodies:
 ///
 /// - **(α)** marker trait + blanket impl gated on the marker.
 /// - **(β)** `#[derive(SetMonoidal)]` proc-macro.
@@ -273,7 +272,7 @@ pub mod private {
 /// #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 /// struct MyMonoidal;
 ///
-/// // v0.4.0 dual-impl soft-seal: Sealed first, then SetCategoryDefaults.
+/// // Dual-impl soft-seal: Sealed first, then SetCategoryDefaults.
 /// impl Sealed for MyMonoidal {}
 /// impl SetCategoryDefaults for MyMonoidal {}
 ///
@@ -361,12 +360,12 @@ pub struct SetMorphism;
 /// `((a, b), c) ↔ (a, (b, c))` and the unitor projections `((), a) ↔ a`
 /// are bona-fide bijections in `Set`, not "up to iso" as in a general
 /// monoidal category. This makes [`SetMonoidal`] the trivial-coherence
-/// reference instance against which DL-3+ instances will be compared.
+/// reference instance against which future instances will be compared.
 ///
-/// As of v0.3.0 the [`MonoidalCategory`] impl is supplied via the
+/// The [`MonoidalCategory`] impl is supplied via the
 /// [`SetCategoryDefaults`] blanket: this struct opts in with an empty
 /// `impl SetCategoryDefaults for SetMonoidal {}`. The behaviour is
-/// pointwise identical to the v0.2.0 hand-written impl — the blanket simply
+/// pointwise identical to the earlier hand-written impl — the blanket simply
 /// hoists the bodies into one place so downstream `(Set, ×, 1)`-flavoured
 /// ZSTs can share them.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -380,6 +379,6 @@ impl SetMonoidal {
     }
 }
 
-// v0.4.0 dual-impl soft-seal: Sealed first, then SetCategoryDefaults.
+// Dual-impl soft-seal: Sealed first, then SetCategoryDefaults.
 impl private::Sealed for SetMonoidal {}
 impl SetCategoryDefaults for SetMonoidal {}

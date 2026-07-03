@@ -168,7 +168,7 @@ impl<R: Rig> MatR<R> {
 
     /// Mutable access to a single entry. Returns `None` if `(row, col)` is out of bounds.
     ///
-    /// **v0.5.5 addition.** Substrate for in-place row/column operations in
+    /// Substrate for in-place row/column operations in
     /// `catgraph-magnitude`'s SNF Phase 1 + Phase 2 (Storjohann 2000).
     pub fn entry_mut(&mut self, row: usize, col: usize) -> Option<&mut R> {
         self.entries.get_mut(row)?.get_mut(col)
@@ -177,7 +177,7 @@ impl<R: Rig> MatR<R> {
     /// Mutable access to the underlying `Vec<Vec<R>>` storage.
     ///
     /// Caller is responsible for preserving rectangularity — if any row is resized,
-    /// `rows()`/`cols()` will return stale values. **v0.5.5 addition.**
+    /// `rows()`/`cols()` will return stale values.
     pub fn entries_mut(&mut self) -> &mut [Vec<R>] {
         &mut self.entries
     }
@@ -185,7 +185,7 @@ impl<R: Rig> MatR<R> {
     /// Swap two rows in place. Returns `Err(CatgraphError::Composition)` if
     /// either index is out of bounds.
     ///
-    /// **v0.5.5 addition.** Substrate for Storjohann SNF row operations.
+    /// Substrate for Storjohann SNF row operations.
     ///
     /// # Errors
     ///
@@ -205,7 +205,7 @@ impl<R: Rig> MatR<R> {
 
     /// Scale a single row in place: `row_i ← factor * row_i`.
     ///
-    /// **v0.5.5 addition.** Substrate for Storjohann SNF row operations.
+    /// Substrate for Storjohann SNF row operations.
     ///
     /// # Errors
     ///
@@ -231,7 +231,7 @@ impl<R: Rig> MatR<R> {
     /// `dst == src` is rejected; the Storjohann SNF call sites always operate on
     /// distinct rows. (Self-scaling is `scale_row(row, 1+factor)` if needed.)
     ///
-    /// **v0.5.5 addition.** Substrate for Storjohann SNF row operations.
+    /// Substrate for Storjohann SNF row operations.
     ///
     /// # Errors
     ///
@@ -256,9 +256,9 @@ impl<R: Rig> MatR<R> {
                 ),
             });
         }
-        // TODO(v0.5.6 perf): in the SNF inner loop, this `dst.clone() + factor*src`
+        // TODO(perf, #37): in the SNF inner loop, this `dst.clone() + factor*src`
         // pattern allocates a new R per cell. Consider `mem::replace` to avoid the
-        // dst-side clone once Phase C/D benches show it as a hotspot.
+        // dst-side clone if benches show it as a hotspot.
         for col in 0..self.cols {
             let s = self.entries[src][col].clone();
             let scaled = factor.clone() * s;
@@ -270,7 +270,7 @@ impl<R: Rig> MatR<R> {
 
     /// Swap two columns in place.
     ///
-    /// **v0.5.5 addition.** Substrate for Storjohann SNF column operations
+    /// Substrate for Storjohann SNF column operations
     /// (column-axis dual of [`Self::row_swap`]).
     ///
     /// # Errors
@@ -293,7 +293,7 @@ impl<R: Rig> MatR<R> {
 
     /// Scale a single column in place: `col_c ← factor * col_c`.
     ///
-    /// **v0.5.5 addition.** Substrate for Storjohann SNF column operations
+    /// Substrate for Storjohann SNF column operations
     /// (column-axis dual of [`Self::scale_row`]).
     ///
     /// # Errors
@@ -317,7 +317,7 @@ impl<R: Rig> MatR<R> {
 
     /// Add a scaled copy of one column into another: `col_dst ← col_dst + factor * col_src`.
     ///
-    /// **v0.5.5 addition.** Substrate for Storjohann SNF column operations
+    /// Substrate for Storjohann SNF column operations
     /// (column-axis dual of [`Self::add_scaled_row`]); `dst == src` rejected.
     ///
     /// # Errors

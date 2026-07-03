@@ -16,16 +16,15 @@
 //! Rank is the canonical Z/p invariant: it's the dimension of the image,
 //! which is impl-independent. This is the cross-validation surface that
 //! makes mathematical sense for cg-magnitude's `smith_normal_form_integer`
-//! pipeline (T14) — the per-prime SNF rank is what feeds into the
+//! pipeline — the per-prime SNF rank is what feeds into the
 //! 2-prime cross-check used to filter "good primes" in
 //! `smith_normal_form_integer` (see `crt_lift.rs` step 4).
 //!
-//! Cross-validating the full integer SNF (`smith_normal_form_integer`,
-//! T14) against modularsnf would require either (a) re-running T14 with
+//! Cross-validating the full integer SNF (`smith_normal_form_integer`)
+//! against modularsnf would require either (a) re-running it with
 //! modularsnf as the per-prime SNF backend and comparing to cg-magnitude's
 //! own backend or (b) a third-party integer-SNF reference. Both are
-//! deferred to the v0.4.0 forward-look as out-of-scope at the §1.10
-//! scaffold stage.
+//! deferred as out-of-scope here.
 //!
 //! To run:
 //!
@@ -91,10 +90,10 @@ proptest! {
         );
     }
 
-    // FORWARD-LOOK §2.9 — extend the proptest grid from `n = 2` to `n ∈ {2, 3, 4}`.
+    // Follow-up: extend the proptest grid from `n = 2` to `n ∈ {2, 3, 4}`.
     // n=4 is the smallest fixture where the chain-rebalance interactions at
     // 4×4 scale (and non-trivial rank-recovery beyond rank ∈ {0, 1, 2}) get
-    // exercised. Anchored to v0.4.0 forward-look §2.9 / v0.5.0 fold-in.
+    // exercised.
 
     #[test]
     fn snf_mod_p_rank_agrees_with_modularsnf_3x3(

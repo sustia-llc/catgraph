@@ -1,4 +1,4 @@
-//! §1.10 CRT reconstruction + sign-symmetric lift.
+//! CRT reconstruction + sign-symmetric lift.
 //! Recovers an integer from residues `r_i = x mod p_i` and lifts to
 //! `[-⌊∏p/2⌋, ⌊∏p/2⌋]`.
 
@@ -39,11 +39,11 @@ fn crt_mismatched_lengths_errors() {
 
 #[test]
 fn crt_four_large_primes_near_2_pow_31() {
-    // T13 C-1 regression: with k=4 primes near 2^31, the naive triple-product
+    // Regression: with k=4 primes near 2^31, the naive triple-product
     // `r · m · m_inv` overflows i128 (silent wrap in release; panic in debug).
     // The mul_mod_i128 helper reduces intermediate products mod P.
-    // This is the production-shape fixture the T14 `smith_normal_form_integer`
-    // consumer will exercise via `select_primes_for_bound` (k_max=16).
+    // This is the production-shape fixture the `smith_normal_form_integer`
+    // consumer exercises via `select_primes_for_bound` (k_max=16).
     let primes = vec![
         2_147_483_647_i64,
         2_147_483_629,
@@ -55,6 +55,6 @@ fn crt_four_large_primes_near_2_pow_31() {
     assert_eq!(
         crt_reconstruct_signed(&primes, &residues).unwrap(),
         x_true,
-        "k=4 large-prime CRT must round-trip; regression for T13 C-1 i128 overflow"
+        "k=4 large-prime CRT must round-trip; regression for i128 overflow"
     );
 }

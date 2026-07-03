@@ -1,7 +1,7 @@
 //! Leinster 2008 Cor 1.5 integer-exact Möbius — three-fixture demo.
 //!
 //! Runnable companion to `tests/mobius_chains_exact.rs`. Demonstrates the
-//! v0.4.0 §1.17 `mobius_function_via_chains_exact<N, Q>` driver over
+//! `mobius_function_via_chains_exact<N, Q>` driver over
 //! `Q = Z` (`BigInt` newtype): three paper-faithful fixtures
 //! covering the canonical classical Möbius computations + the recursion
 //! verifier `verify_mobius_recursion`.
@@ -10,9 +10,10 @@
 //!
 //! - **Leinster 2008** *The Euler characteristic of a category*
 //!   (arXiv:0610260) §1.4 Cor 1.5 — integer Möbius via the chain-sum series
-//!   `μ = Σ_{n≥0} (−1)^n Mⁿ` with `M = ζ − I`.
-//! - **Leinster 2008** proof of Prop 2.10 (p. 13) — the series terminates by `k = |objects|`
-//!   on circuit-free 𝔸; algorithm early-terminates when `Mᵏ = 0`.
+//!   `μ = Σ_{n≥0} (−1)^n M^n` with `M = ζ − I`.
+//! - **Leinster 2008** Cor 1.5 implicit termination — the nondegenerate-path
+//!   count vanishes for `k ≥ |𝔸|` on circuit-free 𝔸, so the series terminates
+//!   by `k = |objects|`; the algorithm early-terminates when `M^k = 0`.
 //! - **Leinster 2008** Ex 1.11(c) — a finite category with terminal object ⊤
 //!   admits `δ(-, ⊤)` as a weighting; the column `μ(-, ⊤)` recovers the
 //!   weights and `μ · ζ = I` confirms invertibility.

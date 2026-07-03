@@ -8,8 +8,8 @@
 //!
 //! For the Z-algebra terminology and Bourbaki *Algèbre* Ch. I §8
 //! (ℤ as initial object of the category of unital rings) anchor,
-//! see [`ZAlgebra`]. (The previous name `Integer`, v0.5.6, was renamed to
-//! `ZAlgebra` at v0.6.0 to clarify that the trait names a Z-algebra — a
+//! see [`ZAlgebra`]. (The previous name `Integer` was renamed to
+//! `ZAlgebra` to clarify that the trait names a Z-algebra — a
 //! ring admitting a unique unital ring homomorphism `ℤ → R` — not a
 //! wrapper for `i64` / `BigInt`.)
 //!
@@ -23,14 +23,14 @@
 //! [`Div`](std::ops::Div) bound off the trait. Lifting an `i64` into the
 //! ring is handled by [`ZAlgebra::from_i64`].
 //!
-//! ## Sealing (v0.6.0)
+//! ## Sealing
 //!
 //! [`ZAlgebra`] carries a `private::Sealed` supertrait bound. The
 //! `private` module is `pub(crate)`, so external crates cannot name (and
 //! therefore cannot satisfy) the `Sealed` bound and therefore cannot
 //! implement [`ZAlgebra`]. This is the standard "sealed trait" pattern
 //! (precedent: `catgraph-dl`'s `para::monoidal_category::private::Sealed`
-//! v0.4.0 soft-seal on `SetCategoryDefaults`; cg-applied tightens that
+//! soft-seal on `SetCategoryDefaults`; cg-applied tightens that
 //! pattern from `pub mod private` to `pub(crate) mod private` so the seal
 //! is unbypassable rather than dual-impl-coordinated). Rationale: the
 //! [`ZAlgebra::from_i64`] axioms below demand a genuine unital
@@ -72,9 +72,9 @@ use std::ops::{Neg, Sub};
 /// This is an **implementation detail**; downstream code should not
 /// reference `Sealed` directly. The seal exists to enforce the
 /// [`ZAlgebra::from_i64`](super::ZAlgebra::from_i64) axioms — see the
-/// "## Sealing (v0.6.0)" section in the crate-level rustdoc above for
+/// "## Sealing" section in the crate-level rustdoc above for
 /// the full rationale. Precedent: `catgraph-dl`'s
-/// `para::monoidal_category::private::Sealed` (v0.4.0 soft-seal on
+/// `para::monoidal_category::private::Sealed` (soft-seal on
 /// `SetCategoryDefaults`).
 pub(crate) mod private {
     /// Sealing trait for [`super::ZAlgebra`]. Implementing this

@@ -5,7 +5,7 @@
 //! - `cell_o : P × S → O` — output (no `I` dependency).
 //! - `cell_n : P × S × I → S` — next-state.
 //!
-//! ## Phase DL-2 Agent E — `run`
+//! ## `run`
 //!
 //! [`MooreCell::run`] projects the unique coalgebra homomorphism into the
 //! final Moore coalgebra `Moore_{O,I}`. Distinctive trait vs. Mealy:
@@ -26,7 +26,7 @@ use core::marker::PhantomData;
 ///
 /// CDL Example I.5.
 ///
-/// **Phase DL-1 scaffold:** opaque struct.
+/// Opaque struct.
 #[derive(Debug, Clone)]
 pub struct MooreCell<P, S, CellO, CellN, I, O> {
     /// The parameter object `P`.

@@ -1057,10 +1057,10 @@ mod test {
         assert_eq!(combined.codomain(), vec![true, false]);
     }
 
-    /// Regression: `Operadic` works with a non-`Copy` `InterCircle` (v0.5.4).
+    /// Regression: `Operadic` works with a non-`Copy` `InterCircle`.
     /// Mirrors the `operadic` test fixture but parameterizes `CircleName` by
     /// `String` rather than `i32`, exercising the loosened `InterCircle: Clone`
-    /// bound (catgraph v0.12.2 `find_nodes_by_name_predicate` /
+    /// bound (catgraph `find_nodes_by_name_predicate` /
     /// `NamedCospan::identity` Clone-bound widening).
     #[allow(clippy::items_after_statements)]
     #[test]

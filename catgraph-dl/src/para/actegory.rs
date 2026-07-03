@@ -15,9 +15,9 @@
 //! ## HKT shape
 //!
 //! The result of acting on an object is a Generic Associated Type
-//! [`Actegory::ActionResult`]. For [`SetActegory`] (the only Phase DL-2
-//! instance), `▶` is Cartesian product, so `ActionResult<P, X> = (P, X)`.
-//! Other DL-3+ instances may project differently — e.g. an `R`-module
+//! [`Actegory::ActionResult`]. For [`SetActegory`] (the only instance
+//! currently shipped), `▶` is Cartesian product, so `ActionResult<P, X> = (P, X)`.
+//! Other instances may project differently — e.g. an `R`-module
 //! actegory would project `(P, X) ↦ P · X` for some scalar action.
 //!
 //! Closure convention: `Fn((P, X)) -> Y` (tuple-as-single-argument). See the
@@ -26,7 +26,7 @@
 //! ## Why methods take `&self`
 //!
 //! [`Actegory::act`] and [`Actegory::compose_action`] take `&self` for the
-//! same DL-4+ future-proofing reason as [`MonoidalCategory`] — see the
+//! same future-proofing reason as [`MonoidalCategory`] — see the
 //! [`super::monoidal_category`] "Why methods take `&self`" section. Future
 //! instances over richer actegories (R-module action carrying a base ring;
 //! vector-bundle action carrying a connection; coalition's `QuantaleActegory`
@@ -35,13 +35,13 @@
 //! unobservable today, but freezing the trait at static methods would force
 //! a breaking change later.
 //!
-//! **Rationale validation (v0.4.0):** the coalition v0.5.0
+//! **Rationale validation:** a downstream coalition
 //! `impl Actegory<SetMonoidal>` for the three quantale ZSTs is the first
-//! downstream consumer expected to carry runtime data (Tropical zero / one
+//! consumer expected to carry runtime data (Tropical zero / one
 //! for the underlying min-plus semiring; BTV21 free-monoid generator
-//! references; Lawvere-metric embedding parameter). v0.4.0 commits to the
-//! `&self` slot for future-proofing; the audit checkpoint fires at
-//! coalition v0.5.0 post-shipping review and either ratifies the choice
+//! references; Lawvere-metric embedding parameter). The shipped surface commits to the
+//! `&self` slot for future-proofing; the audit checkpoint fires at that
+//! consumer's post-shipping review and either ratifies the choice
 //! or opens a follow-up to consider static dispatch. See
 //! [`AUDIT-CHECKPOINT-v0.4.0.md`](../../docs/AUDIT-CHECKPOINT-v0.4.0.md)
 //! for audit criteria.
@@ -102,8 +102,8 @@ pub trait Actegory<M: MonoidalCategory> {
 /// coherence `μ` is the canonical tuple re-association
 /// `(q, (p, x)) ↦ ((q, p), x)` — exact in `Set`, not "up to iso".
 ///
-/// This is the only actegory shipped in Phase DL-2; richer actegories
-/// (R-module, vector-bundle, fibration-based) are deferred to DL-3+.
+/// This is the only actegory currently shipped; richer actegories
+/// (R-module, vector-bundle, fibration-based) are deferred.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct SetActegory;
 

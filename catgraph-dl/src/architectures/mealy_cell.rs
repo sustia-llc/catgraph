@@ -8,7 +8,7 @@
 //! Unrolling builds a `Mealy_{O,I}` element with shared parameter `P`
 //! (CDL Example J.4).
 //!
-//! ## Phase DL-2 Agent E — `run`
+//! ## `run`
 //!
 //! [`MealyCell::run`] is the *stream-process* projection of the unique
 //! coalgebra homomorphism into the final `Mealy_{O,I}` coalgebra. Semantics:
@@ -27,7 +27,7 @@ use core::marker::PhantomData;
 ///
 /// CDL Example I.4.
 ///
-/// **Phase DL-1 scaffold:** opaque struct.
+/// Opaque struct.
 #[derive(Debug, Clone)]
 pub struct MealyCell<P, S, Cell, I, O> {
     /// The parameter object `P`.

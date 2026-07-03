@@ -1,4 +1,4 @@
-//! BV 2025 acceptance gate for `catgraph-magnitude` v0.1.0.
+//! BV 2025 acceptance gate for `catgraph-magnitude`.
 //!
 //! Two paper-anchored numerical tests on a hand-computed 3-state LM:
 //!
@@ -123,7 +123,7 @@ fn bv_2025_thm_3_10_closed_form() {
 fn bv_2025_cor_3_14_shannon_recovery() {
     let m = build_bv_lm();
     // h = 1e-4 > TSALLIS_SHANNON_EPS = 1e-6 so both f(1±h) hit the
-    // Tsallis branch (per execution-plan amend 5).
+    // Tsallis branch.
     let h = 1e-4_f64;
     let mag_plus = m.magnitude(1.0 + h).expect("zeta_t invertible at 1+h");
     let mag_minus = m.magnitude(1.0 - h).expect("zeta_t invertible at 1-h");

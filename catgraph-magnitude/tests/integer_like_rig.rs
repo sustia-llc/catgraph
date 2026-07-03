@@ -1,9 +1,9 @@
-//! Parametric tests verifying §1.21 `IntegerLikeRig` widening.
+//! Parametric tests verifying the `IntegerLikeRig` widening.
 //!
 //! `magnitude_homology_rank` and `snf_rank_*` must produce identical results
-//! over `F64Rig` (carries-forward v0.3.x) and `Z(BigInt)` (new in v0.4.0).
+//! over `F64Rig` and `Z(BigInt)`.
 //!
-//! Phase H-4 Task 9 substrate verification for the §1.21 forward-look:
+//! Substrate verification for the rig widening:
 //! the rank-recovery surface — previously locked to `F64Rig` via the
 //! private `RankQ` alias — now accepts any `IntegerLikeRig`. Existing
 //! `F64Rig` callers compile unchanged via the blanket impl; `Z(BigInt)`

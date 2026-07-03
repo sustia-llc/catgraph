@@ -24,7 +24,7 @@
 //! sequence-processing form is exactly the algebra homomorphism from the
 //! initial algebra of `FreeMnd(F)` to a target F-algebra.
 //!
-//! ## Phase DL-2 status
+//! ## Status
 //!
 //! Recursive bodies present. The two carriers
 //!
@@ -44,14 +44,12 @@
 //! `catgraph_dl::free_monad::tree_endo::*` for downstream consumers, so the
 //! crate root surface stays focused on the categorical primitives.
 //!
-//! ## Phase DL-2 outstanding work
+//! ## Outstanding work
 //!
-//! The algebra-homomorphism unroller (CDL Remark 2.13 — `foldr`/`foldl`
-//! recovered as the unique algebra hom from the initial algebra of
-//! `FreeMnd(1 + A × −)`) lands in DL-3 alongside Agent D's `FAlgebra`
-//! body. Agent D's `FAlgebra` may want to consume the [`EndoFunctor`]
-//! trait declared here; reconciliation between the two is a follow-up
-//! commit.
+//! The free-monad-side algebra-homomorphism unroller (CDL Remark 2.13 —
+//! `foldr`/`foldl` recovered as the unique algebra hom from the initial
+//! algebra of `FreeMnd(1 + A × −)`) is deferred; it would consume the
+//! [`EndoFunctor`] trait declared here alongside the F-algebra body.
 
 pub mod cofree_cmnd;
 pub mod free_mnd;

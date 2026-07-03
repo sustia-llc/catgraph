@@ -1,12 +1,12 @@
 //! CC completeness tracking for `S: SFG_R → Mat(R)` on bounded enumerations.
 //!
-//! # What these tests actually measure (name clarification, v0.5.2)
+//! # What these tests actually measure
 //!
 //! The 12 `cc_completeness_tracking_*` tests below are **NOT** Thm 5.60
 //! faithfulness tests — that theorem is already proved abstractly by
 //! Baez-Erbele 2015 (`Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)`, with `sfg_to_mat`
 //! realising the isomorphism). We do not need to verify an established
-//! theorem; this suite predates that reframing and was mis-named in v0.5.0.
+//! theorem; this suite predates that reframing and was originally mis-named.
 //!
 //! What the harness actually does: it enumerates SFG expressions up to
 //! bounded depth, buckets them by `Presentation::eq_mod` under the 17 Thm
@@ -15,7 +15,7 @@
 //! are `eq_mod`-distinct that the matrix functor identifies — i.e., a
 //! witness of the default [`CongruenceClosure`] engine's syntactic
 //! incompleteness relative to the complete semantic engine
-//! `NormalizeEngine::Functorial(MatrixNFFunctor)` (added v0.5.2).
+//! `NormalizeEngine::Functorial(MatrixNFFunctor)`.
 //!
 //! # Why the gap can't close under plain CC
 //!
@@ -26,22 +26,23 @@
 //! synthesize fresh composite intermediates. Closing the gap requires
 //! either:
 //! - **Knuth-Bendix completion** of the 17 equations modulo SMC coherence
-//!   (v0.5.3+ research; 1-3 weeks if confluence terminates).
+//!   (the Knuth-Bendix vs functorial-terminal decision is tracked in issue
+//!   #15; 1-3 weeks if confluence terminates).
 //! - **The Functorial engine**: [`Presentation::eq_mod_functorial`] with
-//!   [`MatrixNFFunctor<R>`] — complete by theorem for Mat(R), ships in v0.5.2.
+//!   [`MatrixNFFunctor<R>`] — complete by theorem for Mat(R).
 //!
-//! v0.5.2 Option A (atom-canonical `smc_refine` in the kb.rs fixpoint) cut
-//! `BoolRig` d=2 collisions 2574 → 1433 (~44%) but can't reach zero — see
-//! `.claude/plans/2026-04-23-v0.5.2-revised-scope.md` §2.
+//! The atom-canonical `smc_refine` in the kb.rs fixpoint cut
+//! `BoolRig` d=2 collisions 2574 → 1433 (~44%) but can't reach zero.
 //!
 //! # Why keep these tests `#[ignore]`'d
 //!
-//! They are diagnostic, not a release gate. `Mag(a) = Mag(b)` (v0.5.2
-//! semantic equality) is already achievable via
+//! They are diagnostic, not a release gate. `Mag(a) = Mag(b)` (semantic
+//! equality) is already achievable via
 //! [`Presentation::eq_mod_functorial(&a, &b, &MatrixNFFunctor::new())`].
 //! The tests stay `#[ignore]`'d to bound CC incompleteness as engine work
 //! progresses; a zero-collision run would mean either KB has completed
-//! (v0.5.3+ Branch A) or an unexpected CC improvement has landed.
+//! (the Knuth-Bendix path tracked in issue #15) or an unexpected CC
+//! improvement has landed.
 //!
 //! [`CongruenceClosure`]: catgraph_applied::prop::presentation::NormalizeEngine::CongruenceClosure
 //! [`MatrixNFFunctor<R>`]: catgraph_applied::prop::presentation::functorial::MatrixNFFunctor
@@ -89,13 +90,13 @@ const IGNORE_REASON: &str = "\
     2015 proved `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)` abstractly — we do not need to \
     empirically verify the theorem. These tests bound the incompleteness of \
     the default `NormalizeEngine::CongruenceClosure` engine against the \
-    matrix ground truth on bounded-depth enumeration. v0.5.2 Option A \
-    (atom-canonical `smc_refine` in kb.rs) reduces BoolRig d=2 collisions \
+    matrix ground truth on bounded-depth enumeration. The atom-canonical \
+    `smc_refine` in kb.rs reduces BoolRig d=2 collisions \
     2574 → 1433 (~44%). Closing the remaining gap requires either \
     Knuth-Bendix completion of the 17 equations modulo SMC coherence \
-    (v0.5.3+ research), or use of `Presentation::eq_mod_functorial` with \
+    (tracked in issue #15), or use of `Presentation::eq_mod_functorial` with \
     `MatrixNFFunctor` for an operationally complete Mat(R) decision \
-    procedure (v0.5.2 ships this as opt-in). These tests stay `#[ignore]`'d \
+    procedure (shipped as opt-in). These tests stay `#[ignore]`'d \
     as diagnostic, not as a release gate.\
 ";
 
@@ -275,7 +276,7 @@ fn cc_completeness_tracking_f64_depth_4() {
 /// `S(lhs) == S(rhs)` under `sfg_to_mat`. This is the SOUNDNESS direction
 /// (S is well-defined on the quotient); the FAITHFULNESS direction (S is
 /// injective on the quotient) is the harder direction and requires KB
-/// completion — deferred to v0.5.1.
+/// completion — tracked in issue #15.
 fn assert_soundness_for_rig<R>(rig_samples: &[R]) -> String
 where
     R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static,

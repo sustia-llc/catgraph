@@ -1,7 +1,7 @@
-//! Phase 6A.2 tests: Tsallis entropy + Möbius inversion.
+//! Tsallis entropy + Möbius inversion tests.
 //!
 //! All tests use `Q = F64Rig` — the only `Ring + Div + From<f64>` rig in
-//! the v0.1.0 workspace.
+//! the workspace.
 
 use catgraph_magnitude::magnitude::{mobius_function, tsallis_entropy};
 use catgraph_magnitude::weighted_cospan::NodeId;

@@ -1,11 +1,9 @@
-//! Phase DL-2 Agent E — architecture-as-(co)algebra **unroller** acceptance
-//! tests.
+//! Architecture-as-(co)algebra **unroller** acceptance tests.
 //!
 //! CDL Appendix I + Appendix J. The five neural-network architectures
 //! `FoldingRnn`, `RecursiveNn`, `UnfoldingRnn`, `MealyCell`, `MooreCell`
-//! — captured at DL-1 as typed wrappers and at DL-2 Agents A–D as
-//! ParaMorphism / FreeMnd / FAlgebra surfaces — gain at this agent the
-//! **unrolling methods**: the unique algebra (resp. coalgebra)
+//! — typed wrappers over ParaMorphism / FreeMnd / FAlgebra surfaces —
+//! carry **unrolling methods**: the unique algebra (resp. coalgebra)
 //! homomorphism between the relevant inductive (resp. coinductive)
 //! carrier and the cell's structure map.
 //!

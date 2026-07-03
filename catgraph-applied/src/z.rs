@@ -17,14 +17,14 @@
 //! a width bound).
 //!
 //! Performance: ~5-10× slower than native `i64` for small values; heap-
-//! allocates per arithmetic op. Acceptable for v0.4.0 fixtures (≤ 20
-//! objects); v0.5.0 forward-look §2.4 captures `BigInt → i64` opportunistic
-//! specialisation if real-world fixtures push the hot path.
+//! allocates per arithmetic op. Acceptable for the crate's fixtures (≤ 20
+//! objects); a `BigInt → i64` opportunistic specialisation is a possible
+//! future optimisation if real-world fixtures push the hot path.
 //!
 //! ## Why a newtype, not raw `BigInt`
 //!
 //! Wrapping `num::BigInt` in a crate-owned newtype `Z` keeps trait-impl
-//! identity local: future trait widenings (e.g. v0.5.0 Tier 2 `Q` rational)
+//! identity local: future trait widenings (e.g. a `Q` rational)
 //! attach cleanly to `Z` rather than to the foreign type. It also gives
 //! catgraph-magnitude a stable name to bound on in §1.17
 //! `mobius_function_via_chains_exact<Q: Rig + ZAlgebra>` without leaking
@@ -140,7 +140,7 @@ impl ZAlgebra for Z {
 }
 
 // Seal invariant: external `Sealed` impls are impossible because
-// `crate::integer::private` is `pub(crate)` — see the `## Sealing (v0.6.0)`
+// `crate::integer::private` is `pub(crate)` — see the `## Sealing`
 // section in `crate::integer`'s rustdoc. This is the gated `Sealed` impl
 // that licenses `Z`'s `ZAlgebra` impl above.
 impl Sealed for Z {}

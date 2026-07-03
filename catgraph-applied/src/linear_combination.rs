@@ -44,8 +44,7 @@ use rayon_cond::CondIterator;
 // HashMap `into_par_iter()` is not `IndexedParallelIterator`, so the adaptive
 // `with_min_len` pattern (used in catgraph core) doesn't apply here —
 // `rayon_cond::CondIterator` provides the compile/runtime parallel↔serial
-// toggle instead. See `~/.claude/summaries/rayon-summary-0.md` for the
-// rustworkx-core precedent; pattern established in Phase W.0 (2026-04-19).
+// toggle instead (following the rustworkx-core precedent).
 #[cfg(feature = "parallel")]
 const PARALLEL_MUL_THRESHOLD: usize = 32;
 

@@ -79,18 +79,17 @@ const CHAIN_SUM_MAX_DEPTH: usize = 200;
 /// **Bound: `Q: Ring + From<f64>`** — strictly weaker than
 /// [`crate::magnitude::mobius_function`]'s `Q: Ring + Div + From<f64>`.
 /// Matrix-power accumulation doesn't invert anything, so `Div` isn't
-/// needed. In v0.2.x only [`crate::F64Rig`] is exercised in tests, and
+/// needed. Currently only [`crate::F64Rig`] is exercised in tests, and
 /// the implementation's `is_zero()` short-circuits in `matmul` +
 /// `r == 0.0` early-return at the geometric-ratio check assume `Q`'s
 /// `is_zero()` matches `f64 == 0.0` semantics (which `F64Rig` provides).
 /// `Tropical`'s `is_zero` is `+∞` (the rig zero in tropical algebra),
 /// not `f64 == 0.0`, so the `Q: Ring + From<f64>` bound is technically
 /// achievable by other concrete rigs but the optimization paths assume
-/// field-with-`f64`-zero semantics. v0.3.0 magnitude-homology will
-/// either widen the bound semantically or carve a separate
+/// field-with-`f64`-zero semantics. Magnitude-homology may either widen
+/// the bound semantically or carve a separate
 /// `mobius_function_via_chains_exact<Q: Ring>` (no `From<f64>`,
-/// exact-arithmetic) — see `.claude/docs/2026-05-04-catgraph-magnitude-v0.3.0-design.md`
-/// §3.6.
+/// exact-arithmetic).
 ///
 /// **Precondition:** the input must be scattered ([`is_scattered`] returns
 /// `true`).
@@ -236,11 +235,11 @@ where
         }
         // Update m_k ← m_k · M for next iteration.
         //
-        // Performance note (v0.3.0 design doc §3.9): m_k.clone() inside
+        // Performance note: m_k.clone() inside
         // matmul allocates n² Q values per iteration. At the typical
         // scattered K range (~30 for r ≈ 0.5), this is ~30 inner
-        // allocations bounded above by matmul's O(n³) cost. v0.3.0
-        // magnitude-homology is the right place to evaluate a double-
+        // allocations bounded above by matmul's O(n³) cost. Magnitude-
+        // homology is the right place to evaluate a double-
         // buffer pattern (`(buf_a, buf_b)` + `mem::swap` + matmul_into)
         // since the chain complex multiplies the matmul count by the
         // length-grading factor.
@@ -274,9 +273,9 @@ where
 }
 
 // ============================================================================
-// v0.3.0 — Task 22: length-graded chain-sum (per-grade chain-count diagnostic)
-// v0.4.0 — §1.19 renamed `mobius_chains_graded` → `chain_count_signed_graded`
-//          to surface the diagnostic role in the name itself.
+// Length-graded chain-sum (per-grade chain-count diagnostic).
+// Renamed from `mobius_chains_graded` → `chain_count_signed_graded`
+// to surface the diagnostic role in the name itself.
 // ============================================================================
 
 /// Per-grade signed chain counts: returns `Vec<(ℓ, partial_sum_at_ell)>`
@@ -284,20 +283,18 @@ where
 /// **entry-sum** of `(-1)^k Mᵏ` restricted to the length-`ℓ` chain bucket
 /// (the un-weighted variant; see "Acceptance-gate relationship" below).
 ///
-/// # v0.4.0 §1.19 rename
+/// # Rename
 ///
-/// This function was named `mobius_chains_graded` through v0.3.x. The v0.3.1
-/// review demoted its role to a per-grade chain-count diagnostic (NOT the
-/// numerical Möbius path); v0.4.0 surfaces that role in the name itself by
-/// renaming to `chain_count_signed_graded`. Behaviour, signature, and
-/// generic bounds are unchanged — this is a mechanical rename only.
+/// This function was previously named `mobius_chains_graded`. Its role is a
+/// per-grade chain-count diagnostic (NOT the numerical Möbius path), and the
+/// name `chain_count_signed_graded` surfaces that role. Behaviour, signature,
+/// and generic bounds are unchanged — this is a mechanical rename only.
 ///
-/// # Acceptance-gate relationship (clarified v0.3.1, preserved v0.4.0)
+/// # Acceptance-gate relationship
 ///
 /// **This function is NOT the numerical path used by the BV 2025 Prop 3.14
-/// acceptance gate.** Despite the original v0.3.0 rustdoc claim,
-/// [`crate::chain_complex::euler_char_identity_at`] uses
-/// [`crate::magnitude::magnitude`] (the matrix-inverse Möbius from v0.1.x)
+/// acceptance gate.** [`crate::chain_complex::euler_char_identity_at`] uses
+/// [`crate::magnitude::magnitude`] (the matrix-inverse Möbius)
 /// as its numerical comparator — NOT `chain_count_signed_graded`.
 ///
 /// To recover the BV 2025 Prop 3.14 numerical RHS from this function's
@@ -310,9 +307,9 @@ where
 /// Useful for debugging the structural path and for spot-checking a graded
 /// chain-sum without running the full magnitude inverse. A paper-faithful
 /// "numerical path with grading" alternative — multiply by `q^ℓ` and sum —
-/// is folded forward to v0.4.0 forward-look §1.19.
+/// is deferred.
 ///
-/// # Algebraic context (unchanged from v0.3.0)
+/// # Algebraic context
 ///
 /// Per Leinster–Shulman 2017 §2, simple chains `(x₀, …, x_k)` with grade
 /// `ℓ = Σ d(x_{j−1}, x_j)` form `C_{k,ℓ}(M)`. The sign pattern `(-1)^k` is the
@@ -328,7 +325,7 @@ where
 /// rigs whose `From<f64>` honors negative `f64` values — i.e. `F64Rig`.
 /// `BoolRig`, `UnitInterval`, and `Tropical` are technically constructible
 /// via this signature but the embedding of negative chain counts is not
-/// meaningful in those rigs. For v0.3.0/v0.3.1, only `F64Rig` is exercised.
+/// meaningful in those rigs. Only `F64Rig` is exercised.
 ///
 /// # Errors
 ///
@@ -372,15 +369,16 @@ where
 }
 
 // ============================================================================
-// v0.4.0 §1.17 — Integer-exact Möbius via Leinster 2008 Cor 1.5 chain sum.
+// Integer-exact Möbius via Leinster 2008 Cor 1.5 chain sum.
 // ============================================================================
 
-/// §1.17 — Integer-exact Möbius inversion via Leinster 2008 Cor 1.5.
+/// Integer-exact Möbius inversion via Leinster 2008 Cor 1.5.
 ///
 /// Paper anchor: Leinster, *The Euler characteristic of a category*
-/// (arXiv:0610260, 2008): §1.4 Cor 1.5 (page 6) for the integer Möbius
-/// formula + the proof of Prop 2.10 (p. 13) for the nilpotency/termination
-/// bound on circuit-free 𝔸.
+/// (arXiv:0610260v1, 2008): §1.4 Cor 1.5 (page 6) for the integer Möbius
+/// formula. The nilpotency/termination bound is implicit in Cor 1.5 +
+/// circuit-freeness: the nondegenerate-path count vanishes for `n ≥ |𝔸|`
+/// on circuit-free 𝔸 (no separate proposition needed).
 ///
 /// For a finite skeletal category 𝔸 whose only endomorphisms are identities
 /// (equivalently (Leinster 2008 Lemma 1.3, p. 5): the non-identity arrow graph is circuit-free), the
@@ -399,7 +397,8 @@ where
 ///
 /// Off-diagonal `M[i][j]` counts arrows `i → j` (so `Mᵏ[i][j]` is the
 /// number of non-degenerate length-`k` paths from `i` to `j` exactly). Per
-/// proof of Prop 2.10 (p. 13), the series terminates by `k = |objects|` because `M` is
+/// Cor 1.5's implicit termination (the nondegenerate-path count vanishes for
+/// `k ≥ |𝔸|` on circuit-free 𝔸), the series terminates by `k = |objects|` because `M` is
 /// nilpotent on circuit-free 𝔸; this implementation **early-terminates** as
 /// soon as `Mᵏ` becomes the zero matrix, which is often well before `n`.
 ///
@@ -420,10 +419,10 @@ where
 ///
 /// Arrow counts from [`PosetCategory::zeta_matrix`] are cast `u64 → i64`
 /// before lifting via [`ZAlgebra::from_i64`]; counts ≥ 2⁶³ wrap silently.
-/// v0.4.0 fixtures stay at ζ entry counts ≤ 3 (immediate-cover arrow band
-/// on `𝔻^inj_2` and similar small posets), well below the wrap boundary.
-/// A future `Q::from_u64` extension on [`ZAlgebra`] is folded forward to
-/// v0.4.0 forward-look §1.31.
+/// The shipped fixtures stay at ζ entry counts ≤ 3 (immediate-cover arrow
+/// band on `𝔻^inj_2` and similar small posets), well below the wrap
+/// boundary. A `Q::from_u64` extension on [`ZAlgebra`] is a deferred
+/// nice-to-have (#35).
 ///
 /// # Panics
 ///
@@ -491,8 +490,9 @@ where
     let mut m_k = m.clone();
     let mut sign_positive = false; // k = 1 starts at negative sign
 
-    // Step 4. Accumulate (−1)^k M^k for k = 1..=n; per the proof of Prop 2.10 (p. 13) the loop is
-    // guaranteed to early-terminate at most by k = n on circuit-free 𝔸.
+    // Step 4. Accumulate (−1)^k M^k for k = 1..=n; per Cor 1.5's implicit termination
+    // (nondegenerate-path count vanishes for k ≥ |𝔸| on circuit-free 𝔸) the loop is
+    // guaranteed to early-terminate at most by k = n.
     for _k in 1..=n {
         let mut all_zero = true;
         for i in 0..n {
@@ -521,11 +521,13 @@ where
 
 /// Verify the Möbius recursion `μ · ζ = I` **and** `ζ · μ = I` over `Q`.
 ///
-/// Bidirectional check: although Cor 1.5 guarantees `μ` is the two-sided
-/// inverse of `ζ` on finite circuit-free categories, this verifier checks
-/// both `μ · ζ = I` (right inverse) and `ζ · μ = I` (left inverse) as a
-/// runtime asymmetry guard against implementation drift in
-/// [`mobius_function_via_chains_exact`]. Leinster 2008 Def 1.1 (p. 4).
+/// Bidirectional check: per Leinster 2008 Def 1.1 (p. 4), in the
+/// finite-dimensional incidence algebra `R(𝔸)` a one-sided inverse implies
+/// a two-sided inverse ("by finite-dimensionality, either one implies the
+/// other") — so either direction alone is algebraically sufficient. This
+/// verifier nevertheless checks both `μ · ζ = I` (right inverse) and
+/// `ζ · μ = I` (left inverse) as a runtime asymmetry guard against
+/// implementation drift in [`mobius_function_via_chains_exact`].
 ///
 /// Useful for fixtures (e.g. the order-preserving-injection lattice
 /// `𝔻^inj_2`) where the closed-form value of `μ` is harder to write down
