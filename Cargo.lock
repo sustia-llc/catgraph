@@ -258,6 +258,7 @@ dependencies = [
  "rayon",
  "rayon-cond",
  "rust_decimal",
+ "thiserror",
  "ultragraph",
 ]
 
