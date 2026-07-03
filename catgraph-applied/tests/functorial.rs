@@ -1,4 +1,4 @@
-//! Integration tests for the v0.5.2 Functorial decision engine
+//! Integration tests for the Functorial decision engine
 //! ([`Presentation::eq_mod_functorial`] + [`CompleteFunctor`] +
 //! [`MatrixNFFunctor`]).
 //!

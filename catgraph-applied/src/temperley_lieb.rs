@@ -47,12 +47,11 @@ use rayon_cond::CondIterator;
 /// [`BrauerMorphism::non_crossing`] per-side combinations check when the
 /// `parallel` feature is enabled. Combinations grow as `n * (n - 1) / 2`, so
 /// a source-line count of 8 yields 28 pairs.
-// TODO(rayon-threshold): remeasure via `benches/rayon_thresholds.rs`. The
-// current value of 8 is flagged by the 2026-04-10 gleaner2 audit as likely
-// too low — the parallel arm's per-worker setup cost may dominate for small
-// pair counts. Run `cargo bench -p catgraph-applied --bench rayon_thresholds`
-// and adjust. See `~/.claude/summaries/rayon-summary-0.md` for the
-// rustworkx-core `CondIterator` precedent adopted in Phase W.0.
+// TODO(rayon-threshold, #37): remeasure via `benches/rayon_thresholds.rs`. The
+// current value of 8 was flagged by a pre-reboot audit as likely too low —
+// the parallel arm's per-worker setup cost may dominate for small pair
+// counts. Run `cargo bench -p catgraph-applied --bench rayon_thresholds`
+// and adjust.
 #[cfg(feature = "parallel")]
 const PARALLEL_COMBINATIONS_THRESHOLD: usize = 8;
 

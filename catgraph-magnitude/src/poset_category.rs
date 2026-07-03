@@ -1,8 +1,8 @@
 //! Finite skeletal category with identity-only endomorphisms — input type
-//! for §1.17 Leinster 2008 Cor 1.5 integer-exact Möbius inversion.
+//! for Leinster 2008 Cor 1.5 integer-exact Möbius inversion.
 //!
-//! Per Leinster 2008 *The Euler characteristic of a category* Cor 1.5
-//! (page 6), the Möbius function `μ: Ob 𝔸 × Ob 𝔸 → ℤ` takes **integer**
+//! Per Leinster 2008 *The Euler characteristic of a category*
+//! (arXiv:0610260v1) Cor 1.5 (page 6), the Möbius function `μ: Ob 𝔸 × Ob 𝔸 → ℤ` takes **integer**
 //! values when 𝔸 is a finite skeletal category whose only endomorphisms
 //! are identities (equivalently: 𝔸 is **circuit-free** in the non-identity
 //! arrow graph, with trivial automorphism group at every object).
@@ -15,8 +15,8 @@
 //! identity-endomorphism-only case where `ζ[i][j]` may exceed 1 off the
 //! diagonal.
 //!
-//! This module is the **input** type for `mobius_function_via_chains_exact`
-//! (T17, §1.17 headline). It does not perform the Möbius inversion itself.
+//! This module is the **input** type for `mobius_function_via_chains_exact`.
+//! It does not perform the Möbius inversion itself.
 
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -118,7 +118,7 @@ impl<NodeId: Clone + Eq + Hash> PosetCategory<NodeId> {
 
     /// Construct from a raw arrow-count matrix `ζ ∈ ℕ^{n×n}`.
     ///
-    /// Validates the structural invariants for §1.17 Cor 1.5 applicability:
+    /// Validates the structural invariants for Cor 1.5 applicability:
     /// - `ζ` is `n × n` where `n = objects.len()`.
     /// - Diagonal entries `ζ[i][i] ∈ {0, 1}` (identity arrows only).
     /// - The non-identity arrow graph (edges `i → j` for `i ≠ j` with

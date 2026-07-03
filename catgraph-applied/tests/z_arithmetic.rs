@@ -3,7 +3,7 @@
 //! Substrate for catgraph-magnitude §1.17 Leinster 2008 Cor 1.5
 //! integer-exact Möbius inversion. Verifies the ring-axiom obligations
 //! and the `Rig` + `ZAlgebra` trait bounds inherited via blanket-impl.
-//! (`ZAlgebra` was renamed from `Integer` and sealed in v0.6.0.)
+//! (`ZAlgebra` was renamed from `Integer` and sealed.)
 
 use catgraph_applied::ZAlgebra;
 use catgraph_applied::rig::Rig;

@@ -13,7 +13,7 @@
 //! set per operad (the associated type [`OperadAlgebra::Element`]) and a
 //! uniform [`evaluate`](OperadAlgebra::evaluate) method that interprets
 //! each operation of `O` as a function `Elementⁿ → Element`. Multi-sorted
-//! (typed) operads are a v0.5.0 refinement.
+//! (typed) operads are a future refinement.
 //!
 //! The trait is parameterised over the operad type `O` and the input-label
 //! type `Input` so that the same algebra notion applies to all concrete
@@ -99,7 +99,7 @@ where
 /// This is the single-sorted form of the Def 6.99 functoriality axiom
 /// specialised to algebras whose evaluate-function discards inputs. For
 /// algebras that use their inputs non-trivially, the RHS would be
-/// `evaluate(outer, inputs_with_slot_recomputed)` — out of scope for v0.4.0.
+/// `evaluate(outer, inputs_with_slot_recomputed)` — out of scope here.
 ///
 /// # Errors
 ///

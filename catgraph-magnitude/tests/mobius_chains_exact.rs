@@ -1,9 +1,9 @@
-//! §1.17 Leinster 2008 Cor 1.5 integer-exact Möbius inversion.
+//! Leinster 2008 Cor 1.5 integer-exact Möbius inversion.
 //!
 //! Five paper-faithful fixtures + the `μ · ζ = I` recursion verifier.
 //!
 //! Paper anchor: Leinster 2008 *The Euler characteristic of a category*
-//! (arXiv:0610260) §1.4 Cor 1.5 (page 6) + the proof of Prop 2.10 (p. 13).
+//! (arXiv:0610260) §1.4 Cor 1.5 (page 6).
 //!
 //! For finite skeletal 𝔸 with identity-only endomorphisms, the Möbius function
 //! takes integer values:
@@ -12,9 +12,10 @@
 //! μ(a, b) = Σ_{n≥0} (−1)^n · #{nondegenerate n-paths from a to b}
 //! ```
 //!
-//! Realised via `μ = Σ_{k=0}^K (−1)^k Mᵏ` where `M = ζ − I`. Per the proof of Prop 2.10 (p. 13)
-//! the series terminates by `k = |objects|`; the algorithm early-terminates
-//! when `Mᵏ` becomes the zero matrix.
+//! Realised via `μ = Σ_{k=0}^K (−1)^k M^k` where `M = ζ − I`. Per Cor 1.5's
+//! implicit termination (nondegenerate-path count vanishes for `k ≥ |𝔸|` on
+//! circuit-free 𝔸) the series terminates by `k = |objects|`; the algorithm
+//! early-terminates when `M^k` becomes the zero matrix.
 
 use catgraph_magnitude::Z;
 use catgraph_magnitude::mobius_chains::{
@@ -48,7 +49,8 @@ fn cor_1_5_diamond_lattice_2_squared() {
     // Boolean lattice 2²: 0=⊥, 1={a}, 2={b}, 3=⊤. Ordering: a ⊆ b ⇔ a & b == a.
     let cat = PosetCategory::<u32>::from_partial_order(vec![0, 1, 2, 3], |a, b| (*a & *b) == *a);
     let mu = mobius_function_via_chains_exact::<u32, Z>(&cat).unwrap();
-    // Rota classical Möbius on 2² Boolean lattice:
+    // Rota classical Möbius on 2² Boolean lattice
+    // (Cor 1.5 specialises to Rota's classical poset Möbius via Ex 1.2(a)):
     //   μ(⊥, ⊤) = (-1)^2 = 1.
     //   μ(⊥, atom) = -1 for atoms {a} and {b}.
     //   μ(atom, ⊤) = -1.

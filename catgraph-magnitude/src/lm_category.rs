@@ -7,7 +7,7 @@
 //! Eq (11), this terminal mass appears in the Tsallis-entropy sum
 //! `H_t(p_x)` because `p_x` is a probability mass function on `A ∪ {†}`.
 //!
-//! Per umbrella Q5, v0.1.0 is "BYO-LM": callers populate the transition
+//! This crate is "BYO-LM": callers populate the transition
 //! table from their own model. No closures, no LM runtime, no inference.
 //! [`LmCategory::magnitude`] consumes the table by lifting it into a
 //! [`LawvereMetricSpace<NodeId>`] via the `-ln π` embedding (Lawvere 1973;
@@ -88,11 +88,11 @@ impl LmCategory {
     /// — leaky rows (`Σ_y π(y|from) < 1`) are intentional and represent
     /// the BV 2025 †-terminal mass at state `from`.
     ///
-    /// **v0.1.1.** What was previously a `debug_assert!` on `prob ∈ [0, 1]`
-    /// is now a release-mode `Result<(), CatgraphError>` (S1.1: prevents
+    /// Validation of `prob ∈ [0, 1]` is a release-mode
+    /// `Result<(), CatgraphError>` rather than a `debug_assert!` (prevents
     /// unbounded BFS in [`magnitude`](Self::magnitude) on `prob > 1.0`
     /// inputs that survived a release build). Membership in `objects` and
-    /// non-trivial self-loop rejection (S1.2: BV 2025 §3 hypothesis forbids
+    /// non-trivial self-loop rejection (BV 2025 §3 hypothesis forbids
     /// them — see [`magnitude`](Self::magnitude) acyclicity note) are also
     /// promoted.
     ///
@@ -150,9 +150,9 @@ impl LmCategory {
 
     /// Replay constructor — build an [`LmCategory`] from an explicit object
     /// list, terminating-states set, and an iterator of `(from, to, prob)`
-    /// transition triples (v0.1.1).
+    /// transition triples.
     ///
-    /// Designed for Phase 6C `magnitude_history` and `EventLogStore::replay`
+    /// Designed for `magnitude_history` and `EventLogStore::replay`
     /// callers that reconstruct the LM state from an append-only audit log.
     /// Each triple is dispatched through [`add_transition`](Self::add_transition),
     /// so the same validation applies — invalid entries fail-fast with
@@ -238,7 +238,7 @@ impl LmCategory {
     /// coincidences from cyclic transitions).
     ///
     /// Also returns [`CatgraphError::Composition`] if the BFS frontier cap
-    /// (`n*n` steps per source) is exhausted (v0.1.1; defense-in-depth
+    /// (`n*n` steps per source) is exhausted (defense-in-depth
     /// against malformed inputs that bypass [`add_transition`](Self::add_transition)
     /// validation — e.g. table populated by a future release-mode caller
     /// that constructs `transitions` directly via the `pub` API).
@@ -324,7 +324,7 @@ impl LmCategory {
         // (equal-probability rederivations, e.g. a prob = 1.0 cycle, do not
         // re-enter the frontier).
         //
-        // BFS termination cap (v0.1.1): at most `n * n` step transitions per
+        // BFS termination cap: at most `n * n` step transitions per
         // source. A well-formed acyclic LM yields O(n) steps; the n² cap is
         // defense-in-depth for callers who bypass `add_transition` validation
         // (see Errors note above).
@@ -358,10 +358,10 @@ impl LmCategory {
                     let Some(&next) = idx.get(next_name.as_str()) else {
                         continue;
                     };
-                    // Self-loops are rejected by add_transition (S1.2,
-                    // v0.1.1) — this guard is unreachable on well-formed
-                    // tables. Kept defensive for direct-mutation callers
-                    // (none today; field is private since v0.1.0).
+                    // Self-loops are rejected by add_transition — this
+                    // guard is unreachable on well-formed tables. Kept
+                    // defensive for direct-mutation callers (none today;
+                    // the field is private).
                     let new_p = cur_p * edge_p;
                     let prior = best.get(&next).copied().unwrap_or(0.0);
                     if new_p > prior {

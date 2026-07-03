@@ -4,10 +4,13 @@ Category-theoretic graph structures in Rust, anchored to the source papers:
 a strict implementation of Fong & Spivak, *Hypergraph Categories* (2019), with
 applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions.
 
-> **Status:** active reboot in progress. Crates land phase-by-phase on a thin
+> **Status:** all five proven crates (core / applied / magnitude / physics / dl)
+> have landed on a thin
 > [DeepCausality](https://github.com/deepcausality-rs/deep_causality) algebraic
 > substrate (`deep_causality_num` / `deep_causality_haft`), with `nalgebra` kept
-> optional and numeric-only.
+> optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.2.0)
+> and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, Arrow
+> frontend) is a deferred milestone (#5).
 
 ## Workspace
 
@@ -24,7 +27,8 @@ applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions
 ```sh
 cargo build  --workspace
 cargo test   --workspace
-cargo clippy --workspace --all-targets -- -W clippy::pedantic
+cargo clippy --workspace --all-targets -- -D warnings          # the CI gate (default lints)
+cargo clippy --workspace --all-targets -- -W clippy::pedantic  # advisory local pass (non-gating)
 ```
 
 ## License

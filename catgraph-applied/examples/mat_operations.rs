@@ -1,5 +1,5 @@
 //! Matrix prop `Mat(R)` — six demonstrations covering `MatR<R>` core algebra,
-//! the v0.5.5 in-place mutable API, the `mat_f64` nalgebra bridge (feature
+//! the in-place mutable API, the `mat_f64` nalgebra bridge (feature
 //! `f64-rig`), the `graphical_linalg` faithfulness verifier closing FS18
 //! Thm 5.60, and the `Z(BigInt)` integer-exact ring.
 //!
@@ -13,7 +13,7 @@
 //! - **Storjohann 2000** *Algorithms for matrix canonical forms* (`PhD` thesis,
 //!   ETH Zürich) — §7 (Smith Normal Form over a PID via row + column
 //!   operations: `row_swap` / `scale_row` / `add_scaled_row` and the
-//!   column-axis duals). The v0.5.5 mutable API on [`MatR`] exists precisely
+//!   column-axis duals). The mutable API on [`MatR`] exists precisely
 //!   to give the cg-magnitude SNF stack (BV25 Prop 3.14 + Leinster 2008
 //!   Cor 1.5) an in-place row-reduction substrate that does not allocate a
 //!   new matrix per elementary operation.
@@ -29,7 +29,7 @@
 //! 2. Multiplicative structure: `matmul` on a non-trivial 3×3 fixture,
 //!    `block_diagonal` for monoidal tensor, `permutation_matrix` from a
 //!    `permutations::Permutation`.
-//! 3. v0.5.5 mutable API: Gauss-elimination-style sequence — `row_swap`,
+//! 3. Mutable API: Gauss-elimination-style sequence — `row_swap`,
 //!    `scale_row`, `add_scaled_row`, plus column-axis duals + `entry_mut` +
 //!    `entries_mut`. This is the exact API consumed by cg-magnitude's SNF
 //!    benches (Storjohann §7 row + column operations, no per-op allocation).
@@ -46,7 +46,7 @@
 //!    functor's ground truth — NOT Thm 5.60 faithfulness violations
 //!    (Baez-Erbele 2015 already proves the theorem). We then resolve a
 //!    chosen witness through `eq_mod_functorial(_, _, &MatrixNFFunctor)`,
-//!    the v0.5.2 complete-by-theorem decision procedure.
+//!    the complete-by-theorem decision procedure.
 //! 6. `Z(BigInt)` arithmetic: construct via `Z::new(BigInt::from(...))` and
 //!    `Z::from_i64`, exercise `+`, `*`, `-` showing arbitrary-precision
 //!    behaviour past `i64::MAX` (a 64×64 factorial-style product), and prove
@@ -195,14 +195,14 @@ fn main() {
     assert_eq!(pi.entries()[1][0], F64Rig(1.0));
     println!("  P · I_3 swaps rows 0 ↔ 1 of identity.\n");
 
-    // -------- §3. v0.5.5 mutable API — Gauss-elimination sequence ----------
+    // -------- §3. Mutable API — Gauss-elimination sequence ----------
     //
     // The Storjohann SNF stack in cg-magnitude operates row-by-row on a
     // working matrix. Allocating a fresh `MatR` per elementary operation is
-    // prohibitive; the v0.5.5 mutable API gives the SNF benches an in-place
+    // prohibitive; the mutable API gives the SNF benches an in-place
     // row + column operation surface that does not re-allocate. We exercise
     // all 8 mutating methods on a 3×3 fixture, printing state after each step.
-    println!("§3. v0.5.5 mutable API — in-place row + column operations (Storjohann §7)");
+    println!("§3. Mutable API — in-place row + column operations (Storjohann §7)");
 
     let mut g = MatR::<F64Rig>::new(
         3,
@@ -292,7 +292,7 @@ fn main() {
     // composite intermediates, so it leaves witness pairs that are
     // presentation-equivalent under E_{17} but appear CC-distinct.
     //
-    // v0.5.2 closed §5.4 semantically by shipping the Functorial engine:
+    // The Functorial engine closes §5.4 semantically:
     // `Presentation::eq_mod_functorial(&a, &b, &MatrixNFFunctor::new())`
     // is complete-by-theorem for Mat(R) — it just checks `S(a) == S(b)`.
     // We demonstrate both engines side-by-side here.
@@ -310,8 +310,8 @@ fn main() {
     );
 
     // size_bound = 2 keeps the bounded SFG enumeration tractable for BoolRig
-    // while still surfacing the CC-incompleteness witnesses Option A
-    // partially closes (~44% reduction from 2574 → 1433 at v0.5.2).
+    // while still surfacing the CC-incompleteness witnesses the atom-canonical
+    // `smc_refine` partially closes (~44% reduction from 2574 → 1433).
     let report = verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(2, &bool_samples)
         .expect("verifier runs on BoolRig size_bound=2");
     println!("  FaithfulnessReport (BoolRig, size_bound=2):");
@@ -325,22 +325,22 @@ fn main() {
     // The report's `collisions_under_s` counts CC-incompleteness witnesses,
     // not Thm 5.60 faithfulness violations. The matrix functor S is faithful
     // by Baez-Erbele 2015; what's missing from plain CC is syntactic
-    // completeness. v0.5.2 Option A landed `atom_canonical` in `kb.rs`
-    // (~44% reduction); the residual gap closes only via the Functorial
-    // engine demonstrated below or full Knuth-Bendix completion (v0.5.3+).
+    // completeness. The `atom_canonical` pass in `kb.rs` gives ~44%
+    // reduction; the residual gap closes only via the Functorial
+    // engine demonstrated below or full Knuth-Bendix completion (issue #15).
     assert!(
         report.expressions_checked > 0,
         "verifier must enumerate at least one expression"
     );
     println!(
         "  Note: nonzero `collisions_under_S` is *expected* under the default CC engine.\n  \
-        See `tests/graphical_linalg.rs` rustdoc for the v0.5.2 CC-completeness rationale."
+        See `tests/graphical_linalg.rs` rustdoc for the CC-completeness rationale."
     );
 
     // Functorial resolution: pick any CC-incompleteness witness from the
     // report and verify the Functorial engine resolves it correctly to
-    // `Some(true)`. This is the §5.4 Thm 5.60 semantic closure path that
-    // v0.5.2 shipped — `eq_mod_functorial` with `MatrixNFFunctor<R>` is
+    // `Some(true)`. This is the §5.4 Thm 5.60 semantic closure path —
+    // `eq_mod_functorial` with `MatrixNFFunctor<R>` is
     // complete by theorem (it just checks `S(a) == S(b)` in `Mat(R)`).
     if let Some((a, b)) = report.witnesses.first() {
         let cc_verdict = presentation
@@ -357,7 +357,7 @@ fn main() {
         );
         // The witness was binned by matrix image, so S(a) == S(b), so the
         // Functorial verdict MUST be Some(true). This is what closes Thm 5.60
-        // semantically at v0.5.2.
+        // semantically.
         assert_eq!(
             func_verdict,
             Some(true),

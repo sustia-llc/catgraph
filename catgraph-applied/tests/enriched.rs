@@ -119,7 +119,7 @@ fn lawvere_enriched_category_impl() {
 #[test]
 #[allow(clippy::similar_names)]
 fn lawvere_hom_diagonal_default_v0_5_4() {
-    // v0.5.4: hom(x, x) returns Tropical::one() = Tropical(0.0) when no
+    // hom(x, x) returns Tropical::one() = Tropical(0.0) when no
     // explicit diagonal entry was recorded (Lawvere identity-axiom default).
     let objects = vec!['a', 'b'];
     let m = LawvereMetricSpace::new(objects);
@@ -139,7 +139,7 @@ fn lawvere_hom_diagonal_default_v0_5_4() {
 
 #[test]
 fn lawvere_hom_diagonal_explicit_takes_precedence() {
-    // v0.5.4: an explicit diagonal entry is preserved by hom (no override).
+    // An explicit diagonal entry is preserved by hom (no override).
     let objects = vec!['a'];
     let mut m = LawvereMetricSpace::new(objects);
     m.set_distance('a', 'a', Tropical(1.5));
@@ -149,7 +149,7 @@ fn lawvere_hom_diagonal_explicit_takes_precedence() {
 
 #[test]
 fn lawvere_from_distances_v0_5_4() {
-    // v0.5.4: from_distances builds a metric space from an explicit
+    // from_distances builds a metric space from an explicit
     // distance iterator.
     let objects = vec!['a', 'b', 'c'];
     let entries = vec![

@@ -25,7 +25,7 @@
 //! 6. **Compose-identity (right)**: `f ; Identity(n) → f` when `n` matches `f`'s target.
 //! 7. **Compose-associator (right-bias)**: `(f ; g) ; h → f ; (g ; h)`.
 //! 8. **Braid-involution**: `Braid(m,n) ; Braid(n,m) → Identity(m+n)`.
-//! 9. **Identity-coherence of ⊗** (added v0.5.1):
+//! 9. **Identity-coherence of ⊗**:
 //!    `Identity(m) ⊗ Identity(n) → Identity(m+n)`.
 //!
 //! # Confluence
@@ -50,31 +50,28 @@ use functorial::CompleteFunctor;
 /// canonical representative, so it doesn't have a meaningful `normalize`
 /// semantics.
 ///
-/// - [`NormalizeEngine::Structural`]: the v0.5.0 `eq_mod` behavior — normalize
+/// - [`NormalizeEngine::Structural`]: the structural `eq_mod` behavior — normalize
 ///   both sides via bounded structural rewriting and compare. Cheap and
 ///   deterministic for non-overlapping presentations; may yield false negatives
 ///   (`None`) on overlapping equations (e.g., the 16 Thm 5.60 scalar D-group
 ///   equations).
-/// - [`NormalizeEngine::CongruenceClosure`] (default since v0.5.1): decide
+/// - [`NormalizeEngine::CongruenceClosure`] (default): decide
 ///   equality via bounded congruence closure over [`kb::CongruenceClosure`].
 ///   Correct decision procedure for any equational theory without binders,
 ///   including overlapping equations. Always returns `Some(_)` — no false
 ///   negatives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NormalizeEngine {
-    /// v0.5.0 `eq_mod` behavior: normalize both sides via bounded structural
+    /// Structural `eq_mod` behavior: normalize both sides via bounded structural
     /// rewriting and compare structurally.
     Structural,
-    /// v0.5.1 default: decide equality via bounded congruence closure.
+    /// Default: decide equality via bounded congruence closure.
     #[default]
     CongruenceClosure,
 }
 
 /// Result of [`Presentation::normalize`]. Distinguishes "fully reduced"
 /// from "hit depth bound" so callers can decide how to handle partial results.
-///
-/// v0.5.1 API change: replaces the v0.5.0 `Result<PropExpr<G>>` return type.
-/// See [`Presentation::normalize`] migration notes.
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct NormalizeResult<G: PropSignature> {
@@ -102,7 +99,7 @@ impl<G: PropSignature> Default for Presentation<G> {
 
 impl<G: PropSignature> Presentation<G> {
     /// New empty presentation with default `rewrite_depth = 32` and default
-    /// [`NormalizeEngine::CongruenceClosure`] engine (v0.5.1).
+    /// [`NormalizeEngine::CongruenceClosure`] engine.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -126,7 +123,7 @@ impl<G: PropSignature> Presentation<G> {
     /// New empty presentation with an explicit engine selector. Depth
     /// defaults to `32`.
     ///
-    /// Use this to opt into the v0.5.0 [`NormalizeEngine::Structural`]
+    /// Use this to opt into the [`NormalizeEngine::Structural`]
     /// behavior on an overlapping presentation (for regression testing or
     /// performance comparison).
     #[must_use]
@@ -189,7 +186,6 @@ impl<G: PropSignature> Presentation<G> {
     /// before the depth bound), and `.steps_taken` (the number of rewrite
     /// iterations performed).
     ///
-    /// v0.5.1 API change: previously returned `Result<PropExpr<G>, _>`.
     /// Callers that only need the expression can write
     /// `p.normalize(&e)?.expr`.
     ///
@@ -228,7 +224,7 @@ impl<G: PropSignature> Presentation<G> {
 
     /// SMC-only bounded normalization: apply the 9 fixed SMC-canonical-form
     /// rules (including Rule 9 — identity-coherence of ⊗ `Identity(m) ⊗
-    /// Identity(n) → Identity(m+n)`, added v0.5.1) to a fixpoint, **without**
+    /// Identity(n) → Identity(m+n)`) to a fixpoint, **without**
     /// applying user equations. Used by the
     /// CC engine's pre-pass so the congruence-closure graph is fed
     /// SMC-canonicalized operands and seeded equations without pre-consuming
@@ -265,7 +261,7 @@ impl<G: PropSignature> Presentation<G> {
     ///   structural rewriting and compare. Returns `Ok(Some(true))` /
     ///   `Ok(Some(false))` when both sides converge, or `Ok(None)` if at least
     ///   one side hit the depth bound.
-    /// - [`NormalizeEngine::CongruenceClosure`] (default since v0.5.1):
+    /// - [`NormalizeEngine::CongruenceClosure`] (default):
     ///   decide equality via bounded congruence closure. Always returns
     ///   `Ok(Some(_))` — no false negatives on overlapping equations.
     ///
@@ -276,7 +272,7 @@ impl<G: PropSignature> Presentation<G> {
     pub fn eq_mod(&self, a: &PropExpr<G>, b: &PropExpr<G>) -> Result<Option<bool>, CatgraphError> {
         match self.engine {
             NormalizeEngine::Structural => {
-                // v0.5.0 behavior: normalize both sides + compare; None if
+                // Structural behavior: normalize both sides + compare; None if
                 // either side hit the depth bound.
                 let na = self.normalize(a)?;
                 let nb = self.normalize(b)?;
@@ -286,8 +282,8 @@ impl<G: PropSignature> Presentation<G> {
                 Ok(Some(na.expr == nb.expr))
             }
             NormalizeEngine::CongruenceClosure => {
-                // v0.5.2 hybrid: check Layer-1 NF structural equality FIRST,
-                // then fall back to v0.5.1's CC engine with the old
+                // Hybrid: check Layer-1 NF structural equality FIRST,
+                // then fall back to the CC engine with the
                 // `normalize_smc_only` pre-pass.
                 //
                 // Why the hybrid:
@@ -309,7 +305,7 @@ impl<G: PropSignature> Presentation<G> {
                 if smc_nf::nf(a) == smc_nf::nf(b) {
                     return Ok(Some(true));
                 }
-                // Fall back to v0.5.1's CC engine with SMC pre-pass.
+                // Fall back to the CC engine with SMC pre-pass.
                 let na = self.normalize_smc_only(a)?;
                 let nb = self.normalize_smc_only(b)?;
                 if !na.converged || !nb.converged {
@@ -479,7 +475,7 @@ fn apply_smc_rules<G: PropSignature>(expr: &PropExpr<G>) -> PropExpr<G> {
         PropExpr::Tensor(ref f, ref g) if matches!(g.as_ref(), PropExpr::Identity(0)) => {
             apply_smc_rules(f)
         }
-        // Rule 9 (v0.5.1): Identity(m) ⊗ Identity(n) → Identity(m+n)
+        // Rule 9: Identity(m) ⊗ Identity(n) → Identity(m+n)
         //                  (identity-coherence of the monoidal product)
         PropExpr::Tensor(ref f, ref g)
             if matches!(f.as_ref(), PropExpr::Identity(_))
@@ -530,7 +526,7 @@ fn rewrite_once_top<G: PropSignature>(
 }
 
 /// A presented prop: wraps a [`Presentation`] with methods for operating on
-/// equivalence classes. v0.5.0 surfaces only [`PresentedProp::presentation`]
+/// equivalence classes. Surfaces [`PresentedProp::presentation`]
 /// and [`PresentedProp::quotient_representative`].
 #[derive(Debug, Clone)]
 pub struct PresentedProp<G: PropSignature> {

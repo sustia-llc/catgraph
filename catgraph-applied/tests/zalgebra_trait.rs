@@ -1,6 +1,6 @@
 //! Marker test for the §1.17 `ZAlgebra` trait in catgraph-applied.
 //!
-//! v0.6.0 renamed `Integer` to `ZAlgebra` (Bourbaki Algèbre Ch. I §8 — ℤ as
+//! Renamed `Integer` to `ZAlgebra` (Bourbaki Algèbre Ch. I §8 — ℤ as
 //! initial object of the category of unital rings) and
 //! sealed it via `crate::integer::private::Sealed`. This test exercises
 //! the top-level re-export `catgraph_applied::ZAlgebra` (the canonical

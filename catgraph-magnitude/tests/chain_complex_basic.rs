@@ -28,7 +28,7 @@ fn chain_length_sums_consecutive_distances() {
 
 #[test]
 fn enumerate_chains_4state_scattered_degree_1() {
-    // 4-state scattered space from v0.2.0 fixture: d(i,j) = 2.0 for i ≠ j.
+    // 4-state scattered space fixture: d(i,j) = 2.0 for i ≠ j.
     let space = LawvereMetricSpace::from_distance_fn(4, |a, b| if a == b { 0.0 } else { 2.0 });
     let chains_k1 = enumerate_chains(&space, 1);
     // For k=1, chains are ordered pairs (x_0, x_1) with x_0 ≠ x_1.
@@ -85,7 +85,7 @@ fn length_buckets_group_chains_at_same_grade() {
 
 /// Type alias used by the boundary tests below. `F64Rig` is the only `Ring +
 /// From<i64>` rig in the workspace today; once an exact-arithmetic `Rational`
-/// rig lands (Phase B SNF substrate), tests can be re-parameterised on it.
+/// rig lands, tests can be re-parameterised on it.
 type Q = catgraph_applied::rig::F64Rig;
 
 #[test]

@@ -4,7 +4,7 @@
 //! Per Leinster 2013, when ζ is invertible AND the space is scattered
 //! (Def 2.1.2), both `mobius_function::<Q>` (Gaussian elimination) and
 //! `mobius_function_via_chains::<Q>` (chain-sum) yield the same matrix.
-//! v0.1.x's matrix-inversion is the ground truth; v0.2.0's chain-sum must
+//! The matrix-inversion path is the ground truth; the chain-sum path must
 //! agree on every scattered fixture.
 
 use catgraph_applied::lawvere_metric::LawvereMetricSpace;
@@ -75,7 +75,7 @@ fn non_scattered_returns_err_on_chain_sum() {
 
 #[test]
 fn boundary_near_non_scattered_returns_err_on_chain_sum() {
-    // Boundary-near (v0.2.1 reviewer #2 Minor #4): 4-state space with
+    // Boundary-near: 4-state space with
     // d = 1.05 < log(3) ≈ 1.0986 ⇒ not scattered, but only barely. Verifies
     // the scatteredness check is tight (no off-by-epsilon — the strict
     // `>` in Def 2.1.2 should reject this).

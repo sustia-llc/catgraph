@@ -133,12 +133,12 @@ fn _use_c() -> PropExpr<TestGen> {
     g(TestGen::C)
 }
 
-// ---- v0.5.1 NormalizeEngine selector tests ----
+// ---- NormalizeEngine selector tests ----
 //
 // The overlapping-equations "killer case": seed `A ; A = B` AND `A = C`.
-// Under the v0.5.0 structural rewriter, normalize rewrites `A ; A → B` and
+// Under the structural rewriter, normalize rewrites `A ; A → B` and
 // `A → C` independently, yielding distinct normal forms and a false negative.
-// The v0.5.1 congruence-closure engine handles overlap and returns `true`.
+// The congruence-closure engine handles overlap and returns `true`.
 
 #[test]
 fn presentation_eq_mod_cc_joins_overlapping_equations() {
@@ -209,8 +209,8 @@ fn presentation_cc_handles_both_smc_interchange_and_overlapping_user_equations()
     //   Via congruence, `A ; C ≡ C ; C ≡ A ; A ≡ B`. Returns `Some(true)`.
     //
     // If this test fails on the default engine, either the SMC pre-pass
-    // didn't run (losing v0.5.0 capability) or the CC engine isn't being
-    // fed the normalized equation graph (losing v0.5.1 capability).
+    // didn't run (losing SMC-normalization capability) or the CC engine isn't
+    // being fed the normalized equation graph (losing overlap-joining capability).
     let mut pres = Presentation::<TestGen>::new(); // default: CongruenceClosure
     assert_eq!(pres.engine(), NormalizeEngine::CongruenceClosure);
 
@@ -239,7 +239,7 @@ fn presentation_cc_handles_both_smc_interchange_and_overlapping_user_equations()
 #[test]
 fn presentation_structural_engine_returns_none_on_cyclic_overlap() {
     // With A = B, B = A under Structural + small depth bound, normalization
-    // oscillates. The v0.5.0 behavior is to return `None` (depth-bound hit).
+    // oscillates. The Structural behavior is to return `None` (depth-bound hit).
     // This locks in that the `Structural` branch preserves the `Option<bool>`
     // return-type contract.
     let mut pres = Presentation::<TestGen>::with_depth(16);

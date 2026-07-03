@@ -1,4 +1,4 @@
-//! v0.5.2 Phase C2 — Layer 1 NF completeness verification.
+//! Layer 1 NF completeness verification.
 //!
 //! Three complementary checks:
 //!
@@ -168,11 +168,11 @@ mod axiom_closure {
         /// §3 Step 4(c)) that would sift each non-identity atom to its
         /// earliest possible layer.
         ///
-        /// Scope decision (v0.5.2): gate with `#[ignore]` and validate
-        /// whether the 12 `thm_5_60_faithful_*` tests need this canonicalization
-        /// during C4. If they do, add `topological_layer_order` before tagging.
+        /// Scope decision (issue #14): gate with `#[ignore]` and validate
+        /// whether the 12 `thm_5_60_faithful_*` tests need this canonicalization.
+        /// If they do, add `topological_layer_order`.
         #[test]
-        #[ignore = "C2 known gap: missing topological-layer-order pass (§3 Step 4(c)); revisit during C4"]
+        #[ignore = "known gap (issue #14): missing topological-layer-order pass (§3 Step 4(c))"]
         fn interchange(
             f in arb_expr(),
             g in arb_expr(),

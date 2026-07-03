@@ -1,4 +1,4 @@
-//! Functorial decision procedure for prop-equality (v0.5.2).
+//! Functorial decision procedure for prop-equality.
 //!
 //! When a prop presentation `(G, E)` admits a known-complete functor
 //! `F : Free(G) → T` into a decidable target, equality in the quotient
@@ -27,7 +27,7 @@
 //!
 //! `CompleteFunctor` has an associated `Target` type that varies per
 //! functor instance, which precludes a uniform enum-payload representation
-//! without type erasure. For v0.5.2 we keep the functor as a call-site
+//! without type erasure. We keep the functor as a call-site
 //! parameter on [`super::Presentation::eq_mod_functorial`]; the two
 //! existing `NormalizeEngine` variants (`Structural`, `CongruenceClosure`)
 //! continue to cover the default syntactic path.
@@ -51,10 +51,10 @@ use crate::{
 };
 
 // Note on trait bounds: `Target: Clone + Debug + PartialEq` is the actual
-// v0.5.2 requirement (`eq_mod_functorial` only compares two values with
-// `==`). The revised-scope plan §4.2 sketched `Eq + Hash`, but those
-// tighter bounds would require `Eq` on `MatR<R>` (and by transitivity
-// `Eq` on every rig `R`) without any call site actually needing them.
+// requirement (`eq_mod_functorial` only compares two values with `==`).
+// Tighter `Eq + Hash` bounds would require `Eq` on `MatR<R>` (and by
+// transitivity `Eq` on every rig `R`) without any call site actually
+// needing them.
 // If a future functor consumer needs to hash target values, the bound can
 // be tightened with a minor version bump.
 

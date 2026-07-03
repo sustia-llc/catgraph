@@ -6,9 +6,9 @@
 //! `gcd(det V, n) = 1`.
 //!
 //! Determinant computed via recursive minor expansion; capped at `dim ≤ 8`.
-//! For larger fixtures (e.g. Phase E acceptance), invariant checking is
-//! delegated to the consumer-level acceptance gate (Task 23 numerical vs
-//! structural agreement on 5 fixtures).
+//! For larger fixtures, invariant checking is delegated to the
+//! consumer-level acceptance gate (numerical vs structural agreement on
+//! 5 fixtures).
 
 #![allow(
     dead_code,
@@ -27,7 +27,7 @@ const MAX_DET_DIM: usize = 8;
 
 /// Recursive determinant mod `n` via cofactor expansion along row 0. Capped
 /// at `MAX_DET_DIM`; panics for larger inputs (use Gaussian-elimination-based
-/// determinant if v0.4.0 raises the cap).
+/// determinant if a future change raises the cap).
 ///
 /// Internal to integration-test invariant helpers; not a stable API surface.
 /// `pub` only to satisfy cargo's integration-test reachability for

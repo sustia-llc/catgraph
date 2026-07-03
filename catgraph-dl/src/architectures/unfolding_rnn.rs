@@ -8,7 +8,7 @@
 //!
 //! Unrolling produces a `Stream(O)` (CDL Example J.2).
 //!
-//! ## Phase DL-2 Agent E — `unroll_to_vec`
+//! ## `unroll_to_vec`
 //!
 //! [`UnfoldingRnn::unroll_to_vec`] is a *bounded-depth* approximation of
 //! the unique coalgebra homomorphism into the *final* coalgebra
@@ -19,7 +19,7 @@
 //! where s_{k+1} = cell_n(p, s_k)
 //! ```
 //!
-//! Infinite (lazy) unrolling is deferred to DL-3+ and would need a `Lazy`
+//! Infinite (lazy) unrolling is deferred and would need a `Lazy`
 //! / `Thunk` carrier (or `tokio_stream::Stream`); see the closing CDL §3.2
 //! remark on streams as final coalgebras.
 
@@ -29,7 +29,7 @@ use core::marker::PhantomData;
 ///
 /// CDL Example I.3.
 ///
-/// **Phase DL-1 scaffold:** opaque struct.
+/// Opaque struct.
 #[derive(Debug, Clone)]
 pub struct UnfoldingRnn<P, S, CellO, CellN, O> {
     /// The parameter object `P`.
@@ -76,7 +76,7 @@ where
     /// # Why bounded?
     ///
     /// Rust eagerly evaluates `Vec<O>`; the *true* final-coalgebra
-    /// homomorphism would land in a lazy carrier. DL-3+ may add an
+    /// homomorphism would land in a lazy carrier. A future addition may add an
     /// `unroll_into_iter` returning `impl Iterator<Item = O>` for true
     /// streamy semantics, or a `tokio_stream::Stream` adapter once the
     /// crate gains async dependencies (currently it has none).

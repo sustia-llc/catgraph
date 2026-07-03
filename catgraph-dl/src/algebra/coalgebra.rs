@@ -20,9 +20,8 @@ use super::group_action::EndoFunctor;
 ///
 /// CDL Definition B.2. Dual of [`FAlgebra`](super::FAlgebra).
 ///
-/// **Phase DL-1 scaffold:** opaque struct holding the carrier and the
-/// outgoing structure-map closure. **Phase DL-2** adds [`FCoalgebraHom`]
-/// for the dual commuting square.
+/// Opaque struct holding the carrier and the outgoing structure-map
+/// closure. [`FCoalgebraHom`] provides the dual commuting square.
 #[derive(Debug, Clone)]
 pub struct FCoalgebra<F, A, S> {
     /// The carrier object `A`.

@@ -16,9 +16,8 @@
 //! [`ZAlgebra::from_i64`] is that homomorphism, restricted to `i64`-
 //! representable integers.
 //!
-//! Cross-references the `compile_fail` doctest on [`ZAlgebra`] for the v0.6.0
-//! sealed-impl-guard (the v0.6.0 equivalent of T2's nominal `sealed_impl_guard`
-//! sub-target). That doctest prevents external crates from implementing
+//! Cross-references the `compile_fail` doctest on [`ZAlgebra`] for the
+//! sealed-impl-guard. That doctest prevents external crates from implementing
 //! [`ZAlgebra`] on a non-axiomatic backing such as `F64Rig`.
 //!
 //! Axioms covered here are sample-based: three are unit tests (zero, one,

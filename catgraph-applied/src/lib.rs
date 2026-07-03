@@ -16,27 +16,26 @@
 //! - [`e1_operad`] — little-intervals operad (E₁)
 //! - [`e2_operad`] — little-disks operad (E₂)
 //! - [`decorated_cospan`] — generic `DecoratedCospan<F>` over a `Decoration` functor
-//!   (Fong–Spivak Def 6.75 + Thm 6.77; v0.3.0/v0.3.1)
+//!   (Fong–Spivak Def 6.75 + Thm 6.77)
 //! - [`prop`] — symmetric strict monoidal categories with `Ob = ℕ` and the
-//!   free prop `Free(G)` on a signature (F&S Def 5.2, Def 5.25; v0.4.0)
+//!   free prop `Free(G)` on a signature (F&S Def 5.2, Def 5.25)
 //! - [`operad_algebra`] — operad algebras `F : O → Set` with `CircAlgebra`
-//!   (F&S Def 6.99, Ex 6.100; v0.4.0)
+//!   (F&S Def 6.99, Ex 6.100)
 //! - [`operad_functor`] — functors between operads with the canonical
-//!   `E₁ ↪ E₂` inclusion (F&S Rough Def 6.98; v0.4.0)
+//!   `E₁ ↪ E₂` inclusion (F&S Rough Def 6.98)
 //! - [`enriched`] — `EnrichedCategory<V>` trait + `HomMap<O, V>` concrete impl
-//!   (F&S §2.4, CTFP Ch 28; v0.5.1)
+//!   (F&S §2.4, CTFP Ch 28)
 //! - [`lawvere_metric`] — `LawvereMetricSpace<T>` over `Tropical` with triangle
 //!   inequality verifier + `-ln π` embedding from `UnitInterval`
-//!   (Lawvere 1973, BTV 2021; v0.5.1)
+//!   (Lawvere 1973, BTV 2021)
 //! - [`integer`] — `ZAlgebra` trait (sealed; Bourbaki Algèbre Ch. I §8 — ℤ as initial object of the category of unital rings)
 //!   for rigs carrying integer-exact arithmetic (substrate for
 //!   catgraph-magnitude §1.17 Leinster 2008 Cor 1.5 chain-sum Möbius;
 //!   `ZAlgebra` is also re-exported at the crate root as
-//!   [`ZAlgebra`]; renamed from `Integer` and sealed at v0.6.0
-//!   (introduced as `Integer` in v0.5.6))
+//!   [`ZAlgebra`]; renamed from `Integer` and sealed)
 //! - [`z`] — `Z(BigInt)` newtype, the canonical [`integer::ZAlgebra`]
 //!   implementor for catgraph-magnitude §1.17 integer-exact Möbius
-//!   inversion (v0.5.6)
+//!   inversion
 //! - [`mat_kron`] — `MatKron(R)` FdVect with the Kronecker tensor: a genuine
 //!   hypergraph category with the Hadamard SCFM as inherent generators
 //!   (F&S 2019 Ex 2.16); concrete re-expression on the native
@@ -48,7 +47,7 @@
 //!   zero-dependency K1 backend for the downstream koalisi coalition layer
 //!   (sustia-llc/koalisi#4), with a `hyperedge_as_cospan` categorical view (the
 //!   identity cospan over the member index list) back to
-//!   [`catgraph::cospan::Cospan`] (v0.6.x)
+//!   [`catgraph::cospan::Cospan`]
 //!
 //! ## Relationship to catgraph
 //!

@@ -9,7 +9,7 @@
 //!   `magnitude<F64Rig>` and Thm 3.10's closed form apply.
 //!
 //! No `SurrealDB`, no tokio, no async — pure-math demo of the analysis surface
-//! shipped at v0.3.0 (BV 2025 Prop 3.14 acceptance gate + per-`(k, ℓ)`
+//! (BV 2025 Prop 3.14 acceptance gate + per-`(k, ℓ)`
 //! `magnitude_homology_rank` cell report). The `coalition` module (#22) turns
 //! this manual construction into the `Coalition` / `coalition_magnitude` surface
 //! (restrict-then-close + skeletalize); downstream `koalisi` wires that into
@@ -19,9 +19,9 @@
 //! ## Paper anchor
 //!
 //! - **BV 2025 Prop 3.10** — `Mag(tM)` Tsallis decomposition; the closed form
-//!   the v0.1.x magnitude tier reproduces on the 3-agent sub-coalition.
+//!   the magnitude tier reproduces on the 3-agent sub-coalition.
 //! - **BV 2025 Prop 3.14** — magnitude–homology Euler-characteristic identity:
-//!   `Mag(tM) = Σ_ℓ e^(−tℓ) · Σ_k (−1)^k · rank(H_{k,ℓ}(M))`. v0.3.0 ships
+//!   `Mag(tM) = Σ_ℓ e^(−tℓ) · Σ_k (−1)^k · rank(H_{k,ℓ}(M))`. The crate ships
 //!   [`catgraph_magnitude::chain_complex::euler_char_identity_at`] as the
 //!   acceptance-gate driver and `magnitude_homology_rank` as the per-cell
 //!   structural report — both demonstrated below.
@@ -153,8 +153,8 @@ fn build_sub_coalition_lm() -> LmCategory {
 /// ```
 ///
 /// All other off-diagonal pairs are `+∞`. `ChainIndex` drops `∞`-length chains
-/// via `Chain::is_finite_in` (LS 2017 §2; widened to pseudo-metric `d = 0` at
-/// v0.4.0 §1.18), so the resulting `(k, ℓ)`-cell report counts only the
+/// via `Chain::is_finite_in` (LS 2017 §2; widened to pseudo-metric `d = 0`),
+/// so the resulting `(k, ℓ)`-cell report counts only the
 /// forward-directed chain `alice → bob → carol` and its sub-chains.
 #[allow(
     clippy::similar_names,
@@ -177,7 +177,7 @@ fn sub_coalition_3agent_lawvere_space() -> LawvereMetricSpace<NodeId> {
 /// magnitude-homology-rank report for the 3-agent sub-coalition.
 ///
 /// Demonstrates the structural decomposition of magnitude into
-/// `rank(H_{k,ℓ}) · e^(−t·ℓ)` terms per Prop 3.14 (v0.3.0 acceptance gate) +
+/// `rank(H_{k,ℓ}) · e^(−t·ℓ)` terms per Prop 3.14 (acceptance gate) +
 /// the `magnitude_homology_rank<Q>` per-cell report. Guards on
 /// [`is_mobius_invertible_at`] to short-circuit when ζ is singular at the
 /// chosen `t`.
@@ -344,7 +344,7 @@ fn main() {
     println!();
 
     // -----------------------------------------------------------------------
-    // Part 3: v0.3.0 acceptance gate + per-(k, ℓ) homology-rank report
+    // Part 3: acceptance gate + per-(k, ℓ) homology-rank report
     // -----------------------------------------------------------------------
 
     report_prop_3_14_panel_3agent_coalition();

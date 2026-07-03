@@ -11,33 +11,33 @@
 //! - [`tsallis_entropy`](magnitude::tsallis_entropy) — `H_t(p) = (1 − Σ pᵢᵗ)/(t−1)`,
 //!   special-cased to Shannon at `|t−1| < TSALLIS_SHANNON_EPS`.
 //! - [`mobius_function`](magnitude::mobius_function) — Möbius inversion
-//!   `ζ · μ = I` over a [`Ring`] via Gaussian elimination (field-fast path,
-//!   v0.1.x; requires `Q: Ring + Div + From<f64>`).
+//!   `ζ · μ = I` over a [`Ring`] via Gaussian elimination (field-fast path;
+//!   requires `Q: Ring + Div + From<f64>`).
 //! - [`mobius_function_via_chains`](mobius_chains::mobius_function_via_chains)
 //!   — Leinster 2013 Prop 2.1.3 chain-sum formula, realized as the
-//!   von-Neumann series `μ = Σ (−1)ᵏ Mᵏ` with `M = ζ − I` (v0.2.0;
-//!   requires `Q: Ring + From<f64>` + scattered input).
+//!   von-Neumann series `μ = Σ (−1)ᵏ Mᵏ` with `M = ζ − I`
+//!   (requires `Q: Ring + From<f64>` + scattered input).
 //! - [`chain_count_signed_graded`](mobius_chains::chain_count_signed_graded) — per-grade
-//!   signed chain-count diagnostic (renamed v0.4.0 §1.19 from
+//!   signed chain-count diagnostic (renamed from
 //!   `mobius_chains_graded`); Leinster 2013 Prop 2.1.3 + LS 2017 §2 grading
-//!   (v0.3.0; requires `Q: Rig + From<f64>`).
+//!   (requires `Q: Rig + From<f64>`).
 //! - [`is_mobius_invertible_at`](magnitude::is_mobius_invertible_at) — Leinster
-//!   2013 Prop 2.4.17 ergonomic Möbius-existence threshold check (v0.3.0).
+//!   2013 Prop 2.4.17 ergonomic Möbius-existence threshold check.
 //! - [`chain_complex`] — LS 2017 §2 magnitude-homology chain complex `(C_{k,ℓ}, ∂_k)`
 //!   over Lawvere metric: [`Chain`](chain_complex::Chain),
 //!   [`enumerate_chains`](chain_complex::enumerate_chains),
 //!   [`ChainIndex`](chain_complex::ChainIndex),
 //!   [`boundary_matrix`](chain_complex::boundary_matrix),
 //!   [`magnitude_homology_rank`](chain_complex::magnitude_homology_rank),
-//!   [`euler_char_identity_at`](chain_complex::euler_char_identity_at) (v0.3.0).
+//!   [`euler_char_identity_at`](chain_complex::euler_char_identity_at).
 //! - [`snf`] — custom Storjohann §7 Smith Normal Form backend over `MatR<Q>`
 //!   (algorithmic reference: [events555/modularsnf](https://github.com/events555/modularsnf)
 //!   @ `d62535e`, Apache-2.0; dev-only oracle gated by `modularsnf-oracle`,
-//!   NOT a runtime dep) (v0.3.0).
+//!   NOT a runtime dep).
 //! - [`weighting`](magnitude::weighting) / [`coweighting`](magnitude::coweighting)
-//!   — Leinster 2013 §1.1 Def 1.1.1 paper-foundational primitives (v0.2.0).
+//!   — Leinster 2013 §1.1 Def 1.1.1 paper-foundational primitives.
 //! - [`is_scattered`](magnitude::is_scattered) — Leinster 2013 Def 2.1.2
-//!   convergence predicate (v0.2.0).
+//!   convergence predicate.
 //! - [`magnitude`](magnitude::magnitude) — magnitude via Möbius sum.
 //! - [`LmCategory`](lm_category::LmCategory) — materialized language-model
 //!   transition table with `Mag(tM)` per BV 2025 Thm 3.10.
@@ -58,7 +58,7 @@
 //! ## Substrate
 //!
 //! Re-exports the Tier 3 enrichment infrastructure from `catgraph-applied`
-//! v0.5.x — [`Rig`], [`UnitInterval`], [`Tropical`], [`F64Rig`], [`BoolRig`],
+//! — [`Rig`], [`UnitInterval`], [`Tropical`], [`F64Rig`], [`BoolRig`],
 //! [`EnrichedCategory`], [`HomMap`], [`LawvereMetricSpace`].
 //!
 //! ## Algebraic scoping
@@ -68,23 +68,23 @@
 //! - **Field-fast path** —
 //!   [`mobius_function`](magnitude::mobius_function)`::<Q: Ring + Div + From<f64>>`
 //!   via Gaussian elimination on `[ζ | I]`. Requires multiplicative
-//!   inverses (the `Div` bound). v0.1.x.
+//!   inverses (the `Div` bound).
 //! - **Chain-sum path** —
 //!   [`mobius_function_via_chains`](mobius_chains::mobius_function_via_chains)`::<Q: Ring + From<f64>>`
 //!   via the von-Neumann series `μ = Σ (−1)ᵏ Mᵏ` with `M = ζ − I`
 //!   (algebraically identical to Leinster 2013 Prop 2.1.3's
 //!   chain-sum-of-ζ-products by `Mᵏ[a][b] = Σ chain-products of length k`).
 //!   No `Div` needed; requires the input to be **scattered** (Leinster
-//!   Def 2.1.2: `d(a, b) > log(#A − 1)`). v0.2.0.
+//!   Def 2.1.2: `d(a, b) > log(#A − 1)`).
 //!
 //! Among the workspace's four concrete rigs, only `F64Rig` satisfies
-//! either bound in v0.2.0; the wider `Q: Ring + From<f64>` bound on the
+//! either bound; the wider `Q: Ring + From<f64>` bound on the
 //! chain-sum path is forward-compat for any future `Ring`-rig.
 //!
 //! **`Tropical`-valued / `BoolRig`-valued magnitude is out of scope per
 //! Leinster 2013 §1.3 Examples 1.3.1**: the scalar rig `k` is determined
-//! by V (V = `[0,∞]` ⇒ k = ℝ). See `docs/BV25-AUDIT.md` §"Out of scope
-//! (v0.2.x)" for the full citation chain.
+//! by V (V = `[0,∞]` ⇒ k = ℝ). See `docs/BV25-AUDIT.md` "Out of scope"
+//! for the full citation chain.
 //!
 //! ## Numerical scoping
 //!
@@ -102,7 +102,6 @@
 
 pub mod ring;
 
-// Phase 6A.1 / 6A.2 / 6A.3 module stubs — populated in subsequent commits.
 pub mod lm_category;
 pub mod magnitude;
 pub mod weighted_cospan;
@@ -140,15 +139,15 @@ pub use coalition::{
 pub mod coalition_eval;
 pub use coalition_eval::{CoalitionEvaluator, INCREMENTAL_REL_TOL, coalition_value_delta};
 
-// Phase 6F (v0.2.0) — chain-sum Möbius via Leinster 2013 Prop 2.1.3.
+// Chain-sum Möbius via Leinster 2013 Prop 2.1.3.
 pub mod mobius_chains;
 
-// Phase 6F (v0.3.0) — magnitude homology (BV 2025 Prop 3.14, Leinster–Shulman 2017 §2)
+// Magnitude homology (BV 2025 Prop 3.14, Leinster–Shulman 2017 §2)
 // + custom Storjohann SNF over `MatR<Q>` (algorithmic reference: events555/modularsnf @ d62535e).
 pub mod chain_complex;
 pub mod snf;
 
-// Phase H (v0.4.0 §1.17) — `PosetCategory<NodeId>` input type for integer-exact
+// `PosetCategory<NodeId>` input type for integer-exact
 // Möbius inversion (Leinster 2008 *The Euler characteristic of a category* Cor 1.5).
 pub mod poset_category;
 pub use poset_category::PosetCategory;
@@ -160,8 +159,8 @@ pub use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 pub use catgraph_applied::mat::MatR;
 pub use catgraph_applied::rig::{BoolRig, F64Rig, Rig, Tropical, UnitInterval};
 
-// v0.4.0 §1.17 substrate re-exports for integer-exact Möbius
-// (renamed v0.6.0: `Integer` → `ZAlgebra`; the trait names a Z-algebra
+// Substrate re-exports for integer-exact Möbius
+// (renamed from `Integer` → `ZAlgebra`; the trait names a Z-algebra
 // — a unital-ring extension carrying a canonical `ℤ → R` homomorphism —
 // not the mathematical concept of an integer-valued type. Cf. Bourbaki
 // *Algèbre* Ch. I §8 — ℤ as initial object of the category of unital rings).

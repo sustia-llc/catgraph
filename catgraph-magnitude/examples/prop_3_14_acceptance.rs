@@ -1,12 +1,12 @@
 //! BV 2025 Prop 3.14 acceptance demo — 5-fixture path-C analytical-bound suite.
 //!
 //! Runnable demo mirroring `tests/euler_char_identity.rs`. For each of the five
-//! v0.3.0 fixtures (`4state_scattered`, `3point_line`, `5point_path`,
+//! shipped fixtures (`4state_scattered`, `3point_line`, `5point_path`,
 //! `random_4point`, `2point`), constructs the underlying `LawvereMetricSpace`,
 //! evaluates
 //! [`euler_char_identity_at`] over `F64Rig`, and prints
 //! `(via_homology, via_magnitude, |Δ|, analytical_bound, margin)` in the same
-//! format as the `BV25-AUDIT.md` "v0.3.0 deltas" section.
+//! format as the `BV25-AUDIT.md` deltas section.
 //!
 //! Exits with code 1 if any fixture's margin is negative (i.e., `|Δ| > bound`),
 //! making the demo viable as a CI regression gate alongside the test suite.
@@ -32,7 +32,7 @@ use catgraph_magnitude::chain_complex::euler_char_identity_at;
 use catgraph_magnitude::{F64Rig, LawvereMetricSpace};
 
 /// Floor for accumulated rounding noise in the Möbius matrix-inverse path
-/// (`n × n` Gaussian elimination over `F64Rig`, with `n ≤ 5` for v0.3.0
+/// (`n × n` Gaussian elimination over `F64Rig`, with `n ≤ 5` for the shipped
 /// fixtures). Mirrors `tests/euler_char_identity.rs::F64_FLOOR`.
 const F64_FLOOR: f64 = 1e-9;
 
@@ -42,7 +42,7 @@ fn analytical_residual_bound(n: usize, d_min_scaled: f64, max_degree: usize) -> 
     assert!(n >= 2, "trivial space; acceptance demo does not apply");
     #[allow(
         clippy::cast_precision_loss,
-        reason = "n ≤ 5 in v0.3.0 fixtures; trivially fits f64 mantissa"
+        reason = "n ≤ 5 in the shipped fixtures; trivially fits f64 mantissa"
     )]
     let n_f = n as f64;
     let r = (n_f - 1.0) * (-d_min_scaled).exp();
@@ -55,7 +55,7 @@ fn analytical_residual_bound(n: usize, d_min_scaled: f64, max_degree: usize) -> 
     #[allow(
         clippy::cast_possible_wrap,
         clippy::cast_possible_truncation,
-        reason = "max_degree ≤ 4 in v0.3.0 fixtures; powi argument trivially fits i32"
+        reason = "max_degree ≤ 4 in the shipped fixtures; powi argument trivially fits i32"
     )]
     let exponent = (max_degree + 1) as i32;
     n_f * r.powi(exponent) / (1.0 - r)

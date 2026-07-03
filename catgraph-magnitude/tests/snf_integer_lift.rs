@@ -1,4 +1,4 @@
-//! §1.10 `smith_normal_form_integer` — multi-prime CRT integer SNF lift.
+//! `smith_normal_form_integer` — multi-prime CRT integer SNF lift.
 //!
 //! Tests verify the lifted diagonal invariants against canonical fixtures:
 //! Wikipedia 3×3 (diag(2, 2, 156)) + identity + zero + rectangular 2×3.

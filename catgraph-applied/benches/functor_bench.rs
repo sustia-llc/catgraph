@@ -13,15 +13,15 @@
 //!
 //! ## What the `cc_incompleteness_count_*` groups actually measure
 //!
-//! Reframed 2026-05-15 per the T3 paper-audit + T6 bulk-patch. The function
+//! The function
 //! [`verify_sfg_to_mat_is_full_and_faithful`] is NOT a faithfulness gate
 //! (Baez-Erbele 2015 already proves Thm 5.60 holds; cg-applied does not
 //! re-prove established theorems). It returns **CC-engine incompleteness
 //! witnesses** — pairs of SFG expressions that the matrix functor `S`
 //! distinguishes which the default [`CongruenceClosure`] engine does NOT
-//! yet identify. The witness count (~1433 for `size_bound=2` on `BoolRig`
-//! at v0.5.2) is expected to stay nonzero until Knuth-Bendix completion
-//! lands (v0.5.3+ research; see `tests/graphical_linalg.rs:1-49` for the
+//! yet identify. The witness count (~1433 for `size_bound=2` on `BoolRig`)
+//! is expected to stay nonzero until Knuth-Bendix completion
+//! lands (tracked in issue #15; see `tests/graphical_linalg.rs:1-49` for the
 //! authoritative semantics).
 //!
 //! The bench tracks this count as a **performance + progress signal on
@@ -29,12 +29,9 @@
 //! KB-completion run that drives the witness count toward zero would also
 //! show up here as a wall-clock change.
 //!
-//! Closes A-2 from `catgraph-applied/.claude/docs/BENCHES-COVERAGE.md`
-//! v0.6.0 — the second new bench file in the v0.6.1 debt-closure patch
-//! (after `mat_ops_bench.rs` at SHA `32cdfb2`). Inherits T5's bench-file
-//! precedents (module-level imports, `drop(black_box(...))` for
-//! `Result`-returning hot-path calls, `std::hint::black_box`, per-file
-//! `SEED` constant).
+//! Follows the workspace bench-file conventions (module-level imports,
+//! `drop(black_box(...))` for `Result`-returning hot-path calls,
+//! `std::hint::black_box`, per-file `SEED` constant).
 //!
 //! ## Bench-size bracket
 //!
@@ -56,11 +53,11 @@
 //!   invocation, so the cumulative cost is `O(2^d)` scalar `R::Mul` + `O(2^d)`
 //!   `Result`-wrapping at internal nodes (NOT `O(n²)` matmul — that cost
 //!   class would require `Tensor` widening to expose non-`1×1` matrices,
-//!   deferred to v0.7.0 FORWARD-LOOK A-2).
+//!   deferred).
 //!
 //! - **`cc_incompleteness_count::bool` at `size_bound = 2`** — produces
-//!   ~1433 CC-incompleteness witnesses on `BoolRig` per the T4 implementer's
-//!   empirical finding (CHANGELOG line 189 / v0.5.2 baseline). The witness
+//!   ~1433 CC-incompleteness witnesses on `BoolRig` — the measured
+//!   empirical baseline. The witness
 //!   count is the size of the gap between
 //!   [`NormalizeEngine::CongruenceClosure`] (syntactic, incomplete) and
 //!   [`NormalizeEngine::Functorial`] (semantic, complete-by-Thm-5.60); the
@@ -81,8 +78,8 @@
 //!   per the design doc warning; reduced `sample_size = 10` and warmup
 //!   shortened so the group completes in under 60 seconds. Marker flag
 //!   below; if a future profile shows the group exceeding 30 seconds, fold
-//!   the d3-bool bracket back to d2 and surface the regression in the path
-//!   γ next-walk forward-look.
+//!   the d3-bool bracket back to d2 and surface the regression in a
+//!   follow-up.
 //!
 //! - **`cc_incompleteness_count::f64rig` at `size_bound = 2`, `F64Rig` only.**
 //!   Per design doc §3.3.2: `F64Rig` scalar sampling combinatorially blows
@@ -91,7 +88,7 @@
 //!   — `F64Rig(0.0)` is the additive identity AND absorbing under `Mul`, so
 //!   3 of 4 D1 cross-product entries short-circuit; only `1·1 = 1`
 //!   exercises the free-multiplication path. A non-degenerate alternative
-//!   (e.g. `{2.0, 3.0}`) is folded to v0.7.0 FORWARD-LOOK A-1.
+//!   (e.g. `{2.0, 3.0}`) is a deferred future addition.
 //!
 //! ## Trait-bound dispatch tier
 //!
@@ -109,9 +106,9 @@
 //!
 //! No randomness — all bench fixtures are pure constructive walks over the
 //! `SignalFlowGraph` smart-constructor surface. The per-file `SEED`
-//! constant from the T5 `mat_ops_bench` precedent is retained as a placeholder
-//! for future randomised fixtures (currently unused; flag for path-γ
-//! reviewers that this file is fully deterministic).
+//! constant from the `mat_ops_bench` precedent is retained as a placeholder
+//! for future randomised fixtures (currently unused; note that this file is
+//! fully deterministic).
 //!
 //! Fixture allocation cost is amortised at setup, NOT inside `bencher.iter`.
 //! At depth 7 the `build_sfg_fixture_d` recursion constructs 127 `Compose`
@@ -141,7 +138,7 @@ use catgraph_applied::{
     sfg_to_mat::sfg_to_mat,
 };
 
-/// Reserved per-file seed slot (T5 precedent). Currently unused — all T6
+/// Reserved per-file seed slot. Currently unused — all
 /// fixtures are deterministic constructive walks. Retained so a future
 /// randomised-fixture addition has a documented seed handle ready.
 #[allow(dead_code)]
@@ -211,8 +208,8 @@ fn bench_sfg_to_mat_f64(c: &mut Criterion) {
 
         group.bench_with_input(BenchmarkId::from_parameter(d), &d, |bencher, _| {
             bencher.iter(|| {
-                // `sfg_to_mat` is `Result`-returning + hot-path; T5
-                // precedent (mat_ops_bench:116, :135) — use
+                // `sfg_to_mat` is `Result`-returning + hot-path; the
+                // bench-file precedent (mat_ops_bench:116, :135) — use
                 // `drop(black_box(...))` to make the anti-elision intent
                 // structural rather than relying on Result-Drop side
                 // effects.
@@ -257,11 +254,11 @@ fn bench_sfg_to_mat_bool(c: &mut Criterion) {
 // ---------------------------------------------------------------------------
 //
 // `verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(size_bound=2)` returns
-// ~1433 CC-incompleteness witnesses at v0.5.2 (T4 implementer empirical;
+// ~1433 CC-incompleteness witnesses (measured empirically;
 // see `tests/graphical_linalg.rs:1-49` for authoritative semantics). The
 // `size_bound=3` variant is borderline per the design doc warning — runs
 // hundreds of CC `are_equal` calls. To keep the group inside the 60s wall
-// budget from acceptance gate #4 the sample count + warmup are reduced for
+// budget the sample count + warmup are reduced for
 // d=3 (criterion default is 100 samples + 3s warmup).
 
 fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
@@ -274,7 +271,7 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     // a tight presentation.
     let rig_samples = vec![BoolRig(true), BoolRig(false)];
 
-    // d=2: the canonical signal (~1433 witnesses at v0.5.2).
+    // d=2: the canonical signal (~1433 witnesses).
     group.throughput(Throughput::Elements(1));
     group.bench_function(BenchmarkId::from_parameter(2u32), |bencher| {
         bencher.iter(|| {
@@ -297,7 +294,7 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     //
     // d=3: borderline. Shrink sample count + warmup so the group cannot
     // overshoot the 60s wall budget. If d=3 still pushes 30s+ on a
-    // first-walk machine, surface that to path-γ reviewers (and consider
+    // first-walk machine, surface that in a follow-up (and consider
     // dropping the d=3 BoolRig variant in favour of d=2 only — see the
     // module rustdoc note above).
     group.sample_size(10);
@@ -331,7 +328,7 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
 // multiplication path. This is a deliberate "fast-but-degenerate" choice
 // — for an authentic F64-arithmetic signal the samples would be
 // `{2.0, 3.0}` (producing 4 fresh atoms `{4, 6, 6, 9}` that force the CC
-// engine through real work). Folded to v0.7.0 FORWARD-LOOK A-1 as the
+// engine through real work). A future addition would be the
 // natural place to expose a non-degenerate algebraic-structure dimension
 // via a Tropical bench group (idempotent additive + free multiplicative —
 // a structurally different rig from both BoolRig + F64Rig).

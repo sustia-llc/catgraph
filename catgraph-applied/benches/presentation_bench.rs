@@ -15,13 +15,9 @@
 //!   unitors, interchange, braid naturality, σ²=id) without consulting user
 //!   equations.
 //!
-//! Closes path γ v0.6.0 A-3 from
-//! `catgraph-applied/.claude/docs/BENCHES-COVERAGE.md` — third new bench
-//! file in the v0.6.1 debt-closure patch (after `mat_ops_bench.rs` at SHA
-//! `32cdfb2` and `functor_bench.rs` from T6). Inherits the T5/T6 bench-file
-//! precedents (`std::hint::black_box`, `drop(black_box(...))` for
-//! `Result`-returning hot-path calls, module-level imports, per-file `SEED`
-//! constant).
+//! Follows the workspace bench-file conventions (`std::hint::black_box`,
+//! `drop(black_box(...))` for `Result`-returning hot-path calls,
+//! module-level imports, per-file `SEED` constant).
 //!
 //! ## Feature-gating
 //!
@@ -51,8 +47,8 @@
 //! resolves a `TermId`'s union-find class to its preferred atom member
 //! (lowest-`node_kind`, smallest `TermId`). The naive implementation is
 //! `O(n)` per call (linear scan over `reverse` filtering by `find`); calling
-//! it from inside the v0.5.2 `smc_refine` fixpoint contributes the
-//! `O(n²)/n³` perf-tail that the CHANGELOG line 189 TODO calls out. This
+//! it from inside the `smc_refine` fixpoint contributes the
+//! `O(n²)/n³` perf-tail called out as a deferred atom-canonical TODO. This
 //! group quantifies that tail at three problem sizes (`n ∈ {32, 64, 128}`)
 //! so a future Knuth-Bendix completion run + KB-vs-Functorial decision can
 //! cite a measured baseline rather than a back-of-envelope estimate.
@@ -88,11 +84,11 @@
 //!
 //! ## Reproducibility
 //!
-//! Per-file `SEED = 0xCAFE_BABE_DEAD_BEEF` (T5 precedent). The fixtures
+//! Per-file `SEED = 0xCAFE_BABE_DEAD_BEEF`. The fixtures
 //! here are largely constructive (no randomised sampling), but the seed
 //! is retained as a documented handle for any future randomised-fixture
 //! additions and to keep the file-level seed convention uniform across the
-//! v0.6.1 bench triad.
+//! bench files.
 //!
 //! [`CongruenceClosure::atom_canonical_for_bench`]: catgraph_applied::prop::presentation::kb::CongruenceClosure::atom_canonical_for_bench
 
@@ -111,12 +107,12 @@ mod inner {
 
     /// Per-file seed. Documented in the module rustdoc as the file-level seed
     /// handle; currently unused (this file's fixtures are deterministic
-    /// constructive walks) but retained to keep the T5/T6 precedent uniform
-    /// across the v0.6.1 bench triad. Path-γ reviewers: flag if any future
-    /// randomised-fixture group is added that does NOT thread this seed.
+    /// constructive walks) but retained to keep the seed convention uniform
+    /// across the bench files. Flag if any future randomised-fixture group is
+    /// added that does NOT thread this seed.
     #[expect(
         dead_code,
-        reason = "T5/T6 precedent placeholder for future randomised fixtures; see file-level rustdoc Reproducibility section"
+        reason = "placeholder for future randomised fixtures; see file-level rustdoc Reproducibility section"
     )]
     const SEED: u64 = 0xCAFE_BABE_DEAD_BEEF;
 
@@ -140,7 +136,7 @@ mod inner {
     /// `BoolRig` is the smallest rig that exercises all 16 equations + scalar
     /// substitutions; `rig_samples = [true, false]` provides two distinct
     /// scalars without combinatorial blow-up (compare with `F64Rig`, which
-    /// the T6 `functor_bench` reserves to `d=2` only for the same reason).
+    /// the `functor_bench` reserves to `d=2` only for the same reason).
     fn build_eq_mod_fixture_pairs() -> Vec<BoolEqPair> {
         let pres = matr_presentation::<BoolRig>(&[BoolRig(true), BoolRig(false)])
             .expect("matr_presentation: hardcoded equations are arity-correct by construction");
@@ -232,7 +228,7 @@ mod inner {
             bencher.iter(|| {
                 for (lhs, rhs) in &pairs {
                     // `eq_mod` is `Result<Option<bool>, _>`-returning + hot
-                    // path; T5/T6 precedent — `drop(black_box(...))` for
+                    // path; the bench-file precedent — `drop(black_box(...))` for
                     // anti-elision.
                     drop(black_box(pres.eq_mod(black_box(lhs), black_box(rhs))));
                 }
@@ -316,7 +312,7 @@ mod inner {
 
     // -----------------------------------------------------------------------
     // Group 4 — `presentation::atom_canonical_n{32, 64, 128}` (private-shim
-    // bench; closes v0.5.2 CHANGELOG line 189 O(n²)/n³ TODO)
+    // bench for the O(n²)/n³ atom-canonical perf-tail)
     // -----------------------------------------------------------------------
 
     pub(super) fn bench_atom_canonical(c: &mut Criterion) {
@@ -350,7 +346,7 @@ mod inner {
                     // Re-seed inside the iter to avoid amortising
                     // construction cost across iterations. The construction
                     // cost dominates for small `n`; the `atom_canonical`
-                    // call is what we *want* to measure, so reviewers:
+                    // call is what we *want* to measure. Note that
                     // criterion's HTML report's "mean" includes the
                     // construction. For a future regression-guard run,
                     // compute the construction-vs-shim ratio by comparing
@@ -361,7 +357,7 @@ mod inner {
                     let id = engine.add_term_for_bench(&probe);
                     // The shim returns `Option<Node<G>>`. `Node<G>` for
                     // `G = SfgGenerator<BoolRig>` is non-Drop (BoolRig is
-                    // Copy), so the T5 `drop(black_box(...))` precedent
+                    // Copy), so the `drop(black_box(...))` precedent
                     // doesn't apply (clippy::drop_non_drop). Black-box the
                     // return directly — the bencher loop's iteration
                     // boundary already serves as the anti-elision fence.

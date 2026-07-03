@@ -11,11 +11,11 @@
 //! Higher-arity `copy_n : 1 → n` and `discard_n : n → 0` are provided as
 //! **derived** free functions (iterated composition / tensor), not primitive
 //! generators. This keeps [`SfgSignature`] aligned with F&S `G_R` exactly and
-//! keeps the Thm 5.60 equation set (v0.5.x work) defined on primitives.
+//! keeps the Thm 5.60 equation set defined on primitives.
 //!
 //! ## Trait-bound story
 //!
-//! As of v0.5.1 [`PropSignature`] requires `Clone + PartialEq + Eq + Hash +
+//! [`PropSignature`] requires `Clone + PartialEq + Eq + Hash +
 //! Debug`. [`SfgGenerator<R>`] derives all five uniformly and therefore
 //! requires `R: Rig + Eq + Hash + Debug`. All four shipped rigs
 //! ([`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
@@ -34,8 +34,8 @@ use crate::{
 ///
 /// Parameterised over the rig `R` so that `Scalar(r)` ranges over `R`-values.
 ///
-/// The `Eq + Hash` bounds on `R` are required (via the v0.5.1 `PropSignature`
-/// widening) by the congruence-closure decision procedure. All four shipped
+/// The `Eq + Hash` bounds on `R` are required (via the `PropSignature`
+/// `Eq + Hash` bounds) by the congruence-closure decision procedure. All four shipped
 /// rig instances — [`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
 /// [`crate::rig::Tropical`], [`crate::rig::F64Rig`] — satisfy both; the three
 /// `f64`-wrapping rigs provide manual `Eq + Hash` via bit-exact `to_bits()`.
@@ -84,7 +84,7 @@ pub struct SfgSignature<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'stati
 /// the 5 primitive generators plus identity / braid / composition / tensor.
 ///
 /// Equality is the structural equality inherited from [`PropExpr`]; the
-/// F&S Thm 5.60 quotient (matrix equivalence of signal-flow graphs) is v0.5.x
+/// F&S Thm 5.60 quotient (matrix equivalence of signal-flow graphs) is
 /// presentation-layer work.
 #[derive(Clone, Debug)]
 pub struct SignalFlowGraph<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(

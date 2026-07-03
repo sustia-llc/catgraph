@@ -164,7 +164,7 @@ impl<Lambda: Eq + Sized + Debug + Copy> Corel<Lambda> {
     /// Implementation: union-find over domain ⊔ self-middle ⊔ other-middle ⊔ codomain,
     /// seeded by both cospans' leg maps.
     ///
-    // TODO(perf): parallelize the per-root class-extraction loops (dom + cod) via
+    // TODO(perf, #37): parallelize the per-root class-extraction loops (dom + cod) via
     // `rayon_cond::CondIterator` once hot-path workload warrants it. Union-find
     // itself stays sequential (path compression mutates during `.find`), but the
     // extraction is embarrassingly parallel once the UF is built. Re-evaluate

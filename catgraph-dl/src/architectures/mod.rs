@@ -12,10 +12,10 @@
 //! | Full RNN (Mealy)   | `I → O × −`          | Coalgebra    |
 //! | Moore Machine NN   | `O × (I → −)`        | Coalgebra    |
 //!
-//! ## Phase DL-1 scaffold → DL-2 Agent E unrollers
+//! ## Unrollers
 //!
-//! DL-1 landed typed wrappers; DL-2 Agent E adds the **unrolling**
-//! methods that turn a `cell` into a function over the corresponding
+//! Beyond the typed wrappers, each type has an **unrolling**
+//! method that turns a `cell` into a function over the corresponding
 //! inductive/coinductive carrier (CDL Remark 2.13 / Example J.2 / J.3 /
 //! J.4):
 //!

@@ -123,7 +123,7 @@ where
     ///
     /// Identical to threading through the explicit μ on the actegory `C`.
     /// For `C = SetActegory` this is the tuple-action μ:
-    /// `μ((q, p), x) = (q, (p, x))`. v0.4.0 widens from the v0.3.x
+    /// `μ((q, p), x) = (q, (p, x))`. The current API widens from the earlier
     /// `SetActegory`-bound impl; the body is structurally agnostic.
     ///
     /// # Type parameters

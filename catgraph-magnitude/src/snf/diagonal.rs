@@ -10,7 +10,7 @@
 //! `events555/modularsnf` at SHA `d62535e`
 //! (`crates/modularsnf/src/diagonal.rs` and `crates/modularsnf/src/snf.rs`).
 //!
-//! Storage is `Vec<Vec<i64>>` (workspace stays ndarray-free per design doc §2.4).
+//! Storage is `Vec<Vec<i64>>` (workspace stays ndarray-free).
 //!
 //! # Algorithm overview (diagonal → Smith)
 //!
@@ -59,8 +59,8 @@
 //! `left_apply_block_pair`, `right_apply_block_pair`, `is_snf_block_zero`, `get_rank`)
 //! mirror the same names in `snf::band`. They are deliberately re-ported
 //! locally rather than de-duplicated across modules: [`snf::band`]'s helpers
-//! are kept private per the Task 14 code-quality review (encapsulation
-//! finding), and cross-module helper sharing at this layer would couple two
+//! are kept private for encapsulation, and cross-module helper sharing at
+//! this layer would couple two
 //! paper-faithful ports that may diverge in future maintenance.
 //!
 //! [`snf::band`]: crate::snf::band
@@ -442,8 +442,7 @@ fn merge_scalars(a: i64, b: i64, n: i64) -> (Vec<Vec<i64>>, Vec<Vec<i64>>, Vec<V
 
     // V is unimodular: det(V) = 1·(1 + q) − q·1 = 1 (mod n). Mirrors the
     // Storjohann §7.10 column-operation form used by upstream `events555/modularsnf`.
-    // Confirmed by `verify_snf_invariants` in the test suite (Phase G code-quality
-    // reviewer M-1).
+    // Confirmed by `verify_snf_invariants` in the test suite.
     let v_arr = vec![vec![1i64, q], vec![1i64, posmod(1 + q, n)]];
 
     // S = U · diag(a, b) · V.
@@ -559,7 +558,7 @@ fn right_apply_block_pair(
 ///
 /// **Caller contract.** Only sound on inputs that are SNF blocks (or on
 /// rectangular sub-blocks where the SNF divisibility chain has been
-/// established). Renamed v0.3.1 from `is_zero` per Phase G rust-dev-v2 M-4 —
+/// established). Renamed from `is_zero` —
 /// the prior name was a generic "is the block zero?" check that would
 /// silently produce wrong answers if reused on non-SNF blocks.
 fn is_snf_block_zero(arr: &[Vec<i64>], n: i64) -> bool {
@@ -643,7 +642,7 @@ pub(crate) fn bidiagonal_to_smith(
 }
 
 /// Test-only re-export for integration testing of the `pub(crate)` SNF interior.
-/// Hidden from public docs; not part of the v0.3.0 stable API.
+/// Hidden from public docs; not part of the stable API.
 #[doc(hidden)]
 #[must_use]
 pub fn bidiagonal_to_smith_for_testing(
@@ -893,7 +892,7 @@ fn bidiag_step4_smith_on_n_minus_1(
 #[must_use]
 #[allow(
     clippy::too_many_lines,
-    reason = "Storjohann §7.12 fuses steps 5-8 deliberately — they share idx_k + t + u + v mutable state through a single loop body; splitting forces tuple-passing of four mut refs plus additional Vec allocations on each step boundary. v0.4.0 forward-look §1.7 documents the deliberate non-split."
+    reason = "Storjohann §7.12 fuses steps 5-8 deliberately — they share idx_k + t + u + v mutable state through a single loop body; splitting forces tuple-passing of four mut refs plus additional Vec allocations on each step boundary. The non-split is deliberate."
 )]
 fn bidiag_step5_to_8_gcd_chain(
     a: &[Vec<i64>],
@@ -956,17 +955,16 @@ fn bidiag_step5_to_8_gcd_chain(
             // Storjohann §7.10 guarantees the loop finds a witness; the `c = 0`
             // initialization is a mathematical no-op fallback (row[i] += 0·row[i+1]).
             //
-            // **Performance note (Phase G code-quality M-2):** the search is
+            // **Performance note:** the search is
             // O(n) worst-case over the rank-recovery prime modulus (up to
             // `2^31 − 1`). In the rank-recovery-prime regime invoked by
             // `magnitude_homology_rank`, the witness is typically found at
             // very small `c` (often `c = 0` when `target_gcd == gcd(a_ik, a_ii)`,
             // a frequent case for sparse `±1`/`0` boundary matrices). Worst-case
-            // O(n) is acceptable for v0.3.0 fixture sizes (n ≤ 5,
+            // O(n) is acceptable for the shipped fixture sizes (n ≤ 5,
             // boundary-matrix dimensions ≤ 60); a release-build bounded search
-            // is candidate for v0.4.0 forward-look §1.18 if larger fixtures
-            // surface. The `debug_assert` below validates the precondition in
-            // dev builds.
+            // is a candidate if larger fixtures surface. The `debug_assert`
+            // below validates the precondition in dev builds.
             let target_gcd = gcd_three(a_ik, gcd_three(a_i1k, a_ii, n), n);
             let mut c: i64 = 0;
             let mut found = false;

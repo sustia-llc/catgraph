@@ -1,17 +1,14 @@
 //! Magnitude-homology rank recovery + BV 2025 Prop 3.14 acceptance gate.
 //!
-//! v0.4.0 §1.12 split: the Phase B substrate (LS 2017 §2 chain complex
-//! materialisation — [`Chain`](super::Chain), [`enumerate_chains`](super::enumerate_chains),
-//! [`ChainIndex`], [`boundary_matrix`]) lives in [`super`]; the Phase E
-//! rank-recovery + acceptance machinery lives here. Prior to v0.4.0 both
-//! were colocated in a single `chain_complex.rs`.
+//! Module split: the chain-complex substrate (LS 2017 §2 materialisation —
+//! [`Chain`](super::Chain), [`enumerate_chains`](super::enumerate_chains),
+//! [`ChainIndex`], [`boundary_matrix`]) lives in [`super`]; the
+//! rank-recovery + acceptance machinery lives here.
 //!
-//! ## v0.4.0 §1.21 widening
+//! ## Rig widening
 //!
 //! [`IntegerLikeRig`] parameterizes the rank-recovery surface over both
-//! `F64Rig` (carries-forward v0.3.x) and `Z(BigInt)` (new in v0.4.0).
-//! T8 lifted the v0.3.x F64Rig-mono code verbatim into this submodule;
-//! T9 widens via the [`IntegerLikeRig`] trait. Existing `F64Rig` callers
+//! `F64Rig` and `Z(BigInt)`. Existing `F64Rig` callers
 //! compile unchanged via the blanket impl; `magnitude_homology_rank::<Z>`
 //! and `euler_char_identity_at::<F64Rig>` produce identical ranks on
 //! identical inputs.
@@ -25,11 +22,10 @@ use catgraph_applied::z::Z;
 use super::{ChainIndex, boundary_matrix};
 use crate::weighted_cospan::NodeId;
 
-/// Rank-recovery primes (locked Phase E pre-flight 2026-05-08): primary
-/// Mersenne `2^31 − 1`, secondary cross-check, tertiary fallback. All three
-/// are large primes near `i64::MAX/2` so divisibility by any small integer
-/// invariant factor is vanishingly unlikely. Multi-prime CRT reconstruction
-/// is deferred to v0.4.0 forward-look §1.10.
+/// Rank-recovery primes: primary Mersenne `2^31 − 1`, secondary cross-check,
+/// tertiary fallback. All three are large primes near `i64::MAX/2` so
+/// divisibility by any small integer invariant factor is vanishingly
+/// unlikely. Multi-prime CRT reconstruction is deferred (#35).
 const RANK_RECOVERY_PRIMES: [i64; 3] = [
     2_147_483_647, // primary — Mersenne 2^31 − 1
     2_147_483_629, // secondary — cross-check
@@ -40,18 +36,17 @@ const RANK_RECOVERY_PRIMES: [i64; 3] = [
 /// rank-recovery interior of [`magnitude_homology_rank`] and
 /// [`euler_char_identity_at`].
 ///
-/// Replaces the v0.3.x private `type RankQ = F64Rig;` alias. Existing
+/// Replaces a private `type RankQ = F64Rig;` alias. Existing
 /// `F64Rig` callers continue to compile unchanged via the blanket impl;
-/// `Z(BigInt)` becomes a first-class rank-recovery rig in v0.4.0.
+/// `Z(BigInt)` is a first-class rank-recovery rig.
 ///
 /// ## Why a trait, not a type alias
 ///
-/// The v0.3.x rank-recovery path silently coerced any `Rig` argument to
-/// `F64Rig` because the private `snf_rank_over_zp` helper read the
-/// `F64Rig` tuple-struct field `x.0` directly. v0.4.0 §1.17 introduces
-/// [`Z(BigInt)`](Z) as a second integer-exact rig (Leinster 2008 Cor 1.5
-/// substrate); the trait lets both share the rank-recovery interior
-/// without runtime branching.
+/// A type alias would coerce any `Rig` argument to `F64Rig`, since the
+/// private `snf_rank_over_zp` helper reads the `F64Rig` tuple-struct field
+/// `x.0` directly. With [`Z(BigInt)`](Z) as a second integer-exact rig
+/// (Leinster 2008 Cor 1.5 substrate), the trait lets both share the
+/// rank-recovery interior without runtime branching.
 ///
 /// ## Fallibility
 ///
@@ -60,29 +55,28 @@ const RANK_RECOVERY_PRIMES: [i64; 3] = [
 /// carry only `±1` or `0` (LS 2017 Def 2.5 alternating-sum face map),
 /// so the fallible signature defends against future regressions (e.g.
 /// a magnitude-homology fixture that builds non-binary boundary entries)
-/// rather than guarding the v0.4.0 shipped path.
+/// rather than guarding the shipped path.
 ///
-/// ## Forward-look (§1.21)
+/// ## Forward-look
 ///
-/// Multi-prime CRT (v0.4.0 forward-look §1.10) extends the
-/// rank-recovery interior to multi-prime reconstruction; the
-/// [`IntegerLikeRig`] surface is the natural seam for that work.
+/// Multi-prime CRT extends the rank-recovery interior to multi-prime
+/// reconstruction; the [`IntegerLikeRig`] surface is the natural seam for
+/// that work.
 ///
 /// ## Bounds
 ///
-/// `Rig` already entails `Clone`; the explicit `+ Clone` from the original
-/// design doc would have been redundant and obscured the actual added bound
-/// (`From<i64>`). `'static` was likewise unnecessary — no callee in the
-/// rank-recovery interior boxes or downcasts `Q`, so removing it leaves
-/// room for borrowed-arena rigs (e.g. a `&'a BigInt` arena rig in v0.5.0+).
-/// Both tightenings applied T9 M-1 ride-along per code-quality review.
+/// `Rig` already entails `Clone`; an explicit `+ Clone` would be
+/// redundant and would obscure the actual added bound (`From<i64>`).
+/// `'static` is likewise unnecessary — no callee in the rank-recovery
+/// interior boxes or downcasts `Q`, so omitting it leaves room for
+/// borrowed-arena rigs (e.g. a `&'a BigInt` arena rig).
 pub trait IntegerLikeRig: Rig + From<i64> {
     /// Convert to an `i64` for the SNF-mod-p rank-recovery interior.
     ///
     /// # Errors
     ///
     /// Returns [`CatgraphError::Composition`] if the value exceeds `i64`
-    /// range. Boundary-matrix entries are bounded `±1` or `0` on v0.4.0
+    /// range. Boundary-matrix entries are bounded `±1` or `0` on the shipped
     /// fixtures, so the error path defends against future regressions.
     fn to_i64(&self) -> Result<i64, CatgraphError>;
 }
@@ -97,7 +91,7 @@ impl IntegerLikeRig for F64Rig {
         debug_assert!(
             (self.0 - self.0.round()).abs() < 1e-9,
             "F64Rig::to_i64: non-integer-valued boundary entry {} would be silently rounded; \
-             a future fixture has broken the v0.4.0 ±1/0 invariant",
+             a future fixture has broken the ±1/0 invariant",
             self.0
         );
         #[allow(
@@ -115,7 +109,7 @@ impl IntegerLikeRig for Z {
             message: format!(
                 "Z value {} exceeds i64 range; rank-recovery interior requires \
                  i64-fitting boundary entries (typically ±1). Escalate to a \
-                 BigInt-native rank path (v0.5.0 forward-look).",
+                 BigInt-native rank path.",
                 self.0
             ),
         })
@@ -127,11 +121,11 @@ impl IntegerLikeRig for Z {
 ///
 /// Computes `rank(B mod p) over Z/p` for the primary Mersenne prime; cross-
 /// checks against a secondary large prime; on disagreement, falls through to
-/// a tertiary prime. For all magnitude-homology fixtures shipped in v0.3.0,
+/// a tertiary prime. For all shipped magnitude-homology fixtures,
 /// the primary prime is sufficient — the cross-check exists to catch
 /// pathological matrices where invariant factors happen to be divisible by
 /// `2^31 − 1`. Multi-prime CRT reconstruction (full integer invariant-factor
-/// recovery, not just rank) is deferred to v0.4.0 §1.10.
+/// recovery, not just rank) is deferred (#35).
 ///
 /// Computes: `rank(H_{k,ℓ}) = cols(∂_k) − rank(∂_k) − rank(∂_{k+1})`.
 ///
@@ -145,7 +139,7 @@ impl IntegerLikeRig for Z {
 /// - Boundary-matrix construction failure (length-grade tolerance issue).
 /// - All three rank-recovery primes disagree on at least one boundary
 ///   matrix's rank (vanishingly unlikely on representative fixtures; if it
-///   fires, escalate to v0.4.0 §1.10 multi-prime CRT path).
+///   fires, escalate to the multi-prime CRT path).
 pub fn magnitude_homology_rank<Q: IntegerLikeRig>(
     idx: &ChainIndex,
     space: &LawvereMetricSpace<NodeId>,
@@ -185,7 +179,7 @@ fn snf_rank_with_cross_check<Q: IntegerLikeRig>(m: &MatR<Q>) -> Result<usize, Ca
         message: format!(
             "magnitude_homology_rank: all three rank-recovery primes disagree: \
              ranks {r0}, {r1}, {r2} on primes {}, {}, {}; escalate to \
-             multi-prime CRT (v0.4.0 forward-look §1.10)",
+             multi-prime CRT",
             RANK_RECOVERY_PRIMES[0], RANK_RECOVERY_PRIMES[1], RANK_RECOVERY_PRIMES[2],
         ),
     })
@@ -199,13 +193,11 @@ fn snf_rank_with_cross_check<Q: IntegerLikeRig>(m: &MatR<Q>) -> Result<usize, Ca
 /// # Errors
 ///
 /// - [`CatgraphError::Composition`] if an entry exceeds `i64` range via
-///   [`IntegerLikeRig::to_i64`] (shouldn't fire on v0.4.0 boundary
+///   [`IntegerLikeRig::to_i64`] (shouldn't fire on the boundary
 ///   matrices, where entries are bounded `±1` or `0`).
-/// - Propagates [`CatgraphError`] from [`crate::snf::smith_normal_form`] —
-///   originally a `panic!` (v0.3.0); converted to `?` propagation in v0.3.1
-///   per Phase G reviewer findings (rust-dev-v2 I-1, code-quality I-2). The
-///   internal preconditions (positive prime `p` from `RANK_RECOVERY_PRIMES`,
-///   rectangular `a`) hold by construction in v0.3.0, so this `Result` is
+/// - Propagates [`CatgraphError`] from [`crate::snf::smith_normal_form`].
+///   The internal preconditions (positive prime `p` from `RANK_RECOVERY_PRIMES`,
+///   rectangular `a`) hold by construction, so this `Result` is
 ///   always `Ok` on shipped fixtures; the error path exists to defend against
 ///   future regressions in `smith_normal_form` (e.g. tightened modulus
 ///   preconditions, integer-overflow rewrites).
@@ -237,12 +229,12 @@ fn snf_rank_over_zp<Q: IntegerLikeRig>(m: &MatR<Q>, p: i64) -> Result<usize, Cat
 
 /// BV 2025 Prop 3.14 acceptance gate.
 ///
-/// **Mixed parametricity (v0.4.0 §1.21):** the structural rank-recovery path
+/// **Mixed parametricity:** the structural rank-recovery path
 /// is parameterised over `Q: IntegerLikeRig`, but the numerical path always
 /// runs through `crate::magnitude::magnitude::<F64Rig>` — the matrix-inverse
 /// Möbius requires `Ring + Div + From<f64>`, strictly narrower than
-/// `IntegerLikeRig`. Q-typed numerical computation folds forward to v0.4.0
-/// §1.10 (multi-prime CRT). Both invocations of `euler_char_identity_at::<F64Rig>`
+/// `IntegerLikeRig`. Q-typed numerical computation is deferred
+/// (multi-prime CRT). Both invocations of `euler_char_identity_at::<F64Rig>`
 /// and `euler_char_identity_at::<Z>` therefore return `(f64, f64)` with the
 /// same numerical second component.
 ///
@@ -253,13 +245,12 @@ fn snf_rank_over_zp<Q: IntegerLikeRig>(m: &MatR<Q>, p: i64) -> Result<usize, Cat
 ///   Prop 3.14 statement reads `Mag(tM) = Σ_ℓ q^ℓ · Σ_k (−1)^k · rank(H_{k,ℓ}(M))`
 ///   with `q = e^(−t)`; because the space is pre-scaled by `t`, the weight
 ///   `q^ℓ_orig = e^(−t · ℓ_orig)` collapses to `e^(−ℓ_scaled)` in our pre-
-///   scaled coordinates. (Citation refinement v0.3.1 per Phase G paper-audit
-///   M-2; cross-link to Leinster–Shulman 2017 Theorem 3.5 / Cor 7.15 for the
-///   metric-space specialisation directly used here.)
-/// - `via_magnitude = Mag(tM)` via the existing v0.1.x
+///   scaled coordinates. (Cross-link to Leinster–Shulman 2017 Theorem 3.5 /
+///   Cor 7.15 for the metric-space specialisation directly used here.)
+/// - `via_magnitude = Mag(tM)` via
 ///   [`crate::magnitude::magnitude`] (chain-sum Möbius value when ζ is
 ///   invertible). **Note:** this is NOT [`crate::mobius_chains::chain_count_signed_graded`]
-///   (renamed v0.4.0 §1.19 from `mobius_chains_graded`), which is a per-grade
+///   (renamed from `mobius_chains_graded`), which is a per-grade
 ///   chain-count diagnostic that does not weight by `e^(−ℓ)`; see that
 ///   function's rustdoc for the reconciliation.
 ///
@@ -284,8 +275,7 @@ fn snf_rank_over_zp<Q: IntegerLikeRig>(m: &MatR<Q>, p: i64) -> Result<usize, Cat
 /// iteration so each ∂_k is built and SNF'd exactly once per `(k, ℓ)`
 /// cell. This bypasses [`magnitude_homology_rank`], which would otherwise
 /// rebuild ∂_k twice per outer iteration (once as ∂_k at step `k`, once
-/// as ∂_{k+1} at step `k − 1`). ~2× SNF speedup over the naïve loop;
-/// absorbs v0.4.0 forward-look §1.15.
+/// as ∂_{k+1} at step `k − 1`). ~2× SNF speedup over the naïve loop.
 ///
 /// # Errors
 ///
@@ -372,13 +362,13 @@ pub fn euler_char_identity_at<Q: IntegerLikeRig>(
         via_hom += (-ell).exp() * alt_f;
     }
 
-    // Numerical path: existing v0.1.x `magnitude::magnitude`. Pass `t = 1.0`
+    // Numerical path: `magnitude::magnitude`. Pass `t = 1.0`
     // because the space is already pre-scaled by t. Stays `F64Rig`-mono here
     // because the matrix-inverse Möbius path requires `Ring + Div + From<f64>`,
-    // a strictly narrower bound than `IntegerLikeRig` (the §1.21 widening only
+    // a strictly narrower bound than `IntegerLikeRig` (the rig widening only
     // touches the SNF-mod-p rank-recovery interior, not the numerical
-    // magnitude path). Parameterizing the numerical path over `Q` is folded
-    // into v0.4.0 forward-look as a §1.10 multi-prime CRT prerequisite.
+    // magnitude path). Parameterizing the numerical path over `Q` is a
+    // deferred multi-prime CRT prerequisite.
     let via_mag = crate::magnitude::magnitude::<F64Rig>(&scaled, 1.0)
         .map(|q| q.0)
         .map_err(|e| CatgraphError::Composition {

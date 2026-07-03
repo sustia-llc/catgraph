@@ -6,8 +6,8 @@
 //! License notice: this file is a port of Apache-2.0-licensed code from
 //! `events555/modularsnf` at SHA `d62535e`.
 //!
-//! Storage is `Vec<Vec<i64>>` (workspace stays ndarray-free per design doc §2.4);
-//! `MatR<Q>` interop happens at the SNF public boundary in Task 17.
+//! Storage is `Vec<Vec<i64>>` (workspace stays ndarray-free);
+//! `MatR<Q>` interop happens at the SNF public boundary.
 
 #![allow(
     clippy::many_single_char_names,
@@ -20,7 +20,7 @@ use crate::snf::zmod::{div, gcd_three, posmod, posmod_i128};
 
 /// Construct the `n × n` identity matrix as `Vec<Vec<i64>>`.
 ///
-/// Reused by `snf::band` (Task 14) for padded-matrix initialization in
+/// Reused by `snf::band` for padded-matrix initialization in
 /// `band_reduction`; promoted to `pub(crate)` over a separate `matrix_ops`
 /// module since the surface area does not yet justify one.
 #[inline]
@@ -140,7 +140,7 @@ pub fn lemma_3_1(a: &[Vec<i64>], n: i64) -> (Vec<Vec<i64>>, Vec<Vec<i64>>, usize
 /// Returns `(U, T)` where `U · A ≡ T (mod n)` and the strictly-upper part of
 /// the leading `k × k` block has been reduced modulo the diagonal entries.
 ///
-/// Used by Task 14 / `snf::band` for Storjohann Lemma 7.3 band reduction.
+/// Used by `snf::band` for Storjohann Lemma 7.3 band reduction.
 ///
 /// Mirrors `modularsnf::echelon::index1_reduce_on_columns`.
 #[must_use]

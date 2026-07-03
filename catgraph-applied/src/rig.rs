@@ -22,8 +22,8 @@
 //!   language categories; magnitude computations (BV 2025) use the
 //!   embedding into ℝ rather than the Rig axioms directly.
 //! - [`Tropical`] — min-plus semiring `([0,∞], min, +, +∞, 0)`. Used for
-//!   magnitude homology and as the Lawvere-metric enrichment base
-//!   (v0.5.1); `d = -ln π` converts `UnitInterval → Tropical`.
+//!   magnitude homology and as the Lawvere-metric enrichment base;
+//!   `d = -ln π` converts `UnitInterval → Tropical`.
 //! - [`F64Rig`] — plain real rig for `Mat(R)` and `SFG_R` demos.
 //!
 //! Primitive integer and float types are rigs via the blanket impl, since
@@ -36,8 +36,8 @@
 //! # `Eq + Hash` on `f64`-wrapping rigs
 //!
 //! [`UnitInterval`], [`Tropical`], and [`F64Rig`] manually implement `Eq` and
-//! `Hash` via bit-exact `f64::to_bits()`. This is required by the v0.5.1
-//! [`PropSignature`](crate::prop::PropSignature) supertrait widening:
+//! `Hash` via bit-exact `f64::to_bits()`. This is required by the
+//! [`PropSignature`](crate::prop::PropSignature) `Eq + Hash` supertrait bounds:
 //! [`SfgGenerator<R>`](crate::sfg::SfgGenerator) now requires `R: Eq + Hash`,
 //! and the [`prop::presentation::kb::CongruenceClosure`](crate::prop::presentation::kb::CongruenceClosure)
 //! term graph uses `SfgGenerator<R>` as a `HashMap` key. NaN caveats inherit
@@ -168,7 +168,7 @@ impl Mul for UnitInterval {
 }
 
 // Bit-exact `Eq + Hash` for use as a `HashMap` key in the congruence-closure
-// term graph (v0.5.1 `PropSignature: Eq + Hash` widening). NaN caveats
+// term graph (`PropSignature: Eq + Hash` bound). NaN caveats
 // inherit from `PartialEq`; [`UnitInterval::new`] rejects NaN on construction.
 impl Eq for UnitInterval {}
 impl std::hash::Hash for UnitInterval {
@@ -180,7 +180,7 @@ impl std::hash::Hash for UnitInterval {
 /// Tropical (min-plus) semiring over `[0, ∞]`, with `+∞` as the additive
 /// zero and `0` as the multiplicative unit. Represents Lawvere metric-space
 /// distances directly; use as the enrichment base for
-/// `LawvereMetricSpace<T>` (v0.5.1).
+/// `LawvereMetricSpace<T>`.
 ///
 /// Axioms: `(min, +∞)` is commutative monoid; `(+, 0)` is commutative monoid;
 /// `+` distributes over `min`; `+∞ + x = +∞` (absorbing).
@@ -224,7 +224,7 @@ impl Mul for Tropical {
 }
 
 // Bit-exact `Eq + Hash` for use as a `HashMap` key in the congruence-closure
-// term graph (v0.5.1 `PropSignature: Eq + Hash` widening). NaN caveats
+// term graph (`PropSignature: Eq + Hash` bound). NaN caveats
 // inherit from `PartialEq`.
 impl Eq for Tropical {}
 impl std::hash::Hash for Tropical {
@@ -274,9 +274,9 @@ impl Mul for F64Rig {
     }
 }
 
-// Ring + field operations on `F64Rig` (added 2026-04-25 as a prerequisite
-// for catgraph-magnitude v0.1.0). `F64Rig` is the only `Ring + Div`-bounded
-// rig in the workspace; `mobius_function::<F64Rig>` (Phase 6A.2) needs all
+// Ring + field operations on `F64Rig`, a prerequisite for the
+// catgraph-magnitude Möbius path. `F64Rig` is the only `Ring + Div`-bounded
+// rig in the workspace; `mobius_function::<F64Rig>` needs all
 // four of `Neg`, `Sub`, `Div`, and `From<f64>`. The ring/field bound stays
 // off `Rig` itself — these impls live only on `F64Rig` (and any future
 // real-valued rig that elects to adopt them).
@@ -310,7 +310,7 @@ impl From<f64> for F64Rig {
 impl From<i64> for F64Rig {
     /// Convert a signed integer to `F64Rig`. Used by
     /// `catgraph-magnitude`'s `boundary_matrix` to lift `(-1)^i` signs into
-    /// the rig. **v0.5.5 addition.**
+    /// the rig.
     ///
     /// Note: `i64` values exceeding 2^53 lose precision in `f64`; the SNF
     /// call sites use only `±1`, so this is not a concern in practice.
@@ -321,7 +321,7 @@ impl From<i64> for F64Rig {
 }
 
 // Bit-exact `Eq + Hash` for use as a `HashMap` key in the congruence-closure
-// term graph (v0.5.1 `PropSignature: Eq + Hash` widening). NaN caveats
+// term graph (`PropSignature: Eq + Hash` bound). NaN caveats
 // inherit from `PartialEq`.
 impl Eq for F64Rig {}
 impl std::hash::Hash for F64Rig {
