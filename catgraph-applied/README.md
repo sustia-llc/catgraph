@@ -28,7 +28,7 @@ This crate packages applied-CT modules that build on catgraph's strict Fong-Spiv
 | `sfg_to_mat` | `sfg_to_mat` functor `S: SFG_R → Mat(R)` (F&S Thm 5.53) |
 | `graphical_linalg` | `matr_presentation<R>` — 16-equation Thm 5.60 presentation of Mat(R) (F&S §5.4; closed via the Functorial engine — see `prop::presentation::functorial`) |
 | `mat_f64` (feature `f64-rig`) | nalgebra bridge for `MatR<F64Rig>`: determinant, inverse, `DMatrix` roundtrip |
-| `prop::presentation::kb` | Congruence-closure decision procedure (DST 1980 signature-table variant) — the default `eq_mod` backend, with an atom-canonical `smc_refine` fixpoint (~44% BoolRig d=2 collision reduction) |
+| `prop::presentation::kb` | Congruence-closure decision procedure (DST 1980 signature-table variant) — the default `eq_mod` backend, with an atom-canonical `smc_refine` fixpoint (BoolRig d=2 collisions 2574 → 1433 → 1301 post-#14, ~49%) |
 | `prop::presentation::smc_nf` | Layer 1 Joyal-Street string-diagram normal form — canonicalizes `PropExpr` up to SMC coherence (associator, unitors, interchange, braid naturality, σ²=id) (JS 1991 Part I, Selinger 2011) |
 | `prop::presentation::functorial` | `CompleteFunctor<G>` trait + `MatrixNFFunctor<R>` — opt-in semantic decision engine for prop-equality via `Presentation::eq_mod_functorial`. Complete by theorem for Mat(R) (Baez-Erbele 2015 / F&S Thm 5.60) |
 | `enriched` | `EnrichedCategory<V>` trait + `HomMap<O, V>` finite realization (F&S §1.1, §2.4) |

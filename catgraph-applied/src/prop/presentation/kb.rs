@@ -230,8 +230,9 @@ where
     /// under the `internal-bench` feature flag.
     ///
     /// **NOT public API.** This shim exists solely to bench the O(n²)/n³
-    /// deferred atom-canonical work + provide quantitative signal for the
-    /// deferred KB-vs-Functorial decision (issue #15).
+    /// atom-canonical work + provide quantitative signal for the KB-vs-Functorial
+    /// decision (resolved: functorial-terminal, issue #15; KB feasibility spike
+    /// #57).
     /// Downstream consumers MUST NOT enable `internal-bench` in production
     /// builds; the method may be removed or its semantics changed in any
     /// release without `SemVer` guarantee.
