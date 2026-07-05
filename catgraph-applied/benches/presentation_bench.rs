@@ -49,9 +49,10 @@
 //! `O(n)` per call (linear scan over `reverse` filtering by `find`); calling
 //! it from inside the `smc_refine` fixpoint contributes the
 //! `O(n²)/n³` perf-tail called out as a deferred atom-canonical TODO. This
-//! group quantifies that tail at three problem sizes (`n ∈ {32, 64, 128}`)
-//! so a future Knuth-Bendix completion run + KB-vs-Functorial decision can
-//! cite a measured baseline rather than a back-of-envelope estimate.
+//! group quantifies that tail at three problem sizes (`n ∈ {32, 64, 128}`).
+//! The KB-vs-Functorial decision is resolved (functorial-terminal, #15); this
+//! measured baseline now serves the #57 KB feasibility spike rather than a
+//! back-of-envelope estimate.
 //!
 //! ## Bench-size brackets
 //!

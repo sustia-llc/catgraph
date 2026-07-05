@@ -311,7 +311,8 @@ fn main() {
 
     // size_bound = 2 keeps the bounded SFG enumeration tractable for BoolRig
     // while still surfacing the CC-incompleteness witnesses the atom-canonical
-    // `smc_refine` partially closes (~44% reduction from 2574 → 1433).
+    // `smc_refine` partially closes: BoolRig d=2 collisions
+    // 2574 → 1433 (smc_refine) → 1301 (post-#14 NF), ~49% total.
     let report = verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(2, &bool_samples)
         .expect("verifier runs on BoolRig size_bound=2");
     println!("  FaithfulnessReport (BoolRig, size_bound=2):");
@@ -326,8 +327,9 @@ fn main() {
     // not Thm 5.60 faithfulness violations. The matrix functor S is faithful
     // by Baez-Erbele 2015; what's missing from plain CC is syntactic
     // completeness. The `atom_canonical` pass in `kb.rs` gives ~44%
-    // reduction; the residual gap closes only via the Functorial
-    // engine demonstrated below or full Knuth-Bendix completion (issue #15).
+    // reduction; the residual gap is closed by the terminal Functorial engine
+    // demonstrated below (issue #15 resolved functorial-terminal; syntactic
+    // Knuth-Bendix completion is the #57 feasibility spike).
     assert!(
         report.expressions_checked > 0,
         "verifier must enumerate at least one expression"

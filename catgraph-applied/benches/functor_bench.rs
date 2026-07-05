@@ -19,15 +19,15 @@
 //! re-prove established theorems). It returns **CC-engine incompleteness
 //! witnesses** — pairs of SFG expressions that the matrix functor `S`
 //! distinguishes which the default [`CongruenceClosure`] engine does NOT
-//! yet identify. The witness count (~1433 for `size_bound=2` on `BoolRig`)
-//! is expected to stay nonzero until Knuth-Bendix completion
-//! lands (tracked in issue #15; see `tests/graphical_linalg.rs:1-49` for the
-//! authoritative semantics).
+//! identify. The witness count (1301 for `size_bound=2` on `BoolRig`,
+//! post-#14 NF) stays nonzero **by design**: the terminal Mat(R) decision path
+//! is the Functorial engine (issue #15 resolved functorial-terminal; syntactic
+//! Knuth-Bendix completion is the #57 feasibility spike). See the
+//! `tests/graphical_linalg.rs` module docstring for the authoritative semantics.
 //!
 //! The bench tracks this count as a **performance + progress signal on
-//! CC-engine completeness**, not as a correctness gate. A future
-//! KB-completion run that drives the witness count toward zero would also
-//! show up here as a wall-clock change.
+//! CC-engine completeness**, not as a correctness gate. An NF improvement that
+//! drives the witness count down would also show up here as a wall-clock change.
 //!
 //! Follows the workspace bench-file conventions (module-level imports,
 //! `drop(black_box(...))` for `Result`-returning hot-path calls,
@@ -56,8 +56,8 @@
 //!   deferred).
 //!
 //! - **`cc_incompleteness_count::bool` at `size_bound = 2`** — produces
-//!   ~1433 CC-incompleteness witnesses on `BoolRig` — the measured
-//!   empirical baseline. The witness
+//!   1301 CC-incompleteness witnesses on `BoolRig` (post-#14 NF) — the
+//!   measured empirical baseline. The witness
 //!   count is the size of the gap between
 //!   [`NormalizeEngine::CongruenceClosure`] (syntactic, incomplete) and
 //!   [`NormalizeEngine::Functorial`] (semantic, complete-by-Thm-5.60); the
@@ -65,8 +65,9 @@
 //!   faithfulness check.
 //!
 //! - **Witness-count asymmetry (`BoolRig` vs `F64Rig`).** At `size_bound = 2`
-//!   `BoolRig` produces ~1433 witnesses; `F64Rig` produces a smaller count
-//!   that blows up combinatorially at `size_bound = 3`. The mechanism is
+//!   `BoolRig` produces 1301 witnesses (post-#14 NF); `F64Rig` produces a
+//!   larger count (~2777) that blows up combinatorially at `size_bound = 3`.
+//!   The mechanism is
 //!   algebraic, not a measurement artefact: `BoolRig` is idempotent
 //!   (`a ∨ a = a`, `a ∧ a = a`) so the D1 Cayley table
 //!   `r_a ; r_b = r_{a*b}` collapses the 2×2 cross-product to a small set
@@ -74,12 +75,13 @@
 //!   generates fresh scalar atoms (`1+1 = 2`) that compound at the next
 //!   bound step.
 //!
-//! - **`cc_incompleteness_count::bool` at `size_bound = 3`** — borderline
-//!   per the design doc warning; reduced `sample_size = 10` and warmup
-//!   shortened so the group completes in under 60 seconds. Marker flag
-//!   below; if a future profile shows the group exceeding 30 seconds, fold
-//!   the d3-bool bracket back to d2 and surface the regression in a
-//!   follow-up.
+//! - **`cc_incompleteness_count::bool` at `size_bound = 3`** — the "under 60s"
+//!   / `sample_size = 10` figures here were **design-doc estimates, not
+//!   measurements**. Ground truth (release): one `d=2` verifier call is ~7.6 s
+//!   (so the `d=2` bench at criterion defaults is ~13 min), and one `d=3` call
+//!   exceeds 590 s (>10 min) — no criterion configuration brings the `d=3`
+//!   group under 60 s. Marker flag below; re-budgeting these groups (or folding
+//!   the `d=3`-bool bracket back to `d=2`) is tracked in #59.
 //!
 //! - **`cc_incompleteness_count::f64rig` at `size_bound = 2`, `F64Rig` only.**
 //!   Per design doc §3.3.2: `F64Rig` scalar sampling combinatorially blows
@@ -254,12 +256,12 @@ fn bench_sfg_to_mat_bool(c: &mut Criterion) {
 // ---------------------------------------------------------------------------
 //
 // `verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(size_bound=2)` returns
-// ~1433 CC-incompleteness witnesses (measured empirically;
-// see `tests/graphical_linalg.rs:1-49` for authoritative semantics). The
-// `size_bound=3` variant is borderline per the design doc warning — runs
-// hundreds of CC `are_equal` calls. To keep the group inside the 60s wall
-// budget the sample count + warmup are reduced for
-// d=3 (criterion default is 100 samples + 3s warmup).
+// 1301 CC-incompleteness witnesses (measured empirically, post-#14 NF; see the
+// `tests/graphical_linalg.rs` module docstring for authoritative semantics).
+// The `size_bound=3` variant is far heavier — one d=3 call exceeds 590 s in
+// release (>10 min), so the "60s wall budget" below was a design-doc estimate,
+// not a measured bound; the reduced sample count + warmup only cap the sample
+// count, they cannot reach it. Re-budgeting/folding is tracked in #59.
 
 fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     let mut group = c.benchmark_group("functor::cc_incompleteness_count::bool");
@@ -271,7 +273,7 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     // a tight presentation.
     let rig_samples = vec![BoolRig(true), BoolRig(false)];
 
-    // d=2: the canonical signal (~1433 witnesses).
+    // d=2: the canonical signal (1301 witnesses, post-#14 NF).
     group.throughput(Throughput::Elements(1));
     group.bench_function(BenchmarkId::from_parameter(2u32), |bencher| {
         bencher.iter(|| {
@@ -289,14 +291,14 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     // call — d=2 above already ran with criterion defaults (100 samples,
     // 3s warmup); only the d=3 bench below picks up the reduced settings.
     // This ordering is intentional: d=2 needs full-sample statistical
-    // fidelity for the ~1433-witness baseline; d=3 is wall-time-budget-
+    // fidelity for the 1301-witness baseline; d=3 is wall-time-budget-
     // constrained.
     //
-    // d=3: borderline. Shrink sample count + warmup so the group cannot
-    // overshoot the 60s wall budget. If d=3 still pushes 30s+ on a
-    // first-walk machine, surface that in a follow-up (and consider
-    // dropping the d=3 BoolRig variant in favour of d=2 only — see the
-    // module rustdoc note above).
+    // d=3: heavy — one d=3 verifier call exceeds 590 s in release, so no
+    // criterion config brings this group under the design-doc "60s wall
+    // budget"; the reduced sample count + warmup only cap the sample count.
+    // Re-budgeting, or dropping the d=3-bool variant in favour of d=2, is
+    // tracked in #59 (see the module rustdoc note above).
     group.sample_size(10);
     group.warm_up_time(std::time::Duration::from_millis(500));
     group.measurement_time(std::time::Duration::from_secs(20));
