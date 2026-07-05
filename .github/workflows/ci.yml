@@ -46,8 +46,9 @@ jobs:
   # debug_assertions ("30s release / 15+ min debug"), so the debug
   # `cargo test --workspace` above never exercises it. This targeted
   # release run covers it. Deliberately NOT `--workspace --release --
-  # --ignored`: the cc_completeness_tracking_* diagnostics (#15) and the
-  # #14 known-gap test are ignored because they FAIL by design.
+  # --ignored`: #14's interchange proptest is now un-ignored and gating, but the
+  # cc_completeness_tracking_* diagnostics (#15) and the #14 mid-layer zero-source
+  # (η) known-gap follow-up test remain ignored because they FAIL by design.
   release-test:
     runs-on: ubuntu-latest
     steps:

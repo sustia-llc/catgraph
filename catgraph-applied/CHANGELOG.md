@@ -9,6 +9,34 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **SMC normal form: `topological_layer_order` (Step 4(c))** — sifts each
+  non-identity-source generator to its earliest admissible (braid-free) layer,
+  giving independent parallel work a single canonical schedule (issue #14; JS-I
+  Ch 1 §4 Thm 1.2 p.71).
+- **Mixed-layer braid isolation** in `collect_braid_prefix` — a `Braid`
+  co-resident with an unrelated generator (`[σ, F]`) is factored by
+  bifunctoriality into a braid-only layer + a generator layer, freeing the braid
+  for the naturality sweep.
+- **Identity-width-refined naturality sweep** — a braid can now slide past a wide
+  `Identity(n>1)` or a pure-identity cover, not only two width-1 atoms.
+
+### Fixed
+
+- **`try_unitor_merge` source-left ordering** — the `L1 ; (X ⊗ id_k)` case with a
+  zero-source `X` (e.g. `η : 0 → 1`) now PREPENDS `X` (was appended), so
+  SMC-distinct morphisms like `σ;(η⊗id₂)` vs `σ;(id₂⊗η)` no longer collide.
+- **Wide-braid expansion in identity-padded layers** — `hexagon_expand` now
+  decomposes any `Braid(m,n)` (`m+n>2`) sitting in an identity-padded layer (as
+  emitted by the naturality sweep and by isolation), restoring the "no wide
+  braid" invariant.
+- **Mixed-layer re-creation** — the braid+generator merge guard moved to
+  `reduce_involution`'s merge site so neither `try_column_merge` nor
+  `try_unitor_merge` can re-trap a braid alongside an independent generator.
+- **#14 interchange proptest un-ignored and now gating.** One narrow follow-up
+  remains: mid-layer zero-source (η) scheduling (ignored known-gap test).
+
 ## [workspace-v0.1.0] - 2026-07-01
 
 First monorepo release: workspace-wide tag `v0.1.0` (supersedes the pre-reboot
