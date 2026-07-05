@@ -47,8 +47,10 @@ jobs:
   # `cargo test --workspace` above never exercises it. This targeted
   # release run covers it. Deliberately NOT `--workspace --release --
   # --ignored`: #14's interchange proptest is now un-ignored and gating, but the
-  # cc_completeness_tracking_* diagnostics (#15) and the #14 mid-layer zero-source
-  # (η) known-gap follow-up test remain ignored because they FAIL by design.
+  # cc_completeness_tracking_* diagnostics (incomplete-by-design per #15's
+  # functorial-terminal resolution; KB feasibility spike #57) and the #14
+  # mid-layer zero-source (η) known-gap follow-up test remain ignored — the
+  # depth_3/4 trackers and the η test FAIL by design.
   release-test:
     runs-on: ubuntu-latest
     steps:

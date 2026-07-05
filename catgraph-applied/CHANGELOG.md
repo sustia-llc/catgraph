@@ -37,6 +37,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 - **#14 interchange proptest un-ignored and now gating.** One narrow follow-up
   remains: mid-layer zero-source (η) scheduling (ignored known-gap test).
 
+### Changed
+
+- **#15 resolved — functorial-terminal.** `Presentation::eq_mod_functorial`
+  with `MatrixNFFunctor` is declared the terminal, complete decision procedure
+  for Mat(R) (F&S Thm 5.53 / Baez-Erbele 2015); the syntactic congruence-closure
+  engine is incomplete **by design**. Knuth-Bendix completion is demoted to a
+  time-boxed feasibility spike (#57), relevant only for a future non-Mat(R)
+  presentation lacking a semantic functor. The `cc_completeness_tracking_*`
+  depth-2 diagnostics are re-baselined as **regression trackers** at the post-#14
+  NF collision counts: BoolRig 1301, UnitInterval 1856, Tropical 2526 **pinned
+  exactly** (two-sided `assert_eq!`, so a silent drop — KB-like progress or an
+  unsound CC over-merge — is noticed too); F64 ~2777 is float-nondeterministic
+  and tracked as an inclusive **jitter band** `2770..=2790` (#58). Downstream #15
+  references swept accordingly; the `functor_bench` wall-time budgets were found
+  unrealistic (measured, not estimated) and are tracked in #59.
+
 ## [workspace-v0.1.0] - 2026-07-01
 
 First monorepo release: workspace-wide tag `v0.1.0` (supersedes the pre-reboot

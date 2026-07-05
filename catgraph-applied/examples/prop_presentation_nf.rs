@@ -47,8 +47,9 @@
 //!   `CongruenceClosure` (default). There is no `Layer1` or
 //!   `KnuthBendix` variant; the Layer-1 Joyal-Street NF runs as a
 //!   short-circuit *inside* the `CongruenceClosure` engine (see
-//!   `Presentation::eq_mod` rustdoc), and full Knuth-Bendix completion is
-//!   tracked in issue #15.
+//!   `Presentation::eq_mod` rustdoc). The terminal Mat(R) decision path is the
+//!   Functorial engine (issue #15 resolved functorial-terminal); syntactic
+//!   Knuth-Bendix completion is the #57 feasibility spike.
 //! - [`MatrixNFFunctor<R>`] implements [`CompleteFunctor<G>`] only for
 //!   `G = SfgGenerator<R>` — its underlying [`sfg_to_mat`] is hard-wired
 //!   to the 5-generator signal-flow signature (FS18 §5.3 Eq 5.52). The
@@ -346,7 +347,7 @@ fn main() {
     // etc. This idempotency increases collision rate under S = sfg_to_mat:
     // the matrix functor identifies many more pairs over an idempotent rig
     // than over a non-idempotent one, which is why size_bound=2 surfaces
-    // ~1433 CC-incompleteness witnesses below (vs much fewer over F64Rig).
+    // 1301 CC-incompleteness witnesses below (post-#14 NF).
     let bool_samples = [BoolRig(false), BoolRig(true)];
 
     // Note: matr_presentation::<BoolRig>(&samples) returns N > 16. The 16
