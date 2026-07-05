@@ -6,3 +6,7 @@
 # everyone who runs the test benefits from these saved cases.
 cc 0db4c28f0ff1aa66fd440dbe18ed67395c5311edf0870d962c467fd3a40af6eb # shrinks to a = Compose(Compose(Generator(F), Generator(F)), Compose(Identity(1), Generator(F))), b = Identity(1), c = Compose(Compose(Generator(F), Generator(F)), Generator(F))
 cc 9803108153568be41b37602a16406aabf5cfe0c64b1b3e6997287b87375c90fd # shrinks to f = Compose(Braid(1, 1), Braid(1, 1)), g = Compose(Compose(Generator(F), Generator(F)), Compose(Generator(F), Generator(F))), h = Tensor(Generator(F), Identity(1)), k = Compose(Identity(1), Generator(F))
+cc ddc10b161bd68b7cd69bc0023313570e9a04749f2fcabe4a1086a914015a02db # shrinks to f = Tensor(Identity(2), Generator(F)), g = Compose(Identity(2), Braid(1, 1)), h = Tensor(Generator(F), Tensor(Generator(F), Generator(F))), k = Braid(1, 1)
+cc 297a949a0d301993325b42e29eeb397bf74707cd5507e8489cbc378410ca422f # shrinks to f = Compose(Tensor(Generator(F), Generator(F)), Compose(Identity(2), Braid(1, 1))), g = Generator(F), h = Tensor(Generator(F), Generator(F)), k = Generator(F)
+cc 25878afaf82e912932339bf0ab114fd8350613ddf9d1ae7315217cae3b04008f # shrinks to f = Tensor(Identity(1), Tensor(Braid(1, 1), Tensor(Generator(F), Braid(1, 1))))
+cc 249867ed8ce57a2304dd1211678eb677870c147c1e42a6f86dd955457f7f19e8 # shrinks to f = Tensor(Identity(2), Tensor(Generator(F), Identity(2))), g = Compose(Generator(F), Generator(F)), h = Tensor(Tensor(Braid(1, 1), Generator(F)), Braid(1, 1)), k = Generator(F)

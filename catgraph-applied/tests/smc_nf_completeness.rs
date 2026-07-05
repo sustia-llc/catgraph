@@ -159,20 +159,29 @@ mod axiom_closure {
         /// Bifunctoriality / interchange: `(f ⊗ g) ; (h ⊗ k) = (f ; h) ⊗ (g ; k)`
         /// when arities align. JS-I Ch 1 §4 Thm 1.2 p.71.
         ///
-        /// **Known completeness gap (C2, 2026-04-23):** at certain depths the
-        /// two sides compose to the same morphism but place layers in
-        /// different schedulings of independent work — e.g. one side has
-        /// `[id_2, F]; [F, id_1, F]; [id_2, F]` while the other has
-        /// `[F, id_1, F]; [id_2, F]; [id_2, F]`. These are semantically equal
-        /// but my NF lacks the topological-layer-order pass (reconciliation
-        /// §3 Step 4(c)) that would sift each non-identity atom to its
-        /// earliest possible layer.
+        /// **C2 gap (2026-04-23) — closed (issue #14).** Two coordinated
+        /// mechanisms canonicalize both sides onto one normal form:
         ///
-        /// Scope decision (issue #14): gate with `#[ignore]` and validate
-        /// whether the 12 `thm_5_60_faithful_*` tests need this canonicalization.
-        /// If they do, add `topological_layer_order`.
+        /// - **Generator scheduling** — `topological_layer_order` (Step 4(c))
+        ///   sifts each non-identity-source generator to its earliest admissible
+        ///   (braid-free) layer, so schedulings like `[id_2, F]; [F, id_1, F];
+        ///   [id_2, F]` vs `[F, id_1, F]; [id_2, F]; [id_2, F]` converge.
+        /// - **Braids in mixed layers** — a `Braid(1,1)` co-resident with an
+        ///   unrelated generator (e.g. `[σ, F]`) is freed by
+        ///   `isolate_mixed_braid_layers` (bifunctoriality factorization into a
+        ///   braid-only layer + a generator layer) so `collect_braid_prefix`'s
+        ///   naturality sweep — now identity-width-refined — can slide it to the
+        ///   leading layers; `try_column_merge` never re-creates a mixed layer.
+        ///
+        /// See the `issue_14_topological_layer_order` regressions in
+        /// `smc_nf_regression.rs`.
+        ///
+        /// **Scope of "closed":** for generators with source arity > 0 (this
+        /// test's `arb_expr` emits only `F`, `G : 1 → 1` plus braids/identities).
+        /// A mid-layer **zero-source** atom (`η : 0 → 1`) is still not scheduled
+        /// canonically — see `interchange_zero_source_eta_known_gap` below and the
+        /// Watch-item in this file's header.
         #[test]
-        #[ignore = "known gap (issue #14): missing topological-layer-order pass (§3 Step 4(c))"]
         fn interchange(
             f in arb_expr(),
             g in arb_expr(),
@@ -242,4 +251,38 @@ fn known_edge_case_unitor_merge_two_atom_pattern() {
     );
     let rhs_b = PropExpr::Tensor(Box::new(f), Box::new(eta));
     assert_eq!(nf(&lhs_b), nf(&rhs_b), "η-source-right absorption");
+}
+
+/// Known gap (issue #14 follow-up): a mid-layer **zero-source** generator
+/// (`η : 0 → 1`) is not scheduled canonically. `F ⊗ η ⊗ G` and
+/// `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)` are SMC-equal (both are `[F(in0), η-fresh,
+/// G(in1)]`) but currently normalize to distinct diagrams: `find_sift` /
+/// `topological_layer_order` skips source-0 atoms (empty consumed span ⇒
+/// positionally ambiguous earliest-layer) and `try_unitor_merge` only absorbs
+/// the 2-atom boundary pattern, not a 3-atom mid-layer η. See the Watch-item in
+/// this file's header. Deliberately NOT closed by a point-span sift (deferred).
+#[test]
+#[ignore = "known gap: mid-layer zero-source (η) scheduling; see Watch-item"]
+fn interchange_zero_source_eta_known_gap() {
+    let f: PropExpr<TestSig> = PropExpr::Generator(TestSig::F);
+    let g: PropExpr<TestSig> = PropExpr::Generator(TestSig::G);
+    let eta: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eta); // 0 → 1
+
+    // F ⊗ η ⊗ G  :  2 → 3
+    let lhs = PropExpr::Tensor(
+        Box::new(f.clone()),
+        Box::new(PropExpr::Tensor(Box::new(eta.clone()), Box::new(g.clone()))),
+    );
+    // (F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)  :  2 → 3
+    let rhs = PropExpr::Compose(
+        Box::new(PropExpr::Tensor(Box::new(f), Box::new(g))),
+        Box::new(PropExpr::Tensor(
+            Box::new(PropExpr::Identity(1)),
+            Box::new(PropExpr::Tensor(
+                Box::new(eta),
+                Box::new(PropExpr::Identity(1)),
+            )),
+        )),
+    );
+    assert_eq!(nf(&lhs), nf(&rhs));
 }
