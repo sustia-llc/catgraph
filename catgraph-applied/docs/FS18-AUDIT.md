@@ -269,7 +269,7 @@ The `MatrixNFFunctor` semantic engine already decides Mat(R) equality completely
 - **(A)** Knuth-Bendix completion of the 17 Thm 5.60 equations modulo SMC coherence (closes the `cc_completeness_tracking_*` tests under CC and retires `smc_refine`), or
 - **(B)** declare `MatrixNFFunctor` terminal for Mat(R) and leave the syntactic engine as-is.
 
-Pick (A) when a non-Mat(R) presentation needs a syntactically complete decision procedure. The related C2 interchange gap is tracked as **#14**.
+Pick (A) when a non-Mat(R) presentation needs a syntactically complete decision procedure. The related C2 interchange gap (**#14**) is now **closed**: `topological_layer_order` (Step 4(c)) plus mixed-layer braid isolation and identity-width-refined naturality canonicalize interchange, and the `interchange` proptest is un-ignored and gating. One narrow follow-up remains — mid-layer zero-source (η) scheduling — recorded as an ignored known-gap test.
 
 ---
 
