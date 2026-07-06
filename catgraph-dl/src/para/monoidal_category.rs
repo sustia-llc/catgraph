@@ -298,7 +298,10 @@ pub mod private {
 /// bodies:
 ///
 /// - **(α)** marker trait + blanket impl gated on the marker.
-/// - **(β)** `#[derive(SetMonoidal)]` proc-macro.
+/// - **(β)** `#[derive(SetMonoidal)]` proc-macro — re-affirmed as rejected in
+///   [#42](https://github.com/sustia-llc/catgraph/issues/42), where the same
+///   decision is recorded under the `#[derive(SetCategoryDefaults)]` name (the
+///   README documents the dual-impl pattern instead).
 /// - **(γ)** sub-trait with GAT default-method bodies on `MonoidalCategory`.
 ///
 /// Option (γ) as originally sketched (sub-trait with default-method bodies

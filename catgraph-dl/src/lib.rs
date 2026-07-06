@@ -86,8 +86,8 @@
 //! - **Non-`(Set, ×, 1)` `MonoidalCategory` instances** — R-module actegory,
 //!   hyperdoctrine, vector-bundle, fibration-based. Trait surface admits
 //!   them; concrete instances deferred. The [`para::SetCategoryDefaults`]
-//!   sub-trait closes the boilerplate gap for `(Set, ×, 1)`-flavoured ZSTs
-//!   only.
+//!   opt-in marker trait closes the boilerplate gap for
+//!   `(Set, ×, 1)`-flavoured ZSTs only.
 //! - **The Hopf-fibration / carry-operation construction** — private
 //!   namespace stub only; held until a Dudzik preprint exists. See ⚠️
 //!   CAREFUL section below for the 2026-05-06 evidence update.
