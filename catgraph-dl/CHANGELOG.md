@@ -6,6 +6,33 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Documentation
+
+- **Ergonomics-batch verdicts ([#42](https://github.com/sustia-llc/catgraph/issues/42)).**
+  Three "small ergonomics" items triaged; all resolve to documentation, no
+  API change:
+  - `tie_weights`'s `P: Clone` bound documented as **semantic, not
+    incidental** — `Clone` is the Rust witness of the comonoid comultiplication
+    `δ(p) = (p, p)` in `(Set, ×, 1)` (CDL Theorem G.10); a `P` that cannot be
+    duplicated has no diagonal comonoid, so relaxing the bound would change
+    what `tie_weights` means. The canonical statement lives on the `Comonoid`
+    trait (the bound's home); `tie_weights` links to it, and the audit doc's
+    forward-look item is annotated resolved-won't-do (`Arc<T>` is cheaply
+    `Clone`, so the motivating heap-shared case was already served).
+  - `#[doc(hidden)]` on `private::Sealed` verified **already structural** — the
+    `private` module lives inside the private `monoidal_category` module, so
+    `para::private::Sealed` is unreachable; the only public path is the
+    deliberate `para::Sealed` re-export, which downstream must name for the
+    dual-impl soft-seal opt-in. No change.
+  - Documented dual-impl pattern chosen over a `#[derive(SetCategoryDefaults)]`
+    proc-macro (two impl lines don't justify a macro crate — alpha /
+    minimal-ceremony posture); the concrete opt-in snippet (imports included,
+    mirroring the compile-checked doctest) is now inlined in the README `para`
+    section, and the design-history note in `monoidal_category.rs` cross-links
+    the re-affirmed rejection of option (β). Stale "sub-trait" wording for
+    `SetCategoryDefaults` in `lib.rs`/`README.md` corrected to "opt-in marker
+    trait".
+
 ### Changed — BREAKING
 
 - **EndoFunctor→haft migration ([#12](https://github.com/sustia-llc/catgraph/issues/12)).**
