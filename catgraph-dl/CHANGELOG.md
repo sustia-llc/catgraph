@@ -6,6 +6,57 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **EndoFunctor→haft migration ([#12](https://github.com/sustia-llc/catgraph/issues/12)).**
+  The hand-rolled `EndoFunctor` trait (a GAT `type Apply<X>` plus `fmap`) is
+  removed in favour of `deep_causality_haft` v0.3.3's `HKT` (object map
+  `HKT::Type<X>`) + `Functor<F>` (morphism map `fmap`) witnesses. The witnesses
+  `ListEndo<A>`, `TreeEndo<A>`, and `GroupActionEndo<G>` now `impl HKT + Functor<Self>`
+  with `type Constraint = NoConstraint`; `FreeMnd<F, Z>` / `CofreeCmnd<F, Z>` and
+  the `FAlgebraHom` / `FCoalgebraHom` verifiers are bounded `F: EndoWitness` (the
+  new supertrait alias — see Added), and the recursive `Roll` / `tail` payloads
+  project through `F::Type<…>`.
+  - **Removed public paths** (all five cease to exist — alpha posture, no
+    deprecation shim): `catgraph_dl::EndoFunctor`,
+    `catgraph_dl::endofunctor::EndoFunctor`, `catgraph_dl::algebra::EndoFunctor`,
+    `catgraph_dl::free_monad::EndoFunctor`, and
+    `catgraph_dl::free_monad::free_mnd::EndoFunctor` (`free_mnd` is a `pub mod`
+    and carried its own `pub use`).
+  - **New public paths**: `catgraph_dl::{HKT, Functor, EndoWitness, NoConstraint, Satisfies, Either}`
+    re-exported at the crate root and through `crate::endofunctor` (the single
+    import seam), plus `{HKT, Functor, EndoWitness}` through `algebra` and
+    `free_monad`.
+- `TreeEndo`'s `A + (−)²` sum is now `deep_causality_haft::Either` (was the
+  external `either` crate). The `either` dependency is dropped from
+  `catgraph-dl` (the workspace entry stays — `catgraph` core / applied still use
+  it).
+
+### Added
+
+- **`EndoWitness`** (`src/endofunctor.rs`) — a blanket-implemented supertrait
+  alias `HKT<Constraint = NoConstraint> + Functor<Self>` packaging "endofunctor
+  on Set". Restores the type-level invariant the old fused `EndoFunctor` trait
+  carried: a bare `HKT` bound would admit an fmap-less carrier, whereas
+  `EndoWitness` requires both the object map and the morphism map. All carriers
+  (`FreeMnd` / `CofreeCmnd` / the F-(co)algebra verifiers) bound on it;
+  witnesses never name it (blanket impl).
+- Functor-law tests (identity + composition) for all three witnesses, in a new
+  `tests/functor_laws.rs`, driven by a single witness-generic
+  `assert_functor_laws<F: EndoWitness>` helper in `tests/common/mod.rs` (proptest
+  strategies for `ListEndo` / `TreeEndo`, sample values for `GroupActionEndo`).
+  These reify the previously documentation-only law obligations (haft `Functor`
+  law docs; Gavranović et al., ICML 2024). The four byte-identical trivial
+  unit-projection test witnesses were collapsed into one generic
+  `common::UnitEndo<Tag>`.
+
+### Changed
+
+- `deep_causality_num` reservation re-anchored from #12 to
+  [#36](https://github.com/sustia-llc/catgraph/issues/36) (R-module / `F64Module`
+  surfaces need `Zero` / `One`); it remains deps-only. `deep_causality_haft` is
+  now in use, not deps-only.
+
 ## [0.4.1] - 2026-05-10
 
 Patch release applying review findings on top of v0.4.0. Strictly additive; no API break; no behaviour change.

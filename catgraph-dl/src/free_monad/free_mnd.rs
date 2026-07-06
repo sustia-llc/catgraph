@@ -11,33 +11,33 @@
 //!
 //! ## HKT shape
 //!
-//! Rust has no kind `* -> *`, so the endofunctor is encoded as the
-//! [`EndoFunctor`] trait whose object map is the GAT
-//! [`EndoFunctor::Apply`]. The same shape used by Agent A's
-//! `MonoidalCategory::Tensor` and `Actegory::ActionResult`.
+//! Rust has no kind `* -> *`, so the endofunctor is encoded as a
+//! [`deep_causality_haft`] witness — object map
+//! [`HKT::Type`](crate::endofunctor::HKT::Type), morphism map
+//! [`Functor::fmap`](crate::endofunctor::Functor::fmap) — bundled by the
+//! [`EndoWitness`] alias (`HKT<Constraint = NoConstraint> + Functor<Self>`).
+//! `FreeMnd` bounds `F: EndoWitness` so the type system enforces that `F` is a
+//! genuine endofunctor (not a bare object map), and — because the constraint is
+//! [`NoConstraint`](crate::endofunctor::NoConstraint) — the recursive `Type`
+//! projection is universally nameable (the blanket admits any inner type).
 //!
 //! ## Recursion encoding
 //!
 //! `FreeMnd<F, Z>` is recursive (`Roll` carries a value of type
-//! `F::Apply<FreeMnd<F, Z>>`), so the variant must be heap-indirected. We
+//! `F::Type<FreeMnd<F, Z>>`), so the variant must be heap-indirected. We
 //! `Box` the entire applied functor — concrete instances such as
 //! [`super::list_endo::ListEndo`] then carry their own indirection only for
 //! the recursive slot, not the whole functorial value.
 //!
 //! ## Functor laws
 //!
-//! Implementors of [`EndoFunctor`] must satisfy:
-//!
-//! - **Identity:**    `fmap(fx, |x| x) = fx`
-//! - **Composition:** `fmap(fmap(fx, f), g) = fmap(fx, |x| g(f(x)))`
-//!
-//! These are *obligations*, not runtime checks — we do not invoke `fmap`
-//! during construction or destruction of `FreeMnd`. A violator produces a
-//! type-system-legal but mathematically meaningless free monad.
+//! `F: EndoWitness` must satisfy the identity + composition functor laws — see
+//! [`crate::endofunctor`] for the canonical statement (and the pure-morphism
+//! caveat). Not runtime-checked: we never invoke `fmap` during construction or
+//! destruction of `FreeMnd`; a violator produces a type-legal but
+//! mathematically meaningless free monad.
 
-// `EndoFunctor` is canonical in `crate::endofunctor`. Re-exported here for
-// backward compatibility with the `catgraph_dl::free_monad::EndoFunctor` path.
-pub use crate::endofunctor::EndoFunctor;
+use crate::endofunctor::EndoWitness;
 
 /// The free monad `FreeMnd(F)(Z) = Fix(X ↦ F(X) + Z)`.
 ///
@@ -49,7 +49,7 @@ pub use crate::endofunctor::EndoFunctor;
 ///
 /// The `Box` indirection on the `Roll` variant is required by Rust's
 /// finite-size discipline: `FreeMnd<F, Z>` recursively contains itself
-/// inside `F::Apply<…>`.
+/// inside `F::Type<…>`.
 ///
 /// # Examples
 ///
@@ -62,17 +62,29 @@ pub use crate::endofunctor::EndoFunctor;
 ///
 /// See [`super::list_endo`] for the `Vec`-bijection helpers and
 /// [`super::tree_endo`] for the analogous binary-tree helpers.
-pub enum FreeMnd<F: EndoFunctor, Z> {
+///
+/// # Constraint restriction
+///
+/// The `F: EndoWitness` bound fixes `Constraint = NoConstraint`, so only
+/// *unconstrained* haft witnesses can instantiate `FreeMnd` — a witness whose
+/// `Constraint != NoConstraint` (e.g. a hypothetical `CausalTensor`-style
+/// carrier with an inner-type bound) is rejected. This is deliberate: CDL's
+/// ambient category is `Set`, and all three shipped witnesses are
+/// unconstrained. The fully general self-referential form — bounding each
+/// impl on `where FreeMnd<F, Z>: Satisfies<F::Constraint>` — was considered and
+/// rejected as viral: it would thread that clause through the enum plus every
+/// manual `Clone`/`Debug`/`PartialEq`/`Eq` impl for no practical gain.
+pub enum FreeMnd<F: EndoWitness, Z> {
     /// Embed a `Z` value (terminator). Categorically the unit of the free
     /// monad: `η_Z : Z → FreeMnd(F)(Z)`.
     Pure(Z),
     /// Wrap an `F`-applied recursive structure. Categorically the algebra
     /// map of the initial algebra of `X ↦ F(X) + Z` restricted to the `F(X)`
     /// summand.
-    Roll(Box<F::Apply<FreeMnd<F, Z>>>),
+    Roll(Box<F::Type<FreeMnd<F, Z>>>),
 }
 
-impl<F: EndoFunctor, Z> FreeMnd<F, Z> {
+impl<F: EndoWitness, Z> FreeMnd<F, Z> {
     /// Construct the `Pure(z)` leaf.
     pub fn pure(z: Z) -> Self {
         Self::Pure(z)
@@ -80,7 +92,7 @@ impl<F: EndoFunctor, Z> FreeMnd<F, Z> {
 
     /// Construct the `Roll(fx)` node by boxing the supplied `F`-applied
     /// recursive structure.
-    pub fn roll(fx: F::Apply<FreeMnd<F, Z>>) -> Self {
+    pub fn roll(fx: F::Type<FreeMnd<F, Z>>) -> Self {
         Self::Roll(Box::new(fx))
     }
 }
@@ -90,13 +102,13 @@ impl<F: EndoFunctor, Z> FreeMnd<F, Z> {
 // `tests/scaffold_smoke.rs::free_monad_witnesses_construct`, where every
 // reference uses `Z = ()` (i.e. the unit terminator). Callers should
 // prefer the explicit `pure` / `roll` constructors.
-impl<F: EndoFunctor, Z: Default> Default for FreeMnd<F, Z> {
+impl<F: EndoWitness, Z: Default> Default for FreeMnd<F, Z> {
     fn default() -> Self {
         Self::Pure(Z::default())
     }
 }
 
-impl<F: EndoFunctor, Z: Default> FreeMnd<F, Z> {
+impl<F: EndoWitness, Z: Default> FreeMnd<F, Z> {
     /// Compatibility constructor — `Pure(Z::default())`.
     ///
     /// Prefer the explicit [`FreeMnd::pure`] / [`FreeMnd::roll`]
@@ -109,12 +121,12 @@ impl<F: EndoFunctor, Z: Default> FreeMnd<F, Z> {
 }
 
 // `Clone` is a manual impl: the `derive(Clone)` macro emits a bound
-// `F::Apply<FreeMnd<F, Z>>: Clone` that the trait-resolution machinery
+// `F::Type<FreeMnd<F, Z>>: Clone` that the trait-resolution machinery
 // can't always discharge through the GAT projection. The hand-rolled impl
-// states the bound directly on `F::Apply<Self>`.
-impl<F: EndoFunctor, Z: Clone> Clone for FreeMnd<F, Z>
+// states the bound directly on `F::Type<Self>`.
+impl<F: EndoWitness, Z: Clone> Clone for FreeMnd<F, Z>
 where
-    F::Apply<FreeMnd<F, Z>>: Clone,
+    F::Type<FreeMnd<F, Z>>: Clone,
 {
     fn clone(&self) -> Self {
         match self {
@@ -126,9 +138,9 @@ where
 
 // Same for `Debug` — `derive(Debug)` would synthesise a bound that
 // trait-resolution rejects through the GAT.
-impl<F: EndoFunctor, Z: core::fmt::Debug> core::fmt::Debug for FreeMnd<F, Z>
+impl<F: EndoWitness, Z: core::fmt::Debug> core::fmt::Debug for FreeMnd<F, Z>
 where
-    F::Apply<FreeMnd<F, Z>>: core::fmt::Debug,
+    F::Type<FreeMnd<F, Z>>: core::fmt::Debug,
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -139,9 +151,9 @@ where
 }
 
 // `PartialEq` follows the same manual-bound pattern.
-impl<F: EndoFunctor, Z: PartialEq> PartialEq for FreeMnd<F, Z>
+impl<F: EndoWitness, Z: PartialEq> PartialEq for FreeMnd<F, Z>
 where
-    F::Apply<FreeMnd<F, Z>>: PartialEq,
+    F::Type<FreeMnd<F, Z>>: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -152,4 +164,4 @@ where
     }
 }
 
-impl<F: EndoFunctor, Z: Eq> Eq for FreeMnd<F, Z> where F::Apply<FreeMnd<F, Z>>: Eq {}
+impl<F: EndoWitness, Z: Eq> Eq for FreeMnd<F, Z> where F::Type<FreeMnd<F, Z>>: Eq {}

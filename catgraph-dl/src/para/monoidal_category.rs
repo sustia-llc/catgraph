@@ -54,6 +54,13 @@
 //! at the cost of forgoing HAFT's witness-first static-dispatch
 //! convention.
 //!
+//! Since #12, cg-dl's *endofunctor* layer (`ListEndo` / `TreeEndo` /
+//! `GroupActionEndo`) adopts HAFT's `HKT` / `Functor` witnesses directly and
+//! follows the witness-first static-dispatch convention (`ListEndo::fmap(x,
+//! f)`). [`MonoidalCategory`] is therefore the deliberate *local* exception:
+//! it keeps the `&self` receiver for the runtime-payload slot while the rest
+//! of the crate aligns with HAFT's static dispatch.
+//!
 //! See `causality:hkt-type-system` skill Gotcha #6 ("Static dispatch only —
 //! call `VecWitness::fmap(v, f)`, never `v.fmap(f)`. The witness is a
 //! type-level token.") for the HAFT `Functor`/`Monad` static-only side of

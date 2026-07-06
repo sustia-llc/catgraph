@@ -15,23 +15,25 @@
 //! - [`FAlgebraHom`] / [`FCoalgebraHom`] / [`MonadAlgebraHom`] —
 //!   homomorphism types with caller-driven `verify_commutes`
 //!   entry points (CDL Definition 2.5 + dual).
-//! - [`EndoFunctor`] / [`Group`] / [`Z2Group`] / [`GroupActionEndo`] —
-//!   the group-action monad witness for the **CDL Example 2.6
-//!   Geometric-Deep-Learning recovery**: F-algebra homomorphisms over
-//!   `F = G × −` are exactly `G`-equivariant maps.
+//! - [`Group`] / [`Z2Group`] / [`GroupActionEndo`] plus the
+//!   [`HKT`]/[`Functor`] witnesses — the group-action monad witness for the
+//!   **CDL Example 2.6 Geometric-Deep-Learning recovery**: F-algebra
+//!   homomorphisms over `F = G × −` are exactly `G`-equivariant maps.
 //!
-//! ## `EndoFunctor` location
+//! ## Endofunctor witnesses
 //!
-//! The [`EndoFunctor`] trait is canonical in [`crate::endofunctor`] and
-//! re-exported through the private `group_action` submodule for this
-//! module's consumers.
+//! The endofunctor abstraction is `deep_causality_haft`'s [`HKT`] (object
+//! map [`HKT::Type`]) + [`Functor`] (morphism map). They are re-exported
+//! from [`crate::endofunctor`] and surfaced here for this module's
+//! consumers (issue #12).
 
 mod coalgebra;
 mod f_algebra;
 mod group_action;
 mod monad_algebra;
 
+pub use crate::endofunctor::{EndoWitness, Functor, HKT};
 pub use coalgebra::{FCoalgebra, FCoalgebraHom};
 pub use f_algebra::{FAlgebra, FAlgebraHom};
-pub use group_action::{EndoFunctor, Group, GroupActionEndo, Z2Group};
+pub use group_action::{Group, GroupActionEndo, Z2Group};
 pub use monad_algebra::{MonadAlgebra, MonadAlgebraHom};

@@ -31,8 +31,9 @@
 //! - [`FreeMnd<F, Z>`] — the inductive enum `Pure | Roll`.
 //! - [`CofreeCmnd<F, Z>`] — the recursive record `(head, tail)`.
 //!
-//! are parameterised by an [`EndoFunctor`] trait whose object map is the
-//! GAT [`EndoFunctor::Apply`]. Concrete instances and their iso witnesses:
+//! are parameterised by an [`HKT`] witness whose object map is the GAT
+//! [`HKT::Type`] (with morphism map [`Functor::fmap`]). Concrete instances
+//! and their iso witnesses:
 //!
 //! - [`list_endo::ListEndo<A>`] / [`list_endo::free_mnd_to_vec`] /
 //!   [`list_endo::vec_to_free_mnd`].
@@ -49,12 +50,17 @@
 //! The free-monad-side algebra-homomorphism unroller (CDL Remark 2.13 —
 //! `foldr`/`foldl` recovered as the unique algebra hom from the initial
 //! algebra of `FreeMnd(1 + A × −)`) is deferred; it would consume the
-//! [`EndoFunctor`] trait declared here alongside the F-algebra body.
+//! [`HKT`]/[`Functor`] witnesses alongside the F-algebra body.
 
 pub mod cofree_cmnd;
 pub mod free_mnd;
 pub mod list_endo;
 pub mod tree_endo;
 
+// The endofunctor witnesses are the `deep_causality_haft` `HKT` / `Functor`
+// traits, re-exported through `crate::endofunctor` (issue #12). Surfaced here
+// so `catgraph_dl::free_monad::{HKT, Functor}` resolves for the recursive
+// carriers below.
+pub use crate::endofunctor::{EndoWitness, Functor, HKT};
 pub use cofree_cmnd::CofreeCmnd;
-pub use free_mnd::{EndoFunctor, FreeMnd};
+pub use free_mnd::FreeMnd;

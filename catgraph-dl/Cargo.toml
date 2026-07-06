@@ -12,12 +12,16 @@ repository.workspace = true
 [dependencies]
 catgraph = { workspace = true }
 catgraph-applied = { workspace = true }
-either.workspace = true
-# DeepCausality substrate — DEPS-ONLY, reserved for the eventual
-# `endofunctor::EndoFunctor` → `deep_causality_haft` HKT/Arrow migration
-# (deferred; tracked as a follow-up issue). NOT imported in any `catgraph-dl`
-# source file — `rg deep_causality src` is doc-only. Rig `Zero`/`One` are
-# inherited transitively from `catgraph-applied`'s `Rig`.
+# DeepCausality substrate.
+# `deep_causality_haft` is IN USE (issue #12): the endofunctor abstraction is
+# haft's `HKT`/`Functor` witnesses, adopted in `src/endofunctor.rs` (the single
+# import seam) and consumed across `algebra::` and `free_monad::`. `Either` (for
+# `TreeEndo`) is sourced from haft too, so `catgraph-dl` no longer needs the
+# `either` crate.
+# `deep_causality_num` stays DEPS-ONLY, reserved for the R-module / F64Module
+# surfaces (#36) which need `Zero`/`One`. Not referenced anywhere in the crate —
+# `rg deep_causality_num src` returns no hits (post-#12 the doc mentions went
+# too). Rig `Zero`/`One` are inherited transitively from `catgraph-applied`'s `Rig`.
 deep_causality_num = { workspace = true }
 deep_causality_haft = { workspace = true }
 

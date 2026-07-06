@@ -25,9 +25,13 @@
 
 #![allow(clippy::float_cmp, clippy::single_match_else)]
 
+mod common;
+
 use catgraph_dl::free_monad::list_endo::{free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, free_mnd_to_tree, tree_to_free_mnd};
-use catgraph_dl::free_monad::{CofreeCmnd, EndoFunctor, FreeMnd};
+use catgraph_dl::free_monad::{CofreeCmnd, FreeMnd};
+
+use common::UnitEndo;
 
 use proptest::prelude::*;
 
@@ -125,32 +129,24 @@ fn tree_round_trip_examples() {
     assert_eq!(back3, deep);
 }
 
-/// A trivial endofunctor with `Apply<X> = ()` — collapses to "no recursive
-/// slot at all". The cofree comonad over this functor degenerates to a
-/// single `head` value followed by trivial `tail = ()`.
-#[derive(Debug, Clone, Copy)]
-struct TrivialEndo;
-
-impl EndoFunctor for TrivialEndo {
-    type Apply<X> = ();
-    fn fmap<X, Y, G>((): Self::Apply<X>, _: G) -> Self::Apply<Y>
-    where
-        G: Fn(X) -> Y,
-    {
-    }
-}
+/// A trivial endofunctor with `Type<X> = ()` — collapses to "no recursive
+/// slot at all". Aliased onto the shared `common::UnitEndo` witness; the cofree
+/// comonad over it degenerates to a single `head` value followed by trivial
+/// `tail = ()`.
+struct TrivialTag;
+type TrivialEndo = UnitEndo<TrivialTag>;
 
 /// CDL Proposition B.18 dual smoke test. Confirms `CofreeCmnd<TrivialEndo,
 /// u32>` constructs cleanly under the GAT bound and that `head` is
 /// accessible. Compile-time check: the recursive-type pattern
-/// `Box<F::Apply<Self>>` works through the GAT projection without
+/// `Box<F::Type<Self>>` works through the GAT projection without
 /// workaround.
 #[test]
 fn cofree_cmnd_smoke() {
     let c: CofreeCmnd<TrivialEndo, u32> = CofreeCmnd::new(42_u32, ());
     assert_eq!(c.head, 42);
 
-    // Clone works under the manual `where F::Apply<Self>: Clone` bound.
+    // Clone works under the manual `where F::Type<Self>: Clone` bound.
     let c2 = c.clone();
     assert_eq!(c2.head, 42);
     assert_eq!(c, c2);
