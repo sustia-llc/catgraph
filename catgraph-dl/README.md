@@ -35,9 +35,26 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
   witness.
 - **`SetCategoryDefaults`** — opt-in marker trait (soft-sealed via **`Sealed`**)
   carrying a blanket `impl MonoidalCategory` with the five canonical
-  `(Set, ×, 1)` method bodies. A downstream `(Set, ×, 1)`-flavoured ZST opts in
-  with empty `impl Sealed` + `impl SetCategoryDefaults` and gets
-  `MonoidalCategory` for free; `SetMonoidal` itself uses this path.
+  `(Set, ×, 1)` method bodies; `SetMonoidal` itself uses this path. A
+  downstream `(Set, ×, 1)`-flavoured ZST opts in with the dual-impl pattern
+  (mirroring the compile-checked doctest on `SetCategoryDefaults`):
+
+  ```rust
+  use catgraph_dl::para::{MonoidalCategory, Sealed, SetCategoryDefaults};
+
+  #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+  struct MyMonoidal;
+
+  // Dual-impl soft-seal: Sealed (commitment to (Set, ×, 1)) first, then
+  // SetCategoryDefaults — the blanket MonoidalCategory impl comes for free.
+  impl Sealed for MyMonoidal {}
+  impl SetCategoryDefaults for MyMonoidal {}
+  ```
+
+  The documented dual-impl pattern was chosen over a
+  `#[derive(SetCategoryDefaults)]` proc-macro — two impl lines don't justify a
+  separate macro crate
+  ([#42](https://github.com/sustia-llc/catgraph/issues/42) decision).
 - **`Actegory<M>`** + **`SetActegory`** — the action `▶ : M × C → C` and its
   coherence witness `μ : Q ⊗ (P ▶ X) → (Q ⊗ P) ▶ X`.
 - **`Comonoid<M>`** + **`DiagonalComonoid`** — the diagonal `Δ : P → (P, P)`.
@@ -190,7 +207,7 @@ GitHub issue where one exists, otherwise plainly deferred.
   hyperdoctrine, vector-bundle. The trait surface admits them; concrete
   instances are deferred —
   [#36](https://github.com/sustia-llc/catgraph/issues/36). The
-  `SetCategoryDefaults` sub-trait closes the boilerplate gap for
+  `SetCategoryDefaults` opt-in marker trait closes the boilerplate gap for
   `(Set, ×, 1)`-flavoured ZSTs only.
 - **Truly-infinite final-coalgebra semantics** for `UnfoldingRnn` — the current
   `unroll_to_vec` is *bounded*; a lazy / `Iterator` / `tokio_stream::Stream`

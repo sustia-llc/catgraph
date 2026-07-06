@@ -92,9 +92,13 @@ use super::reparameterization::Reparameterization;
 ///
 /// CDL Theorem G.10. The implementor witnesses a uniform comonoid structure
 /// across the objects of `M`: a comultiplication `δ : P → P ⊗ P` and a
-/// counit `ε : P → I` defined for every carrier type `P` (with the
-/// per-method bounds the implementor needs — e.g. [`DiagonalComonoid`]
-/// requires `P: Clone` to implement `δ(p) = (p, p)`).
+/// counit `ε : P → I` defined for every carrier type `P`. The
+/// [`comultiply`](Self::comultiply) signature carries `P: Clone` for **every**
+/// implementor — this is the canonical home of that bound, and it is
+/// **semantic, not incidental**: `Clone` is the Rust witness of duplication
+/// `δ : P → P ⊗ P` in `(Set, ×, 1)`; a carrier that cannot be duplicated has
+/// no comonoid here, and consumers of the structure (e.g. [`tie_weights`])
+/// inherit the bound for the same reason.
 ///
 /// ## Laws (must hold for every implementor)
 ///
@@ -202,8 +206,13 @@ impl Comonoid<SetMonoidal> for DiagonalComonoid<SetMonoidal> {
 ///   using explicit turbofish move from 4-parameter
 ///   `tie_weights::<P, F, X, Y>` to 5-parameter
 ///   `tie_weights::<C, P, F, X, Y>`.
-/// - `P` — the (collapsed) parameter type. Must be `Clone` so the diagonal
-///   can duplicate it.
+/// - `P` — the (collapsed) parameter type. The `P: Clone` bound is
+///   **semantic, not incidental** — `Clone` witnesses the comultiplication
+///   `δ(p) = (p, p)` this function applies, so a `P` with no duplication has
+///   no tied form and relaxing the bound would change what `tie_weights`
+///   means. See [`Comonoid`] (the bound's canonical home) for the full
+///   rationale (CDL Theorem G.10). Heap-shared parameters compose fine:
+///   `Arc<T>` is cheaply `Clone`, satisfying `δ` without a deep copy.
 /// - `F` — the original action `f : (P, P) × X → Y`.
 /// - `X`, `Y` — carrier types in the category `C` acts on.
 ///
