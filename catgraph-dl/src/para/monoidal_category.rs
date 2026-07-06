@@ -21,6 +21,21 @@
 //! surface is widened now to keep their addition a non-breaking transition for
 //! [`SetMonoidal`] consumers.
 //!
+//! ## Coherence laws (machine-checked for the `(Set, ×, 1)` blanket)
+//!
+//! The associator and unitors must satisfy Mac Lane's **pentagon** and
+//! **triangle** identities (see the [`MonoidalCategory`] trait rustdoc for the
+//! equations). For the `(Set, ×, 1)` blanket bodies supplied via
+//! [`SetCategoryDefaults`] these hold on the nose, and are machine-checked
+//! against `SetMonoidal` and a downstream-style ZST in
+//! `tests/monoidal_coherence_laws.rs` (issue #40) — covering the bodies every
+//! `(Set, ×, 1)`-flavoured ZST inherits, not just `SetMonoidal`. For future
+//! non-`Set` instances the trait carries them as documented implementor
+//! obligations (the pentagon is stated per-instance because the trait
+//! currently has no morphism-tensor operation for the generic `α ⊗ id` /
+//! `id ⊗ α` legs; adding one is tracked as
+//! [#65](https://github.com/sustia-llc/catgraph/issues/65)).
+//!
 //! Closure convention across the `para` module: `Fn((P, X)) -> Y`
 //! (tuple-as-single-argument). This mirrors the `architectures::*` scaffold
 //! which uses `fn((f32, u8, u32)) -> u32` etc.
@@ -111,6 +126,33 @@ use core::marker::PhantomData;
 ///
 /// For `SetMonoidal`, the GATs project to Rust tuples and the coherence
 /// isomorphisms are exact, not "up to iso".
+///
+/// # Coherence obligations (Mac Lane)
+///
+/// Implementors must satisfy the **pentagon** and **triangle** identities.
+/// Writing `α` for [`associate`](MonoidalCategory::associate), `λ` for
+/// [`left_unitor`](MonoidalCategory::left_unitor), `ρ` for
+/// [`right_unitor`](MonoidalCategory::right_unitor), and `⊗` for the
+/// object/morphism tensor:
+///
+/// ```text
+/// Pentagon (on ((A ⊗ B) ⊗ C) ⊗ D):
+///   α_{A,B,C⊗D} ∘ α_{A⊗B,C,D}
+///     = (id_A ⊗ α_{B,C,D}) ∘ α_{A,B⊗C,D} ∘ (α_{A,B,C} ⊗ id_D)
+///
+/// Triangle (on (A ⊗ I) ⊗ B):
+///   (id_A ⊗ λ_B) ∘ α_{A,I,B} = ρ_A ⊗ id_B
+/// ```
+///
+/// These are documented obligations, not enforced at construction. The trait
+/// currently carries **no morphism-tensor operation**, so the `α ⊗ id` /
+/// `id ⊗ α` legs are not expressible generically *on this surface* — an
+/// applying-form `tensor_morphisms` method would make them so and is tracked
+/// as [#65](https://github.com/sustia-llc/catgraph/issues/65). Until then,
+/// coherence is machine-checked for the `(Set, ×, 1)` blanket (where the legs
+/// are spelled manually on the concrete tuples) in
+/// `tests/monoidal_coherence_laws.rs` (issue #40), and left as a per-instance
+/// obligation for future non-`Set` monoidal categories.
 pub trait MonoidalCategory {
     /// Marker for the kind of objects of `M`. For `SetMonoidal` this is the
     /// uninhabited [`SetObject`] tag — actual objects are Rust types

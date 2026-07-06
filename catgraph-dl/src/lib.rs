@@ -19,18 +19,25 @@
 //!   [`para::SetCategoryDefaults`].
 //! - [`algebra`] — `FAlgebra<F>`, `FCoalgebra<F>`, `MonadAlgebra<M>` plus
 //!   homomorphism wrappers `FAlgebraHom` / `FCoalgebraHom` /
-//!   `MonadAlgebraHom` with caller-attested `verify_commutes`. The
-//!   `Z2Group`-action GDL recovery test in `tests/algebra_homomorphisms.rs`
-//!   is the headline reification of CDL §2.1 Ex 2.6 (equivariant maps as
-//!   monad-algebra homomorphisms). CDL §2.
+//!   `MonadAlgebraHom` with caller-sampled `verify_commutes`, and (issue #40)
+//!   machine-checked monad-algebra coherence verifiers (`verify_unit_law` /
+//!   `verify_assoc_law` on `MonadAlgebra`; `verify_unit_coherence` /
+//!   `verify_mult_coherence` on `MonadAlgebraHom`) built on haft's `Monad`
+//!   (`η = Pure`, `μ = join`). The `Z2Group`-action GDL recovery test in
+//!   `tests/algebra_homomorphisms.rs` is the headline reification of CDL §2.1
+//!   Ex 2.6 (equivariant maps as monad-algebra homomorphisms). CDL §2.
 //! - [`free_monad`] — explicit `FreeMnd(F)(Z) = Fix(X ↦ F(X) + Z)` and the
 //!   cofree-comonad dual via GAT projection. `ListEndo<A>` / `TreeEndo<A>`
 //!   bijection witnesses for CDL Examples B.19 / B.20. CDL Proposition B.18.
 //! - [`architectures`] — five typed (co)algebra-as-architecture unrollers
-//!   (Folding RNN, Unfolding RNN, Recursive NN, Mealy cell, Moore cell)
-//!   each shipping a `FreeMnd`-equivalence test in
-//!   `tests/architecture_unrollers.rs` reifying CDL Remark 2.13. CDL
-//!   Appendix I + Appendix J + Appendix K.
+//!   (Folding RNN, Unfolding RNN, Recursive NN, Mealy cell, Moore cell). The
+//!   two algebra-direction unrollers (Folding RNN, Recursive NN) ship
+//!   `FreeMnd`-equivalence tests (deterministic + proptest) in
+//!   `tests/architecture_unrollers.rs` reifying CDL Remark 2.13; the three
+//!   coalgebra-direction unrollers have behavioural tests only —
+//!   final-coalgebra equivalence is tracked in
+//!   [#64](https://github.com/sustia-llc/catgraph/issues/64). CDL
+//!   Appendix I + Appendix J.
 //! - [`endofunctor`] — the `deep_causality_haft` `HKT` / `Functor` witness
 //!   substrate (single import seam), shared by `algebra::` and
 //!   `free_monad::`. Replaces the former hand-rolled `EndoFunctor` trait
@@ -131,12 +138,13 @@ pub mod para;
 // `deep_causality_haft`'s `HKT` (object map) + `Functor` (morphism map),
 // shared between `algebra::` (F-algebras and homomorphisms) and
 // `free_monad::` (recursive `FreeMnd` / `CofreeCmnd`). `Either` is the sum
-// carried by `TreeEndo`. `Pure` and `NaturalIso` are mirrored here too:
-// implementing `Pointed` downstream requires `Pure<Self>`, and driving the
-// `IsoForward` / `IsoBackward` adapters requires naming `NaturalIso`. The
-// former `catgraph_dl::EndoFunctor` path is removed (breaking; issue #12).
+// carried by `TreeEndo`. `Pure`, `NaturalIso`, and `Monad` are mirrored here
+// too: implementing `Pointed` downstream requires `Pure<Self>`, driving the
+// `IsoForward` / `IsoBackward` adapters requires naming `NaturalIso`, and the
+// monad-algebra verifiers bound `M: EndoWitness + Monad<M>`. The former
+// `catgraph_dl::EndoFunctor` path is removed (breaking; issue #12).
 pub use endofunctor::{
-    Either, EndoWitness, Functor, HKT, NaturalIso, NoConstraint, Pure, Satisfies,
+    Either, EndoWitness, Functor, HKT, Monad, NaturalIso, NoConstraint, Pure, Satisfies,
 };
 
 // The first-class natural-transformation / pointed-endofunctor / container

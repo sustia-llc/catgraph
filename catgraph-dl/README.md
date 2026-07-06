@@ -25,8 +25,12 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
 `(Q ⊗ P, h)`.
 
 - **`MonoidalCategory`** — GAT-based trait for the parameter category `M`
-  (associated `Object`, `Morphism`, `Unit`, `Tensor<A, B>`). The concrete
-  `(Set, ×, 1)` instance is the zero-sized **`SetMonoidal`**, with kind markers
+  (associated `Object`, `Morphism`, `Unit`, `Tensor<A, B>`). The trait rustdoc
+  now carries the Mac Lane **pentagon** and **triangle** coherence equations as
+  implementor obligations; for the `(Set, ×, 1)` blanket they are
+  machine-checked (against `SetMonoidal` and a downstream-style ZST) in
+  `tests/monoidal_coherence_laws.rs` (issue #40). The concrete `(Set, ×, 1)`
+  instance is the zero-sized **`SetMonoidal`**, with kind markers
   **`SetObject`** / **`SetMorphism`** and the **`MonoidalTag<M>`** phantom
   witness.
 - **`SetCategoryDefaults`** — opt-in marker trait (soft-sealed via **`Sealed`**)
@@ -47,9 +51,19 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
 ### `algebra` — F-(co)algebras and monad algebras (CDL §2)
 
 - **`FAlgebra<F>`** `(A, a : F(A) → A)`, **`FCoalgebra<F>`** (dual), and
-  **`MonadAlgebra<M>`** (CDL Definitions 2.3, 2.8, B.2).
+  **`MonadAlgebra<M>`** (CDL Definitions 2.3, 2.8, B.2). `MonadAlgebra` carries
+  machine-checked monad-law verifiers **`verify_unit_law`** /
+  **`verify_assoc_law`** (`η = ` haft's `Pure`, `μ = ` haft's `Monad::join`).
 - Homomorphism wrappers **`FAlgebraHom`** / **`FCoalgebraHom`** /
-  **`MonadAlgebraHom`**, each with a caller-attested `verify_commutes`.
+  **`MonadAlgebraHom`**, each with a caller-sampled `verify_commutes`;
+  `MonadAlgebraHom` additionally carries the unit/multiplication coherence
+  verifiers **`verify_unit_coherence`** (η-naturality, CDL Def 1.5 applied to
+  `η`) / **`verify_mult_coherence`** (Def 2.3's associativity post-composed
+  with `f`), machine-checked against samples in `tests/monad_algebra_laws.rs`.
+  Note the two coherence verifiers probe the ambient monad/algebra structure —
+  they hold for *any* `f` and cannot reject a non-homomorphism; the
+  discriminating hom condition is `verify_commutes` (CDL Def 2.5). See the ⚠️
+  scope note on `MonadAlgebraHom`.
 - **`Group`**, **`Z2Group`**, **`GroupActionEndo<G>`** — group-action monad
   algebras recover GDL equivariant maps as monad-algebra homomorphisms (CDL §2.1
   Ex 2.6).
@@ -63,9 +77,13 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
 - **`TreeEndo<A>`** + the **`BinaryTree<A>`** carrier with `tree_to_free_mnd` /
   `free_mnd_to_tree` — the tree bijection witness (CDL Example B.20).
 
-### `architectures` — (co)algebra-as-architecture catalogue (CDL Appendix I / J / K)
+### `architectures` — (co)algebra-as-architecture catalogue (CDL Appendix I / J)
 
-Five typed wrappers, each shipping a `FreeMnd`-equivalence test (CDL Remark 2.13):
+Five typed wrappers. The two algebra-direction wrappers (`FoldingRnn`,
+`RecursiveNn`) ship `FreeMnd`-equivalence tests — deterministic + proptest —
+reifying CDL Remark 2.13; the three coalgebra-direction wrappers have
+behavioural tests only, with final-coalgebra equivalence tracked in
+[#64](https://github.com/sustia-llc/catgraph/issues/64):
 
 | Type | Construction |
 |------|--------------|
@@ -180,15 +198,32 @@ GitHub issue where one exists, otherwise plainly deferred.
 - **`examples/` closure** — the crate ships no examples; the four planned
   example files closing the pre-reboot examples-coverage baseline are tracked
   in [#34](https://github.com/sustia-llc/catgraph/issues/34).
-- **Property-based exhaustive testing** of `verify_commutes` and
-  `FreeMnd`-equivalence — current tests are caller-sampled.
+- ~~**Property-based exhaustive testing** of `verify_commutes` and
+  `FreeMnd`-equivalence~~ — **shipped** ([#40](https://github.com/sustia-llc/catgraph/issues/40)).
+  `tests/algebra_homomorphisms.rs` proptests the abs-value equivariance square
+  (positive) and the projection failure (negative);
+  `tests/architecture_unrollers.rs` proptests the list- and tree-direction
+  `FreeMnd`-equivalence over generated inputs (the coalgebra-direction
+  equivalence tests remain open —
+  [#64](https://github.com/sustia-llc/catgraph/issues/64)). The individual
+  `verify_commutes` entry points stay caller-sampled by design (the domain is
+  not enumerable).
 - **Upstream haft adoption of `Pointed` / `NaturalTransformation`** — the
   local `natural` traits stand in until the proposal to add them to
   `deep_causality_haft` itself lands —
   [#62](https://github.com/sustia-llc/catgraph/issues/62). On adoption they
   become seam re-exports.
-- **Machine-checked `MonadAlgebraHom` coherence laws** (`M(f) ∘ η_A = η_B ∘ f`,
-  associativity with `μ`) — currently caller-attested.
+- ~~**Machine-checked `MonadAlgebraHom` coherence laws** (`M(f) ∘ η_A = η_B ∘ f`,
+  associativity with `μ`)~~ — **shipped**
+  ([#40](https://github.com/sustia-llc/catgraph/issues/40)).
+  `MonadAlgebra::verify_unit_law` / `verify_assoc_law` and
+  `MonadAlgebraHom::verify_unit_coherence` / `verify_mult_coherence`, built on
+  haft's `Monad` (`η = Pure`, `μ = join`) and law-tested in
+  `tests/monad_algebra_laws.rs`. Verifiers are caller-sampled; construction
+  still does not enforce the laws; the two hom-side coherence checks probe the
+  ambient monad/algebra structure and cannot reject a non-homomorphism (the
+  discriminating condition is `verify_commutes` — see the ⚠️ scope note on
+  `MonadAlgebraHom`).
 - **The Hopf-fibration / carry-operation construction** — private stub only;
   deferred pending a Dudzik preprint (see below).
 - **Symbiogenesis, Levin bioelectric, active inference** — deferred to a future
