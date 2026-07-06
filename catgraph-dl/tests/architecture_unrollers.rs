@@ -57,8 +57,89 @@
 use catgraph_dl::Either;
 use catgraph_dl::architectures::{FoldingRnn, MealyCell, MooreCell, RecursiveNn, UnfoldingRnn};
 use catgraph_dl::free_monad::FreeMnd;
-use catgraph_dl::free_monad::list_endo::{ListEndo, vec_to_free_mnd};
+use catgraph_dl::free_monad::list_endo::{ListEndo, free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, TreeEndo, tree_to_free_mnd};
+
+use proptest::prelude::*;
+
+/// List-direction cell types (`FoldingRnn` over `1 + A × −`). Module-level so
+/// both the deterministic test and the proptest variant share the
+/// `FreeMnd`-walk helper below.
+type ListCell0 = fn(()) -> i64;
+type ListCell1 = fn(((), i64, i64)) -> i64;
+
+/// Tree-direction cell types (`RecursiveNn` over `A + (−)²`).
+type TreeCell0 = fn(i64) -> i64;
+type TreeCell1 = fn((i64, u8, i64, i64)) -> i64;
+
+/// Walk the cons-cell tower of `FreeMnd<ListEndo<A>, ()>`, applying the
+/// folding cell — the unique algebra hom from `(FreeMnd, structure_map)` into
+/// `(S, [cell_0, cell_1])`. CDL Remark 2.13 / Prop B.18.
+///
+/// Destructs through the canonical [`free_mnd_to_vec`] (which panics loudly on
+/// a non-canonical `Roll(None)` cell — the src contract; all inputs here come
+/// from `vec_to_free_mnd`, which never emits one), then right-folds the
+/// cons-order items through `cell_1` against the `cell_0` seed.
+fn unroll_list_via_free_mnd(
+    cell: &FoldingRnn<(), i64, ListCell0, ListCell1, i64>,
+    free_mnd: FreeMnd<ListEndo<i64>, ()>,
+) -> i64 {
+    let (items, ()) = free_mnd_to_vec(free_mnd);
+    let seed = (cell.cell_0)(());
+    items
+        .into_iter()
+        .rev()
+        .fold(seed, |s, a| (cell.cell_1)(((), a, s)))
+}
+
+/// Walk `FreeMnd<TreeEndo<A>, Infallible>` directly, applying the recursive
+/// cell — the unique algebra hom for the tree direction. Recursive (matches
+/// `tree_endo::free_mnd_to_tree`'s discipline). `Roll(Left(a))` (leaves) →
+/// `cell_0`; `Roll(Right((l, r)))` (internal nodes) → recurse both subtrees,
+/// then `cell_1`. CDL Remark 2.13 / Prop B.18.
+fn unroll_tree_via_free_mnd(
+    cell: &RecursiveNn<i64, i64, TreeCell0, TreeCell1, u8>,
+    free_mnd: FreeMnd<TreeEndo<u8>, core::convert::Infallible>,
+) -> i64 {
+    match free_mnd {
+        FreeMnd::Pure(z) => match z {}, // Infallible: unreachable.
+        FreeMnd::Roll(boxed) => match *boxed {
+            Either::Left(_a) => (cell.cell_0)(cell.parameter),
+            Either::Right((l, r)) => {
+                let leftmost = leftmost_leaf_payload(&l);
+                let l_val = unroll_tree_via_free_mnd(cell, l);
+                let r_val = unroll_tree_via_free_mnd(cell, r);
+                (cell.cell_1)((cell.parameter, leftmost, l_val, r_val))
+            }
+        },
+    }
+}
+
+/// Find the leftmost leaf payload of a `FreeMnd<TreeEndo<u8>, Infallible>`.
+/// Mirrors `RecursiveNn::leftmost_leaf` on the `BinaryTree` carrier.
+fn leftmost_leaf_payload(t: &FreeMnd<TreeEndo<u8>, core::convert::Infallible>) -> u8 {
+    let mut current = t;
+    loop {
+        match current {
+            FreeMnd::Pure(z) => match *z {},
+            FreeMnd::Roll(boxed) => match boxed.as_ref() {
+                Either::Left(a) => return *a,
+                Either::Right((l, _r)) => current = l,
+            },
+        }
+    }
+}
+
+/// Bounded-depth `BinaryTree<u8>` strategy for the tree-direction proptest.
+/// Depth ≤ 4, ≤ 16 nodes — matches the `with_cases(64)` budget.
+fn arb_binary_tree() -> impl Strategy<Value = BinaryTree<u8>> {
+    any::<u8>().prop_map(BinaryTree::leaf).prop_recursive(
+        4,  // max recursion depth
+        16, // max total nodes
+        2,  // expected branching factor
+        |inner| (inner.clone(), inner).prop_map(|(l, r)| BinaryTree::node(l, r)),
+    )
+}
 
 /// **Test 1 — `FoldingRnn::unroll` right-fold semantics.**
 ///
@@ -400,46 +481,8 @@ fn gdl_recovery_via_z2_invariant_folding() {
 /// including the empty list.
 #[test]
 fn folding_rnn_equivalent_to_free_mnd_unroller() {
-    type Cell0 = fn(()) -> i64;
-    type Cell1 = fn(((), i64, i64)) -> i64;
-    let cell: FoldingRnn<(), i64, Cell0, Cell1, i64> =
+    let cell: FoldingRnn<(), i64, ListCell0, ListCell1, i64> =
         FoldingRnn::new((), |()| 0_i64, |((), a, s)| a + s);
-
-    /// Walk the cons-cell tower of `FreeMnd<ListEndo<A>, ()>` directly,
-    /// applying the cell. Iterative (loop) to match
-    /// `list_endo::free_mnd_to_vec`'s discipline. Returns the same `S`
-    /// the right-fold `FoldingRnn::unroll` would produce.
-    ///
-    /// Implementation: collect the `A`s left-to-right (cons-order),
-    /// then right-fold them through `cell_1` against the `cell_0`
-    /// seed — the unique algebra hom from `(FreeMnd, structure_map)`
-    /// into `(S, [cell_0, cell_1])`.
-    fn unroll_via_free_mnd(
-        cell: &FoldingRnn<(), i64, Cell0, Cell1, i64>,
-        free_mnd: FreeMnd<ListEndo<i64>, ()>,
-    ) -> i64 {
-        // Collect the items by walking the cons-cell tower in cons-order.
-        let mut items: Vec<i64> = Vec::new();
-        let mut current = free_mnd;
-        loop {
-            match current {
-                FreeMnd::Pure(()) => break,
-                FreeMnd::Roll(boxed) => match *boxed {
-                    None => break, // Bare nil-ish; treated as the terminator.
-                    Some((a, rest)) => {
-                        items.push(a);
-                        current = rest;
-                    }
-                },
-            }
-        }
-        // Apply the algebra hom: outer call wraps the leftmost item.
-        let seed = (cell.cell_0)(());
-        items
-            .into_iter()
-            .rev()
-            .fold(seed, |s, a| (cell.cell_1)(((), a, s)))
-    }
 
     for vec in [
         Vec::<i64>::new(),
@@ -449,10 +492,10 @@ fn folding_rnn_equivalent_to_free_mnd_unroller() {
         vec![0_i64, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     ] {
         let direct = FoldingRnn::unroll(&cell, vec.clone());
-        let via_free_mnd = unroll_via_free_mnd(&cell, vec_to_free_mnd(vec.clone(), ()));
+        let via_free_mnd = unroll_list_via_free_mnd(&cell, vec_to_free_mnd(vec.clone(), ()));
         assert_eq!(
             direct, via_free_mnd,
-            "FoldingRnn::unroll(cell, {vec:?}) MUST equal unroll_via_free_mnd(cell, vec_to_free_mnd({vec:?}, ()))"
+            "FoldingRnn::unroll(cell, {vec:?}) MUST equal unroll_list_via_free_mnd(cell, vec_to_free_mnd({vec:?}, ()))"
         );
     }
 }
@@ -473,48 +516,8 @@ fn folding_rnn_equivalent_to_free_mnd_unroller() {
 /// (internal nodes → recurse into both subtrees, then `cell_1`).
 #[test]
 fn recursive_nn_equivalent_to_free_mnd_unroller() {
-    type Cell0 = fn(i64) -> i64;
-    type Cell1 = fn((i64, u8, i64, i64)) -> i64;
-    let cell: RecursiveNn<i64, i64, Cell0, Cell1, u8> =
+    let cell: RecursiveNn<i64, i64, TreeCell0, TreeCell1, u8> =
         RecursiveNn::new(1_i64, |p| p, |(_p, _a, l, r)| l + r + 1);
-
-    /// Walk `FreeMnd<TreeEndo<A>, Infallible>` directly, applying the
-    /// cell. Recursive (matches the tree-walk discipline of
-    /// `tree_endo::free_mnd_to_tree`). Returns the same `S` that
-    /// `RecursiveNn::unroll` would produce.
-    fn unroll_via_free_mnd(
-        cell: &RecursiveNn<i64, i64, Cell0, Cell1, u8>,
-        free_mnd: FreeMnd<TreeEndo<u8>, core::convert::Infallible>,
-    ) -> i64 {
-        match free_mnd {
-            FreeMnd::Pure(z) => match z {}, // Infallible: unreachable.
-            FreeMnd::Roll(boxed) => match *boxed {
-                Either::Left(_a) => (cell.cell_0)(cell.parameter),
-                Either::Right((l, r)) => {
-                    let leftmost = leftmost_leaf_payload(&l);
-                    let l_val = unroll_via_free_mnd(cell, l);
-                    let r_val = unroll_via_free_mnd(cell, r);
-                    (cell.cell_1)((cell.parameter, leftmost, l_val, r_val))
-                }
-            },
-        }
-    }
-
-    /// Find the leftmost leaf payload of a `FreeMnd<TreeEndo<u8>,
-    /// Infallible>`. Mirrors `RecursiveNn::leftmost_leaf` on the
-    /// `BinaryTree` carrier.
-    fn leftmost_leaf_payload(t: &FreeMnd<TreeEndo<u8>, core::convert::Infallible>) -> u8 {
-        let mut current = t;
-        loop {
-            match current {
-                FreeMnd::Pure(z) => match *z {},
-                FreeMnd::Roll(boxed) => match boxed.as_ref() {
-                    Either::Left(a) => return *a,
-                    Either::Right((l, _r)) => current = l,
-                },
-            }
-        }
-    }
 
     for tree in [
         BinaryTree::leaf(7_u8),
@@ -529,10 +532,45 @@ fn recursive_nn_equivalent_to_free_mnd_unroller() {
         ),
     ] {
         let direct = RecursiveNn::unroll(&cell, tree.clone());
-        let via_free_mnd = unroll_via_free_mnd(&cell, tree_to_free_mnd(tree.clone()));
+        let via_free_mnd = unroll_tree_via_free_mnd(&cell, tree_to_free_mnd(tree.clone()));
         assert_eq!(
             direct, via_free_mnd,
-            "RecursiveNn::unroll(cell, {tree:?}) MUST equal unroll_via_free_mnd(cell, tree_to_free_mnd({tree:?}))"
+            "RecursiveNn::unroll(cell, {tree:?}) MUST equal unroll_tree_via_free_mnd(cell, tree_to_free_mnd({tree:?}))"
         );
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// **`FreeMnd`-equivalence proptest — list direction.** CDL Remark 2.13 /
+    /// Proposition B.18. `FoldingRnn::unroll` IS the unique algebra hom from the
+    /// initial algebra of the free monad on `1 + A × −`: it agrees with the
+    /// direct `FreeMnd`-tower walk on every generated `Vec<i64>` (≤ 16 elems).
+    /// Lifts the caller-sampled test 9 to property-based.
+    #[test]
+    fn folding_rnn_free_mnd_equivalence_proptest(
+        input in prop::collection::vec(any::<i64>(), 0..=16),
+    ) {
+        // `wrapping_add` so arbitrary i64 payloads can't overflow; both legs
+        // use the *same* cell, so the equivalence is unaffected.
+        let cell: FoldingRnn<(), i64, ListCell0, ListCell1, i64> =
+            FoldingRnn::new((), |()| 0_i64, |((), a, s)| a.wrapping_add(s));
+        let direct = FoldingRnn::unroll(&cell, input.clone());
+        let via_free_mnd = unroll_list_via_free_mnd(&cell, vec_to_free_mnd(input, ()));
+        prop_assert_eq!(direct, via_free_mnd);
+    }
+
+    /// **`FreeMnd`-equivalence proptest — tree direction.** CDL Remark 2.13 /
+    /// Proposition B.18. `RecursiveNn::unroll` agrees with the direct
+    /// `FreeMnd<TreeEndo, Infallible>` walk on every generated bounded
+    /// `BinaryTree<u8>`. Lifts the caller-sampled test 10 to property-based.
+    #[test]
+    fn recursive_nn_free_mnd_equivalence_proptest(tree in arb_binary_tree()) {
+        let cell: RecursiveNn<i64, i64, TreeCell0, TreeCell1, u8> =
+            RecursiveNn::new(1_i64, |p| p, |(_p, _a, l, r)| l + r + 1);
+        let direct = RecursiveNn::unroll(&cell, tree.clone());
+        let via_free_mnd = unroll_tree_via_free_mnd(&cell, tree_to_free_mnd(tree));
+        prop_assert_eq!(direct, via_free_mnd);
     }
 }

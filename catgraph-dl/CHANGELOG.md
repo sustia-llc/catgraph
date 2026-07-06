@@ -34,6 +34,49 @@ All notable changes to this crate are documented here. Format follows
 
 ### Added
 
+- **Machine-checked coherence laws + property-based verification
+  ([#40](https://github.com/sustia-llc/catgraph/issues/40)).** Discharges the
+  two deferred surfaces "machine-checked `MonadAlgebraHom` coherence laws" and
+  "property-based exhaustive testing of `verify_commutes` / `FreeMnd`-equivalence".
+  - **`Monad` seam extension** (`src/endofunctor.rs`): the single import seam now
+    also re-exports haft's `Monad`; `GroupActionEndo<G>` gains an
+    `impl Monad<Self>` — the writer monad over the monoid `G`
+    (`bind((g, x), f) = { let (g2, y) = f(x); (g · g2, y) }`, so
+    `join((g1, (g2, x))) = (g1 · g2, x)` = the μ documented in
+    `monad_algebra.rs`). Monad laws discharged by the `Group` contract
+    (CDL Def 2.1 / Ex 2.2).
+  - **Monad-algebra coherence verifiers** (`src/algebra/monad_algebra.rs`), all
+    sample-based (mirroring `FAlgebraHom::verify_commutes`'s caller-sampled
+    honesty; `η = ` haft's `Pure`, `μ = ` haft's provided `Monad::join`):
+    `MonadAlgebra::verify_unit_law` (`a ∘ η = id`) /
+    `MonadAlgebra::verify_assoc_law` (`a ∘ M(a) = a ∘ μ`), both CDL Def 2.3,
+    and `MonadAlgebraHom::verify_unit_coherence` (`M(f) ∘ η_A = η_B ∘ f` —
+    η-naturality, CDL Def 1.5 applied to `η`) /
+    `MonadAlgebraHom::verify_mult_coherence` (`f ∘ a ∘ M(a) = f ∘ a ∘ μ_A` —
+    Def 2.3's associativity post-composed with `f`). The two hom-side checks
+    hold for *any* `f` between lawful algebras of a lawful monad and cannot
+    reject a non-homomorphism — the discriminating condition stays
+    `verify_commutes` (CDL Def 2.5); documented as a ⚠️ scope note on
+    `MonadAlgebraHom`. Law-tested in `tests/monad_algebra_laws.rs`: positive
+    deterministic + proptest over the `Z2` action on `Vec<f64>`, negative
+    unlawful-algebra cases, a non-hom boundary demonstration, and exhaustive
+    writer-monad laws over a non-abelian test-local `S3` pinning the
+    `g1 · g2` accumulation order.
+  - **Pentagon / triangle coherence** for the monoidal surface. The
+    `MonoidalCategory` trait rustdoc gains the Mac Lane pentagon + triangle
+    equations as implementor obligations (previously absent); the `(Set, ×, 1)`
+    blanket bodies are machine-checked against `SetMonoidal` and a fresh
+    downstream-style ZST in `tests/monoidal_coherence_laws.rs`, driven by a new
+    witness-generic `assert_monoidal_coherence` helper in `tests/common/mod.rs`
+    (the `α ⊗ id` / `id ⊗ α` legs spelled manually — the trait currently has no
+    morphism-tensor operation; adding one is
+    [#65](https://github.com/sustia-llc/catgraph/issues/65)). Mac Lane; CDL §3.1.
+  - **Proptest coverage for `verify_commutes` + `FreeMnd`-equivalence.**
+    `tests/algebra_homomorphisms.rs` proptests the abs-value equivariance square
+    (holds for all samples) and the projection failure (fails for all `x[0] ≠ 0`
+    under `g = true`); `tests/architecture_unrollers.rs` proptests the list- and
+    tree-direction `FreeMnd`-equivalence over generated inputs (bounded `Vec<i64>`
+    ≤ 16, bounded `BinaryTree<u8>`), reusing hoisted module-level walk helpers.
 - **`NaturalTransformation` / `Pointed` / `Container` first-class surfaces
   ([#41](https://github.com/sustia-llc/catgraph/issues/41)).** The three
   surfaces cg-dl previously documented as deferred obligations are now shipped,
