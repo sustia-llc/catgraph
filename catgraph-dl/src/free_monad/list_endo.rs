@@ -39,6 +39,7 @@
 
 use core::marker::PhantomData;
 
+use crate::container::Container;
 use crate::endofunctor::{Functor, HKT, NoConstraint, Satisfies};
 
 use super::free_mnd::FreeMnd;
@@ -77,6 +78,42 @@ impl<A> Functor<Self> for ListEndo<A> {
         // |x| g(f(x)))` — the `Option::map` + tuple-second-map composition
         // discharges both directly.
         fx.map(|(a, x)| (a, f(x)))
+    }
+}
+
+/// Container presentation of `1 + A × −` (Abbott–Altenkirch–Ghani 2003, via
+/// CDL). Shapes are `Option<A>`: the unit summand `None` (a `Nil` cell, arity
+/// 0) and the product summand `Some(a)` (a `Cons` cell carrying its label `a`,
+/// arity 1 — the single recursive slot). `A: PartialEq + Debug` so the shape
+/// carries into the machine-checked container laws.
+impl<A: PartialEq + core::fmt::Debug> Container for ListEndo<A> {
+    type Shape = Option<A>;
+
+    fn arity(shape: &Self::Shape) -> usize {
+        match shape {
+            None => 0,
+            Some(_) => 1,
+        }
+    }
+
+    fn decompose<X>(fx: Option<(A, X)>) -> (Self::Shape, Vec<X>) {
+        match fx {
+            None => (None, Vec::new()),
+            Some((a, x)) => (Some(a), vec![x]),
+        }
+    }
+
+    fn recompose<X>(shape: Self::Shape, contents: Vec<X>) -> Option<Option<(A, X)>> {
+        match shape {
+            // `None` shape (arity 0): reconstruct iff no contents were supplied.
+            None => contents.is_empty().then_some(None),
+            // `Some(a)` shape (arity 1): `TryFrom<Vec<X>> for [X; 1]` rejects
+            // any other length.
+            Some(a) => {
+                let [x] = <[X; 1]>::try_from(contents).ok()?;
+                Some(Some((a, x)))
+            }
+        }
     }
 }
 

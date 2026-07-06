@@ -42,6 +42,7 @@
 use core::convert::Infallible;
 use core::marker::PhantomData;
 
+use crate::container::Container;
 use crate::endofunctor::{Either, Functor, HKT, NoConstraint, Satisfies};
 
 use super::free_mnd::FreeMnd;
@@ -82,6 +83,42 @@ impl<A> Functor<Self> for TreeEndo<A> {
         match fx {
             Either::Left(a) => Either::Left(a),
             Either::Right((l, r)) => Either::Right((f(l), f(r))),
+        }
+    }
+}
+
+/// Container presentation of `A + (−)²` (Abbott–Altenkirch–Ghani 2003, via
+/// CDL). Shapes are `Either<A, ()>`: the leaf summand `Left(a)` (arity 0 — a
+/// leaf carries its label but no recursive slot) and the node summand
+/// `Right(())` (arity 2 — the two subtree slots). `A: PartialEq + Debug` so the
+/// shape carries into the machine-checked container laws.
+impl<A: PartialEq + core::fmt::Debug> Container for TreeEndo<A> {
+    type Shape = Either<A, ()>;
+
+    fn arity(shape: &Self::Shape) -> usize {
+        match shape {
+            Either::Left(_) => 0,
+            Either::Right(()) => 2,
+        }
+    }
+
+    fn decompose<X>(fx: Either<A, (X, X)>) -> (Self::Shape, Vec<X>) {
+        match fx {
+            Either::Left(a) => (Either::Left(a), Vec::new()),
+            Either::Right((l, r)) => (Either::Right(()), vec![l, r]),
+        }
+    }
+
+    fn recompose<X>(shape: Self::Shape, contents: Vec<X>) -> Option<Either<A, (X, X)>> {
+        match shape {
+            // Leaf shape (arity 0): reconstruct iff no contents were supplied.
+            Either::Left(a) => contents.is_empty().then_some(Either::Left(a)),
+            // Node shape (arity 2): `TryFrom<Vec<X>> for [X; 2]` rejects any
+            // other length.
+            Either::Right(()) => {
+                let [l, r] = <[X; 2]>::try_from(contents).ok()?;
+                Some(Either::Right((l, r)))
+            }
         }
     }
 }

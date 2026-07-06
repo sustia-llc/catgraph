@@ -35,7 +35,8 @@
 
 use core::marker::PhantomData;
 
-use crate::endofunctor::{Functor, HKT, NoConstraint, Satisfies};
+use crate::container::Container;
+use crate::endofunctor::{Functor, HKT, NoConstraint, Pure, Satisfies};
 
 /// A group with associative binary `compose` and identity `identity`.
 ///
@@ -119,6 +120,47 @@ impl<G> Functor<Self> for GroupActionEndo<G> {
     {
         let (g, x) = fx;
         (g, f(x))
+    }
+}
+
+/// The writer-functor point `σ_X(x) = (e, x)` making `F(X) = G × X` a
+/// **pointed endofunctor** (CDL Def B.3): the point pairs `x` with the group
+/// identity `e = G::identity()`. σ-naturality
+/// `fmap(pure(x), f) == pure(f(x))` holds because `fmap` preserves the group
+/// slot untouched — both sides carry `e` and apply `f` to the second slot.
+/// This is the crate's own inhabitant of [`crate::natural::Pointed`] (haft
+/// witnesses re-exported through the seam, e.g. `OptionWitness`, are also
+/// pointed via their upstream `Pure` impls); see that module for why
+/// `ListEndo` / `TreeEndo` ship no point.
+impl<G: Group> Pure<Self> for GroupActionEndo<G> {
+    fn pure<X>(value: X) -> (G, X)
+    where
+        X: Satisfies<NoConstraint>,
+    {
+        (G::identity(), value)
+    }
+}
+
+/// Container presentation of `G × −` (Abbott–Altenkirch–Ghani 2003, via CDL).
+/// There is a single position shape per group element: `Shape = G`, and every
+/// shape has arity 1 (the single `X` slot). `G: PartialEq + Debug` so the shape
+/// carries into the machine-checked container laws.
+impl<G: PartialEq + core::fmt::Debug> Container for GroupActionEndo<G> {
+    type Shape = G;
+
+    fn arity(_shape: &Self::Shape) -> usize {
+        1
+    }
+
+    fn decompose<X>(fx: (G, X)) -> (Self::Shape, Vec<X>) {
+        let (g, x) = fx;
+        (g, vec![x])
+    }
+
+    fn recompose<X>(shape: Self::Shape, contents: Vec<X>) -> Option<(G, X)> {
+        // Arity 1: `TryFrom<Vec<X>> for [X; 1]` rejects any other length.
+        let [x] = <[X; 1]>::try_from(contents).ok()?;
+        Some((shape, x))
     }
 }
 

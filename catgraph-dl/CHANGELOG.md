@@ -34,6 +34,42 @@ All notable changes to this crate are documented here. Format follows
 
 ### Added
 
+- **`NaturalTransformation` / `Pointed` / `Container` first-class surfaces
+  ([#41](https://github.com/sustia-llc/catgraph/issues/41)).** The three
+  surfaces cg-dl previously documented as deferred obligations are now shipped,
+  built on the haft witness substrate:
+  - **`natural::NaturalTransformation<F, G>`** (`src/natural.rs`) — the
+    component family `α_X : F(X) → G(X)` of a natural transformation `α : F ⇒ G`
+    (Gavranović et al., ICML 2024, Def 1.5), a static method on a zero-sized
+    witness. Adapter witnesses **`natural::IsoForward`** / **`natural::IsoBackward`**
+    lift any haft `NaturalIso<F, G>` to its two directions (separate types
+    because a pair of blanket impls would overlap).
+  - **`natural::Pointed`** — blanket marker for a pointed endofunctor `(F, σ)`
+    with `σ = ` haft's `Pure` (CDL Def B.3). `GroupActionEndo<G>` gains a
+    `Pure<Self>` impl (`σ(x) = (G::identity(), x)`, the writer-functor point) as
+    the crate's own inhabitant; haft witnesses reachable through the seam
+    (e.g. `OptionWitness`) are also pointed via their upstream `Pure` impls and
+    are law-tested alongside. `ListEndo` / `TreeEndo` are documented
+    non-instances — the former's only natural point (constant `None`)
+    trivialises every pointed-algebra; the latter's diagonal point is natural
+    but not representable under `Pure`'s no-`Clone` signature.
+  - **`container::Container`** (`src/container.rs`) — the shape/position
+    presentation of a polynomial endofunctor `⟦S ◁ P⟧(X) = Σ_{s} X^{P(s)}`
+    (Abbott–Altenkirch–Ghani 2003, via CDL), finitary (`Vec`-of-contents)
+    presentation. Instances for `ListEndo<A>`, `TreeEndo<A>`, `GroupActionEndo<G>`
+    live next to each witness definition.
+  - **Seam extension** (`src/endofunctor.rs`): the single import seam now also
+    re-exports haft's `Pure`, `NaturalIso`, `OptionWitness`, and the public
+    natural-iso law helpers `assert_natural_iso_round_trip` /
+    `assert_natural_iso_naturality` (reachable only via `iso::test_support`).
+  - **Law tests** — `tests/natural_pointed_laws.rs` (NT naturality via iso
+    adapters over a genuine `ListEndo<()> ≅ OptionWitness` iso, plus a
+    hand-written non-iso `ListEndo<i32> ⇒ ListEndo<i64>` NT, plus `Pointed`
+    σ-naturality) and `tests/container_laws.rs` (round-trip, arity coherence
+    including recompose rejection, `fmap` coherence over every witness shape),
+    driven by new witness-generic helpers in `tests/common/mod.rs`.
+  - The upstream proposal to add `Pointed` / `NaturalTransformation` to haft
+    itself is tracked as [#62](https://github.com/sustia-llc/catgraph/issues/62).
 - **`EndoWitness`** (`src/endofunctor.rs`) — a blanket-implemented supertrait
   alias `HKT<Constraint = NoConstraint> + Functor<Self>` packaging "endofunctor
   on Set". Restores the type-level invariant the old fused `EndoFunctor` trait
