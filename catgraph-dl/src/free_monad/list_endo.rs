@@ -39,11 +39,13 @@
 
 use core::marker::PhantomData;
 
-use super::free_mnd::{EndoFunctor, FreeMnd};
+use crate::endofunctor::{Functor, HKT, NoConstraint, Satisfies};
+
+use super::free_mnd::FreeMnd;
 
 /// The endofunctor `1 + A × −` for a fixed alphabet `A`.
 ///
-/// The `Apply<X>` projection is `Option<(A, X)>` — `None` for the unit
+/// The `Type<X>` projection is `Option<(A, X)>` — `None` for the unit
 /// summand, `Some((a, x))` for the product summand.
 ///
 /// CDL Example B.19. The free monad on this endofunctor is `List_{Z+1}(A)`.
@@ -58,12 +60,17 @@ impl<A> ListEndo<A> {
     }
 }
 
-impl<A> EndoFunctor for ListEndo<A> {
-    type Apply<X> = Option<(A, X)>;
+impl<A> HKT for ListEndo<A> {
+    type Constraint = NoConstraint;
+    type Type<X> = Option<(A, X)>;
+}
 
-    fn fmap<X, Y, G>(fx: Self::Apply<X>, f: G) -> Self::Apply<Y>
+impl<A> Functor<Self> for ListEndo<A> {
+    fn fmap<X, Y, Func>(fx: Option<(A, X)>, mut f: Func) -> Option<(A, Y)>
     where
-        G: Fn(X) -> Y,
+        X: Satisfies<NoConstraint>,
+        Y: Satisfies<NoConstraint>,
+        Func: FnMut(X) -> Y,
     {
         // Identity law: `fmap(None, _) = None`, `fmap(Some((a, x)), id) =
         // Some((a, x))`. Composition law: `fmap(fmap(fx, f), g) = fmap(fx,

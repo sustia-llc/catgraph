@@ -270,7 +270,6 @@ dependencies = [
  "catgraph-applied",
  "deep_causality_haft",
  "deep_causality_num",
- "either",
  "proptest",
 ]
 

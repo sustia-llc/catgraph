@@ -44,7 +44,7 @@
 )]
 
 use catgraph_dl::algebra::{
-    EndoFunctor, FAlgebra, FAlgebraHom, FCoalgebra, FCoalgebraHom, GroupActionEndo, MonadAlgebra,
+    FAlgebra, FAlgebraHom, FCoalgebra, FCoalgebraHom, Functor, GroupActionEndo, HKT, MonadAlgebra,
     MonadAlgebraHom, Z2Group,
 };
 
@@ -80,8 +80,8 @@ fn trivial_action((_g, y): (Z2Group, Vec<f64>)) -> Vec<f64> {
 /// Asserts `verify_commutes` returns `true` for the identity hom on the
 /// `Z2`-negation algebra `(Vec<f64>, negation_action)`, sampled at
 /// several `(g, x)` pairs. Bonus assertion: re-checks that `Z2Endo`'s
-/// `fmap` is well-formed (preserves the group element across the
-/// re-export at `catgraph_dl::algebra::EndoFunctor`).
+/// `fmap` is well-formed (preserves the group element through the
+/// `catgraph_dl::algebra` `Functor`/`HKT` re-export).
 #[test]
 fn identity_is_an_f_algebra_homomorphism() {
     let alg_a: FAlgebra<Z2Endo, Vec<f64>, fn((Z2Group, Vec<f64>)) -> Vec<f64>> =
@@ -113,7 +113,7 @@ fn identity_is_an_f_algebra_homomorphism() {
     }
 
     // fmap sanity through the public re-export.
-    let lifted: <Z2Endo as EndoFunctor>::Apply<Vec<f64>> =
+    let lifted: <Z2Endo as HKT>::Type<Vec<f64>> =
         Z2Endo::fmap((Z2Group(true), vec![1.0_f64, 2.0]), |x| x);
     assert_eq!(lifted, (Z2Group(true), vec![1.0_f64, 2.0]));
 }

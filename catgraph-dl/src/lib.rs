@@ -31,8 +31,10 @@
 //!   each shipping a `FreeMnd`-equivalence test in
 //!   `tests/architecture_unrollers.rs` reifying CDL Remark 2.13. CDL
 //!   Appendix I + Appendix J + Appendix K.
-//! - [`endofunctor`] — canonical `EndoFunctor` trait at the crate root,
-//!   GAT-based functor pattern shared by `algebra::` and `free_monad::`.
+//! - [`endofunctor`] — the `deep_causality_haft` `HKT` / `Functor` witness
+//!   substrate (single import seam), shared by `algebra::` and
+//!   `free_monad::`. Replaces the former hand-rolled `EndoFunctor` trait
+//!   (issue #12).
 //! - `hopf_fibration` (private) — namespace stub for Dudzik's carry-operation
 //!   conjecture. Pre-publication research; not in CDL ICML 2024. Not part
 //!   of the public surface. See ⚠️ CAREFUL section below for the 2026-05-06
@@ -77,7 +79,9 @@
 //!   (lazy / `Iterator` / `tokio_stream::Stream` carrier). Bounded-depth
 //!   `unroll_to_vec` is the shipped surface; lazy variant deferred.
 //! - **First-class `NaturalTransformation<F, G>` / `Pointed<F>` / `Container<F>`**
-//!   types. Documented obligations only; land if a consumer surfaces.
+//!   types. Documented obligations only. haft 0.3.3 supplies `Pure` /
+//!   `NaturalIso` but not `Pointed` / `NaturalTransformation`; layering those
+//!   on is tracked as [#41](https://github.com/sustia-llc/catgraph/issues/41).
 //! - **Symbiogenesis / Levin bioelectric / active inference / cellular-
 //!   automata coalitions** — ambitious tier; lands in a future external
 //!   sibling `catgraph-coalition-dl`, not here.
@@ -109,12 +113,13 @@ pub mod free_monad;
 mod hopf_fibration;
 pub mod para;
 
-// Top-level convenience re-export: the `EndoFunctor` trait is the
-// canonical Functor type-class shared between `algebra::` (F-algebras
-// and homomorphisms) and `free_monad::` (recursive `FreeMnd` /
-// `CofreeCmnd`). Both submodules also re-export it for backward
-// compatibility with the pre-reconciliation paths.
-pub use endofunctor::EndoFunctor;
+// Top-level convenience re-export: the endofunctor abstraction is now
+// `deep_causality_haft`'s `HKT` (object map) + `Functor` (morphism map),
+// shared between `algebra::` (F-algebras and homomorphisms) and
+// `free_monad::` (recursive `FreeMnd` / `CofreeCmnd`). `Either` is the sum
+// carried by `TreeEndo`. The former `catgraph_dl::EndoFunctor` path is
+// removed (breaking; issue #12).
+pub use endofunctor::{Either, EndoWitness, Functor, HKT, NoConstraint, Satisfies};
 
 // Re-exports of the Tier 3 enrichment substrate from catgraph-applied. Same
 // pattern as `catgraph-magnitude` — a single import path for downstream
