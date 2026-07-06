@@ -7,7 +7,7 @@
 //!
 //! ## Scope
 //!
-//! Five public modules. The crate is types + (co)algebra wrappers
+//! Seven public modules. The crate is types + (co)algebra wrappers
 //! over `(Set, ×, 1)` by default; non-`(Set, ×, 1)` `MonoidalCategory`
 //! instances are deferred until a downstream consumer surfaces.
 //!
@@ -35,6 +35,15 @@
 //!   substrate (single import seam), shared by `algebra::` and
 //!   `free_monad::`. Replaces the former hand-rolled `EndoFunctor` trait
 //!   (issue #12).
+//! - [`natural`] — first-class [`natural::NaturalTransformation<F, G>`]
+//!   (component family `α_X : F(X) → G(X)`; Gavranović et al. Def 1.5) with
+//!   [`natural::IsoForward`] / [`natural::IsoBackward`] adapters over haft's
+//!   `NaturalIso`, and the blanket [`natural::Pointed`] endofunctor marker
+//!   `(F, σ)` with `σ = ` haft's `Pure` (CDL Def B.3). Issue #41.
+//! - [`container`] — the [`container::Container`] shape/position presentation of
+//!   a polynomial endofunctor `⟦S ◁ P⟧(X) = Σ_{s} X^{P(s)}`
+//!   (Abbott–Altenkirch–Ghani 2003, via CDL), finitary (`Vec`-of-contents)
+//!   presentation. Issue #41.
 //! - `hopf_fibration` (private) — namespace stub for Dudzik's carry-operation
 //!   conjecture. Pre-publication research; not in CDL ICML 2024. Not part
 //!   of the public surface. See ⚠️ CAREFUL section below for the 2026-05-06
@@ -78,10 +87,13 @@
 //! - **Truly-infinite final-coalgebra semantics** for [`architectures::UnfoldingRnn`]
 //!   (lazy / `Iterator` / `tokio_stream::Stream` carrier). Bounded-depth
 //!   `unroll_to_vec` is the shipped surface; lazy variant deferred.
-//! - **First-class `NaturalTransformation<F, G>` / `Pointed<F>` / `Container<F>`**
-//!   types. Documented obligations only. haft 0.3.3 supplies `Pure` /
-//!   `NaturalIso` but not `Pointed` / `NaturalTransformation`; layering those
-//!   on is tracked as [#41](https://github.com/sustia-llc/catgraph/issues/41).
+//! - **Upstream haft adoption of `Pointed` / `NaturalTransformation`** — the
+//!   first-class surfaces themselves shipped in [`natural`] and [`container`]
+//!   ([#41](https://github.com/sustia-llc/catgraph/issues/41)); what remains
+//!   deferred is proposing `Pointed` / `NaturalTransformation` to
+//!   `deep_causality_haft` itself, so cg-dl re-exports rather than defines
+//!   them — tracked as
+//!   [#62](https://github.com/sustia-llc/catgraph/issues/62).
 //! - **Symbiogenesis / Levin bioelectric / active inference / cellular-
 //!   automata coalitions** — ambitious tier; lands in a future external
 //!   sibling `catgraph-coalition-dl`, not here.
@@ -108,18 +120,30 @@
 
 pub mod algebra;
 pub mod architectures;
+pub mod container;
 pub mod endofunctor;
 pub mod free_monad;
 mod hopf_fibration;
+pub mod natural;
 pub mod para;
 
 // Top-level convenience re-export: the endofunctor abstraction is now
 // `deep_causality_haft`'s `HKT` (object map) + `Functor` (morphism map),
 // shared between `algebra::` (F-algebras and homomorphisms) and
 // `free_monad::` (recursive `FreeMnd` / `CofreeCmnd`). `Either` is the sum
-// carried by `TreeEndo`. The former `catgraph_dl::EndoFunctor` path is
-// removed (breaking; issue #12).
-pub use endofunctor::{Either, EndoWitness, Functor, HKT, NoConstraint, Satisfies};
+// carried by `TreeEndo`. `Pure` and `NaturalIso` are mirrored here too:
+// implementing `Pointed` downstream requires `Pure<Self>`, and driving the
+// `IsoForward` / `IsoBackward` adapters requires naming `NaturalIso`. The
+// former `catgraph_dl::EndoFunctor` path is removed (breaking; issue #12).
+pub use endofunctor::{
+    Either, EndoWitness, Functor, HKT, NaturalIso, NoConstraint, Pure, Satisfies,
+};
+
+// The first-class natural-transformation / pointed-endofunctor / container
+// surfaces layered on the endofunctor witnesses (issue #41). Same crate-root
+// re-export convention as the modules above.
+pub use container::Container;
+pub use natural::{IsoBackward, IsoForward, NaturalTransformation, Pointed};
 
 // Re-exports of the Tier 3 enrichment substrate from catgraph-applied. Same
 // pattern as `catgraph-magnitude` — a single import path for downstream
