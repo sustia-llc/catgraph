@@ -4,56 +4,38 @@
 //! architecture wrappers, the F-(co)algebra newtypes, the free-monad
 //! recursive carriers, and the `Para` type-level handle all instantiate.
 //!
-//! `FreeMnd<F, Z>` requires `F: EndoFunctor`
-//! (GAT-based object-map encoding). The endofunctor placeholders below
-//! gain trivial `EndoFunctor` impls so the type-level instantiations
-//! still work — for `Stream`, `Mealy`, and `GroupAction` we use a unit
-//! `Apply<X> = ()` projection because no semantics are exercised here;
-//! semantics for `ListEndo` / `TreeEndo` are tested in the dedicated
-//! `tests/free_monad_bijections.rs`.
+//! `FreeMnd<F, Z>` requires `F: EndoWitness`
+//! (`deep_causality_haft` GAT object map + morphism map). The endofunctor
+//! placeholders below are aliases of the shared trivial `common::UnitEndo`
+//! witness (unit `Type<X> = ()` projection) because no semantics are exercised
+//! here; semantics for `ListEndo` / `TreeEndo` are tested in
+//! `tests/functor_laws.rs` and `tests/free_monad_bijections.rs`.
 
 #![allow(clippy::type_complexity, clippy::float_cmp)]
+
+mod common;
+
+use core::marker::PhantomData;
 
 use catgraph_dl::algebra::{FAlgebra, FCoalgebra, MonadAlgebra};
 use catgraph_dl::architectures::{FoldingRnn, MealyCell, MooreCell, RecursiveNn, UnfoldingRnn};
 use catgraph_dl::free_monad::list_endo::ListEndo;
 use catgraph_dl::free_monad::tree_endo::TreeEndo;
-use catgraph_dl::free_monad::{CofreeCmnd, EndoFunctor, FreeMnd};
+use catgraph_dl::free_monad::{CofreeCmnd, FreeMnd};
 
-// Type-level placeholders for the F-algebra-side endofunctors. The
-// `Apply<X> = ()` projections are deliberately trivial — these names are
-// reserved for future semantic bodies and the smoke test only checks the
-// type-level witnesses still construct.
-struct StreamEndo<O>(core::marker::PhantomData<O>);
-struct MealyEndo<I, O>(core::marker::PhantomData<(I, O)>);
-struct GroupActionEndo<G>(core::marker::PhantomData<G>);
+use common::UnitEndo;
 
-impl<O> EndoFunctor for StreamEndo<O> {
-    type Apply<X> = ();
-    fn fmap<X, Y, G>((): Self::Apply<X>, _: G) -> Self::Apply<Y>
-    where
-        G: Fn(X) -> Y,
-    {
-    }
-}
+// Type-level placeholders for the F-algebra-side endofunctors, aliased onto the
+// single shared `UnitEndo<Tag>` (trivial `Type<X> = ()`). Per-file phantom tag
+// types keep the descriptive names and their generic arity; the smoke test only
+// checks the type-level witnesses still construct.
+struct StreamTag<O>(PhantomData<O>);
+struct MealyTag<I, O>(PhantomData<(I, O)>);
+struct GroupActionTag<G>(PhantomData<G>);
 
-impl<I, O> EndoFunctor for MealyEndo<I, O> {
-    type Apply<X> = ();
-    fn fmap<X, Y, G>((): Self::Apply<X>, _: G) -> Self::Apply<Y>
-    where
-        G: Fn(X) -> Y,
-    {
-    }
-}
-
-impl<G> EndoFunctor for GroupActionEndo<G> {
-    type Apply<X> = ();
-    fn fmap<X, Y, GFn>((): Self::Apply<X>, _: GFn) -> Self::Apply<Y>
-    where
-        GFn: Fn(X) -> Y,
-    {
-    }
-}
+type StreamEndo<O> = UnitEndo<StreamTag<O>>;
+type MealyEndo<I, O> = UnitEndo<MealyTag<I, O>>;
+type GroupActionEndo<G> = UnitEndo<GroupActionTag<G>>;
 
 #[test]
 fn folding_rnn_constructs() {
@@ -126,7 +108,7 @@ fn free_monad_witnesses_construct() {
     let _free_tree: FreeMnd<TreeEndo<u8>, ()> = FreeMnd::new();
 
     // `CofreeCmnd::new` takes `(head, tail)`. For the smoke
-    // test we use the trivial `Apply<X> = ()` projections of the stream/
+    // test we use the trivial `Type<X> = ()` projections of the stream/
     // Mealy endofunctors so `tail = ()` is a valid construction.
     let _cofree_stream: CofreeCmnd<StreamEndo<u8>, ()> = CofreeCmnd::new((), ());
     let _cofree_mealy: CofreeCmnd<MealyEndo<u8, u8>, ()> = CofreeCmnd::new((), ());

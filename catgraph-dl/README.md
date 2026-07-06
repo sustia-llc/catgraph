@@ -75,11 +75,15 @@ Five typed wrappers, each shipping a `FreeMnd`-equivalence test (CDL Remark 2.13
 | `MealyCell` (full RNN) | `Para(I → O × −)` coalgebra |
 | `MooreCell` | `Para(O × (I → −))` coalgebra |
 
-### `endofunctor` — the shared functor type-class
+### `endofunctor` — the shared functor substrate
 
-- **`EndoFunctor`** — canonical GAT-based `EndoFunctor` trait at the crate root,
-  shared by `algebra` (F-algebras and homomorphisms) and `free_monad` (recursive
-  `FreeMnd` / `CofreeCmnd`).
+- **`HKT` / `Functor`** — `deep_causality_haft`'s GAT-based witness traits
+  (object map `HKT::Type<X>`, morphism map `Functor::fmap`), re-exported through
+  `crate::endofunctor` as the single import seam and shared by `algebra`
+  (F-algebras and homomorphisms) and `free_monad` (recursive `FreeMnd` /
+  `CofreeCmnd`). Replaces the former hand-rolled `EndoFunctor` trait
+  ([#12](https://github.com/sustia-llc/catgraph/issues/12)); every shipped
+  witness uses `NoConstraint`.
 
 ### `hopf_fibration` (private)
 
@@ -109,22 +113,25 @@ For a single import path, the Tier-3 enrichment substrate is re-exported from
 
 ## Status
 
-Phase 5 (`catgraph-dl`) is merged. The crate builds against the thin
-DeepCausality substrate but is otherwise DC-free in its own source:
-`deep_causality_num` + `deep_causality_haft` are carried **deps-only**, reserved
-for the eventual `endofunctor::EndoFunctor` → `deep_causality_haft` HKT/Arrow
-migration ([#12](https://github.com/sustia-llc/catgraph/issues/12)); they are not
-imported in any source file (`rg deep_causality src` is doc-only). Rig `Zero` /
-`One` are inherited transitively from `catgraph-applied`'s `Rig`.
+Phase 5 (`catgraph-dl`) is merged. The endofunctor layer now runs on
+`deep_causality_haft`'s `HKT` / `Functor` witnesses (EndoFunctor→haft migration
+landed, [#12](https://github.com/sustia-llc/catgraph/issues/12)) — imported in
+`src/endofunctor.rs`, the single seam. `deep_causality_num` stays carried
+**deps-only**, reserved for the R-module / `F64Module` surfaces
+([#36](https://github.com/sustia-llc/catgraph/issues/36)) which need `Zero` /
+`One`; it is not referenced anywhere in the crate (`rg deep_causality_num src`
+returns no hits — post-#12 the doc mentions went too). Rig `Zero` / `One` are
+inherited transitively from `catgraph-applied`'s `Rig`.
 
 ## Dependencies
 
 - `catgraph` — core Fong & Spivak types.
 - `catgraph-applied` — the `Rig` + `EnrichedCategory` substrate (crate-graph
   position: `catgraph-applied` → `catgraph-dl`).
-- `either` — the `F(X) + Z` coproduct carrier for `FreeMnd`.
-- `deep_causality_num` + `deep_causality_haft` — **deps-only**, reserved for #12
-  (see [Status](#status)).
+- `deep_causality_haft` — the `HKT` / `Functor` endofunctor witnesses (#12) and
+  the `Either` sum used by `TreeEndo`. (The former dependency on the `either`
+  crate was dropped — `Either` now comes from haft.)
+- `deep_causality_num` — **deps-only**, reserved for #36 (see [Status](#status)).
 - dev: `proptest`.
 
 ## Deferred surfaces
@@ -132,9 +139,6 @@ imported in any source file (`rg deep_causality src` is doc-only). Rig `Zero` /
 Held until a downstream consumer surfaces a concrete need. Re-anchored to a
 GitHub issue where one exists, otherwise plainly deferred.
 
-- **`EndoFunctor` → `deep_causality_haft` migration** —
-  [#12](https://github.com/sustia-llc/catgraph/issues/12). The `num` + `haft`
-  deps are present for this and nothing else.
 - **Non-`(Set, ×, 1)` `MonoidalCategory` instances** — R-module actegory,
   hyperdoctrine, vector-bundle. The trait surface admits them; concrete
   instances are deferred —

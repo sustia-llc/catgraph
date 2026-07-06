@@ -11,10 +11,10 @@
 //! the encoding collapses to leaves drawn purely from `A`. With `Z = ()`
 //! leaves are `A + ()` — either an actual `A` or a "hole" placeholder.
 //!
-//! In Rust we encode `A + X²` as `Either<A, (X, X)>` from the `either`
-//! crate (already a workspace dependency). The `Left(a)` summand is a
-//! tree leaf with payload `a : A`; the `Right((l, r))` summand is an
-//! internal node with left/right subtrees.
+//! In Rust we encode `A + X²` as [`Either<A, (X, X)>`] from
+//! `deep_causality_haft`. The `Left(a)` summand is a tree leaf with payload
+//! `a : A`; the `Right((l, r))` summand is an internal node with left/right
+//! subtrees.
 //!
 //! ## Carrier type
 //!
@@ -42,13 +42,13 @@
 use core::convert::Infallible;
 use core::marker::PhantomData;
 
-use either::Either;
+use crate::endofunctor::{Either, Functor, HKT, NoConstraint, Satisfies};
 
-use super::free_mnd::{EndoFunctor, FreeMnd};
+use super::free_mnd::FreeMnd;
 
 /// The endofunctor `A + (−)²` for a fixed leaf alphabet `A`.
 ///
-/// The `Apply<X>` projection is `Either<A, (X, X)>` — `Left(a)` for a
+/// The `Type<X>` projection is `Either<A, (X, X)>` — `Left(a)` for a
 /// leaf, `Right((l, r))` for an internal node with subtrees `l`, `r`.
 ///
 /// CDL Example B.20. The free monad on this endofunctor is `Tree(A + Z)`.
@@ -63,16 +63,22 @@ impl<A> TreeEndo<A> {
     }
 }
 
-impl<A> EndoFunctor for TreeEndo<A> {
-    type Apply<X> = Either<A, (X, X)>;
+impl<A> HKT for TreeEndo<A> {
+    type Constraint = NoConstraint;
+    type Type<X> = Either<A, (X, X)>;
+}
 
-    fn fmap<X, Y, G>(fx: Self::Apply<X>, f: G) -> Self::Apply<Y>
+impl<A> Functor<Self> for TreeEndo<A> {
+    fn fmap<X, Y, Func>(fx: Either<A, (X, X)>, mut f: Func) -> Either<A, (Y, Y)>
     where
-        G: Fn(X) -> Y,
+        X: Satisfies<NoConstraint>,
+        Y: Satisfies<NoConstraint>,
+        Func: FnMut(X) -> Y,
     {
         // Identity law: `fmap(Left(a), _) = Left(a)`, `fmap(Right((l, r)),
         // id) = Right((l, r))`. Composition law: tuple-map of `f` then `g`
-        // collapses to a single tuple-map of `g ∘ f`.
+        // collapses to a single tuple-map of `g ∘ f`. `f` is called twice
+        // (once per subtree) — fine under `FnMut`.
         match fx {
             Either::Left(a) => Either::Left(a),
             Either::Right((l, r)) => Either::Right((f(l), f(r))),

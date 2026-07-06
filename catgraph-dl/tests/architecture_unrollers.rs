@@ -54,6 +54,7 @@
     reason = "Test file. type_complexity: the FoldingRnn<…5 type params…> spelling is exactly what callers see — a `type` alias would still need every parameter. items_after_statements: helper `fn`s nested inside tests are scoped to that test by intent. doc_markdown: backtick-wrapping every CDL type name in module-level prose is busywork; the in-line doc comments on individual tests already use backticks where load-bearing. Same precedent as Agent D's tests/algebra_homomorphisms.rs module-level allows."
 )]
 
+use catgraph_dl::Either;
 use catgraph_dl::architectures::{FoldingRnn, MealyCell, MooreCell, RecursiveNn, UnfoldingRnn};
 use catgraph_dl::free_monad::FreeMnd;
 use catgraph_dl::free_monad::list_endo::{ListEndo, vec_to_free_mnd};
@@ -488,8 +489,8 @@ fn recursive_nn_equivalent_to_free_mnd_unroller() {
         match free_mnd {
             FreeMnd::Pure(z) => match z {}, // Infallible: unreachable.
             FreeMnd::Roll(boxed) => match *boxed {
-                either::Either::Left(_a) => (cell.cell_0)(cell.parameter),
-                either::Either::Right((l, r)) => {
+                Either::Left(_a) => (cell.cell_0)(cell.parameter),
+                Either::Right((l, r)) => {
                     let leftmost = leftmost_leaf_payload(&l);
                     let l_val = unroll_via_free_mnd(cell, l);
                     let r_val = unroll_via_free_mnd(cell, r);
@@ -508,8 +509,8 @@ fn recursive_nn_equivalent_to_free_mnd_unroller() {
             match current {
                 FreeMnd::Pure(z) => match *z {},
                 FreeMnd::Roll(boxed) => match boxed.as_ref() {
-                    either::Either::Left(a) => return *a,
-                    either::Either::Right((l, _r)) => current = l,
+                    Either::Left(a) => return *a,
+                    Either::Right((l, _r)) => current = l,
                 },
             }
         }

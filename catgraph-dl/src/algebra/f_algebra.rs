@@ -11,7 +11,7 @@
 
 use core::marker::PhantomData;
 
-use super::group_action::EndoFunctor;
+use crate::endofunctor::EndoWitness;
 
 /// An F-algebra `(A, a : F(A) → A)`.
 ///
@@ -100,7 +100,7 @@ impl<F, A, B, FromS, ToS, MapS> FAlgebraHom<F, A, B, FromS, ToS, MapS> {
 
 impl<F, A, B, FromS, ToS, MapS> FAlgebraHom<F, A, B, FromS, ToS, MapS>
 where
-    F: EndoFunctor,
+    F: EndoWitness,
 {
     /// Verify the commuting square `f ∘ a = b ∘ F(f)` on a single sample
     /// `fa: F(A)`.
@@ -113,34 +113,34 @@ where
     ///
     /// # Type parameters
     ///
-    /// - `F::Apply<A>: Clone` — the sample is consumed twice (once by `a`
+    /// - `F::Type<A>: Clone` — the sample is consumed twice (once by `a`
     ///   directly, once by `F(f)` followed by `b`).
     /// - `B: PartialEq` — needed to compare the two paths.
     /// - `MapS: Fn(A) -> B + Clone` — `f` is invoked twice (once on the
     ///   `a`-then-`f` path, once inside `F(f)`); cloning the closure is
-    ///   the simplest way to satisfy the `'static` bounds `EndoFunctor`'s
-    ///   `fmap` signature imposes via `impl Fn`.
-    /// - `FromS: Fn(F::Apply<A>) -> A` — the source structure map.
-    /// - `ToS: Fn(F::Apply<B>) -> B` — the target structure map.
+    ///   the simplest way to satisfy the bounds `Functor::fmap` imposes
+    ///   (`FnMut(A) -> B`).
+    /// - `FromS: Fn(F::Type<A>) -> A` — the source structure map.
+    /// - `ToS: Fn(F::Type<B>) -> B` — the target structure map.
     ///
     /// # Returns
     ///
     /// `true` if `f(a(fa)) == b(F(f)(fa))` for the given sample;
     /// `false` otherwise.
-    pub fn verify_commutes(&self, fa: F::Apply<A>) -> bool
+    pub fn verify_commutes(&self, fa: F::Type<A>) -> bool
     where
-        F::Apply<A>: Clone,
+        F::Type<A>: Clone,
         B: PartialEq,
         MapS: Fn(A) -> B + Clone,
-        FromS: Fn(F::Apply<A>) -> A,
-        ToS: Fn(F::Apply<B>) -> B,
+        FromS: Fn(F::Type<A>) -> A,
+        ToS: Fn(F::Type<B>) -> B,
     {
         // LHS: f ∘ a — apply source structure map then f.
         let lhs: B = (self.map)((self.from.structure_map)(fa.clone()));
 
         // RHS: b ∘ F(f) — fmap f over fa, then apply target structure map.
         let f = self.map.clone();
-        let fb: F::Apply<B> = F::fmap(fa, f);
+        let fb: F::Type<B> = F::fmap(fa, f);
         let rhs: B = (self.to.structure_map)(fb);
 
         lhs == rhs

@@ -32,14 +32,10 @@
 //!   value — satisfies the equivariance square because `|−x_i| = |x_i|`.
 //!
 //! [test]: ../../../../tests/algebra_homomorphisms.rs
-//
-// `EndoFunctor` is canonical in `crate::endofunctor`; this module re-exports
-// it for backward compatibility with the `catgraph_dl::algebra::EndoFunctor`
-// path.
 
 use core::marker::PhantomData;
 
-pub use crate::endofunctor::EndoFunctor;
+use crate::endofunctor::{Functor, HKT, NoConstraint, Satisfies};
 
 /// A group with associative binary `compose` and identity `identity`.
 ///
@@ -88,7 +84,7 @@ impl Group for Z2Group {
 
 /// Type-level witness for the endofunctor `F(X) = G × X`.
 ///
-/// CDL Example 2.4. The `Apply<X>` GAT projects to the Rust tuple
+/// CDL Example 2.4. The `Type<X>` GAT projects to the Rust tuple
 /// `(G, X)` — the same encoding used in
 /// [`tests/scaffold_smoke.rs`][smoke]'s `GroupActionEndo<G>` placeholder
 /// (the placeholder was replaced wholesale by this real implementation).
@@ -109,12 +105,17 @@ impl<G> GroupActionEndo<G> {
     }
 }
 
-impl<G> EndoFunctor for GroupActionEndo<G> {
-    type Apply<X> = (G, X);
+impl<G> HKT for GroupActionEndo<G> {
+    type Constraint = NoConstraint;
+    type Type<X> = (G, X);
+}
 
-    fn fmap<X, Y, F>(fx: Self::Apply<X>, f: F) -> Self::Apply<Y>
+impl<G> Functor<Self> for GroupActionEndo<G> {
+    fn fmap<X, Y, Func>(fx: (G, X), mut f: Func) -> (G, Y)
     where
-        F: Fn(X) -> Y,
+        X: Satisfies<NoConstraint>,
+        Y: Satisfies<NoConstraint>,
+        Func: FnMut(X) -> Y,
     {
         let (g, x) = fx;
         (g, f(x))
@@ -123,7 +124,7 @@ impl<G> EndoFunctor for GroupActionEndo<G> {
 
 #[cfg(test)]
 mod tests {
-    use super::{EndoFunctor, Group, GroupActionEndo, Z2Group};
+    use super::{Functor, Group, GroupActionEndo, HKT, Z2Group};
 
     /// Confirms the `Z2` group laws (identity, associativity, self-inverse
     /// of the non-trivial element) and the `fmap` shape of
@@ -157,13 +158,16 @@ mod tests {
         assert_eq!(Z2Group::compose(Z2Group(true), Z2Group(true)), e);
 
         // `GroupActionEndo<Z2>::fmap` lifts only the second slot.
-        let fa: <F as EndoFunctor>::Apply<i32> = (Z2Group(true), 5);
-        let fb: <F as EndoFunctor>::Apply<i32> = F::fmap(fa, |x| x * 2);
+        let fa: <F as HKT>::Type<i32> = (Z2Group(true), 5);
+        let fb: <F as HKT>::Type<i32> = F::fmap(fa, |x| x * 2);
         assert_eq!(fb, (Z2Group(true), 10));
 
         // fmap preserves the group element across changes of return type.
-        let fc: <F as EndoFunctor>::Apply<String> =
-            F::fmap((Z2Group(false), 7_i32), |x| x.to_string());
+        let fc: <F as HKT>::Type<String> = F::fmap((Z2Group(false), 7_i32), |x| x.to_string());
         assert_eq!(fc, (Z2Group(false), "7".to_string()));
+
+        // The full identity + composition functor laws for `GroupActionEndo`
+        // are covered generically in `tests/functor_laws.rs` via the shared
+        // `assert_functor_laws` helper; not duplicated here.
     }
 }

@@ -14,7 +14,7 @@
 
 use core::marker::PhantomData;
 
-use super::group_action::EndoFunctor;
+use crate::endofunctor::EndoWitness;
 
 /// An F-coalgebra `(A, a : A → F(A))`.
 ///
@@ -89,7 +89,7 @@ impl<F, A, B, FromS, ToS, MapS> FCoalgebraHom<F, A, B, FromS, ToS, MapS> {
 
 impl<F, A, B, FromS, ToS, MapS> FCoalgebraHom<F, A, B, FromS, ToS, MapS>
 where
-    F: EndoFunctor,
+    F: EndoWitness,
 {
     /// Verify the dual commuting square `F(f) ∘ a = b ∘ f` on a single
     /// sample `x : A`.
@@ -101,26 +101,26 @@ where
     ///
     /// - `A: Clone` — `x` is consumed twice (by `a` directly, and by `f`
     ///   followed by `b`).
-    /// - `F::Apply<B>: PartialEq` — needed to compare the two paths
+    /// - `F::Type<B>: PartialEq` — needed to compare the two paths
     ///   (both produce `F(B)`).
     /// - `MapS: Fn(A) -> B + Clone` — `f` is invoked twice.
-    /// - `FromS: Fn(A) -> F::Apply<A>` — the source structure map.
-    /// - `ToS: Fn(B) -> F::Apply<B>` — the target structure map.
+    /// - `FromS: Fn(A) -> F::Type<A>` — the source structure map.
+    /// - `ToS: Fn(B) -> F::Type<B>` — the target structure map.
     pub fn verify_commutes(&self, x: A) -> bool
     where
         A: Clone,
-        F::Apply<B>: PartialEq,
+        F::Type<B>: PartialEq,
         MapS: Fn(A) -> B + Clone,
-        FromS: Fn(A) -> F::Apply<A>,
-        ToS: Fn(B) -> F::Apply<B>,
+        FromS: Fn(A) -> F::Type<A>,
+        ToS: Fn(B) -> F::Type<B>,
     {
         // LHS: F(f) ∘ a — apply source structure map then fmap f.
-        let fa: F::Apply<A> = (self.from.structure_map)(x.clone());
+        let fa: F::Type<A> = (self.from.structure_map)(x.clone());
         let f = self.map.clone();
-        let lhs: F::Apply<B> = F::fmap(fa, f);
+        let lhs: F::Type<B> = F::fmap(fa, f);
 
         // RHS: b ∘ f — apply f then target structure map.
-        let rhs: F::Apply<B> = (self.to.structure_map)((self.map)(x));
+        let rhs: F::Type<B> = (self.to.structure_map)((self.map)(x));
 
         lhs == rhs
     }
