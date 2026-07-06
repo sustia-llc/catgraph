@@ -81,12 +81,15 @@
 // `Either` is the sum used by `TreeEndo`'s `Type<X> = Either<A, (X, X)>`.
 // `Pure` (haft's η: Id → F) and `NaturalIso` (natural isomorphism between two
 // HKT witnesses) back `crate::natural`'s `Pointed` and iso adapters.
+// `Monad` (haft's `Functor + Pure` with `bind`, and the provided `join` = μ)
+// backs the machine-checked monad-algebra verifiers in
+// `crate::algebra::monad_algebra`: μ is exactly haft's provided `join`.
 // `OptionWitness` is haft's ready-made `Option` endofunctor (an `EndoWitness`);
 // re-exported so the natural-iso law tests can name a genuine cross-witness iso
 // (`Option<((), X)> ≅ Option<X>`) through the seam rather than reaching into
 // `deep_causality_haft` directly.
 pub use deep_causality_haft::{
-    Either, Functor, HKT, NaturalIso, NoConstraint, OptionWitness, Pure, Satisfies,
+    Either, Functor, HKT, Monad, NaturalIso, NoConstraint, OptionWitness, Pure, Satisfies,
 };
 
 // haft's public (non-`cfg(test)`) law helpers for `NaturalIso`, reachable only

@@ -36,7 +36,7 @@
 use core::marker::PhantomData;
 
 use crate::container::Container;
-use crate::endofunctor::{Functor, HKT, NoConstraint, Pure, Satisfies};
+use crate::endofunctor::{Functor, HKT, Monad, NoConstraint, Pure, Satisfies};
 
 /// A group with associative binary `compose` and identity `identity`.
 ///
@@ -138,6 +138,41 @@ impl<G: Group> Pure<Self> for GroupActionEndo<G> {
         X: Satisfies<NoConstraint>,
     {
         (G::identity(), value)
+    }
+}
+
+/// The **writer monad** over the monoid `(G, ·, e)`: `F(X) = G × X` with unit
+/// `η = pure` (`x ↦ (e, x)`) and multiplication `μ = join` collapsing a nested
+/// group pair via `compose` — `join((g1, (g2, x))) == (g1 · g2, x)`, exactly the
+/// μ documented in `monad_algebra.rs`'s CDL Example 2.6 note (CDL Def 2.1 /
+/// Ex 2.2). `bind((g, x), f)` runs `f(x) = (g2, y)` and accumulates the group
+/// slot: `(g · g2, y)`.
+///
+/// The monad laws are discharged by the [`Group`] contract:
+///
+/// - **Left unit** `bind(pure(x), f) == f(x)` — `pure(x) = (e, x)`, so
+///   `bind` yields `(e · g2, y) = (g2, y) = f(x)` by `G`'s left-identity law.
+/// - **Right unit** `bind(m, pure) == m` — `bind((g, x), pure) = (g · e, x) =
+///   (g, x)` by `G`'s right-identity law.
+/// - **Associativity** `bind(bind(m, f), h) == bind(m, |x| bind(f(x), h))` —
+///   both legs accumulate `g · g2 · g3` in the group slot; equality is `G`'s
+///   associativity law.
+///
+/// These are the monad-algebra coherence obligations that
+/// [`crate::algebra::MonadAlgebra::verify_unit_law`] /
+/// [`verify_assoc_law`](crate::algebra::MonadAlgebra::verify_assoc_law) and the
+/// [`MonadAlgebraHom`](crate::algebra::MonadAlgebraHom) verifiers machine-check
+/// against concrete samples.
+impl<G: Group> Monad<Self> for GroupActionEndo<G> {
+    fn bind<X, Y, Func>(m_a: (G, X), mut f: Func) -> (G, Y)
+    where
+        X: Satisfies<NoConstraint>,
+        Y: Satisfies<NoConstraint>,
+        Func: FnMut(X) -> (G, Y),
+    {
+        let (g, x) = m_a;
+        let (g2, y) = f(x);
+        (G::compose(g, g2), y)
     }
 }
 

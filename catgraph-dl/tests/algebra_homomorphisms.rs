@@ -6,8 +6,9 @@
 //! - [`FAlgebraHom::verify_commutes`] — the F-algebra commuting square
 //!   `f ∘ a = b ∘ F(f)`.
 //! - [`FCoalgebraHom::verify_commutes`] — the dual coalgebra square.
-//! - [`MonadAlgebraHom`] — construction smoke (unit + multiplication
-//!   coherence is a documented obligation, not machine-checked).
+//! - [`MonadAlgebraHom`] — construction smoke; the unit + multiplication
+//!   coherence verifiers added in #40 are exercised in
+//!   `tests/monad_algebra_laws.rs`.
 //!
 //! Each test consolidates several related assertions in one function (per
 //! project TDD convention — quality over quantity).
@@ -43,33 +44,18 @@
     reason = "Test file. type_complexity: the FAlgebraHom<…6 type params…> spelling is exactly what callers see — a `type` alias would still need every parameter and obscures the CDL anchor. items_after_statements: helper `fn`s nested inside tests are scoped to that test by intent. similar_names: `coalg_a2`/`coalg_b2`/`coalg_a3`/`coalg_b3` are the standard `(A, a)` / `(B, b)` algebra names from CDL §2 plus a numeric suffix per fresh construction; renaming would obscure the math. needless_pass_by_value: `fn(Vec<f64>) -> Vec<f64>` is forced by the FAlgebraHom map type. doc_markdown: backtick-wrapping `MonadAlgebraHom` is fine but every doc string already wraps the relevant Rust types; hand-wrapping each prose mention is busywork. Same precedent as Agent A's `para/morphism.rs` module-level allows."
 )]
 
-use catgraph_dl::algebra::{
-    FAlgebra, FAlgebraHom, FCoalgebra, FCoalgebraHom, Functor, GroupActionEndo, HKT, MonadAlgebra,
-    MonadAlgebraHom, Z2Group,
+mod common;
+
+use common::{
+    VecMap, Z2Action, Z2Endo, abs_map, finite_f64, first_coord, negation_action, trivial_action,
 };
 
-/// Type alias for the `Z2` group-action endofunctor used throughout.
-type Z2Endo = GroupActionEndo<Z2Group>;
+use catgraph_dl::algebra::{
+    FAlgebra, FAlgebraHom, FCoalgebra, FCoalgebraHom, Functor, HKT, MonadAlgebra, MonadAlgebraHom,
+    Z2Group,
+};
 
-/// The canonical `Z2`-action on `Vec<f64>` by negation.
-///
-/// `g ▶ x = if g.0 { −x } else { x }` (pointwise). Source algebra in
-/// every GDL-recovery test below.
-fn negation_action((g, x): (Z2Group, Vec<f64>)) -> Vec<f64> {
-    if g.0 {
-        x.into_iter().map(|v| -v).collect()
-    } else {
-        x
-    }
-}
-
-/// The trivial `Z2`-action on `Vec<f64>` — every group element acts as
-/// the identity.
-///
-/// `g ▶ y = y` for all `g`. Target algebra of the GDL-invariance shape.
-fn trivial_action((_g, y): (Z2Group, Vec<f64>)) -> Vec<f64> {
-    y
-}
+use proptest::prelude::*;
 
 /// **Identity is a homomorphism.** CDL Definition 2.5 corollary.
 ///
@@ -152,9 +138,6 @@ fn non_equivariant_projection_fails_commuting_square() {
     let target: FAlgebra<Z2Endo, Vec<f64>, fn((Z2Group, Vec<f64>)) -> Vec<f64>> =
         FAlgebra::new(vec![1.0_f64], trivial_action);
 
-    fn first_coord(x: Vec<f64>) -> Vec<f64> {
-        vec![x[0]]
-    }
     let hom: FAlgebraHom<
         Z2Endo,
         Vec<f64>,
@@ -235,9 +218,6 @@ fn absolute_value_is_z2_equivariant_homomorphism() {
     let triv_alg_dst: FAlgebra<Z2Endo, Vec<f64>, fn((Z2Group, Vec<f64>)) -> Vec<f64>> =
         FAlgebra::new(vec![1.0_f64, 2.0, 3.5], trivial_action);
 
-    fn abs_map(x: Vec<f64>) -> Vec<f64> {
-        x.into_iter().map(f64::abs).collect()
-    }
     let abs_hom: FAlgebraHom<
         Z2Endo,
         Vec<f64>,
@@ -382,8 +362,9 @@ fn coalgebra_hom_identity_smoke() {
 
 /// **MonadAlgebraHom — construction smoke.** CDL Definition 2.3.
 ///
-/// The crate does not machine-check unit + multiplication coherence
-/// (documented obligation on `MonadAlgebraHom::new`). This test
+/// Unit + multiplication coherence are machine-checkable since #40 via the
+/// verifiers exercised in `tests/monad_algebra_laws.rs` (see the ⚠️ scope
+/// note on `MonadAlgebraHom` for what they do and do not discriminate). This test
 /// instantiates a `MonadAlgebraHom` for the group-action monad
 /// `Z2 × −` on `Vec<f64>` and:
 ///
@@ -437,6 +418,54 @@ fn monad_algebra_hom_construction_and_commuting_square() {
         assert!(
             monad_hom.algebra_hom.verify_commutes((g, x.clone())),
             "MonadAlgebraHom (identity, neg, neg) F-algebra square must commute at (g={g:?}, x={x:?})"
+        );
+    }
+}
+
+/// Build the `(Vec<f64>, negation) → (Vec<f64>, trivial)` F-algebra
+/// homomorphism carrying `f`. Carrier values are irrelevant to
+/// `verify_commutes` (it samples the structure maps).
+fn z2_hom(f: VecMap) -> FAlgebraHom<Z2Endo, Vec<f64>, Vec<f64>, Z2Action, Z2Action, VecMap> {
+    let src = FAlgebra::new(vec![0.0_f64], negation_action as Z2Action);
+    let dst = FAlgebra::new(vec![0.0_f64], trivial_action as Z2Action);
+    FAlgebraHom::new(src, dst, f)
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// **Positive `verify_commutes` proptest.** The abs-value equivariance
+    /// square holds for the GDL-recovery hom on *every* `(g, x)` sample —
+    /// `verify_commutes` must return `true`. CDL Example 2.6 positive case,
+    /// lifted from caller-sampled to property-based.
+    #[test]
+    fn abs_value_equivariance_square_holds_for_all_samples(
+        g in any::<bool>(),
+        x in prop::collection::vec(finite_f64(), 0..=16),
+    ) {
+        let hom = z2_hom(abs_map);
+        prop_assert!(
+            hom.verify_commutes((Z2Group(g), x)),
+            "abs map is Z2-invariant — square must commute on every sample"
+        );
+    }
+
+    /// **Negative `verify_commutes` proptest.** The first-coordinate projection
+    /// fails the square whenever `g = true` and `x[0] ≠ 0` — universal on that
+    /// family since `(−x)[0] = −x[0] ≠ x[0]` for non-zero `x[0]`. The head is
+    /// drawn with `|x[0]| ≥ 1` so the failure is guaranteed; `verify_commutes`
+    /// must return `false`. CDL Example 2.6 negative case.
+    #[test]
+    fn projection_fails_square_when_first_coord_nonzero(
+        head in prop_oneof![-1e6f64..=-1.0f64, 1.0f64..=1e6f64],
+        tail in prop::collection::vec(finite_f64(), 0..=15),
+    ) {
+        let mut x = vec![head];
+        x.extend(tail);
+        let hom = z2_hom(first_coord);
+        prop_assert!(
+            !hom.verify_commutes((Z2Group(true), x)),
+            "projection is not Z2-equivariant — square must fail for x[0] != 0"
         );
     }
 }
