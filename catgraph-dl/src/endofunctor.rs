@@ -67,16 +67,37 @@
 //!
 //! # Co-design note (#41)
 //!
-//! haft 0.3.3 ships [`Pure`](deep_causality_haft::Pure) and
-//! [`NaturalIso`](deep_causality_haft::NaturalIso) but not `Pointed` /
-//! `NaturalTransformation`; the first-class `NaturalTransformation<F, G>` /
-//! `Pointed<F>` surfaces cg-dl documents as deferred obligations are layered
-//! on in #41.
+//! haft 0.3.3 ships [`Pure`] and [`NaturalIso`] but not `Pointed` /
+//! `NaturalTransformation`. The first-class surfaces cg-dl once documented as
+//! deferred obligations are now shipped: [`crate::natural::NaturalTransformation`]
+//! and [`crate::natural::Pointed`] (built directly on haft's [`Pure`] and
+//! [`NaturalIso`] via the re-exports below) and [`crate::container::Container`]
+//! (net-new, no haft analogue). The upstream proposal to add `Pointed` /
+//! `NaturalTransformation` to haft itself is tracked separately as
+//! [#62](https://github.com/sustia-llc/catgraph/issues/62).
 
 // The adopted names live in `deep_causality_haft`; re-exported here so the
 // rest of the crate imports them from a single seam (`crate::endofunctor`).
 // `Either` is the sum used by `TreeEndo`'s `Type<X> = Either<A, (X, X)>`.
-pub use deep_causality_haft::{Either, Functor, HKT, NoConstraint, Satisfies};
+// `Pure` (haft's η: Id → F) and `NaturalIso` (natural isomorphism between two
+// HKT witnesses) back `crate::natural`'s `Pointed` and iso adapters.
+// `OptionWitness` is haft's ready-made `Option` endofunctor (an `EndoWitness`);
+// re-exported so the natural-iso law tests can name a genuine cross-witness iso
+// (`Option<((), X)> ≅ Option<X>`) through the seam rather than reaching into
+// `deep_causality_haft` directly.
+pub use deep_causality_haft::{
+    Either, Functor, HKT, NaturalIso, NoConstraint, OptionWitness, Pure, Satisfies,
+};
+
+// haft's public (non-`cfg(test)`) law helpers for `NaturalIso`, reachable only
+// through the `iso::test_support` module path (not re-exported at the haft
+// crate root). Re-exported here so law tests exercise the natural-iso laws
+// through the same single seam as everything else; `doc(hidden)` because they
+// are test support, not part of the crate's documented surface.
+#[doc(hidden)]
+pub use deep_causality_haft::iso::test_support::{
+    assert_natural_iso_naturality, assert_natural_iso_round_trip,
+};
 
 /// An **endofunctor on `Set`** — the invariant the pre-#12 `EndoFunctor` trait
 /// carried, repackaged over the split haft witnesses.

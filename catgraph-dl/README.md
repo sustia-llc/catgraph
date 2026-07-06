@@ -15,7 +15,7 @@ yet instantiated (see [Deferred surfaces](#deferred-surfaces)).
 
 ## Public surface
 
-Five public modules plus one private namespace stub. Every item below is
+Seven public modules plus one private namespace stub. Every item below is
 re-exported from its module root.
 
 ### `para` — the 2-category `Para(M, C)` (CDL §3.1)
@@ -85,6 +85,35 @@ Five typed wrappers, each shipping a `FreeMnd`-equivalence test (CDL Remark 2.13
   ([#12](https://github.com/sustia-llc/catgraph/issues/12)); every shipped
   witness uses `NoConstraint`.
 
+### `natural` — natural transformations and pointed endofunctors (CDL Def 1.5 / B.3)
+
+- **`NaturalTransformation<F, G>`** — the component family `α_X : F(X) → G(X)`
+  of a natural transformation `α : F ⇒ G`, a static method on a zero-sized
+  witness (matching the `Functor::fmap` dispatch style), with the naturality
+  law `transform(F::fmap(fa, h)) == G::fmap(transform(fa), h)` as the
+  implementor obligation.
+- **`IsoForward`** / **`IsoBackward`** — adapter witnesses turning any haft
+  `NaturalIso<F, G>` into its two natural transformations (`F ⇒ G` and `G ⇒ F`);
+  separate types because the two directions would otherwise be overlapping
+  blanket impls.
+- **`Pointed`** — blanket marker for a pointed endofunctor `(F, σ)` with
+  `σ = ` haft's `Pure` (the natural transformation `id ⇒ F`). `GroupActionEndo<G>`
+  is the crate's own inhabitant (`σ(x) = (e, x)`, the writer-functor point);
+  haft witnesses reachable through the seam (e.g. `OptionWitness`) are also
+  pointed via their upstream `Pure` impls. `ListEndo` / `TreeEndo` ship no
+  point — the former's only natural point (constant `None`) trivialises every
+  pointed-algebra, the latter's diagonal point is natural but not representable
+  under `Pure`'s no-`Clone` signature (see `src/natural.rs`).
+
+### `container` — polynomial-functor shape/position presentation (Abbott–Altenkirch–Ghani 2003, via CDL)
+
+- **`Container`** — equips an endofunctor witness with a `Shape` set, a per-shape
+  `arity`, and a `decompose` / `recompose` pair witnessing
+  `F(X) ≅ Σ_{s} X^{arity(s)}` in the finitary (`Vec`-of-contents) presentation.
+  `ListEndo<A>` (`Shape = Option<A>`), `TreeEndo<A>` (`Shape = Either<A, ()>`),
+  and `GroupActionEndo<G>` (`Shape = G`) are the shipped instances; the
+  round-trip, arity-coherence, and `fmap`-coherence laws are machine-checked.
+
 ### `hopf_fibration` (private)
 
 Namespace stub for Dudzik's carry-operation conjecture. Pre-publication research,
@@ -153,6 +182,11 @@ GitHub issue where one exists, otherwise plainly deferred.
   in [#34](https://github.com/sustia-llc/catgraph/issues/34).
 - **Property-based exhaustive testing** of `verify_commutes` and
   `FreeMnd`-equivalence — current tests are caller-sampled.
+- **Upstream haft adoption of `Pointed` / `NaturalTransformation`** — the
+  local `natural` traits stand in until the proposal to add them to
+  `deep_causality_haft` itself lands —
+  [#62](https://github.com/sustia-llc/catgraph/issues/62). On adoption they
+  become seam re-exports.
 - **Machine-checked `MonadAlgebraHom` coherence laws** (`M(f) ∘ η_A = η_B ∘ f`,
   associativity with `μ`) — currently caller-attested.
 - **The Hopf-fibration / carry-operation construction** — private stub only;
