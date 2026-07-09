@@ -51,8 +51,7 @@ All notable changes to this crate are documented here. Format follows
 
 - **EndoFunctor→haft migration ([#12](https://github.com/sustia-llc/catgraph/issues/12)).**
   The hand-rolled `EndoFunctor` trait (a GAT `type Apply<X>` plus `fmap`) is
-  removed in favour of `deep_causality_haft`'s `HKT` (v0.3.3 at migration
-  time; pinned `=0.4.0` since #69) (object map
+  removed in favour of `deep_causality_haft` v0.3.3's `HKT` (object map
   `HKT::Type<X>`) + `Functor<F>` (morphism map `fmap`) witnesses. The witnesses
   `ListEndo<A>`, `TreeEndo<A>`, and `GroupActionEndo<G>` now `impl HKT + Functor<Self>`
   with `type Constraint = NoConstraint`; `FreeMnd<F, Z>` / `CofreeCmnd<F, Z>` and
