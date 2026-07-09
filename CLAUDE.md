@@ -23,9 +23,11 @@ catgraph (F&S core) ─▶ catgraph-applied ─▶ catgraph-magnitude
 `deep_causality_num` / `deep_causality_haft` pinned `=0.4.0` (fallback git rev `3280cb844`).
 `catgraph-applied` + `catgraph-magnitude` depend on `deep_causality_num` (`Zero`/`One`
 only); `catgraph-dl` uses `haft`'s `HKT`/`Functor` witnesses as its endofunctor
-substrate (EndoFunctor→haft migration landed, #12) and carries `num` **deps-only**
-(reserved for the R-module/`F64Module` surfaces, #36); `catgraph` (core) +
-`catgraph-physics` are DC-free.
+substrate (EndoFunctor→haft migration landed, #12) and now **uses** `num`'s
+root `Zero`/`One` in the `F64Module` R-module actegory (`src/para/module_actegory.rs`,
+#36 first bullet landed — the direct-sum monoidal category `(FinReal, ⊕, R⁰)`;
+umbrella #36 stays open for hyperdoctrine/vector-bundle/lazy surfaces);
+`catgraph` (core) + `catgraph-physics` are DC-free.
 
 ## Paper anchors
 

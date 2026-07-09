@@ -57,6 +57,21 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
   ([#42](https://github.com/sustia-llc/catgraph/issues/42) decision).
 - **`Actegory<M>`** + **`SetActegory`** — the action `▶ : M × C → C` and its
   coherence witness `μ : Q ⊗ (P ▶ X) → (Q ⊗ P) ▶ X`.
+- **`F64Module` R-module actegory** — the first **non-`(Set, ×, 1)`**
+  `MonoidalCategory` / `Actegory` instance (issue #36). **`F64Monoidal`** is the
+  monoidal category `(FinReal, ⊕, R⁰)` of finite-dimensional real modules under
+  **direct sum**; **`F64Actegory`** is its self-action `▶ = ⊕`. The object-level
+  tensor is the dedicated **`DirectSum<A, B>`** carrier (not the tuple), so
+  `F64Monoidal` is a genuine non-`Set` instance with a hand-written
+  `MonoidalCategory` impl — it does *not* opt into `SetCategoryDefaults`. The
+  object carrier **`F64Module`** (`Vec<f64>`-backed `Rⁿ`) carries genuine
+  `R`-module structure (`zeros` / `basis` / `add` / `scale` / `direct_sum`),
+  which is where the reserved `deep_causality_num` `Zero` / `One` finally
+  activate. Kind markers **`F64Object`** / **`F64Morphism`**. Monoidal product =
+  **direct sum `⊕`**, not tensor `⊗_R`: CDL Example G.3 forms `Para(Smooth)`
+  over the *cartesian* structure of real vector spaces, whose finite-dimensional
+  biproduct is `Rᵐ × Rⁿ ≅ Rᵐ⁺ⁿ`. Anchors: CDL Definition E.2 (actegory), Example
+  E.4 (self-action), Example G.3.
 - **`Comonoid<M>`** + **`DiagonalComonoid`** — the diagonal `Δ : P → (P, P)`.
 - **`tie_weights`** — ties the parameter of a `Para(SetMonoidal, C)` 1-morphism
   through the diagonal comonoid, generic over any `C: Actegory<SetMonoidal>` so
@@ -180,12 +195,12 @@ For a single import path, the Tier-3 enrichment substrate is re-exported from
 Phase 5 (`catgraph-dl`) is merged. The endofunctor layer now runs on
 `deep_causality_haft`'s `HKT` / `Functor` witnesses (EndoFunctor→haft migration
 landed, [#12](https://github.com/sustia-llc/catgraph/issues/12)) — imported in
-`src/endofunctor.rs`, the single seam. `deep_causality_num` stays carried
-**deps-only**, reserved for the R-module / `F64Module` surfaces
-([#36](https://github.com/sustia-llc/catgraph/issues/36)) which need `Zero` /
-`One`; it is not referenced anywhere in the crate (`rg deep_causality_num src`
-returns no hits — post-#12 the doc mentions went too). Rig `Zero` / `One` are
-inherited transitively from `catgraph-applied`'s `Rig`.
+`src/endofunctor.rs`, the single seam. `deep_causality_num` is now **in use**
+([#36](https://github.com/sustia-llc/catgraph/issues/36)): `src/para/module_actegory.rs`
+imports num's root `Zero` / `One` for the `F64Module` R-module actegory (the
+ring identities filling the zero vector and marking the standard basis). Only
+`Zero` / `One` are used — the DC substrate stays thin. Rig `Zero` / `One` are
+still inherited transitively from `catgraph-applied`'s `Rig`.
 
 ## Dependencies
 
@@ -195,7 +210,8 @@ inherited transitively from `catgraph-applied`'s `Rig`.
 - `deep_causality_haft` — the `HKT` / `Functor` endofunctor witnesses (#12) and
   the `Either` sum used by `TreeEndo`. (The former dependency on the `either`
   crate was dropped — `Either` now comes from haft.)
-- `deep_causality_num` — **deps-only**, reserved for #36 (see [Status](#status)).
+- `deep_causality_num` — root `Zero` / `One` for the `F64Module` R-module
+  actegory (#36; see [Status](#status)).
 - dev: `proptest`.
 
 ## Deferred surfaces
@@ -203,12 +219,13 @@ inherited transitively from `catgraph-applied`'s `Rig`.
 Held until a downstream consumer surfaces a concrete need. Re-anchored to a
 GitHub issue where one exists, otherwise plainly deferred.
 
-- **Non-`(Set, ×, 1)` `MonoidalCategory` instances** — R-module actegory,
-  hyperdoctrine, vector-bundle. The trait surface admits them; concrete
-  instances are deferred —
-  [#36](https://github.com/sustia-llc/catgraph/issues/36). The
-  `SetCategoryDefaults` opt-in marker trait closes the boilerplate gap for
-  `(Set, ×, 1)`-flavoured ZSTs only.
+- **Non-`(Set, ×, 1)` `MonoidalCategory` instances** — the R-module actegory
+  (`F64Monoidal` / `F64Actegory` / `F64Module`) is **shipped** (the first bullet
+  of [#36](https://github.com/sustia-llc/catgraph/issues/36)); the
+  hyperdoctrine, vector-bundle, and fibration actegories remain deferred and
+  keep #36 open. The `SetCategoryDefaults` opt-in marker trait closes the
+  boilerplate gap for `(Set, ×, 1)`-flavoured ZSTs only; non-`Set` instances
+  hand-write their `MonoidalCategory` impl as `F64Monoidal` does.
 - **Truly-infinite final-coalgebra semantics** for `UnfoldingRnn` — the current
   `unroll_to_vec` is *bounded*; a lazy / `Iterator` / `tokio_stream::Stream`
   carrier is deferred — [#36](https://github.com/sustia-llc/catgraph/issues/36).
