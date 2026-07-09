@@ -22,10 +22,10 @@ catgraph-applied   = { path = "catgraph-applied",   version = "0.2.0", default-f
 catgraph-magnitude = { path = "catgraph-magnitude", version = "0.2.0" }
 
 # --- DeepCausality thin substrate — PIN EXACT (DC is 0.x, churning).
-#     Fallback: { git = "https://github.com/deepcausality-rs/deep_causality", rev = "98711f6c8" }
+#     Fallback: { git = "https://github.com/deepcausality-rs/deep_causality", rev = "3280cb844" }
 #     haft is live (catgraph-dl endofunctor layer, #12); num deps-only until a member opts in (#36).
-deep_causality_num  = "=0.3.3"
-deep_causality_haft = "=0.3.3"
+deep_causality_num  = "=0.4.0"
+deep_causality_haft = "=0.4.0"
 
 # --- math / graph — numeric-only, NOT an algebraic substrate ---
 # (members opt in with `{ workspace = true, optional = true }`; `optional` is illegal here.)

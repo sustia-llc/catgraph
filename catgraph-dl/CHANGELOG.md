@@ -33,6 +33,20 @@ All notable changes to this crate are documented here. Format follows
     `SetCategoryDefaults` in `lib.rs`/`README.md` corrected to "opt-in marker
     trait".
 
+### Changed
+
+- **DC substrate pins bumped `=0.3.3` → `=0.4.0` ([#69](https://github.com/sustia-llc/catgraph/issues/69)).**
+  `deep_causality_haft` 0.4.0 / `deep_causality_num` 0.4.0 (DeepCausality
+  v0.14.0, released 2026-07-08). Version-only for this crate: the consumed
+  seam surface was re-verified against the released crate sources — the
+  `crate::endofunctor` re-export root paths, `HKT`/`Functor`/`Pure`/`Monad`
+  (+provided `join`)/`NaturalIso` signatures, the `iso::test_support` helper
+  path, the `Satisfies<NoConstraint>` blanket, `Either`, `OptionWitness`, and
+  num's root `{Zero, One}` are all unchanged. haft 0.4.0 still ships no
+  `Pointed`/`NaturalTransformation` (the upstream proposal remains
+  [#62](https://github.com/sustia-llc/catgraph/issues/62)). Workspace fallback
+  git rev updated to the 0.4.0 release commit `3280cb844`.
+
 ### Changed — BREAKING
 
 - **EndoFunctor→haft migration ([#12](https://github.com/sustia-llc/catgraph/issues/12)).**

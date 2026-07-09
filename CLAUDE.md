@@ -20,7 +20,7 @@ catgraph (F&S core) ─▶ catgraph-applied ─▶ catgraph-magnitude
         └─▶ catgraph-physics              └─▶ catgraph-dl
 ```
 
-`deep_causality_num` / `deep_causality_haft` pinned `=0.3.3` (fallback git rev `98711f6c8`).
+`deep_causality_num` / `deep_causality_haft` pinned `=0.4.0` (fallback git rev `3280cb844`).
 `catgraph-applied` + `catgraph-magnitude` depend on `deep_causality_num` (`Zero`/`One`
 only); `catgraph-dl` uses `haft`'s `HKT`/`Functor` witnesses as its endofunctor
 substrate (EndoFunctor→haft migration landed, #12) and carries `num` **deps-only**
