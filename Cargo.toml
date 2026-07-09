@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 license = "MIT"
 authors = ["sustia-llc"]
@@ -17,9 +17,9 @@ repository = "https://github.com/sustia-llc/catgraph"
 
 [workspace.dependencies]
 # --- intra-workspace (path wins locally; version present for a future publish) ---
-catgraph           = { path = "catgraph",           version = "0.2.0", default-features = false }
-catgraph-applied   = { path = "catgraph-applied",   version = "0.2.0", default-features = false }
-catgraph-magnitude = { path = "catgraph-magnitude", version = "0.2.0" }
+catgraph           = { path = "catgraph",           version = "0.2.1", default-features = false }
+catgraph-applied   = { path = "catgraph-applied",   version = "0.2.1", default-features = false }
+catgraph-magnitude = { path = "catgraph-magnitude", version = "0.2.1" }
 
 # --- DeepCausality thin substrate — PIN EXACT (DC is 0.x, churning).
 #     Fallback: { git = "https://github.com/deepcausality-rs/deep_causality", rev = "3280cb844" }
