@@ -38,8 +38,8 @@ All notable changes to this crate are documented here. Format follows
   - **`para::F64Actegory`** — the self-action `▶ = ⊕` of `F64Monoidal` on
     itself (`Actegory<F64Monoidal>`), with `act(p, x) = p ⊕ x`, the
     multiplicator `µ : Q ▶ (P ▶ X) → (Q ⊗ P) ▶ X` as the exact `DirectSum`
-    re-association, and a concrete `act_modules` realising the action on two
-    modules by concatenation.
+    re-association; the concrete concatenation is realised by
+    `DirectSum::flatten` on the action result.
   - **Paper anchors (verified against `docs/2402.15332v2.pdf`).** The formal
     actegory definition is **Definition E.2** (`η_X : I ▶ X ≅ X`,
     `µ_{M,N} : (M ⊗ N) ▶ X ≅ M ▶ (N ▶ X)`, pentagonator Eq. 7 + unitors Eq. 8),
@@ -57,10 +57,12 @@ All notable changes to this crate are documented here. Format follows
     tuple-bound); the `R`-module axioms (`v + 0 = v`, `1 · v = v`, `0 · v = 0`,
     basis coherence) via `common::assert_f64_module_axioms` — the identities
     where `Zero` / `One` are load-bearing; and the concrete `⊕`-monoid laws
-    (dimensions add, `R⁰` unit, associativity, `flatten` / `act_modules`
-    agreement) via `common::assert_direct_sum_monoid`. Float honesty: the exact
-    asserts (`1 · v`, `0 · v`, `v + 0`) are representable-preserving in IEEE-754;
-    samples use the NaN-free `finite_f64` strategy.
+    (dimensions add, `R⁰` unit, associativity, `flatten`/`act` agreement) via
+    `common::assert_direct_sum_monoid`. Float honesty: the identity asserts
+    (`1 · v`, `0 · v`, `v + 0`) hold under `f64` `PartialEq` (which identifies
+    `±0.0`) for finite inputs — signed-zero bit patterns are **not** preserved
+    (`0.0 · (-1.0) = -0.0`; `-0.0 + 0.0 = +0.0`; cf. #58); samples use the
+    NaN-free `finite_f64` strategy.
 
 ### Documentation
 

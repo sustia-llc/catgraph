@@ -10,8 +10,10 @@ The crate is a Rust expression of the central CDL constructions — the `Para`
 2-category, F-(co)algebras and monad algebras, free/cofree recursion, and the
 (co)algebra-as-architecture catalogue — available to other workspace members
 and downstream crates. It is types plus (co)algebra wrappers over `(Set, ×, 1)`
-by default; other monoidal categories are admitted by the trait surface but not
-yet instantiated (see [Deferred surfaces](#deferred-surfaces)).
+by default, plus the first non-Set instance: the R-module actegory
+`(FinReal, ⊕, R⁰)` (`F64Monoidal` / `F64Actegory`, issue #36); the remaining
+monoidal categories are admitted by the trait surface but not yet instantiated
+(see [Deferred surfaces](#deferred-surfaces)).
 
 ## Public surface
 

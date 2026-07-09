@@ -64,8 +64,18 @@
 //! the nose — machine-checked in `tests/module_actegory_laws.rs` via
 //! `common::assert_direct_sum_coherence` (the `DirectSum` analogue of the tuple
 //! `assert_monoidal_coherence`, since that helper is `SetCategoryDefaults`-bound
-//! and tuple-shaped). The `R`-module axioms that exercise `Zero` / `One`, and
-//! the concrete `⊕`-monoid laws on coordinates, are law-tested in the same file.
+//! and tuple-shaped). As everywhere on this trait, the `α ⊗ id` / `id ⊗ α`
+//! pentagon legs are spelled manually — [`MonoidalCategory`] has no
+//! morphism-level tensor
+//! ([#65](https://github.com/sustia-llc/catgraph/issues/65)); the
+//! `F64Morphism` marker does **not** confer one. Honesty note: the
+//! [`MonoidalCategory`] impl itself is object-agnostic pure re-association
+//! (the trait's GATs place no bound on `A`, `B` — `tensor_objects` accepts
+//! any types, exactly like `SetMonoidal`'s); what makes this instance the
+//! `R`-module actegory is the [`DirectSum`] carrier plus the concrete module
+//! layer ([`F64Module`], [`DirectSum::flatten`]) that realises `⊕` on actual
+//! coordinates. The `R`-module axioms that exercise `Zero` / `One`, and the
+//! concrete `⊕`-monoid laws on coordinates, are law-tested in the same file.
 //!
 //! ## Base ring as a compile-time type
 //!
@@ -94,18 +104,6 @@ use super::monoidal_category::MonoidalCategory;
 /// CDL Definition E.2 / Example E.4.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DirectSum<A, B>(pub A, pub B);
-
-impl<A, B> DirectSum<A, B> {
-    /// Construct a direct sum `A ⊕ B` from its two summands.
-    pub const fn new(left: A, right: B) -> Self {
-        Self(left, right)
-    }
-
-    /// Destructure into the underlying `(left, right)` pair of summands.
-    pub fn into_pair(self) -> (A, B) {
-        (self.0, self.1)
-    }
-}
 
 impl DirectSum<F64Module, F64Module> {
     /// Realise the abstract direct sum `V ⊕ W` of two concrete modules as the
@@ -137,13 +135,18 @@ impl DirectSum<F64Module, F64Module> {
 ///
 /// # Float honesty
 ///
-/// Equality is structural `Vec<f64>` equality. The module-axiom identities that
-/// assert *exact* equality (`1 · v = v`, `0 · v = 0`, `v + 0 = v`) are exact in
-/// IEEE-754 for finite inputs — multiplying by exactly `1.0` and adding exactly
-/// `0.0` are representable-preserving. General [`F64Module::add`] /
-/// [`F64Module::scale`] on arbitrary reals are subject to ordinary
-/// floating-point rounding and are **not** asserted associative/distributive on
-/// the nose; tests use the NaN-free `finite_f64` strategy.
+/// Equality is structural `Vec<f64>` equality via `f64` `PartialEq`, which
+/// **identifies `-0.0` and `+0.0`**. The module-axiom identities
+/// (`1 · v = v`, `0 · v = 0`, `v + 0 = v`) hold exactly *under that equality*
+/// for finite inputs — but signed-zero **bit patterns are not preserved**:
+/// IEEE-754 gives `0.0 · (-1.0) = -0.0` (so `0 · v` need not be bitwise
+/// `zeros()`) and `-0.0 + 0.0 = +0.0` (so `v + 0` can flip a sign bit of `v`).
+/// Do not rely on these identities for bit-exactness (same family as the
+/// [#58](https://github.com/sustia-llc/catgraph/issues/58) `F64Rig`
+/// signed-zero note). General [`F64Module::add`] / [`F64Module::scale`] on
+/// arbitrary reals are subject to ordinary floating-point rounding and are
+/// **not** asserted associative/distributive on the nose; tests use the
+/// NaN-free `finite_f64` strategy.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct F64Module(Vec<f64>);
 
@@ -335,15 +338,6 @@ impl F64Actegory {
     #[must_use]
     pub const fn new() -> Self {
         Self
-    }
-
-    /// Realise the action on two concrete modules: `P ▶ X = P ⊕ X` as the
-    /// single concatenated module. The concrete counterpart of the generic
-    /// [`Actegory::act`], whose [`DirectSum`] result [`DirectSum::flatten`]
-    /// collapses to this.
-    #[must_use]
-    pub fn act_modules(&self, parameter: F64Module, x: F64Module) -> F64Module {
-        parameter.direct_sum(x)
     }
 }
 

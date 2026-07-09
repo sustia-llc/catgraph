@@ -363,12 +363,16 @@ pub fn assert_direct_sum_coherence(m: &F64Monoidal, a: i32, b: u8, c: i64, d: bo
 /// vector `coords` and one scalar `r` — the identities that make
 /// `deep_causality_num`'s `Zero` / `One` load-bearing (issue #36).
 ///
-/// - **Additive identity** (`Zero`): `v + 0 = v` and `0 + v = v` (exact for
-///   finite `f64`).
-/// - **Scalar unit** (`One`): `1 · v = v` (exact; multiplying by `1.0` is
-///   representable-preserving).
+/// - **Additive identity** (`Zero`): `v + 0 = v` and `0 + v = v`.
+/// - **Scalar unit** (`One`): `1 · v = v`.
 /// - **Scalar zero** (`Zero`): `0 · v = 0` (the zero module of the same
 ///   dimension).
+///
+/// Equality is `f64` `PartialEq`, which identifies `-0.0` and `+0.0` — these
+/// identities hold under that equality for finite inputs, but signed-zero bit
+/// patterns are **not** preserved (`-0.0 + 0.0 = +0.0`; `0.0 · (-1.0) = -0.0`),
+/// so this helper certifies `PartialEq`-equality, not bit-exactness. See the
+/// "Float honesty" note on `F64Module`.
 /// - **Basis coherence** (`One` / `Zero`): each standard basis vector `eᵢ` has
 ///   `1` at `i` and `0` elsewhere; scaling `eᵢ` by `r` places `r` at `i`.
 ///
@@ -429,15 +433,15 @@ pub fn assert_f64_module_axioms(coords: Vec<f64>, r: f64) {
 /// - **Concatenation**: coordinates of `u ⊕ v` are `u`'s followed by `v`'s.
 /// - **Unit laws**: `R⁰ ⊕ v = v = v ⊕ R⁰` (zero-dim module is the unit).
 /// - **Associativity**: `(u ⊕ v) ⊕ w = u ⊕ (v ⊕ w)` on the nose.
-/// - **`DirectSum::flatten` / `F64Actegory::act_modules` agree** with
-///   `direct_sum` and with the generic [`Actegory::act`].
+/// - **`DirectSum::flatten` agrees** with `direct_sum` on the generic
+///   [`Actegory::act`] result.
 ///
 /// CDL Example E.4 (self-action) / Example G.3 (`Rᵐ ⊕ Rⁿ = Rᵐ⁺ⁿ`).
 pub fn assert_direct_sum_monoid(u: Vec<f64>, v: Vec<f64>, w: Vec<f64>) {
     let (mu, mv, mw) = (
         F64Module::new(u.clone()),
         F64Module::new(v.clone()),
-        F64Module::new(w.clone()),
+        F64Module::new(w),
     );
     let unit = F64Module::zero_dim();
 
@@ -464,19 +468,14 @@ pub fn assert_direct_sum_monoid(u: Vec<f64>, v: Vec<f64>, w: Vec<f64>) {
     let right = mu.clone().direct_sum(mv.clone().direct_sum(mw.clone()));
     assert_eq!(left, right, "⊕ associativity (u ⊕ v) ⊕ w = u ⊕ (v ⊕ w)");
 
-    // `DirectSum::flatten` and the actegory realise the same concatenation as
-    // the generic `act` (a `DirectSum` pair) collapsed via `flatten`.
+    // `DirectSum::flatten` realises the same concatenation as the generic
+    // `act` (a `DirectSum` pair) collapsed via `flatten`.
     let acteg = F64Actegory::new();
     let generic: DirectSum<F64Module, F64Module> = acteg.act(mu.clone(), mv.clone());
     assert_eq!(
         generic.flatten(),
-        mu.clone().direct_sum(mv.clone()),
-        "act(p, x).flatten() == p ⊕ x"
-    );
-    assert_eq!(
-        acteg.act_modules(mu.clone(), mv.clone()),
         mu.direct_sum(mv),
-        "act_modules == direct_sum"
+        "act(p, x).flatten() == p ⊕ x"
     );
 }
 

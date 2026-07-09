@@ -59,8 +59,8 @@ fn f64_module_axioms_deterministic() {
 
 /// **`⊕`-monoid laws — deterministic.** Dimensions add, coordinates
 /// concatenate, `R⁰` is the unit, `⊕` is associative on the nose, and
-/// `flatten` / `act_modules` agree with the generic action — for several
-/// module triples (including empties).
+/// `flatten` agrees with the generic action — for several module triples
+/// (including empties).
 #[test]
 fn direct_sum_monoid_deterministic() {
     assert_direct_sum_monoid(vec![1.0, 2.0], vec![3.0], vec![4.0, 5.0, 6.0]);
