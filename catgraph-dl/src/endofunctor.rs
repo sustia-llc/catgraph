@@ -5,7 +5,8 @@
 //! This module was, prior to issue #12, the canonical home of a hand-rolled
 //! `EndoFunctor` trait (a GAT `type Apply<X>` plus an `fmap`). That trait has
 //! been removed in favour of the equivalent, already-proven witnesses from
-//! `deep_causality_haft` v0.3.3. The module survives as the single import
+//! `deep_causality_haft` (v0.3.3 at migration time; the workspace now pins
+//! `=0.4.0`, #69). The module survives as the single import
 //! point (and documentation home) for the adopted names.
 //!
 //! # Witness-first static dispatch
@@ -67,7 +68,7 @@
 //!
 //! # Co-design note (#41)
 //!
-//! haft 0.3.3 ships [`Pure`] and [`NaturalIso`] but not `Pointed` /
+//! haft (re-verified at 0.4.0) ships [`Pure`] and [`NaturalIso`] but not `Pointed` /
 //! `NaturalTransformation`. The first-class surfaces cg-dl once documented as
 //! deferred obligations are now shipped: [`crate::natural::NaturalTransformation`]
 //! and [`crate::natural::Pointed`] (built directly on haft's [`Pure`] and
