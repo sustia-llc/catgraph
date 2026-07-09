@@ -8,15 +8,21 @@
 //! ## Scope
 //!
 //! Seven public modules. The crate is types + (co)algebra wrappers
-//! over `(Set, ×, 1)` by default; non-`(Set, ×, 1)` `MonoidalCategory`
-//! instances are deferred until a downstream consumer surfaces.
+//! over `(Set, ×, 1)` by default, plus the first non-`(Set, ×, 1)`
+//! `MonoidalCategory` / `Actegory` instance — the R-module actegory
+//! `(FinReal, ⊕, R⁰)` ([`para::F64Monoidal`] / [`para::F64Actegory`],
+//! issue #36); further non-Set instances (hyperdoctrine, vector-bundle,
+//! fibration-based) remain deferred.
 //!
 //! - [`para`] — the 2-category `Para`(M, C). Objects of `C`, 1-morphisms
 //!   `(P ∈ M, f : P ▶ X → Y)`, 2-morphisms = reparameterizations
 //!   `r : P' → P`. CDL §3.1. Concrete `(Set, ×, 1)` instance via
 //!   [`para::SetMonoidal`] / [`para::SetActegory`]; downstream `(Set, ×, 1)`-
 //!   flavoured ZSTs opt into the canonical bodies via
-//!   [`para::SetCategoryDefaults`].
+//!   [`para::SetCategoryDefaults`]. Concrete R-module instance
+//!   `(FinReal, ⊕, R⁰)` via [`para::F64Monoidal`] / [`para::F64Actegory`]
+//!   on the [`para::F64Module`] carrier (CDL Def E.2 / Ex E.4 / Ex G.3,
+//!   issue #36).
 //! - [`algebra`] — `FAlgebra<F>`, `FCoalgebra<F>`, `MonadAlgebra<M>` plus
 //!   homomorphism wrappers `FAlgebraHom` / `FCoalgebraHom` /
 //!   `MonadAlgebraHom` with caller-sampled `verify_commutes`, and (issue #40)
@@ -83,11 +89,12 @@
 //! See the "Deferred surfaces" section of the crate README for the full
 //! list. Highlights:
 //!
-//! - **Non-`(Set, ×, 1)` `MonoidalCategory` instances** — R-module actegory,
-//!   hyperdoctrine, vector-bundle, fibration-based. Trait surface admits
-//!   them; concrete instances deferred. The [`para::SetCategoryDefaults`]
-//!   opt-in marker trait closes the boilerplate gap for
-//!   `(Set, ×, 1)`-flavoured ZSTs only.
+//! - **Remaining non-`(Set, ×, 1)` `MonoidalCategory` instances** —
+//!   hyperdoctrine, vector-bundle, fibration-based. The trait surface admits
+//!   them; the R-module actegory shipped as [`para::F64Monoidal`] /
+//!   [`para::F64Actegory`] (issue #36 first bullet — the umbrella stays
+//!   open). The [`para::SetCategoryDefaults`] opt-in marker trait closes the
+//!   boilerplate gap for `(Set, ×, 1)`-flavoured ZSTs only.
 //! - **The Hopf-fibration / carry-operation construction** — private
 //!   namespace stub only; held until a Dudzik preprint exists. See ⚠️
 //!   CAREFUL section below for the 2026-05-06 evidence update.

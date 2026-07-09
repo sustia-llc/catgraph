@@ -102,8 +102,10 @@ pub trait Actegory<M: MonoidalCategory> {
 /// coherence `μ` is the canonical tuple re-association
 /// `(q, (p, x)) ↦ ((q, p), x)` — exact in `Set`, not "up to iso".
 ///
-/// This is the only actegory currently shipped; richer actegories
-/// (R-module, vector-bundle, fibration-based) are deferred.
+/// Shipped alongside the R-module self-action
+/// [`F64Actegory`](super::F64Actegory) (`(FinReal, ⊕, R⁰)` acting on itself,
+/// issue #36); richer actegories (vector-bundle, fibration-based) remain
+/// deferred.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct SetActegory;
 
