@@ -25,7 +25,9 @@
 use core::marker::PhantomData;
 
 use catgraph_dl::algebra::{GroupActionEndo, Z2Group};
-use catgraph_dl::para::{MonoidalCategory, SetCategoryDefaults};
+use catgraph_dl::para::{
+    Actegory, DirectSum, F64Actegory, F64Module, F64Monoidal, MonoidalCategory, SetCategoryDefaults,
+};
 use catgraph_dl::{
     Container, EndoWitness, Functor, HKT, NaturalTransformation, NoConstraint, Pointed, Satisfies,
 };
@@ -285,6 +287,196 @@ pub fn assert_monoidal_coherence<M: SetCategoryDefaults>(m: &M, a: i32, b: u8, c
         "right unitor ρ((a, ())) = a"
     );
     assert_eq!(m.unit(), (), "monoidal unit is ()");
+}
+
+/// Assert the **pentagon** and **triangle** coherence laws (plus unitor
+/// sanity) for the direct-sum monoidal category [`F64Monoidal`] on four sample
+/// values. Mac Lane's coherence theorem; CDL Definition E.2 (actegory
+/// coherence) / Example G.3 (the cartesian `⊕` structure of real vector
+/// spaces).
+///
+/// The `DirectSum` analogue of [`assert_monoidal_coherence`]: [`F64Monoidal`]'s
+/// tensor is the [`DirectSum`] carrier, not the tuple, so the
+/// `SetCategoryDefaults`-bound tuple checker does not apply. The associator and
+/// unitors are exact `DirectSum` re-associations (pure data movement, no `f64`
+/// arithmetic), so the laws hold on the nose for arbitrary object types — the
+/// sample types below (`i32`, `u8`, `i64`, `bool`) stand in for module objects.
+/// As with the tuple checker, the trait carries **no morphism-tensor
+/// operation**, so wherever a route needs `α ⊗ id` or `id ⊗ α` the component
+/// manipulation is spelled **manually** on the `DirectSum` values.
+pub fn assert_direct_sum_coherence(m: &F64Monoidal, a: i32, b: u8, c: i64, d: bool) {
+    // --- Pentagon ---------------------------------------------------------
+    // Route 1 (bottom): associate at (A⊕B, C, D), then at (A, B, C⊕D).
+    let start = DirectSum(DirectSum(DirectSum(a, b), c), d);
+    let r1_mid = m.associate::<DirectSum<i32, u8>, i64, bool>(start); // (a⊕b) ⊕ (c⊕d)
+    let route1 = m.associate::<i32, u8, DirectSum<i64, bool>>(r1_mid); // a ⊕ (b ⊕ (c⊕d))
+
+    // Route 2 (top): (associate(A,B,C) ⊗ id_D), then associate(A, B⊕C, D),
+    // then (id_A ⊗ associate(B,C,D)). The `⊗ id` legs are spelled manually.
+    let DirectSum(inner_abc, d2) = start; // inner_abc = (a⊕b) ⊕ c
+    let assoc_abc = m.associate::<i32, u8, i64>(inner_abc); // a ⊕ (b ⊕ c)
+    let step1 = DirectSum(assoc_abc, d2); // (a ⊕ (b⊕c)) ⊕ d
+    let step2 = m.associate::<i32, DirectSum<u8, i64>, bool>(step1); // a ⊕ ((b⊕c) ⊕ d)
+    let DirectSum(a3, bcd) = step2; // a3 = a, bcd = (b⊕c) ⊕ d
+    let route2 = DirectSum(a3, m.associate::<u8, i64, bool>(bcd)); // a ⊕ (b ⊕ (c⊕d))
+
+    assert_eq!(route1, route2, "direct-sum pentagon: two routes agree");
+    assert_eq!(
+        route1,
+        DirectSum(a, DirectSum(b, DirectSum(c, d))),
+        "direct-sum pentagon: exact re-association"
+    );
+
+    // --- Triangle ---------------------------------------------------------
+    // Route A: (right_unitor ⊗ id_B) applied manually to (a ⊕ R⁰) ⊕ b.
+    let tri_start = DirectSum(DirectSum(a, ()), b);
+    let DirectSum(a_unit, b_a) = tri_start; // a_unit = a ⊕ R⁰, b_a = b
+    let route_a = DirectSum(m.right_unitor::<i32>(a_unit), b_a); // a ⊕ b
+
+    // Route B: associate then (id_A ⊗ left_unitor).
+    let tri_assoc = m.associate::<i32, (), u8>(tri_start); // a ⊕ (R⁰ ⊕ b)
+    let DirectSum(a_b, unit_b) = tri_assoc; // a_b = a, unit_b = R⁰ ⊕ b
+    let route_b = DirectSum(a_b, m.left_unitor::<u8>(unit_b)); // a ⊕ b
+
+    assert_eq!(route_a, route_b, "direct-sum triangle: two routes agree");
+    assert_eq!(
+        route_a,
+        DirectSum(a, b),
+        "direct-sum triangle: exact unitor collapse"
+    );
+
+    // --- Unitor sanity ----------------------------------------------------
+    assert_eq!(
+        m.left_unitor::<i32>(DirectSum((), a)),
+        a,
+        "left unitor λ(R⁰ ⊕ a) = a"
+    );
+    assert_eq!(
+        m.right_unitor::<i32>(DirectSum(a, ())),
+        a,
+        "right unitor ρ(a ⊕ R⁰) = a"
+    );
+    assert_eq!(m.unit(), (), "monoidal unit is R⁰ ≅ ()");
+}
+
+/// Assert the `R`-module axioms for [`F64Module`] on one sample coordinate
+/// vector `coords` and one scalar `r` — the identities that make
+/// `deep_causality_num`'s `Zero` / `One` load-bearing (issue #36).
+///
+/// - **Additive identity** (`Zero`): `v + 0 = v` and `0 + v = v`.
+/// - **Scalar unit** (`One`): `1 · v = v`.
+/// - **Scalar zero** (`Zero`): `0 · v = 0` (the zero module of the same
+///   dimension).
+///
+/// Equality is `f64` `PartialEq`, which identifies `-0.0` and `+0.0` — these
+/// identities hold under that equality for finite inputs, but signed-zero bit
+/// patterns are **not** preserved (`-0.0 + 0.0 = +0.0`; `0.0 · (-1.0) = -0.0`),
+/// so this helper certifies `PartialEq`-equality, not bit-exactness. See the
+/// "Float honesty" note on `F64Module`.
+/// - **Basis coherence** (`One` / `Zero`): each standard basis vector `eᵢ` has
+///   `1` at `i` and `0` elsewhere; scaling `eᵢ` by `r` places `r` at `i`.
+///
+/// CDL Definition E.2 (objects of the acted-on category `C`) / Example G.3.
+pub fn assert_f64_module_axioms(coords: Vec<f64>, r: f64) {
+    let v = F64Module::new(coords);
+    let n = v.dim();
+    let zero = F64Module::zeros(n);
+
+    // Additive identity — both sides, exact.
+    assert_eq!(
+        v.add(&zero).as_ref(),
+        Some(&v),
+        "additive identity v + 0 = v"
+    );
+    assert_eq!(
+        zero.add(&v).as_ref(),
+        Some(&v),
+        "additive identity 0 + v = v"
+    );
+
+    // Scalar unit and scalar zero — exact.
+    assert_eq!(v.scale(1.0), v, "scalar unit 1 · v = v");
+    assert_eq!(v.scale(0.0), zero, "scalar zero 0 · v = 0");
+
+    // Dimension mismatch guards addition.
+    if n > 0 {
+        let shorter = F64Module::zeros(n - 1);
+        assert_eq!(
+            v.add(&shorter),
+            None,
+            "addition rejects a dimension mismatch"
+        );
+    }
+
+    // Basis coherence — `eᵢ` has 1 at i, 0 elsewhere; `r · eᵢ` has r at i.
+    for i in 0..n {
+        let e_i = F64Module::basis(n, i).expect("i < n so basis is defined");
+        for (j, &x) in e_i.as_slice().iter().enumerate() {
+            let expected = if j == i { 1.0 } else { 0.0 };
+            assert_eq!(x, expected, "basis e_{i} coordinate {j}");
+        }
+        let scaled = e_i.scale(r);
+        assert_eq!(scaled.as_slice()[i], r * 1.0, "r · e_{i} has r at slot {i}");
+    }
+    // `basis` is out of range past the dimension.
+    assert_eq!(
+        F64Module::basis(n, n),
+        None,
+        "basis rejects i == dim (out of range)"
+    );
+}
+
+/// Assert the concrete `⊕`-monoid laws for [`F64Module`] direct sum on three
+/// samples — the coordinate-level witness that `(FinReal, ⊕, R⁰)` is monoidal.
+///
+/// - **Dimensions add**: `dim(u ⊕ v) = dim(u) + dim(v)`.
+/// - **Concatenation**: coordinates of `u ⊕ v` are `u`'s followed by `v`'s.
+/// - **Unit laws**: `R⁰ ⊕ v = v = v ⊕ R⁰` (zero-dim module is the unit).
+/// - **Associativity**: `(u ⊕ v) ⊕ w = u ⊕ (v ⊕ w)` on the nose.
+/// - **`DirectSum::flatten` agrees** with `direct_sum` on the generic
+///   [`Actegory::act`] result.
+///
+/// CDL Example E.4 (self-action) / Example G.3 (`Rᵐ ⊕ Rⁿ = Rᵐ⁺ⁿ`).
+pub fn assert_direct_sum_monoid(u: Vec<f64>, v: Vec<f64>, w: Vec<f64>) {
+    let (mu, mv, mw) = (
+        F64Module::new(u.clone()),
+        F64Module::new(v.clone()),
+        F64Module::new(w),
+    );
+    let unit = F64Module::zero_dim();
+
+    // Dimensions add; coordinates concatenate.
+    let uv = mu.clone().direct_sum(mv.clone());
+    assert_eq!(uv.dim(), mu.dim() + mv.dim(), "⊕ dimensions add");
+    let expected: Vec<f64> = u.iter().chain(&v).copied().collect();
+    assert_eq!(uv.as_slice(), expected.as_slice(), "⊕ concatenates blocks");
+
+    // Unit laws (zero-dim module is the ⊕-unit).
+    assert_eq!(
+        unit.clone().direct_sum(mv.clone()),
+        mv,
+        "left unit R⁰ ⊕ v = v"
+    );
+    assert_eq!(
+        mv.clone().direct_sum(unit.clone()),
+        mv,
+        "right unit v ⊕ R⁰ = v"
+    );
+
+    // Associativity on the nose.
+    let left = mu.clone().direct_sum(mv.clone()).direct_sum(mw.clone());
+    let right = mu.clone().direct_sum(mv.clone().direct_sum(mw.clone()));
+    assert_eq!(left, right, "⊕ associativity (u ⊕ v) ⊕ w = u ⊕ (v ⊕ w)");
+
+    // `DirectSum::flatten` realises the same concatenation as the generic
+    // `act` (a `DirectSum` pair) collapsed via `flatten`.
+    let acteg = F64Actegory::new();
+    let generic: DirectSum<F64Module, F64Module> = acteg.act(mu.clone(), mv.clone());
+    assert_eq!(
+        generic.flatten(),
+        mu.direct_sum(mv),
+        "act(p, x).flatten() == p ⊕ x"
+    );
 }
 
 /// A trivial endofunctor witness with `Type<X> = ()` — "no recursive slot at

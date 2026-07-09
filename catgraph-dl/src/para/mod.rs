@@ -21,8 +21,16 @@
 //! Bodies present for the concrete `M = (Set, ×, 1)` actegory acting on
 //! `Set` by Cartesian product — see [`SetMonoidal`] / [`SetActegory`].
 //! [`ParaMorphism::compose`] and [`Reparameterization::apply`] have
-//! Set-specialised implementations. Other monoidal categories are
-//! deferred.
+//! Set-specialised implementations.
+//!
+//! A second, non-`(Set, ×, 1)` instance is also shipped: the R-module actegory
+//! `(FinReal, ⊕, R⁰)` — see [`F64Monoidal`] / [`F64Actegory`] / [`F64Module`]
+//! (issue #36). It is the direct-sum monoidal category of finite-dimensional
+//! real modules acting on itself; its object-level tensor is the dedicated
+//! [`DirectSum`] carrier rather than the `(Set, ×, 1)` tuple, so it does not
+//! opt into [`SetCategoryDefaults`]. `ParaMorphism` / `Reparameterization`
+//! composition remains Set-specialised; other monoidal categories
+//! (hyperdoctrine, vector-bundle, fibration) are still deferred.
 //!
 //! ## Closure convention
 //!
@@ -33,12 +41,14 @@
 
 mod actegory;
 mod comonoid;
+mod module_actegory;
 mod monoidal_category;
 mod morphism;
 mod reparameterization;
 
 pub use actegory::{Actegory, SetActegory};
 pub use comonoid::{Comonoid, DiagonalComonoid, tie_weights};
+pub use module_actegory::{DirectSum, F64Actegory, F64Module, F64Monoidal, F64Morphism, F64Object};
 pub use monoidal_category::{
     MonoidalCategory, MonoidalTag, SetCategoryDefaults, SetMonoidal, SetMorphism, SetObject,
     private::Sealed,

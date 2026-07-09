@@ -6,6 +6,64 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`F64Module` R-module actegory — first non-`(Set, ×, 1)` `MonoidalCategory`
+  ([#36](https://github.com/sustia-llc/catgraph/issues/36), first bullet).**
+  Lands the direct-sum monoidal category `(FinReal, ⊕, R⁰)` of
+  finite-dimensional real modules and its self-action, and **activates the
+  reserved `deep_causality_num` dependency** (previously deps-only): the crate
+  now imports num's root `Zero` / `One`. The umbrella #36 stays open for the
+  still-deferred non-Set surfaces (hyperdoctrine / vector-bundle / fibration
+  actegories; lazy final-coalgebra unrolling).
+  - **`para::F64Module`** (`src/para/module_actegory.rs`) — a
+    finite-dimensional real module `Rⁿ` over the scalar ring `R = f64`,
+    `Vec<f64>`-backed, the free `R`-module on `n` generators. Carries genuine
+    `R`-module structure: `zeros` (additive identity `0 ∈ Rⁿ`, each entry
+    `<f64 as Zero>::zero()`), `basis` (standard basis `eᵢ` with
+    `<f64 as One>::one()` at position `i`), `add` (dimension-guarded, `Option`),
+    `scale` (`r · v`), and `direct_sum` (`⊕`, coordinate concatenation
+    `Rᵐ ⊕ Rⁿ = Rᵐ⁺ⁿ`). Plus `zero_dim` (the monoidal unit `R⁰`).
+  - **`para::DirectSum<A, B>`** — the object-level tensor carrier `A ⊕ B`, a
+    dedicated newtype (**not** the `(Set, ×, 1)` tuple), with
+    `DirectSum::<F64Module, F64Module>::flatten` realising `V ⊕ W` as one
+    concatenated module.
+  - **`para::F64Monoidal`** — the `MonoidalCategory` `(FinReal, ⊕, R⁰)`. The
+    first non-`(Set, ×, 1)` instance: **hand-written** `MonoidalCategory` impl
+    with `Tensor<A, B> = DirectSum<A, B>` and `Unit = ()` (the one-element
+    module `R⁰`); it does **not** opt into `SetCategoryDefaults`. Kind markers
+    **`para::F64Object`** / **`para::F64Morphism`**. Zero-sized — the base ring
+    `f64` is a compile-time type, so the `&self` runtime-payload slot stays
+    reserved for a runtime-ring instance (documented).
+  - **`para::F64Actegory`** — the self-action `▶ = ⊕` of `F64Monoidal` on
+    itself (`Actegory<F64Monoidal>`), with `act(p, x) = p ⊕ x`, the
+    multiplicator `µ : Q ▶ (P ▶ X) → (Q ⊗ P) ▶ X` as the exact `DirectSum`
+    re-association; the concrete concatenation is realised by
+    `DirectSum::flatten` on the action result.
+  - **Paper anchors (verified against `docs/2402.15332v2.pdf`).** The formal
+    actegory definition is **Definition E.2** (`η_X : I ▶ X ≅ X`,
+    `µ_{M,N} : (M ⊗ N) ▶ X ≅ M ▶ (N ▶ X)`, pentagonator Eq. 7 + unitors Eq. 8),
+    **not** §3.1 (which is the main-body `Para` section). The self-action is
+    **Example E.4**. The monoidal product is the **direct sum `⊕`**, not the
+    tensor `⊗_R`: **Example G.3** forms `Para(Smooth)` over the *cartesian*
+    structure of real vector spaces, and for finite-dimensional modules the
+    categorical product is the biproduct `Rᵐ × Rⁿ ≅ Rᵐ⁺ⁿ = Rᵐ ⊕ Rⁿ`. The
+    tensor `⊗_R` is a different (closed) monoidal structure (unit `R¹`), not the
+    parameter-concatenation gradient-based-learning `Para` uses.
+  - **Law tests** — `tests/module_actegory_laws.rs` (deterministic + proptest):
+    Mac Lane pentagon / triangle / unitor coherence on `DirectSum` via the new
+    witness-generic `common::assert_direct_sum_coherence` (the `DirectSum`
+    analogue of `assert_monoidal_coherence`, which is `SetCategoryDefaults`- and
+    tuple-bound); the `R`-module axioms (`v + 0 = v`, `1 · v = v`, `0 · v = 0`,
+    basis coherence) via `common::assert_f64_module_axioms` — the identities
+    where `Zero` / `One` are load-bearing; and the concrete `⊕`-monoid laws
+    (dimensions add, `R⁰` unit, associativity, `flatten`/`act` agreement) via
+    `common::assert_direct_sum_monoid`. Float honesty: the identity asserts
+    (`1 · v`, `0 · v`, `v + 0`) hold under `f64` `PartialEq` (which identifies
+    `±0.0`) for finite inputs — signed-zero bit patterns are **not** preserved
+    (`0.0 · (-1.0) = -0.0`; `-0.0 + 0.0 = +0.0`; cf. #58); samples use the
+    NaN-free `finite_f64` strategy.
+
 ### Documentation
 
 - **Ergonomics-batch verdicts ([#42](https://github.com/sustia-llc/catgraph/issues/42)).**
