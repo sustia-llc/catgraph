@@ -301,6 +301,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "catgraph-syntax"
+version = "0.2.1"
+dependencies = [
+ "catgraph",
+ "catgraph-applied",
+ "deep_causality_haft",
+ "proptest",
+ "thiserror",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
