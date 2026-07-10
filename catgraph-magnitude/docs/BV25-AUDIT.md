@@ -11,19 +11,19 @@
 > (`cargo test --workspace` green).
 > **Method:** read all sections; cross-checked each numbered definition / proposition / remark / equation against `catgraph-magnitude` source and the enrichment substrate re-exported from `catgraph-applied`
 >
-> **Anchor papers** (in-tree at `docs/`):
-> - BV 2025 — Bradley & Vigneaux, *Magnitude of Language Models*, [arXiv:2501.06662](https://arxiv.org/abs/2501.06662) (`docs/2501.06662v2.pdf`).
-> - Leinster 2013 — Leinster, *The magnitude of metric spaces*, [arXiv:1012.5857](https://arxiv.org/abs/1012.5857) (`docs/Leinster-1012.5857v3.pdf`).
-> - Leinster–Shulman 2017 — *Magnitude homology of enriched categories and metric spaces*, [arXiv:1711.00802](https://arxiv.org/abs/1711.00802) (`docs/1711.00802v4.pdf`).
-> - Leinster 2008 — *The Euler characteristic of a category*, [arXiv:math/0610260](https://arxiv.org/abs/math/0610260) (`docs/Leinster-0610260v1.pdf`).
+> **Anchor papers** (PDFs are not kept in-tree; fetch from arXiv):
+> - BV 2025 — Bradley & Vigneaux, *Magnitude of Language Models*, [arXiv:2501.06662v2](https://arxiv.org/abs/2501.06662).
+> - Leinster 2013 — Leinster, *The magnitude of metric spaces*, [arXiv:1012.5857v3](https://arxiv.org/abs/1012.5857).
+> - Leinster–Shulman 2017 — *Magnitude homology of enriched categories and metric spaces*, [arXiv:1711.00802v4](https://arxiv.org/abs/1711.00802).
+> - Leinster 2008 — *The Euler characteristic of a category*, [arXiv:math/0610260v1](https://arxiv.org/abs/math/0610260).
 > - BTV 2021 — Bradley, Terilla, Vlassopoulos, *An Enriched Category Theory of Language*, [arXiv:2106.07890](https://arxiv.org/abs/2106.07890).
 >
-> **Background references** (kept in `docs/`, background only — smooth-manifold /
-> spectral magnitude, not implementation anchors): Leinster–Meckes 2016, *The
+> **Background references** (smooth-manifold / spectral magnitude —
+> not implementation anchors): Leinster–Meckes 2016, *The
 > Magnitude of a Metric Space: From Category Theory to Geometric Measure Theory*,
-> [arXiv:1606.00095](https://arxiv.org/abs/1606.00095) (`docs/1606.00095v2.pdf`);
+> [arXiv:1606.00095v2](https://arxiv.org/abs/1606.00095);
 > Gimperlein–Goffeng–Louca, *The Magnitude and Spectral Geometry*,
-> [arXiv:2201.11363](https://arxiv.org/abs/2201.11363) (`docs/2201.11363v3.pdf`).
+> [arXiv:2201.11363v3](https://arxiv.org/abs/2201.11363).
 >
 > **Note on scope:** BV 2025 is anchored in §2 (enriched categories of language models) and §3 (magnitude via Tsallis q-entropy). Only §2 Defs/Eqs that materialize as runtime types and §3 Props that constitute the BV 2025 acceptance gate are tracked here. Categorical foundations (§1, §4) live in `catgraph-applied`'s `enriched.rs` + `lawvere_metric.rs` and are audited by [`catgraph-applied/docs/FS18-AUDIT.md`](../../catgraph-applied/docs/FS18-AUDIT.md).
 >
@@ -269,8 +269,7 @@ The crate's anchored claim — that BV 2025 Prop 3.14 (magnitude as the Euler ch
 
 ## Leinster 2008 Cor 1.5 paper-audit
 
-> **Paper:** Leinster, *The Euler characteristic of a category* ([arXiv:math/0610260v1](https://arxiv.org/abs/math/0610260), 8 Oct 2006 — published Documenta Math 2008).
-> **In-tree at:** [`catgraph-magnitude/docs/Leinster-0610260v1.pdf`](Leinster-0610260v1.pdf) (~263 KB; primary cold-read anchor).
+> **Paper:** Leinster, *The Euler characteristic of a category* ([arXiv:math/0610260v1](https://arxiv.org/abs/math/0610260), 8 Oct 2006 — published Documenta Math 2008; ~263 KB PDF via arXiv, the primary cold-read anchor).
 > **Method:** end-to-end re-read of §1 (Möbius inversion, pages 4-9); cross-walked Cor 1.5 (page 6), Prop 2.10 (referenced in §1 Def 1.1 commentary on Möbius vs graph Möbius), and Ex 1.11(c) (terminal object weighting) against the shipped code (now at sustia-llc/catgraph; re-verified post-reboot).
 > **Anchor surface added** post-shipping (Phase G paper-audit reviewer pass).
 

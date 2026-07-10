@@ -1,7 +1,7 @@
 //! The `R`-module actegory `(FinReal, ⊕, R⁰)` acting on itself — the first
 //! non-`(Set, ×, 1)` [`MonoidalCategory`] / [`Actegory`] instance.
 //!
-//! ## Paper anchors (verified against `docs/2402.15332v2.pdf`)
+//! ## Paper anchors (verified against [arXiv:2402.15332v2](https://arxiv.org/abs/2402.15332))
 //!
 //! The umbrella issue ([#36](https://github.com/sustia-llc/catgraph/issues/36))
 //! cites "CDL §3.1" for the R-module actegory. §3 of the main body ("2-Categories

@@ -39,6 +39,10 @@ umbrella #36 stays open for hyperdoctrine/vector-bundle/lazy surfaces);
 - **catgraph-syntax** — F&S 2018 Ch. 5 (props, presentations, Thm 5.60) + F&S 2019
   (Frobenius/hypergraph layer); haft Arrow via the `arrow_seam` (design: #5)
 
+Paper PDFs are **not** kept in-tree (arXiv licensing does not grant
+redistribution for all anchors); fetch papers via the arXiv links in each
+crate's `docs/`.
+
 ## Rules (the only ones)
 
 1. **The paper is the spec.** Theorems move/stay intact — no re-derivation.

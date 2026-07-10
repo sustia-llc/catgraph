@@ -1,12 +1,12 @@
 # catgraph-syntax — paper anchors
 
-Every public item maps to a theorem/definition in a paper, referenced by the
-in-tree PDFs (not copied here):
+Every public item maps to a theorem/definition in a paper (PDFs are not kept
+in-tree; fetch from arXiv):
 
 - **Seven Sketches** — Fong & Spivak 2018, *Seven Sketches in Compositionality*:
-  [`catgraph-applied/docs/1803.05316v3.pdf`](../../catgraph-applied/docs/1803.05316v3.pdf)
+  [arXiv:1803.05316v3](https://arxiv.org/abs/1803.05316)
 - **Hypergraph Categories** — Fong & Spivak 2019:
-  [`catgraph/docs/1806.08304v3.pdf`](../../catgraph/docs/1806.08304v3.pdf)
+  [arXiv:1806.08304v3](https://arxiv.org/abs/1806.08304)
 
 Status legend: **live** = shipped this phase; **planned** = arrives in a named
 later phase.
