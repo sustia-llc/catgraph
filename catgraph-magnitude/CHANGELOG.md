@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **Lineage note:** pre-reboot version links below (`catgraph-magnitude-v0.x`
 > tags) point at the private predecessor repo `tsondru/catgraph` and will not
 > resolve publicly; they are kept as an honest record of the crate's history.
+> In-tree paper PDFs mentioned in historical entries were removed from the
+> tree on 2026-07-10 (arXiv licensing); fetch papers from the arXiv links in
+> `docs/`.
 
 ## [Unreleased]
 
@@ -508,8 +511,8 @@ C" for the full rationale.
 
 ### Anchor papers added in-tree
 
-- `docs/2501.06662v2.pdf` — BV 2025 (already in-tree from v0.1.x; PDFs since removed from the tree — see [arXiv:2501.06662](https://arxiv.org/abs/2501.06662)).
-- `docs/1711.00802v4.pdf` — Leinster–Shulman 2017 (already in-tree from v0.2.0; promoted from forward reference to active anchor at v0.3.0; PDFs since removed from the tree — see [arXiv:1711.00802](https://arxiv.org/abs/1711.00802)).
+- `docs/2501.06662v2.pdf` — BV 2025 (already in-tree from v0.1.x).
+- `docs/1711.00802v4.pdf` — Leinster–Shulman 2017 (already in-tree from v0.2.0; promoted from forward reference to active anchor at v0.3.0).
 - Storjohann 2000 §7 — algorithmic reference for the SNF backend; not in-tree (open-access via author's institutional repository); `events555/modularsnf` is the working reference.
 
 ### Performance baseline (v0.3.0)

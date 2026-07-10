@@ -18,8 +18,8 @@
 > - Leinster 2008 — *The Euler characteristic of a category*, [arXiv:math/0610260v1](https://arxiv.org/abs/math/0610260).
 > - BTV 2021 — Bradley, Terilla, Vlassopoulos, *An Enriched Category Theory of Language*, [arXiv:2106.07890](https://arxiv.org/abs/2106.07890).
 >
-> **Background references** (background only — smooth-manifold /
-> spectral magnitude, not implementation anchors): Leinster–Meckes 2016, *The
+> **Background references** (smooth-manifold / spectral magnitude —
+> not implementation anchors): Leinster–Meckes 2016, *The
 > Magnitude of a Metric Space: From Category Theory to Geometric Measure Theory*,
 > [arXiv:1606.00095v2](https://arxiv.org/abs/1606.00095);
 > Gimperlein–Goffeng–Louca, *The Magnitude and Spectral Geometry*,
@@ -269,8 +269,7 @@ The crate's anchored claim — that BV 2025 Prop 3.14 (magnitude as the Euler ch
 
 ## Leinster 2008 Cor 1.5 paper-audit
 
-> **Paper:** Leinster, *The Euler characteristic of a category* ([arXiv:math/0610260v1](https://arxiv.org/abs/math/0610260), 8 Oct 2006 — published Documenta Math 2008).
-> **PDF:** [arXiv:math/0610260v1](https://arxiv.org/abs/math/0610260) (~263 KB; primary cold-read anchor — not kept in-tree, fetch from arXiv).
+> **Paper:** Leinster, *The Euler characteristic of a category* ([arXiv:math/0610260v1](https://arxiv.org/abs/math/0610260), 8 Oct 2006 — published Documenta Math 2008; ~263 KB PDF via arXiv, the primary cold-read anchor).
 > **Method:** end-to-end re-read of §1 (Möbius inversion, pages 4-9); cross-walked Cor 1.5 (page 6), Prop 2.10 (referenced in §1 Def 1.1 commentary on Möbius vs graph Möbius), and Ex 1.11(c) (terminal object weighting) against the shipped code (now at sustia-llc/catgraph; re-verified post-reboot).
 > **Anchor surface added** post-shipping (Phase G paper-audit reviewer pass).
 
