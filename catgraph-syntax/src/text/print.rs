@@ -19,8 +19,18 @@
 //! emitted **only where the tree structure requires them** to reparse
 //! identically: a lower-precedence child inside a higher-precedence operator,
 //! and the right operand of a same-operator nesting (which, under
-//! left-associative printing, would otherwise reassociate). Seven Sketches
-//! Def 5.30 (a `G`-generated prop expression).
+//! left-associative printing, would otherwise reassociate). The printed
+//! syntax renders a `G`-generated prop expression in the sense of Seven
+//! Sketches Def 5.30.
+//!
+//! # Depth
+//!
+//! Printing recurses once per tree level with no depth bound, matching the
+//! structural recursion of `PropExpr` itself (`source`/`target`, the NF
+//! engine). Pathologically deep terms (tens of thousands of nested nodes)
+//! can exhaust the stack; this is an engine-wide property of the term
+//! representation, not specific to the printer. The S2 parser bounds input
+//! nesting explicitly (untrusted text).
 
 use std::fmt;
 

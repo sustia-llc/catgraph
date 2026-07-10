@@ -2,9 +2,13 @@
 //!
 //! Phase S1 ships the **printer**: a structural, total renderer of
 //! [`PropExpr<G>`](catgraph_applied::prop::PropExpr) into the concrete syntax
-//! `expr := term (';' term)*`, `term := factor (('*') factor)*`,
-//! `factor := id(n) | braid(m,n) | GENERATOR | '(' expr ')'`. The matching
-//! recursive-descent parser (and the round-trip law tests) land in Phase S2.
+//! `expr := term (';' term)*`, `term := factor (('⊗' | '*') factor)*`,
+//! `factor := id(n) | braid(m,n) | GENERATOR | '(' expr ')'`. The printer
+//! emits ASCII only (`*`); the Unicode tensor `⊗` is an **input** synonym the
+//! Phase-S2 parser accepts per the approved design — an S2 implementation
+//! that lexed only `*` would silently narrow the design's input alphabet.
+//! The matching recursive-descent parser (and the round-trip law tests) land
+//! in Phase S2.
 //!
 //! The bridge between a signature's generators and their concrete tokens is the
 //! [`GeneratorSyntax`] trait; the printer itself is [`print::Pretty`] /
@@ -24,19 +28,23 @@ use catgraph_applied::prop::PropSignature;
 ///
 /// # Round-trip contract
 ///
-/// Implementors must satisfy, for every generator `g`:
+/// Implementors **must** satisfy, for every generator `g`:
 ///
-/// ```text
-/// Self::parse_token(&g.print_token()) == Some(g)
-/// ```
+/// 1. `Self::parse_token(&g.print_token()) == Some(g)` — printing a generator
+///    and parsing the result recovers the original generator; and
+/// 2. **`print_token` returns a single lexical atom**: it must contain no
+///    `;`, `*`, `⊗`, parenthesis, or whitespace, and must not equal the
+///    reserved grammar keywords **`id`** or **`braid`**.
 ///
-/// i.e. printing a generator and parsing the result recovers the original
-/// generator. The contract is machine-checked per signature by a proptest from
-/// Phase S2 onward; S1 ships the trait and the printer that consumes
-/// [`print_token`](GeneratorSyntax::print_token).
-///
-/// Tokens should be single lexical atoms (no embedded `;`, `*`, parentheses, or
-/// whitespace) so they compose cleanly with the surrounding grammar.
+/// Both clauses are load-bearing. The printer emits tokens **verbatim, with no
+/// validation or escaping** — a token violating clause 2 produces output that
+/// re-lexes as multiple tokens (or as the built-in `id(n)` / `braid(m,n)`
+/// atoms), so the printed term does **not** reparse to the same tree even
+/// though the token-level clause 1 may hold. Clause 1 is machine-checked per
+/// signature by a proptest from Phase S2 onward; clause 2 is additionally
+/// exercised by S2's whole-expression round-trip proptests (a violating
+/// implementation fails them). S1 ships the trait and the printer that
+/// consumes [`print_token`](GeneratorSyntax::print_token).
 pub trait GeneratorSyntax: PropSignature {
     /// The concrete token for this generator (e.g. `"copy"`, `"add"`).
     fn print_token(&self) -> String;

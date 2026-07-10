@@ -17,7 +17,8 @@ cargo fmt    --all --check
 
 ```
 catgraph (F&S core) ─▶ catgraph-applied ─▶ catgraph-magnitude
-        └─▶ catgraph-physics              └─▶ catgraph-dl
+        └─▶ catgraph-physics              ├─▶ catgraph-dl
+                                          └─▶ catgraph-syntax
 ```
 
 `deep_causality_num` / `deep_causality_haft` pinned `=0.4.0` (fallback git rev `3280cb844`).
@@ -35,6 +36,8 @@ umbrella #36 stays open for hyperdoctrine/vector-bundle/lazy surfaces);
 - **catgraph-applied** — Fong & Spivak 2018 (*Seven Sketches in Compositionality*)
 - **catgraph-magnitude** — Bradley–Vigneaux 2025; Leinster 2008 / 2013 / 2017
 - **catgraph-dl** — Gavranović et al., ICML 2024 (*Categorical Deep Learning*)
+- **catgraph-syntax** — F&S 2018 Ch. 5 (props, presentations, Thm 5.60) + F&S 2019
+  (Frobenius/hypergraph layer); haft Arrow via the `arrow_seam` (design: #5)
 
 ## Rules (the only ones)
 
@@ -47,7 +50,9 @@ umbrella #36 stays open for hyperdoctrine/vector-bundle/lazy surfaces);
 
 Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-> **Status:** crate migration complete — all five proven crates (core / applied /
+> **Status:** crate migration complete — the five proven crates (core / applied /
 > magnitude / physics / dl) landed on the thin DC substrate (Phases 0–5, merged).
-> Phase 6 (`catgraph-syntax`, Arrow frontend) is a deferred milestone (#5). Open
-> follow-ups + audit/README reconciliation tracked as GitHub issues (e.g. #7).
+> Phase 6 (`catgraph-syntax`, the Arrow presentation frontend, #5) is **in
+> progress**: design approved 2026-07-09; S1 (skeleton + printer) landed; parser /
+> interpreter / Frobenius layer / Traced follow as S2–S5. Open follow-ups +
+> audit/README reconciliation tracked as GitHub issues (e.g. #7).

@@ -45,6 +45,15 @@ fn tensor_binds_tighter_than_compose() {
 
     // Same atoms, structurally distinct terms, distinct rendering.
     assert_ne!(print(&a_then_bc), print(&ab_tensor_c));
+
+    // `c * (a ; b)` == Tensor(unit, Compose(copy, add)): a looser-binding
+    // compose as the RIGHT operand of the tensor must also be parenthesized.
+    // Pins the right-operand mixed-precedence branch (previously only the
+    // left-operand variant was covered) — a regression that parenthesized
+    // only left operands would print the ambiguous `unit * copy ; add`.
+    let a_b2 = Free::compose(g(Sig::Copy), g(Sig::Add)).unwrap();
+    let c_tensor_ab = Free::tensor(g(Sig::Unit), a_b2);
+    assert_eq!(print(&c_tensor_ab), "unit * (copy ; add)");
 }
 
 #[test]

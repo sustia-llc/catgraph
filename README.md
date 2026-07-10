@@ -4,13 +4,14 @@ Category-theoretic graph structures in Rust, anchored to the source papers:
 a strict implementation of Fong & Spivak, *Hypergraph Categories* (2019), with
 applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions.
 
-> **Status:** all five proven crates (core / applied / magnitude / physics / dl)
+> **Status:** the five proven crates (core / applied / magnitude / physics / dl)
 > have landed on a thin
 > [DeepCausality](https://github.com/deepcausality-rs/deep_causality) algebraic
 > substrate (`deep_causality_num` / `deep_causality_haft`), with `nalgebra` kept
-> optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.2.0)
-> and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, Arrow
-> frontend) is a deferred milestone (#5).
+> optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.2.1)
+> and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, the Arrow
+> presentation frontend, #5) is in progress — design approved, S1 landed;
+> S2–S5 (parser / interpreter / Frobenius layer / Traced) follow.
 
 ## Workspace
 
@@ -21,6 +22,7 @@ applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions
 | `catgraph-magnitude` | Bradley–Vigneaux 2025; Leinster 2008/2013/2017 |
 | `catgraph-physics` | Wolfram-physics extensions (DPO rewriting, multiway, branchial) |
 | `catgraph-dl` | Gavranović et al., ICML 2024 — *Categorical Deep Learning* |
+| `catgraph-syntax` | F&S 2018 Ch. 5 (props/presentations) + F&S 2019 (Frobenius layer); term language over `catgraph-applied`'s NF engine |
 
 ## Build
 
