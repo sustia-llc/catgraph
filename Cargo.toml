@@ -6,6 +6,7 @@ members = [
     "catgraph-magnitude",
     "catgraph-physics",
     "catgraph-dl",
+    "catgraph-syntax",
 ]
 
 [workspace.package]
