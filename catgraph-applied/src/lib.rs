@@ -58,7 +58,7 @@
 //! - `Operadic` trait — abstract interface for substitution
 //! - `compact_closed` cup/cap — string-diagram rewriting (TL, wiring)
 //!
-//! See [`docs/FS18-AUDIT.md`](https://github.com/tsondru/catgraph/blob/main/catgraph-applied/docs/FS18-AUDIT.md)
+//! See [`docs/FS18-AUDIT.md`](https://github.com/sustia-llc/catgraph/blob/main/catgraph-applied/docs/FS18-AUDIT.md)
 //! for alignment with Fong & Spivak, *Seven Sketches in Compositionality*
 //! (arXiv:1803.05316v3, 2018), Chapters 4–6.
 

@@ -285,7 +285,8 @@ evidence trail.
 
 ## Documentation artefacts
 
-- [`docs/2402.15332v2.pdf`](docs/2402.15332v2.pdf) — the CDL paper itself.
+- [arXiv:2402.15332v2](https://arxiv.org/abs/2402.15332) — the CDL paper
+  itself (PDF not kept in-tree; fetch from arXiv).
 - [`docs/2402.15332v2-SUMMARY.md`](docs/2402.15332v2-SUMMARY.md) — a merged
   primer (transcript-vs-paper comparison + a faithful paper rendering, with
   ⚠️ CAREFUL cross-checking caveats on the Appendix H.1 / H.3 worked-example

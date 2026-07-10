@@ -4,6 +4,10 @@ All notable changes to this crate are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); semver per
 [SemVer 2.0.0](https://semver.org/spec/v2.0.0.html).
 
+> **Lineage note:** pre-reboot version links below (`catgraph-dl-v0.x` tags)
+> point at the private predecessor repo `tsondru/catgraph` and will not
+> resolve publicly; they are kept as an honest record of the crate's history.
+
 ## [Unreleased]
 
 ### Added
@@ -40,7 +44,7 @@ All notable changes to this crate are documented here. Format follows
     multiplicator `µ : Q ▶ (P ▶ X) → (Q ⊗ P) ▶ X` as the exact `DirectSum`
     re-association; the concrete concatenation is realised by
     `DirectSum::flatten` on the action result.
-  - **Paper anchors (verified against `docs/2402.15332v2.pdf`).** The formal
+  - **Paper anchors (verified against [arXiv:2402.15332v2](https://arxiv.org/abs/2402.15332)).** The formal
     actegory definition is **Definition E.2** (`η_X : I ▶ X ≅ X`,
     `µ_{M,N} : (M ⊗ N) ▶ X ≅ M ▶ (N ▶ X)`, pentagonator Eq. 7 + unitors Eq. 8),
     **not** §3.1 (which is the main-body `Para` section). The self-action is
@@ -836,7 +840,7 @@ Initial scaffold release. Types-only surface; bodies land in Phase DL-2.
   coherence verification, and the algebra-homomorphism unroller arrive in
   Phase DL-2 with the `catgraph-coalition` v0.4.0 enriched-actegory body.
 
-[Unreleased]: https://github.com/tsondru/catgraph/compare/catgraph-dl-v0.4.1...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/commits/main/catgraph-dl
 [0.4.1]: https://github.com/tsondru/catgraph/releases/tag/catgraph-dl-v0.4.1
 [0.4.0]: https://github.com/tsondru/catgraph/releases/tag/catgraph-dl-v0.4.0
 [0.3.1]: https://github.com/tsondru/catgraph/releases/tag/catgraph-dl-v0.3.1

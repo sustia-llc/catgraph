@@ -7,6 +7,10 @@ All notable changes to this crate are documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> **Lineage note:** pre-reboot version links below (`catgraph-applied-v0.x`
+> tags) point at the private predecessor repo `tsondru/catgraph` and will not
+> resolve publicly; they are kept as an honest record of the crate's history.
+
 ## [Unreleased]
 
 ### Added

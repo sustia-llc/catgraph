@@ -52,7 +52,7 @@
 //! place they give ζ two identical rows, so ζ is singular at *every* `t`.
 //! Magnitude is a property of the **skeleton**: it is invariant under
 //! equivalence (Leinster 2008 *The Euler characteristic of a category*,
-//! `docs/Leinster-0610260v1.pdf` — magnitude is defined on skeletal categories
+//! [arXiv:math/0610260](https://arxiv.org/abs/math/0610260) — magnitude is defined on skeletal categories
 //! and invariant under equivalence), and for metric spaces the Kolmogorov
 //! quotient of a pseudometric space is an equivalent `[0,∞]`-category with equal
 //! magnitude (Leinster 2013). So [`Coalition::from_enriched`] quotients members

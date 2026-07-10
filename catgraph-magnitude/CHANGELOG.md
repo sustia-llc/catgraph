@@ -5,6 +5,10 @@ All notable changes to `catgraph-magnitude` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> **Lineage note:** pre-reboot version links below (`catgraph-magnitude-v0.x`
+> tags) point at the private predecessor repo `tsondru/catgraph` and will not
+> resolve publicly; they are kept as an honest record of the crate's history.
+
 ## [Unreleased]
 
 ## [workspace-v0.2.0] - 2026-07-02
@@ -504,8 +508,8 @@ C" for the full rationale.
 
 ### Anchor papers added in-tree
 
-- [`docs/2501.06662v2.pdf`](docs/2501.06662v2.pdf) — BV 2025 (already in-tree from v0.1.x).
-- [`docs/1711.00802v4.pdf`](docs/1711.00802v4.pdf) — Leinster–Shulman 2017 (already in-tree from v0.2.0; promoted from forward reference to active anchor at v0.3.0).
+- `docs/2501.06662v2.pdf` — BV 2025 (already in-tree from v0.1.x; PDFs since removed from the tree — see [arXiv:2501.06662](https://arxiv.org/abs/2501.06662)).
+- `docs/1711.00802v4.pdf` — Leinster–Shulman 2017 (already in-tree from v0.2.0; promoted from forward reference to active anchor at v0.3.0; PDFs since removed from the tree — see [arXiv:1711.00802](https://arxiv.org/abs/1711.00802)).
 - Storjohann 2000 §7 — algorithmic reference for the SNF backend; not in-tree (open-access via author's institutional repository); `events555/modularsnf` is the working reference.
 
 ### Performance baseline (v0.3.0)
