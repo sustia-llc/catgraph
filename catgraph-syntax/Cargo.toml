@@ -1,0 +1,30 @@
+[package]
+name = "catgraph-syntax"
+description = "Textual generator/relation presentation surface for hypergraph-category morphisms, over catgraph-applied's free-prop term engine. Anchored to Fong & Spivak 2018 (Seven Sketches, §5.2) and 2019 (Hypergraph Categories)."
+keywords = ["category-theory", "prop", "presentation", "pretty-printer", "dsl"]
+categories = ["mathematics", "science"]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+# `catgraph` supplies `CatgraphError`, the transparent passthrough behind
+# `SyntaxError::Catgraph` (arity failures surface from applied's `Free::compose`).
+catgraph = { workspace = true }
+# `catgraph-applied` is the term engine: `PropExpr<G>`, `Free` smart
+# constructors, and the `PropSignature` supertrait `GeneratorSyntax` extends.
+catgraph-applied = { workspace = true }
+# `deep_causality_haft` is consumed via the SINGLE seam `src/arrow_seam.rs`
+# (following catgraph-dl's `src/endofunctor.rs` #12 precedent — the ONLY file
+# naming haft). The seam's re-exports (`Arrow`, `ArrowBuilder`, `Compose`,
+# `Fanout`, `First`, `Id`, `Lift`, `Second`, `Split`, `arrow`) are LIVE public
+# API now; the Arrow surface itself is first EXERCISED from Phase S5 (the
+# `Traced` typed builder). Mirrors catgraph-dl's documented-reserved-dep
+# precedent (its `num` dep carried deps-only ahead of the #36 R-module surface).
+deep_causality_haft = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest.workspace = true
