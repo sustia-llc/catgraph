@@ -11,11 +11,18 @@
 //! *textual* surface (the [`print`](mod@text::print) / [`parse`](mod@text::parse)
 //! round-trip and presentation files), the *interpreter*
 //! ([`eval`] — the executable term-action of Def 5.25, with the R-linear
-//! [`SfgModel`](eval::SfgModel) as its worked example), and the *Frobenius layer*
+//! [`SfgModel`](eval::SfgModel) as its worked example), the *Frobenius layer*
 //! ([`frobenius`] — the monochromatic free hypergraph category as
 //! [`FrobeniusOr<G>`](frobenius::FrobeniusOr), its spider calculus, the nine
 //! SCFM equations, and the sound [`to_mat_kron`](frobenius::to_mat_kron) checker,
-//! F&S 2019).
+//! F&S 2019), and the *typed builder* ([`traced`] — a
+//! [`Traced<A, G>`](traced::Traced) pairs an executable haft
+//! [`Arrow`](arrow_seam::Arrow) with the [`PropExpr`](catgraph_applied::prop::PropExpr)
+//! term it denotes, bridged by [`Wires`](traced::Wires), so one value can be both
+//! *run* and *reasoned about*; the first consumer of the [`arrow_seam`]).
+//!
+//! With the typed builder live, the five-layer S1–S5 surface of the
+//! [#5](https://github.com/sustia-llc/catgraph/issues/5) milestone is **complete**.
 //!
 //! Anchors: Fong & Spivak 2018, *Seven Sketches in Compositionality*
 //! (Def 5.25 = prop signature / `Free(G)`; Def 5.30 = a `G`-generated prop
@@ -64,6 +71,7 @@ pub mod eval;
 pub mod frobenius;
 pub mod sfg_syntax;
 pub mod text;
+pub mod traced;
 
 /// Compile-tested README: the `parse → eval → matrix cross-check` example (and
 /// any other Rust code blocks) are run as doctests via this hidden include, so

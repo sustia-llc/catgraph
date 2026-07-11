@@ -10,9 +10,9 @@
 //! # What is consumed and why
 //!
 //! haft's Arrow algebra is the **execution target** for the typed builder
-//! (Phase S5, [`crate::text`]'s sibling `traced` module): a `Traced<A, G>`
-//! pairs an executable haft [`Arrow`] with the
-//! [`PropExpr`](catgraph_applied::prop::PropExpr) term it denotes, so
+//! ([`crate::traced`], Phase S5 — **live**, and this seam's first real consumer):
+//! a [`Traced<A, G>`](crate::traced::Traced) pairs an executable haft [`Arrow`]
+//! with the [`PropExpr`](catgraph_applied::prop::PropExpr) term it denotes, so
 //! a morphism can be both *run* and *reasoned about* from one value. The
 //! re-exports below are the combinators that builder needs:
 //!
@@ -28,10 +28,17 @@
 //!   level rather than conflate them.
 //! - [`Id`] / [`Lift`] — the identity arrow and pure-function lift.
 //!
-//! These names are **live public API** from this seam as of Phase S1, even
-//! though the first consumer (the `Traced` builder) lands in S5 — the same
-//! documented-reserved-surface pattern catgraph-dl used for its `num` dep ahead
-//! of the #36 R-module actegory.
+//! These names have been **live public API** from this seam since Phase S1 (the
+//! same documented-reserved-surface pattern catgraph-dl used for its `num` dep
+//! ahead of the #36 R-module actegory); as of Phase S5 the
+//! [`Traced`](crate::traced::Traced) builder is their first consumer.
+//!
+//! [`Fanout`] is re-exported but **deliberately unused** by the builder: pairing
+//! the Cartesian diagonal `A → (A, A)` with a term would let the arrow duplicate a
+//! wire that no term generator copied, so the two would denote different
+//! morphisms. [`crate::traced`] documents the rejection and makes the
+//! Fanout-≠-Frobenius-δ discipline type-level (the diagonal is unreachable through
+//! the builder); the name stays exported so that distinction can be *named*.
 //!
 //! # Deliberate exclusions
 //!
@@ -49,8 +56,9 @@
 //!   consumes `self` and it is IO-effect specific; it is an effect executor,
 //!   not a reusable, inspectable term carrier, so it cannot back the
 //!   term-plus-arrow pairing.
-//! - `EndoArrow` — haft's endo-arrow (iteration) is not consumed by the current
-//!   design; revisit at S5 only if the `Traced` builder wants a fixed-point /
+//! - `EndoArrow` — haft's endo-arrow (iteration) stays out: the shipped S5
+//!   [`Traced`](crate::traced::Traced) builder wants no fixed-point / loop
+//!   combinator, so it is not re-exported. Revisit only if a future phase adds a
 //!   loop combinator.
 
 // The adopted names live in `deep_causality_haft`; re-exported here so the rest

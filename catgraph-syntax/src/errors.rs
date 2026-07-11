@@ -19,8 +19,10 @@ use thiserror::Error;
 ///
 /// `#[non_exhaustive]`: later phases add variants (S4's Frobenius layer landed
 /// [`NonFrobenius`](SyntaxError::NonFrobenius) /
-/// [`DimensionOverflow`](SyntaxError::DimensionOverflow); S5's typed builder is
-/// still to come), so downstream `match`es must carry a wildcard arm — a new
+/// [`DimensionOverflow`](SyntaxError::DimensionOverflow); S5's typed builder
+/// reuses [`WireCount`](SyntaxError::WireCount) for its
+/// [`Wires`](crate::traced::Wires) / `traced_generator` arity checks, adding no
+/// variant), so downstream `match`es must carry a wildcard arm — a new
 /// variant is not a breaking change. Match with a `_ =>` catch-all.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]

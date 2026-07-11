@@ -17,7 +17,7 @@ later phase.
 | `text::print::Pretty` | Seven Sketches | Def 5.30 (a `G`-generated prop expression) — concrete syntax of a free-prop term | live (S1) |
 | `text::print::print` | Seven Sketches | Def 5.30 | live (S1) |
 | `errors::SyntaxError` | — | crate-local error surface; `Catgraph(..)` passes through applied's arity failures | live (S1) |
-| `arrow_seam` (haft re-exports) | — | #12 single-seam precedent (catgraph-dl `src/endofunctor.rs`); Arrow surface exercised from S5 (`Traced`) | live re-export (S1); exercised S5 |
+| `arrow_seam` (haft re-exports) | — | #12 single-seam precedent (catgraph-dl `src/endofunctor.rs`); Arrow surface first exercised by S5 (`Traced`) | live re-export (S1); exercised (S5) |
 | `text::parse::parse` (parser) | Seven Sketches | Def 5.30 (concrete syntax of a `G`-generated prop expression, parsed) | live (S2) |
 | `text::presentation::{print_presentation, parse_presentation}` | Seven Sketches | Def 5.33 (presentation = arity-matched equation pairs) | live (S2) |
 | `sfg_syntax` (`GeneratorSyntax for SfgGenerator<R>`) | Seven Sketches | Def 5.45 / Eq 5.52 (the `G_R` demo signature's token scheme) | live (S2) |
@@ -29,4 +29,6 @@ later phase.
 | `frobenius::scfm_equations` | Hypergraph Categories | Def 2.5 (the **nine** equations, per Ex 2.8's count) | live (S4) |
 | `frobenius::hypergraph_presentation` | Seven Sketches + Hypergraph Categories | Def 5.33 (presentation) seeded with `E_frob` = Def 2.5's nine equations | live (S4) |
 | `frobenius::to_mat_kron` | Hypergraph Categories | Prop 3.8 (SCFM = strict SM functor `Cospan → C`, the sound checker); Thm 3.14 (`Cospan` is the free monochromatic hypergraph category); Ex 2.16 (`MatKron(R)`, the Hadamard SCFM target) | live (S4) |
-| `Traced` typed builder | — | Hughes 2000 arrow lineage; Fanout ≠ Frobenius δ | planned (S5) |
+| `traced::Wires` | — | the arity-preserving bridge between typed pair bundles and the `Vec<V>` interpreter world (`flatten`/`unflatten`/`COUNT`) | live (S5) |
+| `traced::Traced` | — | Hughes 2000 arrow lineage (*Generalising Monads to Arrows*) — the executable-arrow / denoted-term pairing; coherence law `eval(term, m, in.flatten()) == Ok(run(in).flatten())` | live (S5) |
+| `traced::{traced_generator, traced_id, traced_braid_1_1, then, par}` | — | Hughes 2000 arrow combinators (`arr`/`id`/`>>>`/`***`); `fanout` (`&&&`) rejected: Fanout ≠ Frobenius δ | live (S5) |

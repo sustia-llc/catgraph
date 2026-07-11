@@ -13,9 +13,11 @@ layer). Item-by-item map in [`docs/ANCHORS.md`](docs/ANCHORS.md).
 
 ## Scope
 
-Delivered incrementally, one phase per branch. **S1–S2 ship the round-trip
-textual surface (printer + parser + presentation files); S3 adds the
-interpreter; S4 adds the Frobenius layer.**
+Delivered incrementally, one phase per branch. The full **S1–S5** surface is
+now shipped: **S1–S2 give the round-trip textual surface (printer + parser +
+presentation files); S3 adds the interpreter; S4 adds the Frobenius layer; S5
+adds the typed builder** — the [#5](https://github.com/sustia-llc/catgraph/issues/5)
+milestone is complete.
 
 | Phase | Contents |
 |---|---|
@@ -23,7 +25,7 @@ interpreter; S4 adds the Frobenius layer.**
 | **S2** | recursive-descent parser (`parse`) + presentation print/parse + the `SfgGenerator<R>` `GeneratorSyntax` impl (round-trip law-tested) |
 | **S3** | interpreter (`ArrowModel`, `eval`, `SfgModel`) — the executable term-action, cross-checked against the Thm 5.53 matrix functor |
 | **S4** | Frobenius layer (`FrobeniusOr`, spiders, the nine SCFM equations, `hypergraph_presentation`, the sound `to_mat_kron` checker) |
-| S5 | typed `Traced` builder over the haft Arrow seam (cuttable) |
+| **S5** | typed `Traced` builder over the haft Arrow seam (`Wires`, paired combinators) — one value that both *runs* and *denotes a term* |
 
 ### Printer + parser (S1–S2)
 
@@ -116,6 +118,42 @@ hypergraph category (F&S 2019, `Λ = {•}`).
   witness equality *in `MatKron(R)`*, and the #15 boundary below still governs
   `eq_mod` over `E_frob` (it overlaps, so `None` is an expected non-disproof).
 
+### Typed builder (S5)
+
+A `Traced<A, G>` carries a morphism as **both** an executable haft `Arrow` `A`
+**and** the `PropExpr<G>` term it denotes, so one value can be *run* (via the
+arrow) and *reasoned about* (print it, parse over it, `eval` it under any
+`ArrowModel`, normalize it, feed it to the presentation engine). It is the typed
+track of the Arrow bridge: the S3 interpreter works over flat `Vec<V>` wire
+bundles, while haft arrows speak in nested pairs, and `Wires<V>` is the lawful
+bridge — `Wire<V>` is one wire, `()` is zero, `(L, R)` is `L` then `R`, and
+`flatten`/`unflatten`/`COUNT` move any pair-tree to/from the canonical `Vec<V>`.
+Because `Split`'s input is a bare `(In1, In2)` pair, every tensor of bundles is
+automatically a `Wires` bundle.
+
+- **The pairing invariant.** The fields are private; the term's arities stay in
+  sync with the arrow's interface types *only* because the sole way to build a
+  `Traced` is through the paired combinators, each of which advances arrow and
+  term together. There is no constructor from parts.
+- **Combinators.** `traced_generator(g, arrow)` is the one fallible constructor
+  (it checks the arrow's `Wires::COUNT` against `g.source()`/`g.target()` — a
+  *structural* check; value-level agreement with the model is the caller's
+  contract). `traced_id`, `traced_braid_1_1` (the single-wire swap), `then`
+  (`>>>`), and `par` (`***`) are all **infallible**: `then`'s type equality
+  `A::Out = B::In` plus the sync invariant make `Free::compose` arity-safe at
+  compile time — the payoff of the typed track over the interpreter's runtime
+  arity check.
+- **The coherence law (the S5 milestone).**
+  `eval(t.term(), &model, input.flatten()) == Ok(t.run(input).flatten())` — the
+  law-tested contract, exercised over every combinator with proptest-random
+  input *values* (shapes are type-level).
+- **Three deliberate omissions.** General `braid(m, n)` (would need type-level
+  rebracketing of nested pairs); `fanout`/`&&&` (**rejected** — the Cartesian
+  diagonal would let the arrow copy a wire no term generator copied, so the two
+  would denote different morphisms; copying is a *model* concern, the
+  Fanout-≠-Frobenius-δ discipline made type-level); and spider arrows (haft
+  `Arrow` has no Frobenius structure — spiders stay interpreter/matrix territory).
+
 ## Two standing disclaimers
 
 1. **The [#15](https://github.com/sustia-llc/catgraph/issues/15) completeness
@@ -138,5 +176,5 @@ hypergraph category (F&S 2019, `Λ = {•}`).
 [`src/arrow_seam.rs`](src/arrow_seam.rs) — the only file naming haft, following
 catgraph-dl's `src/endofunctor.rs` precedent
 ([#12](https://github.com/sustia-llc/catgraph/issues/12)). Its Arrow re-exports
-are live public API now; the Arrow surface itself is first exercised by the S5
-`Traced` builder.
+are live public API; the Arrow surface itself is first exercised by the S5
+`Traced` builder ([typed builder](#typed-builder-s5) above).
