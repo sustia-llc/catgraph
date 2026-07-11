@@ -13,28 +13,43 @@ layer). Item-by-item map in [`docs/ANCHORS.md`](docs/ANCHORS.md).
 
 ## Scope
 
-Delivered incrementally, one phase per branch. **S1 (this phase) ships the
-printer only.**
+Delivered incrementally, one phase per branch. **S1–S2 ship the round-trip
+textual surface (printer + parser + presentation files).**
 
 | Phase | Contents |
 |---|---|
 | **S1** | workspace member, crate docs, `SyntaxError`, `arrow_seam` (haft seam), the structural pretty-printer (`GeneratorSyntax`, `Pretty`, `print`) |
-| S2 | recursive-descent parser + presentation print/parse + `GeneratorSyntax` impls (round-trip law-tested) |
+| **S2** | recursive-descent parser (`parse`) + presentation print/parse + the `SfgGenerator<R>` `GeneratorSyntax` impl (round-trip law-tested) |
 | S3 | interpreter (`ArrowModel`, `eval`, `SfgModel`) |
 | S4 | Frobenius layer (`FrobeniusOr`, spiders, SCFM equations, hypergraph presentation) |
 | S5 | typed `Traced` builder over the haft Arrow seam (cuttable) |
 
-### Printer (S1)
+### Printer + parser (S1–S2)
 
 `print(&expr)` / `Pretty(&expr)` render a `PropExpr<G>` to ASCII concrete
-syntax. The grammar is `expr := term (';' term)*`,
-`term := factor ('*' factor)*`, `factor := id(n) | braid(m,n) | GENERATOR |
-'(' expr ')'`: composition `;` is the loosest operator, tensor `*` binds
-tighter, both are left-associative, and parentheses are emitted only where the
-tree structure requires them to reparse identically.
+syntax, and `parse(&text)` reads it back. The grammar is
+`expr := term (';' term)*`,
+`term := factor (('⊗' | '*') factor)*`,
+`factor := id(n) | braid(m,n) | GENERATOR | '(' expr ')'`: composition `;` is
+the loosest operator, tensor binds tighter, both are left-associative, and
+parentheses are emitted only where the tree structure requires them to reparse
+identically. The Unicode tensor `⊗` is an **input** synonym for `*`; output is
+ASCII.
 
-The printer is **structural and total**: it renders a term exactly as written
-and never normalizes.
+The printer is **structural and total** (it renders a term exactly as written
+and never normalizes); the parser builds exclusively through the `Free` smart
+constructors, so every parse is arity-sound by construction and the round-trip
+law `parse(&print(e)) == Ok(e)` holds structurally. Lexical/structural failures
+are `SyntaxError::Parse { offset, .. }`; arity failures pass through as
+`SyntaxError::Catgraph`. Parenthesis-nesting depth is bounded
+(`MAX_NESTING_DEPTH`) so untrusted input cannot overflow the stack — the bound
+is also the round-trip law's one caveat: a term whose *printed* form nests
+deeper (a right-fold of more than `MAX_NESTING_DEPTH` compositions prints one
+paren per level) is rejected on reparse, so print-then-parse pipelines should
+left-fold machine-built chains or treat the bound as a format limit.
+
+Presentation files (Def 5.33) are one `lhs = rhs` equation per line:
+`print_presentation` / `parse_presentation`.
 
 ## Two standing disclaimers
 

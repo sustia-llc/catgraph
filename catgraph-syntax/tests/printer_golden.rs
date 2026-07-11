@@ -7,13 +7,9 @@
 
 mod common;
 
-use catgraph_applied::prop::{Free, PropExpr};
+use catgraph_applied::prop::Free;
 use catgraph_syntax::text::{Pretty, print};
-use common::Sig;
-
-fn g(s: Sig) -> PropExpr<Sig> {
-    Free::generator(s)
-}
+use common::{Sig, g};
 
 #[test]
 fn atoms_print_as_written() {

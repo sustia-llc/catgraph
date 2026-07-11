@@ -15,8 +15,13 @@ use thiserror::Error;
 pub enum SyntaxError {
     /// The parser rejected the input at byte `offset` with `message`.
     ///
-    /// Reserved for the recursive-descent parser (Phase S2); the printer never
-    /// produces it.
+    /// Produced by the expression parser
+    /// ([`text::parse::parse`](crate::text::parse::parse)) and the
+    /// presentation reader
+    /// ([`text::presentation::parse_presentation`](crate::text::presentation::parse_presentation));
+    /// the printer never produces it. `offset` is always relative to the
+    /// **full input handed to the entry point** — for a presentation file that
+    /// is the whole multi-line text, not the failing line or side.
     #[error("parse error at offset {offset}: {message}")]
     Parse {
         /// Byte offset into the source text where the failure was detected.

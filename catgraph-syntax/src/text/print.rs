@@ -5,8 +5,9 @@
 //! This is deliberate. Printing the syntactic term (rather than a normal form)
 //! sidesteps applied's η-scheduling normalization question
 //! ([#55](https://github.com/sustia-llc/catgraph/issues/55)) entirely: a
-//! `PropExpr` prints to concrete syntax that parses back (Phase S2) to the
-//! *same* tree, independent of any decision procedure.
+//! `PropExpr` prints to concrete syntax that parses back (via
+//! [`parse`](super::parse::parse)) to the *same* tree, independent of any
+//! decision procedure.
 //!
 //! # Grammar and precedence
 //!
