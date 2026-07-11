@@ -10,9 +10,9 @@ applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions
 > substrate (`deep_causality_num` / `deep_causality_haft`), with `nalgebra` kept
 > optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.2.1)
 > and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, the Arrow
-> presentation frontend, #5) is in progress — design approved; S1 (printer),
-> S2 (parser + presentation files), S3 (interpreter), and S4 (Frobenius layer)
-> landed; S5 (Traced) follows.
+> presentation frontend, #5): the S1–S5 milestone surface is **complete**
+> (printer, parser + presentation files, interpreter, Frobenius layer, Traced
+> typed builder); post-milestone follow-ups are tracked on #5 (#79/#80/#81).
 
 ## Workspace
 
