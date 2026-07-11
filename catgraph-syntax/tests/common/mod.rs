@@ -22,9 +22,17 @@
 use catgraph_applied::mat::MatR;
 use catgraph_applied::prop::{Free, PropExpr, PropSignature};
 use catgraph_applied::sfg::SfgGenerator;
+use catgraph_syntax::eval::SfgModel;
 use catgraph_syntax::frobenius::FrobeniusOr;
 use catgraph_syntax::text::GeneratorSyntax;
 use proptest::prelude::*;
+
+/// The shared `i64` SFG interpreter model — used by both the S3 interpreter suite
+/// ([`eval`](../eval.rs)) and the S5 typed-builder coherence suite
+/// ([`traced`](../traced.rs)), so the two exercise the *same* semantics.
+pub fn sfg_model() -> SfgModel<i64> {
+    SfgModel::<i64>::new()
+}
 
 /// A four-generator monochromatic test signature.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

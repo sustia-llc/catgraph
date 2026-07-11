@@ -13,14 +13,11 @@ use catgraph_applied::prop::presentation::functorial::{CompleteFunctor, MatrixNF
 use catgraph_applied::prop::{Free, PropExpr};
 use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::errors::SyntaxError;
-use catgraph_syntax::eval::{ArrowModel, SfgModel, eval};
+use catgraph_syntax::eval::{ArrowModel, eval};
 use catgraph_syntax::text::parse;
+use common::sfg_model as model;
 use common::{Sig, arb_expr, arb_sfg_leaf_bounded, basis_i64, g};
 use proptest::prelude::*;
-
-fn model() -> SfgModel<i64> {
-    SfgModel::<i64>::new()
-}
 
 /// A **value-preserving** SFG adapter `p → q`: it passes the first `min(p, q)`
 /// input values straight through, padding with zeros (`p < q`) or discarding the

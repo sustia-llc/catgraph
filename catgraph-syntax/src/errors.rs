@@ -19,8 +19,10 @@ use thiserror::Error;
 ///
 /// `#[non_exhaustive]`: later phases add variants (S4's Frobenius layer landed
 /// [`NonFrobenius`](SyntaxError::NonFrobenius) /
-/// [`DimensionOverflow`](SyntaxError::DimensionOverflow); S5's typed builder is
-/// still to come), so downstream `match`es must carry a wildcard arm — a new
+/// [`DimensionOverflow`](SyntaxError::DimensionOverflow); S5's typed builder
+/// reuses [`WireCount`](SyntaxError::WireCount) for its
+/// [`Wires`](crate::traced::Wires) / `traced_generator` arity checks, adding no
+/// variant), so downstream `match`es must carry a wildcard arm — a new
 /// variant is not a breaking change. Match with a `_ =>` catch-all.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
@@ -42,11 +44,12 @@ pub enum SyntaxError {
         message: String,
     },
 
-    /// The number of wires flowing into a sub-morphism did not match its
-    /// declared source arity — always a *term or caller* fault, never a model
-    /// one (a misbehaving model surfaces as [`ModelArity`](SyntaxError::ModelArity)).
+    /// A wire count did not match a declared arity — always a *term, bundle, or
+    /// caller* fault, never a model one (a misbehaving model surfaces as
+    /// [`ModelArity`](SyntaxError::ModelArity)).
     ///
-    /// Two producers, both in the interpreter ([`crate::eval`]):
+    /// Producers, across the interpreter ([`crate::eval`]) and the S5 typed
+    /// builder ([`crate::traced`]):
     ///
     /// - [`eval`](crate::eval::eval) itself — the top-level input length differs
     ///   from `expr.source()`, or (for a directly-constructed, ill-formed
@@ -58,9 +61,20 @@ pub enum SyntaxError {
     ///   with a wrong-length bundle — `context` is `"SfgModel generator input
     ///   arity"`. (Routed through [`eval`](crate::eval::eval) this cannot happen,
     ///   since `eval` hands each generator exactly its source arity.)
+    /// - [`Wires::unflatten`](crate::traced::Wires::unflatten) fed a value vector
+    ///   whose length is not the bundle's `COUNT` — `context` is
+    ///   `"Wires::unflatten bundle length"` (or `"Wires::unflatten wire"` in the
+    ///   unreachable interior case).
+    /// - [`traced_generator`](crate::traced::traced_generator) when an arrow's
+    ///   typed interface disagrees with the generator's declared arity —
+    ///   `context` is `"traced_generator input bundle vs generator source arity"`
+    ///   or `"...output bundle vs generator target arity"`.
     #[error("wire-count mismatch at a `{context}` node: expected {expected}, got {actual}")]
     WireCount {
-        /// The declared source arity the node expected.
+        /// The declared arity the check expected — the source arity when a *source*
+        /// interface fails, the target arity when a *target* interface fails, or a
+        /// bundle's `COUNT` for the [`crate::traced`] producers (`context`
+        /// disambiguates which).
         expected: usize,
         /// The actual number of wires supplied.
         actual: usize,
