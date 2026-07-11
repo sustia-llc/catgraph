@@ -61,9 +61,11 @@ through identity, braiding, composition, and tensor. Wire bundles are
 is a *model* concern — the Fanout diagonal is not a Frobenius `δ`). `SfgModel<R>`
 is the worked example: the R-linear semantics of the signal-flow-graph
 signature, which under `eval` computes the row-vector action `x ↦ x · S(e)` of
-the Thm 5.53 matrix functor. Shape violations surface as
+the Thm 5.53 matrix functor. *Shape* violations surface as
 `SyntaxError::WireCount` (bad input length) or `SyntaxError::ModelArity` (a model
-returning the wrong number of outputs), never a panic.
+returning the wrong number of outputs), never a panic. *Value* arithmetic is a
+separate matter: for `SfgModel<i64>` the `+`/`*` inherit `i64`'s overflow
+behaviour (debug-panic / release-wrap), exactly as the matrix functor does.
 
 ```rust
 use catgraph_applied::prop::presentation::functorial::{CompleteFunctor, MatrixNFFunctor};
@@ -77,13 +79,11 @@ let e = parse::<SfgGenerator<i64>>("copy ; add").unwrap();
 let model = SfgModel::<i64>::new();
 assert_eq!(eval(&e, &model, vec![21]), Ok(vec![42]));
 
-// Cross-check against the Thm 5.53 matrix functor: feeding the i-th standard
-// basis row must reproduce row i of the matrix (Def 5.50 row-vector action).
+// Cross-check against the Thm 5.53 matrix functor: feeding the standard basis
+// row e_i reproduces row i of the matrix (Def 5.50 row-vector action). Here
+// copy ; add is 1 -> 1, so the basis row [1] IS the whole (only) row.
 let matrix = MatrixNFFunctor::<i64>::new().apply(&e).unwrap();
-for i in 0..e.source() {
-    let basis: Vec<i64> = (0..e.source()).map(|k| i64::from(k == i)).collect();
-    assert_eq!(eval(&e, &model, basis), Ok(matrix.entries()[i].clone()));
-}
+assert_eq!(eval(&e, &model, vec![1]), Ok(matrix.entries()[0].clone()));
 ```
 
 ## Two standing disclaimers

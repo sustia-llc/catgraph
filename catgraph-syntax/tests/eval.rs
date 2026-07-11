@@ -5,7 +5,7 @@
 //! (compose is pipe, tensor splits/concats), the error paths
 //! ([`SyntaxError::WireCount`] and [`SyntaxError::ModelArity`]), and the S3
 //! milestone law — the **basis-row cross-check** against the Thm 5.53/5.60
-//! matrix functor — plus a parse → eval → matrix end-to-end smoke test.
+//! matrix functor — plus a parse → eval end-to-end smoke test.
 
 mod common;
 
@@ -15,30 +15,34 @@ use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::errors::SyntaxError;
 use catgraph_syntax::eval::{ArrowModel, SfgModel, eval};
 use catgraph_syntax::text::parse;
-use common::{Sig, arb_expr, arb_sfg_leaf_bounded, basis_i64};
+use common::{Sig, arb_expr, arb_sfg_leaf_bounded, basis_i64, g};
 use proptest::prelude::*;
-
-/// Shorthand: an SFG generator leaf term over `i64`.
-fn leaf(g: SfgGenerator<i64>) -> PropExpr<SfgGenerator<i64>> {
-    Free::generator(g)
-}
 
 fn model() -> SfgModel<i64> {
     SfgModel::<i64>::new()
 }
 
-/// The canonical SFG adapter `p → q`: discard all `p` inputs, then emit `q`
-/// zeros. Lets a test compose two independently generated terms with mismatched
-/// interfaces into an arity-valid pair *by construction*, so the compose law is
-/// exercised without rejection sampling.
+/// A **value-preserving** SFG adapter `p → q`: it passes the first `min(p, q)`
+/// input values straight through, padding with zeros (`p < q`) or discarding the
+/// surplus (`p > q`). Unlike a discard-everything-then-emit-zeros adapter, this
+/// lets `f`'s actual output values flow into `body`, so a `Compose` arm that
+/// reordered or mangled values while preserving *counts* would break the compose
+/// law. It also makes every generated `(f, adapter ; body)` pair compose by
+/// construction, so the proptest needs no rejection sampling.
 fn adapter(p: usize, q: usize) -> PropExpr<SfgGenerator<i64>> {
-    let discard_all = (0..p).fold(Free::<SfgGenerator<i64>>::identity(0), |acc, _| {
-        Free::tensor(acc, leaf(SfgGenerator::Discard))
-    });
-    let emit_zeros = (0..q).fold(Free::<SfgGenerator<i64>>::identity(0), |acc, _| {
-        Free::tensor(acc, leaf(SfgGenerator::Zero))
-    });
-    Free::compose(discard_all, emit_zeros).expect("p → 0 → q composes")
+    if p <= q {
+        // Pass all p wires through; pad with (q - p) fresh zeros.
+        let zeros = (0..q - p).fold(Free::<SfgGenerator<i64>>::identity(0), |acc, _| {
+            Free::tensor(acc, g(SfgGenerator::Zero))
+        });
+        Free::tensor(Free::<SfgGenerator<i64>>::identity(p), zeros)
+    } else {
+        // Pass the first q wires through; discard the remaining (p - q).
+        let discards = (0..p - q).fold(Free::<SfgGenerator<i64>>::identity(0), |acc, _| {
+            Free::tensor(acc, g(SfgGenerator::Discard))
+        });
+        Free::tensor(Free::<SfgGenerator<i64>>::identity(q), discards)
+    }
 }
 
 // ---- Golden evaluations ------------------------------------------------------
@@ -63,23 +67,20 @@ fn braid_block_rotates() {
 #[test]
 fn generator_shapes() {
     assert_eq!(
-        eval(&leaf(SfgGenerator::Copy), &model(), vec![7]),
+        eval(&g(SfgGenerator::Copy), &model(), vec![7]),
         Ok(vec![7, 7])
     );
     assert_eq!(
-        eval(&leaf(SfgGenerator::Discard), &model(), vec![7]),
+        eval(&g(SfgGenerator::Discard), &model(), vec![7]),
         Ok(vec![])
     );
     assert_eq!(
-        eval(&leaf(SfgGenerator::Add), &model(), vec![3, 4]),
+        eval(&g(SfgGenerator::Add), &model(), vec![3, 4]),
         Ok(vec![7])
     );
+    assert_eq!(eval(&g(SfgGenerator::Zero), &model(), vec![]), Ok(vec![0]));
     assert_eq!(
-        eval(&leaf(SfgGenerator::Zero), &model(), vec![]),
-        Ok(vec![0])
-    );
-    assert_eq!(
-        eval(&leaf(SfgGenerator::Scalar(5)), &model(), vec![3]),
+        eval(&g(SfgGenerator::Scalar(5)), &model(), vec![3]),
         Ok(vec![15]),
     );
 }
@@ -87,14 +88,14 @@ fn generator_shapes() {
 #[test]
 fn hand_computed_sfg_terms() {
     // copy ; add : 1 → 1 doubles its input (x ↦ [x, x] ↦ [x + x]).
-    let double = Free::compose(leaf(SfgGenerator::Copy), leaf(SfgGenerator::Add)).unwrap();
+    let double = Free::compose(g(SfgGenerator::Copy), g(SfgGenerator::Add)).unwrap();
     assert_eq!(eval(&double, &model(), vec![4]), Ok(vec![8]));
 
     // copy ; (scalar(2) ⊗ scalar(3)) ; add : 1 → 1 computes x ↦ [5x].
-    let scaled = Free::tensor(leaf(SfgGenerator::Scalar(2)), leaf(SfgGenerator::Scalar(3)));
+    let scaled = Free::tensor(g(SfgGenerator::Scalar(2)), g(SfgGenerator::Scalar(3)));
     let five_x = Free::compose(
-        Free::compose(leaf(SfgGenerator::Copy), scaled).unwrap(),
-        leaf(SfgGenerator::Add),
+        Free::compose(g(SfgGenerator::Copy), scaled).unwrap(),
+        g(SfgGenerator::Add),
     )
     .unwrap();
     assert_eq!(eval(&five_x, &model(), vec![6]), Ok(vec![30]));
@@ -208,21 +209,14 @@ fn lying_model_triggers_model_arity() {
     }
 }
 
-// ---- End-to-end smoke: parse → eval → matrix action --------------------------
+// ---- End-to-end smoke: parse → eval ------------------------------------------
 
 #[test]
-fn parse_eval_matches_matrix_action() {
-    // Parse a Σ_SFG term from text, evaluate it, and confirm it agrees with the
-    // matrix functor both row-by-row and on a concrete value.
+fn parse_then_eval() {
+    // The parse-specific seam only: a term read from text evaluates like the
+    // hand-built one. The matrix cross-check is owned by the basis-row proptest
+    // and the README doctest, so this stays focused on parse → eval.
     let e = parse::<SfgGenerator<i64>>("copy ; add").unwrap();
-    let matrix = MatrixNFFunctor::<i64>::new().apply(&e).unwrap();
-    let m = model();
-    for i in 0..e.source() {
-        assert_eq!(
-            eval(&e, &m, basis_i64(e.source(), i)),
-            Ok(matrix.entries()[i].clone()),
-        );
-    }
-    // copy ; add doubles its input.
-    assert_eq!(eval(&e, &m, vec![4]), Ok(vec![8]));
+    // copy ; add : 1 → 1 doubles its input.
+    assert_eq!(eval(&e, &model(), vec![4]), Ok(vec![8]));
 }

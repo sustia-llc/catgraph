@@ -42,9 +42,9 @@ use core::fmt::Write;
 use catgraph_applied::prop::presentation::Presentation;
 
 use crate::errors::SyntaxError;
-use crate::text::GeneratorSyntax;
-use crate::text::parse::{Tok, lex, parse};
+use crate::text::parse::parse;
 use crate::text::print::Pretty;
+use crate::text::{EQUALS, GeneratorSyntax};
 
 /// Render a presentation's equation list to text, one `lhs = rhs` per line.
 #[must_use]
@@ -54,7 +54,7 @@ pub fn print_presentation<G: GeneratorSyntax>(presentation: &Presentation<G>) ->
         if i > 0 {
             out.push('\n');
         }
-        write!(out, "{} = {}", Pretty(lhs), Pretty(rhs))
+        write!(out, "{} {EQUALS} {}", Pretty(lhs), Pretty(rhs))
             .expect("invariant: fmt::Write to a String cannot fail");
     }
     out
@@ -73,15 +73,12 @@ pub fn parse_presentation<G: GeneratorSyntax>(input: &str) -> Result<Presentatio
     let mut line_start = 0usize;
     for line in input.split_inclusive('\n') {
         if !line.trim().is_empty() {
-            // Derive the equation-separator positions from the shared lexer
-            // (single source of truth for `=`), not a raw `match_indices('=')`
-            // scan: the `Tok::Equals` lexemes carry the same line-relative byte
-            // offsets, and the side text is still sliced from the line at them.
-            let line_lexemes = lex(line);
-            let mut separators = line_lexemes
-                .iter()
-                .filter(|l| matches!(l.tok, Tok::Equals))
-                .map(|l| l.offset);
+            // `EQUALS` is the single source of truth for the separator char, and
+            // `single_tok` makes it an unconditional delimiter, so a raw
+            // `match_indices(EQUALS)` scan finds exactly the `Tok::Equals`
+            // positions the lexer would — with no per-line tokenisation and no
+            // allocation. Sides are sliced from the line at the found offset.
+            let mut separators = line.match_indices(EQUALS).map(|(i, _)| i);
             let eq = match (separators.next(), separators.next()) {
                 (Some(i), None) => i,
                 (first, _) => {

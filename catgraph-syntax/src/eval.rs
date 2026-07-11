@@ -8,16 +8,21 @@
 //! an [`ArrowModel`] is a semantics, and `eval` is the unique prop-functor
 //! extending the model along the generators.
 //!
-//! # Wire bundles are `Vec<Value>`, sized by arity
+//! # Wire bundles stream through a cursor
 //!
 //! A morphism `m → n` consumes a bundle of `m` values and produces `n`. The
-//! interpreter tracks that invariant explicitly: [`eval`] checks the input
-//! length against `expr.source()` at every node, so a mismatch (a directly
-//! constructed ill-formed term, or a misbehaving model) surfaces as a
+//! interpreter validates the top-level input length against `expr.source()`
+//! **once**, then threads the values through the term as a single
+//! [`vec::IntoIter`] cursor: each node draws exactly its source arity off the
+//! cursor and pushes its outputs onward. Tensor needs no split point (the two
+//! factors draw in turn from the shared cursor), and no node re-walks the
+//! subtree to recompute an arity — so evaluation is linear in the term size even
+//! for flat composition/tensor chains. A shape violation surfaces as a
 //! [`SyntaxError::WireCount`] rather than a panic. The braiding
 //! [`PropExpr::Braid(m, n)`](catgraph_applied::prop::PropExpr::Braid)
-//! block-rotates the bundle `[a | b]` (with `|a| = m`, `|b| = n`) to `[b | a]`,
-//! matching the block-swap permutation matrix of the Thm 5.53 functor.
+//! block-rotates the bundle `[a | b]` (with `|a| = m`, `|b| = n`) to `[b | a]`
+//! via `rotate_left(m)`, matching the block-swap permutation matrix of the
+//! Thm 5.53 functor.
 //!
 //! # No `Clone` on the wire values
 //!
@@ -29,6 +34,16 @@
 //! and a Frobenius comultiplication `δ` (a structure map a model must *supply*)
 //! — the interpreter grants neither for free; a model that wants copying must
 //! carry the `Clone` itself. [`SfgModel`] is exactly such a model.
+//!
+//! # Failure attribution
+//!
+//! A [`SyntaxError::WireCount`] always means a *term or caller* fault — the
+//! top-level input length disagrees with `expr.source()`, or a
+//! directly-constructed, ill-formed [`PropExpr`] feeds an interior node the
+//! wrong wire count. A misbehaving model cannot
+//! produce a `WireCount`; the one way a model can break the fold is by returning
+//! the wrong number of outputs, and that is caught separately as
+//! [`SyntaxError::ModelArity`].
 //!
 //! # Depth
 //!
@@ -47,7 +62,7 @@
 //! the `i`-th standard basis vector therefore reproduces **row `i`** of the
 //! matrix — the law the S3 cross-check proptest pins.
 
-use std::marker::PhantomData;
+use std::vec;
 
 use catgraph_applied::prop::{PropExpr, PropSignature};
 use catgraph_applied::rig::Rig;
@@ -99,14 +114,39 @@ fn node_kind<G: PropSignature>(expr: &PropExpr<G>) -> &'static str {
     }
 }
 
+/// Draw exactly `n` values off the cursor, or report a [`SyntaxError::WireCount`]
+/// (with `context` naming the node) if it runs dry first.
+fn take_exact<V>(
+    cursor: &mut vec::IntoIter<V>,
+    n: usize,
+    context: &'static str,
+) -> Result<Vec<V>, SyntaxError> {
+    let mut out = Vec::with_capacity(n);
+    for _ in 0..n {
+        match cursor.next() {
+            Some(v) => out.push(v),
+            None => {
+                return Err(SyntaxError::WireCount {
+                    expected: n,
+                    actual: out.len(),
+                    context,
+                });
+            }
+        }
+    }
+    Ok(out)
+}
+
 /// Evaluate `expr` on an `input` wire bundle under `model`.
 ///
 /// The engine is structural: `Identity(n)` passes its `n` wires through,
 /// `Braid(m, n)` block-rotates `[a | b] ↦ [b | a]`, `Compose(f, g)` pipes `f`'s
-/// output into `g`, `Tensor(f, g)` splits the input at `f.source()` and
-/// concatenates the two sub-results, and `Generator(g)` delegates to
-/// [`ArrowModel::apply_generator`]. The input length is checked against
-/// `expr.source()` at every node, so the recursion never indexes out of bounds.
+/// output into `g`, `Tensor(f, g)` lets `f` then `g` draw from the shared wire
+/// cursor and concatenates their outputs, and `Generator(g)` delegates to
+/// [`ArrowModel::apply_generator`]. The input length is validated against
+/// `expr.source()` once, up front; from there the values stream through a single
+/// cursor, so the interpreter is linear in the term size and never indexes out
+/// of bounds.
 ///
 /// # Errors
 ///
@@ -116,6 +156,10 @@ fn node_kind<G: PropSignature>(expr: &PropExpr<G>) -> &'static str {
 ///   `generator.target()`.
 /// - Any [`SyntaxError`] the model itself raises from
 ///   [`apply_generator`](ArrowModel::apply_generator).
+///
+/// Value-level failures beyond shape are the model's own: `eval` performs no
+/// arithmetic, so for [`SfgModel`] the `+`/`*` on wire values inherit `R`'s
+/// overflow semantics (see the [`SfgModel`] overflow note), not this function's.
 pub fn eval<G, M>(
     expr: &PropExpr<G>,
     model: &M,
@@ -125,6 +169,8 @@ where
     G: PropSignature,
     M: ArrowModel<G>,
 {
+    // The single `source()` walk — O(term size), paid once. From here every
+    // node draws off `cursor` in O(1) per wire, so evaluation is linear overall.
     if input.len() != expr.source() {
         return Err(SyntaxError::WireCount {
             expected: expr.source(),
@@ -132,20 +178,35 @@ where
             context: node_kind(expr),
         });
     }
+    let mut cursor = input.into_iter();
+    eval_stream(expr, model, &mut cursor)
+}
+
+/// Streaming core: consume exactly `expr.source()` values off `cursor` and
+/// return the `expr.target()` outputs. The shared cursor is what lets `Tensor`
+/// avoid computing a split point.
+fn eval_stream<G, M>(
+    expr: &PropExpr<G>,
+    model: &M,
+    cursor: &mut vec::IntoIter<M::Value>,
+) -> Result<Vec<M::Value>, SyntaxError>
+where
+    G: PropSignature,
+    M: ArrowModel<G>,
+{
     match expr {
         // `id_n`: the n wires pass through untouched.
-        PropExpr::Identity(_) => Ok(input),
+        PropExpr::Identity(n) => take_exact(cursor, *n, "id"),
         // `σ_{m,n}`: block-rotate `[a | b]` (|a| = m, |b| = n) to `[b | a]`.
-        PropExpr::Braid(m, _) => {
-            let mut a = input;
-            let b = a.split_off(*m);
-            let mut out = b;
-            out.extend(a);
-            Ok(out)
+        PropExpr::Braid(m, n) => {
+            let mut wires = take_exact(cursor, m + n, "braid")?;
+            wires.rotate_left(*m);
+            Ok(wires)
         }
         // Delegate to the model, then check it returned the promised arity.
         PropExpr::Generator(g) => {
-            let outputs = model.apply_generator(g, input)?;
+            let inputs = take_exact(cursor, g.source(), "generator")?;
+            let outputs = model.apply_generator(g, inputs)?;
             if outputs.len() != g.target() {
                 return Err(SyntaxError::ModelArity {
                     generator: format!("{g:?}"),
@@ -155,19 +216,28 @@ where
             }
             Ok(outputs)
         }
-        // `f ; g`: pipe f's output bundle into g.
+        // `f ; g`: pipe f's output bundle into g. A leftover means f produced
+        // more wires than g consumed (`f.target() > g.source()`) — ill-formed.
         PropExpr::Compose(f, g) => {
-            let mid = eval(f, model, input)?;
-            eval(g, model, mid)
+            let mid = eval_stream(f, model, cursor)?;
+            let produced = mid.len();
+            let mut mid_cursor = mid.into_iter();
+            let out = eval_stream(g, model, &mut mid_cursor)?;
+            if mid_cursor.next().is_some() {
+                return Err(SyntaxError::WireCount {
+                    expected: g.source(),
+                    actual: produced,
+                    context: "compose",
+                });
+            }
+            Ok(out)
         }
-        // `f ⊗ g`: split at f's source arity, evaluate both, concatenate.
+        // `f ⊗ g`: f then g draw from the shared cursor; concatenate the outputs.
         PropExpr::Tensor(f, g) => {
-            let mut left_in = input;
-            let right_in = left_in.split_off(f.source());
-            let mut left_out = eval(f, model, left_in)?;
-            let right_out = eval(g, model, right_in)?;
-            left_out.extend(right_out);
-            Ok(left_out)
+            let mut out = eval_stream(f, model, cursor)?;
+            let right = eval_stream(g, model, cursor)?;
+            out.extend(right);
+            Ok(out)
         }
     }
 }
@@ -194,8 +264,21 @@ where
 /// (`entries[i][b] * entries[b][c]`). For the shipped rigs (all commutative)
 /// `x * r == r * x`, so the cross-check with the matrix functor is insensitive
 /// to the choice; the order is fixed deliberately for non-commutative rigs.
+///
+/// # Overflow
+///
+/// The value-level arithmetic (`Add`'s `+`, `Scalar`'s `*`) is just `R`'s own
+/// [`Add`](std::ops::Add) / [`Mul`](std::ops::Mul). For a primitive integer rig
+/// like `i64` that is Rust's profile-dependent behaviour: a debug build panics
+/// on overflow, a release build wraps. This is *identical* to the arithmetic in
+/// [`MatrixNFFunctor`](catgraph_applied::prop::presentation::functorial::MatrixNFFunctor)
+/// / [`MatR`](catgraph_applied::mat::MatR) (same `Rig` `+`/`*`), which is why the
+/// basis-row cross-check verifies **convention parity** with the matrix functor,
+/// not overflow safety — both sides compute the same value and would overflow
+/// together. Callers wanting total value semantics should instantiate a rig with
+/// wrapping or checked arithmetic.
 pub struct SfgModel<R: Rig> {
-    _phantom: PhantomData<R>,
+    _phantom: std::marker::PhantomData<R>,
 }
 
 impl<R: Rig> SfgModel<R> {
@@ -203,7 +286,7 @@ impl<R: Rig> SfgModel<R> {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            _phantom: PhantomData,
+            _phantom: std::marker::PhantomData,
         }
     }
 }
@@ -218,8 +301,10 @@ impl<R: Rig> Default for SfgModel<R> {
 ///
 /// [`eval`] already guarantees the bundle length equals the generator's source
 /// arity before delegating, so `N` always matches; the fallible conversion
-/// keeps the model total (no panic) even when `apply_generator` is called
-/// directly with a wrong-length bundle.
+/// keeps the model total — **no panic on a wrong-length bundle** even when
+/// [`apply_generator`](ArrowModel::apply_generator) is called directly. This is
+/// a shape guarantee only: the *value-level* arithmetic the model then performs
+/// inherits `R`'s overflow semantics (see the [`SfgModel`] overflow note).
 fn take_inputs<const N: usize, R>(inputs: Vec<R>) -> Result<[R; N], SyntaxError> {
     let actual = inputs.len();
     inputs.try_into().map_err(|_| SyntaxError::WireCount {

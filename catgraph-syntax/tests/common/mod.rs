@@ -19,6 +19,7 @@
 //! expected per compilation unit.
 #![allow(dead_code)]
 
+use catgraph_applied::mat::MatR;
 use catgraph_applied::prop::{Free, PropExpr, PropSignature};
 use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::text::GeneratorSyntax;
@@ -107,9 +108,9 @@ impl GeneratorSyntax for BadSig {
     }
 }
 
-/// Wrap a [`Sig`] generator in a `PropExpr` leaf — the shared fixture shim
-/// every integration suite uses (extend here, never fork per test binary).
-pub fn g(s: Sig) -> PropExpr<Sig> {
+/// Wrap any signature's generator in a `PropExpr` leaf — the shared fixture
+/// shim every integration suite uses (extend here, never fork per test binary).
+pub fn g<G: PropSignature>(s: G) -> PropExpr<G> {
     Free::generator(s)
 }
 
@@ -224,44 +225,54 @@ pub fn arb_sfg_leaf() -> impl Strategy<Value = PropExpr<SfgGenerator<i64>>> {
     arb_leaf_from(arb_sfg_gen())
 }
 
-/// Strategy over bare `SfgGenerator<i64>` generators (clause-1 round-trip);
-/// `Scalar` ranges over all `i64`, exercising the `scalar:<r>` token fidelity.
-pub fn arb_sfg_gen() -> impl Strategy<Value = SfgGenerator<i64>> {
+/// Strategy over bare `SfgGenerator<i64>` generators, parameterised by the
+/// `Scalar`-payload strategy — the one definition of the generator shape. The
+/// four nullary generators are fixed; only the scalar range varies between the
+/// full-range and bounded wrappers below.
+pub fn arb_sfg_gen_with(
+    scalar: impl Strategy<Value = i64> + 'static,
+) -> impl Strategy<Value = SfgGenerator<i64>> {
     prop_oneof![
         Just(SfgGenerator::Copy),
         Just(SfgGenerator::Discard),
         Just(SfgGenerator::Add),
         Just(SfgGenerator::Zero),
-        any::<i64>().prop_map(SfgGenerator::Scalar),
+        scalar.prop_map(SfgGenerator::Scalar),
     ]
 }
 
+/// Strategy over bare `SfgGenerator<i64>` generators (clause-1 round-trip);
+/// `Scalar` ranges over all `i64`, exercising the `scalar:<r>` token fidelity.
+pub fn arb_sfg_gen() -> impl Strategy<Value = SfgGenerator<i64>> {
+    arb_sfg_gen_with(any::<i64>())
+}
+
 /// Bounded-scalar leaf strategy over `SfgGenerator<i64>` for the S3 arithmetic
-/// law tests. Identical to [`arb_sfg_leaf`] except `Scalar` ranges over a small
-/// magnitude (`-3..=3`): the interpreter and the Thm 5.53 matrix functor both
-/// use overflow-checked `i64` arithmetic, so scalars along a composition chain
-/// (which multiply) must stay bounded to keep the true values inside `i64`. The
-/// round-trip suites keep the full-range [`arb_sfg_leaf`] — only the arithmetic
-/// evaluations need the bound.
+/// law tests. Identical to [`arb_sfg_leaf`] except `Scalar` ranges over `-3..=3`.
+///
+/// The interpreter and the Thm 5.53 matrix functor perform plain `i64` `+`/`*`
+/// (profile-dependent: debug panics on overflow, release wraps) — neither is
+/// "checked" arithmetic. Scalars multiply along a composition chain, so an
+/// unbounded range would eventually overflow; the `-3..=3` bound makes overflow
+/// *astronomically improbable* across the `prop_recursive(6, 64, 2)` term shapes
+/// these tests generate (bounded height, so bounded products), though not
+/// mathematically impossible. The round-trip suites keep the full-range
+/// [`arb_sfg_leaf`]; only the arithmetic evaluations need the bound.
 pub fn arb_sfg_leaf_bounded() -> impl Strategy<Value = PropExpr<SfgGenerator<i64>>> {
     arb_leaf_from(arb_sfg_gen_bounded())
 }
 
-/// Bounded-scalar variant of [`arb_sfg_gen`]: `Scalar` in `-3..=3`.
+/// Bounded-scalar variant of [`arb_sfg_gen`]: `Scalar` in `-3..=3` (see
+/// [`arb_sfg_leaf_bounded`] for the overflow rationale).
 pub fn arb_sfg_gen_bounded() -> impl Strategy<Value = SfgGenerator<i64>> {
-    prop_oneof![
-        Just(SfgGenerator::Copy),
-        Just(SfgGenerator::Discard),
-        Just(SfgGenerator::Add),
-        Just(SfgGenerator::Zero),
-        (-3i64..=3).prop_map(SfgGenerator::Scalar),
-    ]
+    arb_sfg_gen_with(-3i64..=3)
 }
 
 /// A length-`len` standard basis **row** vector over `i64`: `1` at index `i`,
-/// `0` elsewhere. Feeding it through the S3 interpreter under `SfgModel`
-/// selects **row `i`** of the Thm 5.53 matrix (Def 5.50 / Remark 5.49
-/// row-vector convention) — the fixture behind the eval-vs-matrix cross-check.
+/// `0` elsewhere — taken as **row `i` of the `len × len` identity** so the basis
+/// convention has a single definition ([`MatR::identity`]). Feeding it through
+/// the S3 interpreter under `SfgModel` selects **row `i`** of the Thm 5.53
+/// matrix (Def 5.50 / Remark 5.49 row-vector convention).
 pub fn basis_i64(len: usize, i: usize) -> Vec<i64> {
-    (0..len).map(|k| i64::from(k == i)).collect()
+    MatR::<i64>::identity(len).entries()[i].clone()
 }

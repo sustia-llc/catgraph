@@ -7,7 +7,6 @@
 
 mod common;
 
-use catgraph_applied::prop::Free;
 use catgraph_syntax::text::{Pretty, print};
 use common::{Sig, g, precedence_goldens};
 
@@ -15,22 +14,14 @@ use common::{Sig, g, precedence_goldens};
 /// the shared table (the parser suite asserts the reverse over the same table).
 /// Covers atoms, `id(0)`, tensor-binds-tighter, both mixed-precedence operand
 /// positions, left-associative flattening, and right-nested parenthesisation.
+/// Two distinct trees over the same atoms (`copy ; add * unit` vs
+/// `(copy ; add) * unit`) render distinctly, so the reassociation cases in the
+/// table already witness structure-preserving output.
 #[test]
 fn precedence_goldens_print() {
     for (term, text) in precedence_goldens() {
         assert_eq!(print(&term), text, "printing {term:?}");
     }
-}
-
-#[test]
-fn distinct_trees_render_distinctly() {
-    // Same atoms, structurally distinct terms, distinct rendering.
-    let a_then_bc = Free::compose(g(Sig::Copy), Free::tensor(g(Sig::Add), g(Sig::Unit))).unwrap();
-    let ab_tensor_c = Free::tensor(
-        Free::compose(g(Sig::Copy), g(Sig::Add)).unwrap(),
-        g(Sig::Unit),
-    );
-    assert_ne!(print(&a_then_bc), print(&ab_tensor_c));
 }
 
 #[test]

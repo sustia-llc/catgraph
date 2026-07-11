@@ -12,7 +12,12 @@
 use thiserror::Error;
 
 /// Failures raised by `catgraph-syntax`'s textual surface.
+///
+/// `#[non_exhaustive]`: later phases add variants (S4's Frobenius layer, S5's
+/// typed builder), so downstream `match`es must carry a wildcard arm — a new
+/// variant is not a breaking change. Match with a `_ =>` catch-all.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
 pub enum SyntaxError {
     /// The parser rejected the input at byte `offset` with `message`.
     ///
@@ -32,13 +37,21 @@ pub enum SyntaxError {
     },
 
     /// The number of wires flowing into a sub-morphism did not match its
-    /// declared source arity.
+    /// declared source arity — always a *term or caller* fault, never a model
+    /// one (a misbehaving model surfaces as [`ModelArity`](SyntaxError::ModelArity)).
     ///
-    /// Produced by the interpreter ([`eval`](crate::eval::eval)): either the
-    /// top-level input length differs from `expr.source()`, or — for a
-    /// directly-constructed, ill-formed [`PropExpr`](catgraph_applied::prop::PropExpr) —
-    /// an interior node receives the wrong wire count. `context` names the kind
-    /// of node the mismatch was detected at (e.g. `"compose"`, `"tensor"`).
+    /// Two producers, both in the interpreter ([`crate::eval`]):
+    ///
+    /// - [`eval`](crate::eval::eval) itself — the top-level input length differs
+    ///   from `expr.source()`, or (for a directly-constructed, ill-formed
+    ///   [`PropExpr`](catgraph_applied::prop::PropExpr)) an interior node draws
+    ///   the wrong wire count off the cursor. Here `context` names the node kind
+    ///   the mismatch was detected at (`"id"`, `"braid"`, `"generator"`,
+    ///   `"compose"`).
+    /// - [`SfgModel::apply_generator`](crate::eval::SfgModel) called *directly*
+    ///   with a wrong-length bundle — `context` is `"SfgModel generator input
+    ///   arity"`. (Routed through [`eval`](crate::eval::eval) this cannot happen,
+    ///   since `eval` hands each generator exactly its source arity.)
     #[error("wire-count mismatch at a `{context}` node: expected {expected}, got {actual}")]
     WireCount {
         /// The declared source arity the node expected.

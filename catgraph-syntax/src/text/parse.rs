@@ -69,7 +69,7 @@ pub const MAX_NESTING_DEPTH: usize = 256;
 /// never outlives the `&str` handed to [`lex`] / [`parse`], so the borrow is
 /// free and the per-atom allocation is avoided.
 #[derive(Debug)]
-pub(crate) enum Tok<'a> {
+enum Tok<'a> {
     /// `;` — sequential composition.
     Semi,
     /// `*` or `⊗` — tensor.
@@ -108,17 +108,13 @@ fn single_tok<'a>(c: char) -> Option<Tok<'a>> {
 
 /// A token paired with the byte offset at which it starts.
 #[derive(Debug)]
-pub(crate) struct Lexeme<'a> {
-    pub(crate) tok: Tok<'a>,
-    pub(crate) offset: usize,
+struct Lexeme<'a> {
+    tok: Tok<'a>,
+    offset: usize,
 }
 
 /// Tokenise `input`, tracking the byte offset of each token for diagnostics.
-///
-/// `pub(crate)` so the presentation reader ([`super::presentation`]) can derive
-/// the equation-separator positions of a line from the same lexer, rather than
-/// scanning for a raw `=` char independently.
-pub(crate) fn lex(input: &str) -> Vec<Lexeme<'_>> {
+fn lex(input: &str) -> Vec<Lexeme<'_>> {
     let mut out = Vec::new();
     let mut chars = input.char_indices().peekable();
     while let Some(&(idx, c)) = chars.peek() {
@@ -370,4 +366,28 @@ fn parse_usize(s: &str, offset: usize) -> Result<usize, SyntaxError> {
         offset,
         message: format!("expected a decimal usize, found `{s}`"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The lexer's delimiter alphabet is exactly the shared grammar operators
+    /// plus the grouping parentheses — nothing more. If this set changes, update
+    /// the [`GeneratorSyntax`] clause-2 prose in `text/mod.rs` (the alphabet
+    /// consts are `pub(crate)` and cannot be intra-doc-linked from the public
+    /// trait docs, so that contract is spelled out as prose).
+    #[test]
+    fn single_tok_classifies_exactly_the_grammar_delimiters() {
+        let delimiters = [SEMI, STAR, TENSOR, '(', ')', EQUALS, COMMA];
+        for c in delimiters {
+            assert!(single_tok(c).is_some(), "{c:?} should be a delimiter");
+        }
+        // A representative sample of characters that must stay *inside* atoms —
+        // note `:` and `-` (the `scalar:-7` token) and assorted letters/digits.
+        let atom_chars = [':', '-', '_', '.', '/', 'a', 'Z', '0', '9', '⊕', 'λ'];
+        for c in atom_chars {
+            assert!(single_tok(c).is_none(), "{c:?} must stay inside an atom");
+        }
+    }
 }
