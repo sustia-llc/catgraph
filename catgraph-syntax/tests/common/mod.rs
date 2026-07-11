@@ -107,6 +107,12 @@ impl GeneratorSyntax for BadSig {
     }
 }
 
+/// Wrap a [`Sig`] generator in a `PropExpr` leaf — the shared fixture shim
+/// every integration suite uses (extend here, never fork per test binary).
+pub fn g(s: Sig) -> PropExpr<Sig> {
+    Free::generator(s)
+}
+
 /// Recursive strategy for arity-valid [`PropExpr<G>`] built through
 /// [`Free`]: children are tensored (always valid) or composed **only** when
 /// `left.target() == right.source()`, so every generated term typechecks.
@@ -126,17 +132,26 @@ where
     })
 }
 
-/// Leaf strategy over [`Sig`]: generators, identities `id(0..=3)`, braids
-/// `braid(0..=2, 0..=2)`.
-pub fn arb_sig_leaf() -> impl Strategy<Value = PropExpr<Sig>> {
+/// Wrap a bare-generator strategy into a leaf strategy with the shared
+/// identity (`id(0..=3)`) and braid (`braid(0..=2, 0..=2)`) arms — one
+/// definition of the leaf shape, so adding a generator to a signature's
+/// `arb_*_gen` list automatically extends its round-trip coverage.
+pub fn arb_leaf_from<G>(
+    generator: impl Strategy<Value = G> + 'static,
+) -> impl Strategy<Value = PropExpr<G>>
+where
+    G: PropSignature + 'static,
+{
     prop_oneof![
-        Just(Free::generator(Sig::Copy)),
-        Just(Free::generator(Sig::Add)),
-        Just(Free::generator(Sig::Unit)),
-        Just(Free::generator(Sig::Counit)),
-        (0usize..=3).prop_map(Free::<Sig>::identity),
-        (0usize..=2, 0usize..=2).prop_map(|(m, n)| Free::<Sig>::braid(m, n)),
+        generator.prop_map(Free::generator),
+        (0usize..=3).prop_map(Free::<G>::identity),
+        (0usize..=2, 0usize..=2).prop_map(|(m, n)| Free::<G>::braid(m, n)),
     ]
+}
+
+/// Leaf strategy over [`Sig`]: generators, identities, braids.
+pub fn arb_sig_leaf() -> impl Strategy<Value = PropExpr<Sig>> {
+    arb_leaf_from(arb_sig_gen())
 }
 
 /// Strategy over bare [`Sig`] generators (clause-1 round-trip).
@@ -152,15 +167,7 @@ pub fn arb_sig_gen() -> impl Strategy<Value = Sig> {
 /// Leaf strategy over `SfgGenerator<i64>`: the five SFG generators (with a
 /// random `i64` scalar), identities, and braids.
 pub fn arb_sfg_leaf() -> impl Strategy<Value = PropExpr<SfgGenerator<i64>>> {
-    prop_oneof![
-        Just(Free::generator(SfgGenerator::Copy)),
-        Just(Free::generator(SfgGenerator::Discard)),
-        Just(Free::generator(SfgGenerator::Add)),
-        Just(Free::generator(SfgGenerator::Zero)),
-        any::<i64>().prop_map(|r| Free::generator(SfgGenerator::Scalar(r))),
-        (0usize..=3).prop_map(Free::<SfgGenerator<i64>>::identity),
-        (0usize..=2, 0usize..=2).prop_map(|(m, n)| Free::<SfgGenerator<i64>>::braid(m, n)),
-    ]
+    arb_leaf_from(arb_sfg_gen())
 }
 
 /// Strategy over bare `SfgGenerator<i64>` generators (clause-1 round-trip);

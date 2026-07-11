@@ -8,16 +8,12 @@
 
 mod common;
 
-use catgraph_applied::prop::{Free, PropExpr};
+use catgraph_applied::prop::Free;
 use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::errors::SyntaxError;
 use catgraph_syntax::text::{GeneratorSyntax, MAX_NESTING_DEPTH, parse, print};
-use common::{Sig, arb_expr, arb_sfg_gen, arb_sfg_leaf, arb_sig_gen, arb_sig_leaf};
+use common::{Sig, arb_expr, arb_sfg_gen, arb_sfg_leaf, arb_sig_gen, arb_sig_leaf, g};
 use proptest::prelude::*;
-
-fn g(s: Sig) -> PropExpr<Sig> {
-    Free::generator(s)
-}
 
 // ---- Round-trip proptests ----------------------------------------------------
 
@@ -124,13 +120,6 @@ fn right_nesting_requires_parentheses() {
         Ok(right_nested.clone())
     );
 
-    let flat_left = Free::compose(
-        Free::compose(g(Sig::Copy), g(Sig::Add)).unwrap(),
-        g(Sig::Copy),
-    )
-    .unwrap();
-    assert_ne!(parse::<Sig>("copy ; (add ; copy)"), Ok(flat_left));
-
     // "copy * (copy * copy)" for the tensor.
     let cc = Free::tensor(g(Sig::Copy), g(Sig::Copy));
     let right_tensor = Free::tensor(g(Sig::Copy), cc);
@@ -151,20 +140,53 @@ fn atoms_parse() {
 }
 
 #[test]
+fn adjacent_argument_atoms_do_not_fuse() {
+    // `id(1 2)` must error, not silently parse as `id(12)`.
+    assert!(matches!(
+        parse::<Sig>("id(1 2)"),
+        Err(SyntaxError::Parse { .. })
+    ));
+    // Likewise a whitespace-split first braid arity must not fuse to `12`.
+    assert!(matches!(
+        parse::<Sig>("braid(1 2,3)"),
+        Err(SyntaxError::Parse { .. })
+    ));
+    // A braid missing its comma is an error, never a fused single arity.
+    assert!(matches!(
+        parse::<Sig>("braid(1 2)"),
+        Err(SyntaxError::Parse { .. })
+    ));
+}
+
+#[test]
+fn braid_second_argument_error_offset_points_at_it() {
+    // The bad argument is `x` at byte 8; the offset must name IT, not the
+    // start of the argument list.
+    match parse::<Sig>("braid(1,x)") {
+        Err(SyntaxError::Parse { offset, message }) => {
+            assert_eq!(offset, 8, "offset should point at `x`");
+            assert!(message.contains('x'), "got: {message}");
+        }
+        other => panic!("expected Parse, got {other:?}"),
+    }
+}
+
+#[test]
 fn scalar_token_parses() {
     let s = SfgGenerator::Scalar(-7i64);
     assert_eq!(
         parse::<SfgGenerator<i64>>("scalar:-7"),
         Ok(Free::generator(s))
     );
-    assert_eq!(
-        parse::<SfgGenerator<i64>>("copy ; scalar:3"),
-        Free::compose(
-            Free::generator(SfgGenerator::Copy),
-            Free::generator(SfgGenerator::Scalar(3i64)),
-        )
-        .map_err(SyntaxError::from),
-    );
+    // A scalar token in composed position: scalar (1 → 1) ; copy (1 → 2) is
+    // arity-valid, so this pins a SUCCESSFUL composed parse (a `copy ; scalar`
+    // ordering would be arity-invalid and assert nothing about the parser).
+    let expected = Free::compose(
+        Free::generator(SfgGenerator::Scalar(3i64)),
+        Free::generator(SfgGenerator::Copy),
+    )
+    .unwrap();
+    assert_eq!(parse::<SfgGenerator<i64>>("scalar:3 ; copy"), Ok(expected));
 }
 
 // ---- Nesting-depth bound -----------------------------------------------------

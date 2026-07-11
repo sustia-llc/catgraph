@@ -24,23 +24,40 @@
 //!
 //! Round-trip: `parse_presentation(&print_presentation(p))` recovers `p`'s
 //! equation list structurally (the printer never normalises).
+//!
+//! ## The format carries only the equation list `E`
+//!
+//! Def 5.33's presentation data is `(G, s, t, E)`; the file format serialises
+//! `E` (the signature travels as the type parameter `G`). Runtime
+//! configuration on [`Presentation`] — a non-default
+//! [`NormalizeEngine`](catgraph_applied::prop::presentation::NormalizeEngine)
+//! or rewrite depth — is **not** part of the format: [`parse_presentation`]
+//! returns a default-configured presentation, and callers that printed a
+//! specially configured one must re-apply `set_engine` / rebuild with
+//! `with_depth` after parsing. Equation lists round-trip; decision-procedure
+//! configuration does not.
+
+use core::fmt::Write;
 
 use catgraph_applied::prop::presentation::Presentation;
 
 use crate::errors::SyntaxError;
 use crate::text::GeneratorSyntax;
 use crate::text::parse::parse;
-use crate::text::print::print;
+use crate::text::print::Pretty;
 
 /// Render a presentation's equation list to text, one `lhs = rhs` per line.
 #[must_use]
 pub fn print_presentation<G: GeneratorSyntax>(presentation: &Presentation<G>) -> String {
-    presentation
-        .equations()
-        .iter()
-        .map(|(lhs, rhs)| format!("{} = {}", print(lhs), print(rhs)))
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut out = String::new();
+    for (i, (lhs, rhs)) in presentation.equations().iter().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        write!(out, "{} = {}", Pretty(lhs), Pretty(rhs))
+            .expect("invariant: fmt::Write to a String cannot fail");
+    }
+    out
 }
 
 /// Parse a presentation file into a [`Presentation<G>`].
@@ -56,17 +73,23 @@ pub fn parse_presentation<G: GeneratorSyntax>(input: &str) -> Result<Presentatio
     let mut line_start = 0usize;
     for line in input.split_inclusive('\n') {
         if !line.trim().is_empty() {
-            let eqs: Vec<usize> = line.match_indices('=').map(|(i, _)| i).collect();
-            if eqs.len() != 1 {
-                return Err(SyntaxError::Parse {
-                    offset: line_start,
-                    message: format!(
-                        "presentation line must contain exactly one `=`, found {}",
-                        eqs.len()
-                    ),
-                });
-            }
-            let eq = eqs[0];
+            let mut separators = line.match_indices('=').map(|(i, _)| i);
+            let eq = match (separators.next(), separators.next()) {
+                (Some(i), None) => i,
+                (first, _) => {
+                    return Err(SyntaxError::Parse {
+                        offset: line_start,
+                        message: format!(
+                            "presentation line must contain exactly one `=`, found {}",
+                            if first.is_none() {
+                                0
+                            } else {
+                                2 + separators.count()
+                            }
+                        ),
+                    });
+                }
+            };
             let lhs = parse::<G>(&line[..eq]).map_err(|e| shift(e, line_start))?;
             let rhs = parse::<G>(&line[eq + 1..]).map_err(|e| shift(e, line_start + eq + 1))?;
             // Arity mismatch surfaces transparently as `SyntaxError::Catgraph`.

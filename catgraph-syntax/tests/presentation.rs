@@ -2,15 +2,11 @@
 
 mod common;
 
+use catgraph_applied::prop::Free;
 use catgraph_applied::prop::presentation::Presentation;
-use catgraph_applied::prop::{Free, PropExpr};
 use catgraph_syntax::errors::SyntaxError;
 use catgraph_syntax::text::{parse_presentation, print_presentation};
-use common::Sig;
-
-fn g(s: Sig) -> PropExpr<Sig> {
-    Free::generator(s)
-}
+use common::{Sig, g};
 
 /// `copy ; add` and `id(1)` are both `1 → 1`, an arity-valid equation pair.
 fn sample_presentation() -> Presentation<Sig> {

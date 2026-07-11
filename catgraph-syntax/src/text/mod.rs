@@ -17,7 +17,13 @@
 //!
 //! The round-trip target is `parse(&print(e)) == Ok(e)` structurally (same
 //! tree; the printer never normalises). It is machine-checked by the S2
-//! proptests.
+//! proptests, and holds for every term whose *printed* parenthesisation stays
+//! within [`parse::MAX_NESTING_DEPTH`]: printing is total, but a term nested
+//! deeper (e.g. a right-fold of more than `MAX_NESTING_DEPTH` compositions,
+//! each right operand of which prints parenthesised) produces text the
+//! depth-bounded parser rejects. Print-then-parse pipelines that persist
+//! machine-built terms of that shape must restructure them (left-fold) or
+//! treat the depth bound as a format limit.
 //!
 //! The bridge between a signature's generators and their concrete tokens is the
 //! [`GeneratorSyntax`] trait.
@@ -45,10 +51,11 @@ use catgraph_applied::prop::PropSignature;
 /// 1. `Self::parse_token(&g.print_token()) == Some(g)` — printing a generator
 ///    and parsing the result recovers the original generator; and
 /// 2. **`print_token` returns a single lexical atom**: it must contain no
-///    `;`, `*`, `⊗`, `=`, parenthesis, or whitespace, and must not equal the
-///    reserved grammar keywords **`id`** or **`braid`**. (`=` is reserved as
-///    the presentation-file equation separator; the parser's lexer treats it
-///    as a delimiter, so a token containing it cannot re-lex as one atom.)
+///    `;`, `*`, `⊗`, `=`, `,`, parenthesis, or whitespace, and must not equal
+///    the reserved grammar keywords **`id`** or **`braid`**. (`=` is reserved
+///    as the presentation-file equation separator and `,` as the
+///    keyword-argument separator; the parser's lexer treats both as
+///    delimiters, so a token containing either cannot re-lex as one atom.)
 ///
 /// Both clauses are load-bearing. The printer emits tokens **verbatim, with no
 /// validation or escaping** — a token violating clause 2 produces output that

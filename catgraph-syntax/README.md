@@ -42,7 +42,11 @@ constructors, so every parse is arity-sound by construction and the round-trip
 law `parse(&print(e)) == Ok(e)` holds structurally. Lexical/structural failures
 are `SyntaxError::Parse { offset, .. }`; arity failures pass through as
 `SyntaxError::Catgraph`. Parenthesis-nesting depth is bounded
-(`MAX_NESTING_DEPTH`) so untrusted input cannot overflow the stack.
+(`MAX_NESTING_DEPTH`) so untrusted input cannot overflow the stack — the bound
+is also the round-trip law's one caveat: a term whose *printed* form nests
+deeper (a right-fold of more than `MAX_NESTING_DEPTH` compositions prints one
+paren per level) is rejected on reparse, so print-then-parse pipelines should
+left-fold machine-built chains or treat the bound as a format limit.
 
 Presentation files (Def 5.33) are one `lhs = rhs` equation per line:
 `print_presentation` / `parse_presentation`.

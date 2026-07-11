@@ -10,18 +10,28 @@
 //! its token is `scalar:<r>` using `R`'s [`Display`]; the argument is recovered
 //! with `R`'s [`FromStr`].
 //!
-//! # Clause-2 compliance is conditional on `R`
+//! # Round-trip compliance is conditional on `R`
 //!
 //! [`GeneratorSyntax`]'s clause 2 requires each token to be a single lexical
-//! atom (no `;` `*` `⊗` parentheses whitespace `=`, and not the reserved
+//! atom (no `;` `*` `⊗` parentheses whitespace `=` `,`, and not the reserved
 //! keywords `id` / `braid`). The plain tokens satisfy it unconditionally. The
-//! `scalar:<r>` token satisfies it **iff `R`'s [`Display`] output contains no
-//! grammar metacharacter** — true for the integer rigs (their `Display` is an
-//! optional `-` followed by decimal digits, and `:`/`-` are not metacharacters),
-//! and exercised per rig by the round-trip proptest. A rig whose `Display`
-//! emitted, say, a space would break clause 2 (and the round trip) for its
-//! `Scalar` values; float rigs are excluded from the round-trip guarantee for
-//! this reason (the designer default recorded on issue #5).
+//! `scalar:<r>` token satisfies the contract **iff both**:
+//!
+//! 1. `R`'s [`Display`] output contains no grammar metacharacter (clause 2) —
+//!    true for the integer rigs, whose `Display` is an optional `-` followed
+//!    by decimal digits (`:`/`-` are not metacharacters); and
+//! 2. `R`'s [`FromStr`] parses that `Display` output back to the same value
+//!    and the output is nonempty (clause 1) — a rig whose `Display` rendered
+//!    some value as `""` would print the bare token `scalar:`, which fails to
+//!    reparse even though it contains no metacharacter.
+//!
+//! Neither condition is checked at print time; they are **exercised for
+//! `i64` by the round-trip proptests** in this crate's test suite. Any other
+//! rig instantiated with this impl needs its own round-trip test. A rig whose
+//! `Display` emitted, say, a space would break clause 2 for its `Scalar`
+//! values; float rigs cannot inhabit [`SfgGenerator`] at all (no `Eq`/`Hash`)
+//! and are excluded from the round-trip guarantee regardless (the designer
+//! default recorded on issue #5).
 
 use core::fmt::Display;
 use core::str::FromStr;

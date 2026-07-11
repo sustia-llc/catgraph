@@ -15,16 +15,20 @@
 //! # Lexical structure
 //!
 //! An *atom* is a maximal run of characters excluding the operator/grouping
-//! set `;` `*` `⊗` `(` `)` `=` and whitespace. `=` is reserved so that a
-//! generator token can never eat the equation separator of a presentation file
-//! (`super::presentation`); the [`GeneratorSyntax`] clause-2 alphabet is
-//! narrowed accordingly (a token must additionally avoid `=`). The keywords
-//! `id` and `braid` are atoms whose *following* parenthesised argument list is
-//! mandatory: `id(n)` and `braid(m,n)` with decimal `usize` arguments. A bare
-//! `id` or `braid` with no `(` is a parse error — they are reserved and never
-//! name a generator. Any other atom is handed to
-//! [`G::parse_token`](GeneratorSyntax::parse_token); a `None` there is a parse
-//! error naming the offending token.
+//! set `;` `*` `⊗` `(` `)` `=` `,` and whitespace (the set is defined once, in
+//! the private `single_tok` classifier). `=` is reserved so that a generator
+//! token can never eat
+//! the equation separator of a presentation file (`super::presentation`); `,`
+//! is reserved as the keyword-argument separator of `braid(m,n)`. The
+//! [`GeneratorSyntax`] clause-2 alphabet is narrowed accordingly (a token must
+//! additionally avoid `=` and `,`). The keywords `id` and `braid` are atoms
+//! whose *following* parenthesised argument list is mandatory: `id(n)` and
+//! `braid(m,n)` with decimal `usize` arguments — exactly one atom per
+//! argument, each carrying its own byte offset for diagnostics (`id(1 2)` is
+//! a parse error, not `id(12)`). A bare `id` or `braid` with no `(` is a
+//! parse error — they are reserved and never name a generator. Any other atom
+//! is handed to [`G::parse_token`](GeneratorSyntax::parse_token); a `None`
+//! there is a parse error naming the offending token.
 //!
 //! # Failure split
 //!
@@ -60,7 +64,7 @@ pub const MAX_NESTING_DEPTH: usize = 256;
 
 /// A lexical token. Operators and grouping characters are single tokens; every
 /// other maximal non-whitespace run is an [`Tok::Atom`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 enum Tok {
     /// `;` — sequential composition.
     Semi,
@@ -73,12 +77,31 @@ enum Tok {
     /// `=` — the presentation equation separator (never valid inside an
     /// expression; reserved so a generator token cannot absorb it).
     Equals,
+    /// `,` — the keyword-argument separator (only valid inside `braid(m,n)`;
+    /// reserved so a generator token cannot absorb it).
+    Comma,
     /// A maximal non-operator, non-whitespace run.
     Atom(String),
 }
 
+/// The single definition of the delimiter alphabet: classify `c` as a
+/// one-character token, or `None` if it can appear inside an atom. Both the
+/// token classifier and the atom-termination loop in [`lex`] consult this, so
+/// the alphabet cannot drift between them.
+fn single_tok(c: char) -> Option<Tok> {
+    match c {
+        ';' => Some(Tok::Semi),
+        '*' | '⊗' => Some(Tok::Star),
+        '(' => Some(Tok::LParen),
+        ')' => Some(Tok::RParen),
+        '=' => Some(Tok::Equals),
+        ',' => Some(Tok::Comma),
+        _ => None,
+    }
+}
+
 /// A token paired with the byte offset at which it starts.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Lexeme {
     tok: Tok,
     offset: usize,
@@ -89,29 +112,20 @@ fn lex(input: &str) -> Vec<Lexeme> {
     let mut out = Vec::new();
     let mut chars = input.char_indices().peekable();
     while let Some(&(idx, c)) = chars.peek() {
-        let single = match c {
-            c if c.is_whitespace() => {
-                chars.next();
-                continue;
-            }
-            ';' => Some(Tok::Semi),
-            '*' | '⊗' => Some(Tok::Star),
-            '(' => Some(Tok::LParen),
-            ')' => Some(Tok::RParen),
-            '=' => Some(Tok::Equals),
-            _ => None,
-        };
-        if let Some(tok) = single {
+        if c.is_whitespace() {
+            chars.next();
+            continue;
+        }
+        if let Some(tok) = single_tok(c) {
             out.push(Lexeme { tok, offset: idx });
             chars.next();
             continue;
         }
-        // Maximal atom: consume until the next operator, grouping char, or
-        // whitespace.
+        // Maximal atom: consume until the next delimiter or whitespace.
         let start = idx;
         let mut end = idx;
         while let Some(&(i, c)) = chars.peek() {
-            if c.is_whitespace() || matches!(c, ';' | '*' | '⊗' | '(' | ')' | '=') {
+            if c.is_whitespace() || single_tok(c).is_some() {
                 break;
             }
             end = i + c.len_utf8();
@@ -155,12 +169,6 @@ fn lex(input: &str) -> Vec<Lexeme> {
 pub fn parse<G: GeneratorSyntax>(input: &str) -> Result<PropExpr<G>, SyntaxError> {
     let lexemes = lex(input);
     let mut parser = Parser::<G>::new(&lexemes, input.len());
-    if parser.peek().is_none() {
-        return Err(SyntaxError::Parse {
-            offset: 0,
-            message: "empty input; expected an expression".to_string(),
-        });
-    }
     let expr = parser.parse_expr(0)?;
     if let Some(trailing) = lexemes.get(parser.pos) {
         return Err(SyntaxError::Parse {
@@ -237,16 +245,16 @@ impl<'a, G: GeneratorSyntax> Parser<'a, G> {
 
     /// `factor := id(n) | braid(m,n) | GENERATOR | '(' expr ')'`.
     fn parse_factor(&mut self, depth: usize) -> Result<PropExpr<G>, SyntaxError> {
-        let (tok, offset) = match self.lexemes.get(self.pos) {
-            Some(l) => (l.tok.clone(), l.offset),
-            None => {
-                return self.parse_err(
-                    self.end_offset,
-                    "unexpected end of input; expected a factor",
-                );
-            }
+        // Reborrow the shared lexeme slice (independent of `&mut self`) so the
+        // token can be matched by reference without cloning it.
+        let Some(lexeme) = self.lexemes.get(self.pos) else {
+            return self.parse_err(
+                self.end_offset,
+                "unexpected end of input; expected a factor",
+            );
         };
-        match tok {
+        let offset = lexeme.offset;
+        match &lexeme.tok {
             Tok::LParen => {
                 if depth >= MAX_NESTING_DEPTH {
                     return self.parse_err(
@@ -265,7 +273,33 @@ impl<'a, G: GeneratorSyntax> Parser<'a, G> {
             }
             Tok::Atom(atom) => {
                 self.bump();
-                self.parse_atom(&atom, offset)
+                match atom.as_str() {
+                    "id" => {
+                        self.expect_lparen("id")?;
+                        let n = self.read_usize_arg("id")?;
+                        self.expect_rparen("id")?;
+                        Ok(Free::identity(n))
+                    }
+                    "braid" => {
+                        self.expect_lparen("braid")?;
+                        let m = self.read_usize_arg("braid")?;
+                        if matches!(self.peek(), Some(Tok::Comma)) {
+                            self.bump();
+                        } else {
+                            return self.parse_err(
+                                self.offset(),
+                                "expected `,` between the two arities of `braid(m,n)`",
+                            );
+                        }
+                        let n = self.read_usize_arg("braid")?;
+                        self.expect_rparen("braid")?;
+                        Ok(Free::braid(m, n))
+                    }
+                    _ => match G::parse_token(atom) {
+                        Some(g) => Ok(Free::generator(g)),
+                        None => self.parse_err(offset, format!("unknown generator token `{atom}`")),
+                    },
+                }
             }
             _ => self.parse_err(
                 offset,
@@ -274,81 +308,49 @@ impl<'a, G: GeneratorSyntax> Parser<'a, G> {
         }
     }
 
-    /// Resolve an atom to an `id`/`braid` keyword or a generator token.
-    fn parse_atom(&mut self, atom: &str, offset: usize) -> Result<PropExpr<G>, SyntaxError> {
-        match atom {
-            "id" => {
-                let arg = self.read_paren_args("id")?;
-                let n = parse_usize(&arg.text, arg.offset)?;
-                Ok(Free::identity(n))
-            }
-            "braid" => {
-                let arg = self.read_paren_args("braid")?;
-                let (m, n) = match arg.text.split_once(',') {
-                    Some((a, b)) => (
-                        parse_usize(a.trim(), arg.offset)?,
-                        parse_usize(b.trim(), arg.offset)?,
-                    ),
-                    None => {
-                        return self.parse_err(
-                            arg.offset,
-                            "expected `braid(m,n)` with a comma between the two arities",
-                        );
-                    }
-                };
-                Ok(Free::braid(m, n))
-            }
-            _ => match G::parse_token(atom) {
-                Some(g) => Ok(Free::generator(g)),
-                None => self.parse_err(offset, format!("unknown generator token `{atom}`")),
-            },
-        }
-    }
-
-    /// Consume `'(' atom* ')'` after a keyword, returning the joined argument
-    /// text and its start offset. Concatenating the atoms tolerates internal
-    /// whitespace (`id( 2 )`, `braid(1, 2)`) while still building the exact
-    /// `m,n` string the argument grammar expects.
-    fn read_paren_args(&mut self, kw: &str) -> Result<ParenArgs, SyntaxError> {
+    /// Consume the mandatory `(` after the keyword `kw`.
+    fn expect_lparen(&mut self, kw: &str) -> Result<(), SyntaxError> {
         if matches!(self.peek(), Some(Tok::LParen)) {
             self.bump();
+            Ok(())
         } else {
-            return self.parse_err(
+            self.parse_err(
                 self.offset(),
                 format!("`{kw}` requires a parenthesised argument list `{kw}(...)`"),
-            );
+            )
         }
-        let start = self.offset();
-        let mut text = String::new();
-        loop {
-            match self.lexemes.get(self.pos).map(|l| l.tok.clone()) {
-                Some(Tok::Atom(s)) => {
-                    text.push_str(&s);
-                    self.bump();
-                }
-                Some(Tok::RParen) => {
-                    self.bump();
-                    break;
-                }
-                _ => {
-                    return self.parse_err(
-                        self.offset(),
-                        format!("expected an argument or `)` in `{kw}(...)`"),
-                    );
-                }
-            }
-        }
-        Ok(ParenArgs {
-            text,
-            offset: start,
-        })
     }
-}
 
-/// Joined text of a keyword's parenthesised argument list plus its start offset.
-struct ParenArgs {
-    text: String,
-    offset: usize,
+    /// Consume the `)` closing the keyword `kw`'s argument list. Rejecting
+    /// anything else here is what makes `id(1 2)` an error instead of a
+    /// silently fused `id(12)`.
+    fn expect_rparen(&mut self, kw: &str) -> Result<(), SyntaxError> {
+        if matches!(self.peek(), Some(Tok::RParen)) {
+            self.bump();
+            Ok(())
+        } else {
+            self.parse_err(self.offset(), format!("expected `)` closing `{kw}(...)`"))
+        }
+    }
+
+    /// Read exactly one decimal-`usize` argument atom, reporting failures at
+    /// the atom's own byte offset.
+    fn read_usize_arg(&mut self, kw: &str) -> Result<usize, SyntaxError> {
+        match self.lexemes.get(self.pos) {
+            Some(Lexeme {
+                tok: Tok::Atom(s),
+                offset,
+            }) => {
+                let n = parse_usize(s, *offset)?;
+                self.bump();
+                Ok(n)
+            }
+            _ => self.parse_err(
+                self.offset(),
+                format!("expected a decimal arity argument in `{kw}(...)`"),
+            ),
+        }
+    }
 }
 
 /// Parse a decimal `usize`, rejecting overflow and malformed input as a
