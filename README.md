@@ -11,8 +11,8 @@ applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions
 > optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.2.1)
 > and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, the Arrow
 > presentation frontend, #5) is in progress — design approved; S1 (printer),
-> S2 (parser + presentation files), and S3 (interpreter) landed; S4–S5
-> (Frobenius layer / Traced) follow.
+> S2 (parser + presentation files), S3 (interpreter), and S4 (Frobenius layer)
+> landed; S5 (Traced) follows.
 
 ## Workspace
 

@@ -58,6 +58,7 @@ Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBU
 > magnitude / physics / dl) landed on the thin DC substrate (Phases 0–5, merged).
 > Phase 6 (`catgraph-syntax`, the Arrow presentation frontend, #5) is **in
 > progress**: design approved 2026-07-09; S1 (skeleton + printer), S2 (parser +
-> presentation files), and S3 (interpreter: ArrowModel/eval/SfgModel) landed;
-> Frobenius layer / Traced follow as S4–S5. Open follow-ups +
+> presentation files), S3 (interpreter: ArrowModel/eval/SfgModel), and S4
+> (Frobenius layer: FrobeniusOr/spiders/E_frob/to_mat_kron) landed; Traced
+> follows as S5 (the cut line). Open follow-ups +
 > audit/README reconciliation tracked as GitHub issues (e.g. #7).
