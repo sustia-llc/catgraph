@@ -235,3 +235,33 @@ pub fn arb_sfg_gen() -> impl Strategy<Value = SfgGenerator<i64>> {
         any::<i64>().prop_map(SfgGenerator::Scalar),
     ]
 }
+
+/// Bounded-scalar leaf strategy over `SfgGenerator<i64>` for the S3 arithmetic
+/// law tests. Identical to [`arb_sfg_leaf`] except `Scalar` ranges over a small
+/// magnitude (`-3..=3`): the interpreter and the Thm 5.53 matrix functor both
+/// use overflow-checked `i64` arithmetic, so scalars along a composition chain
+/// (which multiply) must stay bounded to keep the true values inside `i64`. The
+/// round-trip suites keep the full-range [`arb_sfg_leaf`] — only the arithmetic
+/// evaluations need the bound.
+pub fn arb_sfg_leaf_bounded() -> impl Strategy<Value = PropExpr<SfgGenerator<i64>>> {
+    arb_leaf_from(arb_sfg_gen_bounded())
+}
+
+/// Bounded-scalar variant of [`arb_sfg_gen`]: `Scalar` in `-3..=3`.
+pub fn arb_sfg_gen_bounded() -> impl Strategy<Value = SfgGenerator<i64>> {
+    prop_oneof![
+        Just(SfgGenerator::Copy),
+        Just(SfgGenerator::Discard),
+        Just(SfgGenerator::Add),
+        Just(SfgGenerator::Zero),
+        (-3i64..=3).prop_map(SfgGenerator::Scalar),
+    ]
+}
+
+/// A length-`len` standard basis **row** vector over `i64`: `1` at index `i`,
+/// `0` elsewhere. Feeding it through the S3 interpreter under `SfgModel`
+/// selects **row `i`** of the Thm 5.53 matrix (Def 5.50 / Remark 5.49
+/// row-vector convention) — the fixture behind the eval-vs-matrix cross-check.
+pub fn basis_i64(len: usize, i: usize) -> Vec<i64> {
+    (0..len).map(|k| i64::from(k == i)).collect()
+}

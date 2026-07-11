@@ -1,12 +1,13 @@
 //! Error type for the textual surface.
 //!
-//! [`SyntaxError`] is intentionally minimal: it carries only the variants this
-//! phase's surface can produce, plus a transparent passthrough for the arity
-//! failures that originate in [`catgraph-applied`](catgraph_applied) (every
+//! [`SyntaxError`] carries the failure modes the crate's surfaces can produce:
+//! [`Parse`](SyntaxError::Parse) from the textual layer (S1/S2), the two
+//! interpreter variants [`WireCount`](SyntaxError::WireCount) and
+//! [`ModelArity`](SyntaxError::ModelArity) from the S3 evaluator
+//! ([`crate::eval`]), and a transparent passthrough for the arity failures that
+//! originate in [`catgraph-applied`](catgraph_applied) (every
 //! [`Free::compose`](catgraph_applied::prop::Free::compose) is a
-//! [`CatgraphError`](catgraph::errors::CatgraphError)). Semantic variants
-//! (`WireCount`, `ModelArity`) arrive with the interpreter phase (S3) — no
-//! speculative variants ahead of a constructor.
+//! [`CatgraphError`](catgraph::errors::CatgraphError)).
 
 use thiserror::Error;
 
@@ -28,6 +29,39 @@ pub enum SyntaxError {
         offset: usize,
         /// Human-readable description of what was expected.
         message: String,
+    },
+
+    /// The number of wires flowing into a sub-morphism did not match its
+    /// declared source arity.
+    ///
+    /// Produced by the interpreter ([`eval`](crate::eval::eval)): either the
+    /// top-level input length differs from `expr.source()`, or — for a
+    /// directly-constructed, ill-formed [`PropExpr`](catgraph_applied::prop::PropExpr) —
+    /// an interior node receives the wrong wire count. `context` names the kind
+    /// of node the mismatch was detected at (e.g. `"compose"`, `"tensor"`).
+    #[error("wire-count mismatch at a `{context}` node: expected {expected}, got {actual}")]
+    WireCount {
+        /// The declared source arity the node expected.
+        expected: usize,
+        /// The actual number of wires supplied.
+        actual: usize,
+        /// A short description of where the mismatch was detected.
+        context: &'static str,
+    },
+
+    /// A model's [`apply_generator`](crate::eval::ArrowModel::apply_generator)
+    /// returned a number of output wires that disagrees with the generator's
+    /// declared target arity — a broken [`ArrowModel`](crate::eval::ArrowModel)
+    /// implementation, caught by [`eval`](crate::eval::eval) before the wrong
+    /// bundle propagates.
+    #[error("model returned {actual} outputs for generator `{generator}`, expected {expected}")]
+    ModelArity {
+        /// The offending generator, rendered via its `Debug` impl.
+        generator: String,
+        /// The generator's declared target arity.
+        expected: usize,
+        /// The number of outputs the model actually returned.
+        actual: usize,
     },
 
     /// An arity check in the underlying free-prop engine failed — for example a
