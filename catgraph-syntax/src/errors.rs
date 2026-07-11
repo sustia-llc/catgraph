@@ -4,8 +4,12 @@
 //! [`Parse`](SyntaxError::Parse) from the textual layer (S1/S2), the two
 //! interpreter variants [`WireCount`](SyntaxError::WireCount) and
 //! [`ModelArity`](SyntaxError::ModelArity) from the S3 evaluator
-//! ([`crate::eval`]), and a transparent passthrough for the arity failures that
-//! originate in [`catgraph-applied`](catgraph_applied) (every
+//! ([`crate::eval`]), the two S4 Frobenius-functor variants
+//! [`NonFrobenius`](SyntaxError::NonFrobenius) and
+//! [`DimensionOverflow`](SyntaxError::DimensionOverflow) from
+//! [`to_mat_kron`](crate::frobenius::to_mat_kron), and a transparent passthrough
+//! for the arity failures that originate in
+//! [`catgraph-applied`](catgraph_applied) (every
 //! [`Free::compose`](catgraph_applied::prop::Free::compose) is a
 //! [`CatgraphError`](catgraph::errors::CatgraphError)).
 
@@ -13,8 +17,10 @@ use thiserror::Error;
 
 /// Failures raised by `catgraph-syntax`'s textual surface.
 ///
-/// `#[non_exhaustive]`: later phases add variants (S4's Frobenius layer, S5's
-/// typed builder), so downstream `match`es must carry a wildcard arm — a new
+/// `#[non_exhaustive]`: later phases add variants (S4's Frobenius layer landed
+/// [`NonFrobenius`](SyntaxError::NonFrobenius) /
+/// [`DimensionOverflow`](SyntaxError::DimensionOverflow); S5's typed builder is
+/// still to come), so downstream `match`es must carry a wildcard arm — a new
 /// variant is not a breaking change. Match with a `_ =>` catch-all.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
@@ -75,6 +81,34 @@ pub enum SyntaxError {
         expected: usize,
         /// The number of outputs the model actually returned.
         actual: usize,
+    },
+
+    /// A [`to_mat_kron`](crate::frobenius::to_mat_kron) mapping hit a `User`
+    /// generator, which is **out of the semantic functor's domain** (S4). The
+    /// Prop 3.8 functor `Cospan → MatKron(R)` is defined only on the Frobenius
+    /// generators μ/η/δ/ε and the SMC structure; a signature generator carries
+    /// no MatKron image, so the mapping stops here rather than guess one.
+    /// `generator` is the offending `User(g)`'s inner `g` rendered via `Debug`.
+    #[error(
+        "non-Frobenius generator `{generator}` has no MatKron image (out of the Prop 3.8 functor's domain)"
+    )]
+    NonFrobenius {
+        /// The offending user generator `g`, rendered via its `Debug` impl.
+        generator: String,
+    },
+
+    /// A [`to_mat_kron`](crate::frobenius::to_mat_kron) wire interface of `k`
+    /// wires maps to the object dimension `dim^k`, and that power overflowed
+    /// `usize`. Reported instead of panicking (or attempting to allocate an
+    /// astronomically large matrix). Raised for the `dim.checked_pow(k)` of an
+    /// `Identity(k)` / `Braid(m, n)` node whose wire count is too large for the
+    /// chosen `dim`.
+    #[error("dimension dim^k overflowed usize: dim = {dim}, k = {exponent}")]
+    DimensionOverflow {
+        /// The per-wire object dimension `dim`.
+        dim: usize,
+        /// The wire-count exponent `k` (so the object is `dim^k`).
+        exponent: usize,
     },
 
     /// An arity check in the underlying free-prop engine failed — for example a
