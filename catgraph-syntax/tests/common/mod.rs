@@ -22,6 +22,7 @@
 use catgraph_applied::mat::MatR;
 use catgraph_applied::prop::{Free, PropExpr, PropSignature};
 use catgraph_applied::sfg::SfgGenerator;
+use catgraph_syntax::frobenius::FrobeniusOr;
 use catgraph_syntax::text::GeneratorSyntax;
 use proptest::prelude::*;
 
@@ -105,6 +106,35 @@ impl GeneratorSyntax for BadSig {
 
     fn parse_token(token: &str) -> Option<Self> {
         (token == "bad token").then_some(BadSig)
+    }
+}
+
+/// A signature whose one generator's token is `"mu"` — deliberately colliding
+/// with a reserved Frobenius name (arity `2 → 1`, matching `Mu`, so an equation
+/// using it would even typecheck). Used by the S4 negative test to prove
+/// `FrobeniusOr`'s Frobenius-first `parse_token` **shadows** such a user token
+/// (so its clause-1 round-trip breaks), the analogue of S2's [`BadSig`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ShadowSig;
+
+impl PropSignature for ShadowSig {
+    fn source(&self) -> usize {
+        2
+    }
+
+    fn target(&self) -> usize {
+        1
+    }
+}
+
+impl GeneratorSyntax for ShadowSig {
+    fn print_token(&self) -> String {
+        // Collides with the reserved Frobenius token `mu`.
+        "mu".to_string()
+    }
+
+    fn parse_token(token: &str) -> Option<Self> {
+        (token == "mu").then_some(ShadowSig)
     }
 }
 
@@ -266,6 +296,30 @@ pub fn arb_sfg_leaf_bounded() -> impl Strategy<Value = PropExpr<SfgGenerator<i64
 /// [`arb_sfg_leaf_bounded`] for the overflow rationale).
 pub fn arb_sfg_gen_bounded() -> impl Strategy<Value = SfgGenerator<i64>> {
     arb_sfg_gen_with(-3i64..=3)
+}
+
+/// Strategy over bare [`FrobeniusOr<Sig>`] generators (S4 clause-1 round-trip):
+/// the four Frobenius generators plus a `User(g)` wrapping any [`Sig`] generator.
+///
+/// [`Sig`]'s tokens (`copy`/`add`/`unit`/`counit`) do not collide with the
+/// reserved Frobenius names (`mu`/`eta`/`delta`/`epsilon`), so every value here
+/// round-trips — the reserved-token shadowing documented on the `FrobeniusOr`
+/// `GeneratorSyntax` impl does not bite this signature.
+pub fn arb_frob_gen() -> impl Strategy<Value = FrobeniusOr<Sig>> {
+    prop_oneof![
+        Just(FrobeniusOr::Mu),
+        Just(FrobeniusOr::Eta),
+        Just(FrobeniusOr::Delta),
+        Just(FrobeniusOr::Epsilon),
+        arb_sig_gen().prop_map(FrobeniusOr::User),
+    ]
+}
+
+/// Leaf strategy over [`FrobeniusOr<Sig>`]: generators, identities, braids —
+/// reusing the shared [`arb_leaf_from`] shape so S4 round-trip coverage tracks
+/// the same leaf definition as every other signature.
+pub fn arb_frob_leaf() -> impl Strategy<Value = PropExpr<FrobeniusOr<Sig>>> {
+    arb_leaf_from(arb_frob_gen())
 }
 
 /// A length-`len` standard basis **row** vector over `i64`: `1` at index `i`,

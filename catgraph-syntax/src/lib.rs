@@ -9,14 +9,19 @@
 //! [`Free`](catgraph_applied::prop::Free) smart constructors, `smc_nf`, and
 //! `eq_mod` all live in applied; syntax adds the layers above that engine: the
 //! *textual* surface (the [`print`](mod@text::print) / [`parse`](mod@text::parse)
-//! round-trip and presentation files) and the *interpreter*
+//! round-trip and presentation files), the *interpreter*
 //! ([`eval`] — the executable term-action of Def 5.25, with the R-linear
-//! [`SfgModel`](eval::SfgModel) as its worked example).
+//! [`SfgModel`](eval::SfgModel) as its worked example), and the *Frobenius layer*
+//! ([`frobenius`] — the monochromatic free hypergraph category as
+//! [`FrobeniusOr<G>`](frobenius::FrobeniusOr), its spider calculus, the nine
+//! SCFM equations, and the sound [`to_mat_kron`](frobenius::to_mat_kron) checker,
+//! F&S 2019).
 //!
 //! Anchors: Fong & Spivak 2018, *Seven Sketches in Compositionality*
 //! (Def 5.25 = prop signature / `Free(G)`; Def 5.30 = a `G`-generated prop
 //! expression; Def 5.33 = presentation; Thm 5.60 = Mat(R) normal form) and
-//! Fong & Spivak 2019, *Hypergraph Categories* (the future Frobenius layer).
+//! Fong & Spivak 2019, *Hypergraph Categories* (the [`frobenius`] layer —
+//! Def 2.5's SCFM, Prop 3.8, Thm 3.14).
 //! Anchor-to-item map: [`docs/ANCHORS.md`](https://github.com/sustia-llc/catgraph/blob/main/catgraph-syntax/docs/ANCHORS.md).
 //!
 //! ## Two standing disclaimers
@@ -43,9 +48,9 @@
 //!
 //! ### 2. The monochromatic-fragment scope
 //!
-//! The Frobenius layer that arrives in a later phase presents the *single-sort*
-//! (monochromatic) free hypergraph category — the object palette is `Λ = {•}`,
-//! one wire colour. F&S 2019 Thm 3.14's full **colored** generality (a distinct
+//! The [`frobenius`] layer (S4, live) presents the *single-sort* (monochromatic)
+//! free hypergraph category — the object palette is `Λ = {•}`, one wire colour,
+//! one spider family. F&S 2019 Thm 3.14's full **colored** generality (a distinct
 //! spider family per colour) is out of scope here and tracked separately as
 //! [#79](https://github.com/sustia-llc/catgraph/issues/79); multi-sorted /
 //! Λ-colored prop expressions are an applied-side extension.
@@ -56,6 +61,7 @@
 pub mod arrow_seam;
 pub mod errors;
 pub mod eval;
+pub mod frobenius;
 pub mod sfg_syntax;
 pub mod text;
 

@@ -24,5 +24,9 @@ later phase.
 | `eval::ArrowModel` | Seven Sketches | Def 5.25 (a semantics = the generator action extended along the free prop) | live (S3) |
 | `eval::eval` | Seven Sketches | Def 5.25 (executable term-action); Thm 5.53 / 5.60 (agrees with the Mat(R) functor); Def 5.50 / Remark 5.49 (row-vector convention — basis row `i` = matrix row `i`) | live (S3) |
 | `eval::SfgModel` | Seven Sketches | Def 5.45 / Eq 5.52 (R-linear Σ_SFG action); Thm 5.53 (matches `S : SFG_R → Mat(R)`) | live (S3) |
-| Frobenius layer (`FrobeniusOr`, spiders) | Hypergraph Categories | Def 2.5/2.12, Prop 3.8, Thm 3.14 (monochromatic fragment, Λ = {•}) | planned (S4) |
+| `frobenius::FrobeniusOr` | Hypergraph Categories | Def 2.5 (the SCFM generators μ/η/δ/ε as a sum over `G`); Def 2.12 (hypergraph category) | live (S4) |
+| `frobenius::{spider, cup, cap}` | Hypergraph Categories | Def 2.5 §2.2 (spider calculus of the monochromatic SCFM, Λ = {•}) | live (S4) |
+| `frobenius::scfm_equations` | Hypergraph Categories | Def 2.5 (the **nine** equations, per Ex 2.8's count) | live (S4) |
+| `frobenius::hypergraph_presentation` | Seven Sketches + Hypergraph Categories | Def 5.33 (presentation) seeded with `E_frob` = Def 2.5's nine equations | live (S4) |
+| `frobenius::to_mat_kron` | Hypergraph Categories | Prop 3.8 (SCFM = strict SM functor `Cospan → C`, the sound checker); Thm 3.14 (`Cospan` is the free monochromatic hypergraph category); Ex 2.16 (`MatKron(R)`, the Hadamard SCFM target) | live (S4) |
 | `Traced` typed builder | — | Hughes 2000 arrow lineage; Fanout ≠ Frobenius δ | planned (S5) |
