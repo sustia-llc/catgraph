@@ -38,6 +38,31 @@ pub use print::{Pretty, print};
 
 use catgraph_applied::prop::PropSignature;
 
+// ---- Concrete-syntax alphabet (one definition, shared printer/parser) --------
+//
+// The printer ([`print`]) and the parser's lexer ([`parse::single_tok`]) must
+// agree on which characters are operators/separators and which words are
+// reserved keywords. Defining them once here keeps the two surfaces from
+// drifting: the printer emits these tokens and the lexer recognises exactly the
+// same set.
+
+/// Sequential-composition operator `;` (the loosest binder).
+pub(crate) const SEMI: char = ';';
+/// Tensor operator, ASCII form `*` (the canonical **output** token).
+pub(crate) const STAR: char = '*';
+/// Tensor operator, Unicode form `⊗` (U+2297) — an accepted **input** synonym
+/// for [`STAR`]; never emitted by the printer.
+pub(crate) const TENSOR: char = '⊗';
+/// Presentation-file equation separator `=` (reserved; never valid inside an
+/// expression).
+pub(crate) const EQUALS: char = '=';
+/// Keyword-argument separator `,` (only valid inside `braid(m,n)`).
+pub(crate) const COMMA: char = ',';
+/// Reserved keyword introducing an identity `id(n)`.
+pub(crate) const KW_ID: &str = "id";
+/// Reserved keyword introducing a braiding `braid(m,n)`.
+pub(crate) const KW_BRAID: &str = "braid";
+
 /// A prop signature whose generators have a concrete textual token.
 ///
 /// This extends [`PropSignature`] (Seven Sketches Def 5.25 — the source/target

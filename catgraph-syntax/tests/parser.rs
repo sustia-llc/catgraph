@@ -12,7 +12,9 @@ use catgraph_applied::prop::Free;
 use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::errors::SyntaxError;
 use catgraph_syntax::text::{GeneratorSyntax, MAX_NESTING_DEPTH, parse, print};
-use common::{Sig, arb_expr, arb_sfg_gen, arb_sfg_leaf, arb_sig_gen, arb_sig_leaf, g};
+use common::{
+    Sig, arb_expr, arb_sfg_gen, arb_sfg_leaf, arb_sig_gen, arb_sig_leaf, g, precedence_goldens,
+};
 use proptest::prelude::*;
 
 // ---- Round-trip proptests ----------------------------------------------------
@@ -75,55 +77,16 @@ fn unicode_tensor_is_a_synonym_for_star() {
 
 // ---- Precedence / associativity goldens (printer_golden.rs, reversed) --------
 
+/// The whole precedence / associativity golden set, read in reverse:
+/// `parse(text) == Ok(term)` over the shared table (the printer suite asserts
+/// `print(term) == text` over the same table). Covers tensor-binds-tighter,
+/// both mixed-precedence operand positions, left-associative flattening, and
+/// right-nested parenthesisation.
 #[test]
-fn tensor_binds_tighter_than_compose() {
-    // "copy ; add * unit" == Compose(copy, Tensor(add, unit)).
-    let inner = Free::tensor(g(Sig::Add), g(Sig::Unit));
-    let expected = Free::compose(g(Sig::Copy), inner).unwrap();
-    assert_eq!(parse::<Sig>("copy ; add * unit"), Ok(expected));
-}
-
-#[test]
-fn parenthesised_compose_inside_tensor() {
-    // "(copy ; add) * unit" == Tensor(Compose(copy, add), unit).
-    let ab = Free::compose(g(Sig::Copy), g(Sig::Add)).unwrap();
-    let expected = Free::tensor(ab, g(Sig::Unit));
-    assert_eq!(parse::<Sig>("(copy ; add) * unit"), Ok(expected));
-
-    // "unit * (copy ; add)" — parenthesised compose as the RIGHT tensor operand.
-    let ab2 = Free::compose(g(Sig::Copy), g(Sig::Add)).unwrap();
-    let expected_right = Free::tensor(g(Sig::Unit), ab2);
-    assert_eq!(parse::<Sig>("unit * (copy ; add)"), Ok(expected_right));
-}
-
-#[test]
-fn operators_are_left_associative() {
-    // "copy ; add ; copy" == Compose(Compose(copy, add), copy).
-    let left = Free::compose(g(Sig::Copy), g(Sig::Add)).unwrap();
-    let expected = Free::compose(left, g(Sig::Copy)).unwrap();
-    assert_eq!(parse::<Sig>("copy ; add ; copy"), Ok(expected));
-
-    // "copy * copy * copy" == Tensor(Tensor(copy, copy), copy).
-    let cc = Free::tensor(g(Sig::Copy), g(Sig::Copy));
-    let ccc = Free::tensor(cc, g(Sig::Copy));
-    assert_eq!(parse::<Sig>("copy * copy * copy"), Ok(ccc));
-}
-
-#[test]
-fn right_nesting_requires_parentheses() {
-    // "copy ; (add ; copy)" == Compose(copy, Compose(add, copy)); distinct from
-    // the flat "copy ; add ; copy".
-    let add_copy = Free::compose(g(Sig::Add), g(Sig::Copy)).unwrap();
-    let right_nested = Free::compose(g(Sig::Copy), add_copy).unwrap();
-    assert_eq!(
-        parse::<Sig>("copy ; (add ; copy)"),
-        Ok(right_nested.clone())
-    );
-
-    // "copy * (copy * copy)" for the tensor.
-    let cc = Free::tensor(g(Sig::Copy), g(Sig::Copy));
-    let right_tensor = Free::tensor(g(Sig::Copy), cc);
-    assert_eq!(parse::<Sig>("copy * (copy * copy)"), Ok(right_tensor));
+fn precedence_goldens_parse() {
+    for (term, text) in precedence_goldens() {
+        assert_eq!(parse::<Sig>(text), Ok(term), "parsing {text:?}");
+    }
 }
 
 #[test]

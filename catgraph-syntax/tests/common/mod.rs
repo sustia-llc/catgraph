@@ -113,6 +113,60 @@ pub fn g(s: Sig) -> PropExpr<Sig> {
     Free::generator(s)
 }
 
+/// The precedence / associativity golden table: `(term, concrete syntax)` pairs
+/// where `print(term) == text` **and** `parse(text) == Ok(term)`. It is the one
+/// source of truth for both directions — [`printer_golden`](../printer_golden.rs)
+/// asserts the printer over it and [`parser`](../parser.rs) asserts the parser
+/// over it, so the two surfaces cannot drift apart on the precedence rules.
+///
+/// Every `compose` is arity-valid by the deliberate [`Sig`] arities (see the
+/// module docs); `.expect` documents that invariant at the fixture.
+pub fn precedence_goldens() -> Vec<(PropExpr<Sig>, &'static str)> {
+    let compose = |f: PropExpr<Sig>, h: PropExpr<Sig>| {
+        Free::compose(f, h).expect("golden compositions are arity-valid by construction")
+    };
+    vec![
+        // Atoms.
+        (Free::<Sig>::identity(2), "id(2)"),
+        (Free::<Sig>::identity(0), "id(0)"),
+        (Free::<Sig>::braid(1, 2), "braid(1,2)"),
+        (g(Sig::Copy), "copy"),
+        // Tensor binds tighter than compose: no parens needed.
+        (
+            compose(g(Sig::Copy), Free::tensor(g(Sig::Add), g(Sig::Unit))),
+            "copy ; add * unit",
+        ),
+        // A looser-binding compose as the LEFT tensor operand must parenthesize.
+        (
+            Free::tensor(compose(g(Sig::Copy), g(Sig::Add)), g(Sig::Unit)),
+            "(copy ; add) * unit",
+        ),
+        // ... and as the RIGHT tensor operand.
+        (
+            Free::tensor(g(Sig::Unit), compose(g(Sig::Copy), g(Sig::Add))),
+            "unit * (copy ; add)",
+        ),
+        // Left-associative chains print flat.
+        (
+            compose(compose(g(Sig::Copy), g(Sig::Add)), g(Sig::Copy)),
+            "copy ; add ; copy",
+        ),
+        (
+            Free::tensor(Free::tensor(g(Sig::Copy), g(Sig::Copy)), g(Sig::Copy)),
+            "copy * copy * copy",
+        ),
+        // Right-nested same-operator subterms must parenthesize.
+        (
+            compose(g(Sig::Copy), compose(g(Sig::Add), g(Sig::Copy))),
+            "copy ; (add ; copy)",
+        ),
+        (
+            Free::tensor(g(Sig::Copy), Free::tensor(g(Sig::Copy), g(Sig::Copy))),
+            "copy * (copy * copy)",
+        ),
+    ]
+}
+
 /// Recursive strategy for arity-valid [`PropExpr<G>`] built through
 /// [`Free`]: children are tensored (always valid) or composed **only** when
 /// `left.target() == right.source()`, so every generated term typechecks.

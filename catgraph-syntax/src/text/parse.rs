@@ -52,7 +52,7 @@ use std::marker::PhantomData;
 use catgraph_applied::prop::{Free, PropExpr};
 
 use crate::errors::SyntaxError;
-use crate::text::GeneratorSyntax;
+use crate::text::{COMMA, EQUALS, GeneratorSyntax, KW_BRAID, KW_ID, SEMI, STAR, TENSOR};
 
 /// Maximum parenthesis-nesting depth [`parse`] accepts before rejecting the
 /// input with a [`SyntaxError::Parse`].
@@ -63,9 +63,13 @@ use crate::text::GeneratorSyntax;
 pub const MAX_NESTING_DEPTH: usize = 256;
 
 /// A lexical token. Operators and grouping characters are single tokens; every
-/// other maximal non-whitespace run is an [`Tok::Atom`].
+/// other maximal non-whitespace run is an [`Tok::Atom`] borrowing the source.
+///
+/// Atoms borrow the input rather than owning a `String`: the lexeme vector
+/// never outlives the `&str` handed to [`lex`] / [`parse`], so the borrow is
+/// free and the per-atom allocation is avoided.
 #[derive(Debug)]
-enum Tok {
+pub(crate) enum Tok<'a> {
     /// `;` — sequential composition.
     Semi,
     /// `*` or `⊗` — tensor.
@@ -80,35 +84,41 @@ enum Tok {
     /// `,` — the keyword-argument separator (only valid inside `braid(m,n)`;
     /// reserved so a generator token cannot absorb it).
     Comma,
-    /// A maximal non-operator, non-whitespace run.
-    Atom(String),
+    /// A maximal non-operator, non-whitespace run, borrowed from the input.
+    Atom(&'a str),
 }
 
 /// The single definition of the delimiter alphabet: classify `c` as a
 /// one-character token, or `None` if it can appear inside an atom. Both the
 /// token classifier and the atom-termination loop in [`lex`] consult this, so
-/// the alphabet cannot drift between them.
-fn single_tok(c: char) -> Option<Tok> {
+/// the alphabet cannot drift between them. The character set is the shared
+/// [`crate::text`] alphabet ([`SEMI`], [`STAR`]/[`TENSOR`], [`EQUALS`],
+/// [`COMMA`]) plus the grouping parentheses.
+fn single_tok<'a>(c: char) -> Option<Tok<'a>> {
     match c {
-        ';' => Some(Tok::Semi),
-        '*' | '⊗' => Some(Tok::Star),
+        SEMI => Some(Tok::Semi),
+        STAR | TENSOR => Some(Tok::Star),
         '(' => Some(Tok::LParen),
         ')' => Some(Tok::RParen),
-        '=' => Some(Tok::Equals),
-        ',' => Some(Tok::Comma),
+        EQUALS => Some(Tok::Equals),
+        COMMA => Some(Tok::Comma),
         _ => None,
     }
 }
 
 /// A token paired with the byte offset at which it starts.
 #[derive(Debug)]
-struct Lexeme {
-    tok: Tok,
-    offset: usize,
+pub(crate) struct Lexeme<'a> {
+    pub(crate) tok: Tok<'a>,
+    pub(crate) offset: usize,
 }
 
 /// Tokenise `input`, tracking the byte offset of each token for diagnostics.
-fn lex(input: &str) -> Vec<Lexeme> {
+///
+/// `pub(crate)` so the presentation reader ([`super::presentation`]) can derive
+/// the equation-separator positions of a line from the same lexer, rather than
+/// scanning for a raw `=` char independently.
+pub(crate) fn lex(input: &str) -> Vec<Lexeme<'_>> {
     let mut out = Vec::new();
     let mut chars = input.char_indices().peekable();
     while let Some(&(idx, c)) = chars.peek() {
@@ -132,7 +142,7 @@ fn lex(input: &str) -> Vec<Lexeme> {
             chars.next();
         }
         out.push(Lexeme {
-            tok: Tok::Atom(input[start..end].to_string()),
+            tok: Tok::Atom(&input[start..end]),
             offset: start,
         });
     }
@@ -182,14 +192,14 @@ pub fn parse<G: GeneratorSyntax>(input: &str) -> Result<PropExpr<G>, SyntaxError
 /// Cursor over a lexeme stream. `end_offset` is the byte length of the source,
 /// reported for end-of-input diagnostics.
 struct Parser<'a, G: GeneratorSyntax> {
-    lexemes: &'a [Lexeme],
+    lexemes: &'a [Lexeme<'a>],
     pos: usize,
     end_offset: usize,
     _marker: PhantomData<G>,
 }
 
 impl<'a, G: GeneratorSyntax> Parser<'a, G> {
-    fn new(lexemes: &'a [Lexeme], end_offset: usize) -> Self {
+    fn new(lexemes: &'a [Lexeme<'a>], end_offset: usize) -> Self {
         Self {
             lexemes,
             pos: 0,
@@ -198,7 +208,7 @@ impl<'a, G: GeneratorSyntax> Parser<'a, G> {
         }
     }
 
-    fn peek(&self) -> Option<&Tok> {
+    fn peek(&self) -> Option<&Tok<'_>> {
         self.lexemes.get(self.pos).map(|l| &l.tok)
     }
 
@@ -273,16 +283,16 @@ impl<'a, G: GeneratorSyntax> Parser<'a, G> {
             }
             Tok::Atom(atom) => {
                 self.bump();
-                match atom.as_str() {
-                    "id" => {
-                        self.expect_lparen("id")?;
-                        let n = self.read_usize_arg("id")?;
-                        self.expect_rparen("id")?;
+                match *atom {
+                    KW_ID => {
+                        self.expect_lparen(KW_ID)?;
+                        let n = self.read_usize_arg(KW_ID)?;
+                        self.expect_rparen(KW_ID)?;
                         Ok(Free::identity(n))
                     }
-                    "braid" => {
-                        self.expect_lparen("braid")?;
-                        let m = self.read_usize_arg("braid")?;
+                    KW_BRAID => {
+                        self.expect_lparen(KW_BRAID)?;
+                        let m = self.read_usize_arg(KW_BRAID)?;
                         if matches!(self.peek(), Some(Tok::Comma)) {
                             self.bump();
                         } else {
@@ -291,8 +301,8 @@ impl<'a, G: GeneratorSyntax> Parser<'a, G> {
                                 "expected `,` between the two arities of `braid(m,n)`",
                             );
                         }
-                        let n = self.read_usize_arg("braid")?;
-                        self.expect_rparen("braid")?;
+                        let n = self.read_usize_arg(KW_BRAID)?;
+                        self.expect_rparen(KW_BRAID)?;
                         Ok(Free::braid(m, n))
                     }
                     _ => match G::parse_token(atom) {

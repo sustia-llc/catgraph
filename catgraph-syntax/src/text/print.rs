@@ -37,7 +37,7 @@ use std::fmt;
 
 use catgraph_applied::prop::PropExpr;
 
-use crate::text::GeneratorSyntax;
+use crate::text::{COMMA, GeneratorSyntax, KW_BRAID, KW_ID, SEMI, STAR};
 
 /// Binding tightness of a printed node. Larger binds tighter; a child is
 /// parenthesized relative to its parent by comparing these.
@@ -84,17 +84,17 @@ fn fmt_child<G: GeneratorSyntax>(
 
 fn fmt_node<G: GeneratorSyntax>(expr: &PropExpr<G>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match expr {
-        PropExpr::Identity(n) => write!(f, "id({n})"),
-        PropExpr::Braid(m, n) => write!(f, "braid({m},{n})"),
+        PropExpr::Identity(n) => write!(f, "{KW_ID}({n})"),
+        PropExpr::Braid(m, n) => write!(f, "{KW_BRAID}({m}{COMMA}{n})"),
         PropExpr::Generator(g) => write!(f, "{}", g.print_token()),
         PropExpr::Compose(l, r) => {
             fmt_child(l, Prec::Compose, false, f)?;
-            write!(f, " ; ")?;
+            write!(f, " {SEMI} ")?;
             fmt_child(r, Prec::Compose, true, f)
         }
         PropExpr::Tensor(l, r) => {
             fmt_child(l, Prec::Tensor, false, f)?;
-            write!(f, " * ")?;
+            write!(f, " {STAR} ")?;
             fmt_child(r, Prec::Tensor, true, f)
         }
     }

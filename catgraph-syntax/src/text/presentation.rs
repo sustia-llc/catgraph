@@ -43,7 +43,7 @@ use catgraph_applied::prop::presentation::Presentation;
 
 use crate::errors::SyntaxError;
 use crate::text::GeneratorSyntax;
-use crate::text::parse::parse;
+use crate::text::parse::{Tok, lex, parse};
 use crate::text::print::Pretty;
 
 /// Render a presentation's equation list to text, one `lhs = rhs` per line.
@@ -73,7 +73,15 @@ pub fn parse_presentation<G: GeneratorSyntax>(input: &str) -> Result<Presentatio
     let mut line_start = 0usize;
     for line in input.split_inclusive('\n') {
         if !line.trim().is_empty() {
-            let mut separators = line.match_indices('=').map(|(i, _)| i);
+            // Derive the equation-separator positions from the shared lexer
+            // (single source of truth for `=`), not a raw `match_indices('=')`
+            // scan: the `Tok::Equals` lexemes carry the same line-relative byte
+            // offsets, and the side text is still sliced from the line at them.
+            let line_lexemes = lex(line);
+            let mut separators = line_lexemes
+                .iter()
+                .filter(|l| matches!(l.tok, Tok::Equals))
+                .map(|l| l.offset);
             let eq = match (separators.next(), separators.next()) {
                 (Some(i), None) => i,
                 (first, _) => {
