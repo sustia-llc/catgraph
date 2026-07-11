@@ -21,19 +21,18 @@
 //! `SfgModel` overflow note), so a wide range would eventually overflow along a
 //! composition chain. Small bounds keep every product representable.
 
+mod common;
+
 use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::arrow_seam::{Arrow, Lift};
 use catgraph_syntax::errors::SyntaxError;
-use catgraph_syntax::eval::{SfgModel, eval};
+use catgraph_syntax::eval::eval;
 use catgraph_syntax::text::{parse, print};
 use catgraph_syntax::traced::{Traced, Wire, Wires, traced_braid_1_1, traced_generator, traced_id};
+use common::sfg_model;
 use proptest::prelude::*;
 
 type Sfg = SfgGenerator<i64>;
-
-fn model() -> SfgModel<i64> {
-    SfgModel::<i64>::new()
-}
 
 /// The S5 milestone law for one `Traced` value on one typed input bundle: running
 /// the arrow and flattening equals evaluating the paired term on the flattened
@@ -46,13 +45,28 @@ where
 {
     let flat = input.clone().flatten();
     let ran = t.run(input).flatten();
-    assert_eq!(eval(t.term(), &model(), flat), Ok(ran));
+    assert_eq!(eval(t.term(), &sfg_model(), flat), Ok(ran));
+}
+
+/// Assert a `Result` is the expected `SyntaxError::WireCount`, without requiring
+/// the `Ok` payload to be `Debug` (a `Traced` is not) — the shared shape behind
+/// the three arity-error checks below.
+fn expect_wire_count<T>(result: Result<T, SyntaxError>, expected: usize, actual: usize) {
+    match result {
+        Err(SyntaxError::WireCount {
+            expected: e,
+            actual: a,
+            ..
+        }) => assert_eq!((e, a), (expected, actual)),
+        Err(other) => panic!("expected WireCount ({expected}, {actual}), got {other:?}"),
+        Ok(_) => panic!("expected WireCount ({expected}, {actual}), got an Ok value"),
+    }
 }
 
 // ---- The SFG atom builders (one Traced per generator shape) -------------------
 
 fn t_copy() -> Traced<impl Arrow<In = Wire<i64>, Out = (Wire<i64>, Wire<i64>)>, Sfg> {
-    traced_generator::<i64, _, _>(
+    traced_generator(
         SfgGenerator::Copy,
         Lift::new(|Wire(x): Wire<i64>| (Wire(x), Wire(x))),
     )
@@ -60,12 +74,12 @@ fn t_copy() -> Traced<impl Arrow<In = Wire<i64>, Out = (Wire<i64>, Wire<i64>)>, 
 }
 
 fn t_discard() -> Traced<impl Arrow<In = Wire<i64>, Out = ()>, Sfg> {
-    traced_generator::<i64, _, _>(SfgGenerator::Discard, Lift::new(|Wire(_x): Wire<i64>| ()))
+    traced_generator(SfgGenerator::Discard, Lift::new(|Wire(_x): Wire<i64>| ()))
         .expect("discard arrow is 1 -> 0")
 }
 
 fn t_add() -> Traced<impl Arrow<In = (Wire<i64>, Wire<i64>), Out = Wire<i64>>, Sfg> {
-    traced_generator::<i64, _, _>(
+    traced_generator(
         SfgGenerator::Add,
         Lift::new(|(Wire(a), Wire(b)): (Wire<i64>, Wire<i64>)| Wire(a + b)),
     )
@@ -73,21 +87,40 @@ fn t_add() -> Traced<impl Arrow<In = (Wire<i64>, Wire<i64>), Out = Wire<i64>>, S
 }
 
 fn t_zero() -> Traced<impl Arrow<In = (), Out = Wire<i64>>, Sfg> {
-    traced_generator::<i64, _, _>(SfgGenerator::Zero, Lift::new(|(): ()| Wire(0i64)))
+    traced_generator(SfgGenerator::Zero, Lift::new(|(): ()| Wire(0i64)))
         .expect("zero arrow is 0 -> 1")
 }
 
 fn t_scalar(r: i64) -> Traced<impl Arrow<In = Wire<i64>, Out = Wire<i64>>, Sfg> {
-    traced_generator::<i64, _, _>(
+    traced_generator(
         SfgGenerator::Scalar(r),
         Lift::new(move |Wire(x): Wire<i64>| Wire(x * r)),
     )
     .expect("scalar arrow is 1 -> 1")
 }
 
+// ---- Composite pipeline fixtures (built ONCE, reused across tests) -------------
+
+/// `copy ; add : 1 → 1` — doubles its input.
+fn double_traced() -> Traced<impl Arrow<In = Wire<i64>, Out = Wire<i64>>, Sfg> {
+    t_copy().then(t_add())
+}
+
+/// `copy ; (scalar(2) *** scalar(3)) ; add : 1 → 1` — computes `x ↦ 5x`. Shared by
+/// the coherence proptest and the term-round-trip test so they cannot drift.
+fn five_x_traced() -> Traced<impl Arrow<In = Wire<i64>, Out = Wire<i64>>, Sfg> {
+    t_copy().then(t_scalar(2).par(t_scalar(3))).then(t_add())
+}
+
 // ---- Coherence family: every combinator, proptest-random VALUES ---------------
 
 proptest! {
+    // Every pipeline here is affine (a fixed composite of `+`/`*`/copy/swap over
+    // i64); coherence is a value-independent structural identity, so a handful of
+    // sampled points per shape suffices — capping the cases keeps the suite quick
+    // without weakening it.
+    #![proptest_config(ProptestConfig::with_cases(32))]
+
     /// `traced_generator` for each of the five SFG generator shapes.
     #[test]
     fn coherence_generators(x in -100i64..=100, y in -100i64..=100, r in -3i64..=3) {
@@ -101,33 +134,32 @@ proptest! {
     /// `traced_id` on several bundle shapes (0, 1, 2, and 3 wires).
     #[test]
     fn coherence_identity(a in -100i64..=100, b in -100i64..=100, c in -100i64..=100) {
-        assert_coherent(&traced_id::<i64, (), Sfg>(), ());
-        assert_coherent(&traced_id::<i64, Wire<i64>, Sfg>(), Wire(a));
+        assert_coherent(&traced_id::<(), Sfg>(), ());
+        assert_coherent(&traced_id::<Wire<i64>, Sfg>(), Wire(a));
         assert_coherent(
-            &traced_id::<i64, (Wire<i64>, Wire<i64>), Sfg>(),
+            &traced_id::<(Wire<i64>, Wire<i64>), Sfg>(),
             (Wire(a), Wire(b)),
         );
         assert_coherent(
-            &traced_id::<i64, (Wire<i64>, (Wire<i64>, Wire<i64>)), Sfg>(),
+            &traced_id::<(Wire<i64>, (Wire<i64>, Wire<i64>)), Sfg>(),
             (Wire(a), (Wire(b), Wire(c))),
         );
     }
 
     /// `traced_braid_1_1` — the single-wire swap matches eval's `Braid(1, 1)`
-    /// block rotation `[a, b] ↦ [b, a]`.
+    /// block rotation `[a, b] ↦ [b, a]`. `assert_coherent` already checks the term
+    /// side against eval; the extra pin fixes the concrete swap *direction*.
     #[test]
     fn coherence_braid(a in -100i64..=100, b in -100i64..=100) {
         let braid = traced_braid_1_1::<i64, Sfg>();
         assert_coherent(&braid, (Wire(a), Wire(b)));
-        // Pin the concrete swap direction against the interpreter.
         prop_assert_eq!(braid.run((Wire(a), Wire(b))).flatten(), vec![b, a]);
-        prop_assert_eq!(eval(braid.term(), &model(), vec![a, b]), Ok(vec![b, a]));
     }
 
     /// `then` — `copy ; add : 1 → 1` doubles its input.
     #[test]
     fn coherence_then_double(x in -100i64..=100) {
-        let double = t_copy().then(t_add());
+        let double = double_traced();
         assert_coherent(&double, Wire(x));
         prop_assert_eq!(double.run(Wire(x)).flatten(), vec![2 * x]);
     }
@@ -140,13 +172,12 @@ proptest! {
         prop_assert_eq!(both.run((Wire(a), Wire(b))).flatten(), vec![a * p, b * q]);
     }
 
-    /// A mixed pipeline composing every combinator:
-    /// `copy ; (scalar(2) *** scalar(3)) ; add : 1 → 1` computes `x ↦ 5x`, and a
-    /// braid variant `(scalar(2) *** scalar(3)) ; braid ; add` computes
-    /// `(a, b) ↦ 3b + 2a`.
+    /// A mixed pipeline composing every combinator: the shared `five_x_traced`
+    /// (`copy ; (scalar(2) *** scalar(3)) ; add = 5x`) and a braid variant
+    /// `(scalar(2) *** scalar(3)) ; braid ; add = 3b + 2a`.
     #[test]
     fn coherence_mixed_pipeline(x in -100i64..=100, a in -100i64..=100, b in -100i64..=100) {
-        let five_x = t_copy().then(t_scalar(2).par(t_scalar(3))).then(t_add());
+        let five_x = five_x_traced();
         assert_coherent(&five_x, Wire(x));
         prop_assert_eq!(five_x.run(Wire(x)).flatten(), vec![5 * x]);
 
@@ -188,12 +219,11 @@ fn wires_flatten_unflatten_round_trip() {
 
 #[test]
 fn wires_unflatten_length_mismatch_is_wire_count() {
-    match <(Wire<i64>, Wire<i64>)>::unflatten(vec![1]) {
-        Err(SyntaxError::WireCount {
-            expected, actual, ..
-        }) => assert_eq!((expected, actual), (2, 1)),
-        other => panic!("expected WireCount, got {other:?}"),
-    }
+    // Too many values: the up-front length check rejects surplus (no silent
+    // truncation).
+    expect_wire_count(<(Wire<i64>, Wire<i64>)>::unflatten(vec![1, 2, 3]), 2, 3);
+    // Too few.
+    expect_wire_count(<(Wire<i64>, Wire<i64>)>::unflatten(vec![1]), 2, 1);
 }
 
 // ---- traced_generator arity-mismatch error paths ------------------------------
@@ -201,44 +231,31 @@ fn wires_unflatten_length_mismatch_is_wire_count() {
 #[test]
 fn traced_generator_source_arity_mismatch() {
     // Add declares source 2, but the arrow's input bundle is a single wire.
-    let bad = traced_generator::<i64, _, _>(
+    let bad = traced_generator(
         SfgGenerator::<i64>::Add,
         Lift::new(|Wire(x): Wire<i64>| Wire(x)),
     );
-    match bad {
-        Err(SyntaxError::WireCount {
-            expected, actual, ..
-        }) => assert_eq!((expected, actual), (2, 1)),
-        Err(other) => panic!("expected a WireCount on the source side, got {other:?}"),
-        Ok(_) => panic!("expected a source-side arity error, got a Traced value"),
-    }
+    expect_wire_count(bad, 2, 1);
 }
 
 #[test]
 fn traced_generator_target_arity_mismatch() {
     // Copy declares target 2, but the arrow's output bundle is a single wire.
-    let bad = traced_generator::<i64, _, _>(
+    let bad = traced_generator(
         SfgGenerator::<i64>::Copy,
         Lift::new(|Wire(x): Wire<i64>| Wire(x)),
     );
-    match bad {
-        Err(SyntaxError::WireCount {
-            expected, actual, ..
-        }) => assert_eq!((expected, actual), (2, 1)),
-        Err(other) => panic!("expected a WireCount on the target side, got {other:?}"),
-        Ok(_) => panic!("expected a target-side arity error, got a Traced value"),
-    }
+    expect_wire_count(bad, 2, 1);
 }
 
 // ---- Term-side S2 round-trip of a Traced-built term ---------------------------
 
 #[test]
 fn traced_term_prints_and_reparses() {
-    // The mixed pipeline's term is a left-nested compose chain (so it prints flat,
-    // clear of the parser's nesting bound) and reparses identically — the typed
-    // track hands a well-formed term straight back to the S2 textual surface.
-    let pipeline = t_copy().then(t_scalar(2).par(t_scalar(3))).then(t_add());
-    let term = pipeline.term().clone();
+    // The shared five_x pipeline's term is a left-nested compose chain (so it
+    // prints flat, clear of the parser's nesting bound) and reparses identically —
+    // the typed track hands a well-formed term straight back to the S2 surface.
+    let term = five_x_traced().term().clone();
     let printed = print(&term);
     assert_eq!(parse::<Sfg>(&printed), Ok(term));
 }
@@ -247,7 +264,7 @@ fn traced_term_prints_and_reparses() {
 
 #[test]
 fn into_parts_yields_arrow_and_matching_term() {
-    let double = t_copy().then(t_add());
+    let double = double_traced();
     let expected_term = double.term().clone();
     let (arrow, term) = double.into_parts();
     // The extracted term is the one the Traced denoted...

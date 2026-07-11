@@ -24,29 +24,34 @@
 //! # The coherence contract (the S5 milestone law)
 //!
 //! For every [`Traced<A, G>`] built through the combinators in this module, and
-//! every model `M: ArrowModel<G, Value = V>`:
+//! every model `M: ArrowModel<G, Value = V>` **whose generator actions agree with
+//! the paired arrows** (the caller contract that [`traced_generator`] checks
+//! *structurally* — arities only — and that the coherence tests demonstrate for
+//! the shipped SFG examples):
 //!
 //! ```text
 //! eval(t.term(), &model, input.flatten()) == Ok(t.run(input).flatten())
 //! ```
 //!
 //! Running the arrow on a typed [`Wires`] bundle and flattening the result equals
-//! evaluating the paired term on the flattened input. Because wire shapes are
-//! *type-level* (a `Traced`'s interface is fixed by `A::In`/`A::Out`), this cannot
-//! be proptested over random shapes; the test suite instead exercises every
-//! combinator with a family of hand-built pipelines over
+//! evaluating the paired term on the flattened input. The qualifier matters: an
+//! arrow whose *values* disagree with the model (while its *arities* match) would
+//! break the equation — arity agreement is machine-checked, value agreement is the
+//! caller's responsibility. Because wire shapes are *type-level* (a `Traced`'s
+//! interface is fixed by `A::In`/`A::Out`), the law cannot be proptested over
+//! random shapes; the test suite instead exercises every combinator with a family
+//! of hand-built pipelines over
 //! [`SfgGenerator<i64>`](catgraph_applied::sfg::SfgGenerator) /
 //! [`SfgModel`](crate::eval::SfgModel), each checked over proptest-random input
-//! *values*. The structural check in [`traced_generator`] pins **arities**; the
-//! value-level agreement between an arrow and the model the term is evaluated
-//! under is the caller's contract (the coherence tests demonstrate it for the
-//! shipped SFG examples).
+//! *values*.
 //!
 //! # Deliberate omissions
 //!
 //! Three combinators are intentionally **not** offered — each would either need
 //! machinery out of this phase's scope or would let the arrow and the term denote
-//! *different* morphisms, breaking the coherence law:
+//! *different* morphisms, breaking the coherence law. This module is the canonical
+//! statement of these rejections (the [`crate::arrow_seam`] and README notes point
+//! here):
 //!
 //! - **General `braid(m, n)`.** Only [`traced_braid_1_1`] ships. A general braid
 //!   would have to rebracket arbitrary nested pair types at the type level (turn
@@ -67,9 +72,9 @@
 //!   Frobenius structure, so μ/η/δ/ε have no arrow realization here; spiders are
 //!   interpreter / matrix territory ([`crate::eval`], [`crate::frobenius`]).
 //!
-//! [`EndoArrow`](https://docs.rs/deep_causality_haft) (haft's iteration arrow)
-//! stays excluded as well — it is not re-exported by [`crate::arrow_seam`], and a
-//! loop / fixed-point combinator is not wanted by this design.
+//! The `EndoArrow` (haft's iteration arrow) stays excluded on the same footing —
+//! it is not re-exported by [`crate::arrow_seam`] (see that module's exclusion
+//! note), and a loop / fixed-point combinator is not wanted by this design.
 
 use std::vec;
 
@@ -78,98 +83,104 @@ use catgraph_applied::prop::{Free, PropExpr, PropSignature};
 use crate::arrow_seam::{Arrow, Compose, Id, Lift, Split};
 use crate::errors::SyntaxError;
 
+/// The sealing layer for the [`Wires`] / [`WireCount`] hierarchy.
+///
+/// [`Sealed`](sealed::Sealed) is the `V`-free marker that seals [`WireCount`], and
+/// [`WiresInternal`](sealed::WiresInternal) carries the `V`-parameterized
+/// flatten/unflatten *recursion*. Both live in this private module, so downstream
+/// code can neither implement nor name them: the three bundle shapes are the only
+/// inhabitants, which is exactly what makes [`Traced::then`]'s infallibility and
+/// the coherence law sound (see the trait docs).
+mod sealed {
+    use super::Wire;
+    use crate::errors::SyntaxError;
+    use std::vec;
+
+    /// `V`-free sealing marker: only `()`, [`Wire<V>`](super::Wire), and pairs
+    /// implement it, so [`WireCount`](super::WireCount) cannot be implemented
+    /// downstream.
+    pub trait Sealed {}
+
+    impl Sealed for () {}
+    impl<V> Sealed for Wire<V> {}
+    impl<L: Sealed, R: Sealed> Sealed for (L, R) {}
+
+    /// The internal, `V`-parameterized recursion behind
+    /// [`Wires::flatten`](super::Wires::flatten) /
+    /// [`Wires::unflatten`](super::Wires::unflatten). Kept private (its name is
+    /// unreachable downstream) so `flatten_into` / `unflatten_from` can be neither
+    /// called nor implemented outside the crate — the public entry points stay the
+    /// length-checked [`unflatten`](super::Wires::unflatten) and the
+    /// capacity-preallocating [`flatten`](super::Wires::flatten).
+    pub trait WiresInternal<V>: Sized {
+        /// Append this bundle's wires, in canonical left-to-right order, to `out`.
+        fn flatten_into(self, out: &mut Vec<V>);
+
+        /// Draw exactly this bundle's wires off `iter`, leaving any surplus. A
+        /// `(L, R)` draws `L`'s wires then `R`'s from the shared cursor, mirroring
+        /// the S3 interpreter's `take_exact` pattern.
+        fn unflatten_from(iter: &mut vec::IntoIter<V>) -> Result<Self, SyntaxError>;
+    }
+}
+
 /// A single typed wire carrying one value of type `V`.
 ///
-/// The atom of the [`Wires`] encoding: it has [`COUNT`](Wires::COUNT) `1` and
+/// The atom of the [`Wires`] encoding: it has [`COUNT`](WireCount::COUNT) `1` and
 /// flattens to a one-element bundle. The newtype (rather than a bare `V`) is what
-/// keeps the [`Wires`] impls coherent — a blanket `impl<V> Wires<V> for V` would
-/// overlap the pair impl.
+/// keeps the impls coherent — a blanket `impl<V> Wires<V> for V` would overlap the
+/// pair impl.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Wire<V>(pub V);
 
-/// A typed wire bundle: the bridge between a haft arrow's nested-pair interface
-/// and the [interpreter](crate::eval)'s flat `Vec<V>` bundles.
+/// The compile-time wire count of a bundle shape — the `V`-free arity of a
+/// [`Wires`] tree.
 ///
-/// An implementor is a *tree of pairs* over [`Wire<V>`] leaves and the empty
-/// bundle `()`; [`flatten`](Wires::flatten) collapses any such tree to the
-/// canonical left-to-right `Vec<V>`, and [`COUNT`](Wires::COUNT) is that vector's
-/// length known at compile time. **Any pair-tree shape is a valid bundle** —
-/// `(L, R)`, `((A, B), C)`, and `(A, (B, C))` with the same leaves all flatten to
-/// the same vector. That is exactly why
-/// [`Split`]'s input `(In1, In2)` is automatically a
-/// `Wires` bundle: [`par`](Traced::par) tensors two sub-bundles by *pairing* them,
-/// with no rebracketing, and flatten canonicalizes the nesting away.
+/// Split out from [`Wires`] so that arity-only operations (the checks in
+/// [`traced_generator`], the length in [`traced_id`]) need no value type `V`, and
+/// so constructors carry no phantom-`V` turbofish. [`COUNT`](WireCount::COUNT) is
+/// `0` for `()`, `1` for [`Wire<V>`], and `L::COUNT + R::COUNT` for a pair.
 ///
-/// # The encoding (why these three impls, no blanket)
+/// # Sealed
 ///
-/// - `()` — zero wires ([`COUNT`](Wires::COUNT) `0`).
-/// - [`Wire<V>`] — one wire ([`COUNT`](Wires::COUNT) `1`).
-/// - `(L, R)` — [`COUNT`](Wires::COUNT) = `L::COUNT + R::COUNT`, flatten = `L`
-///   then `R`.
-///
-/// A blanket `impl<V> Wires<V> for V` would overlap the pair impl (a pair is
-/// itself a `V`), and a unit-terminated cons-list encoding (`(Wire<V>, ())`) is
-/// not [`Split`]-compatible — `Split`'s `Out` is a bare
-/// `(B, D)` pair. Leaf-plus-pair is the shape that matches haft's arrows.
-pub trait Wires<V>: Sized {
+/// This trait is **sealed** (via a private `Sealed` marker): the three shapes above are
+/// its only implementors. Sealing is not mere API hygiene here — it is a
+/// *correctness* precondition. [`Traced::then`] is infallible because it trusts
+/// that a bundle type's `COUNT` equals its [`Wires::flatten`] length; a downstream
+/// impl with a mismatched `COUNT` (or two conflicting impls) would make that trust
+/// false and turn `then`'s internal `expect` into a library panic, silently
+/// breaking the coherence law. Sealing makes "the count is always the flatten
+/// length" a fact no external code can violate. The three shapes are also
+/// *expressively complete* — every finite arity is some pair-tree — so nothing is
+/// lost by closing the trait.
+pub trait WireCount: sealed::Sealed {
     /// The number of wires in this bundle — the length of
-    /// [`flatten`](Wires::flatten)'s output, known at compile time.
+    /// [`Wires::flatten`]'s output, known at compile time.
     const COUNT: usize;
-
-    /// Collapse the pair-tree to its canonical left-to-right value vector.
-    fn flatten(self) -> Vec<V>;
-
-    /// Rebuild a bundle of this shape from `values`, checking the length.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SyntaxError::WireCount`] if `values.len() != Self::COUNT`.
-    fn unflatten(values: Vec<V>) -> Result<Self, SyntaxError> {
-        let actual = values.len();
-        if actual != Self::COUNT {
-            return Err(SyntaxError::WireCount {
-                expected: Self::COUNT,
-                actual,
-                context: "Wires::unflatten bundle length",
-            });
-        }
-        let mut iter = values.into_iter();
-        Self::unflatten_from(&mut iter)
-    }
-
-    /// Streaming core of [`unflatten`](Wires::unflatten): draw exactly
-    /// [`COUNT`](Wires::COUNT) values off `iter`, leaving the rest.
-    ///
-    /// This mirrors the S3 interpreter's `take_exact` cursor pattern so nested
-    /// bundles consume cleanly: a `(L, R)` draws `L`'s wires then `R`'s from the
-    /// same iterator. Prefer [`unflatten`](Wires::unflatten), which length-checks
-    /// up front; this method assumes the caller guarantees enough values.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`SyntaxError::WireCount`] if `iter` runs dry before this bundle's
-    /// wires are filled (unreachable via [`unflatten`](Wires::unflatten), whose
-    /// length check precedes the draw).
-    fn unflatten_from(iter: &mut vec::IntoIter<V>) -> Result<Self, SyntaxError>;
 }
 
-impl<V> Wires<V> for () {
+impl WireCount for () {
     const COUNT: usize = 0;
+}
 
-    fn flatten(self) -> Vec<V> {
-        Vec::new()
-    }
+impl<V> WireCount for Wire<V> {
+    const COUNT: usize = 1;
+}
+
+impl<L: WireCount, R: WireCount> WireCount for (L, R) {
+    const COUNT: usize = L::COUNT + R::COUNT;
+}
+
+impl<V> sealed::WiresInternal<V> for () {
+    fn flatten_into(self, _out: &mut Vec<V>) {}
 
     fn unflatten_from(_iter: &mut vec::IntoIter<V>) -> Result<Self, SyntaxError> {
         Ok(())
     }
 }
 
-impl<V> Wires<V> for Wire<V> {
-    const COUNT: usize = 1;
-
-    fn flatten(self) -> Vec<V> {
-        vec![self.0]
+impl<V> sealed::WiresInternal<V> for Wire<V> {
+    fn flatten_into(self, out: &mut Vec<V>) {
+        out.push(self.0);
     }
 
     fn unflatten_from(iter: &mut vec::IntoIter<V>) -> Result<Self, SyntaxError> {
@@ -184,13 +195,14 @@ impl<V> Wires<V> for Wire<V> {
     }
 }
 
-impl<V, L: Wires<V>, R: Wires<V>> Wires<V> for (L, R) {
-    const COUNT: usize = L::COUNT + R::COUNT;
-
-    fn flatten(self) -> Vec<V> {
-        let mut out = self.0.flatten();
-        out.extend(self.1.flatten());
-        out
+impl<V, L, R> sealed::WiresInternal<V> for (L, R)
+where
+    L: sealed::WiresInternal<V>,
+    R: sealed::WiresInternal<V>,
+{
+    fn flatten_into(self, out: &mut Vec<V>) {
+        self.0.flatten_into(out);
+        self.1.flatten_into(out);
     }
 
     fn unflatten_from(iter: &mut vec::IntoIter<V>) -> Result<Self, SyntaxError> {
@@ -200,17 +212,72 @@ impl<V, L: Wires<V>, R: Wires<V>> Wires<V> for (L, R) {
     }
 }
 
+/// A typed wire bundle: the value-carrying bridge between a haft arrow's
+/// nested-pair interface and the [interpreter](crate::eval)'s flat `Vec<V>`
+/// bundles.
+///
+/// An implementor is a *tree of pairs* over [`Wire<V>`] leaves and the empty
+/// bundle `()`; [`flatten`](Wires::flatten) collapses any such tree to the
+/// canonical left-to-right `Vec<V>`, and [`WireCount::COUNT`] is that vector's
+/// length known at compile time. **Any pair-tree shape is a valid bundle** —
+/// `(L, R)`, `((A, B), C)`, and `(A, (B, C))` with the same leaves all flatten to
+/// the same vector. That is exactly why [`Split`]'s input `(In1, In2)` is
+/// automatically a `Wires` bundle: [`par`](Traced::par) tensors two sub-bundles by
+/// *pairing* them, with no rebracketing, and flatten canonicalizes the nesting
+/// away.
+///
+/// # Sealed
+///
+/// Like [`WireCount`], this trait is **sealed** — it is implemented (by a single
+/// blanket impl) for exactly the shapes that implement the private recursion
+/// carrier, and cannot be implemented downstream. See [`WireCount`]'s sealing note
+/// for why this is a soundness precondition of [`Traced::then`] and the coherence
+/// law, not just hygiene.
+pub trait Wires<V>: WireCount + sealed::WiresInternal<V> {
+    /// Collapse the pair-tree to its canonical left-to-right value vector in one
+    /// allocation (capacity [`WireCount::COUNT`]) and one pass of moves.
+    fn flatten(self) -> Vec<V> {
+        let mut out = Vec::with_capacity(<Self as WireCount>::COUNT);
+        self.flatten_into(&mut out);
+        out
+    }
+
+    /// Rebuild a bundle of this shape from `values`, checking the length up front.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SyntaxError::WireCount`] if `values.len() != Self::COUNT` (either
+    /// too few or **too many** — the length check precedes the draw, so surplus
+    /// values are rejected rather than silently truncated).
+    fn unflatten(values: Vec<V>) -> Result<Self, SyntaxError> {
+        let actual = values.len();
+        if actual != <Self as WireCount>::COUNT {
+            return Err(SyntaxError::WireCount {
+                expected: <Self as WireCount>::COUNT,
+                actual,
+                context: "Wires::unflatten bundle length",
+            });
+        }
+        let mut iter = values.into_iter();
+        Self::unflatten_from(&mut iter)
+    }
+}
+
+impl<V, T> Wires<V> for T where T: WireCount + sealed::WiresInternal<V> {}
+
 /// A morphism carried as both an executable arrow and the term it denotes.
 ///
 /// `Traced<A, G>` bundles a haft [`Arrow`] `A` with the
 /// [`PropExpr<G>`](catgraph_applied::prop::PropExpr) it stands for. The fields are
 /// **private on purpose**: the two halves are kept in sync — the term's source
-/// arity equals `A::In`'s [`Wires::COUNT`], its target equals `A::Out`'s — *only*
-/// because the sole way to obtain a `Traced` is through the paired constructors in
-/// this module ([`traced_generator`], [`traced_id`], [`traced_braid_1_1`],
-/// [`then`](Traced::then), [`par`](Traced::par)), each of which advances arrow and
-/// term together. There is no constructor from parts, so this invariant cannot be
-/// violated from outside the module.
+/// arity equals `A::In`'s [`WireCount::COUNT`], its target equals `A::Out`'s —
+/// *only* because the sole way to obtain a `Traced` is through the paired
+/// constructors in this module ([`traced_generator`], [`traced_id`],
+/// [`traced_braid_1_1`], [`then`](Traced::then), [`par`](Traced::par)), each of
+/// which advances arrow and term together. There is no constructor from parts, and
+/// — because [`Wires`] / [`WireCount`] are sealed — no downstream impl can make a
+/// bundle's `COUNT` disagree with its flatten length either. So this invariant
+/// genuinely cannot be violated from outside the module.
 pub struct Traced<A, G: PropSignature> {
     arrow: A,
     term: PropExpr<G>,
@@ -241,8 +308,8 @@ impl<A, G: PropSignature> Traced<A, G> {
 
 impl<A: Arrow, G: PropSignature> Traced<A, G> {
     /// Run the executable arrow on a typed input bundle, delegating to
-    /// [`Arrow::run`]. The paired term is
-    /// untouched; [`term`](Traced::term) still denotes what this computes.
+    /// [`Arrow::run`]. The paired term is untouched; [`term`](Traced::term) still
+    /// denotes what this computes.
     pub fn run(&self, input: A::In) -> A::Out {
         self.arrow.run(input)
     }
@@ -251,9 +318,10 @@ impl<A: Arrow, G: PropSignature> Traced<A, G> {
     /// output. **Infallible.**
     ///
     /// The bound `B: Arrow<In = A::Out>` makes the interface types *equal*, so
-    /// `A::Out` and `B::In` have the same [`Wires::COUNT`]; combined with the
+    /// `A::Out` and `B::In` have the same [`WireCount::COUNT`]; combined with the
     /// `Traced` sync invariant (each term's arities track its arrow's interface
-    /// types), `self.term.target() == other.term.source()`, so
+    /// types, which sealing guarantees — see the [`WireCount`] sealing note),
+    /// `self.term.target() == other.term.source()`, so
     /// [`Free::compose`](catgraph_applied::prop::Free::compose) cannot fail. This
     /// is the payoff of the typed track: an arity error that the untyped
     /// interpreter would surface at runtime is here ruled out at compile time.
@@ -265,7 +333,8 @@ impl<A: Arrow, G: PropSignature> Traced<A, G> {
         Traced {
             arrow: self.arrow.compose(other.arrow),
             term: Free::compose(self.term, other.term).expect(
-                "invariant: type-level interface agreement makes the term composition arity-safe",
+                "invariant: sealed WireCount ties each term's arity to its arrow's \
+                 interface type, and B::In = A::Out makes the composition arity-safe",
             ),
         }
     }
@@ -290,12 +359,13 @@ impl<A: Arrow, G: PropSignature> Traced<A, G> {
 ///
 /// This is the **only** fallible constructor: it verifies that the arrow's typed
 /// interface matches the generator's declared arity —
-/// `<A::In as Wires<V>>::COUNT == generator.source()` and
-/// `<A::Out as Wires<V>>::COUNT == generator.target()`. The check is
+/// `<A::In as WireCount>::COUNT == generator.source()` and
+/// `<A::Out as WireCount>::COUNT == generator.target()`. The check is
 /// **structural (arity) only**; whether the arrow's *values* agree with the
 /// [`ArrowModel`](crate::eval::ArrowModel) the term is later evaluated under is
 /// the caller's contract (the coherence tests demonstrate it for the shipped SFG
-/// examples). The resulting term is the generator leaf
+/// examples — see the module-level coherence law and its qualifier). The resulting
+/// term is the generator leaf
 /// [`Free::generator(generator)`](catgraph_applied::prop::Free::generator).
 ///
 /// # Errors
@@ -303,17 +373,17 @@ impl<A: Arrow, G: PropSignature> Traced<A, G> {
 /// Returns [`SyntaxError::WireCount`] if the input-bundle wire count differs from
 /// `generator.source()`, or the output-bundle wire count from
 /// `generator.target()`.
-pub fn traced_generator<V, A, G>(generator: G, arrow: A) -> Result<Traced<A, G>, SyntaxError>
+pub fn traced_generator<A, G>(generator: G, arrow: A) -> Result<Traced<A, G>, SyntaxError>
 where
     A: Arrow,
-    A::In: Wires<V>,
-    A::Out: Wires<V>,
+    A::In: WireCount,
+    A::Out: WireCount,
     G: PropSignature,
 {
     let source = generator.source();
     let target = generator.target();
-    let in_count = <A::In as Wires<V>>::COUNT;
-    let out_count = <A::Out as Wires<V>>::COUNT;
+    let in_count = <A::In as WireCount>::COUNT;
+    let out_count = <A::Out as WireCount>::COUNT;
     if in_count != source {
         return Err(SyntaxError::WireCount {
             expected: source,
@@ -336,16 +406,16 @@ where
 
 /// The identity morphism on a `W`-shaped bundle — the haft [`Id`] arrow paired
 /// with [`Free::identity(W::COUNT)`](catgraph_applied::prop::Free::identity).
-/// Infallible.
+/// Infallible. Carries no value type `V`: the term needs only the arity.
 #[must_use]
-pub fn traced_id<V, W, G>() -> Traced<Id<W>, G>
+pub fn traced_id<W, G>() -> Traced<Id<W>, G>
 where
-    W: Wires<V>,
+    W: WireCount,
     G: PropSignature,
 {
     Traced {
         arrow: Id::new(),
-        term: Free::identity(<W as Wires<V>>::COUNT),
+        term: Free::identity(<W as WireCount>::COUNT),
     }
 }
 
@@ -353,6 +423,9 @@ where
 /// [`Free::braid(1, 1)`](catgraph_applied::prop::Free::braid) — the one braid this
 /// builder ships (see the module docs on why general `braid(m, n)` is omitted).
 /// Infallible.
+///
+/// Unlike [`traced_generator`] / [`traced_id`], this keeps the value type `V`: the
+/// swap acts on the wire *values*, so the arrow is genuinely `V`-parameterized.
 #[must_use]
 pub fn traced_braid_1_1<V, G>() -> Traced<PairSwap<V>, G>
 where

@@ -13,32 +13,42 @@
 //! ([`crate::traced`], Phase S5 — **live**, and this seam's first real consumer):
 //! a [`Traced<A, G>`](crate::traced::Traced) pairs an executable haft [`Arrow`]
 //! with the [`PropExpr`](catgraph_applied::prop::PropExpr) term it denotes, so
-//! a morphism can be both *run* and *reasoned about* from one value. The
-//! re-exports below are the combinators that builder needs:
+//! a morphism can be both *run* and *reasoned about* from one value.
 //!
-//! - [`Arrow`] / [`arrow`] — the trait and its lifting constructor.
-//! - [`ArrowBuilder`] — the fluent construction surface.
-//! - [`Compose`] — sequential composition `f >>> g` (the term-level `;`).
-//! - [`Split`] — the true tensor `(A, C) → (B, D)` (the term-level `⊗`).
-//! - [`First`] / [`Second`] — tensor with an identity on one wire bundle.
-//! - [`Fanout`] — the diagonal `A → (B, C)`. **Not** Frobenius `δ`: fanout is
-//!   the Cartesian diagonal (copy is free in `Set`), whereas a comonoid
-//!   comultiplication is a structure map that a *model* must supply. Keeping
-//!   both names available lets Phase S5 document the distinction at the type
-//!   level rather than conflate them.
-//! - [`Id`] / [`Lift`] — the identity arrow and pure-function lift.
+//! ## Consumed by the builder
 //!
-//! These names have been **live public API** from this seam since Phase S1 (the
-//! same documented-reserved-surface pattern catgraph-dl used for its `num` dep
-//! ahead of the #36 R-module actegory); as of Phase S5 the
-//! [`Traced`](crate::traced::Traced) builder is their first consumer.
+//! These are the names [`crate::traced`] actually builds on:
 //!
-//! [`Fanout`] is re-exported but **deliberately unused** by the builder: pairing
-//! the Cartesian diagonal `A → (A, A)` with a term would let the arrow duplicate a
-//! wire that no term generator copied, so the two would denote different
-//! morphisms. [`crate::traced`] documents the rejection and makes the
-//! Fanout-≠-Frobenius-δ discipline type-level (the diagonal is unreachable through
-//! the builder); the name stays exported so that distinction can be *named*.
+//! - [`Arrow`] — the trait (`run` + the combinator methods).
+//! - [`Compose`] — sequential composition `f >>> g` (the term-level `;`), behind
+//!   [`Traced::then`](crate::traced::Traced::then).
+//! - [`Split`] — the true tensor `(A, C) → (B, D)` (the term-level `⊗`), behind
+//!   [`Traced::par`](crate::traced::Traced::par).
+//! - [`Id`] — the identity arrow, behind [`traced_id`](crate::traced::traced_id).
+//! - [`Lift`] — the pure-function lift, behind
+//!   [`traced_braid_1_1`](crate::traced::traced_braid_1_1) and the caller's
+//!   generator arrows.
+//!
+//! ## Re-exported, deliberately not (yet) consumed — reserved surface
+//!
+//! These names round out the Arrow algebra for downstream users but the builder
+//! does not (currently) need them; they are kept live for the same
+//! documented-reserved-surface reason catgraph-dl kept its `num` dep ahead of the
+//! #36 R-module actegory:
+//!
+//! - [`arrow`] / [`ArrowBuilder`] — the fluent lift/construction path; the
+//!   ergonomic way for a downstream crate to build arrows to feed
+//!   [`traced_generator`](crate::traced::traced_generator).
+//! - [`First`] / [`Second`] — tensor with an identity on one side; achievable
+//!   through the builder anyway (`par` with a [`traced_id`](crate::traced::traced_id)),
+//!   so not exposed as a dedicated combinator.
+//! - [`Fanout`] — the Cartesian diagonal `A → (A, A)`; **rejected** by the builder
+//!   because pairing it with a term would let the arrow duplicate a wire no term
+//!   generator copied (Fanout ≠ Frobenius `δ`) — [`crate::traced`]'s *Deliberate
+//!   omissions* is the canonical statement; the name stays exported so that
+//!   distinction can be *named*.
+//!
+//! All of these have been **live public API** from this seam since Phase S1.
 //!
 //! # Deliberate exclusions
 //!

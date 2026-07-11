@@ -16,8 +16,13 @@ layer). Item-by-item map in [`docs/ANCHORS.md`](docs/ANCHORS.md).
 Delivered incrementally, one phase per branch. The full **S1–S5** surface is
 now shipped: **S1–S2 give the round-trip textual surface (printer + parser +
 presentation files); S3 adds the interpreter; S4 adds the Frobenius layer; S5
-adds the typed builder** — the [#5](https://github.com/sustia-llc/catgraph/issues/5)
-milestone is complete.
+adds the typed builder** — so the
+[#5](https://github.com/sustia-llc/catgraph/issues/5) milestone *surface* is
+complete. Post-milestone follow-ups (multi-sorted props
+[#79](https://github.com/sustia-llc/catgraph/issues/79), the Cospan-valued
+complete-functor spike [#80](https://github.com/sustia-llc/catgraph/issues/80),
+serde on `PropExpr` [#81](https://github.com/sustia-llc/catgraph/issues/81))
+stay tracked on #5.
 
 | Phase | Contents |
 |---|---|
@@ -127,32 +132,37 @@ arrow) and *reasoned about* (print it, parse over it, `eval` it under any
 track of the Arrow bridge: the S3 interpreter works over flat `Vec<V>` wire
 bundles, while haft arrows speak in nested pairs, and `Wires<V>` is the lawful
 bridge — `Wire<V>` is one wire, `()` is zero, `(L, R)` is `L` then `R`, and
-`flatten`/`unflatten`/`COUNT` move any pair-tree to/from the canonical `Vec<V>`.
+`flatten`/`unflatten` (with the compile-time `WireCount::COUNT`) move any pair-tree
+to/from the canonical `Vec<V>`.
 Because `Split`'s input is a bare `(In1, In2)` pair, every tensor of bundles is
 automatically a `Wires` bundle.
 
 - **The pairing invariant.** The fields are private; the term's arities stay in
   sync with the arrow's interface types *only* because the sole way to build a
   `Traced` is through the paired combinators, each of which advances arrow and
-  term together. There is no constructor from parts.
+  term together. There is no constructor from parts, and `Wires` / `WireCount`
+  are **sealed** (the three bundle shapes are their only inhabitants), so no
+  downstream impl can make a bundle's `COUNT` disagree with its `flatten` length —
+  which is why the invariant genuinely cannot be violated from outside the module.
 - **Combinators.** `traced_generator(g, arrow)` is the one fallible constructor
-  (it checks the arrow's `Wires::COUNT` against `g.source()`/`g.target()` — a
+  (it checks the arrow's `WireCount::COUNT` against `g.source()`/`g.target()` — a
   *structural* check; value-level agreement with the model is the caller's
   contract). `traced_id`, `traced_braid_1_1` (the single-wire swap), `then`
   (`>>>`), and `par` (`***`) are all **infallible**: `then`'s type equality
-  `A::Out = B::In` plus the sync invariant make `Free::compose` arity-safe at
-  compile time — the payoff of the typed track over the interpreter's runtime
-  arity check.
+  `A::Out = B::In` plus the (sealing-guaranteed) sync invariant make
+  `Free::compose` arity-safe at compile time — the payoff of the typed track over
+  the interpreter's runtime arity check.
 - **The coherence law (the S5 milestone).**
-  `eval(t.term(), &model, input.flatten()) == Ok(t.run(input).flatten())` — the
-  law-tested contract, exercised over every combinator with proptest-random
-  input *values* (shapes are type-level).
+  `eval(t.term(), &model, input.flatten()) == Ok(t.run(input).flatten())`, for any
+  model whose generator actions agree with the paired arrows (arity agreement is
+  checked structurally by `traced_generator`; value agreement is the caller's
+  contract, demonstrated by the coherence tests). Law-tested over every combinator
+  with proptest-random input *values* (shapes are type-level).
 - **Three deliberate omissions.** General `braid(m, n)` (would need type-level
-  rebracketing of nested pairs); `fanout`/`&&&` (**rejected** — the Cartesian
-  diagonal would let the arrow copy a wire no term generator copied, so the two
-  would denote different morphisms; copying is a *model* concern, the
-  Fanout-≠-Frobenius-δ discipline made type-level); and spider arrows (haft
-  `Arrow` has no Frobenius structure — spiders stay interpreter/matrix territory).
+  rebracketing of nested pairs); `fanout`/`&&&` (**rejected** so the arrow cannot
+  copy a wire no term generator copied — Fanout ≠ Frobenius δ); and spider arrows
+  (haft `Arrow` has no Frobenius structure). The `traced` module docs are the
+  canonical statement of each rejection.
 
 ## Two standing disclaimers
 

@@ -17,7 +17,7 @@ later phase.
 | `text::print::Pretty` | Seven Sketches | Def 5.30 (a `G`-generated prop expression) — concrete syntax of a free-prop term | live (S1) |
 | `text::print::print` | Seven Sketches | Def 5.30 | live (S1) |
 | `errors::SyntaxError` | — | crate-local error surface; `Catgraph(..)` passes through applied's arity failures | live (S1) |
-| `arrow_seam` (haft re-exports) | — | #12 single-seam precedent (catgraph-dl `src/endofunctor.rs`); Arrow surface first exercised by S5 (`Traced`) | live re-export (S1); exercised (S5) |
+| `arrow_seam` (haft re-exports) | — | #12 single-seam precedent (catgraph-dl `src/endofunctor.rs`); {`Arrow`,`Compose`,`Split`,`Id`,`Lift`} consumed by S5 `Traced`; {`arrow`,`ArrowBuilder`,`First`,`Second`,`Fanout`} reserved surface | live re-export (S1); {consumed, reserved} split (S5) |
 | `text::parse::parse` (parser) | Seven Sketches | Def 5.30 (concrete syntax of a `G`-generated prop expression, parsed) | live (S2) |
 | `text::presentation::{print_presentation, parse_presentation}` | Seven Sketches | Def 5.33 (presentation = arity-matched equation pairs) | live (S2) |
 | `sfg_syntax` (`GeneratorSyntax for SfgGenerator<R>`) | Seven Sketches | Def 5.45 / Eq 5.52 (the `G_R` demo signature's token scheme) | live (S2) |
