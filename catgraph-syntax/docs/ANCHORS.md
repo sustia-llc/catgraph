@@ -30,5 +30,5 @@ later phase.
 | `frobenius::hypergraph_presentation` | Seven Sketches + Hypergraph Categories | Def 5.33 (presentation) seeded with `E_frob` = Def 2.5's nine equations | live (S4) |
 | `frobenius::to_mat_kron` | Hypergraph Categories | Prop 3.8 (SCFM = strict SM functor `Cospan → C`, the sound checker); Thm 3.14 (`Cospan` is the free monochromatic hypergraph category); Ex 2.16 (`MatKron(R)`, the Hadamard SCFM target) | live (S4) |
 | `traced::Wires` | — | the arity-preserving bridge between typed pair bundles and the `Vec<V>` interpreter world (`flatten`/`unflatten`/`COUNT`) | live (S5) |
-| `traced::Traced` | — | Hughes 2000 arrow lineage (*Generalising Monads to Arrows*) — the executable-arrow / denoted-term pairing; coherence law `eval(term, m, in.flatten()) == Ok(run(in).flatten())` | live (S5) |
+| `traced::Traced` | — | Hughes 2000 arrow lineage (*Generalising Monads to Arrows*) — the executable-arrow / denoted-term pairing; coherence law `eval(term, m, in.flatten()) == Ok(run(in).flatten())`, inductive: generator constructors *establish* it (caller's value contract), `then`/`par`/`traced_id`/`traced_braid_1_1` *preserve* it | live (S5) |
 | `traced::{traced_generator, traced_id, traced_braid_1_1, then, par}` | — | Hughes 2000 arrow combinators (`arr`/`id`/`>>>`/`***`); `fanout` (`&&&`) rejected: Fanout ≠ Frobenius δ | live (S5) |

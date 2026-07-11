@@ -23,25 +23,39 @@
 //!
 //! # The coherence contract (the S5 milestone law)
 //!
-//! For every [`Traced<A, G>`] built through the combinators in this module, and
-//! every model `M: ArrowModel<G, Value = V>` **whose generator actions agree with
-//! the paired arrows** (the caller contract that [`traced_generator`] checks
-//! *structurally* — arities only — and that the coherence tests demonstrate for
-//! the shipped SFG examples):
+//! For a [`Traced<A, G>`] and a model `M: ArrowModel<G, Value = V>`:
 //!
 //! ```text
 //! eval(t.term(), &model, input.flatten()) == Ok(t.run(input).flatten())
 //! ```
 //!
-//! Running the arrow on a typed [`Wires`] bundle and flattening the result equals
-//! evaluating the paired term on the flattened input. The qualifier matters: an
-//! arrow whose *values* disagree with the model (while its *arities* match) would
-//! break the equation — arity agreement is machine-checked, value agreement is the
-//! caller's responsibility. Because wire shapes are *type-level* (a `Traced`'s
-//! interface is fixed by `A::In`/`A::Out`), the law cannot be proptested over
-//! random shapes; the test suite instead exercises every combinator with a family
-//! of hand-built pipelines over
-//! [`SfgGenerator<i64>`](catgraph_applied::sfg::SfgGenerator) /
+//! — running the arrow on a typed [`Wires`] bundle and flattening equals
+//! evaluating the paired term on the flattened input. The law is **conditional**,
+//! and the cleanest way to see both *why* it holds and *why the combinators are
+//! the trustworthy part* is inductively over how a `Traced` is built:
+//!
+//! - **Base case — the generator constructors *establish* coherence.**
+//!   [`traced_generator`] pairs a generator with an arrow and holds only for a
+//!   model whose action on that generator *agrees with the paired arrow*. That
+//!   agreement is the caller's hypothesis: [`traced_generator`] checks its
+//!   **arity** half *structurally* (the `Wires::COUNT` match), while the
+//!   **value** half — that the arrow computes what the model computes — is the
+//!   caller's responsibility (the coherence tests discharge it for the shipped
+//!   SFG examples). [`traced_id`] and [`traced_braid_1_1`] are unconditional base
+//!   cases: identity and the block-swap agree with `eval`'s `Identity`/`Braid` for
+//!   *any* model.
+//! - **Inductive step — [`then`](Traced::then), [`par`](Traced::par) *preserve*
+//!   coherence.** If two `Traced`s are each coherent for `M`, so is their
+//!   composition/tensor: `eval` is a prop-functor (compose pipes, tensor
+//!   concatenates) and [`run`](Traced::run) mirrors it on the typed side, so the
+//!   equation is closed under both combinators.
+//!
+//! So the conditionality lives *entirely* in the generator base case (a value
+//! contract the caller supplies); every structural combinator is unconditionally
+//! sound. Because wire shapes are *type-level* (a `Traced`'s interface is fixed by
+//! `A::In`/`A::Out`), the law cannot be proptested over random shapes; the test
+//! suite instead exercises every combinator with a family of hand-built pipelines
+//! over [`SfgGenerator<i64>`](catgraph_applied::sfg::SfgGenerator) /
 //! [`SfgModel`](crate::eval::SfgModel), each checked over proptest-random input
 //! *values*.
 //!

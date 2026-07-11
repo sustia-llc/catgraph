@@ -153,11 +153,13 @@ automatically a `Wires` bundle.
   `Free::compose` arity-safe at compile time — the payoff of the typed track over
   the interpreter's runtime arity check.
 - **The coherence law (the S5 milestone).**
-  `eval(t.term(), &model, input.flatten()) == Ok(t.run(input).flatten())`, for any
-  model whose generator actions agree with the paired arrows (arity agreement is
-  checked structurally by `traced_generator`; value agreement is the caller's
-  contract, demonstrated by the coherence tests). Law-tested over every combinator
-  with proptest-random input *values* (shapes are type-level).
+  `eval(t.term(), &model, input.flatten()) == Ok(t.run(input).flatten())`, stated
+  inductively: the generator constructors *establish* it for a model whose actions
+  agree with the paired arrows (arity checked structurally by `traced_generator`,
+  value agreement the caller's contract), and `then`/`par`/`traced_id`/`traced_braid_1_1`
+  *preserve* it — so the conditionality is confined to the generator base case and
+  every structural combinator is unconditionally sound. Law-tested over every
+  combinator with proptest-random input *values* (shapes are type-level).
 - **Three deliberate omissions.** General `braid(m, n)` (would need type-level
   rebracketing of nested pairs); `fanout`/`&&&` (**rejected** so the arrow cannot
   copy a wire no term generator copied — Fanout ≠ Frobenius δ); and spider arrows
