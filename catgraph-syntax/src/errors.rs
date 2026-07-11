@@ -97,17 +97,22 @@ pub enum SyntaxError {
         generator: String,
     },
 
-    /// A [`to_mat_kron`](crate::frobenius::to_mat_kron) wire interface of `k`
-    /// wires maps to the object dimension `dim^k`, and that power overflowed
-    /// `usize`. Reported instead of panicking (or attempting to allocate an
-    /// astronomically large matrix). Raised for the `dim.checked_pow(k)` of an
-    /// `Identity(k)` / `Braid(m, n)` node whose wire count is too large for the
-    /// chosen `dim`.
-    #[error("dimension dim^k overflowed usize: dim = {dim}, k = {exponent}")]
+    /// A [`to_mat_kron`](crate::frobenius::to_mat_kron) node's **dense cell
+    /// count** `dim^(src + tgt)` overflowed `usize`. Every node is guarded on the
+    /// exponent `src + tgt` before its matrix is built, so the products a naïve
+    /// per-interface check would miss — `braiding`'s `dim^m · dim^n`, `mu`/`delta`'s
+    /// `dim²`, and the `kron`/matmul results — are all covered, and the sound
+    /// checker never wraps into a wrong matrix nor attempts an overflowing
+    /// allocation. This guards the cell *count* (a `usize` overflow), **not**
+    /// memory pressure: a huge-but-representable matrix still allocates and is the
+    /// caller's concern. `exponent` is the offending `src + tgt` (or `usize::MAX`
+    /// as a "≥ this" marker in the unreachable case where the wire sum itself
+    /// overflows `usize`).
+    #[error("dense cell count dim^k overflowed usize: dim = {dim}, k = {exponent}")]
     DimensionOverflow {
         /// The per-wire object dimension `dim`.
         dim: usize,
-        /// The wire-count exponent `k` (so the object is `dim^k`).
+        /// The exponent `k = src + tgt` (so the dense cell count is `dim^k`).
         exponent: usize,
     },
 

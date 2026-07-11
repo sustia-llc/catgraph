@@ -109,6 +109,35 @@ impl GeneratorSyntax for BadSig {
     }
 }
 
+/// A signature whose one generator's token is `"mu"` — deliberately colliding
+/// with a reserved Frobenius name (arity `2 → 1`, matching `Mu`, so an equation
+/// using it would even typecheck). Used by the S4 negative test to prove
+/// `FrobeniusOr`'s Frobenius-first `parse_token` **shadows** such a user token
+/// (so its clause-1 round-trip breaks), the analogue of S2's [`BadSig`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ShadowSig;
+
+impl PropSignature for ShadowSig {
+    fn source(&self) -> usize {
+        2
+    }
+
+    fn target(&self) -> usize {
+        1
+    }
+}
+
+impl GeneratorSyntax for ShadowSig {
+    fn print_token(&self) -> String {
+        // Collides with the reserved Frobenius token `mu`.
+        "mu".to_string()
+    }
+
+    fn parse_token(token: &str) -> Option<Self> {
+        (token == "mu").then_some(ShadowSig)
+    }
+}
+
 /// Wrap any signature's generator in a `PropExpr` leaf — the shared fixture
 /// shim every integration suite uses (extend here, never fork per test binary).
 pub fn g<G: PropSignature>(s: G) -> PropExpr<G> {

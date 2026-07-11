@@ -164,48 +164,66 @@ fn id<G: PropSignature>(n: usize) -> PropExpr<FrobeniusOr<G>> {
 }
 
 /// Lift a user term into the Frobenius prop, wrapping every generator as
-/// [`User`](FrobeniusOr::User) and mapping every other node identically.
+/// [`User`](FrobeniusOr::User) and mapping every other node identically. Takes
+/// `expr` **by value** — the generator payloads are *moved* into `User(g)`, not
+/// cloned (the sole caller, [`hypergraph_presentation`], owns and drops the
+/// originals).
 ///
 /// The map is **structural and arity-preserving**: `Generator(g) ↦
 /// Generator(User(g))`, `Identity(n) ↦ Identity(n)`, `Braid(m, n) ↦ Braid(m,
-/// n)`, and `Compose`/`Tensor` recurse. Because `User(g)` has exactly `g`'s
-/// arities, an interior `Free::compose` re-composition can never fail — the
-/// `.expect` documents that invariant. This is the inclusion `Free(G) ↪
+/// n)`, and `Compose`/`Tensor` recurse. This is the inclusion `Free(G) ↪
 /// Free(FrobeniusOr<G>)` of the user prop into the hypergraph prop.
-#[must_use]
-pub fn lift_user<G: PropSignature>(expr: &PropExpr<G>) -> PropExpr<FrobeniusOr<G>> {
-    match expr {
-        PropExpr::Identity(n) => Free::identity(*n),
-        PropExpr::Braid(m, n) => Free::braid(*m, *n),
-        PropExpr::Generator(g) => Free::generator(FrobeniusOr::User(g.clone())),
-        PropExpr::Compose(f, g) => Free::compose(lift_user(f), lift_user(g))
-            .expect("invariant: lift_user preserves arities, so an interior compose cannot fail"),
-        PropExpr::Tensor(f, g) => Free::tensor(lift_user(f), lift_user(g)),
-    }
+///
+/// # Errors
+///
+/// Returns [`SyntaxError::Catgraph`] if an interior `Compose` node's interfaces
+/// do not meet. A term built through the [`Free`] smart constructors is
+/// arity-sound and cannot trigger this — but a `PropExpr` assembled by raw
+/// variant construction (documented-legal in applied) may be ill-formed, and a
+/// `Result`-returning API must surface that transparently rather than panic.
+pub fn lift_user<G: PropSignature>(
+    expr: PropExpr<G>,
+) -> Result<PropExpr<FrobeniusOr<G>>, SyntaxError> {
+    Ok(match expr {
+        PropExpr::Identity(n) => Free::identity(n),
+        PropExpr::Braid(m, n) => Free::braid(m, n),
+        PropExpr::Generator(g) => Free::generator(FrobeniusOr::User(g)),
+        PropExpr::Compose(f, g) => Free::compose(lift_user(*f)?, lift_user(*g)?)?,
+        PropExpr::Tensor(f, g) => Free::tensor(lift_user(*f)?, lift_user(*g)?),
+    })
 }
 
 /// μ-comb collapsing `m` legs to a single wire (`m → 1`): the left-nested fold
-/// `(((η|id) ⊗ id) ; μ) …`. Base cases `η` (`m = 0`) and `id(1)` (`m = 1`).
+/// `(((id ⊗ id) ; μ) ⊗ id) ; μ …`. Base cases `η` (`m = 0`) and `id(1)`
+/// (`m = 1`). Built **iteratively** (a loop, not recursion) so a wide `m` cannot
+/// overflow the stack during construction — only the O(m)-deep *result* term is
+/// recursed over downstream.
 fn collapse<G: PropSignature>(m: usize) -> PropExpr<FrobeniusOr<G>> {
-    match m {
-        0 => eta(),
-        1 => id(1),
-        _ => Free::compose(Free::tensor(collapse::<G>(m - 1), id(1)), mu()).expect(
-            "invariant: collapse(m-1):(m-1)→1 tensored with id(1) is m→2, then ;μ:2→1 gives m→1",
-        ),
+    if m == 0 {
+        return eta();
     }
+    let mut acc = id::<G>(1);
+    for _ in 1..m {
+        acc = Free::compose(Free::tensor(acc, id(1)), mu())
+            .expect("invariant: acc:k→1 tensored with id(1) is (k+1)→2, then ;μ:2→1 gives (k+1)→1");
+    }
+    acc
 }
 
 /// δ-comb expanding a single wire to `n` legs (`1 → n`): the right-nested fold
 /// `δ ; ((δ ; (… ⊗ id)) ⊗ id)`. Base cases `ε` (`n = 0`) and `id(1)` (`n = 1`).
+/// Built **iteratively** (a loop, not recursion) so a wide `n` cannot overflow
+/// the stack during construction.
 fn expand<G: PropSignature>(n: usize) -> PropExpr<FrobeniusOr<G>> {
-    match n {
-        0 => epsilon(),
-        1 => id(1),
-        _ => Free::compose(delta(), Free::tensor(expand::<G>(n - 1), id(1))).expect(
-            "invariant: δ:1→2 then (expand(n-1):1→(n-1) tensored with id(1)):2→n gives 1→n",
-        ),
+    if n == 0 {
+        return epsilon();
     }
+    let mut acc = id::<G>(1);
+    for _ in 1..n {
+        acc = Free::compose(delta(), Free::tensor(acc, id(1)))
+            .expect("invariant: δ:1→2 then (acc:1→k tensored with id(1)):2→(k+1) gives 1→(k+1)");
+    }
+    acc
 }
 
 /// The `(m, n)` **spider**: collapse `m` legs to one wire via a μ-comb, then
@@ -213,24 +231,40 @@ fn expand<G: PropSignature>(n: usize) -> PropExpr<FrobeniusOr<G>> {
 ///
 /// Construction: `spider(m, n) = collapse(m) ; expand(n)`, where the two combs
 /// meet at the single collapsed middle wire — the composition therefore always
-/// typechecks (the `.expect` states that invariant). The edge cases follow the
-/// combs' bases:
+/// typechecks (the `.expect` states that invariant). The edge cases:
 ///
 /// - `spider(0, n)` starts from `η` (`collapse(0) = η`);
 /// - `spider(m, 0)` ends at `ε` (`expand(0) = ε`);
-/// - `spider(0, 0) = η ; ε` (the empty spider — the scalar `η ; ε`), matching
-///   the design's chosen construction;
-/// - `spider(1, 1)` is returned as the literal `id(1)` (both combs are `id(1)`,
-///   so `collapse(1) ; expand(1)` would be `id(1) ; id(1)`; the single-node
-///   `id(1)` is the documented canonical form for the identity spider).
+/// - `spider(0, 0) = η ; ε` (the empty spider — the scalar `η ; ε`);
+/// - `spider(m, 1)` returns `collapse(m)` directly and `spider(1, n)` returns
+///   `expand(n)` directly — the other comb would be `id(1)`, and composing with
+///   it only adds a dead identity leg (and, under [`to_mat_kron`], a wasted
+///   identity matmul). Together these subsume the identity spider:
+///   `spider(1, 1) = expand(1) = id(1)`, the canonical form for the identity.
 ///
-/// Spiders **fuse**: `spider(m, k) ; spider(k, n)` and `spider(m, n)` denote the
-/// same morphism (semantically checkable via [`to_mat_kron`]), the defining
-/// property of the SCFM spider calculus (F&S 2019 §2.2).
+/// Spiders **fuse**: for a *connecting wire count* `k ≥ 1`, `spider(m, k) ;
+/// spider(k, n)` and `spider(m, n)` denote the same morphism (semantically
+/// checkable via [`to_mat_kron`]) — the defining property of the SCFM spider
+/// calculus (F&S 2019 §2.2). The condition `k ≥ 1` is load-bearing: at `k = 0`
+/// the composite is `spider(m, 0) ; spider(0, n) = (… ; ε) ; (η ; …)`, whose
+/// `ε ; η` scalar bridge collapses the connection (its `MatKron` image is the
+/// all-ones outer product, not the identity), so it is **not** `spider(m, n)`.
+///
+/// # Depth
+///
+/// The *result* term is O(m + n) deep; consumers that recurse over it
+/// (`to_mat_kron`, [`eval`](mod@crate::eval), the [printer](mod@crate::text::print))
+/// recurse once per level, so a pathologically wide spider can exhaust the stack
+/// downstream — an engine-wide property of the term representation, matching the
+/// note on the printer/interpreter. Construction itself is iterative and never
+/// recurses.
 #[must_use]
 pub fn spider<G: PropSignature>(m: usize, n: usize) -> PropExpr<FrobeniusOr<G>> {
-    if m == 1 && n == 1 {
-        return id(1);
+    if m == 1 {
+        return expand::<G>(n);
+    }
+    if n == 1 {
+        return collapse::<G>(m);
     }
     Free::compose(collapse::<G>(m), expand::<G>(n))
         .expect("invariant: collapse(m):m→1 meets expand(n):1→n at the single middle wire")
@@ -337,10 +371,21 @@ pub fn scfm_equations<G: PropSignature>() -> Vec<FrobeniusEquation<G>> {
 /// [#80](https://github.com/sustia-llc/catgraph/issues/80)). [`to_mat_kron`] is a
 /// separate **sound semantic** check, not a syntactic decision.
 ///
+/// # Equation order
+///
+/// User equations are added **before** the nine `E_frob` equations. Under the
+/// default [`NormalizeEngine::CongruenceClosure`](catgraph_applied::prop::presentation::NormalizeEngine)
+/// engine, insertion order is immaterial (congruence closure is order-invariant).
+/// Under [`NormalizeEngine::Structural`](catgraph_applied::prop::presentation::NormalizeEngine),
+/// rewrites apply in insertion order, so the order **is** observable — a caller
+/// that switches the engine via
+/// [`set_engine`](catgraph_applied::prop::presentation::Presentation::set_engine)
+/// should be aware user rewrites fire ahead of the SCFM ones.
+///
 /// # Errors
 ///
-/// Returns [`SyntaxError::Catgraph`] if any lifted user equation or any
-/// `E_frob` equation is arity-mismatched (surfaced transparently from
+/// Returns [`SyntaxError::Catgraph`] if any lifted user equation is arity-
+/// mismatched or ill-formed (surfaced transparently from [`lift_user`] or from
 /// [`add_equation`](catgraph_applied::prop::presentation::Presentation::add_equation)).
 /// The nine built-in equations are arity-matched by construction; an error here
 /// can only originate in a caller-supplied user equation.
@@ -349,7 +394,7 @@ pub fn hypergraph_presentation<G: PropSignature>(
 ) -> Result<Presentation<FrobeniusOr<G>>, SyntaxError> {
     let mut presentation = Presentation::<FrobeniusOr<G>>::new();
     for (lhs, rhs) in user_eqs {
-        presentation.add_equation(lift_user(&lhs), lift_user(&rhs))?;
+        presentation.add_equation(lift_user(lhs)?, lift_user(rhs)?)?;
     }
     for (lhs, rhs) in scfm_equations::<G>() {
         presentation.add_equation(lhs, rhs)?;
@@ -358,13 +403,40 @@ pub fn hypergraph_presentation<G: PropSignature>(
 }
 
 /// Compute `dim^exponent`, or a [`SyntaxError::DimensionOverflow`] if the power
-/// exceeds `usize` — no panic, no runaway allocation. A `k`-wire interface maps
-/// to the object of dimension `dim^k` (`dim^0 = 1`, the monoidal unit).
+/// exceeds `usize`. A `k`-wire interface maps to the object of dimension `dim^k`
+/// (`dim^0 = 1`, the monoidal unit).
 fn dim_pow(dim: usize, exponent: usize) -> Result<usize, SyntaxError> {
     u32::try_from(exponent)
         .ok()
         .and_then(|e| dim.checked_pow(e))
         .ok_or(SyntaxError::DimensionOverflow { dim, exponent })
+}
+
+/// Add two wire counts, reporting a [`SyntaxError::DimensionOverflow`] if the
+/// sum itself overflows `usize`. (Unreachable for constructible terms — it needs
+/// ~2⁶³ wires — but reported rather than silently wrapped. The `exponent` field
+/// carries `usize::MAX` as a "≥ this" marker since the true sum is unrepresentable.)
+fn checked_wire_sum(a: usize, b: usize, dim: usize) -> Result<usize, SyntaxError> {
+    a.checked_add(b).ok_or(SyntaxError::DimensionOverflow {
+        dim,
+        exponent: usize::MAX,
+    })
+}
+
+/// Guard that the **dense cell count** of a `src`-wire → `tgt`-wire morphism fits
+/// `usize`, returning its `(rows, cols) = (dim^src, dim^tgt)`.
+///
+/// The dense matrix has `rows · cols = dim^src · dim^tgt = dim^(src+tgt)` cells;
+/// guarding the single exponent `src + tgt` proves `rows`, `cols`, **and** their
+/// product all fit `usize`, so every downstream `MatKron` constructor / `kron` /
+/// matmul allocates a `Vec` whose capacity cannot overflow. This is a `usize`-
+/// overflow guard on the cell *count*, **not** memory-exhaustion protection: a
+/// huge-but-representable matrix (e.g. `dim^60` cells) still allocates, and that
+/// is the caller's responsibility.
+fn checked_cells(dim: usize, src: usize, tgt: usize) -> Result<(usize, usize), SyntaxError> {
+    let exponent = checked_wire_sum(src, tgt, dim)?;
+    dim_pow(dim, exponent)?;
+    Ok((dim_pow(dim, src)?, dim_pow(dim, tgt)?))
 }
 
 /// Map a Frobenius term to its image in [`MatKron(R)`](catgraph_applied::mat_kron),
@@ -412,9 +484,13 @@ fn dim_pow(dim: usize, exponent: usize) -> Result<usize, SyntaxError> {
 /// # Errors
 ///
 /// - [`SyntaxError::NonFrobenius`] if `expr` contains a `User(g)` generator.
-/// - [`SyntaxError::DimensionOverflow`] if a `dim^k` interface dimension
-///   overflows `usize` (e.g. a very wide `Identity`/`Braid` for the chosen
-///   `dim`).
+/// - [`SyntaxError::DimensionOverflow`] if the **dense cell count** `dim^(src +
+///   tgt)` of any node — including the products `dim^m · dim^n` in a `Braid`,
+///   `dim²` in `Mu`/`Delta`, and the `kron`/matmul results — overflows `usize`.
+///   The guard is threaded through every node (leaf, `kron`, and `compose`), so
+///   the sound checker never wraps into a wrong matrix or attempts an
+///   overflowing `Vec` allocation. It guards the cell *count*, not memory
+///   pressure: a huge-but-representable matrix still allocates.
 /// - [`SyntaxError::Catgraph`] if an interior composition's interface does not
 ///   meet (surfaced transparently from the `MatKron` matmul); this cannot arise
 ///   from a well-formed `PropExpr` built through [`Free`], only from a
@@ -427,28 +503,78 @@ where
     G: PropSignature,
     R: Rig,
 {
+    to_mat_kron_inner::<G, R>(expr, dim).map(|(matrix, _src, _tgt)| matrix)
+}
+
+/// Recursion behind [`to_mat_kron`], returning `(matrix, src_wires, tgt_wires)`.
+///
+/// Threading the wire counts is what makes the overflow guard **complete**: every
+/// node checks its own dense cell count (`dim^(src+tgt)`) via [`checked_cells`]
+/// *before* the constructor runs, so the product dimensions a naïve per-interface
+/// guard misses (`braiding`'s `a·b`, `mu`/`delta`'s `dim²`, `kron`'s and matmul's
+/// results) are all covered.
+fn to_mat_kron_inner<G, R>(
+    expr: &PropExpr<FrobeniusOr<G>>,
+    dim: usize,
+) -> Result<(MatKron<R>, usize, usize), SyntaxError>
+where
+    G: PropSignature,
+    R: Rig,
+{
     match expr {
-        PropExpr::Identity(k) => Ok(MatKron::identity(dim_pow(dim, *k)?)),
-        PropExpr::Braid(m, n) => Ok(MatKron::braiding(dim_pow(dim, *m)?, dim_pow(dim, *n)?)),
+        PropExpr::Identity(k) => {
+            let (rows, _cols) = checked_cells(dim, *k, *k)?;
+            Ok((MatKron::identity(rows), *k, *k))
+        }
+        PropExpr::Braid(m, n) => {
+            // A braid m+n → m+n; its braiding(dim^m, dim^n) matrix has
+            // (dim^m · dim^n)² = dim^(2(m+n)) cells. Guarding the wire sum proves
+            // dim^m, dim^n, and their squared product all fit.
+            let wires = checked_wire_sum(*m, *n, dim)?;
+            checked_cells(dim, wires, wires)?;
+            Ok((
+                MatKron::braiding(dim_pow(dim, *m)?, dim_pow(dim, *n)?),
+                wires,
+                wires,
+            ))
+        }
         PropExpr::Generator(g) => match g {
-            FrobeniusOr::Mu => Ok(MatKron::mu(dim)),
-            FrobeniusOr::Eta => Ok(MatKron::eta(dim)),
-            FrobeniusOr::Delta => Ok(MatKron::delta(dim)),
-            FrobeniusOr::Epsilon => Ok(MatKron::epsilon(dim)),
+            FrobeniusOr::Mu => {
+                checked_cells(dim, 2, 1)?;
+                Ok((MatKron::mu(dim), 2, 1))
+            }
+            FrobeniusOr::Eta => {
+                checked_cells(dim, 0, 1)?;
+                Ok((MatKron::eta(dim), 0, 1))
+            }
+            FrobeniusOr::Delta => {
+                checked_cells(dim, 1, 2)?;
+                Ok((MatKron::delta(dim), 1, 2))
+            }
+            FrobeniusOr::Epsilon => {
+                checked_cells(dim, 1, 0)?;
+                Ok((MatKron::epsilon(dim), 1, 0))
+            }
             FrobeniusOr::User(u) => Err(SyntaxError::NonFrobenius {
                 generator: format!("{u:?}"),
             }),
         },
         PropExpr::Compose(f, g) => {
-            let fm = to_mat_kron::<G, R>(f, dim)?;
-            let gm = to_mat_kron::<G, R>(g, dim)?;
+            let (fm, f_src, _f_tgt) = to_mat_kron_inner::<G, R>(f, dim)?;
+            let (gm, _g_src, g_tgt) = to_mat_kron_inner::<G, R>(g, dim)?;
+            // matmul allocates a dim^f_src × dim^g_tgt result — guard it even
+            // though each factor's own subtree already fit.
+            checked_cells(dim, f_src, g_tgt)?;
             // A matmul interface mismatch surfaces transparently as Catgraph.
-            Ok(fm.compose(&gm)?)
+            Ok((fm.compose(&gm)?, f_src, g_tgt))
         }
         PropExpr::Tensor(f, g) => {
-            let fm = to_mat_kron::<G, R>(f, dim)?;
-            let gm = to_mat_kron::<G, R>(g, dim)?;
-            Ok(fm.kron(&gm))
+            let (fm, f_src, f_tgt) = to_mat_kron_inner::<G, R>(f, dim)?;
+            let (gm, g_src, g_tgt) = to_mat_kron_inner::<G, R>(g, dim)?;
+            let src = checked_wire_sum(f_src, g_src, dim)?;
+            let tgt = checked_wire_sum(f_tgt, g_tgt, dim)?;
+            checked_cells(dim, src, tgt)?;
+            Ok((fm.kron(&gm), src, tgt))
         }
     }
 }

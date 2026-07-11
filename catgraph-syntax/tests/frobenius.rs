@@ -2,11 +2,12 @@
 //!
 //! Covers the S4 milestone law — the Hadamard SCFM on `R^dim` satisfies all
 //! **nine** Def 2.5 equations (`to_mat_kron` semantic check, Ex 2.16) — the #15
-//! soundness boundary (`eq_mod` over `E_frob` never claims a false inequality),
-//! the spider calculus (fusion, diagonal pattern, the `η;ε` empty spider, cup/cap
-//! parity with `MatKron`, the compact-closed snake), the `to_mat_kron` error
-//! paths (`User` out of domain, `dim^k` overflow), the textual round-trip over
-//! the `FrobeniusOr<Sig>` sum type, and the S3 `eval` interop seam.
+//! boundary (each `E_frob` axiom is provable by its own presentation), the spider
+//! calculus (fusion, diagonal pattern, the `η;ε` empty spider, cup/cap parity
+//! with `MatKron`, the compact-closed snake), the braid shuffle direction, the
+//! `to_mat_kron` error paths (`User` out of domain, cell-count overflow on the
+//! product paths), the reserved-token shadowing, the textual round-trip over the
+//! `FrobeniusOr<Sig>` sum type, and the S3 `eval` interop seam.
 
 mod common;
 
@@ -18,7 +19,7 @@ use catgraph_syntax::frobenius::{
     FrobeniusOr, cap, cup, hypergraph_presentation, scfm_equations, spider, to_mat_kron,
 };
 use catgraph_syntax::text::{GeneratorSyntax, parse, print};
-use common::{Sig, arb_expr, arb_frob_gen, arb_frob_leaf};
+use common::{ShadowSig, Sig, arb_expr, arb_frob_gen, arb_frob_leaf, g};
 use proptest::prelude::*;
 
 /// Map a Frobenius term to its `MatKron<i64>` image on `R^d` (turbofish shim).
@@ -46,35 +47,27 @@ fn scfm_nine_laws_hold_in_hadamard_matkron() {
     }
 }
 
-// ---- The #15 boundary: sound, syntactically incomplete -----------------------
+// ---- The #15 boundary: axioms are provable, completeness is not claimed ------
 
 #[test]
-fn scfm_boundary_is_sound_never_false() {
-    // eq_mod over E_frob is sound but incomplete (#15): Some(true) is a proof, a
-    // None is not a disproof, and Some(false) must NEVER occur (that would be a
-    // false inequality claim). We assert the soundness half and record the
-    // true-vs-None split for the log (the exact split is engine-internal and is
-    // deliberately NOT asserted — pinning it would freeze CC internals).
+fn e_frob_axioms_prove_themselves() {
+    // Each of the nine E_frob equations is an AXIOM of the presentation, so a
+    // correct congruence closure must identify its own two sides: eq_mod returns
+    // Ok(Some(true)) for every one. This pins axiom-provability — NOT completeness
+    // on DERIVED equalities (#15): a derived spider fusion may legitimately get
+    // None or Some(false) under the sound-but-incomplete engine, which is why
+    // to_mat_kron (the sound semantic checker) carries the fusion laws instead.
     let pres = hypergraph_presentation::<Sig>(Vec::<(PropExpr<Sig>, PropExpr<Sig>)>::new())
         .expect("E_frob is arity-matched");
-    let mut some_true = 0usize;
-    let mut none = 0usize;
-    for (lhs, rhs) in scfm_equations::<Sig>() {
-        match pres
-            .eq_mod(&lhs, &rhs)
-            .expect("eq_mod is infallible for this presentation")
-        {
-            Some(true) => some_true += 1,
-            None => none += 1,
-            Some(false) => panic!("#15 soundness violated: eq_mod claimed a false inequality"),
-        }
+    for (i, (lhs, rhs)) in scfm_equations::<Sig>().into_iter().enumerate() {
+        assert_eq!(
+            pres.eq_mod(&lhs, &rhs)
+                .expect("eq_mod is infallible for this presentation"),
+            Some(true),
+            "E_frob axiom {} should be provable by its own presentation",
+            i + 1
+        );
     }
-    assert_eq!(
-        some_true + none,
-        9,
-        "each equation is classified true-or-None"
-    );
-    println!("E_frob eq_mod split: Some(true) = {some_true}, None = {none}");
 }
 
 // ---- Spider calculus ---------------------------------------------------------
@@ -94,13 +87,13 @@ fn spider_has_all_equal_diagonal_pattern() {
     // basis index: rows/cols encode (a,b) as a*2+b, so only (0,0)→(0,0) and
     // (1,1)→(1,1) are 1 — the SCFM "all legs equal" spider.
     let s = mk(&spider::<Sig>(2, 2), 2);
-    assert_eq!((s.rows(), s.cols()), (4, 4));
-    for i in 0..4 {
-        for j in 0..4 {
-            let expected = i64::from((i == 0 && j == 0) || (i == 3 && j == 3));
-            assert_eq!(s.entries()[i][j], expected, "spider(2,2) entry [{i}][{j}]");
-        }
-    }
+    let expected: Vec<Vec<i64>> = vec![
+        vec![1, 0, 0, 0],
+        vec![0, 0, 0, 0],
+        vec![0, 0, 0, 0],
+        vec![0, 0, 0, 1],
+    ];
+    assert_eq!(s.entries(), expected.as_slice());
 }
 
 #[test]
@@ -123,17 +116,22 @@ fn spiders_fuse() {
 #[test]
 fn empty_spider_is_eta_then_epsilon() {
     // Design choice: spider(0,0) = η ; ε, by construction (structural equality).
-    let expected = Free::compose(
-        Free::generator(FrobeniusOr::<Sig>::Eta),
-        Free::generator(FrobeniusOr::<Sig>::Epsilon),
-    )
-    .expect("η:0→1 ; ε:1→0");
+    let expected = Free::compose(g(FrobeniusOr::<Sig>::Eta), g(FrobeniusOr::<Sig>::Epsilon))
+        .expect("η:0→1 ; ε:1→0");
     assert_eq!(spider::<Sig>(0, 0), expected);
 }
 
 #[test]
-fn identity_spider_is_id_one() {
-    // Design choice: spider(1,1) is the literal id(1) (the canonical identity spider).
+fn spider_early_returns_drop_the_identity_leg() {
+    // m == 1 returns expand(n) directly (top node is δ ; …, NOT a leading
+    // collapse(1) = id(1) compose); n == 1 returns collapse(m) directly. Together
+    // they subsume the identity: spider(1,1) = expand(1) = the literal id(1).
+    match spider::<Sig>(1, 2) {
+        PropExpr::Compose(left, _) => {
+            assert_eq!(*left, g(FrobeniusOr::<Sig>::Delta), "spider(1,2) = δ ; (…)");
+        }
+        other => panic!("spider(1,2) should be a compose δ ; (…), got {other:?}"),
+    }
     assert_eq!(spider::<Sig>(1, 1), Free::<FrobeniusOr<Sig>>::identity(1));
 }
 
@@ -159,11 +157,25 @@ fn compact_closed_snake() {
     }
 }
 
+// ---- Braid shuffle direction -------------------------------------------------
+
+#[test]
+fn braid_maps_with_correct_shuffle_direction() {
+    // Braid(m,n) ↦ braiding(dim^m, dim^n). The asymmetric case pins the argument
+    // order: an m/n swap would map to braiding(dim^n, dim^m), a different
+    // permutation — so braid(2,1) at dim 2 must be braiding(4,2), and must NOT
+    // equal braiding(2,4). Only braid(1,1) is symmetric, so this is the check a
+    // swapped mapping would slip past.
+    let got = mk(&Free::<FrobeniusOr<Sig>>::braid(2, 1), 2);
+    assert_eq!(got, MatKron::<i64>::braiding(4, 2));
+    assert_ne!(got, MatKron::<i64>::braiding(2, 4));
+}
+
 // ---- to_mat_kron error paths -------------------------------------------------
 
 #[test]
 fn user_generator_is_out_of_domain() {
-    let e = Free::generator(FrobeniusOr::User(Sig::Copy));
+    let e = g(FrobeniusOr::User(Sig::Copy));
     match to_mat_kron::<Sig, i64>(&e, 2) {
         Err(SyntaxError::NonFrobenius { generator }) => {
             assert!(generator.contains("Copy"), "got: {generator}");
@@ -173,15 +185,36 @@ fn user_generator_is_out_of_domain() {
 }
 
 #[test]
-fn dimension_overflow_errors_cleanly() {
-    // Identity(100) ↦ object dim^100; 2^100 overflows usize — a clean error, no
-    // panic and no attempt to allocate an astronomically large matrix.
-    let e = Free::<FrobeniusOr<Sig>>::identity(100);
-    match to_mat_kron::<Sig, i64>(&e, 2) {
+fn cell_count_overflow_errors_on_the_product_paths() {
+    // Identity(100) ↦ dim^(100+100) cells; 2^200 overflows usize.
+    match to_mat_kron::<Sig, i64>(&Free::<FrobeniusOr<Sig>>::identity(100), 2) {
         Err(SyntaxError::DimensionOverflow { dim, exponent }) => {
-            assert_eq!((dim, exponent), (2, 100));
+            assert_eq!((dim, exponent), (2, 200));
         }
-        other => panic!("expected DimensionOverflow, got {other:?}"),
+        other => panic!("Identity(100): expected DimensionOverflow, got {other:?}"),
+    }
+
+    // Braid(33,33) ↦ braiding(2^33, 2^33), a (2^33 · 2^33)² = 2^132-cell matrix —
+    // the PRODUCT path a per-interface guard would miss: each 2^33 interface fits,
+    // but the perfect-shuffle matrix it builds does not. The guard fires on the
+    // leaf before braiding allocates.
+    match to_mat_kron::<Sig, i64>(&Free::<FrobeniusOr<Sig>>::braid(33, 33), 2) {
+        Err(SyntaxError::DimensionOverflow { dim, exponent }) => {
+            assert_eq!((dim, exponent), (2, 132));
+        }
+        other => panic!("Braid(33,33): expected DimensionOverflow, got {other:?}"),
+    }
+
+    // Mu at a large dim ↦ mu(dim), a dim² × dim = dim³-cell matrix. At dim = 2^22
+    // that is 2^66 cells (> usize) even though the per-wire dim itself fits — the
+    // dim² product path the old per-interface guard did not check at all. The
+    // guard fires on the leaf before mu allocates.
+    let big_dim = 1usize << 22;
+    match to_mat_kron::<Sig, i64>(&g(FrobeniusOr::<Sig>::Mu), big_dim) {
+        Err(SyntaxError::DimensionOverflow { dim, exponent }) => {
+            assert_eq!((dim, exponent), (big_dim, 3));
+        }
+        other => panic!("Mu at dim 2^22: expected DimensionOverflow, got {other:?}"),
     }
 }
 
@@ -191,21 +224,34 @@ fn dimension_overflow_errors_cleanly() {
 fn parses_mixed_frobenius_and_user_tokens() {
     // Frobenius-only: mu ; delta : 2 → 2.
     let frob = parse::<FrobeniusOr<Sig>>("mu ; delta").expect("mu ; delta parses");
-    let expected_frob = Free::compose(
-        Free::generator(FrobeniusOr::<Sig>::Mu),
-        Free::generator(FrobeniusOr::Delta),
-    )
-    .expect("μ:2→1 ; δ:1→2");
+    let expected_frob =
+        Free::compose(g(FrobeniusOr::<Sig>::Mu), g(FrobeniusOr::Delta)).expect("μ:2→1 ; δ:1→2");
     assert_eq!(frob, expected_frob);
 
     // Mixed: Sig::Copy is 1 → 2 and mu is 2 → 1, so `copy ; mu` composes to 1 → 1.
     let mixed = parse::<FrobeniusOr<Sig>>("copy ; mu").expect("copy ; mu parses");
-    let expected_mixed = Free::compose(
-        Free::generator(FrobeniusOr::User(Sig::Copy)),
-        Free::generator(FrobeniusOr::<Sig>::Mu),
-    )
-    .expect("copy:1→2 ; μ:2→1");
+    let expected_mixed = Free::compose(g(FrobeniusOr::User(Sig::Copy)), g(FrobeniusOr::<Sig>::Mu))
+        .expect("copy:1→2 ; μ:2→1");
     assert_eq!(mixed, expected_mixed);
+}
+
+#[test]
+fn frobenius_names_shadow_user_tokens() {
+    // `parse_token` tries the four Frobenius names FIRST, so a user generator
+    // spelled `mu` (here ShadowSig) is shadowed: `"mu"` parses to Mu, never
+    // User(ShadowSig).
+    assert_eq!(
+        FrobeniusOr::<ShadowSig>::parse_token("mu"),
+        Some(FrobeniusOr::Mu)
+    );
+    // Consequently the clause-1 round-trip breaks for that User generator: it
+    // prints `"mu"` but reparses to Mu (the S2 BadSig-style negative check).
+    let shadowed = FrobeniusOr::User(ShadowSig);
+    assert_eq!(shadowed.print_token(), "mu");
+    assert_ne!(
+        FrobeniusOr::<ShadowSig>::parse_token(&shadowed.print_token()),
+        Some(shadowed)
+    );
 }
 
 proptest! {
