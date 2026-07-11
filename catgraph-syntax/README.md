@@ -13,12 +13,10 @@ layer). Item-by-item map in [`docs/ANCHORS.md`](docs/ANCHORS.md).
 
 ## Scope
 
-Delivered incrementally, one phase per branch. The full **S1–S5** surface is
-now shipped: **S1–S2 give the round-trip textual surface (printer + parser +
-presentation files); S3 adds the interpreter; S4 adds the Frobenius layer; S5
-adds the typed builder** — so the
-[#5](https://github.com/sustia-llc/catgraph/issues/5) milestone *surface* is
-complete. Post-milestone follow-ups (multi-sorted props
+Delivered incrementally, one phase per branch — the full **S1–S5** surface is
+shipped, completing the
+[#5](https://github.com/sustia-llc/catgraph/issues/5) milestone *surface*.
+Post-milestone follow-ups (multi-sorted props
 [#79](https://github.com/sustia-llc/catgraph/issues/79), the Cospan-valued
 complete-functor spike [#80](https://github.com/sustia-llc/catgraph/issues/80),
 serde on `PropExpr` [#81](https://github.com/sustia-llc/catgraph/issues/81))

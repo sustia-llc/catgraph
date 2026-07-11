@@ -8,7 +8,7 @@ applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions
 > have landed on a thin
 > [DeepCausality](https://github.com/deepcausality-rs/deep_causality) algebraic
 > substrate (`deep_causality_num` / `deep_causality_haft`), with `nalgebra` kept
-> optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.2.1)
+> optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.3.0)
 > and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, the Arrow
 > presentation frontend, #5): the S1–S5 milestone surface is **complete**
 > (printer, parser + presentation files, interpreter, Frobenius layer, Traced
