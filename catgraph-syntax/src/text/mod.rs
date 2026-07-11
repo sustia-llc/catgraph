@@ -1,21 +1,33 @@
 //! Textual surface for free-prop terms.
 //!
-//! Phase S1 ships the **printer**: a structural, total renderer of
-//! [`PropExpr<G>`](catgraph_applied::prop::PropExpr) into the concrete syntax
+//! The surface is a lossless round-trip pair over the concrete syntax
 //! `expr := term (';' term)*`, `term := factor (('⊗' | '*') factor)*`,
-//! `factor := id(n) | braid(m,n) | GENERATOR | '(' expr ')'`. The printer
-//! emits ASCII only (`*`); the Unicode tensor `⊗` is an **input** synonym the
-//! Phase-S2 parser accepts per the approved design — an S2 implementation
-//! that lexed only `*` would silently narrow the design's input alphabet.
-//! The matching recursive-descent parser (and the round-trip law tests) land
-//! in Phase S2.
+//! `factor := id(n) | braid(m,n) | GENERATOR | '(' expr ')'`:
+//!
+//! - the **printer** ([`print::Pretty`] / [`print::print`]) is a structural,
+//!   total renderer of [`PropExpr<G>`](catgraph_applied::prop::PropExpr). It
+//!   emits ASCII only (`*`); the Unicode tensor `⊗` is an **input** synonym.
+//! - the **parser** ([`parse::parse`]) is a hand-rolled recursive-descent
+//!   reader accepting both `*` and `⊗`, building exclusively through the
+//!   [`Free`](catgraph_applied::prop::Free) smart constructors so every parse
+//!   is arity-sound by construction. Nesting depth is bounded
+//!   ([`parse::MAX_NESTING_DEPTH`], untrusted input).
+//! - [`presentation`] renders and reads presentation files
+//!   (one `lhs = rhs` per line, Seven Sketches Def 5.33).
+//!
+//! The round-trip target is `parse(&print(e)) == Ok(e)` structurally (same
+//! tree; the printer never normalises). It is machine-checked by the S2
+//! proptests.
 //!
 //! The bridge between a signature's generators and their concrete tokens is the
-//! [`GeneratorSyntax`] trait; the printer itself is [`print::Pretty`] /
-//! [`print::print`].
+//! [`GeneratorSyntax`] trait.
 
+pub mod parse;
+pub mod presentation;
 pub mod print;
 
+pub use parse::{MAX_NESTING_DEPTH, parse};
+pub use presentation::{parse_presentation, print_presentation};
 pub use print::{Pretty, print};
 
 use catgraph_applied::prop::PropSignature;
@@ -33,8 +45,10 @@ use catgraph_applied::prop::PropSignature;
 /// 1. `Self::parse_token(&g.print_token()) == Some(g)` — printing a generator
 ///    and parsing the result recovers the original generator; and
 /// 2. **`print_token` returns a single lexical atom**: it must contain no
-///    `;`, `*`, `⊗`, parenthesis, or whitespace, and must not equal the
-///    reserved grammar keywords **`id`** or **`braid`**.
+///    `;`, `*`, `⊗`, `=`, parenthesis, or whitespace, and must not equal the
+///    reserved grammar keywords **`id`** or **`braid`**. (`=` is reserved as
+///    the presentation-file equation separator; the parser's lexer treats it
+///    as a delimiter, so a token containing it cannot re-lex as one atom.)
 ///
 /// Both clauses are load-bearing. The printer emits tokens **verbatim, with no
 /// validation or escaping** — a token violating clause 2 produces output that

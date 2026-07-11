@@ -7,8 +7,8 @@
 //! Phase 6 milestone). The crate never re-derives the term AST or the decision
 //! procedures — [`PropExpr<G>`](catgraph_applied::prop::PropExpr), the
 //! [`Free`](catgraph_applied::prop::Free) smart constructors, `smc_nf`, and
-//! `eq_mod` all live in applied; syntax adds the *textual* layer (printer now,
-//! parser and interpreter in later phases).
+//! `eq_mod` all live in applied; syntax adds the *textual* layer (printer and
+//! parser now, interpreter in later phases).
 //!
 //! Anchors: Fong & Spivak 2018, *Seven Sketches in Compositionality*
 //! (Def 5.25 = prop signature / `Free(G)`; Def 5.30 = a `G`-generated prop
@@ -52,4 +52,5 @@
 
 pub mod arrow_seam;
 pub mod errors;
+pub mod sfg_syntax;
 pub mod text;
