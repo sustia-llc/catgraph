@@ -189,6 +189,115 @@ fn hom_coherence_verifiers_pass_for_a_non_homomorphism() {
     );
 }
 
+/// **The full monad-algebra-homomorphism certification recipe — end to end.**
+/// CDL Def 2.3 (algebra laws) + Def 2.5 (hom square); Mac Lane CWM VI.2.
+///
+/// Certifying "`f` is a homomorphism between *lawful* Eilenberg–Moore algebras"
+/// is a **three-part** conjunction — no single verifier decides it (the ⚠️ scope
+/// note on [`MonadAlgebraHom`]: the coherence verifiers probe the ambient
+/// structure, not `f`; only the square discriminates):
+///
+/// 1. **source algebra lawful** — `verify_unit_law` + `verify_assoc_law`;
+/// 2. **target algebra lawful** — the same two, after rewrapping the hom's bare
+///    [`FAlgebra`] field as a [`MonadAlgebra`] (`MonadAlgebra::new(hom.algebra_hom.to.clone())`
+///    — the mildly unergonomic step #67 flags);
+/// 3. **the hom square** — `hom.algebra_hom.verify_commutes` (CDL Def 2.5).
+///
+/// This test runs the composite `(source_lawful, target_lawful, square)` tuple
+/// positively (the abs-value hom → `(true, true, true)`) and against three
+/// negatives that each fail **exactly one** part while the other two pass —
+/// proving the recipe is a genuine three-way conjunction, not any single check
+/// masquerading as certification.
+#[test]
+fn full_monad_algebra_hom_certification_recipe() {
+    type Hom = MonadAlgebraHom<Z2Endo, Vec<f64>, Vec<f64>, Z2Action, Z2Action, VecMap>;
+
+    // Non-empty carriers throughout: `drop_action`'s unit-law violation only
+    // shows on a non-empty carrier (`a(η([])) = [] = []` holds vacuously), and
+    // `first_coord` panics on the empty vector.
+    fn carriers() -> [Vec<f64>; 2] {
+        [vec![1.0_f64, -2.0, 3.0], vec![-4.5_f64, 6.0]]
+    }
+
+    /// Run the three-part recipe, returning `(source_lawful, target_lawful,
+    /// square)`. Structure maps are sampled (caller-sampled honesty), so
+    /// "lawful"/"commutes" means "holds on every sample".
+    fn certify(hom: &Hom) -> (bool, bool, bool) {
+        // Rewrap the bare `FAlgebra` fields as `MonadAlgebra`s to reach the
+        // unit/assoc verifiers (the ergonomic wrinkle #67 notes).
+        let source = MonadAlgebra::new(hom.algebra_hom.from.clone());
+        let target = MonadAlgebra::new(hom.algebra_hom.to.clone());
+
+        let lawful = |alg: &MonadAlgebra<Z2Endo, Vec<f64>, Z2Action>| {
+            carriers().iter().all(|x| alg.verify_unit_law(x.clone()))
+                && [false, true].iter().all(|&g1| {
+                    [false, true].iter().all(|&g2| {
+                        alg.verify_assoc_law((Z2Group(g1), (Z2Group(g2), carriers()[0].clone())))
+                    })
+                })
+        };
+        let square = carriers().iter().all(|x| {
+            [false, true]
+                .iter()
+                .all(|&g| hom.algebra_hom.verify_commutes((Z2Group(g), x.clone())))
+        });
+        (lawful(&source), lawful(&target), square)
+    }
+
+    // Constant-empty maps: `drop_action` is an unlawful algebra structure map;
+    // `drop_map` is the object map that makes the square commute against it
+    // (both sides collapse to `[]`), isolating a single failing part.
+    fn drop_action((_g, _x): (Z2Group, Vec<f64>)) -> Vec<f64> {
+        Vec::new()
+    }
+    fn drop_map(_x: Vec<f64>) -> Vec<f64> {
+        Vec::new()
+    }
+    let lawful_from = || FAlgebra::new(vec![0.0_f64], negation_action as Z2Action);
+    let lawful_to = || FAlgebra::new(vec![0.0_f64], trivial_action as Z2Action);
+    let unlawful = || FAlgebra::new(vec![0.0_f64], drop_action as Z2Action);
+
+    // Positive: abs-value hom (Example 2.6) — all three parts hold.
+    assert_eq!(
+        certify(&z2_monad_hom(abs_map as VecMap)),
+        (true, true, true),
+        "abs-value hom between lawful negation/trivial algebras is fully certified"
+    );
+
+    // Negative — square only fails: lawful algebras, non-hom map `first_coord`.
+    assert_eq!(
+        certify(&z2_monad_hom(first_coord as VecMap)),
+        (true, true, false),
+        "first_coord: both algebras lawful, but the hom square fails"
+    );
+
+    // Negative — source only fails: unlawful source, square-commuting `drop_map`,
+    // lawful target.
+    let bad_source: Hom = MonadAlgebraHom::new(FAlgebraHom::new(
+        unlawful(),
+        lawful_to(),
+        drop_map as VecMap,
+    ));
+    assert_eq!(
+        certify(&bad_source),
+        (false, true, true),
+        "unlawful source algebra fails part 1 alone (target lawful, square commutes)"
+    );
+
+    // Negative — target only fails: lawful source, square-commuting `drop_map`,
+    // unlawful target.
+    let bad_target: Hom = MonadAlgebraHom::new(FAlgebraHom::new(
+        lawful_from(),
+        unlawful(),
+        drop_map as VecMap,
+    ));
+    assert_eq!(
+        certify(&bad_target),
+        (true, false, true),
+        "unlawful target algebra fails part 2 alone (source lawful, square commutes)"
+    );
+}
+
 /// The symmetric group `S₃` as index-permutation arrays: `self.0[i]` is the
 /// image of `i`. Composition is right-to-left (`(g1 · g2)(i) = g1(g2(i))`),
 /// matching the group-action convention `g1 ▶ (g2 ▶ x) = (g1 · g2) ▶ x`.
