@@ -45,6 +45,32 @@
 //! `catgraph_dl::free_monad::tree_endo::*` for downstream consumers, so the
 //! crate root surface stays focused on the categorical primitives.
 //!
+//! ## Relationship to haft 0.4.0's `Free` / `FreeWitness` (#76)
+//!
+//! haft 0.4.0 newly ships a crate-root free monad — `Free<F, A>` (`Pure |
+//! Suspend`, `alloc`-gated) + `FreeWitness` — structurally the same
+//! free-monad-over-endofunctor construction as [`FreeMnd`]. Under #12's "adopt
+//! haft witnesses, drop hand-rolled equivalents" principle this looks like a
+//! duplication to collapse. It is **deliberately not collapsed** (decision
+//! recorded on [#76](https://github.com/sustia-llc/catgraph/issues/76));
+//! [`FreeMnd`] / [`CofreeCmnd`] stay native. Why:
+//!
+//! 1. **Equality.** haft's `Free` ships *no* `Clone`/`Debug`/`PartialEq`/`Eq`
+//!    (it is "compared by folding"). [`CofreeCmnd`]'s structural equality is
+//!    exercised directly (`tests/free_monad_bijections.rs::cofree_cmnd_smoke`
+//!    asserts `==`), and [`FreeMnd`] carries the matching manual impls for
+//!    symmetry — adopting `Free` would forfeit both.
+//! 2. **No cofree twin.** haft has no `CofreeCmnd` counterpart. Adopting `Free`
+//!    for the monad side alone would split the matched CDL Prop-B.18 (co)algebra
+//!    pair that this module is built around.
+//! 3. **Minimal carrier.** [`FreeMnd`]/[`CofreeCmnd`] are deliberately minimal
+//!    inductive carriers (`pure`/`roll`/`new`) anchored to CDL Prop B.18; haft's
+//!    `Free`/`FreeWitness` carry an algebraic-effects `bind`/`map`/`fold`/`lift`
+//!    surface these carriers do not need.
+//!
+//! The seam ([`crate::endofunctor`]) therefore does **not** re-export haft's
+//! `Free`; the two coexist by design, not by oversight.
+//!
 //! ## Outstanding work
 //!
 //! The free-monad-side algebra-homomorphism unroller (CDL Remark 2.13 —

@@ -43,8 +43,28 @@
 //! 10. `recursive_nn_equivalent_to_free_mnd_unroller` — same,
 //!     dual-direction check for trees: `unroll(cell, tree) ==
 //!     unroll_via_free_mnd(cell, tree_to_free_mnd(tree))`.
+//! 11. `unfolding_rnn_equivalent_to_cofree_cmnd_unroller` — coalgebra-direction analogue (CDL Remark H.6, App I.3): bounded unroll equals the `CofreeCmnd<OptionWitness, O>` prefix walk from the same seed.
+//! 12. `mealy_cell_equivalent_to_cofree_cmnd_unroller` — same for Mealy (App I.4); input-driven prefix, length = `inputs.len()`.
+//! 13. `moore_cell_equivalent_to_cofree_cmnd_unroller` — same for Moore (App I.5); output-then-step prefix.
 //!
-//! Total: 10 tests (the spec asked for at least 8).
+//! Total: 13 tests + 5 proptests (the spec asked for at least 8). The three
+//! coalgebra tests each get a proptest lift; see "Coalgebra-direction anchor".
+//!
+//! ## Coalgebra-direction anchor (#64)
+//!
+//! The algebra direction (tests 1-3, 9-10) uses `FreeMnd` = the *initial*
+//! algebra of the free monad on `1 + A × −` (CDL Remark 2.13 / Prop B.18); tests
+//! 4-7 are the behavioural coalgebra-wrapper checks. Its
+//! dual — CDL **Remark H.6**: *"streams are a terminal object in the category of
+//! `(O × −)`-coalgebras"* — governs the three coalgebra wrappers
+//! (`UnfoldingRnn`/`MealyCell`/`MooreCell`, CDL App I.3/I.4/I.5). We witness that
+//! dual with `CofreeCmnd<OptionWitness, O>`: a **bounded** non-empty stream
+//! prefix (tail `None` terminates; a top-level `Option` carries the empty,
+//! depth-0 case). The truly-infinite stream carrier stays deferred behind
+//! `Lazy`/`Thunk` (see the `CofreeCmnd` module doc; #36-adjacent), so these tests
+//! assert the finite-depth prefix only. (Anchor note: the issue body's "Remark
+//! 2.13 dual / App B + App J" was imprecise — the exact dual statement is
+//! Remark H.6 and the architectures live in App I; corrected here and on #64.)
 
 #![allow(
     clippy::float_cmp,
@@ -56,9 +76,10 @@
 
 use catgraph_dl::Either;
 use catgraph_dl::architectures::{FoldingRnn, MealyCell, MooreCell, RecursiveNn, UnfoldingRnn};
-use catgraph_dl::free_monad::FreeMnd;
+use catgraph_dl::endofunctor::OptionWitness;
 use catgraph_dl::free_monad::list_endo::{ListEndo, free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, TreeEndo, tree_to_free_mnd};
+use catgraph_dl::free_monad::{CofreeCmnd, FreeMnd};
 
 use proptest::prelude::*;
 
@@ -128,6 +149,69 @@ fn leftmost_leaf_payload(t: &FreeMnd<TreeEndo<u8>, core::convert::Infallible>) -
             },
         }
     }
+}
+
+// ---- Coalgebra direction (#64): the CofreeCmnd stream-prefix carrier ---------
+//
+// `CofreeCmnd<OptionWitness, O>` is the bounded, non-empty prefix of the terminal
+// `(O × −)`-coalgebra (streams; CDL Remark H.6): `head : O`, `tail : Option<Self>`
+// — `None` terminates the prefix. The empty (depth-0) case is a top-level
+// `Option`, since a stream node always carries a head. These mirror the
+// `unroll_*_via_free_mnd` walkers on the algebra side: the wrapper's bounded
+// output must equal the walk of the prefix built from the same seed.
+
+/// A bounded stream prefix over `O` — the coalgebra-direction dual of the
+/// `FreeMnd<ListEndo<_>, ()>` cons tower.
+type StreamPrefix<O> = CofreeCmnd<OptionWitness, O>;
+
+/// Walk a bounded `CofreeCmnd<OptionWitness, O>` prefix into its observed output
+/// sequence — the counit-then-tail projection, collected left to right. `None`
+/// (the depth-0 / empty case) yields `[]`.
+fn cofree_prefix_to_vec<O>(prefix: Option<StreamPrefix<O>>) -> Vec<O> {
+    let mut out = Vec::new();
+    let mut cur = prefix;
+    while let Some(node) = cur {
+        out.push(node.head);
+        cur = *node.tail; // `tail : Box<Option<StreamPrefix<O>>>`
+    }
+    out
+}
+
+/// Unfold a **state-driven** stream prefix (the `UnfoldingRnn` shape): emit
+/// `step(s).0` at each state, advance to `step(s).1`, for `depth` layers. The
+/// bounded anamorphism into the terminal `(O × −)`-coalgebra.
+fn unfold_stream<S: Clone, O>(
+    seed: S,
+    step: impl Fn(S) -> (O, S),
+    depth: usize,
+) -> Option<StreamPrefix<O>> {
+    if depth == 0 {
+        return None;
+    }
+    let (head, next) = step(seed);
+    Some(CofreeCmnd::new(head, unfold_stream(next, step, depth - 1)))
+}
+
+/// Unfold an **input-driven** stream prefix (the `MealyCell` / `MooreCell`
+/// shape): consume the inputs left to right, emitting `step(s, i).0` and
+/// advancing to `step(s, i).1` per input. Prefix length = `inputs.len()` (empty
+/// inputs → `None` → `[]`).
+fn unfold_driven<S, I, O>(
+    seed: S,
+    inputs: Vec<I>,
+    step: impl Fn(S, I) -> (O, S),
+) -> Option<StreamPrefix<O>> {
+    let mut iter = inputs.into_iter();
+    fn go<S, I: Iterator, O>(
+        state: S,
+        iter: &mut I,
+        step: &impl Fn(S, I::Item) -> (O, S),
+    ) -> Option<StreamPrefix<O>> {
+        let input = iter.next()?;
+        let (head, next) = step(state, input);
+        Some(CofreeCmnd::new(head, go(next, iter, step)))
+    }
+    go(seed, &mut iter, &step)
 }
 
 /// Bounded-depth `BinaryTree<u8>` strategy for the tree-direction proptest.
@@ -540,6 +624,102 @@ fn recursive_nn_equivalent_to_free_mnd_unroller() {
     }
 }
 
+/// **Test 11 — `CofreeCmnd`-equivalence for `UnfoldingRnn`.** (Coalgebra
+/// direction; CDL Remark H.6, App I.3.)
+///
+/// `UnfoldingRnn::unroll_to_vec(cell, seed, depth)` MUST equal the walk of the
+/// depth-`depth` `CofreeCmnd<OptionWitness, O>` prefix unfolded from the same
+/// seed with the same `(cell_o, cell_n)` step — the wrapper's output IS the
+/// finite prefix of the unique coalgebra hom into `Stream(O)`. Counter cell
+/// (`cell_o = id`, `cell_n = +1`), the same fixture as test 4; sweeps the
+/// depth-0 empty edge.
+#[test]
+fn unfolding_rnn_equivalent_to_cofree_cmnd_unroller() {
+    type CellO = fn((i64, i64)) -> i64;
+    type CellN = fn((i64, i64)) -> i64;
+    let cell: UnfoldingRnn<i64, i64, CellO, CellN, i64> =
+        UnfoldingRnn::new(0_i64, |(_p, s)| s, |(_p, s)| s + 1);
+    let step = |s: i64| {
+        (
+            (cell.cell_o)((cell.parameter, s)),
+            (cell.cell_n)((cell.parameter, s)),
+        )
+    };
+
+    for (seed, depth) in [(0_i64, 5_usize), (7, 1), (-2, 4), (0, 0)] {
+        let direct = UnfoldingRnn::unroll_to_vec(&cell, seed, depth);
+        let via_cofree = cofree_prefix_to_vec(unfold_stream(seed, step, depth));
+        assert_eq!(
+            direct, via_cofree,
+            "UnfoldingRnn::unroll_to_vec(cell, {seed}, {depth}) MUST equal the CofreeCmnd prefix walk"
+        );
+    }
+}
+
+/// **Test 12 — `CofreeCmnd`-equivalence for `MealyCell`.** (Coalgebra
+/// direction; CDL Remark H.6, App I.4.)
+///
+/// `MealyCell::run(cell, seed, inputs)` MUST equal the walk of the input-driven
+/// `CofreeCmnd<OptionWitness, O>` prefix (length = `inputs.len()`). Stateful
+/// counter cell (`|i| (s + i, s + 1)`), the same fixture as test 6; sweeps the
+/// empty-input edge.
+#[test]
+fn mealy_cell_equivalent_to_cofree_cmnd_unroller() {
+    let cell: MealyCell<(), i64, _, i64, i64> =
+        MealyCell::new((), |((), s): ((), i64)| move |i: i64| (s + i, s + 1));
+    let step = |s: i64, i: i64| ((cell.cell)((cell.parameter, s)))(i);
+
+    for (seed, inputs) in [
+        (0_i64, vec![10_i64, 20, 30]),
+        (5, vec![1, 1, 1]),
+        (0, Vec::<i64>::new()),
+    ] {
+        let direct = MealyCell::run(&cell, seed, inputs.clone());
+        let via_cofree = cofree_prefix_to_vec(unfold_driven(seed, inputs.clone(), step));
+        assert_eq!(
+            direct, via_cofree,
+            "MealyCell::run(cell, {seed}, {inputs:?}) MUST equal the CofreeCmnd prefix walk"
+        );
+    }
+}
+
+/// **Test 13 — `CofreeCmnd`-equivalence for `MooreCell`.** (Coalgebra
+/// direction; CDL Remark H.6, App I.5.)
+///
+/// `MooreCell::run(cell, seed, inputs)` MUST equal the walk of the input-driven
+/// `CofreeCmnd<OptionWitness, O>` prefix. Output-then-step cell (`cell_o(s) =
+/// 2s`, `cell_n(s, _) = s + 1`), the same fixture as test 7; the head emitted at
+/// each node is the pre-step output, exactly Moore semantics. Sweeps the
+/// empty-input edge.
+#[test]
+fn moore_cell_equivalent_to_cofree_cmnd_unroller() {
+    type CellO = fn(((), i64)) -> i64;
+    type CellN = fn(((), i64, ())) -> i64;
+    let cell: MooreCell<(), i64, CellO, CellN, (), i64> =
+        MooreCell::new((), |((), s)| s * 2, |((), s, ())| s + 1);
+    let step = |s: i64, i: ()| {
+        (
+            (cell.cell_o)((cell.parameter, s)),
+            (cell.cell_n)((cell.parameter, s, i)),
+        )
+    };
+
+    for (seed, inputs) in [
+        (0_i64, vec![(); 3]),
+        (10, vec![(); 4]),
+        (7, Vec::<()>::new()),
+    ] {
+        let direct = MooreCell::run(&cell, seed, inputs.clone());
+        let via_cofree = cofree_prefix_to_vec(unfold_driven(seed, inputs.clone(), step));
+        assert_eq!(
+            direct,
+            via_cofree,
+            "MooreCell::run(cell, {seed}, {} inputs) MUST equal the CofreeCmnd prefix walk",
+            inputs.len()
+        );
+    }
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
@@ -572,5 +752,62 @@ proptest! {
         let direct = RecursiveNn::unroll(&cell, tree.clone());
         let via_free_mnd = unroll_tree_via_free_mnd(&cell, tree_to_free_mnd(tree));
         prop_assert_eq!(direct, via_free_mnd);
+    }
+
+    /// **`CofreeCmnd`-equivalence proptest — `UnfoldingRnn` (coalgebra).** CDL
+    /// Remark H.6. Counter cell with wrapping advance so arbitrary seeds can't
+    /// overflow; the bounded unroll agrees with the `CofreeCmnd<OptionWitness,
+    /// i64>` prefix walk on every seed/depth. Lifts test 11.
+    #[test]
+    fn unfolding_rnn_cofree_equivalence_proptest(
+        seed in any::<i64>(),
+        depth in 0..=16_usize,
+    ) {
+        type CellO = fn((i64, i64)) -> i64;
+        type CellN = fn((i64, i64)) -> i64;
+        let cell: UnfoldingRnn<i64, i64, CellO, CellN, i64> =
+            UnfoldingRnn::new(0_i64, |(_p, s)| s, |(_p, s)| s.wrapping_add(1));
+        let step = |s: i64| ((cell.cell_o)((cell.parameter, s)), (cell.cell_n)((cell.parameter, s)));
+        let direct = UnfoldingRnn::unroll_to_vec(&cell, seed, depth);
+        let via_cofree = cofree_prefix_to_vec(unfold_stream(seed, step, depth));
+        prop_assert_eq!(direct, via_cofree);
+    }
+
+    /// **`CofreeCmnd`-equivalence proptest — `MealyCell` (coalgebra).** CDL
+    /// Remark H.6. Stateful counter with wrapping arithmetic; input-driven prefix
+    /// walk agrees with `run` on every seed/input sequence. Lifts test 12.
+    #[test]
+    fn mealy_cell_cofree_equivalence_proptest(
+        seed in any::<i64>(),
+        inputs in prop::collection::vec(any::<i64>(), 0..=16),
+    ) {
+        let cell: MealyCell<(), i64, _, i64, i64> = MealyCell::new(
+            (),
+            |((), s): ((), i64)| move |i: i64| (s.wrapping_add(i), s.wrapping_add(1)),
+        );
+        let step = |s: i64, i: i64| ((cell.cell)((cell.parameter, s)))(i);
+        let direct = MealyCell::run(&cell, seed, inputs.clone());
+        let via_cofree = cofree_prefix_to_vec(unfold_driven(seed, inputs, step));
+        prop_assert_eq!(direct, via_cofree);
+    }
+
+    /// **`CofreeCmnd`-equivalence proptest — `MooreCell` (coalgebra).** CDL
+    /// Remark H.6. Output-then-step cell with wrapping arithmetic; input-driven
+    /// prefix walk agrees with `run` on every seed/length. Lifts test 13.
+    #[test]
+    fn moore_cell_cofree_equivalence_proptest(
+        seed in any::<i64>(),
+        len in 0..=16_usize,
+    ) {
+        type CellO = fn(((), i64)) -> i64;
+        type CellN = fn(((), i64, ())) -> i64;
+        let cell: MooreCell<(), i64, CellO, CellN, (), i64> =
+            MooreCell::new((), |((), s)| s.wrapping_mul(2), |((), s, ())| s.wrapping_add(1));
+        let step =
+            |s: i64, i: ()| ((cell.cell_o)((cell.parameter, s)), (cell.cell_n)((cell.parameter, s, i)));
+        let inputs = vec![(); len];
+        let direct = MooreCell::run(&cell, seed, inputs.clone());
+        let via_cofree = cofree_prefix_to_vec(unfold_driven(seed, inputs, step));
+        prop_assert_eq!(direct, via_cofree);
     }
 }
