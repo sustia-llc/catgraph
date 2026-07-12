@@ -13,7 +13,7 @@
 //! - the closed `m × m` coupling table of `S` (extracted from the base
 //!   [`Coalition`]) — reused to border the candidate in one `O(m²)` pass,
 //! - the skeletal, `t`-scaled `ζ⁻¹ = μ` of `S` (the same Gaussian inverse
-//!   [`magnitude`](crate::magnitude::magnitude) computes) plus its row-sum
+//!   [`magnitude`] computes) plus its row-sum
 //!   ([`weighting`](crate::magnitude::weighting)) and column-sum
 //!   ([`coweighting`](crate::magnitude::coweighting)) vectors — reused in the
 //!   Schur-complement update below.
@@ -34,7 +34,7 @@
 //!   through-`x` shortcut) or the skeleton shrinks (`x` is a perfect clone), so
 //!   `ζ_S` is stale. We border the *closed* table in `O(m²)` (still skipping the
 //!   `O(m³)` fresh closure — the cached table plus `x`'s borders suffice) and
-//!   re-run the crate's shared skeletalize + [`magnitude`](crate::magnitude::magnitude)
+//!   re-run the crate's shared skeletalize + [`magnitude`]
 //!   helpers on the `(m+1)`-point space.
 //!
 //! # Numerical contract (#31 amendment, 2026-07-02)
@@ -42,7 +42,7 @@
 //! 1. **Base value bit-identical.** [`CoalitionEvaluator::base_value`] is `Σ μ`
 //!    over the cached skeletal ζ⁻¹, accumulated row-major exactly as
 //!    `magnitude` sums the Möbius inverse — `==` (exact) to
-//!    [`coalition_magnitude_from_couplings`] at the same `t`, since both invert
+//!    [`coalition_magnitude_from_couplings`](crate::coalition::coalition_magnitude_from_couplings) at the same `t`, since both invert
 //!    the identically-built scaled space and sum it the same way.
 //! 2. **Incremental value within tolerance.** [`CoalitionEvaluator::value_with`]
 //!    equals the fresh `Mag(S ∪ {x})` within relative tolerance
@@ -106,7 +106,7 @@ pub const INCREMENTAL_REL_TOL: f64 = 1e-9;
 /// residue, or a *near*-clone candidate (closed product `0.99999999`, escaping
 /// the exact-`1.0` skeletal-merge test) — dividing by a tiny `s` amplifies that
 /// residue past tolerance while fresh evaluation may legitimately error. Routing
-/// such borders through [`CoalitionEvaluator::value_with_slow`] (the same
+/// such borders through `CoalitionEvaluator::value_with_slow` (the same
 /// helpers fresh evaluation uses) gives them fresh-equivalent treatment: a
 /// finite value when well-defined, an `Err` exactly when the re-inversion is
 /// singular. `1e-12` sits far below any genuine coalition's `s` yet safely above
@@ -169,11 +169,11 @@ impl CoalitionEvaluator {
     /// Build an evaluator for coalition `S = members` over `agents`, at scale
     /// `t`, from a sparse coupling table.
     ///
-    /// Validation mirrors [`coalition_magnitude_from_couplings`] **exactly** —
+    /// Validation mirrors [`coalition_magnitude_from_couplings`](crate::coalition::coalition_magnitude_from_couplings) **exactly** —
     /// same order, same rejected cases — so an evaluator constructs iff that
     /// function would succeed on `(agents, couplings, members, t)`: member
     /// indices are validated first, then coupling indices, self-couplings, and
-    /// probabilities (via [`UnitInterval::new`]); the base [`Coalition`] is then
+    /// probabilities (via [`UnitInterval::new`](crate::UnitInterval::new)); the base [`Coalition`] is then
     /// built through the identical `HomMap` + [`Coalition::from_enriched`] path
     /// (restrict-then-close + skeletalize).
     ///
@@ -183,11 +183,11 @@ impl CoalitionEvaluator {
     /// - a `members` index is out of range for `agents`,
     /// - a coupling index is out of range, or a coupling is a self-loop
     ///   `(i, i, _)` (the identity axiom fixes the diagonal to `1.0`),
-    /// - some probability is outside `[0, 1]` (via [`UnitInterval::new`]),
+    /// - some probability is outside `[0, 1]` (via [`UnitInterval::new`](crate::UnitInterval::new)),
     /// - `members` is empty / has a duplicate / names a non-agent (from
     ///   [`Coalition::from_enriched`]), or
     /// - the `t`-scaled skeletal `ζ` of `S` is singular (from
-    ///   [`mobius_function`](crate::magnitude::mobius_function)).
+    ///   [`mobius_function`]).
     pub fn new<O>(
         agents: &[O],
         couplings: &[(usize, usize, f64)],
@@ -272,7 +272,7 @@ impl CoalitionEvaluator {
     }
 
     /// The cached fresh `Mag(S)` at the evaluator's `t` (contract point 1:
-    /// `==` exact to [`coalition_magnitude_from_couplings`]).
+    /// `==` exact to [`coalition_magnitude_from_couplings`](crate::coalition::coalition_magnitude_from_couplings)).
     #[must_use]
     pub fn base_value(&self) -> f64 {
         self.base_mag
@@ -320,7 +320,7 @@ impl CoalitionEvaluator {
     /// `k × k` block `ζ_S` is unchanged, so the bordered
     /// `ζ′ = [[ζ_S, u], [vᵀ, 1]]` has a blockwise (Schur) inverse. With
     /// `u[a] = exp(−t·d(rep_a → x))`, `v[a] = exp(−t·d(x → rep_a))` (the exact
-    /// exp route [`mobius_function`](crate::magnitude::mobius_function) uses —
+    /// exp route [`mobius_function`] uses —
     /// **not** `powf` — for ULP consistency with the cached `μ`; `0` when the
     /// coupling is `0`):
     ///
@@ -348,7 +348,7 @@ impl CoalitionEvaluator {
     ///
     /// A near-singular bordered `ζ′` (Schur complement `s` within
     /// [`SCHUR_SLOW_FALLBACK_TOL`] of singular) is routed through the slow path
-    /// rather than the closed form — see [`value_with_fast`](Self::value_with_fast).
+    /// rather than the closed form — see `value_with_fast`.
     ///
     /// # Errors
     ///
