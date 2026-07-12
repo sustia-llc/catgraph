@@ -58,10 +58,11 @@ All notable changes to this crate are documented here. Format follows
     tensor `⊗_R` is a different (closed) monoidal structure (unit `R¹`), not the
     parameter-concatenation gradient-based-learning `Para` uses.
   - **Law tests** — `tests/module_actegory_laws.rs` (deterministic + proptest):
-    Mac Lane pentagon / triangle / unitor coherence on `DirectSum` via the new
-    witness-generic `common::assert_direct_sum_coherence` (the `DirectSum`
-    analogue of `assert_monoidal_coherence`, which is `SetCategoryDefaults`- and
-    tuple-bound); the `R`-module axioms (`v + 0 = v`, `1 · v = v`, `0 · v = 0`,
+    Mac Lane pentagon / triangle / unitor coherence on `DirectSum` via
+    `common::assert_monoidal_coherence` (generic over `MonoidalCategory` since
+    [#65](https://github.com/sustia-llc/catgraph/issues/65); the initially-added
+    `DirectSum`-specific `assert_direct_sum_coherence` was folded into it);
+    the `R`-module axioms (`v + 0 = v`, `1 · v = v`, `0 · v = 0`,
     basis coherence) via `common::assert_f64_module_axioms` — the identities
     where `Zero` / `One` are load-bearing; and the concrete `⊕`-monoid laws
     (dimensions add, `R⁰` unit, associativity, `flatten`/`act` agreement) via
@@ -70,9 +71,24 @@ All notable changes to this crate are documented here. Format follows
     `±0.0`) for finite inputs — signed-zero bit patterns are **not** preserved
     (`0.0 · (-1.0) = -0.0`; `-0.0 + 0.0 = +0.0`; cf. #58); samples use the
     NaN-free `finite_f64` strategy.
+- **Coalgebra-direction unroller equivalence tests ([#64](https://github.com/sustia-llc/catgraph/issues/64)).**
+  `tests/architecture_unrollers.rs` gains three `CofreeCmnd`-equivalence tests
+  (+3 proptest lifts) for `UnfoldingRnn`/`MealyCell`/`MooreCell`: each bounded
+  unroll equals the walk of a `CofreeCmnd<OptionWitness, O>` stream prefix
+  unfolded from the same seed — witnessing the wrapper as the finite prefix of
+  the unique coalgebra hom into the terminal `(O × −)`-coalgebra (CDL Remark
+  H.6, App I.3/I.4/I.5). Test-only; no API change.
+- **`tests/THEOREM_MAP.md` law-test → paper-anchor registry ([#70](https://github.com/sustia-llc/catgraph/issues/70), Part 1).**
+  The correctness spine: every law test mapped to its paper anchor (the paper is
+  the proof layer; Kani deferred). New law tests update their row in the same PR.
 
 ### Documentation
 
+- **`FreeMnd`/`CofreeCmnd` kept native vs haft 0.4.0's `Free`/`FreeWitness`
+  ([#76](https://github.com/sustia-llc/catgraph/issues/76)).** Decision recorded
+  in the `free_monad` module doc: the native carriers stay (haft `Free` ships no
+  `Eq`/`Debug`, has no `CofreeCmnd` twin, and the minimal `pure`/`roll`/`new`
+  surface is deliberate); the seam does not re-export haft's `Free`. No API change.
 - **Ergonomics-batch verdicts ([#42](https://github.com/sustia-llc/catgraph/issues/42)).**
   Three "small ergonomics" items triaged; all resolve to documentation, no
   API change:
@@ -114,6 +130,19 @@ All notable changes to this crate are documented here. Format follows
 
 ### Changed — BREAKING
 
+- **`MonoidalCategory::tensor_morphisms` added ([#65](https://github.com/sustia-llc/catgraph/issues/65)).**
+  The `MonoidalCategory` trait gains a required applying-form morphism-tensor
+  method `fn tensor_morphisms<A, B, C, D>(&self, Self::Tensor<A, B>,
+  impl FnMut(A) -> C, impl FnMut(B) -> D) -> Self::Tensor<C, D>` (CDL §3.1 — the
+  morphism map of `⊗`). Breaking for any external implementor (no generic
+  default body is possible; the two in-tree impls — the `SetCategoryDefaults`
+  blanket `(a, b) ↦ (f(a), g(b))` and the direct `F64Monoidal` impl
+  `DirectSum(a, b) ↦ DirectSum(f(a), g(b))` — supply it). With the `α ⊗ id` /
+  `id ⊗ α` legs now expressible on the trait surface, the two per-instance
+  coherence checkers collapse into one generic
+  `common::assert_monoidal_coherence<M: MonoidalCategory>` exercising both the
+  `(Set, ×, 1)` tuple and `DirectSum` carriers, and the "spelled manually"
+  per-instance caveats are dropped.
 - **EndoFunctor→haft migration ([#12](https://github.com/sustia-llc/catgraph/issues/12)).**
   The hand-rolled `EndoFunctor` trait (a GAT `type Apply<X>` plus `fmap`) is
   removed in favour of `deep_causality_haft` v0.3.3's `HKT` (object map

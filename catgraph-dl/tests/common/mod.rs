@@ -25,9 +25,7 @@
 use core::marker::PhantomData;
 
 use catgraph_dl::algebra::{GroupActionEndo, Z2Group};
-use catgraph_dl::para::{
-    Actegory, DirectSum, F64Actegory, F64Module, F64Monoidal, MonoidalCategory, SetCategoryDefaults,
-};
+use catgraph_dl::para::{Actegory, DirectSum, F64Actegory, F64Module, MonoidalCategory};
 use catgraph_dl::{
     Container, EndoWitness, Functor, HKT, NaturalTransformation, NoConstraint, Pointed, Satisfies,
 };
@@ -217,146 +215,121 @@ where
     }
 }
 
-/// Assert the **pentagon** and **triangle** coherence laws (plus unitor
-/// sanity) for a `(Set, ×, 1)`-flavoured monoidal category `M` on four sample
-/// values. Mac Lane's coherence theorem; CDL §3.1 cites the monoidal structure
-/// of the parameter category.
-///
-/// `M: SetCategoryDefaults` pins the blanket bodies `Tensor<A, B> = (A, B)` and
-/// `Unit = ()`, so the two GATs normalise to concrete Rust tuples and the
-/// coherence isomorphisms are exact (bona-fide bijections in `Set`, not "up to
-/// iso"). The trait carries **no morphism-tensor operation** (see the
-/// `MonoidalCategory` rustdoc), so wherever a route needs `α ⊗ id` or
-/// `id ⊗ α` the component manipulation is spelled **manually** on the tuples.
-///
-/// - **Pentagon** — on `(((a, b), c), d)` the two routes from
-///   `((A⊗B)⊗C)⊗D` to `A⊗(B⊗(C⊗D))` agree:
-///   - route 1: `associate` at `(A⊗B, C, D)` then `associate` at `(A, B, C⊗D)`;
-///   - route 2: `(associate(A, B, C)) ⊗ id_D` (manual), then `associate` at
-///     `(A, B⊗C, D)`, then `id_A ⊗ associate(B, C, D)` (manual).
-/// - **Triangle** — on `((a, ()), b)`: `right_unitor ⊗ id_B` (manual) equals
-///   `id_A ⊗ left_unitor` after `associate` — both yield `(a, b)`.
-/// - **Unitor sanity** — `left_unitor(((), a)) == a`,
-///   `right_unitor((a, ())) == a`, `unit() == ()`.
-pub fn assert_monoidal_coherence<M: SetCategoryDefaults>(m: &M, a: i32, b: u8, c: i64, d: bool) {
-    // --- Pentagon ---------------------------------------------------------
-    // Route 1 (bottom): associate at (A⊗B, C, D), then at (A, B, C⊗D).
-    let start = (((a, b), c), d);
-    let r1_mid = m.associate::<(i32, u8), i64, bool>(start); // ((a, b), (c, d))
-    let route1 = m.associate::<i32, u8, (i64, bool)>(r1_mid); // (a, (b, (c, d)))
+/// Shorthand for the object-level tensor GAT of a monoidal category `M`, used
+/// to spell the nested turbofish/annotation types in
+/// [`assert_monoidal_coherence`] without the fully-qualified
+/// `<M as MonoidalCategory>::Tensor<..>` at every site.
+type Ten<M, A, B> = <M as MonoidalCategory>::Tensor<A, B>;
 
-    // Route 2 (top): (associate(A,B,C) ⊗ id_D), then associate(A, B⊗C, D),
-    // then (id_A ⊗ associate(B,C,D)). The `⊗ id` legs are spelled manually.
-    let (inner_abc, d2) = start; // inner_abc = ((a, b), c)
-    let assoc_abc = m.associate::<i32, u8, i64>(inner_abc); // (a, (b, c))
-    let step1 = (assoc_abc, d2); // ((a, (b, c)), d)
-    let step2 = m.associate::<i32, (u8, i64), bool>(step1); // (a, ((b, c), d))
-    let (a3, bcd) = step2; // a3 = a, bcd = ((b, c), d)
-    let route2 = (a3, m.associate::<u8, i64, bool>(bcd)); // (a, (b, (c, d)))
+/// Assert the **pentagon** and **triangle** coherence laws (plus unitor
+/// sanity) for **any** [`MonoidalCategory`] `M` on four sample values. Mac
+/// Lane's coherence theorem; CDL §3.1 (the parameter category `M` of
+/// `Para(M, C)` is monoidal), and — for the [`DirectSum`] carrier
+/// ([`F64Monoidal`](catgraph_dl::para::F64Monoidal)) — CDL Definition E.2
+/// (actegory coherence) / Example G.3 (the cartesian `⊕` structure of real
+/// vector spaces used by gradient-based-learning `Para(…)` constructions).
+///
+/// Generic over the trait: the `α ⊗ id` / `id ⊗ α` pentagon and triangle legs
+/// are expressed through [`MonoidalCategory::tensor_morphisms`] (the
+/// applying-form morphism tensor, issue #65), so the **one** checker serves
+/// both the `(Set, ×, 1)` tuple carrier
+/// ([`SetMonoidal`](catgraph_dl::para::SetMonoidal) and any
+/// `SetCategoryDefaults`-flavoured ZST, `Tensor<A, B> = (A, B)`, `Unit = ()`)
+/// and the [`DirectSum`] carrier ([`F64Monoidal`](catgraph_dl::para::F64Monoidal),
+/// `Tensor<A, B> = DirectSum<A, B>`, `Unit = ()`) without spelling the legs by
+/// hand per instance. For both shipped instances the associator/unitors are
+/// exact isomorphisms (bona-fide bijections, not "up to iso"), so the laws
+/// hold on the nose for arbitrary object types — the caller's `A`/`B`/`C`/`D`
+/// samples stand in for objects.
+///
+/// - **Pentagon** — on `((A⊗B)⊗C)⊗D` the two routes to `A⊗(B⊗(C⊗D))` agree:
+///   - route 1: `associate` at `(A⊗B, C, D)` then `associate` at `(A, B, C⊗D)`;
+///   - route 2: `associate(A, B, C) ⊗ id_D` (via `tensor_morphisms`), then
+///     `associate` at `(A, B⊗C, D)`, then `id_A ⊗ associate(B, C, D)` (via
+///     `tensor_morphisms`).
+///
+///   Two-routes-agree **is** the pentagon law (there is no carrier-agnostic
+///   "concrete re-association" target to compare against, unlike the earlier
+///   tuple-only checker).
+/// - **Triangle** — on `(A⊗I)⊗B`: `ρ ⊗ id_B` (via `tensor_morphisms`) equals
+///   `id_A ⊗ λ` after `associate` — both collapse the unit.
+/// - **Unitor sanity** — `left_unitor(I ⊗ a) == a` and
+///   `right_unitor(a ⊗ I) == a`.
+pub fn assert_monoidal_coherence<M, A, B, C, D>(m: &M, a: A, b: B, c: C, d: D)
+where
+    M: MonoidalCategory,
+    A: Clone + PartialEq + core::fmt::Debug,
+    B: Clone,
+    C: Clone,
+    D: Clone,
+    Ten<M, A, Ten<M, B, Ten<M, C, D>>>: PartialEq + core::fmt::Debug,
+    Ten<M, A, B>: PartialEq + core::fmt::Debug,
+{
+    // --- Pentagon ---------------------------------------------------------
+    // Two independent copies of the fully-left-nested start ((a⊗b)⊗c)⊗d;
+    // route 1 and route 2 each consume one.
+    let start1 = m.tensor_objects(
+        m.tensor_objects(m.tensor_objects(a.clone(), b.clone()), c.clone()),
+        d.clone(),
+    );
+    let start2 = m.tensor_objects(
+        m.tensor_objects(m.tensor_objects(a.clone(), b.clone()), c.clone()),
+        d.clone(),
+    );
+
+    // Route 1 (bottom): associate at (A⊗B, C, D), then at (A, B, C⊗D).
+    let r1_mid = m.associate::<Ten<M, A, B>, C, D>(start1); // (a⊗b) ⊗ (c⊗d)
+    let route1 = m.associate::<A, B, Ten<M, C, D>>(r1_mid); // a ⊗ (b ⊗ (c⊗d))
+
+    // Route 2 (top): (associate(A,B,C) ⊗ id_D) via tensor_morphisms, then
+    // associate(A, B⊗C, D), then (id_A ⊗ associate(B,C,D)) via tensor_morphisms.
+    let step_aid = m.tensor_morphisms(
+        start2,
+        |abc: Ten<M, Ten<M, A, B>, C>| m.associate::<A, B, C>(abc),
+        |d: D| d,
+    ); // (a ⊗ (b⊗c)) ⊗ d
+    let step_mid = m.associate::<A, Ten<M, B, C>, D>(step_aid); // a ⊗ ((b⊗c) ⊗ d)
+    let route2 = m.tensor_morphisms(
+        step_mid,
+        |a: A| a,
+        |bcd: Ten<M, Ten<M, B, C>, D>| m.associate::<B, C, D>(bcd),
+    ); // a ⊗ (b ⊗ (c⊗d))
 
     assert_eq!(route1, route2, "monoidal pentagon: two routes agree");
-    assert_eq!(
-        route1,
-        (a, (b, (c, d))),
-        "monoidal pentagon: exact re-association"
-    );
 
     // --- Triangle ---------------------------------------------------------
-    // Route A: (right_unitor ⊗ id_B) applied manually to ((a, ()), b).
-    let tri_start = ((a, ()), b);
-    let (a_unit, b_a) = tri_start; // a_unit = (a, ()), b_a = b
-    let route_a = (m.right_unitor::<i32>(a_unit), b_a); // (a, b)
+    // Two copies of (a ⊗ I) ⊗ b — route A and route B each consume one.
+    let tri_start_a = m.tensor_objects(m.tensor_objects(a.clone(), m.unit()), b.clone());
+    let tri_start_b = m.tensor_objects(m.tensor_objects(a.clone(), m.unit()), b.clone());
 
-    // Route B: associate then (id_A ⊗ left_unitor).
-    let tri_assoc = m.associate::<i32, (), u8>(tri_start); // (a, ((), b))
-    let (a_b, unit_b) = tri_assoc; // a_b = a, unit_b = ((), b)
-    let route_b = (a_b, m.left_unitor::<u8>(unit_b)); // (a, b)
+    // Route A: (ρ ⊗ id_B) via tensor_morphisms.
+    let route_a = m.tensor_morphisms(
+        tri_start_a,
+        |au: Ten<M, A, M::Unit>| m.right_unitor::<A>(au),
+        |b: B| b,
+    ); // a ⊗ b
+
+    // Route B: associate then (id_A ⊗ λ) via tensor_morphisms.
+    let tri_assoc = m.associate::<A, M::Unit, B>(tri_start_b); // a ⊗ (I ⊗ b)
+    let route_b = m.tensor_morphisms(
+        tri_assoc,
+        |a: A| a,
+        |ub: Ten<M, M::Unit, B>| m.left_unitor::<B>(ub),
+    ); // a ⊗ b
 
     assert_eq!(route_a, route_b, "monoidal triangle: two routes agree");
-    assert_eq!(route_a, (a, b), "monoidal triangle: exact unitor collapse");
 
     // --- Unitor sanity ----------------------------------------------------
     assert_eq!(
-        m.left_unitor::<i32>(((), a)),
+        m.left_unitor::<A>(m.tensor_objects(m.unit(), a.clone())),
         a,
-        "left unitor λ(((), a)) = a"
+        "left unitor λ(I ⊗ a) = a"
     );
     assert_eq!(
-        m.right_unitor::<i32>((a, ())),
+        m.right_unitor::<A>(m.tensor_objects(a.clone(), m.unit())),
         a,
-        "right unitor ρ((a, ())) = a"
+        "right unitor ρ(a ⊗ I) = a"
     );
-    assert_eq!(m.unit(), (), "monoidal unit is ()");
-}
-
-/// Assert the **pentagon** and **triangle** coherence laws (plus unitor
-/// sanity) for the direct-sum monoidal category [`F64Monoidal`] on four sample
-/// values. Mac Lane's coherence theorem; CDL Definition E.2 (actegory
-/// coherence) / Example G.3 (the cartesian `⊕` structure of real vector
-/// spaces).
-///
-/// The `DirectSum` analogue of [`assert_monoidal_coherence`]: [`F64Monoidal`]'s
-/// tensor is the [`DirectSum`] carrier, not the tuple, so the
-/// `SetCategoryDefaults`-bound tuple checker does not apply. The associator and
-/// unitors are exact `DirectSum` re-associations (pure data movement, no `f64`
-/// arithmetic), so the laws hold on the nose for arbitrary object types — the
-/// sample types below (`i32`, `u8`, `i64`, `bool`) stand in for module objects.
-/// As with the tuple checker, the trait carries **no morphism-tensor
-/// operation**, so wherever a route needs `α ⊗ id` or `id ⊗ α` the component
-/// manipulation is spelled **manually** on the `DirectSum` values.
-pub fn assert_direct_sum_coherence(m: &F64Monoidal, a: i32, b: u8, c: i64, d: bool) {
-    // --- Pentagon ---------------------------------------------------------
-    // Route 1 (bottom): associate at (A⊕B, C, D), then at (A, B, C⊕D).
-    let start = DirectSum(DirectSum(DirectSum(a, b), c), d);
-    let r1_mid = m.associate::<DirectSum<i32, u8>, i64, bool>(start); // (a⊕b) ⊕ (c⊕d)
-    let route1 = m.associate::<i32, u8, DirectSum<i64, bool>>(r1_mid); // a ⊕ (b ⊕ (c⊕d))
-
-    // Route 2 (top): (associate(A,B,C) ⊗ id_D), then associate(A, B⊕C, D),
-    // then (id_A ⊗ associate(B,C,D)). The `⊗ id` legs are spelled manually.
-    let DirectSum(inner_abc, d2) = start; // inner_abc = (a⊕b) ⊕ c
-    let assoc_abc = m.associate::<i32, u8, i64>(inner_abc); // a ⊕ (b ⊕ c)
-    let step1 = DirectSum(assoc_abc, d2); // (a ⊕ (b⊕c)) ⊕ d
-    let step2 = m.associate::<i32, DirectSum<u8, i64>, bool>(step1); // a ⊕ ((b⊕c) ⊕ d)
-    let DirectSum(a3, bcd) = step2; // a3 = a, bcd = (b⊕c) ⊕ d
-    let route2 = DirectSum(a3, m.associate::<u8, i64, bool>(bcd)); // a ⊕ (b ⊕ (c⊕d))
-
-    assert_eq!(route1, route2, "direct-sum pentagon: two routes agree");
-    assert_eq!(
-        route1,
-        DirectSum(a, DirectSum(b, DirectSum(c, d))),
-        "direct-sum pentagon: exact re-association"
-    );
-
-    // --- Triangle ---------------------------------------------------------
-    // Route A: (right_unitor ⊗ id_B) applied manually to (a ⊕ R⁰) ⊕ b.
-    let tri_start = DirectSum(DirectSum(a, ()), b);
-    let DirectSum(a_unit, b_a) = tri_start; // a_unit = a ⊕ R⁰, b_a = b
-    let route_a = DirectSum(m.right_unitor::<i32>(a_unit), b_a); // a ⊕ b
-
-    // Route B: associate then (id_A ⊗ left_unitor).
-    let tri_assoc = m.associate::<i32, (), u8>(tri_start); // a ⊕ (R⁰ ⊕ b)
-    let DirectSum(a_b, unit_b) = tri_assoc; // a_b = a, unit_b = R⁰ ⊕ b
-    let route_b = DirectSum(a_b, m.left_unitor::<u8>(unit_b)); // a ⊕ b
-
-    assert_eq!(route_a, route_b, "direct-sum triangle: two routes agree");
-    assert_eq!(
-        route_a,
-        DirectSum(a, b),
-        "direct-sum triangle: exact unitor collapse"
-    );
-
-    // --- Unitor sanity ----------------------------------------------------
-    assert_eq!(
-        m.left_unitor::<i32>(DirectSum((), a)),
-        a,
-        "left unitor λ(R⁰ ⊕ a) = a"
-    );
-    assert_eq!(
-        m.right_unitor::<i32>(DirectSum(a, ())),
-        a,
-        "right unitor ρ(a ⊕ R⁰) = a"
-    );
-    assert_eq!(m.unit(), (), "monoidal unit is R⁰ ≅ ()");
 }
 
 /// Assert the `R`-module axioms for [`F64Module`] on one sample coordinate

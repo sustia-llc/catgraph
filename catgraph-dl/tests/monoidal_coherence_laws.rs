@@ -10,9 +10,11 @@
 //! for the blanket bodies any downstream `(Set, ×, 1)`-flavoured ZST inherits,
 //! not just `SetMonoidal` (issue #40).
 //!
-//! The shared checker [`common::assert_monoidal_coherence`] spells the
-//! `α ⊗ id` / `id ⊗ α` legs manually because the `MonoidalCategory` trait
-//! carries no morphism-tensor operation.
+//! The shared checker [`common::assert_monoidal_coherence`] is generic over
+//! [`MonoidalCategory`] and expresses the `α ⊗ id` / `id ⊗ α` legs through
+//! [`MonoidalCategory::tensor_morphisms`] (issue #65), so the same driver
+//! serves this tuple carrier and the `DirectSum` carrier of
+//! `module_actegory_laws.rs`.
 
 mod common;
 

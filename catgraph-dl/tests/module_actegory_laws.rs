@@ -8,7 +8,9 @@
 //! Four surfaces:
 //!
 //! 1. **Monoidal coherence** — pentagon / triangle / unitor sanity on the
-//!    `DirectSum` tensor, via `common::assert_direct_sum_coherence`.
+//!    `DirectSum` tensor, via the generic `common::assert_monoidal_coherence`
+//!    (the `α ⊗ id` / `id ⊗ α` legs go through
+//!    [`MonoidalCategory::tensor_morphisms`], issue #65).
 //! 2. **`R`-module axioms** — `Zero` / `One` load-bearing identities on
 //!    [`F64Module`], via `common::assert_f64_module_axioms`.
 //! 3. **`⊕`-monoid laws** — concrete coordinate concatenation, unit, and
@@ -21,7 +23,7 @@
 mod common;
 
 use common::{
-    assert_direct_sum_coherence, assert_direct_sum_monoid, assert_f64_module_axioms, finite_f64,
+    assert_direct_sum_monoid, assert_f64_module_axioms, assert_monoidal_coherence, finite_f64,
 };
 
 use catgraph_dl::para::{
@@ -32,7 +34,10 @@ use proptest::prelude::*;
 
 /// **Pentagon + triangle + unitor sanity — deterministic.** [`F64Monoidal`]'s
 /// `DirectSum` associator/unitors satisfy the Mac Lane coherence laws on a
-/// hand-picked spread of object values (sign extremes, both booleans).
+/// hand-picked spread of object values (sign extremes, both booleans), driven
+/// by the same generic `common::assert_monoidal_coherence` used for the
+/// `(Set, ×, 1)` tuple carrier — the `α ⊗ id` / `id ⊗ α` legs now go through
+/// [`MonoidalCategory::tensor_morphisms`] (issue #65).
 #[test]
 fn direct_sum_coherence_deterministic() {
     let m = F64Monoidal::new();
@@ -42,7 +47,7 @@ fn direct_sum_coherence_deterministic() {
         (i32::MIN, u8::MAX, i64::MAX, true),
         (0_i32, 0_u8, 0_i64, false),
     ] {
-        assert_direct_sum_coherence(&m, a, b, c, d);
+        assert_monoidal_coherence(&m, a, b, c, d);
     }
 }
 
@@ -113,7 +118,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
     /// Pentagon / triangle / unitor laws for [`F64Monoidal`] across arbitrary
-    /// object samples.
+    /// object samples, via the generic `common::assert_monoidal_coherence`.
     #[test]
     fn direct_sum_coherence_proptest(
         a in any::<i32>(),
@@ -121,7 +126,7 @@ proptest! {
         c in any::<i64>(),
         d in any::<bool>(),
     ) {
-        assert_direct_sum_coherence(&F64Monoidal::new(), a, b, c, d);
+        assert_monoidal_coherence(&F64Monoidal::new(), a, b, c, d);
     }
 
     /// `R`-module axioms across finite (NaN-free) coordinate vectors and

@@ -37,12 +37,13 @@ PR (this is the #70 discipline). Style: reference `<file>::<test_fn>`.
 
 | Witness | Anchor | Law |
 |---|---|---|
-| `monoidal_coherence_laws::monoidal_coherence_{deterministic,proptest}` | Mac Lane CWM; CDL §3.1 | Pentagon + triangle (Set/tuple carrier) |
-| `module_actegory_laws::direct_sum_coherence_*` | CDL Def E.2 / Example G.3 | Pentagon + triangle on `DirectSum` |
+| `monoidal_coherence_laws::monoidal_coherence_{deterministic,proptest}` | Mac Lane CWM; CDL §3.1 | Pentagon + triangle (Set/tuple carrier), via the generic driver |
+| `module_actegory_laws::direct_sum_coherence_*` | CDL Def E.2 / Example G.3 | Pentagon + triangle on `DirectSum`, via the **same** generic driver |
 | `module_actegory_laws::f64_module_axioms_*` | CDL Def E.2 / Example G.3 | R-module axioms (`Zero`/`One`) |
 | `module_actegory_laws::direct_sum_monoid_*` | CDL Example E.4 / G.3 | `(FinReal, ⊕, R⁰)` monoid laws |
 | `module_actegory_laws::actegory_action_and_multiplicator` | CDL Def E.2 | Actegory action + multiplicator |
-| `common::assert_monoidal_coherence` / `::assert_direct_sum_coherence` / `::assert_f64_module_axioms` / `::assert_direct_sum_monoid` | (helpers) | drivers for the above |
+| `common::assert_monoidal_coherence` | (helper) | **one** generic pentagon/triangle driver over `MonoidalCategory`; the `α ⊗ id` / `id ⊗ α` legs go through `MonoidalCategory::tensor_morphisms` (issue #65), so it serves both the tuple and `DirectSum` carriers |
+| `common::assert_f64_module_axioms` / `::assert_direct_sum_monoid` | (helpers) | drivers for the module-axiom / `⊕`-monoid rows |
 
 ## Eilenberg–Moore / (co)algebra laws
 

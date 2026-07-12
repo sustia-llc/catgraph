@@ -61,14 +61,14 @@
 //!
 //! On `DirectSum` the associator and unitors are exact re-associations (pure
 //! data movement, no arithmetic), so Mac Lane's pentagon and triangle hold on
-//! the nose — machine-checked in `tests/module_actegory_laws.rs` via
-//! `common::assert_direct_sum_coherence` (the `DirectSum` analogue of the tuple
-//! `assert_monoidal_coherence`, since that helper is `SetCategoryDefaults`-bound
-//! and tuple-shaped). As everywhere on this trait, the `α ⊗ id` / `id ⊗ α`
-//! pentagon legs are spelled manually — [`MonoidalCategory`] has no
-//! morphism-level tensor
-//! ([#65](https://github.com/sustia-llc/catgraph/issues/65)); the
-//! `F64Morphism` marker does **not** confer one. Honesty note: the
+//! the nose — machine-checked in `tests/module_actegory_laws.rs` via the
+//! **generic** `common::assert_monoidal_coherence` (the same driver used for
+//! the `(Set, ×, 1)` tuple carrier). Since
+//! [`MonoidalCategory::tensor_morphisms`] landed
+//! ([#65](https://github.com/sustia-llc/catgraph/issues/65)) the `α ⊗ id` /
+//! `id ⊗ α` pentagon/triangle legs are expressed through that method rather
+//! than hand-spelled per instance — for `DirectSum` it maps the two summands,
+//! and this instance supplies the [`DirectSum`]-shaped body. Honesty note: the
 //! [`MonoidalCategory`] impl itself is object-agnostic pure re-association
 //! (the trait's GATs place no bound on `A`, `B` — `tensor_objects` accepts
 //! any types, exactly like `SetMonoidal`'s); what makes this instance the
@@ -315,6 +315,17 @@ impl MonoidalCategory for F64Monoidal {
         // ρ : A ⊕ R⁰ → A.
         let DirectSum(a, ()) = paired;
         a
+    }
+
+    fn tensor_morphisms<A, B, C, D>(
+        &self,
+        ab: DirectSum<A, B>,
+        mut f: impl FnMut(A) -> C,
+        mut g: impl FnMut(B) -> D,
+    ) -> DirectSum<C, D> {
+        // f ⊗ g : (A ⊕ B) → (C ⊕ D) — map each summand.
+        let DirectSum(a, b) = ab;
+        DirectSum(f(a), g(b))
     }
 }
 
