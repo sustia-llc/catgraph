@@ -21,20 +21,21 @@
 //! surface is widened now to keep their addition a non-breaking transition for
 //! [`SetMonoidal`] consumers.
 //!
-//! ## Coherence laws (machine-checked for the `(Set, ×, 1)` blanket)
+//! ## Coherence laws (machine-checked generically)
 //!
 //! The associator and unitors must satisfy Mac Lane's **pentagon** and
 //! **triangle** identities (see the [`MonoidalCategory`] trait rustdoc for the
-//! equations). For the `(Set, ×, 1)` blanket bodies supplied via
-//! [`SetCategoryDefaults`] these hold on the nose, and are machine-checked
-//! against `SetMonoidal` and a downstream-style ZST in
-//! `tests/monoidal_coherence_laws.rs` (issue #40) — covering the bodies every
-//! `(Set, ×, 1)`-flavoured ZST inherits, not just `SetMonoidal`. For future
-//! non-`Set` instances the trait carries them as documented implementor
-//! obligations (the pentagon is stated per-instance because the trait
-//! currently has no morphism-tensor operation for the generic `α ⊗ id` /
-//! `id ⊗ α` legs; adding one is tracked as
-//! [#65](https://github.com/sustia-llc/catgraph/issues/65)).
+//! equations). Since [`MonoidalCategory::tensor_morphisms`] landed (issue #65)
+//! the `α ⊗ id` / `id ⊗ α` legs of both diagrams are expressible **on this
+//! trait surface**, so the coherence check is a single generic driver —
+//! `common::assert_monoidal_coherence`, generic over `MonoidalCategory` — that
+//! is machine-checked against `SetMonoidal`, a downstream-style
+//! `(Set, ×, 1)`-flavoured ZST (`tests/monoidal_coherence_laws.rs`, issue
+//! #40), **and** the non-`Set` [`DirectSum`](super::DirectSum) carrier
+//! [`F64Monoidal`](super::F64Monoidal) (`tests/module_actegory_laws.rs`, issue
+//! #36). All three hold on the nose (exact isomorphisms, not "up to iso"). For
+//! any future instance the laws remain documented implementor obligations, but
+//! the same generic driver now checks them without per-instance hand-spelling.
 //!
 //! Closure convention across the `para` module: `Fn((P, X)) -> Y`
 //! (tuple-as-single-argument). This mirrors the `architectures::*` scaffold
@@ -144,15 +145,18 @@ use core::marker::PhantomData;
 ///   (id_A ⊗ λ_B) ∘ α_{A,I,B} = ρ_A ⊗ id_B
 /// ```
 ///
-/// These are documented obligations, not enforced at construction. The trait
-/// currently carries **no morphism-tensor operation**, so the `α ⊗ id` /
-/// `id ⊗ α` legs are not expressible generically *on this surface* — an
-/// applying-form `tensor_morphisms` method would make them so and is tracked
-/// as [#65](https://github.com/sustia-llc/catgraph/issues/65). Until then,
-/// coherence is machine-checked for the `(Set, ×, 1)` blanket (where the legs
-/// are spelled manually on the concrete tuples) in
-/// `tests/monoidal_coherence_laws.rs` (issue #40), and left as a per-instance
-/// obligation for future non-`Set` monoidal categories.
+/// These are documented obligations, not enforced at construction — but they
+/// are now **expressible generically on this surface**: the `α ⊗ id` /
+/// `id ⊗ α` legs are the applying-form morphism tensor
+/// [`tensor_morphisms`](MonoidalCategory::tensor_morphisms) (issue #65,
+/// `f ⊗ g` mapping the two components of a tensored value). A single generic
+/// driver, `common::assert_monoidal_coherence`, therefore machine-checks the
+/// pentagon and triangle for **every** instance — the `(Set, ×, 1)` blanket
+/// (`tests/monoidal_coherence_laws.rs`, issue #40) and the non-`Set`
+/// [`DirectSum`](super::DirectSum) carrier
+/// [`F64Monoidal`](super::F64Monoidal) (`tests/module_actegory_laws.rs`, issue
+/// #36) — instead of hand-spelling the legs per instance. Any future instance
+/// inherits the same generic check.
 pub trait MonoidalCategory {
     /// Marker for the kind of objects of `M`. For `SetMonoidal` this is the
     /// uninhabited [`SetObject`] tag — actual objects are Rust types
@@ -198,6 +202,17 @@ pub trait MonoidalCategory {
     ///
     /// For `SetMonoidal` this is `(a, ()) ↦ a`.
     fn right_unitor<A>(&self, paired: Self::Tensor<A, Self::Unit>) -> A;
+
+    /// Morphism-level tensor `f ⊗ g : (A ⊗ B) → (C ⊗ D)` in applying form:
+    /// map the two components of a tensored value by `f` and `g` respectively.
+    /// CDL §3.1 — the morphism map of `⊗ : M × M → M`. For `SetMonoidal` this is
+    /// `((a, b)) ↦ (f(a), g(b))`.
+    fn tensor_morphisms<A, B, C, D>(
+        &self,
+        ab: Self::Tensor<A, B>,
+        f: impl FnMut(A) -> C,
+        g: impl FnMut(B) -> D,
+    ) -> Self::Tensor<C, D>;
 }
 
 /// Sealing module for [`SetCategoryDefaults`].
@@ -367,6 +382,16 @@ impl<T: SetCategoryDefaults> MonoidalCategory for T {
     fn right_unitor<A>(&self, paired: Self::Tensor<A, Self::Unit>) -> A {
         let (a, ()) = paired;
         a
+    }
+
+    fn tensor_morphisms<A, B, C, D>(
+        &self,
+        ab: (A, B),
+        mut f: impl FnMut(A) -> C,
+        mut g: impl FnMut(B) -> D,
+    ) -> (C, D) {
+        let (a, b) = ab;
+        (f(a), g(b))
     }
 }
 
