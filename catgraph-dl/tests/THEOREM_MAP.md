@@ -53,6 +53,7 @@ PR (this is the #70 discipline). Style: reference `<file>::<test_fn>`.
 | `monad_algebra_laws::unlawful_structure_maps_fail_the_algebra_laws` | CDL Def 2.3 | negative: unlawful maps fail |
 | `monad_algebra_laws::abs_hom_unit_and_mult_coherence` | CDL Def 2.5 (ambient) | hom-side coherence probes (η-naturality, source-assoc∘f) |
 | `monad_algebra_laws::hom_coherence_verifiers_pass_for_a_non_homomorphism` | CDL Def 2.5 | boundary: coherence verifiers do **not** discriminate a hom |
+| `monad_algebra_laws::full_monad_algebra_hom_certification_recipe` | CDL Def 2.3 + Def 2.5; Mac Lane CWM VI.2 | end-to-end hom certification: source lawful ∧ target lawful ∧ square (each negative fails exactly one part) |
 | `monad_algebra_laws::writer_monad_laws_pinned_by_non_abelian_s3` | CDL Def 2.1 / Ex 2.2 | writer-monad `join` order (non-abelian S3) |
 | `monad_algebra_laws::monad_algebra_coherence_holds_proptest` | CDL Def 2.3 / 2.5 | proptest lift of the four verifiers |
 | `algebra_homomorphisms::identity_is_an_f_algebra_homomorphism` | CDL Def 2.5 | F-algebra hom square (identity) |

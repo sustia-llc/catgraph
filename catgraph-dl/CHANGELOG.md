@@ -81,6 +81,13 @@ All notable changes to this crate are documented here. Format follows
 - **`tests/THEOREM_MAP.md` law-test → paper-anchor registry ([#70](https://github.com/sustia-llc/catgraph/issues/70), Part 1).**
   The correctness spine: every law test mapped to its paper anchor (the paper is
   the proof layer; Kani deferred). New law tests update their row in the same PR.
+- **Full monad-algebra-hom certification recipe test ([#67](https://github.com/sustia-llc/catgraph/issues/67)).**
+  `monad_algebra_laws::full_monad_algebra_hom_certification_recipe` exercises the
+  three-part recipe end to end — source algebra lawful ∧ target algebra lawful ∧
+  hom square (CDL Def 2.3 + Def 2.5) — positively (abs-value hom) and against
+  three negatives each failing exactly one part. A recipe paragraph was added to
+  the `MonadAlgebraHom` rustdoc; no `verify_all` convenience (minimal-ceremony).
+  Test/doc-only; no API change.
 
 ### Documentation
 

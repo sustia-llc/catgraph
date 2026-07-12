@@ -167,6 +167,26 @@ where
 /// structure reached through the hom. See each verifier's rustdoc and the
 /// boundary demonstration in `tests/monad_algebra_laws.rs`.
 ///
+/// # Certifying a homomorphism — the full recipe
+///
+/// Because no single verifier decides "`f` is a hom between *lawful* algebras",
+/// certification is a **three-part conjunction** (CDL Def 2.3 + Def 2.5; Mac Lane
+/// CWM VI.2):
+///
+/// 1. **source algebra lawful** — [`MonadAlgebra::verify_unit_law`] +
+///    [`MonadAlgebra::verify_assoc_law`] on the `from` algebra;
+/// 2. **target algebra lawful** — the same two on the `to` algebra. The hom holds
+///    its algebras as bare [`FAlgebra`] fields, so rewrap first:
+///    `MonadAlgebra::new(hom.algebra_hom.to.clone())`;
+/// 3. **the hom square** — `hom.algebra_hom.verify_commutes(..)` (the *only*
+///    discriminating check).
+///
+/// The end-to-end recipe — positive plus three negatives each failing exactly
+/// one part — is exercised by `full_monad_algebra_hom_certification_recipe` in
+/// `tests/monad_algebra_laws.rs`. (No `verify_all` convenience is provided: the
+/// rewrap is a one-liner and a bundled entry point would hide which part failed —
+/// minimal-ceremony posture.)
+///
 /// # CDL Example 2.6 — GDL recovery
 ///
 /// When `M = G × −` is the group-action monad for a group `G`, a
