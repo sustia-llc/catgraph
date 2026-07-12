@@ -38,6 +38,10 @@ jobs:
           echo "grep-guard ok: no stray num::{One,Zero}"
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # #85: broken intra-doc links (unresolved / private / redundant) shipped
+      # because CI had no doc gate. `-D warnings` fails the build on any of them,
+      # keeping docs.rs rendering clean now that the crates are public.
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
       - run: cargo test --workspace
       - run: cargo test -p catgraph --no-default-features
 
