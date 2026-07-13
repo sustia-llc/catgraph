@@ -49,6 +49,14 @@ jobs:
       # the clippy pass) keeps the serde surface from rotting silently.
       - run: cargo test -p catgraph-applied -p catgraph-syntax --features serde
       - run: cargo clippy -p catgraph-applied -p catgraph-syntax --features serde --all-targets -- -D warnings
+      # #34: the dl examples are self-checking (their main() asserts), but the
+      # test runs above only *compile* examples — they never execute main(). Run
+      # each so a wrong-value regression fails CI, per the issue's acceptance
+      # criterion ("each runs green under cargo run --example").
+      - run: |
+          for ex in para_walkthrough weight_tying free_monad_basics architecture_unrollers; do
+            cargo run -q -p catgraph-dl --example "$ex"
+          done
 
   # #11: the slow BV 2025 Prop 3.14 acceptance fixture
   # (euler_char_identity::fixture_3_5point_path_t_2_5) is ignored under

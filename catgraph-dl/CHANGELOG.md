@@ -15,6 +15,15 @@ All notable changes to this crate are documented here. Format follows
 
 ### Added
 
+- **`examples/` directory** ([#34](https://github.com/sustia-llc/catgraph/issues/34)):
+  four runnable, self-checking walkthroughs closing the last workspace crate with
+  no examples — `para_walkthrough` (Para build/compose/reparameterize, CDL §3.1),
+  `weight_tying` (diagonal comonoid + `tie_weights`, Thm G.10), `free_monad_basics`
+  (`FreeMnd`/`CofreeCmnd` construction + bijections + an `FAlgebra` catamorphism,
+  App B), and `architecture_unrollers` (the five (co)algebra unrollers + GDL
+  invariance, App I/J). Public-API only; a per-directory `README.md` maps each to
+  its CDL anchor. Each `main()` self-checks with assertions and **CI runs all
+  four** (the acceptance criterion). `cargo run -p catgraph-dl --example <name>`.
 - **`F64Module` R-module actegory — first non-`(Set, ×, 1)` `MonoidalCategory`
   ([#36](https://github.com/sustia-llc/catgraph/issues/36), first bullet).**
   Lands the direct-sum monoidal category `(FinReal, ⊕, R⁰)` of
