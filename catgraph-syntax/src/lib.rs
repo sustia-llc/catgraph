@@ -66,6 +66,7 @@
 #![warn(missing_docs)]
 
 pub mod arrow_seam;
+pub mod cospan_functor;
 pub mod errors;
 pub mod eval;
 pub mod frobenius;
