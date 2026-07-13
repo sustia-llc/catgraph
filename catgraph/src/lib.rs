@@ -40,6 +40,7 @@ pub mod compact_closed;
 pub mod corel;
 pub mod cospan;
 pub mod cospan_algebra;
+pub mod cospan_canon;
 pub mod equivalence;
 pub mod errors;
 pub mod finset;

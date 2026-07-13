@@ -6,6 +6,16 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `cospan_canon` — `CospanCanon<Λ>` and `Cospan::canonical_form`, a decidable
+  (hashable, `Eq`) invariant for parallel cospans up to apex isomorphism.
+  Records each apex vertex's `(label, sorted dom preimage, sorted cod preimage)`
+  as a sorted multiset, so **scalars** (apex-only bubbles) are counted rather
+  than collapsed — the *special* (not extra-special) semantics. Enables the
+  complete Cospan-valued decision functor in `catgraph-syntax`
+  ([#80](https://github.com/sustia-llc/catgraph/issues/80), F&S 2019 Prop 3.8).
+
 ## [workspace-v0.1.0] - 2026-07-01
 
 First monorepo release: workspace-wide tag `v0.1.0` (supersedes the pre-reboot

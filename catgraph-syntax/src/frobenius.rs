@@ -57,10 +57,10 @@
 //! [`to_mat_kron`] is a **sound** semantic check (Prop 3.8), **not** registered
 //! as a
 //! [`CompleteFunctor`](catgraph_applied::prop::presentation::functorial::CompleteFunctor):
-//! no completeness theorem is claimed for `E_frob` here (the Cospan-valued
-//! complete-functor spike is [#80](https://github.com/sustia-llc/catgraph/issues/80)).
-//! Equal `MatKron` images witness equality *in `MatKron(R)`*; they do not
-//! promote an incomplete `eq_mod None` into a syntactic decision.
+//! equal `MatKron` images witness equality *in `MatKron(R)`*; they do not
+//! promote an incomplete `eq_mod None` into a syntactic decision. For a
+//! **complete** decision over the User-free fragment, use
+//! [`CospanFunctor`](crate::cospan_functor::CospanFunctor) (F&S Prop 3.8, #80).
 //!
 //! # Monochromatic scope (disclaimer 2)
 //!
@@ -365,11 +365,11 @@ pub fn scfm_equations<G: PropSignature>() -> Vec<FrobeniusEquation<G>> {
 /// **Complete** decisions come only through the functorial route
 /// ([`eq_mod_functorial`](catgraph_applied::prop::presentation::Presentation::eq_mod_functorial)
 /// with a
-/// [`CompleteFunctor`](catgraph_applied::prop::presentation::functorial::CompleteFunctor));
-/// today that is Mat(R) via Thm 5.60, and no complete functor is claimed for
-/// `E_frob` (the Cospan-valued spike is
-/// [#80](https://github.com/sustia-llc/catgraph/issues/80)). [`to_mat_kron`] is a
-/// separate **sound semantic** check, not a syntactic decision.
+/// [`CompleteFunctor`](catgraph_applied::prop::presentation::functorial::CompleteFunctor)):
+/// `Mat(R)` via Thm 5.60 for signal-flow graphs, and — for the User-free
+/// spider fragment of `E_frob` —
+/// [`CospanFunctor`](crate::cospan_functor::CospanFunctor) (F&S Prop 3.8, #80).
+/// [`to_mat_kron`] is a separate **sound semantic** check, not a syntactic decision.
 ///
 /// # Equation order
 ///
@@ -469,8 +469,9 @@ fn checked_cells(dim: usize, src: usize, tgt: usize) -> Result<(usize, usize), S
 /// [`CompleteFunctor`](catgraph_applied::prop::presentation::functorial::CompleteFunctor):
 /// no completeness theorem is claimed for `E_frob` here, so equal images witness
 /// equality *in `MatKron(R)`* and must not be read as a general syntactic
-/// decision (the Cospan-valued complete-functor spike is
-/// [#80](https://github.com/sustia-llc/catgraph/issues/80)).
+/// decision. The **complete** decision for the User-free fragment is
+/// [`CospanFunctor`](crate::cospan_functor::CospanFunctor) (same Prop 3.8, but
+/// valued in the free `Cospan` rather than a single model `MatKron(R)`, #80).
 ///
 /// `User(_)` generators are outside this functor's domain (the SCFM structure
 /// carries no image for an arbitrary signature generator), so they are rejected

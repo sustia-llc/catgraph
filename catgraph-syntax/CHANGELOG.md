@@ -7,6 +7,25 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Added
+
+- **`cospan_functor` — a complete decision functor for the pure-spider
+  fragment** ([#80](https://github.com/sustia-llc/catgraph/issues/80)):
+  `CospanFunctor` implements `catgraph-applied`'s `CompleteFunctor<FrobeniusOr<G>>`
+  by mapping the **User-free** spider fragment into the free monochromatic
+  cospan category and canonicalising up to apex isomorphism (F&S 2019
+  Prop 3.8 — `(Cospan, ⊕)` is the theory of *special* commutative Frobenius
+  monoids). `Target = CospanCanon<()>`. This is the **second entry in the
+  completeness registry** after `Mat(R)`/Thm 5.60: `Presentation::eq_mod_functorial`
+  now gives a definite decision for `E_frob` where the congruence-closure
+  `eq_mod` is only sound-incomplete (#15). Scalars are **kept** (the closed
+  bubble `η;ε` is distinct from `id₀`), so `Cospan` — not the extra-special
+  `Corel` — is the target; over an idempotent rig the functor is strictly finer
+  than `to_mat_kron`. `User` generators lie outside the fragment
+  (`CatgraphError::Presentation`); colored/multi-sorted generality is
+  [#79](https://github.com/sustia-llc/catgraph/issues/79). Relies on the new
+  `catgraph::cospan_canon` canonical form.
+
 ## [0.3.0] - 2026-07-11
 
 The crate's first release — the complete S1–S5 milestone surface of
