@@ -505,6 +505,9 @@ where
     G: PropSignature,
     R: Rig,
 {
+    // Pre-flight the recursion depth so `to_mat_kron_inner` cannot overflow the
+    // stack on an unbounded programmatically-built term (#99).
+    crate::depth::guard_term_depth(expr)?;
     to_mat_kron_inner::<G, R>(expr, dim).map(|(matrix, _src, _tgt)| matrix)
 }
 

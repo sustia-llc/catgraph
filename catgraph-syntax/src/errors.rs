@@ -130,6 +130,25 @@ pub enum SyntaxError {
         exponent: usize,
     },
 
+    /// A term interpreter ([`eval`](crate::eval::eval),
+    /// [`to_mat_kron`](crate::frobenius::to_mat_kron)) refused a term whose
+    /// structural nesting depth exceeds
+    /// [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH). The interpreters recurse
+    /// over the term structure, so an unbounded, *programmatically*-built term
+    /// (parsed terms are already capped by the parser's `MAX_NESTING_DEPTH`)
+    /// would otherwise risk a **stack overflow** — an abort, not a catchable
+    /// error. The guard is a pre-flight *iterative* depth measurement
+    /// ([`term_depth`](crate::depth::term_depth)), so the interpreter never
+    /// recurses past the limit. (The recursive `Drop` of the deep term itself is
+    /// a separate, upstream `PropExpr` concern.)
+    #[error("term nesting depth {depth} exceeds MAX_TERM_DEPTH ({limit})")]
+    RecursionLimit {
+        /// The term's measured structural depth.
+        depth: usize,
+        /// The configured limit, [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH).
+        limit: usize,
+    },
+
     /// An arity check in the underlying free-prop engine failed — for example a
     /// composition whose interfaces do not meet. Surfaced transparently from
     /// [`catgraph::errors::CatgraphError`].

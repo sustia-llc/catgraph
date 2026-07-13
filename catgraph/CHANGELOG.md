@@ -8,6 +8,11 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Added
 
+- `CatgraphError::RecursionLimit { depth, limit }` — shared term-interpreter
+  recursion-guard error, so `catgraph-syntax` interpreters whose error type is
+  fixed to `CatgraphError` (e.g. a `CompleteFunctor`) report the same shape as
+  its `SyntaxError::RecursionLimit`
+  ([#99](https://github.com/sustia-llc/catgraph/issues/99)).
 - `cospan_canon` — `CospanCanon<Λ>` and `Cospan::canonical_form`, a decidable
   (hashable, `Eq`) invariant for parallel cospans up to apex isomorphism.
   Records each apex vertex's `(label, sorted dom preimage, sorted cod preimage)`

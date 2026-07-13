@@ -67,6 +67,7 @@
 
 pub mod arrow_seam;
 pub mod cospan_functor;
+pub mod depth;
 pub mod errors;
 pub mod eval;
 pub mod frobenius;

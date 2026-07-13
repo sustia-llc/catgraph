@@ -135,6 +135,16 @@ impl<G: GeneratorSyntax> fmt::Display for Pretty<'_, G> {
 
 /// Pretty-print a term to an owned `String` (the [`Pretty`] adapter without the
 /// borrow ceremony).
+///
+/// # Depth
+///
+/// Printing recurses over the term structure, so — like the interpreters — a
+/// pathologically deep programmatically-built term risks a stack overflow.
+/// Unlike the interpreters this returns an infallible `String` and so carries no
+/// guard; a caller handling untrusted or machine-generated terms can pre-check
+/// with [`term_depth`](crate::depth::term_depth) against
+/// [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH). Parsed terms are already
+/// bounded by the [parser](mod@crate::text::parse)'s `MAX_NESTING_DEPTH`.
 #[must_use]
 pub fn print<G: GeneratorSyntax>(expr: &PropExpr<G>) -> String {
     Pretty(expr).to_string()

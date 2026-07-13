@@ -9,6 +9,20 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ### Added
 
+- **`depth` module — recursion guard for the term interpreters**
+  ([#99](https://github.com/sustia-llc/catgraph/issues/99)): `term_depth`
+  (iterative, overflow-free), `guard_term_depth`, and `MAX_TERM_DEPTH` (= the
+  parser's `MAX_NESTING_DEPTH`, 256). `eval`, `to_mat_kron`, and the Cospan
+  functor's `to_cospan` now pre-flight the term's structural depth and return a
+  catchable error (`SyntaxError::RecursionLimit`; the `CatgraphError`-typed
+  `to_cospan` reports the shared `CatgraphError::RecursionLimit`, one shape across
+  all interpreters) instead of risking a stack overflow on
+  an unbounded programmatically-built term. The limit is set below the
+  *interpreters'* own recursion-overflow point (their frames — Kronecker
+  products, cospan pushouts — are heavy), not merely to bound depth. `print`
+  stays infallible and documents the same exposure with a `term_depth` pre-check.
+  (The recursive `Drop` of a deep `PropExpr` remains an upstream `catgraph-applied`
+  concern, out of scope here.)
 - **Optional `serde` feature** ([#81](https://github.com/sustia-llc/catgraph/issues/81),
   syntax complement): forwards to `catgraph-applied/serde` and derives
   `Serialize`/`Deserialize` on `FrobeniusOr<G>`, so a full syntax term
@@ -30,6 +44,11 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
   (`CatgraphError::Presentation`); colored/multi-sorted generality is
   [#79](https://github.com/sustia-llc/catgraph/issues/79). Relies on the new
   `catgraph::cospan_canon` canonical form.
+
+### Changed
+
+- `SyntaxError` gains a `RecursionLimit { depth, limit }` variant (#99;
+  additive — the enum is `#[non_exhaustive]`).
 
 ## [0.3.0] - 2026-07-11
 
