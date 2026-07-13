@@ -258,6 +258,8 @@ dependencies = [
  "rayon",
  "rayon-cond",
  "rust_decimal",
+ "serde",
+ "serde_json",
  "thiserror",
  "ultragraph",
 ]
@@ -308,6 +310,8 @@ dependencies = [
  "catgraph-applied",
  "deep_causality_haft",
  "proptest",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

@@ -9,6 +9,11 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ### Added
 
+- **Optional `serde` feature** ([#81](https://github.com/sustia-llc/catgraph/issues/81),
+  syntax complement): forwards to `catgraph-applied/serde` and derives
+  `Serialize`/`Deserialize` on `FrobeniusOr<G>`, so a full syntax term
+  `PropExpr<FrobeniusOr<G>>` round-trips through serde — the machine analogue of
+  the textual parser/printer. Off by default.
 - **`cospan_functor` — a complete decision functor for the pure-spider
   fragment** ([#80](https://github.com/sustia-llc/catgraph/issues/80)):
   `CospanFunctor` implements `catgraph-applied`'s `CompleteFunctor<FrobeniusOr<G>>`

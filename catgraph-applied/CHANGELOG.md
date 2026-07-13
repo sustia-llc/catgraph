@@ -15,6 +15,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
+- **Optional `serde` feature** ([#81](https://github.com/sustia-llc/catgraph/issues/81)):
+  `Serialize`/`Deserialize` derives on the term-persistence surface —
+  `PropExpr<G>`, `Presentation<G>`, `PresentedProp<G>`, `NormalizeEngine`,
+  `NormalizeResult<G>`, and `SfgGenerator<R>` (generic over the payload's own
+  serde impls). **Off by default**; the default build stays dependency-identical
+  (serde is opt-in via `--features serde`). Terms are the machine-persistence
+  representation of morphisms, feeding the realtime/persistence tracks
+  (#72/#73). `Presentation` deserialization trusts the arity invariant (does not
+  re-run `add_equation`'s check — documented on the type). CI gains a targeted
+  `--features serde` test+clippy pass. (Note: the issue named a `StringDiagram<G>`
+  type; the actual SMC normal form is `smc_nf::n<G>`, a *derived* form — persist
+  the `PropExpr` term and re-normalize on load, so it is intentionally not
+  serialized.)
+
+### Added
+
 - **SMC normal form: `topological_layer_order` (Step 4(c))** — sifts each
   non-identity-source generator to its earliest admissible (braid-free) layer,
   giving independent parallel work a single canonical schedule (issue #14; JS-I

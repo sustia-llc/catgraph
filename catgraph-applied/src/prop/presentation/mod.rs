@@ -61,6 +61,7 @@ use functorial::CompleteFunctor;
 ///   including overlapping equations. Always returns `Some(_)` — no false
 ///   negatives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum NormalizeEngine {
     /// Structural `eq_mod` behavior: normalize both sides via bounded structural
     /// rewriting and compare structurally.
@@ -73,6 +74,7 @@ pub enum NormalizeEngine {
 /// Result of [`Presentation::normalize`]. Distinguishes "fully reduced"
 /// from "hit depth bound" so callers can decide how to handle partial results.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[must_use]
 pub struct NormalizeResult<G: PropSignature> {
     /// The (possibly partial) normalized expression.
@@ -84,7 +86,17 @@ pub struct NormalizeResult<G: PropSignature> {
 }
 
 /// A presentation of a prop: generators `G` with arity maps plus equations `E`.
+///
+/// # Serde (feature `serde`)
+///
+/// `Serialize`/`Deserialize` round-trip the full state (equations, depth,
+/// engine). **Deserialization does not re-run [`Self::add_equation`]'s arity
+/// check** — it reconstructs the fields directly, so a hand-crafted document
+/// could carry an arity-mismatched equation. Round-tripping a value produced by
+/// this crate is always safe; when ingesting untrusted documents, re-validate
+/// (e.g. rebuild via [`Self::add_equation`]).
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Presentation<G: PropSignature> {
     equations: Vec<(PropExpr<G>, PropExpr<G>)>,
     rewrite_depth: usize,
@@ -529,6 +541,7 @@ fn rewrite_once_top<G: PropSignature>(
 /// equivalence classes. Surfaces [`PresentedProp::presentation`]
 /// and [`PresentedProp::quotient_representative`].
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PresentedProp<G: PropSignature> {
     presentation: Presentation<G>,
 }
