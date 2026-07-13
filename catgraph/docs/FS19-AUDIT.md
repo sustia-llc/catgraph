@@ -86,8 +86,8 @@
 | Ex 2.7: 1-object SMC = monoid case (Frobenius on I = invertible scalar) | ➖ | — | algebraic remark, not a constructable example |
 | Ex 2.8: Frobenius on object 1 in Cospan | ✅ | hypergraph_category.rs (`impl HypergraphCategory for Cospan<Lambda>`) | |
 | Ex 2.9: any object in Cospan(C) for C with finite colimits | ⚠️ | — | catgraph only does Cospan_Λ on FinSet_Λ, not general Cospan(C) |
-| Ex 2.10: additive Frobenius on ℝ in LinRel | ❌ | — | LinRel deferred per FONG-SPIVAK-XREF |
-| Ex 2.11: multiplicative Frobenius on ℝ in LinRel (different) | ❌ | — | LinRel deferred |
+| Ex 2.10: copy/equality Frobenius on ℝ in LinRel (`E = {(a,b,c) \| a=b=c}`) | ❌ | — | LinRel deferred per FONG-SPIVAK-XREF |
+| Ex 2.11: addition Frobenius on ℝ in LinRel (`μ = {a+b=c}`; the paper's "additive" structure) | ❌ | — | LinRel deferred |
 
 ### §2.3 Hypergraph categories
 
@@ -230,8 +230,8 @@ Flat bulleted index of every ❌ MISSING entry across the per-section tables abo
 
 ### §2.2 Special commutative Frobenius monoids
 
-- Ex 2.10: additive Frobenius on ℝ in LinRel — **[different-target-category]**
-- Ex 2.11: multiplicative Frobenius on ℝ in LinRel — **[different-target-category]**
+- Ex 2.10: copy/equality Frobenius on ℝ in LinRel (`a=b=c`) — **[different-target-category]**
+- Ex 2.11: addition Frobenius on ℝ in LinRel (`a+b=c`) — **[different-target-category]**
 
 ### §2.3 Hypergraph categories
 

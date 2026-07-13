@@ -91,6 +91,7 @@
 | Def 5.50: Mat(R) prop of R-matrices | ✅ | catgraph-applied::mat | `MatR<R>` pure-rig matrix prop. F&S convention: morphism m→n is m×n matrix. Composable/Monoidal/SymmetricMonoidalMorphism over any `Rig`; block_diagonal tensor. `mat_f64` nalgebra bridge behind opt-in `f64-rig` feature. |
 | Thm 5.53: prop functor S: SFG_R → Mat(R) | ✅ | catgraph-applied::sfg_to_mat | `sfg_to_mat` structural recursion over `PropExpr<SfgGenerator<R>>`; generator table matches Eq 5.52 exactly. Functoriality (S(f∘g) = S(f)·S(g), S(f⊗g) = S(f)⊕S(g)) verified on all 4 rigs via 13 integration tests. |
 | Prop 5.54: matrix S(g) describes input→output amplification | ✅ | catgraph-applied::sfg_to_mat (implicit) | Implicitly verified by Thm 5.53 functoriality tests; the generator matrices are exact per Eq 5.52. No standalone test. |
+| Prop 5.56: every matrix M∈Mat(R) is realized by some SFG (`S` is surjective/full) | ❌ | — | The converse of the shipped Thm 5.53: there is no `mat_to_sfg` realization. Genuine coverage gap (companion to a shipped theorem); the crate only computes SFG→Mat. |
 | Eq 5.52: generator → matrix table (copy, discard, add, zero, scalar) | ✅ | catgraph-applied::sfg_to_mat + tests/sfg_to_mat.rs | All 5 generator matrices verified in integration tests across BoolRig, UnitInterval, Tropical, F64Rig. |
 
 ### §5.4 Graphical linear algebra (pp. 168–178)
@@ -99,7 +100,7 @@
 |---|---|---|---|
 | Thm 5.60: presentation of Mat(R) from Frobenius + rig equations | ✅ | catgraph-applied::graphical_linalg + prop::presentation::functorial | **DONE** via the semantic Functorial engine. `matr_presentation<R>` builds all 16 equations from F&S p.170 (Groups A cocomonoid, B monoid, C bialgebra, D scalar — D1/D3/D4/D5/D6 instantiated for `rig_samples`). Decision procedure: `Presentation::eq_mod_functorial(a, b, &MatrixNFFunctor::<R>::new())` — complete by F&S Thm 5.53 + Baez-Erbele 2015 (the isomorphism `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)` is realised by `sfg_to_mat`). **Syntactic (CC) decision remains incomplete by design** — Option A (atom-canonical `smc_refine` in `kb::CongruenceClosure`) plus the post-#14 layer-ordering NF reduce BoolRig d=2 collisions 2574 → 1433 → 1301 (~49% total) but cannot reach zero; the terminal Mat(R) decision path is the Functorial engine (resolved: functorial-terminal, #15; KB feasibility spike #57). The 12 integration tests in `tests/graphical_linalg.rs` were renamed `cc_completeness_tracking_*` (from `thm_5_60_faithful_*`) to reflect that they diagnose CC incompleteness vs the matrix ground truth — they are NOT Thm 5.60 verification (Baez-Erbele proved that abstractly). They stay `#[ignore]`'d as a diagnostic, not a release gate. See the CHANGELOG entry. |
 | Def 5.65: monoid object in SMC (commutative monoid axioms) | ❌ | — | catgraph has `FrobeniusOperation` (monoid + comonoid) but no standalone `MonoidObject` in general SMC; deferred |
-| Thm 5.87: hypergraph category from linear relations | ➖ | — | LinRel deferred (same as core audit) |
+| Thm 5.87: `Rel_R` (Def 5.79, R-relations) is a self-dual compact closed prop | ➖ | — | `Rel_R`/`LinRel_R` deferred. **Note:** the paper's Thm 5.87 is about `Rel_R` and states *compact closed* (not "hypergraph category"); *linear* relations are `LinRel_R`, the Exercise 5.85 sub-prop — a different object. |
 
 ### §6.2 Colimits and connection (pp. 184–196)
 
@@ -182,7 +183,7 @@
 
 - **Ch 1–3** (orders, enrichment, databases): foundational CT already in catgraph core or out of scope
 - **Ch 7** (toposes, sheaves, logic): out of scope for catgraph
-- **LinRel examples** (Ex 6.65, Thm 5.87): deferred per core audit decision
+- **`Rel_R` / `LinRel_R`** (Def 5.79, Exercise 5.85, Thm 5.87 — `Rel_R` compact closed): deferred per core audit decision
 - **Profunctor categories** (Thm 4.63): enriched profunctors are out of catgraph's scope
 
 ### Items that are implicit / "morally present" but not explicit
