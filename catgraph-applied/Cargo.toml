@@ -26,6 +26,12 @@ f64-rig = ["dep:nalgebra"]
 # only. **NOT public API.** Drives the `presentation::atom_canonical_n*`
 # group in `benches/presentation_bench.rs`. Opt-in only (NOT in `default`).
 internal-bench = []
+# `serde` adds `Serialize`/`Deserialize` derives on the term surface
+# (`PropExpr`, `Presentation`, `PresentedProp`, `NormalizeEngine`,
+# `NormalizeResult`, `SfgGenerator`). Off by default — zero-dep default build
+# preserved. Terms are the machine-persistence representation of morphisms
+# (feeds #72/#73). Deserialization trusts the arity invariant (see `Presentation`).
+serde = ["dep:serde"]
 
 [dependencies]
 catgraph = { workspace = true }
@@ -43,6 +49,7 @@ rand.workspace = true
 rayon = { workspace = true, optional = true }
 rayon-cond = { version = "0.4", optional = true }
 rust_decimal.workspace = true
+serde = { workspace = true, optional = true }
 # Workspace error-derive pattern (already in the tree via catgraph core's
 # CatgraphError; adopted for HypergraphError per #28 — no new lockfile entry).
 thiserror.workspace = true
@@ -53,6 +60,7 @@ ultragraph = { workspace = true }
 [dev-dependencies]
 criterion.workspace = true
 proptest.workspace = true
+serde_json.workspace = true
 
 [[bench]]
 name = "rayon_thresholds"

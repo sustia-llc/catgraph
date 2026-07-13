@@ -70,6 +70,7 @@ pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::De
 /// expressions; raw variant construction is available but callers must
 /// uphold the composition-arity invariant themselves.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PropExpr<G: PropSignature> {
     /// `id_n : n → n`.
     Identity(usize),

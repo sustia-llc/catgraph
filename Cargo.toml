@@ -47,8 +47,13 @@ num          = "0.4"   # narrowed to BigInt / Complex / ToPrimitive / pow (NOT Z
 rand         = "0.10"
 rayon        = "1.12"
 rust_decimal = "1"
+# `serde` is opt-in per member (`{ workspace = true, optional = true }` behind a
+# `serde` feature) — off by default so the default build stays serde-free (#81).
+# Term persistence: morphisms serialize as `PropExpr<G>` terms (feeds #72/#73).
+serde        = { version = "1", features = ["derive"] }
 thiserror    = "2"     # workspace error-derive pattern (CatgraphError, HypergraphError — #28)
 
 # --- dev ---
-proptest  = "1"
-criterion = { version = "0.8", features = ["html_reports"] }
+proptest   = "1"
+criterion  = { version = "0.8", features = ["html_reports"] }
+serde_json = "1"       # serde round-trip tests only (dev-dep, behind the `serde` feature)

@@ -44,6 +44,11 @@ jobs:
       - run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
       - run: cargo test --workspace
       - run: cargo test -p catgraph --no-default-features
+      # #81: the opt-in `serde` feature is off by default, so the runs above
+      # never exercise its derives or round-trip tests. This targeted run (plus
+      # the clippy pass) keeps the serde surface from rotting silently.
+      - run: cargo test -p catgraph-applied -p catgraph-syntax --features serde
+      - run: cargo clippy -p catgraph-applied -p catgraph-syntax --features serde --all-targets -- -D warnings
 
   # #11: the slow BV 2025 Prop 3.14 acceptance fixture
   # (euler_char_identity::fixture_3_5point_path_t_2_5) is ignored under

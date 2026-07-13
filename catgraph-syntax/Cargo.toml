@@ -9,6 +9,12 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[features]
+# `serde` forwards to catgraph-applied's `serde` feature and adds the derive on
+# `FrobeniusOr`, so a full syntax term `PropExpr<FrobeniusOr<G>>` round-trips
+# (machine complement to the textual parser/printer). Off by default (#81).
+serde = ["dep:serde", "catgraph-applied/serde"]
+
 [dependencies]
 # `catgraph` supplies `CatgraphError`, the transparent passthrough behind
 # `SyntaxError::Catgraph` (arity failures surface from applied's `Free::compose`).
@@ -24,7 +30,9 @@ catgraph-applied = { workspace = true }
 # `Traced` typed builder). Mirrors catgraph-dl's documented-reserved-dep
 # precedent (its `num` dep carried deps-only ahead of the #36 R-module surface).
 deep_causality_haft = { workspace = true }
+serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 proptest.workspace = true
+serde_json.workspace = true

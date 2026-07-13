@@ -40,6 +40,7 @@ use crate::{
 /// [`crate::rig::Tropical`], [`crate::rig::F64Rig`] — satisfy both; the three
 /// `f64`-wrapping rigs provide manual `Eq + Hash` via bit-exact `to_bits()`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SfgGenerator<R: Rig + Eq + std::hash::Hash> {
     /// `Δ : 1 → 2` — duplicate a wire.
     Copy,

@@ -95,6 +95,7 @@ use crate::text::GeneratorSyntax;
 /// | [`Epsilon`](FrobeniusOr::Epsilon) | `ε` counit | `1 → 0` |
 /// | [`User(g)`](FrobeniusOr::User) | a `G`-generator | `g.source() → g.target()` |
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FrobeniusOr<G> {
     /// Multiplication `μ : 2 → 1` (the merge).
     Mu,
