@@ -74,11 +74,37 @@ impl CospanFunctor {
 ///
 /// # Errors
 ///
+/// - [`CatgraphError::RecursionLimit`] if the term's structural depth exceeds
+///   [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH) (the recursion guard, #99 —
+///   the same variant `SyntaxError::RecursionLimit` wraps, so every interpreter
+///   reports the guard with one shape even though [`CompleteFunctor`] fixes this
+///   one's error type to `CatgraphError`).
 /// - [`CatgraphError::Presentation`] if the term contains a
 ///   [`FrobeniusOr::User`] generator (outside the fragment).
 /// - [`CatgraphError::Composition`] if a [`PropExpr::Compose`] node is
 ///   arity-mismatched (surfaced transparently from the cospan pushout).
 pub fn to_cospan<G>(expr: &PropExpr<FrobeniusOr<G>>) -> Result<Cospan<()>, CatgraphError>
+where
+    G: PropSignature,
+{
+    // Pre-flight the recursion depth so `to_cospan_inner` cannot overflow the
+    // stack on an unbounded programmatically-built term (#99). `CompleteFunctor`
+    // fixes the error type to `CatgraphError`, so this reports the shared
+    // `CatgraphError::RecursionLimit` — the same shape `SyntaxError::RecursionLimit`
+    // carries for the other interpreters.
+    let depth = crate::depth::term_depth(expr);
+    if depth > crate::depth::MAX_TERM_DEPTH {
+        return Err(CatgraphError::RecursionLimit {
+            depth,
+            limit: crate::depth::MAX_TERM_DEPTH,
+        });
+    }
+    to_cospan_inner::<G>(expr)
+}
+
+/// Recursion behind [`to_cospan`]; the depth guard runs once in the public
+/// entry so this can recurse freely.
+fn to_cospan_inner<G>(expr: &PropExpr<FrobeniusOr<G>>) -> Result<Cospan<()>, CatgraphError>
 where
     G: PropSignature,
 {
@@ -114,14 +140,14 @@ where
         },
         // f ; g — pushout composition. Arity mismatch surfaces as Composition.
         PropExpr::Compose(f, g) => {
-            let fc = to_cospan::<G>(f)?;
-            let gc = to_cospan::<G>(g)?;
+            let fc = to_cospan_inner::<G>(f)?;
+            let gc = to_cospan_inner::<G>(g)?;
             fc.compose(&gc)
         }
         // f ⊗ g — monoidal (disjoint-union) product.
         PropExpr::Tensor(f, g) => {
-            let mut fc = to_cospan::<G>(f)?;
-            let gc = to_cospan::<G>(g)?;
+            let mut fc = to_cospan_inner::<G>(f)?;
+            let gc = to_cospan_inner::<G>(g)?;
             fc.monoidal(gc);
             Ok(fc)
         }

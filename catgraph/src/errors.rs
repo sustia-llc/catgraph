@@ -72,6 +72,14 @@ pub enum CatgraphError {
     /// Finite set morphism construction or conversion failed.
     #[error("finite set error: {message}")]
     FinSet { message: String },
+
+    /// A term interpreter refused a term whose structural nesting depth exceeds
+    /// its recursion limit — a guard against stack overflow on unbounded,
+    /// programmatically-built terms. Shared with `catgraph-syntax`'s
+    /// `SyntaxError::RecursionLimit` so interpreters whose error type is fixed to
+    /// `CatgraphError` (e.g. a `CompleteFunctor`) report the same shape.
+    #[error("recursion limit: term nesting depth {depth} exceeds limit ({limit})")]
+    RecursionLimit { depth: usize, limit: usize },
 }
 
 impl From<TryFromSurjError> for CatgraphError {

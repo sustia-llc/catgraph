@@ -169,6 +169,9 @@ where
     G: PropSignature,
     M: ArrowModel<G>,
 {
+    // Pre-flight the recursion depth so `eval_stream` cannot overflow the stack
+    // on an unbounded programmatically-built term (#99).
+    crate::depth::guard_term_depth(expr)?;
     // The single `source()` walk — O(term size), paid once. From here every
     // node draws off `cursor` in O(1) per wire, so evaluation is linear overall.
     if input.len() != expr.source() {
