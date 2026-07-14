@@ -23,10 +23,13 @@ catgraph-applied   = { path = "catgraph-applied",   version = "0.3.0", default-f
 catgraph-magnitude = { path = "catgraph-magnitude", version = "0.3.0" }
 
 # --- DeepCausality thin substrate — PIN EXACT (DC is 0.x, churning).
-#     Fallback: { git = "https://github.com/deepcausality-rs/deep_causality", rev = "3280cb844" }
+#     haft 0.4.1 (DC v0.15.0 stack, 2026-07-14) now SHIPS the categorical machinery on crates.io
+#     (Category/Kleisli, reified ArrowTerm + interpret_kleisli, symmetric-monoidal PROP, Foldable::fold_map,
+#     NaturalTransformation, + the Cofree comonad & EqFunctor/DebugFunctor) — the -v0.4.0 tag lacked it, so
+#     the git-rev fallback is no longer needed to reach it. Fallback (if ever): { git = "https://github.com/deepcausality-rs/deep_causality", rev = "3280cb844" }
 #     haft is live (catgraph-dl endofunctor layer, #12); num deps-only until a member opts in (#36).
-deep_causality_num  = "=0.4.0"
-deep_causality_haft = "=0.4.0"
+deep_causality_num  = "=0.4.1"
+deep_causality_haft = "=0.4.1"
 
 # --- math / graph — numeric-only, NOT an algebraic substrate ---
 # (members opt in with `{ workspace = true, optional = true }`; `optional` is illegal here.)
