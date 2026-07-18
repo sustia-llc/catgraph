@@ -123,7 +123,7 @@ pub(crate) mod private {
 /// # Intended implementors
 ///
 /// - [`crate::z::Z`] (`BigInt` newtype) — integer-exact arithmetic for
-///   `mobius_function_via_chains_exact<Q: Rig + ZAlgebra>` in
+///   `mobius_function_via_chains_exact<Q: Ring + ZAlgebra>` in
 ///   catgraph-magnitude (Leinster 2008 Cor 1.5).
 /// - Any future fixed-width-integer rig (e.g. `i64`, `i128`) defined
 ///   inside `catgraph-applied` that wishes to opt into the integer-exact

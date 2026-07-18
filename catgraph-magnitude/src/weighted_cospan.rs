@@ -9,7 +9,7 @@
 //!
 //! When `Q = UnitInterval`, [`WeightedCospan::into_metric_space`] lifts the
 //! weighted cospan into a [`LawvereMetricSpace<NodeId>`] via the `-ln π`
-//! embedding (Lawvere 1973; BTV 2021 §1.4). The general `Q` case is deferred
+//! embedding (Lawvere 1973; BTV 2021 §5). The general `Q` case is deferred
 //! — magnitude over arbitrary rigs needs a base-change choice that
 //! is not unique.
 //!

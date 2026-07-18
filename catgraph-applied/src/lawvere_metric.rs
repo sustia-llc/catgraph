@@ -128,7 +128,7 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
     /// # Why a tolerance
     ///
     /// When distances are the `−ln` lift of `[0, 1]`-valued couplings (BTV
-    /// 2021 §1.4), a max-product transitive closure guarantees the *product*
+    /// 2021 §5), a max-product transitive closure guarantees the *product*
     /// inequality `π(x, z) ≥ π(x, y)·π(y, z)` exactly, but the corresponding
     /// distance inequality is `−ln π(x, z) ≤ −ln(π(x, y)·π(y, z))`. Evaluating
     /// the right side as `(−ln π(x, y)) + (−ln π(y, z))` — a log-of-product

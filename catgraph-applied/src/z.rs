@@ -27,7 +27,7 @@
 //! identity local: future trait widenings (e.g. a `Q` rational)
 //! attach cleanly to `Z` rather than to the foreign type. It also gives
 //! catgraph-magnitude a stable name to bound on in §1.17
-//! `mobius_function_via_chains_exact<Q: Rig + ZAlgebra>` without leaking
+//! `mobius_function_via_chains_exact<Q: Ring + ZAlgebra>` without leaking
 //! the `num::BigInt` dependency into downstream APIs.
 
 use crate::integer::{ZAlgebra, private::Sealed};

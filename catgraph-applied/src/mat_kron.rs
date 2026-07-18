@@ -1,6 +1,6 @@
 //! `MatKron(R)` — `FdVect` with the **Kronecker** tensor: a genuine hypergraph
 //! category (Fong & Spivak 2019, *Hypergraph Categories* arXiv:1806.08304v3,
-//! Ex 2.16, §2.6).
+//! Ex 2.16, §2.3).
 //!
 //! This is a concrete (semantic) re-expression onto catgraph's **native**
 //! [`Monoidal`] / [`Composable`] / [`SymmetricMonoidalMorphism`] traits. It is

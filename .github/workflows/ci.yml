@@ -39,10 +39,10 @@ jobs:
       # #111: audit-doc tallies (summary tables, headline %, "(N tests)"
       # citations) are hand-maintained and drifted twice before Phase 1 of the
       # paper audit caught them. This recomputes them from the docs themselves.
-      # FS19 only for now — FS18/BV25 summaries have known pre-existing drift
-      # that their audit phases (2-3) will fix, after which they join this list.
+      # FS19 + FS18 (drift fixed in audit Phases 1-2) — BV25 joins after its
+      # audit phase (3) fixes its known pre-existing summary drift.
       - name: audit-count guard (#111)
-        run: python3 scripts/check_audit_counts.py catgraph/docs/FS19-AUDIT.md
+        run: python3 scripts/check_audit_counts.py catgraph/docs/FS19-AUDIT.md catgraph-applied/docs/FS18-AUDIT.md
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # #85: broken intra-doc links (unresolved / private / redundant) shipped

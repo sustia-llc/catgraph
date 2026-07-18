@@ -1,5 +1,5 @@
 //! Partial trace from the compact-closed structure of [`MatKron`]
-//! (Fong & Spivak 2019, *Hypergraph Categories* arXiv:1806.08304v3, §2.6).
+//! (Fong & Spivak 2019, *Hypergraph Categories* arXiv:1806.08304v3, §3.1).
 //!
 //! `MatKron(R)` is a self-dual compact closed category whose Kronecker tensor
 //! is **strictly** associative with a **strict** unit (dimension `1`). No
