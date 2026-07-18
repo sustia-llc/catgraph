@@ -1,4 +1,4 @@
-//! Fong-Spivak Theorem 1.2: `Hyp_OF` ≅ Cospan-Alg
+//! Fong-Spivak Theorem 1.2 in its per-Λ form (Thm 4.13): `Hyp_OF(Λ)` ≅ Lax(Cospan_Λ, Set)
 //!
 //! Demonstrates both directions of the equivalence (§4) using
 //! concrete cospan-algebras and hypergraph categories.
@@ -19,7 +19,9 @@ use catgraph::{
 type PartMorph = CospanAlgebraMorphism<PartitionAlgebra, char>;
 
 fn main() {
-    println!("=== Fong-Spivak Theorem 1.2: Hyp_OF ≅ Cospan-Alg ===\n");
+    println!(
+        "=== Fong-Spivak Theorem 1.2 (per-Λ form, Thm 4.13): Hyp_OF(Λ) ≅ Lax(Cospan_Λ, Set) ===\n"
+    );
 
     let alg = Arc::new(PartitionAlgebra);
 
@@ -88,5 +90,5 @@ fn main() {
     let elem = part.map_cospan(&s, &unit).unwrap();
     println!("    Part([a]) element: ∅ → {:?}", elem.codomain());
 
-    println!("\nDone. Theorem 1.2 verified.");
+    println!("\nDone. Per-Λ roundtrip (Thm 4.13) verified.");
 }

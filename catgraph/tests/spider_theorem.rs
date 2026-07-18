@@ -1,6 +1,7 @@
-//! Explicit verification of Fong-Spivak Thm 6.55 (spider theorem):
+//! Shape-level test instances of Fong-Spivak Thm 6.55 (spider theorem):
 //! any connected Frobenius diagram on `m` inputs and `n` outputs equals
-//! the spider `s_{m,n}`.
+//! the spider `s_{m,n}`. Only domain/codomain agreement is asserted here,
+//! not full structural equality of the morphisms.
 //!
 //! These tests build connected diagrams from the generators (η, ε, μ, δ)
 //! and verify that their shape (domain/codomain) matches the canonical
