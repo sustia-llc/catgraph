@@ -24,19 +24,19 @@
 |---|---|---|---|---|---|---|
 | §4.4 Categorification + monoidal cats | 5 | 0 | 0 | 2 | 2 | 9 |
 | §4.5 Compact closed categories | 0 | 0 | 0 | 2 | 3 | 5 |
-| §5.2 Props and presentations | 4 | 0 | 0 | 3 | 0 | 7 |
-| §5.3 Signal flow graphs | 5 | 0 | 0 | 1 | 0 | 6 |
+| §5.2 Props and presentations | 4 | 1 | 0 | 3 | 0 | 8 |
+| §5.3 Signal flow graphs | 6 | 0 | 1 | 0 | 0 | 7 |
 | §5.4 Graphical linear algebra | 1 | 0 | 1 | 1 | 0 | 3 |
 | §6.2 Colimits and connection | 0 | 0 | 0 | 2 | 4 | 6 |
-| §6.3 Hypergraph categories | 2 | 0 | 0 | 2 | 6 | 10 |
+| §6.3 Hypergraph categories | 2 | 0 | 0 | 0 | 7 | 9 |
 | §6.4 Decorated cospans | 4 | 0 | 1 | 1 | 0 | 6 |
 | §6.5 Operads and their algebras | 5 | 2 | 0 | 1 | 0 | 8 |
-| **TOTAL** | **26** | **2** | **2** | **15** | **15** | **60** |
+| **TOTAL** | **27** | **3** | **3** | **12** | **16** | **61** |
 
 **Headline numbers:**
-- **43% DONE / 3% PARTIAL / 3% MISSING / 25% N/A / 25% IN CORE**
-- Of the 60 audited items, 15 are already in catgraph core (the research paper's content), 15 are N/A (pedagogical), leaving **30 implementable items** of which **26 are DONE, 2 PARTIAL, 2 MISSING**.
-- Of implementable items: **87% DONE / 7% PARTIAL / 7% MISSING**
+- **44% DONE / 5% PARTIAL / 5% MISSING / 20% N/A / 26% IN CORE**
+- Of the 61 audited items, 16 are already in catgraph core (the research paper's content), 12 are N/A (pedagogical), leaving **33 implementable items** of which **27 are DONE, 3 PARTIAL, 3 MISSING**.
+- Of implementable items: **82% DONE / 9% PARTIAL / 9% MISSING**
 - §5.4 Thm 5.60 is closed via the opt-in `Presentation::eq_mod_functorial<MatrixNFFunctor<R>>` semantic engine — a complete decision procedure for `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)` by Baez-Erbele 2015. The default syntactic (CC) engine remains incomplete by design; see the §5.4 Thm 5.60 row for the measured Option-A improvement and the Mat(R) completeness resolution (resolved: functorial-terminal (#15); KB feasibility spike #57).
 - §4.4 carries 3 enriched-category rows (EnrichedCategory, HomMap, LawvereMetricSpace) and the congruence-closure decision procedure as the default `eq_mod` backend.
 - SFG_R, Mat(R), the `sfg_to_mat` functor, `Presentation`, Thm 5.60, and Corel are all closed; §6.3 Ex 6.64 Corel is closed in catgraph core.
@@ -59,7 +59,7 @@
 | Lawvere metric space | ✅ | catgraph-applied::lawvere_metric::LawvereMetricSpace | Concrete impl over `Tropical`. Triangle-inequality verifier + `-ln π` embedding from `UnitInterval`. |
 | HomMap finite realization | ✅ | catgraph-applied::enriched::HomMap | Concrete trait realization. Used for testing + the catgraph-magnitude LmCategory construction (sibling crate). |
 
-### §4.5 Profunctors form a compact closed category (pp. 139–146)
+### §4.5 Profunctors form a compact closed category (pp. 139–145)
 
 | Item | Status | Location | Notes |
 |---|---|---|---|
@@ -252,7 +252,7 @@ This section maps every catgraph workspace module to its paper provenance (or la
 | `e2_operad.rs` | — | §6.5 Rough Def 6.91 | May [May72], Boardman-Vogt [BV73] | Little-disks operad. Same: abstract operad definition from [FS18], specific E₂ construction from homotopy theory. |
 | `rig.rs` | — | §5.3.1 Def 5.36 | deep_causality_num (blanket) | `Rig` trait + BoolRig, UnitInterval, Tropical, F64Rig. `Zero`/`One` re-sourced from `deep_causality_num`. |
 | `mat_kron.rs` | §2.3 Ex 2.16 | — | Kissinger 2015 (FdVect HC) | `MatKron<R>` Kronecker-tensor **genuine hypergraph category** over a rig; Hadamard SCFM (μ/δ/η/ε) as inherent generators on native `Monoidal`/`Composable`/`SymmetricMonoidalMorphism`; speciality δ;μ=id (n=2,3,5). |
-| `trace.rs` | §2.6 | — | — | Partial trace `Tr_X(f)` built from the `mat_kron` cup/cap generators (strict Kronecker; no associators). |
+| `trace.rs` | §3.1 | — | — | Partial trace `Tr_X(f)` built from the `mat_kron` cup/cap generators (strict Kronecker; no associators). |
 | `prop/presentation/mod.rs` | — | §5.2 Def 5.33 | — | `Presentation<G>` with 9-rule SMC canonical form + user equations; `NormalizeEngine` selector (Structural / CongruenceClosure) + `eq_mod_functorial<F>` method. File split out of a single `prop/presentation.rs` when the CC backend landed. |
 | `sfg.rs` | — | §5.3 Def 5.45 | — | `SignalFlowGraph<R>` free prop on G_R generators. |
 | `mat.rs` | — | §5.3 Def 5.50 | — | `MatR<R>` pure-rig matrix prop. |

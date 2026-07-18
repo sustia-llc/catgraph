@@ -23,8 +23,8 @@ This crate packages applied-CT modules that build on catgraph's strict Fong-Spiv
 | `rig` | `Rig` trait (semiring) + `BoolRig`, `UnitInterval`, `Tropical`, `F64Rig` instances (F&S Def 5.36) |
 | `sfg` | `SignalFlowGraph<R>` — free prop on signal-flow generators (F&S Def 5.45) |
 | `mat` | `MatR<R>` — pure-rig matrix prop over any `Rig` R (F&S Def 5.50) |
-| `mat_kron` | `MatKron<R>` — Kronecker-tensor matrix prop: a genuine hypergraph category over a rig with Hadamard SCFM (η/ε/μ/δ) as inherent generators; speciality δ;μ = id (F&S 2019 *Hypergraph Categories* Ex 2.16, §2.6) |
-| `trace` | Partial trace `Tr_X(f)` for `MatKron<R>`, built from its compact-closed cup/cap generators (strict Kronecker; no associators) (F&S 2019 §2.6) |
+| `mat_kron` | `MatKron<R>` — Kronecker-tensor matrix prop: a genuine hypergraph category over a rig with Hadamard SCFM (η/ε/μ/δ) as inherent generators; speciality δ;μ = id (F&S 2019 *Hypergraph Categories* Ex 2.16, §2.3) |
+| `trace` | Partial trace `Tr_X(f)` for `MatKron<R>`, built from its compact-closed cup/cap generators (strict Kronecker; no associators) (F&S 2019 §3.1) |
 | `sfg_to_mat` | `sfg_to_mat` functor `S: SFG_R → Mat(R)` (F&S Thm 5.53) |
 | `graphical_linalg` | `matr_presentation<R>` — 16-equation Thm 5.60 presentation of Mat(R) (F&S §5.4; closed via the Functorial engine — see `prop::presentation::functorial`) |
 | `mat_f64` (feature `f64-rig`) | nalgebra bridge for `MatR<F64Rig>`: determinant, inverse, `DMatrix` roundtrip |
@@ -70,7 +70,7 @@ Every module depends on catgraph's public API:
 
 ## Paper alignment
 
-See [`docs/FS18-AUDIT.md`](docs/FS18-AUDIT.md) for the section-by-section Seven Sketches coverage audit (Chapters 4–6, 60 items tracked; 87% of implementable items DONE, §5.4 Thm 5.60 closed via Functorial engine). Cross-linked from [`../catgraph/docs/FS19-AUDIT.md`](../catgraph/docs/FS19-AUDIT.md) "Reconciliation" section.
+See [`docs/FS18-AUDIT.md`](docs/FS18-AUDIT.md) for the section-by-section Seven Sketches coverage audit (Chapters 4–6, 61 items tracked; 82% of implementable items DONE, §5.4 Thm 5.60 closed via Functorial engine). Cross-linked from [`../catgraph/docs/FS19-AUDIT.md`](../catgraph/docs/FS19-AUDIT.md) "Reconciliation" section.
 
 ## Changelog
 

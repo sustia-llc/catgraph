@@ -13,6 +13,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed
+
+- **FS18-AUDIT summary recount** (paper-audit Phase 2): the summary table had
+  drifted from its own detail tables since before the earliest tracked commit —
+  §5.2 7→8 rows (Def 5.13 ⚠️ was uncounted), §5.3 6→7 (Prop 5.56 ❌ added in the
+  2026-07-13 reconciliation was never summed), §6.3 10→9; TOTAL 26/2/2/15/15 of
+  60 → **27/3/3/12/16 of 61**, implementable 30→33, headline 87%→82% DONE. The
+  released [0.3.1]/[0.2.0] "56 items" entries below record the audit's size at
+  those dates and are left untouched. Citation fixes in the same pass: F&S 2019
+  "§2.6" → §2.3 (mat_kron) / §3.1 (trace), BTV 2021 "§1.4" → §5
+  (lawvere_metric), §4.5 page range, `Ring + ZAlgebra` bound in z/integer docs.
+
 ### Added
 
 - **Optional `serde` feature** ([#81](https://github.com/sustia-llc/catgraph/issues/81)):

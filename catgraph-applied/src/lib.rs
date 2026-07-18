@@ -41,7 +41,7 @@
 //!   (F&S 2019 Ex 2.16); concrete re-expression on the native
 //!   `Monoidal`/`Composable`/`SymmetricMonoidalMorphism` traits
 //! - [`trace`] — partial trace `Tr_X(f) : A → B` from the compact-closed
-//!   structure of [`mat_kron`] (F&S 2019 §2.6); strict tensor, no
+//!   structure of [`mat_kron`] (F&S 2019 §3.1); strict tensor, no
 //!   associators/unitors required
 //! - [`hypergraph`] — a CRUD hypergraph container (`Hypergraph<V, HE>`), the
 //!   zero-dependency K1 backend for the downstream koalisi coalition layer
