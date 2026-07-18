@@ -47,7 +47,7 @@ substrate (numeric backends kept optional).
   (Props 3.1–3.4, zigzag identities Eq 13).
 - `CospanAlgebra` with `PartitionAlgebra` (Ex 2.3, Prop 4.6 initiality) and
   `NameAlgebra` (§4.1).
-- The §4 equivalence `Hyp_OF ≅ Cospan-Alg` — Theorem 1.2 in its per-Λ form
+- The §4 equivalence `Hyp_OF(Λ) ≅ Lax(Cospan_Λ, Set)` — Theorem 1.2 in its per-Λ form
   (= Thm 4.13), with Lemmas 4.3 / 4.9 and `CospanToFrobeniusFunctor` (Prop 3.8).
 - `MorphismSystem` dependency-graph acyclicity (`add_definition_composite`) and
   bottom-up resolution order (`fill_black_boxes`) run on the zero-dependency

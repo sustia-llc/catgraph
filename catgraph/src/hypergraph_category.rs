@@ -11,7 +11,8 @@
 //!
 //! ## Implementations
 //!
-//! - [`Cospan<Lambda>`](crate::cospan::Cospan) — the free hypergraph category on `Λ` (Thm 3.14)
+//! - [`Cospan<Lambda>`](crate::cospan::Cospan) — the free hypergraph category on `Λ`
+//!   (Thm 3.14; freeness adjunction deferred — see `docs/FS19-AUDIT.md`, #79)
 
 use std::fmt::Debug;
 

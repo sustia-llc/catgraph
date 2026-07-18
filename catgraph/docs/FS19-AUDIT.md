@@ -26,24 +26,24 @@
 
 | Section | DONE | PARTIAL | MISSING | N/A | Total |
 |---|---|---|---|---|---|
-| §1 Introduction | 6 | 2 | 0 | 1 | 9 |
-| §2.1 Cospan-algebras | 3 | 2 | 2 | 0 | 7 |
+| §1 Introduction | 6 | 3 | 0 | 1 | 10 |
+| §2.1 Cospan-algebras | 3 | 3 | 2 | 0 | 8 |
 | §2.2 Frobenius monoids | 3 | 2 | 2 | 1 | 8 |
-| §2.3 Hypergraph categories | 4 | 6 | 1 | 2 | 13 |
+| §2.3 Hypergraph categories | 4 | 6 | 2 | 2 | 14 |
 | §2.4 Critiques | 0 | 0 | 2 | 0 | 2 |
 | §2.5 Operads | 0 | 0 | 0 | 1 | 1 |
-| §3.1 Compact closed | 7 | 0 | 0 | 0 | 7 |
-| §3.2 Free hypergraph cats | 4 | 4 | 3 | 2 | 13 |
+| §3.1 Compact closed | 8 | 0 | 0 | 0 | 8 |
+| §3.2 Free hypergraph cats | 3 | 4 | 3 | 2 | 12 |
 | §3.3 io/ff factorization | 0 | 0 | 6 | 0 | 6 |
 | §3.4 Strictification | 0 | 1 | 3 | 0 | 4 |
-| §4.1 H → A direction | 5 | 2 | 2 | 1 | 10 |
-| §4.2 A → H direction | 5 | 1 | 1 | 1 | 8 |
+| §4.1 H → A direction | 8 | 1 | 0 | 1 | 10 |
+| §4.2 A → H direction | 6 | 2 | 0 | 1 | 9 |
 | §4.3 The equivalence | 1 | 1 | 2 | 1 | 5 |
-| **TOTAL** | **38** | **21** | **24** | **10** | **93** |
+| **TOTAL** | **42** | **23** | **22** | **10** | **97** |
 
 **Headline numbers:**
-- **41% DONE / 23% PARTIAL / 26% MISSING / 11% N/A**
-- Of the 24 missing items: 6 are §3.3 (explicitly deferred), 5 are LinRel/non-strict examples (deferred; Ex 2.16 FdVect is no longer here — realized in `catgraph-applied::mat_kron`), 3 are §3.4 strictification (deferred), and most of the remainder are cross-Λ functoriality items that require parametric-Λ machinery beyond catgraph's type system.
+- **43% DONE / 24% PARTIAL / 23% MISSING / 10% N/A**
+- Of the 22 missing items: 6 are §3.3 (explicitly deferred), 5 are LinRel/non-strict examples (deferred; Ex 2.16 FdVect is no longer here — realized in `catgraph-applied::mat_kron`), 3 are §3.4 strictification (deferred), and most of the remainder are cross-Λ functoriality items that require parametric-Λ machinery beyond catgraph's type system.
 - **Five gaps + one bonus are closed**: Prop 3.4 (explicit comp cospan form), Prop 4.6 (initiality proptest), compose_names_direct, Lemma 4.3 (A_F natural transformation), Lemma 4.9 (F_α io functor), plus a bug fix to `two_layer_simplify` that let `permutation_automatic` come out of `#[ignore]`.
 
 ## Per-section detail
@@ -126,7 +126,7 @@
 | Item | Status | catgraph location | Notes |
 |---|---|---|---|
 | Compact closed category definition (cup, cap, zigzag) | ✅ | compact_closed.rs (cup/cap functions) | not a separate trait; provided as helper functions |
-| Eq 13: zigzag identities | ✅ | tests/compact_closed.rs (33 tests) | tested |
+| Eq 13: zigzag identities | ✅ | tests/compact_closed.rs (44 tests) | tested |
 | Prop 3.1: every hypergraph cat is self-dual compact closed (cup_X := η; δ, cap_X := μ; ε) | ✅ | compact_closed.rs::cup, cap | exact formula |
 | Prop 3.2: bijection C(X,Y) ≅ C(I, X⊗Y) (name) | ✅ | compact_closed.rs::name, unname | |
 | Eq 14: comp^Y_{X,Z} morphism (id_X ⊗ cap_Y ⊗ id_Z) | ✅ | equivalence.rs::comp_cospan | |
@@ -204,7 +204,7 @@
 
 | Item | Status | catgraph location | Notes |
 |---|---|---|---|
-| Thm 4.13: Hyp_OF(Λ) ≃ Lax(Cospan_Λ, Set) | ✅ | equivalence.rs + tests/equivalence.rs | roundtrip verified for PartitionAlgebra and NameAlgebra (17 tests) |
+| Thm 4.13: Hyp_OF(Λ) ≃ Lax(Cospan_Λ, Set) | ✅ | equivalence.rs + tests/equivalence.rs | roundtrip verified for PartitionAlgebra and NameAlgebra (22 tests) |
 | Naturality in Λ | ❌ | — | naturality across varying Λ not verified |
 | Ex 4.14: LinRel' ≃ LinRel (specific worked example with the rectification ν(R) = (-a, b)) | ❌ | — | LinRel deferred |
 | Remark 4.15: generalization Hyp^io_{H/} ≅ Lax(H, Set) | ➖ | — | theoretical remark |
@@ -356,7 +356,7 @@ The applied-CT audit is anchored to Fong & Spivak, *Seven Sketches in Compositio
 - **§6.5 Operads** — `Operadic` trait (core), `WiringDiagram` (Cospan operad, Ex 6.94), `E1`/`E2` operads (Rough Def 6.91)
 - **§6.4 Decorated cospans** — `PetriNet` cospan bridge (Def 6.75 specialized)
 - **§6.3 Hypergraph categories** — `BrauerMorphism` / Temperley-Lieb (spider-adjacent)
-- **§5.2–5.4 Props, signal flow** — `LinearCombination` (rig infrastructure); props/SFG/Mat(R) not yet implemented
+- **§5.2–5.4 Props, signal flow** — `LinearCombination` (rig infrastructure); props/SFG/Mat(R) implemented in catgraph-applied (`PropExpr`/`Presentation`, `SignalFlowGraph`, `MatR`, `sfg_to_mat`; Thm 5.60 closed via the functorial engine)
 - **§4.4–4.5 Monoidal / compact closed** — inherited from catgraph core
 
 The audit also includes a **cross-paper reconciliation** mapping every module in all three workspace crates (catgraph, catgraph-applied, catgraph-physics) to its paper provenance in [FS19] (this document's paper), [FS18] (Seven Sketches), or neither (Wolfram model, representation theory, etc.).
