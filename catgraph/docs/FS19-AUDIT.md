@@ -180,7 +180,7 @@
 | Eq 25: A_H(-) := H(I, Frob(-)) | ✅ | NameAlgebra::map_cospan | implemented as the lax monoidal functor itself |
 | Lemma 4.2: A_H is lax monoidal functor | ✅ | NameAlgebra trait impl | implicit in trait impl |
 | Eq 26: laxator γ definition (γ: 1 → A_H(∅) and γ_{X,Y}: A_H(X) × A_H(Y) → A_H(X⊕Y)) | ✅ | NameAlgebra::lax_monoidal | |
-| Lemma 4.3: A_F natural transformation construction (from F: H → H' to α: A_H → A_H') | ✅ | cospan_algebra.rs::functor_induced_algebra_map | free function lifting any `HypergraphFunctor` to a cospan-algebra morphism; tests in tests/cospan_algebra.rs verify naturality/monoidality/unit for RelabelingFunctor and CospanToFrobeniusFunctor |
+| Lemma 4.3: A_F natural transformation construction (from io F: H → H' to α: A_H → A_H') | ✅ | cospan_algebra.rs::functor_induced_algebra_map | free function lifting a `HypergraphFunctor` to a cospan-algebra morphism; paper states the lemma for io functors over fixed Λ — the cross-label `RelabelingFunctor` case is a beyond-paper generalization (Eq 29 direction, Cospan_f itself ❌ above); tests verify naturality/monoidality/unit for RelabelingFunctor and CospanToFrobeniusFunctor |
 | Eq 27/28: naturality square + α_X definition | ✅ | cospan_algebra.rs::functor_induced_algebra_map + lemma_4_3_* tests | naturality verified via assert_eq chains |
 | Remark 4.4: extension to Hyp (non-OF case) via Frob_H'(-) | ➖ | — | not needed since catgraph only does OF |
 | Remark 4.5: A_{Cospan_Λ} = Part_Λ | ✅ | implicit | the roundtrip test verifies this for Part |

@@ -1,4 +1,8 @@
 //! Operadic substitution trait for plugging one n-ary operation into a slot of another.
+//!
+//! The compositional viewpoint is F&S 2019 Eq (6); the operadic framing itself is
+//! Spivak 2013, *The Operad of Wiring Diagrams* (arXiv:1305.0297), as credited in
+//! the F&S introduction. Concrete operad implementations live in `catgraph-applied`.
 
 use crate::errors::CatgraphError;
 

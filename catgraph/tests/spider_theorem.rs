@@ -1,11 +1,11 @@
-//! Shape-level test instances of Fong-Spivak Thm 6.55 (spider theorem):
+//! Explicit verification of Fong-Spivak Thm 6.55 (spider theorem):
 //! any connected Frobenius diagram on `m` inputs and `n` outputs equals
-//! the spider `s_{m,n}`. Only domain/codomain agreement is asserted here,
-//! not full structural equality of the morphisms.
+//! the spider `s_{m,n}`.
 //!
 //! These tests build connected diagrams from the generators (η, ε, μ, δ)
-//! and verify that their shape (domain/codomain) matches the canonical
-//! spider `s_{m,n}` produced by `special_frobenius_morphism(m, n, z)`.
+//! and assert **full structural equality** (`FrobeniusMorphism` derives `Eq`)
+//! against the canonical spider `s_{m,n}` produced by
+//! `special_frobenius_morphism(m, n, z)`, plus domain/codomain agreement.
 //! They close the ⚠️ PARTIAL status for Thm 6.55 in
 //! `catgraph-applied/docs/FS18-AUDIT.md`.
 
@@ -38,6 +38,7 @@ fn spider_2_2_via_mu_delta() {
     let spider: FM = special_frobenius_morphism(2, 2, z);
     assert_eq!(spider.domain(), mu_then_delta.domain());
     assert_eq!(spider.codomain(), mu_then_delta.codomain());
+    assert!(spider == mu_then_delta, "s_2_2: composite != spider");
 }
 
 /// s_{3,1} constructed as (μ ⊗ id) ; μ : [z,z,z] -> [z].
@@ -60,6 +61,7 @@ fn spider_3_1_via_double_mu() {
     let spider: FM = special_frobenius_morphism(3, 1, z);
     assert_eq!(spider.domain(), mu_id.domain());
     assert_eq!(spider.codomain(), mu_id.codomain());
+    assert!(spider == mu_id, "s_3_1: composite != spider");
 }
 
 /// s_{1,3} constructed as (δ ⊗ id) ; δ : [z] -> [z,z,z].
@@ -82,6 +84,7 @@ fn spider_1_3_via_double_delta() {
     let spider: FM = special_frobenius_morphism(1, 3, z);
     assert_eq!(spider.domain(), delta_first.domain());
     assert_eq!(spider.codomain(), delta_first.codomain());
+    assert!(spider == delta_first, "s_1_3: composite != spider");
 }
 
 /// s_{0,0}: the η;ε loop. A connected diagram on zero inputs and zero
@@ -101,6 +104,7 @@ fn spider_0_0_via_eta_epsilon() {
     let spider: FM = special_frobenius_morphism(0, 0, z);
     assert_eq!(spider.domain(), eta.domain());
     assert_eq!(spider.codomain(), eta.codomain());
+    assert!(spider == eta, "s_0_0: composite != spider");
 }
 
 /// Sanity check on a direct generator: μ alone is a connected diagram
@@ -118,4 +122,5 @@ fn connected_diagrams_reduce_to_same_spider() {
     let spider: FM = special_frobenius_morphism(2, 1, z);
     assert_eq!(spider.domain(), mu.domain());
     assert_eq!(spider.codomain(), mu.codomain());
+    assert!(spider == mu, "s_2_1: generator != spider");
 }

@@ -184,8 +184,14 @@ where
 /// of the functor to each element of `A_H(x) = H(I, P(x))`. The content of
 /// Lemma 4.3 is that this pointwise map is automatically a monoidal natural
 /// transformation between the two name-algebras whenever `F` preserves
-/// composition, tensor product, and Frobenius structure (i.e., whenever `F` is
-/// a hypergraph functor).
+/// composition, tensor product, and Frobenius structure.
+///
+/// The paper states Lemma 4.3 for an **io** (identity-on-objects) hypergraph
+/// functor over a fixed `Λ`; this function additionally accepts cross-label
+/// functors (`L1 ≠ L2`, e.g. `RelabelingFunctor`) — a beyond-paper
+/// generalization in the direction of the paper's Eq (29) naturality square
+/// (the cross-Λ `Cospan_f` machinery itself is not implemented; see
+/// `docs/FS19-AUDIT.md` and #109).
 ///
 /// This free function is the direct embodiment of the paper's construction:
 /// it is a thin wrapper around `F.map_mor(e)` whose purpose is to make the
