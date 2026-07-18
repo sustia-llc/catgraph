@@ -10,7 +10,8 @@
 //! ## Implementations
 //!
 //! - [`RelabelingFunctor`]: relabels `Cospan<L1> → Cospan<L2>` via a function `L1 → L2`,
-//!   preserving all structural maps (the free hypergraph functor induced by a set map).
+//!   preserving all structural maps (the single-map component of the free functor
+//!   `Cospan_-`, Prop 2.1/Cor 3.13; the cross-Λ functor itself is deferred).
 //! - [`CospanToFrobeniusFunctor`]: decomposes `Cospan<L>` into `FrobeniusMorphism<L, BL>`
 //!   via epi-mono factorization (Fong-Spivak Prop 3.8).
 
@@ -74,8 +75,10 @@ where
 /// maps (left-to-middle, right-to-middle indices) are preserved unchanged; only the
 /// middle set labels are transformed.
 ///
-/// This is the free hypergraph functor `Cospan_f` induced by a set map `f: L1 → L2`
-/// (Fong-Spivak §3.2).
+/// This is the component `Cospan_f` at a single set map `f: L1 → L2` of the free
+/// functor `Cospan_-` (Fong-Spivak Prop 2.1, upgraded by Cor 3.13). The cross-Λ
+/// functor `Cospan_-` itself (functoriality across varying label sets, Eq 9) is
+/// deferred — see `docs/FS19-AUDIT.md` and #109.
 pub struct RelabelingFunctor<F> {
     relabel: F,
 }

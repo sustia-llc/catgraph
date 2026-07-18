@@ -17,7 +17,7 @@ Originally based on a fork of [Cobord/Hypergraph](https://github.com/Cobord/Hype
 | `monoidal.rs` | `Monoidal`, `SymmetricMonoidalMorphism`, `GenericMonoidalMorphism` | Tensor product, braiding, generic layered morphisms |
 | `frobenius/` | `FrobeniusMorphism`, `MorphismSystem` | String diagram morphisms, DAG-based black-box interpretation |
 | `compact_closed.rs` | `cup`, `cap`, `name`, `unname`, `compose_names_direct` | Self-dual compact closed structure (§3.1), Prop 3.3 literal form |
-| `cospan_algebra.rs` | `CospanAlgebra`, `PartitionAlgebra`, `NameAlgebra`, `functor_induced_algebra_map` | Lax monoidal functors Cospan → Set (§2.1), Lemma 4.3 natural transformation |
+| `cospan_algebra.rs` | `CospanAlgebra`, `PartitionAlgebra`, `NameAlgebra`, `functor_induced_algebra_map` | Lax monoidal functors Cospan → Set (§2.1), Lemma 4.3 natural transformation (io; see Feature Map) |
 | `hypergraph_category.rs` | `HypergraphCategory` | Frobenius generators η, ε, μ, δ with cup/cap (§2.3) |
 | `hypergraph_functor.rs` | `HypergraphFunctor`, `RelabelingFunctor`, `CospanToFrobeniusFunctor` | Structure-preserving maps between hypergraph categories (§2.3) |
 | `equivalence.rs` | `CospanAlgebraMorphism`, `comp_cospan`, `functor_from_algebra_morphism` | §4 equivalence (Thm 1.2 per-Λ form = Thm 4.13, Eq 8; statement in the Feature Map below), Lemma 4.9 io functor |
@@ -46,9 +46,9 @@ Features implementing structures from [Fong & Spivak, *Hypergraph Categories*](h
 | Def 2.2 | `cospan_algebra.rs` | `CospanAlgebra` trait — lax monoidal functors Cospan_Λ → C. `PartitionAlgebra` (Ex 2.3, Prop 4.6: initial) and `NameAlgebra` (Prop 4.1). |
 | Def 2.5 | `frobenius/` | `FrobeniusMorphism` — string diagram morphisms from the 4 Frobenius generators. `MorphismSystem` DAG for named composition. Ex 2.8: generators as cospans. |
 | Def 2.12 | `hypergraph_category.rs` | `HypergraphCategory` trait — Frobenius generators (η, ε, μ, δ) with derived cup/cap. Prop 2.18 (strict case) implicitly satisfied. |
-| Def 2.12, Eq 12 | `hypergraph_functor.rs` | `HypergraphFunctor` trait — structure-preserving maps. `RelabelingFunctor` (Thm 3.14: free functor). |
+| Def 2.12, Eq 12 | `hypergraph_functor.rs` | `HypergraphFunctor` trait — structure-preserving maps. `RelabelingFunctor` (single-map component of Prop 2.1/Cor 3.13, Eq 9; the cross-Λ functor itself is deferred). |
 | Prop 3.1–3.4 | `compact_closed.rs` | Self-dual compact closed — cup/cap (Prop 3.1), name bijection (Prop 3.2), `compose_names_direct` realising the literal Prop 3.3 formula `(f̂ ⊗ ĝ) ; comp^Y_{X,Z}`, Prop 3.4 recovery. Zigzag identities (Eq 13). |
-| Lemma 4.3 | `cospan_algebra.rs` | `functor_induced_algebra_map` lifts any `HypergraphFunctor` to a cospan-algebra morphism α: A_H → A_H'. |
+| Lemma 4.3 | `cospan_algebra.rs` | `functor_induced_algebra_map` lifts a `HypergraphFunctor` to a cospan-algebra morphism α: A_H → A_H'. Paper states the lemma for io functors over fixed Λ; the cross-label case is a beyond-paper generalization (Eq 29 direction). |
 | Lemma 4.9 | `equivalence.rs` | `functor_from_algebra_morphism` lifts a monoidal natural transformation α: A → B to the induced io hypergraph functor F_α: H_A → H_B. |
 | Lemma 3.6, Prop 3.8 | `cospan_algebra.rs`, `hypergraph_functor.rs` | `cospan_to_frobenius` + `CospanToFrobeniusFunctor` — epi-mono decomposition into Frobenius generators. |
 | **Thm 1.2** (per-Λ = Thm 4.13) | `equivalence.rs` | `CospanAlgebraMorphism<A>` (Lemma 4.8): cospan-algebra → hypergraph category. `comp_cospan` (Ex 3.5, Eq 32). Identity/Frobenius via Eq 33. Roundtrip: `Hyp_OF(Λ) ≅ Lax(Cospan_Λ, Set)` (Eq 8). |
@@ -142,7 +142,8 @@ See `examples/wasi_smoke_core.rs` for a minimal cospan-composition smoke test.
 ## References
 
 - [Fong & Spivak, *Hypergraph Categories* (2019)](https://arxiv.org/abs/1806.08304) — primary theoretical foundation
-- [Spivak, *The Operad of Wiring Diagrams* (2013)](https://arxiv.org/abs/1305.0297)
+- [Fong & Spivak, *Seven Sketches in Compositionality* (2018)](https://arxiv.org/abs/1803.05316) — secondary anchor: Thm 6.55 (`tests/spider_theorem.rs`), Ex 6.64 `Corel` (`src/corel.rs`)
+- [Spivak, *The Operad of Wiring Diagrams* (2013)](https://arxiv.org/abs/1305.0297) — operadic viewpoint behind `src/operadic.rs` (Eq 6)
 
 ## License
 

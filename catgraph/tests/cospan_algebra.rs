@@ -307,6 +307,8 @@ fn prop_4_6_partition_identity_is_unique_self_map() {
 
 // ---------------------------------------------------------------------------
 // §4 Lemma 4.3: A_F natural transformation from a hypergraph functor F: H → H'
+// (paper states the lemma for io functors over fixed Λ; the cross-label
+// RelabelingFunctor case below is a beyond-paper generalization, Eq 29 direction)
 // ---------------------------------------------------------------------------
 //
 // Given F: H → H', the induced cospan-algebra morphism α: A_H → A_H' is defined

@@ -119,7 +119,7 @@
 |---|---|---|---|
 | Def 6.52: Frobenius structure (μ, η, δ, ε + 9 axioms) | 🔗 | catgraph::frobenius | `FrobeniusOperation`, 8 axiom tests |
 | Def 6.54: spider s_{m,n} | 🔗 | catgraph::frobenius | `from_decomposition` constructs spiders from generators |
-| Thm 6.55: spider theorem (connected diagrams = spiders) | 🔗 ✅ | catgraph::frobenius + `tests/spider_theorem.rs` | Shape-level tests in catgraph core — 5 tests covering s_{2,2}, s_{3,1}, s_{1,3}, s_{0,0} via `special_frobenius_morphism`; domain/codomain agreement only, full-equality upgrade tracked in #110 |
+| Thm 6.55: spider theorem (connected diagrams = spiders) | 🔗 ✅ | catgraph::frobenius + `tests/spider_theorem.rs` | Explicit tests in catgraph core — 5 tests covering s_{2,2}, s_{3,1}, s_{1,3}, s_{0,0} asserting full structural equality against `special_frobenius_morphism` (#110) |
 | Thm 6.58: free prop on Frobenius ≅ Cospan_FinSet | 🔗 | catgraph::cospan_algebra + hypergraph_functor | `CospanToFrobeniusFunctor` (Prop 3.8 in the research paper) |
 | Def 6.60: hypergraph category | 🔗 | catgraph::hypergraph_category | `HypergraphCategory` trait |
 | Ex 6.61: Cospan_C is a hypergraph category | 🔗 | catgraph::hypergraph_category | `impl HypergraphCategory for Cospan<Lambda>` |
@@ -174,7 +174,7 @@
 
 ### Items that are implicit / "morally present" but not explicit
 
-1. **Thm 6.55 (spider theorem)** — ✅ **CLOSED in catgraph core** (shape level). `tests/spider_theorem.rs` asserts shape (domain/codomain) equality between connected Frobenius diagrams and the canonical spiders produced by `special_frobenius_morphism(m, n, z)`; the full structural-equality upgrade is tracked in #110.
+1. **Thm 6.55 (spider theorem)** — ✅ **CLOSED in catgraph core.** `tests/spider_theorem.rs` asserts full structural equality (plus domain/codomain) between connected Frobenius diagrams and the canonical spiders produced by `special_frobenius_morphism(m, n, z)` (#110).
 
 2. **Def 6.97 (operad underlying an SMC)** — the `Operadic` trait captures the interface but the generic *construction* that derives an operad from any SMC is not automated.
 

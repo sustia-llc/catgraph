@@ -32,7 +32,8 @@ umbrella #36 stays open for hyperdoctrine/vector-bundle/lazy surfaces);
 
 ## Paper anchors
 
-- **catgraph** — Fong & Spivak 2019 (*Hypergraph Categories*)
+- **catgraph** — Fong & Spivak 2019 (*Hypergraph Categories*); secondary: F&S 2018
+  (*Seven Sketches*) for Thm 6.55 spider tests + Ex 6.64 `Corel`
 - **catgraph-applied** — Fong & Spivak 2018 (*Seven Sketches in Compositionality*)
 - **catgraph-magnitude** — Bradley–Vigneaux 2025; Leinster 2008 / 2013 / 2017
 - **catgraph-dl** — Gavranović et al., ICML 2024 (*Categorical Deep Learning*)
