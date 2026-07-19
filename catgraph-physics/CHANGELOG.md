@@ -10,6 +10,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed
+
+- **Paper-audit citation reconciliation (Phase 4)** — verified every Gorard
+  2301.04690 anchor in `src/**` against the cached paper and fixed the drifted
+  claims in the `evolution_graph.rs` header: the irreducibility gloss was
+  *inverted* ("irreducibility = lack of functorial exactness"; the paper says a
+  multicomputationally irreducible computation is one whose map **is** a pure
+  symmetric monoidal functor — it also contradicted the same header's Z′ line);
+  the Z′ line now says *pure* symmetric monoidal functor; the Mamba
+  state-space-model bullet is labeled analogy-only (cache-unverifiable, not a
+  citation anchor); the stale "planned `catgraph-magnitude` sibling crate
+  (Phase 6)" note updated (the crate shipped); the Bradley–Vigneaux magnitude
+  formula gained its missing index restriction `x ∈ ob(M) \ T(⊥)` (BV25
+  Prop 3.10). Adversarially re-checked as already correct: the paper-title
+  quotes, the trace.rs "cannot be shortcut" gloss, and the branchial
+  common-ancestor edge definition. The `branchial_spectrum.rs` λ₂/Fiedler
+  attribution and the uncited `gauge.rs`/`rewrite_rule.rs`/`ollivier_ricci.rs`
+  physics claims are substantive and tracked as a GitHub issue (crate-local
+  ANCHORS provenance note).
+
 ## [workspace-v0.1.0] - 2026-07-01
 
 First monorepo release: workspace-wide tag `v0.1.0` (supersedes the pre-reboot

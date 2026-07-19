@@ -14,7 +14,8 @@
 //! - Tensor product ⊗ represents parallel branches
 //!
 //! The functor Z': 𝒯 → ℬ maps this to the cobordism category, where
-//! multicomputational irreducibility means Z' is a symmetric monoidal functor.
+//! multicomputational irreducibility means Z' is a *pure* symmetric monoidal
+//! functor.
 //!
 //! ## Time-step discretization as a functor `F: C → D`
 //!
@@ -23,9 +24,13 @@
 //! a general compositional pattern that also appears in:
 //!
 //! - **Gorard (2023), "A functorial perspective on (multi)computational
-//!   irreducibility"** (arXiv:2301.04690) — irreducibility = lack of functorial
-//!   exactness between a computation category and a cobordism category.
-//! - **Mamba / state-space models** — discretization parameter Δ
+//!   irreducibility"** (arXiv:2301.04690) — irreducibility = *exactness* of the
+//!   functorial correspondence between a computation category and a cobordism
+//!   category (the map is a pure symmetric monoidal functor); reducibility is
+//!   deformation away from exactness.
+//! - **Mamba / state-space models** (analogy only — not a paper anchor; the
+//!   Mamba paper is not part of this crate's citation surface) —
+//!   discretization parameter Δ
 //!   (exponential-trapezoidal, bilinear, zero-order hold) acts as a functor
 //!   `F: C → D` from smooth ODE morphisms to discrete recurrences; the
 //!   selection mechanism chooses a natural transformation per token.
@@ -58,9 +63,9 @@
 //! cross-section, analogous to Mamba's input-dependent Δ selection.
 //!
 //! Enrichment (`[0,1]`-weighted hom-objects on the cospan chain) is
-//! deliberately not provided here; it lives in the planned
-//! `catgraph-magnitude` sibling crate (Phase 6), where the Bradley-Vigneaux
-//! magnitude formula `Mag(tM) = (t − 1) · Σ H_t(p_x) + #(T(⊥))` gives a
+//! deliberately not provided here; it lives in the `catgraph-magnitude`
+//! sibling crate, where the Bradley-Vigneaux magnitude formula
+//! `Mag(tM) = (t − 1) · Σ_{x ∈ ob(M) \ T(⊥)} H_t(p_x) + #(T(⊥))` gives a
 //! quantitative measure of how much information `D` carries about `C`.
 
 use std::collections::hash_map::DefaultHasher;
