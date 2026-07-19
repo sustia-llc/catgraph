@@ -32,8 +32,9 @@
 //!   (`η = Pure`, `μ = join`). The `Z2Group`-action GDL recovery test in
 //!   `tests/algebra_homomorphisms.rs` is the headline reification of CDL §2.1
 //!   Ex 2.6 (equivariant maps as monad-algebra homomorphisms). CDL §2.
-//! - [`free_monad`] — explicit `FreeMnd(F)(Z) = Fix(X ↦ F(X) + Z)` and the
-//!   cofree-comonad dual via GAT projection. `ListEndo<A>` / `TreeEndo<A>`
+//! - [`free_monad`] — the free monad `FreeMnd(F)(Z) = Fix(X ↦ F(X) + Z)` and
+//!   its cofree-comonad dual, adopted from `deep_causality_haft` as
+//!   [`Free`] / [`Cofree`] (issue #93). `ListEndo<A>` / `TreeEndo<A>`
 //!   bijection witnesses for CDL Examples B.19 / B.20. CDL Proposition B.18.
 //! - [`architectures`] — five typed (co)algebra-as-architecture unrollers
 //!   (Folding RNN, Unfolding RNN, Recursive NN, Mealy cell, Moore cell). The
@@ -144,14 +145,18 @@ pub mod para;
 // Top-level convenience re-export: the endofunctor abstraction is now
 // `deep_causality_haft`'s `HKT` (object map) + `Functor` (morphism map),
 // shared between `algebra::` (F-algebras and homomorphisms) and
-// `free_monad::` (recursive `FreeMnd` / `CofreeCmnd`). `Either` is the sum
-// carried by `TreeEndo`. `Pure`, `NaturalIso`, and `Monad` are mirrored here
-// too: implementing `Pointed` downstream requires `Pure<Self>`, driving the
-// `IsoForward` / `IsoBackward` adapters requires naming `NaturalIso`, and the
-// monad-algebra verifiers bound `M: EndoWitness + Monad<M>`. The former
-// `catgraph_dl::EndoFunctor` path is removed (breaking; issue #12).
+// `free_monad::` (the recursive `Free` / `Cofree` carriers). `Either` is the
+// sum carried by `TreeEndo`. `Pure`, `NaturalIso`, and `Monad` are mirrored
+// here too: implementing `Pointed` downstream requires `Pure<Self>`, driving
+// the `IsoForward` / `IsoBackward` adapters requires naming `NaturalIso`, and
+// the monad-algebra verifiers bound `M: EndoWitness + Monad<M>`. `Free` /
+// `Cofree` (+ their `FreeWitness` / `CofreeWitness` HKT witnesses) and the
+// `EqFunctor` / `DebugFunctor` capability traits their opt-in `Eq`/`Debug`
+// route through are mirrored for the free-monad surface (issue #93). The
+// former `catgraph_dl::EndoFunctor` path is removed (breaking; issue #12).
 pub use endofunctor::{
-    Either, EndoWitness, Functor, HKT, Monad, NaturalIso, NoConstraint, Pure, Satisfies,
+    Cofree, CofreeWitness, DebugFunctor, Either, EndoWitness, EqFunctor, Free, FreeWitness, Functor,
+    HKT, Monad, NaturalIso, NoConstraint, Pure, Satisfies,
 };
 
 // The first-class natural-transformation / pointed-endofunctor / container

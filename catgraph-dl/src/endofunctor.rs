@@ -1,6 +1,6 @@
 //! Endofunctor substrate — the `deep_causality_haft` HKT/Functor witnesses
 //! used by both [`crate::algebra`] (F-algebras and their homomorphisms) and
-//! [`crate::free_monad`] (recursive `FreeMnd`/`CofreeCmnd`).
+//! [`crate::free_monad`] (the recursive `Free`/`Cofree` carriers).
 //!
 //! This module was, prior to issue #12, the canonical home of a hand-rolled
 //! `EndoFunctor` trait (a GAT `type Apply<X>` plus an `fmap`). That trait has
@@ -31,9 +31,12 @@
 //! would admit an fmap-less carrier — a categorically meaningless
 //! "endofunctor". [`EndoWitness`] repackages the invariant the old fused trait
 //! carried: `HKT<Constraint = NoConstraint> + Functor<Self>` (unconstrained
-//! object map **and** morphism map). Downstream carriers (`FreeMnd`,
-//! `CofreeCmnd`, the F-(co)algebra verifiers) bound on `EndoWitness` so the
-//! type system again enforces "F is an endofunctor on Set".
+//! object map **and** morphism map). The F-(co)algebra verifiers bound on
+//! `EndoWitness` so the type system again enforces "F is an endofunctor on Set".
+//! haft's [`Free`] / [`Cofree`] carriers (re-exported below) bound only
+//! `HKT<Constraint = NoConstraint>` on their data and add `Functor<F>` on the
+//! recursion-consuming methods — the same `Constraint = NoConstraint` gate, so
+//! constrained witnesses are still rejected (CDL's ambient category is Set).
 //!
 //! # Functor laws
 //!
@@ -89,8 +92,18 @@
 // re-exported so the natural-iso law tests can name a genuine cross-witness iso
 // (`Option<((), X)> ≅ Option<X>`) through the seam rather than reaching into
 // `deep_causality_haft` directly.
+//
+// `Free` / `FreeWitness` (haft's free monad `Pure | Suspend`) and
+// `Cofree` / `CofreeWitness` (its cofree-comonad dual `head :< tail`) are the
+// recursive carriers that back [`crate::free_monad`] (adopted per #93, owner
+// decision 2026-07-19 — see the `free_monad` module doc). Their opt-in
+// `Eq`/`Debug` route through the capability traits `EqFunctor` (`eq_type`) and
+// `DebugFunctor` (`fmt_type`) rather than std derives — re-exported so the
+// crate's own witnesses (`ListEndo`, `TreeEndo`, the test `UnitEndo`) can impl
+// them through the single seam.
 pub use deep_causality_haft::{
-    Either, Functor, HKT, Monad, NaturalIso, NoConstraint, OptionWitness, Pure, Satisfies,
+    Cofree, CofreeWitness, DebugFunctor, Either, EqFunctor, Free, FreeWitness, Functor, HKT, Monad,
+    NaturalIso, NoConstraint, OptionWitness, Pure, Satisfies,
 };
 
 // haft's public (non-`cfg(test)`) law helpers for `NaturalIso`, reachable only
@@ -117,8 +130,8 @@ pub use deep_causality_haft::iso::test_support::{
 /// It is a blanket-implemented marker: any type satisfying the two bounds
 /// implements it automatically, so witnesses (`ListEndo`, `TreeEndo`,
 /// `GroupActionEndo`) never name it — they just `impl HKT + Functor<Self>`.
-/// Carriers that must enforce "F is an endofunctor" (`FreeMnd`, `CofreeCmnd`,
-/// `FAlgebraHom` / `FCoalgebraHom`) bound on `EndoWitness` instead of the bare
+/// Verifiers that must enforce "F is an endofunctor" (`FAlgebraHom` /
+/// `FCoalgebraHom`) bound on `EndoWitness` instead of the bare
 /// `HKT<Constraint = NoConstraint>`. `HKT` is a supertrait, so the recursive
 /// `F::Type<…>` projections resolve through it unchanged.
 pub trait EndoWitness: HKT<Constraint = NoConstraint> + Functor<Self> + Sized {}
