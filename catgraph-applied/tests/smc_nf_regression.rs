@@ -280,7 +280,8 @@ mod selinger_2011_regression {
         );
     }
 
-    /// Selinger §3.5 Thm 3.12 (p. 17) vs §3.3 Thm 3.7: in a **braided** MC
+    /// Selinger §3.5 (p. 17, self-inverse def.) + Thm 3.12 (p. 18) vs §3.3
+    /// Thm 3.7 (p. 16): in a **braided** MC
     /// two crossings of the same two wires are NOT equal to the identity
     /// (§3.3 diagram p. 15 middle: `c_{A,B} ∘ c_{B,A} ≠ id_{A⊗B}`). In an
     /// **SMC** they ARE equal (§3.5 p. 17). This test specifically
