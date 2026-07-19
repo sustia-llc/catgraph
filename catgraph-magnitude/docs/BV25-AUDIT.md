@@ -39,15 +39,15 @@
 | §1.1 (co)weighting primitives | 1 | 0 | 0 | 0 | 0 | 1 |
 | §2 LM as enriched category | 5 | 0 | 0 | 1 | 3 | 9 |
 | §2.1 scatteredness predicate | 1 | 0 | 0 | 0 | 0 | 1 |
-| §3 Magnitude via Tsallis | 8 | 0 | 0 | 0 | 0 | 8 |
+| §3 Magnitude via Tsallis | 7 | 0 | 0 | 1 | 0 | 8 |
 | §3.5 Möbius / chain-sum | 2 | 0 | 0 | 0 | 0 | 2 |
 | §3.14 Magnitude homology | 1 | 0 | 0 | 0 | 0 | 1 |
 | §4 Bounds + asymptotics | 3 | 0 | 0 | 2 | 0 | 5 |
-| **TOTAL** | **21** | **0** | **0** | **3** | **3** | **27** |
+| **TOTAL** | **20** | **0** | **0** | **4** | **3** | **27** |
 
 **Headline numbers:**
-- **78% DONE / 0% PARTIAL / 0% DEFERRED / 11% N/A / 11% IN APPLIED**
-- Of the 27 audited items, 3 are already in `catgraph-applied` (enrichment substrate), 3 are N/A (motivational), leaving **21 implementable items** of which **21 are DONE, 0 PARTIAL, 0 DEFERRED**.
+- **74% DONE / 0% PARTIAL / 0% DEFERRED / 15% N/A / 11% IN APPLIED**
+- Of the 27 audited items, 3 are already in `catgraph-applied` (enrichment substrate), 4 are N/A (3 motivational + the §3 acyclicity standing hypothesis, whose runtime enforcement is audited at §2.17), leaving **20 implementable items** of which **20 are DONE, 0 PARTIAL, 0 DEFERRED**.
 - Of implementable items: **100% DONE / 0% PARTIAL / 0% DEFERRED**
 - No paper-anchored audit item remains deferred: the §3 Tsallis-side optimization stash (#37) is a performance-backlog item, out of the paper-item audit scope (only §2/§3 Defs/Props/Eqs that materialize as types or constitute the acceptance gate are tracked — see the scope note above), not a tracked deferral. The magnitude-homology / chain-complex / Storjohann SNF / Euler-char-identity stack closes the §3.14 deferral. The design-doc §3.6 surface row `mobius_function_via_chains_exact<Q: Ring>` was struck from that stack and folded into the Leinster 2008 Cor 1.5 integer-exact Möbius surface (documented below) — the paper-faithful destination requires anchoring a NEW paper (Leinster 2008 finite-category Möbius) outside the crate's BV/LS/Leinster-2013 anchor surface. Both now ship in the migrated tree.
 
@@ -88,7 +88,7 @@
 | Tsallis q-entropy `H_t(p) = (1 - Σ pᵢᵗ) / (t-1)` (stated **unnumbered** in BV25 — not "Eq (4)"; Eq (4) is a `π`-normalization step in the Prop 2.9 proof) | ✅ | `magnitude::tsallis_entropy(p, t)` | Shannon special case at `\|t-1\| < TSALLIS_SHANNON_EPS = 1e-6` returns `-Σ pᵢ ln pᵢ` directly (avoids `0/0` cancellation around `t = 1`). |
 | Rem 3.11 Shannon recovery as `t → 1` | ✅ | `magnitude::tsallis_entropy` + acceptance test | Acceptance residual `~6.46e-10` by central FD `h = 1e-4` on 4-state LM. |
 | Prop 3.10 closed form `Mag(tM) = (t-1)·Σ H_t(p_x) + #(T(⊥))` | ✅ | `tests/bv_2025_acceptance.rs` | v0.1.0 acceptance residual `0e0` (exact `f64`) at `t ∈ {0.5, 1.5, 2.0, 5.0}` on hand-computed 4-state tree (`A = {a}, N = 1`; `#T(⊥) = 2`). |
-| Acyclicity hypothesis (tree-shaped prefix poset) | ✅ | `LmCategory` runtime contract | Fixture rebuilt from cyclic to a 4-state acyclic prefix poset. **Note:** acyclicity is a *prose* standing hypothesis in BV25 §3, not a numbered result — "3.4" is the *Example* that an initial object gives magnitude 1, a different statement. |
+| Acyclicity hypothesis (tree-shaped prefix poset) | ➖ | `LmCategory` runtime contract | Fixture rebuilt from cyclic to a 4-state acyclic prefix poset. **Note:** acyclicity is a *prose* standing hypothesis in BV25 §3, not a numbered result — "3.4" is the *Example* that an initial object gives magnitude 1, a different statement. Marked N/A as a hypothesis (not an implementable item); its runtime enforcement is audited at the §2.17 row above. |
 | §3.5 Eq 7 magnitude as Möbius sum `Mag = Σᵢⱼ μ[i][j]` | ✅ | `magnitude::magnitude::<Q>(space, t)` | Builds t-scaled zeta, Möbius-inverts, sums every entry. Algebraic surface `Q: Ring + Div + From<f64>`. |
 | §3.5 Möbius inversion `ζ·μ = I` | ✅ | `magnitude::mobius_function::<Q>(space)` | Gaussian elimination on `[ζ \| I]` augmented matrix. `Err(CatgraphError::Composition)` on singular zeta. v0.1.0 limit ~1000 states (O(n³)). |
 | §3.5 Chain-sum Möbius (Leinster 2013 Prop 2.1.3) | ✅ | `mobius_chains::mobius_function_via_chains` | v0.2.0. Implemented as the von-Neumann series `μ = Σ (−1)ᵏ Mᵏ` with `M = ζ − I` (algebraically identical to Prop 2.1.3's chain-sum-of-ζ-products by Mᵏ[a][b] = chain-sum at length k). O(K · n³) matrix-power accumulation with adaptive K = ⌈log(τ) / log(r)⌉, τ = 1e-13, capped at K_MAX = 200. Bound `Q: Ring + From<f64>` (no `Div` needed). Acceptance: chain-sum agrees with v0.1.x `mobius_function` to 1e-9 on hand-built 4-state + proptest n=2-5. Returns `Err` on non-scattered or near-boundary (r ≥ 0.94) input — caller falls back to `mobius_function`. |

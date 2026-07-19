@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deferred (the #37 Tsallis-side perf optimization is out-of-scope backlog, not a
   deferred paper anchor, and correctly has no detail row). BV25-AUDIT is now
   wired into the `scripts/check_audit_counts.py` CI guard alongside FS19/FS18.
+- **`docs/BV25-AUDIT.md` §3 acyclicity-hypothesis status ✅ → ➖ (owner
+  decision, Phase-3 follow-up)** — BV25's acyclicity hypothesis is prose
+  standing-hypothesis, not an implementable numbered result; its runtime
+  enforcement stays audited at the §2.17 row. §3 recount `[8,0,0,0,0] →
+  [7,0,0,1,0]`, TOTAL `[21,0,0,3,3] → [20,0,0,4,3]` (20 implementable, 100%
+  DONE).
 
 ## [workspace-v0.2.0] - 2026-07-02
 
