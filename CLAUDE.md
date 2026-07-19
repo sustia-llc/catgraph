@@ -21,7 +21,9 @@ catgraph (F&S core) ─▶ catgraph-applied ─▶ catgraph-magnitude
                                           └─▶ catgraph-syntax
 ```
 
-`deep_causality_num` / `deep_causality_haft` pinned `=0.4.0` (fallback git rev `3280cb844`).
+`deep_causality_num` / `deep_causality_haft` pinned `=0.4.1` (haft 0.4.1 ships the
+post-0.4.0 categorical machinery — PROP `SymMonoidal`, `ArrowTerm`, native
+`NaturalTransformation`, `Cofree` — re-evaluation tracked in #93).
 `catgraph-applied` + `catgraph-magnitude` depend on `deep_causality_num` (`Zero`/`One`
 only); `catgraph-dl` uses `haft`'s `HKT`/`Functor` witnesses as its endofunctor
 substrate (EndoFunctor→haft migration landed, #12) and now **uses** `num`'s
@@ -64,11 +66,16 @@ Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBU
 > haft Arrow seam. Post-milestone follow-ups on #5 (#79/#80/#81); other open
 > follow-ups + audit/README reconciliation tracked as GitHub issues (e.g. #7).
 >
-> **Paper-audit (papers-vs-implementation citation sweep), phases 1–3 complete
-> (2026-07-19):** core (#112/#113), applied (#118/#119 — Thm 5.60 presentation
-> completed to the paper's 18 equations "E_18"; Mat(R) completeness attribution
-> corrected to Baez–Erbele for fields + Wadsley–Woods for commutative rigs), and
-> magnitude (#120 — BV25/Leinster/LS citation reconciliation + BV25-AUDIT recount)
-> are merged. A CI guard (`scripts/check_audit_counts.py`) keeps the FS19/FS18/BV25
-> audit-doc tallies self-consistent. Phases 4–7 (physics / dl / syntax /
-> cross-cutting) remain.
+> **Paper-audit (papers-vs-implementation citation sweep), ALL phases 1–7
+> complete (2026-07-19):** core (#112/#113), applied (#118/#119 — Thm 5.60
+> presentation completed to the paper's 18 equations "E_18"; Mat(R) completeness
+> attribution corrected to Baez–Erbele for fields + Wadsley–Woods for commutative
+> rigs), magnitude (#120/#122 — BV25/Leinster/LS reconciliation + BV25-AUDIT
+> recount), physics (#125 — inverted Gorard irreducibility gloss fixed;
+> provenance follow-up #124), dl (#128 — phantom "Appendix K", Def 1.4/1.5 swap,
+> fabricated section name), and syntax (#127 — spider vocabulary re-anchored to
+> FS18 Def 6.54/Thm 6.55; MatKron marked an extension of Ex 2.16) are merged.
+> A CI guard (`scripts/check_audit_counts.py`) keeps the FS19/FS18/BV25
+> audit-doc tallies self-consistent. Substantive gaps live as issues
+> (#124 physics ANCHORS note, #126 Prop 5.56 `mat_to_sfg`, #117 Joyal–Street
+> sourcing).
