@@ -55,7 +55,7 @@ where
     /// Run the cell over a sequence of inputs from `initial_state`,
     /// collecting outputs in order.
     ///
-    /// CDL Remark 2.13 dual / Example J.4. The Mealy unfolding: each
+    /// CDL Remark H.6 / Example J.4 (iterated Mealy). The Mealy unfolding: each
     /// input step produces an output and a fresh state; state threads
     /// left-to-right through the sequence.
     ///

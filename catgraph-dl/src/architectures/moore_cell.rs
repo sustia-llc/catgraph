@@ -59,7 +59,8 @@ where
 {
     /// Run the cell over a sequence of inputs from `initial_state`.
     ///
-    /// CDL Remark 2.13 dual / Example I.5. Moore semantics:
+    /// CDL Remark H.6 / Example J.5 (iterated Moore; the cell itself is
+    /// Example I.5). Moore semantics:
     ///
     /// ```text
     /// run(s_0, [i_1, …, i_n]) = [o_0, o_1, …, o_{n−1}]
