@@ -27,7 +27,8 @@ use core::marker::PhantomData;
 use catgraph_dl::algebra::{GroupActionEndo, Z2Group};
 use catgraph_dl::para::{Actegory, DirectSum, F64Actegory, F64Module, MonoidalCategory};
 use catgraph_dl::{
-    Container, EndoWitness, Functor, HKT, NaturalTransformation, NoConstraint, Pointed, Satisfies,
+    Container, DebugFunctor, EndoWitness, EqFunctor, Functor, HKT, NaturalTransformation,
+    NoConstraint, Pointed, Satisfies,
 };
 
 use proptest::prelude::*;
@@ -473,5 +474,23 @@ impl<Tag> Functor<Self> for UnitEndo<Tag> {
         Func: FnMut(X) -> Y,
     {
         m_a
+    }
+}
+
+// Capability impls so `Cofree<UnitEndo<Tag>, Z>` (and `Free`) get opt-in
+// `Eq`/`Debug`: the functor hole is the unit `()`, whose own `==`/`Debug` are
+// total. Used by `free_monad_bijections::cofree_cmnd_smoke`.
+impl<Tag> EqFunctor for UnitEndo<Tag> {
+    fn eq_type<T: PartialEq>(a: &(), b: &()) -> bool {
+        a == b
+    }
+}
+
+impl<Tag> DebugFunctor for UnitEndo<Tag> {
+    fn fmt_type<T: core::fmt::Debug>(
+        fa: &(),
+        f: &mut core::fmt::Formatter<'_>,
+    ) -> core::fmt::Result {
+        core::fmt::Debug::fmt(fa, f)
     }
 }

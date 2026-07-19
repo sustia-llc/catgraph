@@ -1,4 +1,4 @@
-//! `FreeMnd` ⇄ `Vec` and `FreeMnd` ⇄ `BinaryTree`
+//! `Free` ⇄ `Vec` and `Free` ⇄ `BinaryTree`
 //! bijection acceptance tests.
 //!
 //! CDL Examples B.19 + B.20. We verify that the two concrete encodings of
@@ -15,13 +15,13 @@
 //! 1. `vec_round_trip_proptest` — proptest-driven round trip for `Vec<u32>`
 //!    in both directions.
 //! 2. `empty_list_is_pure_unit` — the empty `Vec` collapses to
-//!    `FreeMnd::Pure(())`.
+//!    `Free::Pure(())`.
 //! 3. `cons_cell_explicit_structure_round_trips` — the manually-built
 //!    cons-cell tower for `[1, 2]` round-trips correctly.
 //! 4. `tree_round_trip_examples` — three hand-built `BinaryTree` instances
-//!    round-trip via the `FreeMnd<TreeEndo, Infallible>` encoding.
-//! 5. `cofree_cmnd_smoke` — `CofreeCmnd<TrivialEndo, u32>` constructs and
-//!    `head` is accessible. Compile-time + runtime sanity for the dual.
+//!    round-trip via the `Free<TreeEndo, Infallible>` encoding.
+//! 5. `cofree_cmnd_smoke` — `Cofree<TrivialEndo, u32>` constructs and
+//!    `head()` is accessible. Compile-time + runtime sanity for the dual.
 
 #![allow(clippy::float_cmp, clippy::single_match_else)]
 
@@ -29,7 +29,7 @@ mod common;
 
 use catgraph_dl::free_monad::list_endo::{free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, free_mnd_to_tree, tree_to_free_mnd};
-use catgraph_dl::free_monad::{CofreeCmnd, FreeMnd};
+use catgraph_dl::free_monad::{Cofree, Free};
 
 use common::UnitEndo;
 
@@ -45,12 +45,12 @@ proptest! {
 
     #[test]
     fn vec_round_trip_proptest(items in proptest::collection::vec(any::<u32>(), 0..=24)) {
-        // Forward: items → FreeMnd → (items', ()).
+        // Forward: items → Free → (items', ()).
         let f = vec_to_free_mnd::<u32, ()>(items.clone(), ());
         let (round_trip, ()) = free_mnd_to_vec(f);
         prop_assert_eq!(round_trip, items.clone());
 
-        // Backward: build the FreeMnd from the same items, destruct,
+        // Backward: build the Free from the same items, destruct,
         // rebuild — must coincide structurally.
         let f1 = vec_to_free_mnd::<u32, ()>(items.clone(), ());
         let (items_again, ()) = free_mnd_to_vec(f1);
@@ -61,32 +61,31 @@ proptest! {
 }
 
 /// CDL Example B.19 corner case. Empty list with `()` terminator is
-/// canonically `FreeMnd::Pure(())` — no `Roll` cells.
+/// canonically `Free::Pure(())` — no `Suspend` cells.
 #[test]
 fn empty_list_is_pure_unit() {
-    let f: FreeMnd<catgraph_dl::free_monad::list_endo::ListEndo<u32>, ()> =
+    let f: Free<catgraph_dl::free_monad::list_endo::ListEndo<u32>, ()> =
         vec_to_free_mnd(Vec::new(), ());
     match f {
-        FreeMnd::Pure(()) => (),
-        FreeMnd::Roll(_) => panic!("empty Vec must encode to FreeMnd::Pure(()), not Roll"),
+        Free::Pure(()) => (),
+        Free::Suspend(_) => panic!("empty Vec must encode to Free::Pure(()), not Suspend"),
     }
 
     // And the round-trip from Pure(()) gives back (vec![], ()).
-    let pure_unit: FreeMnd<catgraph_dl::free_monad::list_endo::ListEndo<u32>, ()> =
-        FreeMnd::pure(());
+    let pure_unit: Free<catgraph_dl::free_monad::list_endo::ListEndo<u32>, ()> = Free::Pure(());
     let (items, ()) = free_mnd_to_vec(pure_unit);
     assert!(items.is_empty(), "Pure(()) must decode to empty Vec");
 }
 
 /// CDL Example B.19. The explicit cons-cell tower for `[1, 2]` written by
-/// hand using `FreeMnd::roll` constructors must decode to `vec![1, 2]`.
+/// hand using `Free::Suspend` constructors must decode to `vec![1, 2]`.
 #[test]
 fn cons_cell_explicit_structure_round_trips() {
     use catgraph_dl::free_monad::list_endo::ListEndo;
 
-    // FreeMnd::Roll(Some((1, FreeMnd::Roll(Some((2, FreeMnd::Pure(())))))))
-    let inner: FreeMnd<ListEndo<u32>, ()> = FreeMnd::roll(Some((2_u32, FreeMnd::pure(()))));
-    let outer: FreeMnd<ListEndo<u32>, ()> = FreeMnd::roll(Some((1_u32, inner)));
+    // Free::Suspend(Some((1, Box(Free::Suspend(Some((2, Box(Free::Pure(())))))))))
+    let inner: Free<ListEndo<u32>, ()> = Free::Suspend(Some((2_u32, Box::new(Free::Pure(())))));
+    let outer: Free<ListEndo<u32>, ()> = Free::Suspend(Some((1_u32, Box::new(inner))));
 
     let (items, ()) = free_mnd_to_vec(outer);
     assert_eq!(items, vec![1_u32, 2_u32]);
@@ -99,7 +98,7 @@ fn cons_cell_explicit_structure_round_trips() {
 }
 
 /// CDL Example B.20. Three hand-built `BinaryTree` instances round-trip
-/// via the `FreeMnd<TreeEndo<A>, Infallible>` encoding.
+/// via the `Free<TreeEndo<A>, Infallible>` encoding.
 #[test]
 fn tree_round_trip_examples() {
     // Case 1: a single leaf.
@@ -136,18 +135,19 @@ fn tree_round_trip_examples() {
 struct TrivialTag;
 type TrivialEndo = UnitEndo<TrivialTag>;
 
-/// CDL Proposition B.18 dual smoke test. Confirms `CofreeCmnd<TrivialEndo,
-/// u32>` constructs cleanly under the GAT bound and that `head` is
-/// accessible. Compile-time check: the recursive-type pattern
-/// `Box<F::Type<Self>>` works through the GAT projection without
-/// workaround.
+/// CDL Proposition B.18 dual smoke test. Confirms `Cofree<TrivialEndo,
+/// u32>` constructs cleanly under the GAT bound and that `head()` is
+/// accessible. Compile-time check: haft's recursive `F::Type<Box<Self>>`
+/// field works through the GAT projection without workaround.
 #[test]
 fn cofree_cmnd_smoke() {
-    let c: CofreeCmnd<TrivialEndo, u32> = CofreeCmnd::new(42_u32, ());
-    assert_eq!(c.head, 42);
+    let c: Cofree<TrivialEndo, u32> = Cofree::new(42_u32, ());
+    assert_eq!(*c.head(), 42);
 
-    // Clone works under the manual `where F::Type<Self>: Clone` bound.
-    let c2 = c.clone();
-    assert_eq!(c2.head, 42);
+    // haft's `Cofree` has no `Clone` (no `CloneFunctor` in 0.4.1); construct an
+    // equal value and compare structurally through the opt-in `PartialEq`
+    // (`UnitEndo: EqFunctor`, `u32: PartialEq`).
+    let c2: Cofree<TrivialEndo, u32> = Cofree::new(42_u32, ());
+    assert_eq!(*c2.head(), 42);
     assert_eq!(c, c2);
 }

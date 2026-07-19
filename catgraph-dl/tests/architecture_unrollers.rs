@@ -37,13 +37,13 @@
 //!    `FreeMnd`-equivalence test: `unroll(cell, vec) ==
 //!    unroll_via_free_mnd(cell, vec_to_free_mnd(vec, ()))`. Local
 //!    helper `unroll_via_free_mnd` walks the
-//!    `FreeMnd<ListEndo<i64>, ()>` cons-cell tower — proves the
+//!    `Free<ListEndo<i64>, ()>` cons-cell tower — proves the
 //!    unroller IS the unique algebra hom from the initial algebra of
 //!    the free monad on `1 + A × −`.
 //! 10. `recursive_nn_equivalent_to_free_mnd_unroller` — same,
 //!     dual-direction check for trees: `unroll(cell, tree) ==
 //!     unroll_via_free_mnd(cell, tree_to_free_mnd(tree))`.
-//! 11. `unfolding_rnn_equivalent_to_cofree_cmnd_unroller` — coalgebra-direction analogue (CDL Remark H.6, App I.3): bounded unroll equals the `CofreeCmnd<OptionWitness, O>` prefix walk from the same seed.
+//! 11. `unfolding_rnn_equivalent_to_cofree_cmnd_unroller` — coalgebra-direction analogue (CDL Remark H.6, App I.3): bounded unroll equals the `Cofree<OptionWitness, O>` prefix walk from the same seed.
 //! 12. `mealy_cell_equivalent_to_cofree_cmnd_unroller` — same for Mealy (App I.4); input-driven prefix, length = `inputs.len()`.
 //! 13. `moore_cell_equivalent_to_cofree_cmnd_unroller` — same for Moore (App I.5); output-then-step prefix.
 //!
@@ -52,16 +52,16 @@
 //!
 //! ## Coalgebra-direction anchor (#64)
 //!
-//! The algebra direction (tests 1-3, 9-10) uses `FreeMnd` = the *initial*
+//! The algebra direction (tests 1-3, 9-10) uses `Free` = the *initial*
 //! algebra of the free monad on `1 + A × −` (CDL Remark 2.13 / Prop B.18); tests
 //! 4-7 are the behavioural coalgebra-wrapper checks. Its
 //! dual — CDL **Remark H.6**: *"streams are a terminal object in the category of
 //! `(O × −)`-coalgebras"* — governs the three coalgebra wrappers
 //! (`UnfoldingRnn`/`MealyCell`/`MooreCell`, CDL App I.3/I.4/I.5). We witness that
-//! dual with `CofreeCmnd<OptionWitness, O>`: a **bounded** non-empty stream
+//! dual with `Cofree<OptionWitness, O>`: a **bounded** non-empty stream
 //! prefix (tail `None` terminates; a top-level `Option` carries the empty,
 //! depth-0 case). The truly-infinite stream carrier stays deferred behind
-//! `Lazy`/`Thunk` (see the `CofreeCmnd` module doc; #36-adjacent), so these tests
+//! `Lazy`/`Thunk` (see the crate-root "Deferred surfaces" list; #36-adjacent), so these tests
 //! assert the finite-depth prefix only. (Anchor note: the issue body's "Remark
 //! 2.13 dual / App B + App J" was imprecise — the exact dual statement is
 //! Remark H.6 and the architectures live in App I; corrected here and on #64.)
@@ -79,13 +79,13 @@ use catgraph_dl::architectures::{FoldingRnn, MealyCell, MooreCell, RecursiveNn, 
 use catgraph_dl::endofunctor::OptionWitness;
 use catgraph_dl::free_monad::list_endo::{ListEndo, free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, TreeEndo, tree_to_free_mnd};
-use catgraph_dl::free_monad::{CofreeCmnd, FreeMnd};
+use catgraph_dl::free_monad::{Cofree, Free};
 
 use proptest::prelude::*;
 
 /// List-direction cell types (`FoldingRnn` over `1 + A × −`). Module-level so
 /// both the deterministic test and the proptest variant share the
-/// `FreeMnd`-walk helper below.
+/// `Free`-walk helper below.
 type ListCell0 = fn(()) -> i64;
 type ListCell1 = fn(((), i64, i64)) -> i64;
 
@@ -93,17 +93,17 @@ type ListCell1 = fn(((), i64, i64)) -> i64;
 type TreeCell0 = fn(i64) -> i64;
 type TreeCell1 = fn((i64, u8, i64, i64)) -> i64;
 
-/// Walk the cons-cell tower of `FreeMnd<ListEndo<A>, ()>`, applying the
-/// folding cell — the unique algebra hom from `(FreeMnd, structure_map)` into
+/// Walk the cons-cell tower of `Free<ListEndo<A>, ()>`, applying the
+/// folding cell — the unique algebra hom from `(Free, structure_map)` into
 /// `(S, [cell_0, cell_1])`. CDL Remark 2.13 / Prop B.18.
 ///
 /// Destructs through the canonical [`free_mnd_to_vec`] (which panics loudly on
-/// a non-canonical `Roll(None)` cell — the src contract; all inputs here come
+/// a non-canonical `Suspend(None)` cell — the src contract; all inputs here come
 /// from `vec_to_free_mnd`, which never emits one), then right-folds the
 /// cons-order items through `cell_1` against the `cell_0` seed.
 fn unroll_list_via_free_mnd(
     cell: &FoldingRnn<(), i64, ListCell0, ListCell1, i64>,
-    free_mnd: FreeMnd<ListEndo<i64>, ()>,
+    free_mnd: Free<ListEndo<i64>, ()>,
 ) -> i64 {
     let (items, ()) = free_mnd_to_vec(free_mnd);
     let seed = (cell.cell_0)(());
@@ -113,74 +113,84 @@ fn unroll_list_via_free_mnd(
         .fold(seed, |s, a| (cell.cell_1)(((), a, s)))
 }
 
-/// Walk `FreeMnd<TreeEndo<A>, Infallible>` directly, applying the recursive
+/// Walk `Free<TreeEndo<A>, Infallible>` directly, applying the recursive
 /// cell — the unique algebra hom for the tree direction. Recursive (matches
-/// `tree_endo::free_mnd_to_tree`'s discipline). `Roll(Left(a))` (leaves) →
-/// `cell_0`; `Roll(Right((l, r)))` (internal nodes) → recurse both subtrees,
+/// `tree_endo::free_mnd_to_tree`'s discipline). `Suspend(Left(a))` (leaves) →
+/// `cell_0`; `Suspend(Right((l, r)))` (internal nodes) → recurse both subtrees,
 /// then `cell_1`. CDL Remark 2.13 / Prop B.18.
 fn unroll_tree_via_free_mnd(
     cell: &RecursiveNn<i64, i64, TreeCell0, TreeCell1, u8>,
-    free_mnd: FreeMnd<TreeEndo<u8>, core::convert::Infallible>,
+    free_mnd: Free<TreeEndo<u8>, core::convert::Infallible>,
 ) -> i64 {
     match free_mnd {
-        FreeMnd::Pure(z) => match z {}, // Infallible: unreachable.
-        FreeMnd::Roll(boxed) => match *boxed {
+        Free::Pure(z) => match z {}, // Infallible: unreachable.
+        // haft boxes each recursive subtree *inside* the `Either` hole.
+        Free::Suspend(node) => match node {
             Either::Left(_a) => (cell.cell_0)(cell.parameter),
             Either::Right((l, r)) => {
                 let leftmost = leftmost_leaf_payload(&l);
-                let l_val = unroll_tree_via_free_mnd(cell, l);
-                let r_val = unroll_tree_via_free_mnd(cell, r);
+                let l_val = unroll_tree_via_free_mnd(cell, *l);
+                let r_val = unroll_tree_via_free_mnd(cell, *r);
                 (cell.cell_1)((cell.parameter, leftmost, l_val, r_val))
             }
         },
     }
 }
 
-/// Find the leftmost leaf payload of a `FreeMnd<TreeEndo<u8>, Infallible>`.
+/// Find the leftmost leaf payload of a `Free<TreeEndo<u8>, Infallible>`.
 /// Mirrors `RecursiveNn::leftmost_leaf` on the `BinaryTree` carrier.
-fn leftmost_leaf_payload(t: &FreeMnd<TreeEndo<u8>, core::convert::Infallible>) -> u8 {
+fn leftmost_leaf_payload(t: &Free<TreeEndo<u8>, core::convert::Infallible>) -> u8 {
     let mut current = t;
     loop {
         match current {
-            FreeMnd::Pure(z) => match *z {},
-            FreeMnd::Roll(boxed) => match boxed.as_ref() {
+            Free::Pure(z) => match *z {},
+            Free::Suspend(node) => match node {
                 Either::Left(a) => return *a,
-                Either::Right((l, _r)) => current = l,
+                Either::Right((l, _r)) => current = l.as_ref(),
             },
         }
     }
 }
 
-// ---- Coalgebra direction (#64): the CofreeCmnd stream-prefix carrier ---------
+// ---- Coalgebra direction (#64): the Cofree stream-prefix carrier -------------
 //
-// `CofreeCmnd<OptionWitness, O>` is the bounded, non-empty prefix of the terminal
-// `(O × −)`-coalgebra (streams; CDL Remark H.6): `head : O`, `tail : Option<Self>`
-// — `None` terminates the prefix. The empty (depth-0) case is a top-level
-// `Option`, since a stream node always carries a head. These mirror the
-// `unroll_*_via_free_mnd` walkers on the algebra side: the wrapper's bounded
+// `Cofree<OptionWitness, O>` is the bounded, non-empty prefix of the terminal
+// `(O × −)`-coalgebra (streams; CDL Remark H.6): `head : O`, `tail :
+// Option<Box<Self>>` — `None` terminates the prefix. The empty (depth-0) case is
+// a top-level `Option`, since a stream node always carries a head. These mirror
+// the `unroll_*_via_free_mnd` walkers on the algebra side: the wrapper's bounded
 // output must equal the walk of the prefix built from the same seed.
+//
+// The generators below are re-expressed through haft's `Cofree::unfold` (the
+// anamorphism, dual of `Free::fold`) — the payoff of adopting the haft carrier:
+// the bounded-depth / bounded-input control is threaded through the coalgebra
+// seed, and the depth-0 / empty-input case is the top-level `Option`.
 
 /// A bounded stream prefix over `O` — the coalgebra-direction dual of the
-/// `FreeMnd<ListEndo<_>, ()>` cons tower.
-type StreamPrefix<O> = CofreeCmnd<OptionWitness, O>;
+/// `Free<ListEndo<_>, ()>` cons tower.
+type StreamPrefix<O> = Cofree<OptionWitness, O>;
 
-/// Walk a bounded `CofreeCmnd<OptionWitness, O>` prefix into its observed output
+/// Walk a bounded `Cofree<OptionWitness, O>` prefix into its observed output
 /// sequence — the counit-then-tail projection, collected left to right. `None`
-/// (the depth-0 / empty case) yields `[]`.
+/// (the depth-0 / empty case) yields `[]`. haft's `Cofree` has private fields, so
+/// the walk goes through `into_parts()` (`head : O`, `tail : Option<Box<Self>>`).
 fn cofree_prefix_to_vec<O>(prefix: Option<StreamPrefix<O>>) -> Vec<O> {
     let mut out = Vec::new();
     let mut cur = prefix;
     while let Some(node) = cur {
-        out.push(node.head);
-        cur = *node.tail; // `tail : Box<Option<StreamPrefix<O>>>`
+        let (head, tail) = node.into_parts();
+        out.push(head);
+        cur = tail.map(|boxed| *boxed);
     }
     out
 }
 
 /// Unfold a **state-driven** stream prefix (the `UnfoldingRnn` shape): emit
 /// `step(s).0` at each state, advance to `step(s).1`, for `depth` layers. The
-/// bounded anamorphism into the terminal `(O × −)`-coalgebra.
-fn unfold_stream<S: Clone, O>(
+/// bounded anamorphism into the terminal `(O × −)`-coalgebra, via
+/// [`Cofree::unfold`] — the coalgebra threads `(state, remaining_depth)` as its
+/// seed and terminates the tail (`None`) when the last layer is reached.
+fn unfold_stream<S, O>(
     seed: S,
     step: impl Fn(S) -> (O, S),
     depth: usize,
@@ -188,30 +198,35 @@ fn unfold_stream<S: Clone, O>(
     if depth == 0 {
         return None;
     }
-    let (head, next) = step(seed);
-    Some(CofreeCmnd::new(head, unfold_stream(next, step, depth - 1)))
+    // coalg : (S, usize) -> (O, Option<(S, usize)>) — the `OptionWitness` hole
+    // `None` ends the tail; `Some(next_seed)` continues it.
+    let coalg = |(s, remaining): (S, usize)| {
+        let (head, next) = step(s);
+        let tail_seed = (remaining > 1).then_some((next, remaining - 1));
+        (head, tail_seed)
+    };
+    Some(Cofree::unfold((seed, depth), &coalg))
 }
 
 /// Unfold an **input-driven** stream prefix (the `MealyCell` / `MooreCell`
 /// shape): consume the inputs left to right, emitting `step(s, i).0` and
 /// advancing to `step(s, i).1` per input. Prefix length = `inputs.len()` (empty
-/// inputs → `None` → `[]`).
+/// inputs → `None` → `[]`). Via [`Cofree::unfold`]: the coalgebra seed carries
+/// the state, the current input, and the remaining-input iterator; the tail ends
+/// when the iterator is exhausted.
 fn unfold_driven<S, I, O>(
     seed: S,
     inputs: Vec<I>,
     step: impl Fn(S, I) -> (O, S),
 ) -> Option<StreamPrefix<O>> {
     let mut iter = inputs.into_iter();
-    fn go<S, I: Iterator, O>(
-        state: S,
-        iter: &mut I,
-        step: &impl Fn(S, I::Item) -> (O, S),
-    ) -> Option<StreamPrefix<O>> {
-        let input = iter.next()?;
-        let (head, next) = step(state, input);
-        Some(CofreeCmnd::new(head, go(next, iter, step)))
-    }
-    go(seed, &mut iter, &step)
+    let first = iter.next()?; // empty inputs → top-level `None`.
+    let coalg = |(s, input, mut rest): (S, I, std::vec::IntoIter<I>)| {
+        let (head, next) = step(s, input);
+        let tail_seed = rest.next().map(|i| (next, i, rest));
+        (head, tail_seed)
+    };
+    Some(Cofree::unfold((seed, first, iter), &coalg))
 }
 
 /// Bounded-depth `BinaryTree<u8>` strategy for the tree-direction proptest.
@@ -555,10 +570,10 @@ fn gdl_recovery_via_z2_invariant_folding() {
 /// ```
 ///
 /// The right-hand side walks the cons-cell tower of
-/// `FreeMnd<ListEndo<A>, ()>` directly, applying `cell.cell_1` at each
-/// `Roll(Some((a, rest)))` and `cell.cell_0` at the `Pure(())`
+/// `Free<ListEndo<A>, ()>` directly, applying `cell.cell_1` at each
+/// `Suspend(Some((a, rest)))` and `cell.cell_0` at the `Pure(())`
 /// terminator. It is structurally identical to the unique algebra hom
-/// from `(FreeMnd, [Roll, Pure])` into `(S, [cell_1, cell_0])`.
+/// from `(Free, [Suspend, Pure])` into `(S, [cell_1, cell_0])`.
 ///
 /// If this equality holds across several samples, the unroller is
 /// (acceptance-tested) the algebra homomorphism. Sweeps several lengths
@@ -595,8 +610,8 @@ fn folding_rnn_equivalent_to_free_mnd_unroller() {
 /// unroll_via_free_mnd(cell, tree_to_free_mnd(tree))
 /// ```
 ///
-/// The local helper walks `FreeMnd<TreeEndo<A>, Infallible>` through
-/// `Roll(Left(a))` (leaves → `cell_0`) and `Roll(Right((l, r)))`
+/// The local helper walks `Free<TreeEndo<A>, Infallible>` through
+/// `Suspend(Left(a))` (leaves → `cell_0`) and `Suspend(Right((l, r)))`
 /// (internal nodes → recurse into both subtrees, then `cell_1`).
 #[test]
 fn recursive_nn_equivalent_to_free_mnd_unroller() {
@@ -628,7 +643,7 @@ fn recursive_nn_equivalent_to_free_mnd_unroller() {
 /// direction; CDL Remark H.6, App I.3.)
 ///
 /// `UnfoldingRnn::unroll_to_vec(cell, seed, depth)` MUST equal the walk of the
-/// depth-`depth` `CofreeCmnd<OptionWitness, O>` prefix unfolded from the same
+/// depth-`depth` `Cofree<OptionWitness, O>` prefix unfolded from the same
 /// seed with the same `(cell_o, cell_n)` step — the wrapper's output IS the
 /// finite prefix of the unique coalgebra hom into `Stream(O)`. Counter cell
 /// (`cell_o = id`, `cell_n = +1`), the same fixture as test 4; sweeps the
@@ -660,7 +675,7 @@ fn unfolding_rnn_equivalent_to_cofree_cmnd_unroller() {
 /// direction; CDL Remark H.6, App I.4.)
 ///
 /// `MealyCell::run(cell, seed, inputs)` MUST equal the walk of the input-driven
-/// `CofreeCmnd<OptionWitness, O>` prefix (length = `inputs.len()`). Stateful
+/// `Cofree<OptionWitness, O>` prefix (length = `inputs.len()`). Stateful
 /// counter cell (`|i| (s + i, s + 1)`), the same fixture as test 6; sweeps the
 /// empty-input edge.
 #[test]
@@ -687,7 +702,7 @@ fn mealy_cell_equivalent_to_cofree_cmnd_unroller() {
 /// direction; CDL Remark H.6, App I.5.)
 ///
 /// `MooreCell::run(cell, seed, inputs)` MUST equal the walk of the input-driven
-/// `CofreeCmnd<OptionWitness, O>` prefix. Output-then-step cell (`cell_o(s) =
+/// `Cofree<OptionWitness, O>` prefix. Output-then-step cell (`cell_o(s) =
 /// 2s`, `cell_n(s, _) = s + 1`), the same fixture as test 7; the head emitted at
 /// each node is the pre-step output, exactly Moore semantics. Sweeps the
 /// empty-input edge.
@@ -726,7 +741,7 @@ proptest! {
     /// **`FreeMnd`-equivalence proptest — list direction.** CDL Remark 2.13 /
     /// Proposition B.18. `FoldingRnn::unroll` IS the unique algebra hom from the
     /// initial algebra of the free monad on `1 + A × −`: it agrees with the
-    /// direct `FreeMnd`-tower walk on every generated `Vec<i64>` (≤ 16 elems).
+    /// direct `Free`-tower walk on every generated `Vec<i64>` (≤ 16 elems).
     /// Lifts the caller-sampled test 9 to property-based.
     #[test]
     fn folding_rnn_free_mnd_equivalence_proptest(
@@ -743,7 +758,7 @@ proptest! {
 
     /// **`FreeMnd`-equivalence proptest — tree direction.** CDL Remark 2.13 /
     /// Proposition B.18. `RecursiveNn::unroll` agrees with the direct
-    /// `FreeMnd<TreeEndo, Infallible>` walk on every generated bounded
+    /// `Free<TreeEndo, Infallible>` walk on every generated bounded
     /// `BinaryTree<u8>`. Lifts the caller-sampled test 10 to property-based.
     #[test]
     fn recursive_nn_free_mnd_equivalence_proptest(tree in arb_binary_tree()) {
@@ -756,7 +771,7 @@ proptest! {
 
     /// **`CofreeCmnd`-equivalence proptest — `UnfoldingRnn` (coalgebra).** CDL
     /// Remark H.6. Counter cell with wrapping advance so arbitrary seeds can't
-    /// overflow; the bounded unroll agrees with the `CofreeCmnd<OptionWitness,
+    /// overflow; the bounded unroll agrees with the `Cofree<OptionWitness,
     /// i64>` prefix walk on every seed/depth. Lifts test 11.
     #[test]
     fn unfolding_rnn_cofree_equivalence_proptest(

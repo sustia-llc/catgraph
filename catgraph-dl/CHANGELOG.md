@@ -15,6 +15,27 @@ All notable changes to this crate are documented here. Format follows
 
 ### Changed
 
+- **BREAKING — `free_monad` adopts `deep_causality_haft` 0.4.1 `Free` / `Cofree`**
+  ([#93](https://github.com/sustia-llc/catgraph/issues/93); reverses the #76
+  keep-native decision now that haft 0.4.1 ships a `Cofree` twin and opt-in
+  `Eq`/`Debug`). The native `FreeMnd` / `CofreeCmnd` carriers are removed;
+  `catgraph_dl::free_monad::{FreeMnd, CofreeCmnd}` become `{Free, Cofree}` (also
+  re-exported at the crate root, alongside `FreeWitness` / `CofreeWitness` and
+  the `EqFunctor` / `DebugFunctor` capability traits). This is a re-derivation,
+  not a rename: the recursion box now sits **inside** the functor hole
+  (`Suspend(F::Type<Box>)` rather than the old `Roll(Box<F::Type>)`), so the
+  enum variants are `Pure` / `Suspend` (not `Pure` / `Roll`); `Cofree` fields are
+  private (use `new` / `head` / `tail` / `into_parts`); and there is **no**
+  `Clone` on either carrier (haft ships no `CloneFunctor` yet — construct twice
+  instead). `Eq`/`Debug` are opt-in via the capability traits: `ListEndo` /
+  `TreeEndo` gain `EqFunctor` / `DebugFunctor` impls (bounded `A: PartialEq` /
+  `A: Debug`). Gains the library recursion schemes `Free::fold` (the
+  catamorphism — the previously-deferred CDL Remark 2.13 `foldr`/`foldl`
+  algebra-hom unroller) and `Cofree::unfold` (the anamorphism — the #64
+  coalgebra-direction unroller). No paper anchors change: `Free` realises the
+  paper's `FreeMnd(F)` (CDL Def B.8); bijection helper names
+  (`vec_to_free_mnd`, `free_mnd_to_vec`, `tree_to_free_mnd`, `free_mnd_to_tree`)
+  are unchanged.
 - **Paper-audit citation reconciliation (Phase 5)** — verified every CDL / FE /
   cocycles anchor in `src/**`, `tests/**`, `examples/**`, docs, and README
   against the cached papers. Fixes: phantom **"Appendix K"** at

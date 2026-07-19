@@ -9,7 +9,7 @@ asserting its results, so `cargo run --example <name>` doubles as a smoke check.
 |---|---|---|
 | [`para_walkthrough`](para_walkthrough.rs) | `Para` 1-morphisms: build, sequential `compose`, `Reparameterization` | §3.1 |
 | [`weight_tying`](weight_tying.rs) | the diagonal `Comonoid` and `tie_weights` (shared parameters) | Thm G.10 / §3.1 |
-| [`free_monad_basics`](free_monad_basics.rs) | `FreeMnd`/`CofreeCmnd` construction, list/tree bijections, an `FAlgebra` catamorphism | App B |
+| [`free_monad_basics`](free_monad_basics.rs) | `Free`/`Cofree` construction, list/tree bijections, an `FAlgebra` catamorphism | App B |
 | [`architecture_unrollers`](architecture_unrollers.rs) | `FoldingRnn`/`RecursiveNn`/`UnfoldingRnn`/`MealyCell`/`MooreCell` as (co)algebra unrollers; GDL invariance | App I & J, Ex 2.6 |
 
 ```sh

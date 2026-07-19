@@ -69,10 +69,10 @@ PR (this is the #70 discipline). Style: reference `<file>::<test_fn>`.
 | `architecture_unrollers::folding_rnn_equivalent_to_free_mnd_unroller` (+ proptest) | CDL Remark 2.13 / Prop B.18 | RNN unroll = unique algebra hom from initial `FreeMnd(1 + A × −)` |
 | `architecture_unrollers::recursive_nn_equivalent_to_free_mnd_unroller` (+ proptest) | CDL Remark 2.13 / Prop B.18 | tree unroll = unique algebra hom (tree direction) |
 | `architecture_unrollers::unfolding_rnn_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.3 | UnfoldingRnn unroll = finite prefix of unique coalgebra hom into `Stream(O)` |
-| `architecture_unrollers::mealy_cell_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.4 | Mealy run = input-driven `CofreeCmnd` prefix walk |
-| `architecture_unrollers::moore_cell_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.5 | Moore run = output-then-step `CofreeCmnd` prefix walk |
+| `architecture_unrollers::mealy_cell_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.4 | Mealy run = input-driven `Cofree<OptionWitness, O>` prefix walk |
+| `architecture_unrollers::moore_cell_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.5 | Moore run = output-then-step `Cofree<OptionWitness, O>` prefix walk |
 | `architecture_unrollers::gdl_recovery_via_z2_invariant_folding` | CDL Example 2.6 | GDL recovery: Z2-invariant fold |
-| `free_monad_bijections::*` | CDL Example B.19/B.20, Prop B.18 | `FreeMnd`/`CofreeCmnd` ↔ concrete-carrier bijections |
+| `free_monad_bijections::*` | CDL Example B.19/B.20, Prop B.18 | haft `Free`/`Cofree` ↔ concrete-carrier bijections |
 
 > **Anchor correction (#64):** the coalgebra-direction dual of Remark 2.13 is
 > **Remark H.6** ("streams are a terminal object in the category of

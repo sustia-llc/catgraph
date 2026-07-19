@@ -4,8 +4,9 @@
 //! architecture wrappers, the F-(co)algebra newtypes, the free-monad
 //! recursive carriers, and the `Para` type-level handle all instantiate.
 //!
-//! `FreeMnd<F, Z>` requires `F: EndoWitness`
-//! (`deep_causality_haft` GAT object map + morphism map). The endofunctor
+//! haft's `Free<F, Z>` / `Cofree<F, Z>` require `F: HKT<Constraint = NoConstraint>`
+//! on their data (GAT object map; `Functor<F>` is additionally required by their
+//! recursion-consuming methods). The endofunctor
 //! placeholders below are aliases of the shared trivial `common::UnitEndo`
 //! witness (unit `Type<X> = ()` projection) because no semantics are exercised
 //! here; semantics for `ListEndo` / `TreeEndo` are tested in
@@ -21,7 +22,7 @@ use catgraph_dl::algebra::{FAlgebra, FCoalgebra, MonadAlgebra};
 use catgraph_dl::architectures::{FoldingRnn, MealyCell, MooreCell, RecursiveNn, UnfoldingRnn};
 use catgraph_dl::free_monad::list_endo::ListEndo;
 use catgraph_dl::free_monad::tree_endo::TreeEndo;
-use catgraph_dl::free_monad::{CofreeCmnd, FreeMnd};
+use catgraph_dl::free_monad::{Cofree, Free};
 
 use common::UnitEndo;
 
@@ -102,14 +103,14 @@ fn monad_algebra_constructs() {
 
 #[test]
 fn free_monad_witnesses_construct() {
-    // FreeMnd(1 + A × −) ≅ List in CDL Example B.19. The `new()`
-    // compatibility constructor produces `Pure(Z::default())`.
-    let _free: FreeMnd<ListEndo<u8>, ()> = FreeMnd::new();
-    let _free_tree: FreeMnd<TreeEndo<u8>, ()> = FreeMnd::new();
+    // FreeMnd(1 + A × −) ≅ List in CDL Example B.19. haft's `Free` has no
+    // `new()`; the monadic unit is `Free::Pure`.
+    let _free: Free<ListEndo<u8>, ()> = Free::Pure(());
+    let _free_tree: Free<TreeEndo<u8>, ()> = Free::Pure(());
 
-    // `CofreeCmnd::new` takes `(head, tail)`. For the smoke
-    // test we use the trivial `Type<X> = ()` projections of the stream/
-    // Mealy endofunctors so `tail = ()` is a valid construction.
-    let _cofree_stream: CofreeCmnd<StreamEndo<u8>, ()> = CofreeCmnd::new((), ());
-    let _cofree_mealy: CofreeCmnd<MealyEndo<u8, u8>, ()> = CofreeCmnd::new((), ());
+    // `Cofree::new` takes `(head, tail)`. For the smoke test we use the trivial
+    // `Type<X> = ()` projections of the stream/Mealy endofunctors so `tail = ()`
+    // is a valid construction.
+    let _cofree_stream: Cofree<StreamEndo<u8>, ()> = Cofree::new((), ());
+    let _cofree_mealy: Cofree<MealyEndo<u8, u8>, ()> = Cofree::new((), ());
 }
