@@ -54,14 +54,19 @@
 //!
 //! Some haft Arrow-adjacent names are intentionally **not** re-exported:
 //!
-//! - `Free` / `FreeWitness` — haft's free monad ships **no** `Eq` / `Clone` /
-//!   `Debug` (opaque by design), but applied's congruence-closure engine
+//! - `Free` / `FreeWitness` — as of haft 0.4.1 the free monad's `Eq` / `Debug`
+//!   are **opt-in** via the `EqFunctor` / `DebugFunctor` capability traits (the
+//!   witness supplies `eq_type` / `fmt_type`), but it still ships **no** `Clone`,
+//!   **no** `Hash`, and **no** serde. Applied's congruence-closure engine
 //!   *requires* `Eq + Hash` on terms (see
 //!   [`PropSignature`](catgraph_applied::prop::PropSignature)). So
 //!   [`PropExpr<G>`](catgraph_applied::prop::PropExpr) — which derives all of
 //!   them — stays the term type, and haft's `Free` is not a substitute. The
 //!   `FreeMnd` interplay is tracked in catgraph
-//!   [#76](https://github.com/sustia-llc/catgraph/issues/76).
+//!   [#76](https://github.com/sustia-llc/catgraph/issues/76) (resolved for
+//!   catgraph-dl via [#93](https://github.com/sustia-llc/catgraph/issues/93),
+//!   which adopts haft's `Free`/`Cofree` there; catgraph-syntax's `Hash`
+//!   requirement keeps `PropExpr` the term type here regardless).
 //! - The `IoAction` family (`IoAction`, `IoAndThen`, `IoMap`, …) — its `run`
 //!   consumes `self` and it is IO-effect specific; it is an effect executor,
 //!   not a reusable, inspectable term carrier, so it cannot back the

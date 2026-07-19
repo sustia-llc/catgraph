@@ -10,7 +10,7 @@
 //! - `FreeMnd(A + (−)²)(!) ≅ BinaryTree<A>` — a binary tree with `A`-leaves
 //!   (`TreeEndo`; the empty leaf type `!` is `core::convert::Infallible`).
 //!
-//! Its dual, the **cofree comonad** `CofreeCmnd`, models `F`-branching streams
+//! Its dual, the **cofree comonad** `Cofree`, models `F`-branching streams
 //! (`head` + an `F`-shape of tails). This example builds each by hand, checks the
 //! bijections with their obvious carriers, and folds an [`FAlgebra`] over a free
 //! monad (a *catamorphism*) — the operation the architecture unrollers generalise.
@@ -56,7 +56,7 @@ fn main() {
     );
     let back = free_mnd_to_tree(tree_to_free_mnd(tree.clone()));
     assert_eq!(back, tree);
-    println!("tree free monad: BinaryTree ⇄ FreeMnd<TreeEndo> bijection round-trips");
+    println!("tree free monad: BinaryTree ⇄ Free<TreeEndo> bijection round-trips");
 
     // ---- 3. The dual: cofree comonad (a bounded stream prefix) ----------
     //

@@ -73,7 +73,9 @@
 //! haft's [`Free`]/[`Cofree`] have **no** `#[derive]`d `PartialEq`/`Eq`/`Debug`
 //! (a derive would gate on the GAT projection `F::Type<Box<…>>` and overflow the
 //! trait solver, `error[E0275]`). Instead the instances are opt-in and route
-//! through the operation functor's [`EqFunctor::eq_type`] / [`DebugFunctor::fmt_type`]
+//! through the operation functor's
+//! [`EqFunctor::eq_type`](crate::endofunctor::EqFunctor::eq_type) /
+//! [`DebugFunctor::fmt_type`](crate::endofunctor::DebugFunctor::fmt_type)
 //! capability. haft ships those for its own single-hole witnesses
 //! (`OptionWitness`, `VecWitness`, `BoxWitness`, …); the crate's own `ListEndo` /
 //! `TreeEndo` implement them next to their `HKT`/`Functor` impls (bounded

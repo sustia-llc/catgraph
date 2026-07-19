@@ -25,6 +25,16 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
   5.25/5.30/5.33/5.45/5.50, Thm 5.53/5.60, and `frobenius.rs`'s left-only
   unitality/counitality note (PDF p.10 figure check).
 
+### Documentation
+
+- **`arrow_seam` `Free`/`FreeWitness` exclusion rationale refreshed for haft
+  0.4.1** ([#93](https://github.com/sustia-llc/catgraph/issues/93)): haft's free
+  monad now has opt-in `Eq`/`Debug` via the `EqFunctor`/`DebugFunctor`
+  capability traits (no longer "opaque by design"), but still no `Clone`/`Hash`/
+  serde — so `PropExpr<G>` (which the congruence-closure engine needs `Eq + Hash`
+  on) stays the term type. No code change; catgraph-syntax does not adopt haft's
+  `Free` (that adoption landed in catgraph-dl per #93).
+
 ### Added
 
 - **`depth` module — recursion guard for the term interpreters**

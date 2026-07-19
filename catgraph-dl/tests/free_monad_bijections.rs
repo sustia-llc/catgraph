@@ -1,4 +1,4 @@
-//! `FreeMnd` ⇄ `Vec` and `FreeMnd` ⇄ `BinaryTree`
+//! `Free` ⇄ `Vec` and `Free` ⇄ `BinaryTree`
 //! bijection acceptance tests.
 //!
 //! CDL Examples B.19 + B.20. We verify that the two concrete encodings of
@@ -15,11 +15,11 @@
 //! 1. `vec_round_trip_proptest` — proptest-driven round trip for `Vec<u32>`
 //!    in both directions.
 //! 2. `empty_list_is_pure_unit` — the empty `Vec` collapses to
-//!    `FreeMnd::Pure(())`.
+//!    `Free::Pure(())`.
 //! 3. `cons_cell_explicit_structure_round_trips` — the manually-built
 //!    cons-cell tower for `[1, 2]` round-trips correctly.
 //! 4. `tree_round_trip_examples` — three hand-built `BinaryTree` instances
-//!    round-trip via the `FreeMnd<TreeEndo, Infallible>` encoding.
+//!    round-trip via the `Free<TreeEndo, Infallible>` encoding.
 //! 5. `cofree_cmnd_smoke` — `Cofree<TrivialEndo, u32>` constructs and
 //!    `head()` is accessible. Compile-time + runtime sanity for the dual.
 
@@ -45,12 +45,12 @@ proptest! {
 
     #[test]
     fn vec_round_trip_proptest(items in proptest::collection::vec(any::<u32>(), 0..=24)) {
-        // Forward: items → FreeMnd → (items', ()).
+        // Forward: items → Free → (items', ()).
         let f = vec_to_free_mnd::<u32, ()>(items.clone(), ());
         let (round_trip, ()) = free_mnd_to_vec(f);
         prop_assert_eq!(round_trip, items.clone());
 
-        // Backward: build the FreeMnd from the same items, destruct,
+        // Backward: build the Free from the same items, destruct,
         // rebuild — must coincide structurally.
         let f1 = vec_to_free_mnd::<u32, ()>(items.clone(), ());
         let (items_again, ()) = free_mnd_to_vec(f1);
@@ -61,7 +61,7 @@ proptest! {
 }
 
 /// CDL Example B.19 corner case. Empty list with `()` terminator is
-/// canonically `FreeMnd::Pure(())` — no `Roll` cells.
+/// canonically `Free::Pure(())` — no `Suspend` cells.
 #[test]
 fn empty_list_is_pure_unit() {
     let f: Free<catgraph_dl::free_monad::list_endo::ListEndo<u32>, ()> =
@@ -78,7 +78,7 @@ fn empty_list_is_pure_unit() {
 }
 
 /// CDL Example B.19. The explicit cons-cell tower for `[1, 2]` written by
-/// hand using `FreeMnd::roll` constructors must decode to `vec![1, 2]`.
+/// hand using `Free::Suspend` constructors must decode to `vec![1, 2]`.
 #[test]
 fn cons_cell_explicit_structure_round_trips() {
     use catgraph_dl::free_monad::list_endo::ListEndo;
@@ -98,7 +98,7 @@ fn cons_cell_explicit_structure_round_trips() {
 }
 
 /// CDL Example B.20. Three hand-built `BinaryTree` instances round-trip
-/// via the `FreeMnd<TreeEndo<A>, Infallible>` encoding.
+/// via the `Free<TreeEndo<A>, Infallible>` encoding.
 #[test]
 fn tree_round_trip_examples() {
     // Case 1: a single leaf.

@@ -4,8 +4,9 @@
 //! architecture wrappers, the F-(co)algebra newtypes, the free-monad
 //! recursive carriers, and the `Para` type-level handle all instantiate.
 //!
-//! `FreeMnd<F, Z>` requires `F: EndoWitness`
-//! (`deep_causality_haft` GAT object map + morphism map). The endofunctor
+//! haft's `Free<F, Z>` / `Cofree<F, Z>` require `F: HKT<Constraint = NoConstraint>`
+//! on their data (GAT object map; `Functor<F>` is additionally required by their
+//! recursion-consuming methods). The endofunctor
 //! placeholders below are aliases of the shared trivial `common::UnitEndo`
 //! witness (unit `Type<X> = ()` projection) because no semantics are exercised
 //! here; semantics for `ListEndo` / `TreeEndo` are tested in
