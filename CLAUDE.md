@@ -63,3 +63,12 @@ Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBU
 > (FrobeniusOr/spiders/E_frob/to_mat_kron), S5 Traced typed builder over the
 > haft Arrow seam. Post-milestone follow-ups on #5 (#79/#80/#81); other open
 > follow-ups + audit/README reconciliation tracked as GitHub issues (e.g. #7).
+>
+> **Paper-audit (papers-vs-implementation citation sweep), phases 1–3 complete
+> (2026-07-19):** core (#112/#113), applied (#118/#119 — Thm 5.60 presentation
+> completed to the paper's 18 equations "E_18"; Mat(R) completeness attribution
+> corrected to Baez–Erbele for fields + Wadsley–Woods for commutative rigs), and
+> magnitude (#120 — BV25/Leinster/LS citation reconciliation + BV25-AUDIT recount)
+> are merged. A CI guard (`scripts/check_audit_counts.py`) keeps the FS19/FS18/BV25
+> audit-doc tallies self-consistent. Phases 4–7 (physics / dl / syntax /
+> cross-cutting) remain.
