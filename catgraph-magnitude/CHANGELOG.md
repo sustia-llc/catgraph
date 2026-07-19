@@ -14,6 +14,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Paper-audit citation reconciliation (Phase 3, PR #120)** — verified every
+  BV25 / Leinster13 / Leinster08 / Leinster–Shulman anchor in `src/**`, tests,
+  examples, README, and `docs/BV25-AUDIT.md` against the cached papers and fixed
+  the drifted citations: `Thm 3.10 → Prop 3.10`; the Shannon-entropy derivative
+  `Cor 3.14 → Remark 3.11 + Eq (12)` (3.14 is the Euler-characteristic
+  Proposition); the `#T(⊥) ≤ Mag(tM) ≤ #ob(M)` bounds re-anchored to BV25's
+  un-numbered intro prose (the "Eq 4.3" label was phantom; the `t ≥ 1` form
+  confirmed derivable from Prop 3.10); LS `Def 2.5 → Def 3.3`, `Example 2.7 →
+  2.9`, and the chain-complex framing `§2 → §3`; `Prop 2.4.17 → Def 2.1.2 +
+  Prop 2.1.3` for Möbius invertibility; the phantom `§1.4` dropped from Leinster08
+  `Cor 1.5`; paper title corrected to *The Magnitude of Categories of Texts
+  Enriched by Language Models*; the `magnitude.rs` ζ-matrix quote fixed to the
+  paper's "**Often** our matrix ζ…". Storjohann / Newman SNF anchors are not in
+  the local cache and were left unchanged (cache-unverifiable).
+- **`docs/BV25-AUDIT.md` §2/§3 recount** — the summary rows had drifted from
+  their own (correct) detail tables: §2 `[4,0,0,2,3] → [5,0,0,1,3]`, §3
+  `[6,0,1,1,0] → [8,0,0,0,0]`; headline → 21 implementable / 100% DONE / 0
+  deferred (the #37 Tsallis-side perf optimization is out-of-scope backlog, not a
+  deferred paper anchor, and correctly has no detail row). BV25-AUDIT is now
+  wired into the `scripts/check_audit_counts.py` CI guard alongside FS19/FS18.
+
 ## [workspace-v0.2.0] - 2026-07-02
 
 Incremental coalition magnitude for the decision hot path (#31, PR #32).

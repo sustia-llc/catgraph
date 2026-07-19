@@ -6,8 +6,24 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Paper-audit citation reconciliation (Phase 1, PRs #112/#113)** — verified the
+  FS19 (Hypergraph Categories) anchors against the cached paper and fixed drifted
+  citations: `Thm 1.2 / Thm 4.13` isomorphism-vs-equivalence phrasing in README /
+  rustdoc, `FS19-AUDIT.md` internal count drift, Lemma 4.3 "io" (cross-label)
+  qualifier, and `RelabelingFunctor` re-cited as the single-map component of
+  Prop 2.1 / Cor 3.13. `operadic.rs` grounded in its `1305.0297` anchor and FS18
+  (`1803.05316`) declared a secondary core anchor. `tests/spider_theorem.rs`
+  upgraded from shape-only to full structural-equality assertions.
+
 ### Added
 
+- **`scripts/check_audit_counts.py` CI guard (#111)** — checks the hand-maintained
+  audit-doc tallies (summary arithmetic, headline percentages, per-section emoji
+  counts, `(N tests)` citations) for self-consistency; wired into CI for
+  `FS19-AUDIT.md` (Phase 1), then extended to `FS18-AUDIT.md` (Phase 2) and
+  `BV25-AUDIT.md` (Phase 3).
 - `CatgraphError::RecursionLimit { depth, limit }` — shared term-interpreter
   recursion-guard error, so `catgraph-syntax` interpreters whose error type is
   fixed to `CatgraphError` (e.g. a `CompleteFunctor`) report the same shape as
