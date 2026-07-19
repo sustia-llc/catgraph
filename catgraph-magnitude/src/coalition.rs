@@ -1,6 +1,7 @@
 //! [`Coalition`] — the §IV.5 enriched-coalition magnitude surface (#22).
 //!
-//! Bradley–Vigneaux 2025 (*Magnitude of Language Models*, arXiv:2501.06662)
+//! Bradley–Vigneaux 2025 (*The Magnitude of Categories of Texts Enriched by
+//! Language Models*, arXiv:2501.06662)
 //! §3.5 Eq (7) gives magnitude as the Möbius sum `Mag(tM) = Σ_{x,y} ζ_t⁻¹(x, y)`;
 //! Bradley–Terilla–Vlassopoulos 2021 (*An enriched category theory of language*,
 //! arXiv:2106.07890) supply the `[0,1]` enrichment via `d = −ln π`. This module
@@ -19,7 +20,7 @@
 //! | coalition diversity    | `Mag(tA\|members)` — this module's [`coalition_magnitude`]       |
 //!
 //! `magnitude` computes the Möbius sum (BV 2025 §3.5 Eq 7), which is well-defined
-//! for **cyclic** coupling graphs too. BV 2025 Thm 3.10's Tsallis *closed form*
+//! for **cyclic** coupling graphs too. BV 2025 Prop 3.10's Tsallis *closed form*
 //! only applies in the acyclic tree-poset case (see
 //! [`LmCategory::magnitude`](crate::lm_category::LmCategory::magnitude)); coalitions
 //! may be cyclic, which is fine for Eq 7.
@@ -71,8 +72,8 @@
 //!
 //! `t = 1` is the canonical/default arm (the downstream `MagnitudePolicy` pin).
 //! Its Shannon connection is via the **derivative**
-//! `d/dt Mag(tM)|_{t=1} = Σ_x H(p_x)` (Shannon entropy; BV 2025 §3.14 Cor /
-//! Rem 3.11), not the `t = 1` value itself. `t = 2` is a collision-probability
+//! `d/dt Mag(tM)|_{t=1} = Σ_x H(p_x)` (Shannon entropy; BV 2025 Rem 3.11 /
+//! Eq (12)), not the `t = 1` value itself. `t = 2` is a collision-probability
 //! proxy (the `Σ pᵢ²` regime); `t → ∞` approaches a cardinality-like limit
 //! (effective member count). The API takes an explicit `t`.
 
@@ -435,7 +436,7 @@ pub(crate) fn build_skeletal_space(
 ///
 /// Reads the derived skeletal space cached at construction (no per-call
 /// allocation) and calls [`magnitude::<F64Rig>`](crate::magnitude::magnitude).
-/// The Möbius sum is well-defined for cyclic coupling graphs (Thm 3.10's Tsallis
+/// The Möbius sum is well-defined for cyclic coupling graphs (Prop 3.10's Tsallis
 /// closed form is the acyclic tree-poset special case — see
 /// [`LmCategory::magnitude`](crate::lm_category::LmCategory::magnitude)).
 ///
@@ -601,7 +602,7 @@ where
 /// quotiented — see the [module docs](crate::coalition)).
 ///
 /// `t = 1` is the pinned canonical arm (#22 pins it; its Shannon tie is the
-/// derivative `d/dt Mag|_{t=1} = Σ_x H(p_x)`, BV 2025 §3.14 Cor). The `t`-sweep
+/// derivative `d/dt Mag|_{t=1} = Σ_x H(p_x)`, BV 2025 Rem 3.11 / Eq (12)). The `t`-sweep
 /// (`t = 2` collision proxy, `t → ∞` cardinality limit) is an experiment axis of
 /// the downstream A/B harness, **not** a knob on this stable API — callers who
 /// need other scales reach for [`coalition_magnitude_from_couplings`] directly.

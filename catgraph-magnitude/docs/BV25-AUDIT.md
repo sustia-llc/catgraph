@@ -1,12 +1,12 @@
 # Bradley-Vigneaux 2025 Coverage Audit
 
-> **Paper:** Bradley & Vigneaux, *Magnitude of Language Models* ([arXiv:2501.06662v2](https://arxiv.org/abs/2501.06662), Jan 2025)
+> **Paper:** Bradley & Vigneaux, *The Magnitude of Categories of Texts Enriched by Language Models* ([arXiv:2501.06662v2](https://arxiv.org/abs/2501.06662), Jan 2025)
 > **Library:** `catgraph-magnitude` (workspace member of `catgraph`)
 > **Anchors:** reconciled against the cached paper text + PDF (2026-07-13). BV25 uses a Documenta/TAC **shared subsection/environment counter** — cite the *environment* number (e.g. Example 2.13, Definition 2.14), not a "§2.N" subsection.
 > **Method:** cross-checked each numbered definition / proposition / remark / equation against `catgraph-magnitude` source and the enrichment substrate re-exported from `catgraph-applied`.
 >
 > **Anchor papers** (PDFs are not kept in-tree; fetch from arXiv):
-> - BV 2025 — Bradley & Vigneaux, *Magnitude of Language Models*, [arXiv:2501.06662v2](https://arxiv.org/abs/2501.06662).
+> - BV 2025 — Bradley & Vigneaux, *The Magnitude of Categories of Texts Enriched by Language Models*, [arXiv:2501.06662v2](https://arxiv.org/abs/2501.06662).
 > - Leinster 2013 — Leinster, *The magnitude of metric spaces*, [arXiv:1012.5857v3](https://arxiv.org/abs/1012.5857).
 > - Leinster–Shulman 2017 — *Magnitude homology of enriched categories and metric spaces*, [arXiv:1711.00802v4](https://arxiv.org/abs/1711.00802).
 > - Leinster 2008 — *The Euler characteristic of a category*, [arXiv:math/0610260v1](https://arxiv.org/abs/math/0610260).
@@ -37,19 +37,19 @@
 | Section | DONE | PARTIAL | DEFERRED | N/A | IN APPLIED | Total |
 |---|---|---|---|---|---|---|
 | §1.1 (co)weighting primitives | 1 | 0 | 0 | 0 | 0 | 1 |
-| §2 LM as enriched category | 4 | 0 | 0 | 2 | 3 | 9 |
+| §2 LM as enriched category | 5 | 0 | 0 | 1 | 3 | 9 |
 | §2.1 scatteredness predicate | 1 | 0 | 0 | 0 | 0 | 1 |
-| §3 Magnitude via Tsallis | 6 | 0 | 1 | 1 | 0 | 8 |
+| §3 Magnitude via Tsallis | 8 | 0 | 0 | 0 | 0 | 8 |
 | §3.5 Möbius / chain-sum | 2 | 0 | 0 | 0 | 0 | 2 |
 | §3.14 Magnitude homology | 1 | 0 | 0 | 0 | 0 | 1 |
 | §4 Bounds + asymptotics | 3 | 0 | 0 | 2 | 0 | 5 |
-| **TOTAL** | **18** | **0** | **1** | **5** | **3** | **27** |
+| **TOTAL** | **21** | **0** | **0** | **3** | **3** | **27** |
 
 **Headline numbers:**
-- **67% DONE / 0% PARTIAL / 4% DEFERRED / 19% N/A / 11% IN APPLIED**
-- Of the 27 audited items, 3 are already in `catgraph-applied` (enrichment substrate), 5 are N/A (motivational), leaving **19 implementable items** of which **18 are DONE, 0 PARTIAL, 1 DEFERRED**.
-- Of implementable items: **95% DONE / 0% PARTIAL / 5% DEFERRED**
-- The one remaining deferred item is the §3 Tsallis-side optimization stash (in-section; tracked in the perf backlog, #37). The magnitude-homology / chain-complex / Storjohann SNF / Euler-char-identity stack closes the §3.14 deferral. The design-doc §3.6 surface row `mobius_function_via_chains_exact<Q: Ring>` was struck from that stack and folded into the Leinster 2008 Cor 1.5 integer-exact Möbius surface (documented below) — the paper-faithful destination requires anchoring a NEW paper (Leinster 2008 finite-category Möbius) outside the crate's BV/LS/Leinster-2013 anchor surface. Both now ship in the migrated tree.
+- **78% DONE / 0% PARTIAL / 0% DEFERRED / 11% N/A / 11% IN APPLIED**
+- Of the 27 audited items, 3 are already in `catgraph-applied` (enrichment substrate), 3 are N/A (motivational), leaving **21 implementable items** of which **21 are DONE, 0 PARTIAL, 0 DEFERRED**.
+- Of implementable items: **100% DONE / 0% PARTIAL / 0% DEFERRED**
+- No paper-anchored audit item remains deferred: the §3 Tsallis-side optimization stash (#37) is a performance-backlog item, out of the paper-item audit scope (only §2/§3 Defs/Props/Eqs that materialize as types or constitute the acceptance gate are tracked — see the scope note above), not a tracked deferral. The magnitude-homology / chain-complex / Storjohann SNF / Euler-char-identity stack closes the §3.14 deferral. The design-doc §3.6 surface row `mobius_function_via_chains_exact<Q: Ring>` was struck from that stack and folded into the Leinster 2008 Cor 1.5 integer-exact Möbius surface (documented below) — the paper-faithful destination requires anchoring a NEW paper (Leinster 2008 finite-category Möbius) outside the crate's BV/LS/Leinster-2013 anchor surface. Both now ship in the migrated tree.
 
 ---
 
@@ -104,7 +104,7 @@
 
 | Item | Status | Location | Notes |
 |---|---|---|---|
-| Eq 4.3 bounds `#T(⊥) ≤ Mag(tM) ≤ #ob(M)` for `t ≥ 1` | ✅ | `tests/lm_category.rs` proptest | Bounds proptest on randomly generated forward-chain LMs (size 2–4). |
+| Intro bounds `#T(⊥) ≤ Mag(tM) ≤ #ob(M)` for `t ≥ 1` | ✅ | `tests/lm_category.rs` proptest | Bounds proptest on randomly generated forward-chain LMs (size 2–4). **Un-numbered intro prose** (p.4), derivable from Prop 3.10 — not a numbered "Eq 4.3". |
 | Asymptotic `Mag(t·M) → #T(⊥)` as `t → ∞` (deterministic) | ✅ | `examples/lm_magnitude.rs` | Asserted at `t = 1e6`. v0.1.0 caveat documented: the `t → ∞` limit equals `#T(⊥)` only for fully-deterministic LMs (all-Dirac rows); for non-degenerate rows it is `#T(⊥) + #{non-degenerate non-terminal states}`. |
 | Monotonicity of `Mag` in `t` for `t ≥ 1` | ✅ | `examples/lm_magnitude.rs` | Property (C) asserted. |
 | §4 Information-theoretic interpretation | ➖ | — | motivational; covered narratively in `README.md`. |
@@ -182,7 +182,7 @@ The two are equivalent **as matrices** because `(M^k)[i][j]` counts walks of len
 
 ### Prop 2.10 (nilpotency / circuit-freeness) audit
 
-The Leinster 2008 paper has multiple "Prop 2.10" candidates depending on edition/numbering. The implementation's rustdoc cites "Prop 2.10" as the termination guarantee — that on circuit-free 𝔸, `M^k = 0` for `k ≥ |𝔸|`. **The actual paper anchor for this termination claim is Cor 1.5 itself** (the nondegenerate-path count is bounded by the longest chain in the non-identity arrow graph, which is `≤ |𝔸| − 1` on a circuit-free DAG; this is implicit in the paper's framing where the sum `Σ_{n≥0}` collapses to a finite sum on circuit-free 𝔸). The paper does not need a separate Prop 2.10 — the termination falls out of nondegeneracy + circuit-freeness directly. The implementation's "Prop 2.10" rustdoc citation is therefore **slightly misattributed** but mathematically correct; see Important I-1 below.
+The Leinster 2008 paper has **exactly one** Prop 2.10 (arXiv:math/0610260v1, §2): "Let `G` be a finite circuit-free directed graph. Then `χ(F(G))` is defined and equal to `|G₀| − |G₁|`." That is a real, distinct result (the free-category Euler characteristic of a circuit-free graph), *not* the per-`𝔸` termination guarantee. An earlier revision's rustdoc cited "Prop 2.10" as the termination guarantee — that on circuit-free 𝔸, `M^k = 0` for `k ≥ |𝔸|`. **The actual paper anchor for that termination claim is Cor 1.5 itself** (the nondegenerate-path count is bounded by the longest chain in the non-identity arrow graph, which is `≤ |𝔸| − 1` on a circuit-free DAG; this is implicit in the paper's framing where the sum `Σ_{n≥0}` collapses to a finite sum on circuit-free 𝔸). The paper does not need a separate proposition for it — the termination falls out of nondegeneracy + circuit-freeness directly. The current `mobius_chains.rs` rustdoc anchors termination on Cor 1.5 (+ Lemma 1.3), so no live code cites Prop 2.10; the conclusion (termination ⇐ Cor 1.5, mathematically correct) stands. See Important I-1 below.
 
 ### 5 fixture paper-faithfulness
 

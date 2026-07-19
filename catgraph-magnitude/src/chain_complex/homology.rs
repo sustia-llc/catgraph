@@ -1,6 +1,6 @@
 //! Magnitude-homology rank recovery + BV 2025 Prop 3.14 acceptance gate.
 //!
-//! Module split: the chain-complex substrate (LS 2017 §2 materialisation —
+//! Module split: the chain-complex substrate (LS 2017 §3 materialisation —
 //! [`Chain`](super::Chain), [`enumerate_chains`](super::enumerate_chains),
 //! [`ChainIndex`], [`boundary_matrix`]) lives in [`super`]; the
 //! rank-recovery + acceptance machinery lives here.
@@ -52,7 +52,7 @@ const RANK_RECOVERY_PRIMES: [i64; 3] = [
 ///
 /// [`to_i64`](IntegerLikeRig::to_i64) is fallible: [`Z(BigInt)`](Z)
 /// values may exceed `i64` range. In practice, boundary-matrix entries
-/// carry only `±1` or `0` (LS 2017 Def 2.5 alternating-sum face map),
+/// carry only `±1` or `0` (LS 2017 Def 3.3 alternating-sum face map),
 /// so the fallible signature defends against future regressions (e.g.
 /// a magnitude-homology fixture that builds non-binary boundary entries)
 /// rather than guarding the shipped path.

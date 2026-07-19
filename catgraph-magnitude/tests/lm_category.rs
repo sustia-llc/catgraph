@@ -1,7 +1,8 @@
-//! [`LmCategory`] unit tests + BV 2025 Eq 4.3 bounds proptest.
+//! [`LmCategory`] unit tests + BV 2025 intro magnitude-bounds proptest.
 //!
-//! The two paper-anchored acceptance tests (Thm 3.10 closed form, Cor 3.14
-//! Shannon recovery) live in `tests/bv_2025_acceptance.rs` so they appear as
+//! The two paper-anchored acceptance tests (Prop 3.10 closed form,
+//! Rem 3.11 / Eq (12) Shannon recovery) live in `tests/bv_2025_acceptance.rs`
+//! so they appear as
 //! a distinct test binary in `cargo test` output — they are the
 //! acceptance gate and visibility matters.
 
@@ -47,7 +48,7 @@ fn add_transition_and_mark_terminating_round_trip() {
     assert_eq!(m.objects().len(), 3);
 }
 
-/// Magnitude is finite and (per Eq 4.3) bounded on a small tree-shaped LM.
+/// Magnitude is finite and (per the p.4 intro bounds) bounded on a small tree-shaped LM.
 ///
 /// Uses a minimal `A = {a}, N = 1` tree (4 states), the same shape as the
 /// BV 2025 acceptance fixture.
@@ -66,15 +67,15 @@ fn magnitude_smoke_tree_lm() {
             mag.is_finite(),
             "Mag(tM) at t={t} should be finite, got {mag}"
         );
-        // BV 2025 Eq 4.3: #T(⊥) ≤ Mag(tM) ≤ #ob(M) for t ≥ 1.
+        // BV 2025 p.4 intro bounds (derivable from Prop 3.10): #T(⊥) ≤ Mag(tM) ≤ #ob(M) for t ≥ 1.
         if t >= 1.0 {
             assert!(
                 mag >= m.terminating().len() as f64 - 1e-9,
-                "Eq 4.3 lower bound violated at t={t}: mag={mag}"
+                "intro lower bound violated at t={t}: mag={mag}"
             );
             assert!(
                 mag <= m.objects().len() as f64 + 1e-9,
-                "Eq 4.3 upper bound violated at t={t}: mag={mag}"
+                "intro upper bound violated at t={t}: mag={mag}"
             );
         }
     }
@@ -177,7 +178,7 @@ fn enriched_space_prob_one_two_cycle_terminates_with_zero_distance() {
 }
 
 // ---------------------------------------------------------------------------
-// Eq 4.3 bounds proptest — sanity check on random LMs
+// Intro magnitude-bounds proptest — sanity check on random LMs
 // ---------------------------------------------------------------------------
 
 /// Construct a random tree-shaped `n`-state LM with strictly forward
@@ -185,7 +186,7 @@ fn enriched_space_prob_one_two_cycle_terminates_with_zero_distance() {
 ///
 /// State naming: `s0, …, s{n-1}`. The last state `s{n-1}` is the only
 /// terminating state. This mirrors the BV 2025 §2.15 prefix-poset shape
-/// (forward-only, no cycles, single root); Eq 4.3 holds in this regime.
+/// (forward-only, no cycles, single root); the intro bounds hold in this regime.
 fn build_random_tree_lm(n: usize, seed: u64) -> LmCategory {
     let mut state = seed | 1;
     #[allow(clippy::cast_precision_loss)]
@@ -227,14 +228,14 @@ fn build_random_tree_lm(n: usize, seed: u64) -> LmCategory {
 }
 
 proptest! {
-    /// BV 2025 Eq 4.3: `#T(⊥) ≤ Mag(tM) ≤ #ob(M)` for `t ≥ 1`.
+    /// BV 2025 p.4 intro bounds (derivable from Prop 3.10): `#T(⊥) ≤ Mag(tM) ≤ #ob(M)` for `t ≥ 1`.
     ///
     /// At `t = 1` magnitude exactly equals `#T(⊥) + Σ entropies`, but the
     /// general bound argument is monotone and the upper bound `#ob(M)` is
     /// tight only as `t → ∞`. We test with `t ∈ {1.5, 2.0, 3.0}` to stay
     /// well inside the regime where ζ_t is invertible and the bounds apply.
     #[test]
-    fn mag_bounds_eq_4_3(
+    fn mag_bounds_intro(
         n in 2usize..=4,
         seed in any::<u64>(),
     ) {
@@ -248,11 +249,11 @@ proptest! {
             };
             prop_assert!(
                 mag >= n_term - 1e-6,
-                "Eq 4.3 lower bound violated at t={t}: mag={mag}, #T(⊥)={n_term}"
+                "intro lower bound violated at t={t}: mag={mag}, #T(⊥)={n_term}"
             );
             prop_assert!(
                 mag <= n_obj + 1e-6,
-                "Eq 4.3 upper bound violated at t={t}: mag={mag}, #ob={n_obj}"
+                "intro upper bound violated at t={t}: mag={mag}, #ob={n_obj}"
             );
         }
     }

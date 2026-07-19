@@ -6,7 +6,7 @@
 //! - The **general interaction view** (`WeightedCospan`): cycles allowed, models
 //!   directed message-passing probabilities between agents.
 //! - The **BV 2025 prefix-poset view** (`LmCategory`): acyclic, where
-//!   `magnitude<F64Rig>` and Thm 3.10's closed form apply.
+//!   `magnitude<F64Rig>` and Prop 3.10's closed form apply.
 //!
 //! No `SurrealDB`, no tokio, no async — pure-math demo of the analysis surface
 //! (BV 2025 Prop 3.14 acceptance gate + per-`(k, ℓ)`
@@ -70,7 +70,7 @@ const AGENTS: [&str; 5] = ["alice", "bob", "carol", "dan", "eve"];
 /// unsuitable for direct `magnitude<F64Rig>` via `LmCategory` (which requires
 /// acyclicity per BV 2025 §3). The `WeightedCospan` + `into_metric_space` path
 /// produces a valid `LawvereMetricSpace`, but the resulting magnitude is not
-/// guaranteed to match BV 2025 Thm 3.10's closed form for cyclic inputs.
+/// guaranteed to match BV 2025 Prop 3.10's closed form for cyclic inputs.
 ///
 /// For that reason we demonstrate `magnitude` only on the 3-agent acyclic
 /// sub-coalition built separately with `LmCategory`.
@@ -393,7 +393,7 @@ fn main() {
     println!();
     println!("Key design point (BV 2025 §3.7 Remark):");
     println!("  WeightedCospan accepts cycles (general interaction graph view).");
-    println!("  LmCategory requires acyclicity (BV 2025 prefix-poset view, Thm 3.10).");
+    println!("  LmCategory requires acyclicity (BV 2025 prefix-poset view, Prop 3.10).");
     println!("  The `coalition` module (#22) bridges the two: Coalition::from_enriched");
     println!("  restrict-then-closes couplings into a magnitude-ready space; koalisi consumes it.");
 }

@@ -79,11 +79,11 @@ pub(crate) fn scaled_space(
 /// At `t = 1` the limit is Shannon entropy `H₁(p) = -Σ pᵢ ln pᵢ`. Tsallis
 /// 1988 / Havrda-Charvát 1967 introduce the parametric family; BV 2025 §3
 /// uses it as the per-state language-model entropy in the closed-form
-/// magnitude expression of Thm 3.10.
+/// magnitude expression of Prop 3.10.
 ///
 /// **Shannon special case.** When `|t − 1| < TSALLIS_SHANNON_EPS` (= `1e-6`),
 /// the function returns `-Σ pᵢ ln pᵢ` directly to avoid catastrophic
-/// cancellation in the `(1 − Σ pᵢᵗ) / (t − 1) ≈ 0/0` regime. The Cor 3.14
+/// cancellation in the `(1 − Σ pᵢᵗ) / (t − 1) ≈ 0/0` regime. The Rem 3.11 / Eq (12)
 /// finite-difference step `h` MUST
 /// satisfy `h > TSALLIS_SHANNON_EPS`; otherwise both `f(1+h)` and `f(1−h)`
 /// evaluate the Shannon branch and the central difference collapses
@@ -417,7 +417,7 @@ where
 /// system). For symmetric ζ — the typical Lawvere-metric case via the
 /// `-ln π` embedding on a symmetric `WeightedCospan<Λ, UnitInterval>` —
 /// weightings and coweightings are essentially the same (Leinster 2013
-/// §1.1 last paragraph; "if our matrix ζ will be symmetric, in which case
+/// §1.1 last paragraph; "Often our matrix ζ will be symmetric, in which case
 /// weightings and coweightings are essentially the same"), so
 /// `coweighting(space) == weighting(space)` numerically. For asymmetric ζ
 /// (Lawvere `[0,∞]`-enrichment drops the symmetry axiom; user-built

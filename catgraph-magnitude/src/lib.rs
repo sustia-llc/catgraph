@@ -1,7 +1,8 @@
 //! # catgraph-magnitude
 //!
 //! Magnitude of enriched categories for the catgraph workspace. Anchored to
-//! Bradley & Vigneaux, *Magnitude of Language Models* (2025) and to
+//! Bradley & Vigneaux, *The Magnitude of Categories of Texts Enriched by
+//! Language Models* (2025) and to
 //! Leinster, *The magnitude of metric spaces* (2013).
 //!
 //! ## Scope
@@ -19,11 +20,11 @@
 //!   (requires `Q: Ring + From<f64>` + scattered input).
 //! - [`chain_count_signed_graded`](mobius_chains::chain_count_signed_graded) — per-grade
 //!   signed chain-count diagnostic (renamed from
-//!   `mobius_chains_graded`); Leinster 2013 Prop 2.1.3 + LS 2017 §2 grading
+//!   `mobius_chains_graded`); Leinster 2013 Prop 2.1.3 + LS 2017 §3 grading
 //!   (requires `Q: Rig + From<f64>`).
 //! - [`is_mobius_invertible_at`](magnitude::is_mobius_invertible_at) — Leinster
-//!   2013 Prop 2.4.17 ergonomic Möbius-existence threshold check.
-//! - [`chain_complex`] — LS 2017 §2 magnitude-homology chain complex `(C_{k,ℓ}, ∂_k)`
+//!   2013 Def 2.1.2 + Prop 2.1.3 ergonomic Möbius-existence threshold check.
+//! - [`chain_complex`] — LS 2017 §3 magnitude-homology chain complex `(C_{k,ℓ}, ∂_k)`
 //!   over Lawvere metric: [`Chain`](chain_complex::Chain),
 //!   [`enumerate_chains`](chain_complex::enumerate_chains),
 //!   [`ChainIndex`](chain_complex::ChainIndex),
@@ -40,7 +41,7 @@
 //!   convergence predicate.
 //! - [`magnitude`](magnitude::magnitude) — magnitude via Möbius sum.
 //! - [`LmCategory`](lm_category::LmCategory) — materialized language-model
-//!   transition table with `Mag(tM)` per BV 2025 Thm 3.10.
+//!   transition table with `Mag(tM)` per BV 2025 Prop 3.10.
 //! - [`coalition`] — enriched-coalition magnitude surface (gemini-spec §IV.5,
 //!   #22): [`Coalition`] is a member-restricted, max-product-closed,
 //!   perfectly-coupled-quotiented cospan-weighted subgraph of an
@@ -91,7 +92,7 @@
 //! [`TSALLIS_SHANNON_EPS`] = `1e-6` is the threshold below which
 //! [`tsallis_entropy`](magnitude::tsallis_entropy) returns the Shannon limit
 //! `-Σ pᵢ ln pᵢ` directly, avoiding catastrophic cancellation in the
-//! `O(1e-9) / 1e-9` regime around `t = 1`. The Cor 3.14 finite-difference
+//! `O(1e-9) / 1e-9` regime around `t = 1`. The Rem 3.11 / Eq (12) finite-difference
 //! step `h` must satisfy `h > TSALLIS_SHANNON_EPS` so both `f(1±h)` evaluate
 //! the Tsallis branch (recommended `h = 1e-4`, ~2 decimal margin above the
 //! threshold while staying near `f64`'s `ε^(1/3) ≈ 6e-6` truncation+roundoff
@@ -124,7 +125,7 @@ pub mod determinism;
 
 // #22 — enriched-coalition magnitude surface (gemini-spec §IV.5): a coalition is
 // a member-restricted, max-product-closed cospan-weighted subgraph of an enriched
-// category; its diversity is `Mag(tA|members)` (BV 2025 §3.5 Eq 7 / Thm 3.10 +
+// category; its diversity is `Mag(tA|members)` (BV 2025 §3.5 Eq 7 / Prop 3.10 +
 // BTV 2021 [0,1] enrichment). The `t = 1` arm is the Shannon-diversity default.
 pub mod coalition;
 pub use coalition::{
@@ -142,7 +143,7 @@ pub use coalition_eval::{CoalitionEvaluator, INCREMENTAL_REL_TOL, coalition_valu
 // Chain-sum Möbius via Leinster 2013 Prop 2.1.3.
 pub mod mobius_chains;
 
-// Magnitude homology (BV 2025 Prop 3.14, Leinster–Shulman 2017 §2)
+// Magnitude homology (BV 2025 Prop 3.14, Leinster–Shulman 2017 §3)
 // + custom Storjohann SNF over `MatR<Q>` (algorithmic reference: events555/modularsnf @ d62535e).
 pub mod chain_complex;
 pub mod snf;
@@ -174,7 +175,7 @@ pub use ring::Ring;
 /// function returns `-Σ pᵢ ln pᵢ` directly, avoiding catastrophic cancellation
 /// in the `(1 − Σ pᵢᵗ)/(t − 1)` ≈ `0/0` regime.
 ///
-/// The Cor 3.14 finite-difference step `h` MUST satisfy
+/// The Rem 3.11 / Eq (12) finite-difference step `h` MUST satisfy
 /// `h > TSALLIS_SHANNON_EPS`, otherwise both `f(1+h)` and `f(1−h)` evaluate
 /// the Shannon branch and the central difference collapses to identically
 /// zero. Recommended `h = 1e-4` — see crate-level docs.

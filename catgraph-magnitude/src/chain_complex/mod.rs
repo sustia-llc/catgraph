@@ -1,9 +1,9 @@
 //! Magnitude-homology chain complex over a Lawvere metric space.
 //!
-//! Per Leinster-Shulman 2017 §2, this module materialises:
+//! Per Leinster-Shulman 2017 §3, this module materialises:
 //! - [`Chain`]: simple-chain newtype `(a_0, ..., a_k)` with `a_{j-1} ≠ a_j`.
 //! - [`enumerate_chains`]: DFS up to caller-supplied length cutoff.
-//! - [`ChainIndex`]: `(k, ℓ)`-bucketed index per LS 2017 §2 grading.
+//! - [`ChainIndex`]: `(k, ℓ)`-bucketed index per LS 2017 §3 grading.
 //! - [`boundary_matrix<Q>`]: alternating-sum drop-one-vertex face map.
 //!
 //! ## Pseudo-metric widening
@@ -34,7 +34,7 @@ use crate::weighted_cospan::NodeId;
 
 /// A simple chain `(x₀, x₁, …, x_k)` in a Lawvere metric space.
 ///
-/// Per Leinster–Shulman 2017 §2, a `k`-chain is a `(k+1)`-tuple of points.
+/// Per Leinster–Shulman 2017 §3, a `k`-chain is a `(k+1)`-tuple of points.
 /// Simplicity (consecutive entries distinct) is enforced at construction.
 /// Finite-distance and simplicity (`+∞` rejected; distinct consecutive points
 /// required) is checked by [`Chain::is_finite_in`]. Pseudo-metric `d == 0`
@@ -95,7 +95,7 @@ impl Chain {
     /// consecutive points; pseudo-metric `[0, ∞]`-categories (LS 2017
     /// Example 2.9), where distinct objects may have zero distance before
     /// skeletal collapse, enumerate correctly. The widening is **monotone for
-    /// strict metrics** (LS 2017 Example 2.7): on a strict metric `d = 0` only
+    /// strict metrics** (LS 2017 Example 2.9): on a strict metric `d = 0` only
     /// when points coincide, which is already rejected by the `win[0] != win[1]`
     /// clause, so the acceptance fixtures continue to pass verbatim.
     #[must_use]
@@ -267,14 +267,14 @@ impl ChainIndex {
     }
 }
 
-/// Build the boundary matrix `∂_k: C_{k,ℓ} → C_{k-1,ℓ}` per LS 2017 Def 2.5,
+/// Build the boundary matrix `∂_k: C_{k,ℓ} → C_{k-1,ℓ}` per LS 2017 Def 3.3,
 /// restricted to the length grade `ell`.
 ///
 /// Rows are indexed by `(k-1)`-chains at grade `ell`; columns by `k`-chains
 /// at grade `ell`. Entries are signed integers cast into `Q` via `Q::from(i64)`
 /// for `±1`. The geodesic condition `d(x_{i-1}, x_{i+1}) = d(x_{i-1}, x_i) +
 /// d(x_i, x_{i+1})` is checked within `2 * tolerance` of the index. Per LS 2017
-/// Def 2.5, `i` ranges over interior indices `1..=k-1` only — the endpoints
+/// Def 3.3, `i` ranges over interior indices `1..=k-1` only — the endpoints
 /// `x_0` and `x_k` are never omitted (only interior omissions can preserve the
 /// length grade).
 ///
@@ -311,7 +311,7 @@ where
         if pts.len() < 2 {
             continue; // ∂ of a 0-chain is empty
         }
-        // i ranges over interior indices 1..=k-1 per LS 2017 Def 2.5.
+        // i ranges over interior indices 1..=k-1 per LS 2017 Def 3.3.
         for i in 1..pts.len().saturating_sub(1) {
             let d_left = space.distance(&pts[i - 1], &pts[i]).0;
             let d_right = space.distance(&pts[i], &pts[i + 1]).0;
