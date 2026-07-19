@@ -15,6 +15,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **JS-Braided precursor report cached; `(‡ MMR86 …)` cross-checks added**
+  ([#117](https://github.com/sustia-llc/catgraph/issues/117)): Ross
+  Street's publication list designates the author-hosted scan of
+  *Braided monoidal categories* (Macquarie Math. Reports 860081, 1986)
+  as the earlier version of the 1993 Adv. Math. paper; it is now in the
+  private papers cache (`js-braided-860081.pdf`/`.txt`).
+  `docs/SMC-NF-RECONCILIATION.md` gains content cross-checks against
+  it: condition **S** verbatim (`c_BA c_AB = 1_{A⊗B}`, pp. i/2), axiom
+  **B2** = exactly the `c_{A⊗B,C}` decomposition the NF uses (B1 noted
+  as its mirror via `c⁻¹`, p. 2), Yang-Baxter as braid-group relation
+  **BG1** (p. 5), and **Theorem 4** freeness (`𝔹` free braided on one
+  object, p. 17). The 1993 page/theorem locators keep their (†) — the
+  report's numbering and pagination differ, and some 1993 content
+  (§6 "balanced") does not exist in it, so Elsevier access (option (b))
+  is still the only full-verification path.
 - **Selinger + JS-II SMC-NF anchors verified and de-daggered**
   ([#117](https://github.com/sustia-llc/catgraph/issues/117) step 2):
   every Selinger (arXiv:0908.3347) and JS-II anchor in
