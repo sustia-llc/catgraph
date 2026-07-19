@@ -15,6 +15,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **Selinger + JS-II SMC-NF anchors verified and de-daggered**
+  ([#117](https://github.com/sustia-llc/catgraph/issues/117) step 2):
+  every Selinger (arXiv:0908.3347) and JS-II anchor in
+  `docs/SMC-NF-RECONCILIATION.md` re-checked against the private papers
+  cache and its (†) removed. One correction: symmetric-coherence
+  **Thm 3.12 sits on p. 18, not p. 17** (p. 17 is §3.5's self-inverse
+  symmetry definition) — fixed in the doc and in
+  `tests/smc_nf_regression.rs`. JS-I / JS-Braided anchors keep (†)
+  pending Elsevier access (#117 option (b)); statements Selinger's
+  survey restates now carry a `(‡ Sel …)` cross-check mark
+  (#117 option (a)), including Selinger's own attributions
+  `[22, Thm. 1.2]` / `[22, Thm. 2.3]` corroborating the JS-I theorem
+  numbers.
 - **Selinger 2011 citation now carries its arXiv id** ([#117](https://github.com/sustia-llc/catgraph/issues/117)
   step 1): `docs/SMC-NF-RECONCILIATION.md` cites the survey as
   arXiv:0908.3347 so the private papers-cache `fetch-papers.sh` (arXiv-id
