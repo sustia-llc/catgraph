@@ -79,7 +79,7 @@ use catgraph_dl::architectures::{FoldingRnn, MealyCell, MooreCell, RecursiveNn, 
 use catgraph_dl::endofunctor::OptionWitness;
 use catgraph_dl::free_monad::list_endo::{ListEndo, free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, TreeEndo, tree_to_free_mnd};
-use catgraph_dl::free_monad::{CofreeCmnd, FreeMnd};
+use catgraph_dl::free_monad::{Cofree, Free};
 
 use proptest::prelude::*;
 
@@ -103,7 +103,7 @@ type TreeCell1 = fn((i64, u8, i64, i64)) -> i64;
 /// cons-order items through `cell_1` against the `cell_0` seed.
 fn unroll_list_via_free_mnd(
     cell: &FoldingRnn<(), i64, ListCell0, ListCell1, i64>,
-    free_mnd: FreeMnd<ListEndo<i64>, ()>,
+    free_mnd: Free<ListEndo<i64>, ()>,
 ) -> i64 {
     let (items, ()) = free_mnd_to_vec(free_mnd);
     let seed = (cell.cell_0)(());
@@ -120,16 +120,17 @@ fn unroll_list_via_free_mnd(
 /// then `cell_1`. CDL Remark 2.13 / Prop B.18.
 fn unroll_tree_via_free_mnd(
     cell: &RecursiveNn<i64, i64, TreeCell0, TreeCell1, u8>,
-    free_mnd: FreeMnd<TreeEndo<u8>, core::convert::Infallible>,
+    free_mnd: Free<TreeEndo<u8>, core::convert::Infallible>,
 ) -> i64 {
     match free_mnd {
-        FreeMnd::Pure(z) => match z {}, // Infallible: unreachable.
-        FreeMnd::Roll(boxed) => match *boxed {
+        Free::Pure(z) => match z {}, // Infallible: unreachable.
+        // haft boxes each recursive subtree *inside* the `Either` hole.
+        Free::Suspend(node) => match node {
             Either::Left(_a) => (cell.cell_0)(cell.parameter),
             Either::Right((l, r)) => {
                 let leftmost = leftmost_leaf_payload(&l);
-                let l_val = unroll_tree_via_free_mnd(cell, l);
-                let r_val = unroll_tree_via_free_mnd(cell, r);
+                let l_val = unroll_tree_via_free_mnd(cell, *l);
+                let r_val = unroll_tree_via_free_mnd(cell, *r);
                 (cell.cell_1)((cell.parameter, leftmost, l_val, r_val))
             }
         },
@@ -138,49 +139,58 @@ fn unroll_tree_via_free_mnd(
 
 /// Find the leftmost leaf payload of a `FreeMnd<TreeEndo<u8>, Infallible>`.
 /// Mirrors `RecursiveNn::leftmost_leaf` on the `BinaryTree` carrier.
-fn leftmost_leaf_payload(t: &FreeMnd<TreeEndo<u8>, core::convert::Infallible>) -> u8 {
+fn leftmost_leaf_payload(t: &Free<TreeEndo<u8>, core::convert::Infallible>) -> u8 {
     let mut current = t;
     loop {
         match current {
-            FreeMnd::Pure(z) => match *z {},
-            FreeMnd::Roll(boxed) => match boxed.as_ref() {
+            Free::Pure(z) => match *z {},
+            Free::Suspend(node) => match node {
                 Either::Left(a) => return *a,
-                Either::Right((l, _r)) => current = l,
+                Either::Right((l, _r)) => current = l.as_ref(),
             },
         }
     }
 }
 
-// ---- Coalgebra direction (#64): the CofreeCmnd stream-prefix carrier ---------
+// ---- Coalgebra direction (#64): the Cofree stream-prefix carrier -------------
 //
-// `CofreeCmnd<OptionWitness, O>` is the bounded, non-empty prefix of the terminal
-// `(O × −)`-coalgebra (streams; CDL Remark H.6): `head : O`, `tail : Option<Self>`
-// — `None` terminates the prefix. The empty (depth-0) case is a top-level
-// `Option`, since a stream node always carries a head. These mirror the
-// `unroll_*_via_free_mnd` walkers on the algebra side: the wrapper's bounded
+// `Cofree<OptionWitness, O>` is the bounded, non-empty prefix of the terminal
+// `(O × −)`-coalgebra (streams; CDL Remark H.6): `head : O`, `tail :
+// Option<Box<Self>>` — `None` terminates the prefix. The empty (depth-0) case is
+// a top-level `Option`, since a stream node always carries a head. These mirror
+// the `unroll_*_via_free_mnd` walkers on the algebra side: the wrapper's bounded
 // output must equal the walk of the prefix built from the same seed.
+//
+// The generators below are re-expressed through haft's `Cofree::unfold` (the
+// anamorphism, dual of `Free::fold`) — the payoff of adopting the haft carrier:
+// the bounded-depth / bounded-input control is threaded through the coalgebra
+// seed, and the depth-0 / empty-input case is the top-level `Option`.
 
 /// A bounded stream prefix over `O` — the coalgebra-direction dual of the
-/// `FreeMnd<ListEndo<_>, ()>` cons tower.
-type StreamPrefix<O> = CofreeCmnd<OptionWitness, O>;
+/// `Free<ListEndo<_>, ()>` cons tower.
+type StreamPrefix<O> = Cofree<OptionWitness, O>;
 
-/// Walk a bounded `CofreeCmnd<OptionWitness, O>` prefix into its observed output
+/// Walk a bounded `Cofree<OptionWitness, O>` prefix into its observed output
 /// sequence — the counit-then-tail projection, collected left to right. `None`
-/// (the depth-0 / empty case) yields `[]`.
+/// (the depth-0 / empty case) yields `[]`. haft's `Cofree` has private fields, so
+/// the walk goes through `into_parts()` (`head : O`, `tail : Option<Box<Self>>`).
 fn cofree_prefix_to_vec<O>(prefix: Option<StreamPrefix<O>>) -> Vec<O> {
     let mut out = Vec::new();
     let mut cur = prefix;
     while let Some(node) = cur {
-        out.push(node.head);
-        cur = *node.tail; // `tail : Box<Option<StreamPrefix<O>>>`
+        let (head, tail) = node.into_parts();
+        out.push(head);
+        cur = tail.map(|boxed| *boxed);
     }
     out
 }
 
 /// Unfold a **state-driven** stream prefix (the `UnfoldingRnn` shape): emit
 /// `step(s).0` at each state, advance to `step(s).1`, for `depth` layers. The
-/// bounded anamorphism into the terminal `(O × −)`-coalgebra.
-fn unfold_stream<S: Clone, O>(
+/// bounded anamorphism into the terminal `(O × −)`-coalgebra, via
+/// [`Cofree::unfold`] — the coalgebra threads `(state, remaining_depth)` as its
+/// seed and terminates the tail (`None`) when the last layer is reached.
+fn unfold_stream<S, O>(
     seed: S,
     step: impl Fn(S) -> (O, S),
     depth: usize,
@@ -188,30 +198,35 @@ fn unfold_stream<S: Clone, O>(
     if depth == 0 {
         return None;
     }
-    let (head, next) = step(seed);
-    Some(CofreeCmnd::new(head, unfold_stream(next, step, depth - 1)))
+    // coalg : (S, usize) -> (O, Option<(S, usize)>) — the `OptionWitness` hole
+    // `None` ends the tail; `Some(next_seed)` continues it.
+    let coalg = |(s, remaining): (S, usize)| {
+        let (head, next) = step(s);
+        let tail_seed = (remaining > 1).then_some((next, remaining - 1));
+        (head, tail_seed)
+    };
+    Some(Cofree::unfold((seed, depth), &coalg))
 }
 
 /// Unfold an **input-driven** stream prefix (the `MealyCell` / `MooreCell`
 /// shape): consume the inputs left to right, emitting `step(s, i).0` and
 /// advancing to `step(s, i).1` per input. Prefix length = `inputs.len()` (empty
-/// inputs → `None` → `[]`).
+/// inputs → `None` → `[]`). Via [`Cofree::unfold`]: the coalgebra seed carries
+/// the state, the current input, and the remaining-input iterator; the tail ends
+/// when the iterator is exhausted.
 fn unfold_driven<S, I, O>(
     seed: S,
     inputs: Vec<I>,
     step: impl Fn(S, I) -> (O, S),
 ) -> Option<StreamPrefix<O>> {
     let mut iter = inputs.into_iter();
-    fn go<S, I: Iterator, O>(
-        state: S,
-        iter: &mut I,
-        step: &impl Fn(S, I::Item) -> (O, S),
-    ) -> Option<StreamPrefix<O>> {
-        let input = iter.next()?;
-        let (head, next) = step(state, input);
-        Some(CofreeCmnd::new(head, go(next, iter, step)))
-    }
-    go(seed, &mut iter, &step)
+    let first = iter.next()?; // empty inputs → top-level `None`.
+    let coalg = |(s, input, mut rest): (S, I, std::vec::IntoIter<I>)| {
+        let (head, next) = step(s, input);
+        let tail_seed = rest.next().map(|i| (next, i, rest));
+        (head, tail_seed)
+    };
+    Some(Cofree::unfold((seed, first, iter), &coalg))
 }
 
 /// Bounded-depth `BinaryTree<u8>` strategy for the tree-direction proptest.

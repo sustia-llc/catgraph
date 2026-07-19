@@ -155,8 +155,8 @@ pub mod para;
 // route through are mirrored for the free-monad surface (issue #93). The
 // former `catgraph_dl::EndoFunctor` path is removed (breaking; issue #12).
 pub use endofunctor::{
-    Cofree, CofreeWitness, DebugFunctor, Either, EndoWitness, EqFunctor, Free, FreeWitness, Functor,
-    HKT, Monad, NaturalIso, NoConstraint, Pure, Satisfies,
+    Cofree, CofreeWitness, DebugFunctor, Either, EndoWitness, EqFunctor, Free, FreeWitness,
+    Functor, HKT, Monad, NaturalIso, NoConstraint, Pure, Satisfies,
 };
 
 // The first-class natural-transformation / pointed-endofunctor / container

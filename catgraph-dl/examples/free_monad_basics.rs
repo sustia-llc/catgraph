@@ -21,20 +21,21 @@ use catgraph_dl::algebra::FAlgebra;
 use catgraph_dl::endofunctor::OptionWitness;
 use catgraph_dl::free_monad::list_endo::{ListEndo, free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, free_mnd_to_tree, tree_to_free_mnd};
-use catgraph_dl::free_monad::{CofreeCmnd, FreeMnd};
+use catgraph_dl::free_monad::{Cofree, Free};
 
 fn main() {
     // ---- 1. The list free monad `FreeMnd(1 + A × −)` --------------------
     //
-    // `Pure(z)` is the terminator; `Roll(Some((a, rest)))` is a cons cell. The
-    // empty list is exactly `Pure(())`.
-    let empty: FreeMnd<ListEndo<u32>, ()> = FreeMnd::pure(());
+    // `Pure(z)` is the terminator; `Suspend(Some((a, Box(rest))))` is a cons cell
+    // (haft boxes the recursion inside the functor hole). The empty list is
+    // exactly `Pure(())`.
+    let empty: Free<ListEndo<u32>, ()> = Free::Pure(());
     let (items, ()) = free_mnd_to_vec(empty);
     assert!(items.is_empty());
 
     // Build `[1, 2]` as an explicit cons tower and decode it.
-    let inner: FreeMnd<ListEndo<u32>, ()> = FreeMnd::roll(Some((2_u32, FreeMnd::pure(()))));
-    let tower: FreeMnd<ListEndo<u32>, ()> = FreeMnd::roll(Some((1_u32, inner)));
+    let inner: Free<ListEndo<u32>, ()> = Free::Suspend(Some((2_u32, Box::new(Free::Pure(())))));
+    let tower: Free<ListEndo<u32>, ()> = Free::Suspend(Some((1_u32, Box::new(inner))));
     let (decoded, ()) = free_mnd_to_vec(tower);
     assert_eq!(decoded, vec![1_u32, 2]);
 
@@ -59,18 +60,21 @@ fn main() {
 
     // ---- 3. The dual: cofree comonad (a bounded stream prefix) ----------
     //
-    // `CofreeCmnd<OptionWitness, O>` is `head : O` + `tail : Option<Self>`; a
-    // `None` tail terminates. Build the 2-element prefix `1, 2` and walk it.
-    let stream: CofreeCmnd<OptionWitness, i64> =
-        CofreeCmnd::new(1_i64, Some(CofreeCmnd::new(2_i64, None)));
+    // `Cofree<OptionWitness, O>` is `head : O` + `tail : Option<Box<Self>>`; a
+    // `None` tail terminates. haft's `Cofree` has private fields, so build with
+    // `Cofree::new` and walk through `into_parts()`. Build the 2-element prefix
+    // `1, 2` and walk it.
+    let stream: Cofree<OptionWitness, i64> =
+        Cofree::new(1_i64, Some(Box::new(Cofree::new(2_i64, None))));
     let mut observed = Vec::new();
     let mut cursor = Some(stream);
     while let Some(node) = cursor {
-        observed.push(node.head);
-        cursor = *node.tail;
+        let (head, tail) = node.into_parts();
+        observed.push(head);
+        cursor = tail.map(|boxed| *boxed);
     }
     assert_eq!(observed, vec![1_i64, 2]);
-    println!("cofree comonad: CofreeCmnd<OptionWitness, _> prefix 1,2 walks to [1, 2]");
+    println!("cofree comonad: Cofree<OptionWitness, _> prefix 1,2 walks to [1, 2]");
 
     // ---- 4. Fold an algebra over the free monad (a catamorphism) --------
     //
@@ -92,19 +96,21 @@ fn main() {
     println!("free_monad_basics: all assertions passed");
 }
 
-/// Fold a `FreeMnd<ListEndo<i64>, ()>` cons tower through an `FAlgebra`'s
+/// Fold a `Free<ListEndo<i64>, ()>` cons tower through an `FAlgebra`'s
 /// structure map — the catamorphism (unique algebra hom out of the initial
-/// algebra). `Pure`/`Roll(None)` hit the algebra's `None` case; each cons cell
-/// applies the structure map to `Some((head, fold(rest)))`.
-fn cata_list<S>(free: FreeMnd<ListEndo<i64>, ()>, alg: &FAlgebra<ListEndo<i64>, i64, S>) -> i64
+/// algebra). Re-expressed via haft's [`Free::fold`]: the `pure_case` handles the
+/// `Pure(())` terminator (the algebra's `None` case), and the `algebra` is the
+/// structure map itself — `fold` walks the tree, threading the recursive result
+/// into the `Option<(i64, i64)>` hole functorially. This is the payoff of the
+/// haft carrier: the hand-written recursion collapses to the library fold.
+fn cata_list<S>(free: Free<ListEndo<i64>, ()>, alg: &FAlgebra<ListEndo<i64>, i64, S>) -> i64
 where
     S: Fn(Option<(i64, i64)>) -> i64,
 {
-    match free {
-        FreeMnd::Pure(()) => (alg.structure_map)(None),
-        FreeMnd::Roll(boxed) => match *boxed {
-            None => (alg.structure_map)(None),
-            Some((a, rest)) => (alg.structure_map)(Some((a, cata_list(rest, alg)))),
-        },
-    }
+    // `pure_case`: the `Pure(())` terminator maps to the algebra's `None` case.
+    let pure_case = |()| (alg.structure_map)(None);
+    // `algebra`: the `Suspend` node — an `Option<(i64, i64)>` with the recursive
+    // result already folded into the hole — is exactly the structure map's input.
+    let algebra = |shape: Option<(i64, i64)>| (alg.structure_map)(shape);
+    free.fold(&pure_case, &algebra)
 }

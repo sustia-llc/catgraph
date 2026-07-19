@@ -107,6 +107,4 @@ pub mod tree_endo;
 // `CofreeWitness`) are re-exported through the same seam (issue #93) and
 // surfaced here so `catgraph_dl::free_monad::{Free, Cofree}` resolves for the
 // bijection helpers below.
-pub use crate::endofunctor::{
-    Cofree, CofreeWitness, EndoWitness, Free, FreeWitness, Functor, HKT,
-};
+pub use crate::endofunctor::{Cofree, CofreeWitness, EndoWitness, Free, FreeWitness, Functor, HKT};
