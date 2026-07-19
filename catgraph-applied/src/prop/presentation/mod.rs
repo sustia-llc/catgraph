@@ -53,7 +53,7 @@ use functorial::CompleteFunctor;
 /// - [`NormalizeEngine::Structural`]: the structural `eq_mod` behavior — normalize
 ///   both sides via bounded structural rewriting and compare. Cheap and
 ///   deterministic for non-overlapping presentations; may yield false negatives
-///   (`None`) on overlapping equations (e.g., the 16 Thm 5.60 scalar D-group
+///   (`None`) on overlapping equations (e.g., the 18 Thm 5.60 scalar D-group
 ///   equations).
 /// - [`NormalizeEngine::CongruenceClosure`] (default): decide
 ///   equality via bounded congruence closure over [`kb::CongruenceClosure`].
@@ -303,7 +303,7 @@ impl<G: PropSignature> Presentation<G> {
                 //   interchange, braid-naturality, σ²=id) and catches those
                 //   equalities without consulting user equations.
                 // - The CC engine handles user-equation congruence (e.g., the
-                //   16 Thm 5.60 equations) but doesn't know SMC axioms.
+                //   18 Thm 5.60 equations) but doesn't know SMC axioms.
                 // - Replacing CC's pre-pass entirely with NF was tried and
                 //   regressed the faithfulness-test collision counts at
                 //   BoolRig d2 (2574 → 3763) because NF reshapes seeded-
@@ -358,9 +358,10 @@ impl<G: PropSignature> Presentation<G> {
     ///
     /// # Example — Thm 5.60 Mat(R) via [`functorial::MatrixNFFunctor`]
     ///
-    /// `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)` (Baez-Erbele 2015 / F&S Thm 5.60).
-    /// Two signal-flow graphs are equivalent under the 17 Thm 5.60
-    /// equations iff their matrix images are equal:
+    /// `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)` (F&S Thm 5.60; proof via Baez-Erbele
+    /// 2015 for fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs,
+    /// cf. BE15 §6). Two signal-flow graphs are equivalent under the 18 Thm
+    /// 5.60 equations iff their matrix images are equal:
     ///
     /// ```ignore
     /// let f = MatrixNFFunctor::<BoolRig>::new();

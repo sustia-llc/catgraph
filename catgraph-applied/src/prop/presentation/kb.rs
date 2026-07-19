@@ -6,16 +6,19 @@
 //!
 //! Based on the Downey-Sethi-Tarjan 1980 algorithm using a signature-table
 //! indexed by canonical child-class IDs. Correct for finitely-presented
-//! equational theories without binders; complete for the 16 F&S Thm 5.60
-//! equations (Baez-Erbele 2015).
+//! equational theories without binders; the 18 F&S Thm 5.60 equations present
+//! Mat(R) (proof via Baez-Erbele 2015 for fields; the commutative-rig case —
+//! which covers all four rigs instantiated in this crate — is Wadsley–Woods
+//! arXiv:1505.00048, cf. BE15 §6).
 //!
 //! This engine is **not** full Knuth-Bendix completion with critical-pair
 //! discovery — it seeds a term graph with the user's equations as-is, then
 //! propagates congruence through `Compose` / `Tensor`. For a confluent,
-//! terminating rewrite system, this is a decision procedure. For the 16
-//! Thm 5.60 equations specifically, Baez-Erbele 2015 proved completeness, so
-//! congruence closure with this seed decides Mat(R)-equality on SFG
-//! expressions.
+//! terminating rewrite system, this is a decision procedure. For the 18
+//! Thm 5.60 equations specifically, F&S Thm 5.60 presents Mat(R) (proof via
+//! Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for commutative
+//! rigs, cf. BE15 §6), so congruence closure with this seed decides
+//! Mat(R)-equality on SFG expressions.
 //!
 //! # Algorithm sketch
 //!
@@ -46,7 +49,11 @@
 //! * P. J. Downey, R. Sethi, R. E. Tarjan. *Variations on the Common
 //!   Subexpression Problem*. J. ACM 27(4), 1980.
 //! * J. Baez, J. Erbele. *Categories in Control*. Theory and Applications
-//!   of Categories 30, 2015.
+//!   of Categories 30, 2015. (Theorem 2 is field-only; §6 attributes the
+//!   commutative-rig generalization to Wadsley–Woods.)
+//! * S. Wadsley, N. Woods. *PROPs for Linear Systems*. arXiv:1505.00048,
+//!   2015. (Mat(k) is the PROP for bicommutative bimonoids over any
+//!   commutative rig k — the completeness result for the rigs used here.)
 
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -147,8 +154,9 @@ where
 /// Equality is **modulo the seeded equations only** — associativity,
 /// unitality, interchange, braiding naturality, and other SMC axioms are
 /// *not* assumed unless explicitly seeded. Callers that need an SMC-aware
-/// decision procedure should pre-seed the 16 Thm 5.60 equations (Baez-Erbele
-/// 2015).
+/// decision procedure should pre-seed the 18 Thm 5.60 equations (F&S Thm 5.60;
+/// proof via Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for
+/// commutative rigs, cf. BE15 §6).
 pub struct CongruenceClosure<G>
 where
     G: PropSignature,
@@ -398,7 +406,7 @@ where
     /// of equivalence classes (every merge added reduces class count by 1);
     /// the class count is bounded below by 1, so the loop terminates after
     /// finitely many iterations. The `SAFETY_BOUND` is a defense-in-depth
-    /// guard — in practice never reached on the 16 Thm 5.60 equations.
+    /// guard — in practice never reached on the 18 Thm 5.60 equations.
     fn propagate_fixpoint(&mut self) {
         const SAFETY_BOUND: usize = 64;
         for _ in 0..SAFETY_BOUND {
@@ -434,7 +442,7 @@ where
     /// which then trigger stack overflow in the downstream [`Self::add_term`]
     /// recursion. Atom-only substitution stays O(|term|) and captures the
     /// essential post-merge SMC refinement case: atomic equivalences like
-    /// `Scalar(R::one()) ≡ Identity(1)` (D2 in the 16 F&S Thm 5.60 equations)
+    /// `Scalar(R::one()) ≡ Identity(1)` (D2 in the 18 F&S Thm 5.60 equations)
     /// that enable SMC Rule 9 (`Identity(m) ⊗ Identity(n) → Identity(m+n)`)
     /// to fire on the enclosing `Tensor`.
     ///

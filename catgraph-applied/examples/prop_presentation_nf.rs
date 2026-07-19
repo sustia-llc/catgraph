@@ -25,8 +25,9 @@
 //!    [`verify_sfg_to_mat_is_full_and_faithful`] — a pair the default
 //!    [`CongruenceClosure`] engine fails to identify but the
 //!    [`Presentation::eq_mod_functorial`] semantic path resolves correctly
-//!    to `Some(true)` by Baez-Erbele 2015. This is the §5.4 closure
-//!    surface in operation.
+//!    to `Some(true)` by F&S Thm 5.60 (Baez-Erbele 2015 for fields,
+//!    Wadsley–Woods arXiv:1505.00048 for commutative rigs). This is the §5.4
+//!    closure surface in operation.
 //! 5. [`PresentedProp::quotient_representative`] showing the canonical
 //!    representative of an equivalence class as a wrapper around
 //!    `Presentation::normalize`.
@@ -55,8 +56,9 @@
 //!   to the 5-generator signal-flow signature (FS18 §5.3 Eq 5.52). The
 //!   functorial engine cannot dispatch over an arbitrary custom signature
 //!   like our `Sig::{A, B}`; that's structurally a Thm 5.60 phenomenon
-//!   (Baez-Erbele 2015 proves the theorem on the SFG-axiomatized matrix
-//!   prop, not on every PROP).
+//!   (F&S Thm 5.60 proves the theorem on the SFG-axiomatized matrix prop, not
+//!   on every PROP; via Baez-Erbele 2015 for fields, Wadsley–Woods
+//!   arXiv:1505.00048 for commutative rigs).
 //!
 //! So §4 keeps the *shape* of the side-by-side comparison (anchor, count,
 //! resolve-via-stronger-engine, mirroring `mat_operations.rs::§5`
@@ -73,11 +75,16 @@
 //!   - §5.3 Def 5.45 + Eq 5.52 — the 5-generator signal-flow signature `G_R`
 //!     and matrix prop `Mat(R)`.
 //!   - §5.3 Thm 5.53 — the matrix functor `S : SFG_R → Mat(R)`.
-//!   - §5.4 Thm 5.60 — `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)` (full + faithful).
+//!   - §5.4 Thm 5.60 — `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)` (full + faithful).
 //! - **Baez & Erbele 2015** *Categories in Control* (Theory and Applications
-//!   of Categories 30) — proves FS18 §5.4 Thm 5.60. The
-//!   [`MatrixNFFunctor`] is the realisation of this theorem's
-//!   decision procedure in the catgraph-applied surface.
+//!   of Categories 30) — proves FS18 §5.4 Thm 5.60 for a **field** k
+//!   (Theorem 2); §6 attributes the commutative-rig generalization to
+//!   Wadsley–Woods. The [`MatrixNFFunctor`] is the realisation of this
+//!   theorem's decision procedure in the catgraph-applied surface.
+//! - **Wadsley & Woods 2015** *PROPs for Linear Systems* (`arXiv:1505.00048`)
+//!   — `Mat(k)` is the PROP for bicommutative bimonoids over any commutative
+//!   rig k, covering all four rigs (`BoolRig`, `Tropical`, `UnitInterval`,
+//!   `F64Rig`) instantiated in this crate.
 //! - **Joyal & Street 1991** *The geometry of tensor calculus I, II* — the
 //!   string-diagram normal form algorithm implemented in
 //!   `prop::presentation::smc_nf` (§6 below).
@@ -321,16 +328,19 @@ fn main() {
 
     // -------- §4. Headline: syntactic vs semantic on the Mat(R) presentation ----
     //
-    // FS18 §5.4 Thm 5.60 (Baez-Erbele 2015): the 17-equation presentation
-    // `Free(Σ_SFG)/⟨E_{17}⟩` is isomorphic to `Mat(R)`. The two engines:
+    // FS18 §5.4 Thm 5.60 (proof via Baez-Erbele 2015 for fields, Wadsley–Woods
+    // arXiv:1505.00048 for commutative rigs, cf. BE15 §6): the 18-equation
+    // presentation `Free(Σ_SFG)/⟨E_{18}⟩` is isomorphic to `Mat(R)`. The two
+    // engines:
     //
     //   - SYNTACTIC: default `CongruenceClosure`. Sound but syntactically
     //     incomplete on overlapping equation sets — it cannot synthesize
     //     fresh composite intermediates that the matrix functor identifies.
     //     The bounded enumeration in `verify_sfg_to_mat_is_full_and_faithful`
     //     surfaces these gaps as CC-incompleteness witnesses (NOT Thm 5.60
-    //     violations — the theorem is already proved abstractly by
-    //     Baez-Erbele 2015).
+    //     violations — the theorem is already proved abstractly, via
+    //     Baez-Erbele 2015 for fields and Wadsley–Woods arXiv:1505.00048 for
+    //     commutative rigs).
     //
     //   - SEMANTIC: `Presentation::eq_mod_functorial` with
     //     `MatrixNFFunctor<BoolRig>`. Reduces equality to a single matrix
@@ -347,20 +357,21 @@ fn main() {
     // etc. This idempotency increases collision rate under S = sfg_to_mat:
     // the matrix functor identifies many more pairs over an idempotent rig
     // than over a non-idempotent one, which is why size_bound=2 surfaces
-    // 1301 CC-incompleteness witnesses below (post-#14 NF).
+    // 1142 CC-incompleteness witnesses below (post-E_18).
     let bool_samples = [BoolRig(false), BoolRig(true)];
 
-    // Note: matr_presentation::<BoolRig>(&samples) returns N > 16. The 16
-    // "scalar-free" equations of E_16 are the BASE schema (Mat(R) is a *prop
+    // Note: matr_presentation::<BoolRig>(&samples) returns N > 18. The 18
+    // equation SCHEMAS of E_18 are the base presentation (Mat(R) is a *prop
     // schema* parameterised over R); matr_presentation instantiates the
     // scalar D-group rules per-sample, expanding the count to
-    // 16 + (sample-count × scalar-D-group rules). For BoolRig with the
-    // chosen 2-sample set this lands at 23. The printout below shows the
-    // expanded count; the FS18 §5.4 E_{16} citation refers to the base schema.
+    // 10 structural + D2 + D8 + (sample-count × 4 single-sample D-rules)
+    // + (sample-count² × 2 double-sample D-rules D1/D7). For BoolRig with the
+    // chosen 2-sample set this lands at 28. The printout below shows the
+    // expanded count; the FS18 §5.4 E_{18} citation refers to the schema set.
     let presentation = matr_presentation::<BoolRig>(&bool_samples)
         .expect("matr_presentation builds the Thm 5.60 presentation for BoolRig");
     println!(
-        "  matr_presentation::<BoolRig>: {} equations seeded (FS18 §5.4 E_{{16}} base + scalar expansion)",
+        "  matr_presentation::<BoolRig>: {} equations seeded (FS18 §5.4 E_{{18}} schemas + scalar expansion)",
         presentation.equations().len()
     );
 
@@ -377,7 +388,7 @@ fn main() {
     println!("    witnesses.len()     = {}", report.witnesses.len());
 
     // Pick a witness and run BOTH engines on it. The functorial engine MUST
-    // return Some(true) by Baez-Erbele 2015 (the pair was binned by matrix
+    // return Some(true) by F&S Thm 5.60 (the pair was binned by matrix
     // image, so S(a) == S(b) holds by construction). The CC engine may
     // return None or Some(false) — exactly the gap §5.4 closure addresses.
     if let Some((a, b)) = report.witnesses.first() {
@@ -386,14 +397,14 @@ fn main() {
         let cc_verdict = presentation.eq_mod(a_expr, b_expr).expect("CC engine runs");
         let nf_functor = MatrixNFFunctor::<BoolRig>::new();
         let func_verdict = decide_via_functor(&presentation, a_expr, b_expr, &nf_functor);
-        println!("  Picked witness pair (Thm 5.60-equivalent under E_{{16}}):");
+        println!("  Picked witness pair (Thm 5.60-equivalent under E_{{18}}):");
         println!("    CC engine        eq_mod                = {cc_verdict:?}");
         println!("    Functorial       eq_mod_functorial     = {func_verdict:?}");
         println!("  Functorial MUST be Some(true) on every CC witness — that IS the §5.4 closure.");
         assert_eq!(
             func_verdict,
             Some(true),
-            "Functorial engine is complete for Mat(R) by Baez-Erbele 2015"
+            "Functorial engine is complete for Mat(R) by F&S Thm 5.60 (Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs)"
         );
         // The CC verdict is allowed to be Some(true) (NF short-circuit hit)
         // or anything else; we just record it for the printed contrast.
@@ -402,7 +413,9 @@ fn main() {
             "  (No witnesses surfaced at size_bound=2; this is rare but acceptable on tiny BoolRig fixtures.)"
         );
     }
-    println!("  FS18 §5.4 Thm 5.60 semantic closure exercised (Baez-Erbele 2015).\n");
+    println!(
+        "  FS18 §5.4 Thm 5.60 semantic closure exercised (Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs).\n"
+    );
 
     // -------- §5. PresentedProp::quotient_representative -------------------
     //

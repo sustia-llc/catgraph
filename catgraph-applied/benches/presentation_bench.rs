@@ -4,9 +4,11 @@
 //! Paper anchors:
 //! - **FS18 §5.2 Def 5.2 + Def 5.25 + Def 5.33** — `Free(G)` + presentation.
 //!   Fong-Spivak, *Seven Sketches in Compositionality* (arXiv:1803.05316v3).
-//! - **FS18 §5.4 Thm 5.60** — the `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)`
-//!   presentation. Already proved by Baez-Erbele, *Categories in Control*
-//!   (2015, arXiv:1405.6881). cg-applied does NOT re-verify this theorem at
+//! - **FS18 §5.4 Thm 5.60** — the `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)`
+//!   presentation. Proved by F&S Thm 5.60 (via Baez-Erbele, *Categories in
+//!   Control* (2015, arXiv:1405.6881), for fields; Wadsley–Woods *PROPs for
+//!   Linear Systems* (arXiv:1505.00048) for commutative rigs, cf. BE15 §6).
+//!   cg-applied does NOT re-verify this theorem at
 //!   runtime; this bench measures the perf of `Presentation::eq_mod`'s
 //!   decision procedure on a representative subset of the equations + a set
 //!   of hand-curated probe pairs, NOT theorem verification.
@@ -70,7 +72,8 @@
 //!   group and `cc` is the short-circuit speedup factor.
 //!
 //! - **`cc_new::seed_{4, 16, 32}_eqs`** — `CongruenceClosure::new` on a
-//!   prefix of the 16-equation `matr_presentation::<BoolRig>` seed +
+//!   prefix of the `matr_presentation::<BoolRig>` seed (4/16/32 are perf
+//!   brackets, not the 18-schema Thm 5.60 count) +
 //!   inflated repetition to hit higher equation counts.
 //!
 //! - **`atom_canonical_n{32, 64, 128}`** — `n` synthesised generators
@@ -130,11 +133,11 @@ mod inner {
     // Fixture builders
     // -----------------------------------------------------------------------
 
-    /// Build the 16-equation Thm 5.60 presentation over `BoolRig` and return
+    /// Build the 18-equation Thm 5.60 presentation over `BoolRig` and return
     /// the first 20 `(lhs, rhs)` equation pairs. Used to synthesise the `cc`
     /// and `nf_short_circuit` probe pairs.
     ///
-    /// `BoolRig` is the smallest rig that exercises all 16 equations + scalar
+    /// `BoolRig` is the smallest rig that exercises all 18 equations + scalar
     /// substitutions; `rig_samples = [true, false]` provides two distinct
     /// scalars without combinatorial blow-up (compare with `F64Rig`, which
     /// the `functor_bench` reserves to `d=2` only for the same reason).
@@ -277,11 +280,12 @@ mod inner {
     pub(super) fn bench_cc_new(c: &mut Criterion) {
         let mut group = c.benchmark_group("presentation::cc_new");
 
-        // 16-equation base from matr_presentation; pad to 32 by duplicating
-        // the 16-equation suffix once (CC's hash-cons folds identical
-        // equations into a single insert, so the cost growth tracks
-        // unique-equation count more than wall-clock seed count). Truncate
-        // to 4 for the smallest bracket.
+        // 16-equation bracket taken as a prefix of the `matr_presentation`
+        // seed; pad to 32 by duplicating that 16-equation prefix once (CC's
+        // hash-cons folds identical equations into a single insert, so the
+        // cost growth tracks unique-equation count more than wall-clock seed
+        // count). Truncate to 4 for the smallest bracket. The 4/16/32 numbers
+        // are perf brackets, not the Thm 5.60 schema count (which is 18).
         let base_pairs = build_eq_mod_fixture_pairs();
         let mut padded = base_pairs.clone();
         padded.extend(base_pairs.iter().cloned());

@@ -31,7 +31,7 @@ use super::super::{PropExpr, PropSignature};
 
 /// A single horizontal slice of a string diagram. Within a layer, atoms are
 /// tensored left-to-right; the layer's `Vec<Atom>` preserves source tensor
-/// order (see reconciliation §2.3).
+/// order (see `docs/SMC-NF-RECONCILIATION.md` §2.3).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Layer<G: PropSignature> {
     pub atoms: Vec<Atom<G>>,
@@ -80,7 +80,7 @@ pub struct StringDiagram<G: PropSignature> {
 /// Normalize `expr` to a canonical [`StringDiagram`].
 ///
 /// Totality: `nf` is defined on every arity-well-formed `PropExpr<G>` and
-/// always terminates (see termination measure in reconciliation §2.4).
+/// always terminates (see the termination measure in `docs/SMC-NF-RECONCILIATION.md` §2.4).
 ///
 /// Canonicality claim: for any two SMC-equal expressions `a`, `b` (i.e., equal
 /// in the free symmetric monoidal category on `G`), `nf(&a) == nf(&b)`. The
@@ -111,7 +111,7 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     // - the naturality sweep shrinks braid_position_sum (braids move input-ward);
     // - `topological_layer_order` shrinks generator_position_sum;
     // - `coalesce_identity_layers`/`simplify_units` shrink layer_count.
-    // See reconciliation §2.4.
+    // See `docs/SMC-NF-RECONCILIATION.md` §2.4.
     loop {
         let prev = sd.clone();
         sd = normalize_empty_braids(sd);
@@ -341,7 +341,7 @@ fn normalize_empty_braids<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagr
 /// Paper anchor: JS-Braided Prop 2.1 / axiom (B2) p.33–34
 /// (`c_{U⊗V, W} = (c_{U,W} ⊗ 1_V) ∘ (1_U ⊗ c_{V,W})`); JS-I Ch 2 Thm 2.3 p.81
 /// via the `S_n` presentation. Direction convention: always expand, never
-/// collapse (see reconciliation §2.2).
+/// collapse (see `docs/SMC-NF-RECONCILIATION.md` §2.2).
 fn hexagon_expand<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
     let mut new_layers: Vec<Layer<G>> = Vec::with_capacity(sd.layers.len());
     for layer in sd.layers {
@@ -752,7 +752,7 @@ fn split_atoms_at_boundaries<G: PropSignature>(
 /// JS-Braided Cor 2.6 p.44 (equality of braids via underlying permutation);
 /// JS-I Ch 2 §1 + Ch 3 p.84 (`S_n` reduced-word canonicality).
 ///
-/// Direction convention: braids to input (see reconciliation §2.1).
+/// Direction convention: braids to input (see `docs/SMC-NF-RECONCILIATION.md` §2.1).
 fn collect_braid_prefix<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
     let mut layers = sd.layers;
     // Sub-rule (0): isolate braids out of mixed (braid+generator) layers.

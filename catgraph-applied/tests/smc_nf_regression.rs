@@ -1,10 +1,11 @@
 //! Paper-cited SMC-coherence regression tests for the Layer 1 NF.
 //!
-//! Source: reconciled from the 4 dpcs notes (JS-I, JS-II, Selinger, JS-Braided).
+//! Source: `docs/SMC-NF-RECONCILIATION.md` (reconstructed from the shipped
+//! code + tests; anchors from JS-I, JS-II, Selinger, JS-Braided).
 //!
 //! Each test's docstring cites the primary paper + section/theorem. When an
 //! equation is justified by multiple papers, the primary citation is chosen
-//! per the reconciliation's "paper coverage matrix" (§3 step table).
+//! per the "paper coverage matrix" in `docs/SMC-NF-RECONCILIATION.md` (§3 step table).
 
 use catgraph_applied::prop::presentation::smc_nf::{Atom, StringDiagram, nf};
 use catgraph_applied::prop::{PropExpr, PropSignature};
@@ -356,7 +357,7 @@ mod joyal_street_braided_regression {
     /// ∘ (1_U ⊗ σ_{V,W})` — the source-side m+n splitting of a braid. In
     /// forward composition: `σ_{2,1} = (id_1 ⊗ σ_{1,1}) ; (σ_{1,1} ⊗ id_1)`.
     /// Traces to `[c, a, b]` on input `[a, b, c]` ✓.
-    /// (Paper-anchor note corrected to (B2) per the reconciliation.)
+    /// (Paper-anchor note corrected to (B2) per `docs/SMC-NF-RECONCILIATION.md` §2.1.)
     #[test]
     fn test_hexagon_sigma_on_tensor() {
         let lhs: PropExpr<TestSig> = Braid(2, 1);
