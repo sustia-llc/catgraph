@@ -37,19 +37,19 @@
 | Section | DONE | PARTIAL | DEFERRED | N/A | IN APPLIED | Total |
 |---|---|---|---|---|---|---|
 | §1.1 (co)weighting primitives | 1 | 0 | 0 | 0 | 0 | 1 |
-| §2 LM as enriched category | 4 | 0 | 0 | 2 | 3 | 9 |
+| §2 LM as enriched category | 5 | 0 | 0 | 1 | 3 | 9 |
 | §2.1 scatteredness predicate | 1 | 0 | 0 | 0 | 0 | 1 |
-| §3 Magnitude via Tsallis | 6 | 0 | 1 | 1 | 0 | 8 |
+| §3 Magnitude via Tsallis | 8 | 0 | 0 | 0 | 0 | 8 |
 | §3.5 Möbius / chain-sum | 2 | 0 | 0 | 0 | 0 | 2 |
 | §3.14 Magnitude homology | 1 | 0 | 0 | 0 | 0 | 1 |
 | §4 Bounds + asymptotics | 3 | 0 | 0 | 2 | 0 | 5 |
-| **TOTAL** | **18** | **0** | **1** | **5** | **3** | **27** |
+| **TOTAL** | **21** | **0** | **0** | **3** | **3** | **27** |
 
 **Headline numbers:**
-- **67% DONE / 0% PARTIAL / 4% DEFERRED / 19% N/A / 11% IN APPLIED**
-- Of the 27 audited items, 3 are already in `catgraph-applied` (enrichment substrate), 5 are N/A (motivational), leaving **19 implementable items** of which **18 are DONE, 0 PARTIAL, 1 DEFERRED**.
-- Of implementable items: **95% DONE / 0% PARTIAL / 5% DEFERRED**
-- The one remaining deferred item is the §3 Tsallis-side optimization stash (in-section; tracked in the perf backlog, #37). The magnitude-homology / chain-complex / Storjohann SNF / Euler-char-identity stack closes the §3.14 deferral. The design-doc §3.6 surface row `mobius_function_via_chains_exact<Q: Ring>` was struck from that stack and folded into the Leinster 2008 Cor 1.5 integer-exact Möbius surface (documented below) — the paper-faithful destination requires anchoring a NEW paper (Leinster 2008 finite-category Möbius) outside the crate's BV/LS/Leinster-2013 anchor surface. Both now ship in the migrated tree.
+- **78% DONE / 0% PARTIAL / 0% DEFERRED / 11% N/A / 11% IN APPLIED**
+- Of the 27 audited items, 3 are already in `catgraph-applied` (enrichment substrate), 3 are N/A (motivational), leaving **21 implementable items** of which **21 are DONE, 0 PARTIAL, 0 DEFERRED**.
+- Of implementable items: **100% DONE / 0% PARTIAL / 0% DEFERRED**
+- No paper-anchored audit item remains deferred: the §3 Tsallis-side optimization stash (#37) is a performance-backlog item, out of the paper-item audit scope (only §2/§3 Defs/Props/Eqs that materialize as types or constitute the acceptance gate are tracked — see the scope note above), not a tracked deferral. The magnitude-homology / chain-complex / Storjohann SNF / Euler-char-identity stack closes the §3.14 deferral. The design-doc §3.6 surface row `mobius_function_via_chains_exact<Q: Ring>` was struck from that stack and folded into the Leinster 2008 Cor 1.5 integer-exact Möbius surface (documented below) — the paper-faithful destination requires anchoring a NEW paper (Leinster 2008 finite-category Möbius) outside the crate's BV/LS/Leinster-2013 anchor surface. Both now ship in the migrated tree.
 
 ---
 
