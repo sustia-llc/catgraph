@@ -6,21 +6,23 @@
 //! - **FS18 §5.3 Thm 5.53** — the functor `S : SFG_R → Mat(R)` realised by
 //!   `sfg_to_mat`. Fong-Spivak, *Seven Sketches in Compositionality*
 //!   (arXiv:1803.05316v3).
-//! - **FS18 §5.4 Thm 5.60** — the `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)`
-//!   presentation. Already proved by Baez-Erbele, *Categories in Control*
-//!   (2015, arXiv:1405.6881). cg-applied does NOT re-verify this theorem at
-//!   runtime.
+//! - **FS18 §5.4 Thm 5.60** — the `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)`
+//!   presentation. Proved by F&S Thm 5.60 (via Baez-Erbele, *Categories in
+//!   Control* (2015, arXiv:1405.6881), for fields; Wadsley–Woods *PROPs for
+//!   Linear Systems* (arXiv:1505.00048) for commutative rigs, cf. BE15 §6).
+//!   cg-applied does NOT re-verify this theorem at runtime.
 //!
 //! ## What the `cc_incompleteness_count_*` groups actually measure
 //!
 //! The function
 //! [`verify_sfg_to_mat_is_full_and_faithful`] is NOT a faithfulness gate
-//! (Baez-Erbele 2015 already proves Thm 5.60 holds; cg-applied does not
-//! re-prove established theorems). It returns **CC-engine incompleteness
+//! (F&S Thm 5.60 already proves the theorem holds — via Baez-Erbele 2015 for
+//! fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs; cg-applied does
+//! not re-prove established theorems). It returns **CC-engine incompleteness
 //! witnesses** — pairs of SFG expressions that the matrix functor `S`
 //! distinguishes which the default [`CongruenceClosure`] engine does NOT
-//! identify. The witness count (1301 for `size_bound=2` on `BoolRig`,
-//! post-#14 NF) stays nonzero **by design**: the terminal Mat(R) decision path
+//! identify. The witness count (1142 for `size_bound=2` on `BoolRig`,
+//! post-E_18) stays nonzero **by design**: the terminal Mat(R) decision path
 //! is the Functorial engine (issue #15 resolved functorial-terminal; syntactic
 //! Knuth-Bendix completion is the #57 feasibility spike). See the
 //! `tests/graphical_linalg.rs` module docstring for the authoritative semantics.
@@ -56,7 +58,7 @@
 //!   deferred).
 //!
 //! - **`cc_incompleteness_count::bool` at `size_bound = 2`** — produces
-//!   1301 CC-incompleteness witnesses on `BoolRig` (post-#14 NF) — the
+//!   1142 CC-incompleteness witnesses on `BoolRig` (post-E_18) — the
 //!   measured empirical baseline. The witness
 //!   count is the size of the gap between
 //!   [`NormalizeEngine::CongruenceClosure`] (syntactic, incomplete) and
@@ -65,8 +67,8 @@
 //!   faithfulness check.
 //!
 //! - **Witness-count asymmetry (`BoolRig` vs `F64Rig`).** At `size_bound = 2`
-//!   `BoolRig` produces 1301 witnesses (post-#14 NF); `F64Rig` produces a
-//!   larger count (~2777) that blows up combinatorially at `size_bound = 3`.
+//!   `BoolRig` produces 1142 witnesses (post-E_18); `F64Rig` produces a
+//!   larger count (~2478) that blows up combinatorially at `size_bound = 3`.
 //!   The mechanism is
 //!   algebraic, not a measurement artefact: `BoolRig` is idempotent
 //!   (`a ∨ a = a`, `a ∧ a = a`) so the D1 Cayley table
@@ -256,7 +258,7 @@ fn bench_sfg_to_mat_bool(c: &mut Criterion) {
 // ---------------------------------------------------------------------------
 //
 // `verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(size_bound=2)` returns
-// 1301 CC-incompleteness witnesses (measured empirically, post-#14 NF; see the
+// 1142 CC-incompleteness witnesses (measured empirically, post-E_18; see the
 // `tests/graphical_linalg.rs` module docstring for authoritative semantics).
 // The `size_bound=3` variant is far heavier — one d=3 call exceeds 590 s in
 // release (>10 min), so the "60s wall budget" below was a design-doc estimate,
@@ -273,7 +275,7 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     // a tight presentation.
     let rig_samples = vec![BoolRig(true), BoolRig(false)];
 
-    // d=2: the canonical signal (1301 witnesses, post-#14 NF).
+    // d=2: the canonical signal (1142 witnesses, post-E_18).
     group.throughput(Throughput::Elements(1));
     group.bench_function(BenchmarkId::from_parameter(2u32), |bencher| {
         bencher.iter(|| {
@@ -291,7 +293,7 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     // call — d=2 above already ran with criterion defaults (100 samples,
     // 3s warmup); only the d=3 bench below picks up the reduced settings.
     // This ordering is intentional: d=2 needs full-sample statistical
-    // fidelity for the 1301-witness baseline; d=3 is wall-time-budget-
+    // fidelity for the 1142-witness baseline; d=3 is wall-time-budget-
     // constrained.
     //
     // d=3: heavy — one d=3 verifier call exceeds 590 s in release, so no

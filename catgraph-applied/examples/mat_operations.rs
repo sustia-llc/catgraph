@@ -8,8 +8,10 @@
 //! - **F&S 2018 Seven Sketches** (`arXiv:1803.05316`) — §5.3 Def 5.50 (`Mat(R)`
 //!   as the prop of `m × n` matrices over a rig R; row-major / row-vector
 //!   convention, rows = domain arity); Def 5.45 (signal flow graphs over R);
-//!   Thm 5.53 (functor `S: SFG_R → Mat(R)`); Thm 5.60 (16-equation
-//!   presentation of `Mat(R)` is full + faithful, after Baez-Erbele 2015).
+//!   Thm 5.53 (functor `S: SFG_R → Mat(R)`); Thm 5.60 (18-equation
+//!   presentation of `Mat(R)` is full + faithful; proof via Baez-Erbele 2015
+//!   for fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs,
+//!   cf. BE15 §6).
 //! - **Storjohann 2000** *Algorithms for matrix canonical forms* (`PhD` thesis,
 //!   ETH Zürich) — §7 (Smith Normal Form over a PID via row + column
 //!   operations: `row_swap` / `scale_row` / `add_scaled_row` and the
@@ -44,7 +46,9 @@
 //!    [`verify_sfg_to_mat_is_full_and_faithful`] surfaces witnesses of the
 //!    default CC engine's *syntactic* incompleteness against the matrix
 //!    functor's ground truth — NOT Thm 5.60 faithfulness violations
-//!    (Baez-Erbele 2015 already proves the theorem). We then resolve a
+//!    (F&S Thm 5.60 already proves the theorem; via Baez-Erbele 2015 for
+//!    fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs). We then
+//!    resolve a
 //!    chosen witness through `eq_mod_functorial(_, _, &MatrixNFFunctor)`,
 //!    the complete-by-theorem decision procedure.
 //! 6. `Z(BigInt)` arithmetic: construct via `Z::new(BigInt::from(...))` and
@@ -282,15 +286,17 @@ fn main() {
 
     // -------- §5. graphical_linalg — bounded CC-incompleteness witness + the §5.4 Functorial resolution ---
     //
-    // F&S Thm 5.60 (Baez-Erbele 2015) proves `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)`
-    // abstractly — we do NOT empirically re-verify the theorem. What the
+    // F&S Thm 5.60 proves `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)` abstractly (via
+    // Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for
+    // commutative rigs, cf. BE15 §6) — we do NOT empirically re-verify it.
+    // What the
     // bounded-enumeration verifier `verify_sfg_to_mat_is_full_and_faithful`
     // actually surfaces is the *incompleteness* of the syntactic
     // `NormalizeEngine::CongruenceClosure` default engine against the
     // semantic ground truth carried by the matrix functor `S = sfg_to_mat`.
     // Plain CC (with or without `smc_refine`) cannot synthesize fresh
     // composite intermediates, so it leaves witness pairs that are
-    // presentation-equivalent under E_{17} but appear CC-distinct.
+    // presentation-equivalent under E_{18} but appear CC-distinct.
     //
     // The Functorial engine closes §5.4 semantically:
     // `Presentation::eq_mod_functorial(&a, &b, &MatrixNFFunctor::new())`
@@ -312,7 +318,7 @@ fn main() {
     // size_bound = 2 keeps the bounded SFG enumeration tractable for BoolRig
     // while still surfacing the CC-incompleteness witnesses the atom-canonical
     // `smc_refine` partially closes: BoolRig d=2 collisions
-    // 2574 → 1433 (smc_refine) → 1301 (post-#14 NF), ~49% total.
+    // 2574 → 1433 (smc_refine) → 1301 (post-#14 NF) → 1142 (post-E_18).
     let report = verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(2, &bool_samples)
         .expect("verifier runs on BoolRig size_bound=2");
     println!("  FaithfulnessReport (BoolRig, size_bound=2):");
@@ -325,7 +331,9 @@ fn main() {
     println!("    witnesses.len()     = {}", report.witnesses.len());
     // The report's `collisions_under_s` counts CC-incompleteness witnesses,
     // not Thm 5.60 faithfulness violations. The matrix functor S is faithful
-    // by Baez-Erbele 2015; what's missing from plain CC is syntactic
+    // by F&S Thm 5.60 (Baez-Erbele 2015 for fields, Wadsley–Woods
+    // arXiv:1505.00048 for commutative rigs); what's missing from plain CC is
+    // syntactic
     // completeness. The `atom_canonical` pass in `kb.rs` gives ~44%
     // reduction; the residual gap is closed by the terminal Functorial engine
     // demonstrated below (issue #15 resolved functorial-terminal; syntactic
@@ -363,7 +371,7 @@ fn main() {
         assert_eq!(
             func_verdict,
             Some(true),
-            "Functorial engine is complete for Mat(R) per Baez-Erbele 2015"
+            "Functorial engine is complete for Mat(R) per F&S Thm 5.60 (Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs)"
         );
     }
     println!("  §5.4 Thm 5.60 semantic closure verified via the Functorial engine.\n");

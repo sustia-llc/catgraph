@@ -13,10 +13,12 @@
 //! - [`CompleteFunctor<G>`] — a generic trait for any such decision functor.
 //! - [`MatrixNFFunctor<R>`] — concrete instance wrapping [`crate::sfg_to_mat`]
 //!   for the canonical `S: SFG_R → Mat(R)` functor. Complete on the
-//!   presentation `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)` by F&S Thm 5.60 /
-//!   Baez-Erbele 2015. For signal-flow graphs under the 17 Thm 5.60
-//!   equations, a matrix-equality check decides equivalence in the prop
-//!   quotient — no congruence-closure engine needed.
+//!   presentation `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)` by F&S Thm 5.60 (proof via
+//!   Baez-Erbele 2015 for fields; the commutative-rig case — covering all rigs
+//!   instantiated here — is Wadsley–Woods arXiv:1505.00048, cf. BE15 §6). For
+//!   signal-flow graphs under the 18 Thm 5.60 equations, a matrix-equality
+//!   check decides equivalence in the prop quotient — no congruence-closure
+//!   engine needed.
 //!
 //! Use via [`super::Presentation::eq_mod_functorial`]. Unlike the default
 //! [`super::NormalizeEngine::CongruenceClosure`] engine (sound but
@@ -63,9 +65,10 @@ use crate::{
 ///
 /// Completeness is a claim about the specific presentation; it is not a
 /// property of the functor alone. For example, the matrix functor
-/// `S : SFG_R → Mat(R)` is complete on the `E_{17}` presentation of Thm 5.60
-/// (Baez-Erbele 2015) but would NOT decide equality under a smaller
-/// equation set `E' ⊂ E_{17}` — there the functor would over-identify.
+/// `S : SFG_R → Mat(R)` is complete on the `E_{18}` presentation of Thm 5.60
+/// (proof via Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for
+/// commutative rigs, cf. BE15 §6) but would NOT decide equality under a smaller
+/// equation set `E' ⊂ E_{18}` — there the functor would over-identify.
 ///
 /// Implementors are responsible for citing the source of their
 /// completeness claim in their rustdoc.
@@ -87,11 +90,13 @@ pub trait CompleteFunctor<G: PropSignature> {
 }
 
 /// The matrix functor `S : SFG_R → Mat(R)` (F&S 2018 Thm 5.53), complete
-/// on the `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)` presentation by F&S Thm 5.60 /
-/// Baez-Erbele 2015. Wraps the existing [`crate::sfg_to_mat`] function.
+/// on the `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)` presentation by F&S Thm 5.60 (proof
+/// via Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for
+/// commutative rigs, cf. BE15 §6). Wraps the existing [`crate::sfg_to_mat`]
+/// function.
 ///
 /// Equality of `MatR<R>` values decides equivalence of signal-flow graphs
-/// under the 17 Thm 5.60 equations — no Knuth-Bendix completion or
+/// under the 18 Thm 5.60 equations — no Knuth-Bendix completion or
 /// congruence closure required.
 pub struct MatrixNFFunctor<R: Rig + Debug + Eq + Hash + 'static> {
     _phantom: PhantomData<R>,

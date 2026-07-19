@@ -2,10 +2,11 @@
 //! ([`Presentation::eq_mod_functorial`] + [`CompleteFunctor`] +
 //! [`MatrixNFFunctor`]).
 //!
-//! The Functorial engine is complete by theorem on the `Free(Σ_SFG)/⟨E_{17}⟩
-//! ≅ Mat(R)` presentation (F&S Thm 5.60 / Baez-Erbele 2015): two signal-flow
-//! graphs are equivalent under the 17 Thm 5.60 equations iff their matrix
-//! images are equal. These tests exercise the API surface; the underlying
+//! The Functorial engine is complete by theorem on the `Free(Σ_SFG)/⟨E_{18}⟩
+//! ≅ Mat(R)` presentation (F&S Thm 5.60; proof via Baez-Erbele 2015 for fields,
+//! Wadsley–Woods arXiv:1505.00048 for commutative rigs, cf. BE15 §6): two
+//! signal-flow graphs are equivalent under the 18 Thm 5.60 equations iff their
+//! matrix images are equal. These tests exercise the API surface; the underlying
 //! functor `sfg_to_mat` has its own coverage in `tests/graphical_linalg.rs`.
 
 use catgraph_applied::prop::presentation::Presentation;
@@ -46,7 +47,7 @@ fn identity_and_scalar_one_have_same_matrix_image() {
     // `Scalar(1) : 1 → 1` maps to `[[1]]` under `S` (Eq 5.52).
     // `Identity(1)` also maps to `[[1]]` (the 1×1 identity matrix).
     // Their matrix images are bit-identical, so the functorial engine
-    // decides equality as `Some(true)` without consulting the E_{17}
+    // decides equality as `Some(true)` without consulting the E_{18}
     // presentation.
     let pres = Presentation::<SfgGenerator<BoolRig>>::new();
     let f = MatrixNFFunctor::<BoolRig>::new();

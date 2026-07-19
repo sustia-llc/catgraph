@@ -15,6 +15,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **Thm 5.60 presentation completed to E_18** ([#114](https://github.com/sustia-llc/catgraph/issues/114)):
+  `matr_presentation<R>` now builds all **18** equation schemas of F&S Thm 5.60
+  (p.170) / BE15 Theorem 2 relations (1)–(18), up from 16. The two missing rig-
+  structure relations were added: **D7** scalar addition `Δ ; (r_a ⊗ r_b) ; μ =
+  r_{a+b}` (BE15 (12), iterated over `rig_samples` pairs like D1) and **D8** zero
+  scalar `r_0 = ε ; η` (BE15 (14), emitted once like D2). The presentation is
+  renamed `E_17 → E_18` workspace-wide (the old `17` count matched neither paper;
+  the figure and BE15 both have 18). Completing the presentation gives the CC
+  engine more equations to identify with, so the pinned `cc_completeness_tracking_*`
+  depth-2 collision baselines dropped: BoolRig 1301 → **1142**, UnitInterval
+  1856 → **1634**, Tropical 2526 → **2234**, F64Rig jitter band `2770..=2790` →
+  **`2468..=2488`** (observed 2478–2480); the `prop_presentation_nf` example's
+  BoolRig expansion count 23 → **28**. All four `thm_5_60_soundness_*` tests
+  confirm every new equation is a matrix equality under `S = sfg_to_mat`.
 - **FS18-AUDIT summary recount** (paper-audit Phase 2): the summary table had
   drifted from its own detail tables since before the earliest tracked commit —
   §5.2 7→8 rows (Def 5.13 ⚠️ was uncounted), §5.3 6→7 (Prop 5.56 ❌ added in the

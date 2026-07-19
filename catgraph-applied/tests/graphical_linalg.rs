@@ -3,13 +3,15 @@
 //! # What these tests actually measure
 //!
 //! The 12 `cc_completeness_tracking_*` tests below are **NOT** Thm 5.60
-//! faithfulness tests — that theorem is already proved abstractly by
-//! Baez-Erbele 2015 (`Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)`, with `sfg_to_mat`
-//! realising the isomorphism). We do not need to verify an established
-//! theorem; this suite predates that reframing and was originally mis-named.
+//! faithfulness tests — that theorem is already proved abstractly by F&S
+//! Thm 5.60 (`Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)`, with `sfg_to_mat` realising the
+//! isomorphism; proof via Baez-Erbele 2015 for fields, Wadsley–Woods
+//! arXiv:1505.00048 for commutative rigs, cf. BE15 §6). We do not need to
+//! verify an established theorem; this suite predates that reframing and was
+//! originally mis-named.
 //!
 //! What the harness actually does: it enumerates SFG expressions up to
-//! bounded depth, buckets them by `Presentation::eq_mod` under the 17 Thm
+//! bounded depth, buckets them by `Presentation::eq_mod` under the 18 Thm
 //! 5.60 equations, then checks that every bucket maps to a single matrix
 //! under `sfg_to_mat`. A "collision" is a pair of expressions CC decides
 //! are `eq_mod`-distinct that the matrix functor identifies — i.e., a
@@ -22,12 +24,13 @@
 //! The Knuth-Bendix-vs-functorial decision (issue #15) is **resolved:
 //! functorial-terminal**. [`Presentation::eq_mod_functorial`] with
 //! [`MatrixNFFunctor<R>`] is the terminal, complete decision procedure for
-//! Mat(R) (complete by theorem — F&S Thm 5.53 / Baez-Erbele 2015). Plain
+//! Mat(R) (complete by theorem — F&S Thm 5.53 / Thm 5.60; via Baez-Erbele 2015
+//! for fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs). Plain
 //! congruence closure stays **incomplete by design**: residual collisions all
 //! exhibit the same structural pattern — derivation chains needing intermediate
 //! composite terms not present in the CC term graph, which plain congruence
 //! closure (with or without `smc_refine`) cannot synthesize. Closing that gap
-//! by Knuth-Bendix completion of the 17 equations modulo SMC coherence is
+//! by Knuth-Bendix completion of the 18 equations modulo SMC coherence is
 //! demoted to a time-boxed feasibility spike (issue #57), relevant only for a
 //! future non-Mat(R) presentation that lacks a semantic functor.
 //!
@@ -44,22 +47,24 @@
 //! over 10 min/rig in release, depth 4 larger still), so on a manual `--ignored`
 //! run the assert's LEFT value IS the true depth-N count (not an expectation).
 //!
-//! Fresh collision/expression counts (post-#14 NF, release, depth 2):
+//! Fresh collision/expression counts (post-E_18, release, depth 2):
 //!
 //! | rig          | collisions | expressions |
 //! |--------------|-----------:|------------:|
-//! | BoolRig      |       1301 |       20324 |
-//! | UnitInterval |       1856 |       31337 |
-//! | Tropical     |       2526 |       46810 |
-//! | F64Rig       |      ~2777 |       46810 |
+//! | BoolRig      |       1142 |       20324 |
+//! | UnitInterval |       1634 |       31337 |
+//! | Tropical     |       2234 |       46810 |
+//! | F64Rig       |      ~2478 |       46810 |
 //!
 //! BoolRig lineage: 2574 plain CC → 1433 atom-canonical `smc_refine` → 1301
-//! post-#14 layer-ordering NF (~49% total).
+//! post-#14 layer-ordering NF → 1142 post-E_18 (D7/D8 scalar add/zero added).
+//! Completing the presentation to all 18 F&S/BE15 relations gives CC more
+//! equations to identify with, lowering the residual collision count.
 //!
 //! BoolRig/UnitInterval/Tropical counts are deterministic and their tracker
 //! bounds are pinned exactly. F64Rig's count is float-nondeterministic
-//! (observed 2776–2778 — signed-zero `Hash`/`Eq` interacts with HashMap
-//! ordering), so its tracker is an inclusive jitter band (`2770..=2790`,
+//! (observed 2478–2480 — signed-zero `Hash`/`Eq` interacts with HashMap
+//! ordering), so its tracker is an inclusive jitter band (`2468..=2488`,
 //! tracked as #58). All baselines live in the `BASELINE_*_D2` module consts.
 //!
 //! [`CongruenceClosure`]: catgraph_applied::prop::presentation::NormalizeEngine::CongruenceClosure
@@ -103,20 +108,21 @@ fn matr_presentation_builds_unit_interval() {
     matr_presentation::<UnitInterval>(&samples).unwrap();
 }
 
-// Post-#14 depth-2 collision baselines — the single Rust source of truth for
-// each number (mirrored in the module docstring table). BoolRig/UnitInterval/
-// Tropical are deterministic → pinned exactly; F64Rig is float-nondeterministic
-// (signed-zero `Hash`/`Eq` × HashMap ordering; observed 2776–2778) → an
-// inclusive jitter band, tracked as #58.
-const BASELINE_BOOL_D2: usize = 1301;
-const BASELINE_UNIT_INTERVAL_D2: usize = 1856;
-const BASELINE_TROPICAL_D2: usize = 2526;
-const BASELINE_F64_D2: std::ops::RangeInclusive<usize> = 2770..=2790;
+// Post-E_18 depth-2 collision baselines (D7/D8 added, #114) — the single Rust
+// source of truth for each number (mirrored in the module docstring table).
+// BoolRig/UnitInterval/Tropical are deterministic → pinned exactly; F64Rig is
+// float-nondeterministic (signed-zero `Hash`/`Eq` × HashMap ordering; observed
+// 2478–2480) → an inclusive jitter band, tracked as #58.
+const BASELINE_BOOL_D2: usize = 1142;
+const BASELINE_UNIT_INTERVAL_D2: usize = 1634;
+const BASELINE_TROPICAL_D2: usize = 2234;
+const BASELINE_F64_D2: std::ops::RangeInclusive<usize> = 2468..=2488;
 
 const IGNORE_REASON: &str = "\
-    CC completeness tracking (NOT a Thm 5.60 faithfulness test): Baez-Erbele \
-    2015 proved `Free(Σ_SFG)/⟨E_{17}⟩ ≅ Mat(R)` abstractly — we do not need to \
-    empirically verify the theorem. These tests bound the incompleteness of \
+    CC completeness tracking (NOT a Thm 5.60 faithfulness test): F&S Thm 5.60 \
+    proves `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)` abstractly (via Baez-Erbele 2015 for \
+    fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs) — we do not \
+    need to empirically verify the theorem. These tests bound the incompleteness of \
     the default `NormalizeEngine::CongruenceClosure` engine against the \
     matrix ground truth on bounded-depth enumeration. Issue #15 is resolved \
     functorial-terminal: `Presentation::eq_mod_functorial` with \
@@ -179,7 +185,7 @@ fn assert_exact_baseline<R>(
 #[test]
 #[ignore = "CC completeness tracking; see module docstring and IGNORE_REASON"]
 fn cc_completeness_tracking_bool_depth_2() {
-    // Post-#14 NF baseline: 1301 collisions / 20324 expressions (deterministic;
+    // Post-E_18 baseline: 1142 collisions / 20324 expressions (deterministic;
     // pinned exactly via `assert_exact_baseline`).
     let samples = vec![BoolRig(false), BoolRig(true)];
     let report = verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(2, &samples).unwrap();
@@ -212,7 +218,7 @@ fn cc_completeness_tracking_unit_interval_depth_2() {
         UnitInterval::new(0.5).unwrap(),
         UnitInterval::new(1.0).unwrap(),
     ];
-    // Post-#14 NF baseline: 1856 collisions / 31337 expressions (deterministic;
+    // Post-E_18 baseline: 1634 collisions / 31337 expressions (deterministic;
     // pinned exactly).
     let report = verify_sfg_to_mat_is_full_and_faithful::<UnitInterval>(2, &samples).unwrap();
     assert_exact_baseline("UnitInterval", &report, BASELINE_UNIT_INTERVAL_D2);
@@ -253,7 +259,7 @@ fn cc_completeness_tracking_tropical_depth_2() {
         Tropical(1.0),
         Tropical(2.0),
     ];
-    // Post-#14 NF baseline: 2526 collisions / 46810 expressions (deterministic;
+    // Post-E_18 baseline: 2234 collisions / 46810 expressions (deterministic;
     // pinned exactly).
     let report = verify_sfg_to_mat_is_full_and_faithful::<Tropical>(2, &samples).unwrap();
     assert_exact_baseline("Tropical", &report, BASELINE_TROPICAL_D2);
@@ -290,12 +296,11 @@ fn cc_completeness_tracking_tropical_depth_4() {
 #[test]
 #[ignore = "CC completeness tracking; see module docstring and IGNORE_REASON"]
 fn cc_completeness_tracking_f64_depth_2() {
-    // Post-#14 NF baseline: ~2777 collisions / 46810 expressions. Unlike the
+    // Post-E_18 baseline: ~2478 collisions / 46810 expressions. Unlike the
     // other three rigs, F64Rig's collision count is float-nondeterministic
-    // (observed 2776–2778 across runs — signed-zero Hash/Eq interacts with
-    // HashMap ordering; tracked in #58), so it is checked against an inclusive
-    // jitter band rather than an exact pin. A real CC/NF regression moves the
-    // count structurally, far outside the band.
+    // (signed-zero Hash/Eq interacts with HashMap ordering; tracked in #58), so
+    // it is checked against an inclusive jitter band rather than an exact pin.
+    // A real CC/NF regression moves the count structurally, far outside the band.
     let samples = vec![F64Rig(0.0), F64Rig(1.0), F64Rig(2.0), F64Rig(-1.0)];
     let report = verify_sfg_to_mat_is_full_and_faithful::<F64Rig>(2, &samples).unwrap();
     assert!(
@@ -330,8 +335,9 @@ fn cc_completeness_tracking_f64_depth_4() {
 /// `S(lhs) == S(rhs)` under `sfg_to_mat`. This is the SOUNDNESS direction
 /// (S is well-defined on the quotient); the FAITHFULNESS direction (S is
 /// injective on the quotient) is decided operationally by the terminal
-/// Functorial engine (`eq_mod_functorial`, complete by Baez-Erbele 2015) —
-/// issue #15 resolved functorial-terminal, with syntactic Knuth-Bendix
+/// Functorial engine (`eq_mod_functorial`, complete by F&S Thm 5.60 — via
+/// Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for commutative
+/// rigs) — issue #15 resolved functorial-terminal, with syntactic Knuth-Bendix
 /// completion demoted to the #57 feasibility spike.
 fn assert_soundness_for_rig<R>(rig_samples: &[R]) -> String
 where

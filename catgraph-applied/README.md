@@ -26,11 +26,11 @@ This crate packages applied-CT modules that build on catgraph's strict Fong-Spiv
 | `mat_kron` | `MatKron<R>` — Kronecker-tensor matrix prop: a genuine hypergraph category over a rig with Hadamard SCFM (η/ε/μ/δ) as inherent generators; speciality δ;μ = id (F&S 2019 *Hypergraph Categories* Ex 2.16, §2.3) |
 | `trace` | Partial trace `Tr_X(f)` for `MatKron<R>`, built from its compact-closed cup/cap generators (strict Kronecker; no associators) (F&S 2019 §3.1) |
 | `sfg_to_mat` | `sfg_to_mat` functor `S: SFG_R → Mat(R)` (F&S Thm 5.53) |
-| `graphical_linalg` | `matr_presentation<R>` — 16-equation Thm 5.60 presentation of Mat(R) (F&S §5.4; closed via the Functorial engine — see `prop::presentation::functorial`) |
+| `graphical_linalg` | `matr_presentation<R>` — 18-equation Thm 5.60 presentation of Mat(R) (F&S §5.4; closed via the Functorial engine — see `prop::presentation::functorial`) |
 | `mat_f64` (feature `f64-rig`) | nalgebra bridge for `MatR<F64Rig>`: determinant, inverse, `DMatrix` roundtrip |
-| `prop::presentation::kb` | Congruence-closure decision procedure (DST 1980 signature-table variant) — the default `eq_mod` backend, with an atom-canonical `smc_refine` fixpoint (BoolRig d=2 collisions 2574 → 1433 → 1301 post-#14, ~49%) |
+| `prop::presentation::kb` | Congruence-closure decision procedure (DST 1980 signature-table variant) — the default `eq_mod` backend, with an atom-canonical `smc_refine` fixpoint (BoolRig d=2 collisions 2574 → 1433 → 1301 post-#14 → 1142 post-E_18) |
 | `prop::presentation::smc_nf` | Layer 1 Joyal-Street string-diagram normal form — canonicalizes `PropExpr` up to SMC coherence (associator, unitors, interchange, braid naturality, σ²=id) (JS 1991 Part I, Selinger 2011) |
-| `prop::presentation::functorial` | `CompleteFunctor<G>` trait + `MatrixNFFunctor<R>` — opt-in semantic decision engine for prop-equality via `Presentation::eq_mod_functorial`. Complete by theorem for Mat(R) (Baez-Erbele 2015 / F&S Thm 5.60) |
+| `prop::presentation::functorial` | `CompleteFunctor<G>` trait + `MatrixNFFunctor<R>` — opt-in semantic decision engine for prop-equality via `Presentation::eq_mod_functorial`. Complete by theorem for Mat(R) (F&S Thm 5.60; proof via Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs, cf. BE15 §6) |
 | `enriched` | `EnrichedCategory<V>` trait + `HomMap<O, V>` finite realization (F&S §1.1, §2.4) |
 | `lawvere_metric` | `LawvereMetricSpace<T>` over `Tropical` — triangle-inequality verifier + `-ln π` embedding from `UnitInterval` (Lawvere 1973) |
 | `integer` | `ZAlgebra` trait (sealed) — `Rig` extension with `Neg + Sub + from_i64` for rings carrying integer-exact arithmetic. Canonical ring-homomorphism ℤ → R (Bourbaki *Algèbre* Ch. I §8). Renamed from `Integer`; sealed via `private::Sealed` so only `Z(BigInt)` and `i64` carry it |
@@ -55,8 +55,9 @@ This crate packages applied-CT modules that build on catgraph's strict Fong-Spiv
 - **Thm 5.60 test naming.** The 12 integration tests in `tests/graphical_linalg.rs`
   are named `cc_completeness_tracking_*` (not `thm_5_60_faithful_*`): they measure
   the default CC engine's syntactic incompleteness vs the matrix ground truth, not
-  Thm 5.60 itself (Baez-Erbele proved that abstractly). They stay `#[ignore]`'d as
-  a diagnostic.
+  Thm 5.60 itself (F&S Thm 5.60 proves that abstractly — via Baez-Erbele 2015 for
+  fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs). They stay
+  `#[ignore]`'d as a diagnostic.
 
 ## Dependency on catgraph
 

@@ -1,11 +1,11 @@
 //! Graphical linear algebra — F&S 2018 Thm 5.60: `Mat(R)` has a presentation
-//! over the SFG generators plus 16 equations (cocomonoid + monoid + bialgebra,
+//! over the SFG generators plus 18 equations (cocomonoid + monoid + bialgebra,
 //! plus scalar interactions). The functor `S: SFG_R → Mat(R)` is full and
 //! faithful on this presentation.
 //!
 //! This module provides:
 //!
-//! - [`matr_presentation`] — builds the 16-equation presentation.
+//! - [`matr_presentation`] — builds the 18-equation presentation.
 //! - [`FaithfulnessReport`] — result of a bounded-enumeration faithfulness check.
 //! - [`verify_sfg_to_mat_is_full_and_faithful`] — enumerates bounded SFG
 //!   expressions, groups by presentation-equivalence, and verifies that
@@ -22,9 +22,15 @@ use crate::{
 
 /// Build the F&S Thm 5.60 presentation of `Mat(R)`.
 ///
-/// Equations: 10 structural (A1-A3, B1-B3, C1-C4) plus 6 scalar-parameterized
-/// (D1-D6), with D1/D3/D4/D5/D6 instantiated for each `a ∈ rig_samples` and
-/// D1 additionally iterating `b ∈ rig_samples`.
+/// Equations: 10 structural (A1-A3, B1-B3, C1-C4) plus 8 scalar-parameterized
+/// (D1-D8). D2 (`r_one = id`) and D8 (`r_zero = ε ; η`) are emitted once; D3/D4/
+/// D5/D6 are instantiated for each `a ∈ rig_samples`; D1 (`r_a ; r_b = r_{a*b}`)
+/// and D7 (scalar addition `Δ ; (r_a ⊗ r_b) ; μ = r_{a+b}`) additionally iterate
+/// `b ∈ rig_samples`.
+///
+/// This is the full 18-relation set of BE15 Theorem 2 / F&S Thm 5.60 (p.170):
+/// the rig structure of `R` is recovered by D1 (multiplication, BE15 (11)),
+/// D7 (addition, BE15 (12)), D2 (unit, BE15 (13)), and D8 (zero, BE15 (14)).
 ///
 /// # Errors
 ///
@@ -110,19 +116,24 @@ where
     // C4. η ; ε = id_0
     p.add_equation(cmp(zero_gen(), discard()), id_n(0))?;
 
-    // D-group scalar equations: D2 is independent of rig_samples (the unit
-    // scalar is always R::one()); D3-D6 need a single sample `a`; D1 needs two
-    // samples `a, b` with their precomputed product. We emit D2 first (outside
-    // the loop), then iterate the single-sample equations, then close with the
-    // double-sample D1 in the inner loop. The out-of-paper-order of D1 (last
-    // by emission) vs its paper position (first in §5.4) is deliberate for
-    // enumeration efficiency — emitting D1 last puts the most instantiated
+    // D-group scalar equations: D2 and D8 are independent of rig_samples (the
+    // unit scalar is always R::one(), the zero scalar always R::zero()); D3-D6
+    // need a single sample `a`; D1 and D7 need two samples `a, b` (D1 with their
+    // precomputed product, D7 with their precomputed sum). We emit D2 and D8
+    // first (outside the loop), then iterate the single-sample equations, then
+    // close with the double-sample D1/D7 in the inner loop. The out-of-paper-
+    // order of D1 (last by emission) vs its paper position (first in §5.4) is
+    // deliberate for enumeration efficiency — emitting the most-instantiated
     // equations at the end of the presentation's equation list.
 
-    // D2. r_{one} = id_1
+    // D2. r_{one} = id_1  (BE15 (13))
     p.add_equation(scalar(R::one()), id_n(1))?;
 
-    // D1 / D3 / D4 / D5 / D6 iterate over rig_samples.
+    // D8. r_{zero} = ε ; η  (BE15 (14)) — scalar multiplication by 0 is the
+    // discard-then-zero morphism 1→0→1.
+    p.add_equation(scalar(R::zero()), cmp(discard(), zero_gen()))?;
+
+    // D1 / D3 / D4 / D5 / D6 / D7 iterate over rig_samples.
     for a in rig_samples {
         // D3. r_a ; Δ = Δ ; (r_a ⊗ r_a)
         p.add_equation(
@@ -142,11 +153,22 @@ where
         // D6. η ; r_a = η
         p.add_equation(cmp(zero_gen(), scalar(a.clone())), zero_gen())?;
 
-        // D1. r_a ; r_b = r_{a*b} — iterate b as well.
+        // D1 / D7 iterate b as well.
         for b in rig_samples {
+            // D1. r_a ; r_b = r_{a*b}
             p.add_equation(
                 cmp(scalar(a.clone()), scalar(b.clone())),
                 scalar(a.clone() * b.clone()),
+            )?;
+
+            // D7. Δ ; (r_a ⊗ r_b) ; μ = r_{a+b} — scalar addition (BE15 (12)):
+            // copy the input, scale the two copies by a and b, then add.
+            p.add_equation(
+                cmp(
+                    cmp(copy(), tensor(scalar(a.clone()), scalar(b.clone()))),
+                    add(),
+                ),
+                scalar(a.clone() + b.clone()),
             )?;
         }
     }
