@@ -23,7 +23,10 @@ catgraph (F&S core) ─▶ catgraph-applied ─▶ catgraph-magnitude
 
 `deep_causality_num` / `deep_causality_haft` pinned `=0.4.1` (haft 0.4.1 ships the
 post-0.4.0 categorical machinery — PROP `SymMonoidal`, `ArrowTerm`, native
-`NaturalTransformation`, `Cofree` — re-evaluation tracked in #93).
+`NaturalTransformation`, `Cofree` — re-evaluation #93 resolved 2026-07-19:
+`Free`/`Cofree` adopted as catgraph-dl's carriers; `ArrowTerm` vs `PropExpr` and
+`Category`/`Kleisli` vs `eval` assessed no-adopt; `SymMonoidal` decided-no —
+cartesian, not a Frobenius substrate).
 `catgraph-applied` + `catgraph-magnitude` depend on `deep_causality_num` (`Zero`/`One`
 only); `catgraph-dl` uses `haft`'s `HKT`/`Functor` witnesses as its endofunctor
 substrate (EndoFunctor→haft migration landed, #12) and now **uses** `num`'s

@@ -61,7 +61,7 @@
 //! dual with `Cofree<OptionWitness, O>`: a **bounded** non-empty stream
 //! prefix (tail `None` terminates; a top-level `Option` carries the empty,
 //! depth-0 case). The truly-infinite stream carrier stays deferred behind
-//! `Lazy`/`Thunk` (see the `free_monad` module doc; #36-adjacent), so these tests
+//! `Lazy`/`Thunk` (see the crate-root "Deferred surfaces" list; #36-adjacent), so these tests
 //! assert the finite-depth prefix only. (Anchor note: the issue body's "Remark
 //! 2.13 dual / App B + App J" was imprecise — the exact dual statement is
 //! Remark H.6 and the architectures live in App I; corrected here and on #64.)
