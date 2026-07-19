@@ -71,7 +71,7 @@ Every module depends on catgraph's public API:
 
 ## Paper alignment
 
-See [`docs/FS18-AUDIT.md`](docs/FS18-AUDIT.md) for the section-by-section Seven Sketches coverage audit (Chapters 4–6, 61 items tracked; 82% of implementable items DONE, §5.4 Thm 5.60 closed via Functorial engine). Cross-linked from [`../catgraph/docs/FS19-AUDIT.md`](../catgraph/docs/FS19-AUDIT.md) "Reconciliation" section.
+See [`docs/FS18-AUDIT.md`](docs/FS18-AUDIT.md) for the section-by-section Seven Sketches coverage audit (Chapters 4–6, 63 items tracked; 82% of implementable items DONE, §5.4 Thm 5.60 closed via Functorial engine). Cross-linked from [`../catgraph/docs/FS19-AUDIT.md`](../catgraph/docs/FS19-AUDIT.md) "Reconciliation" section.
 
 ## Changelog
 
