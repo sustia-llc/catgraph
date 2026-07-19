@@ -20,6 +20,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   arXiv:0908.3347 so the private papers-cache `fetch-papers.sh` (arXiv-id
   auto-discovery) can fetch it, making the ~12 Selinger-anchored SMC-NF
   lines cache-verifiable.
+- **`docs/FS18-AUDIT.md` completeness rows added (owner decision, audit
+  Phase 7)** — §5.2 gains the two previously untracked prop examples:
+  **Ex 5.7** (the prop Corel — 🔗 IN CORE, `catgraph::corel::Corel<Lambda>`
+  carries the listed identity/symmetry/composition/monoidal structure) and
+  **Ex 5.8** (the prop Rel — 🔗 IN CORE, `catgraph::span::Rel<Lambda>`,
+  already mapped to this example in the cross-paper table). Summary
+  `[27,3,3,12,16] of 61 → [27,3,3,12,18] of 63` (implementable count
+  unchanged at 33); count-guard green.
 
 - **Thm 5.60 presentation completed to E_18** ([#114](https://github.com/sustia-llc/catgraph/issues/114)):
   `matr_presentation<R>` now builds all **18** equation schemas of F&S Thm 5.60

@@ -24,18 +24,18 @@
 |---|---|---|---|---|---|---|
 | §4.4 Categorification + monoidal cats | 5 | 0 | 0 | 2 | 2 | 9 |
 | §4.5 Compact closed categories | 0 | 0 | 0 | 2 | 3 | 5 |
-| §5.2 Props and presentations | 4 | 1 | 0 | 3 | 0 | 8 |
+| §5.2 Props and presentations | 4 | 1 | 0 | 3 | 2 | 10 |
 | §5.3 Signal flow graphs | 6 | 0 | 1 | 0 | 0 | 7 |
 | §5.4 Graphical linear algebra | 1 | 0 | 1 | 1 | 0 | 3 |
 | §6.2 Colimits and connection | 0 | 0 | 0 | 2 | 4 | 6 |
 | §6.3 Hypergraph categories | 2 | 0 | 0 | 0 | 7 | 9 |
 | §6.4 Decorated cospans | 4 | 0 | 1 | 1 | 0 | 6 |
 | §6.5 Operads and their algebras | 5 | 2 | 0 | 1 | 0 | 8 |
-| **TOTAL** | **27** | **3** | **3** | **12** | **16** | **61** |
+| **TOTAL** | **27** | **3** | **3** | **12** | **18** | **63** |
 
 **Headline numbers:**
-- **44% DONE / 5% PARTIAL / 5% MISSING / 20% N/A / 26% IN CORE**
-- Of the 61 audited items, 16 are already in catgraph core (the research paper's content), 12 are N/A (pedagogical), leaving **33 implementable items** of which **27 are DONE, 3 PARTIAL, 3 MISSING**.
+- **43% DONE / 5% PARTIAL / 5% MISSING / 19% N/A / 29% IN CORE**
+- Of the 63 audited items, 18 are already in catgraph core (the research paper's content), 12 are N/A (pedagogical), leaving **33 implementable items** of which **27 are DONE, 3 PARTIAL, 3 MISSING**.
 - Of implementable items: **82% DONE / 9% PARTIAL / 9% MISSING**
 - §5.4 Thm 5.60 is closed via the opt-in `Presentation::eq_mod_functorial<MatrixNFFunctor<R>>` semantic engine — a complete decision procedure for `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)` (F&S Thm 5.60; proof via Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs, cf. BE15 §6). The default syntactic (CC) engine remains incomplete by design; see the §5.4 Thm 5.60 row for the measured Option-A improvement and the Mat(R) completeness resolution (resolved: functorial-terminal (#15); KB feasibility spike #57).
 - §4.4 carries 3 enriched-category rows (EnrichedCategory, HomMap, LawvereMetricSpace) and the congruence-closure decision procedure as the default `eq_mod` backend.
@@ -76,6 +76,8 @@
 | Def 5.2: prop (symmetric strict monoidal category, Ob = ℕ) | ✅ | catgraph-applied::prop | `PropExpr<G>` arity-tracked expression tree with `Composable<Vec<()>>`, `Monoidal`, `HasIdentity`, `SymmetricMonoidalMorphism<()>` impls. |
 | Def 5.11: prop functor | ➖ | — | definition only (operadic analogue available as `OperadFunctor` for Rough Def 6.98) |
 | Def 5.13: (m,n)-port graph | ⚠️ | catgraph-applied::petri_net | `PetriNet` is a bipartite graph with typed ports; not literally a port graph but structurally adjacent. `WiringDiagram` inner/outer circles are closer. |
+| Ex 5.7: the prop **Corel** (equivalence relations on m+n) | 🔗 | catgraph::corel | `Corel<Lambda>` carries the full prop structure the example lists: identity/symmetry (`HasIdentity` + `SymmetricMonoidalMorphism`), item-4 composition = coarsen-and-compose through the middle (`Composable`), item-5 monoidal product = disjoint union with no interaction (`Monoidal`). Shipped in core as the FS19-side surface (see §6.3 Ex 6.64 row — same type, hypergraph-category structure on top). |
+| Ex 5.8: the prop **Rel** (relations ⊆ m × n) | 🔗 | catgraph::span::Rel | `Rel<Lambda>` (newtype over `Span`) — pullback composition (the example's item 4), disjoint-union monoidal product (item 5). Already mapped to this example in the cross-paper reconciliation table below; corelation-vs-relation distinction noted at the §4.5 Ex 4.61 row. |
 | Def 5.25: free prop on a signature Free(G) | ✅ | catgraph-applied::prop::Free | `Free<G>::{identity, braid, generator, compose, tensor}` smart constructors on `PropExpr<G>`, arity-checked at construction time. SMC-axiom quotient (`Presentation::normalize` with 9-rule canonical form). |
 | Def 5.30: G-generated prop expressions | ✅ | catgraph-applied::prop::PropExpr + prop::presentation | `PropExpr<G>` realises the syntactic layer (Identity/Braid/Generator/Compose/Tensor); `Presentation::normalize` applies the 9-rule SMC canonical form (interchange, unitors, braiding naturality, identity-coherence of ⊗). Note: the quotient uses bounded structural rewriting; the congruence-closure backend is the default `eq_mod` engine, and Knuth-Bendix completion of the SMC-coherence rewriting is the #57 feasibility spike (Mat(R) completeness resolved functorial-terminal, #15). |
 | Rough Def 5.33: presentation (G, s, t, E) for a prop | ✅ | catgraph-applied::prop::presentation::Presentation | `Presentation<G>` with `add_equation`, `normalize`, `eq_mod`, `with_depth`. 9-rule SMC canonical form applied first; user-supplied equations then applied left-to-right. |
