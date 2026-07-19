@@ -36,18 +36,18 @@
 
 | Section | DONE | PARTIAL | DEFERRED | N/A | IN APPLIED | Total |
 |---|---|---|---|---|---|---|
-| §1.1 (co)weighting primitives | 1 | 0 | 0 | 0 | 0 | 1 |
-| §2 LM as enriched category | 5 | 0 | 0 | 1 | 3 | 9 |
+| §1.1 (co)weighting primitives | 2 | 0 | 0 | 0 | 0 | 2 |
+| §2 LM as enriched category | 5 | 0 | 0 | 2 | 3 | 10 |
 | §2.1 scatteredness predicate | 1 | 0 | 0 | 0 | 0 | 1 |
-| §3 Magnitude via Tsallis | 7 | 0 | 0 | 1 | 0 | 8 |
+| §3 Magnitude via Tsallis | 8 | 0 | 0 | 3 | 0 | 11 |
 | §3.5 Möbius / chain-sum | 2 | 0 | 0 | 0 | 0 | 2 |
 | §3.14 Magnitude homology | 1 | 0 | 0 | 0 | 0 | 1 |
 | §4 Bounds + asymptotics | 3 | 0 | 0 | 2 | 0 | 5 |
-| **TOTAL** | **20** | **0** | **0** | **4** | **3** | **27** |
+| **TOTAL** | **22** | **0** | **0** | **7** | **3** | **32** |
 
 **Headline numbers:**
-- **74% DONE / 0% PARTIAL / 0% DEFERRED / 15% N/A / 11% IN APPLIED**
-- Of the 27 audited items, 3 are already in `catgraph-applied` (enrichment substrate), 4 are N/A (3 motivational + the §3 acyclicity standing hypothesis, whose runtime enforcement is audited at §2.17), leaving **20 implementable items** of which **20 are DONE, 0 PARTIAL, 0 DEFERRED**.
+- **69% DONE / 0% PARTIAL / 0% DEFERRED / 22% N/A / 9% IN APPLIED**
+- Of the 32 audited items, 3 are already in `catgraph-applied` (enrichment substrate), 7 are N/A (3 motivational; the §3 acyclicity standing hypothesis, whose runtime enforcement is audited at §2.17; Prop 2.9, which materializes as the BYO-LM pmf input contract; and Cor 3.8/3.9, proof-layer steps whose consequence the Prop 3.10 acceptance gate verifies exactly), leaving **22 implementable items** of which **22 are DONE, 0 PARTIAL, 0 DEFERRED**.
 - Of implementable items: **100% DONE / 0% PARTIAL / 0% DEFERRED**
 - No paper-anchored audit item remains deferred: the §3 Tsallis-side optimization stash (#37) is a performance-backlog item, out of the paper-item audit scope (only §2/§3 Defs/Props/Eqs that materialize as types or constitute the acceptance gate are tracked — see the scope note above), not a tracked deferral. The magnitude-homology / chain-complex / Storjohann SNF / Euler-char-identity stack closes the §3.14 deferral. The design-doc §3.6 surface row `mobius_function_via_chains_exact<Q: Ring>` was struck from that stack and folded into the Leinster 2008 Cor 1.5 integer-exact Möbius surface (documented below) — the paper-faithful destination requires anchoring a NEW paper (Leinster 2008 finite-category Möbius) outside the crate's BV/LS/Leinster-2013 anchor surface. Both now ship in the migrated tree.
 
@@ -60,6 +60,7 @@
 | Item | Status | Location | Notes |
 |---|---|---|---|
 | §1.1 Def 1.1.1 + Lemma 1.1.2 + Lemma 1.1.4: weighting / coweighting | ✅ | `magnitude::weighting`, `magnitude::coweighting` | v0.2.0. Both solve `ζ · w = u_I` (resp. `v · ζ = u_J^T`) by Gaussian-Jordan elimination on the augmented system. By Lemma 1.1.2, `Σⱼ w(j) = Σᵢ v(i) = magnitude`. By Lemma 1.1.4, on invertible ζ, `w(j) = Σᵢ μ(j, i)` (row-sum of `μ = ζ⁻¹`). Verified in `tests/weighting_coweighting.rs` (6/6 tests including Lemma 1.1.2 + Lemma 1.1.4 numerical residuals). Bound: `Q: Ring + Div + From<f64>` matches `mobius_function`. |
+| Leinster 2013 Def 1.1.3: a matrix ζ over a rig `k` *has magnitude* iff it admits a weighting and a coweighting; magnitude `:= Σⱼ w(j) = Σᵢ v(i)` | ✅ | `magnitude::{magnitude, weighting, coweighting}` | The crate's `magnitude` computes the Möbius-sum form (Eq 7), which agrees with Def 1.1.3's `Σ w = Σ v` on invertible ζ by Lemma 1.1.2/1.1.4 — the agreement is what `tests/weighting_coweighting.rs` asserts numerically. The weaker has-magnitude-without-Möbius-inversion case (weighting exists, ζ singular) is not separately surfaced: `mobius_function` returns `Err` on singular ζ, and `weighting`/`coweighting` are the direct route there. |
 
 ### §2 Language models as enriched categories
 
@@ -74,6 +75,7 @@
 | §2.10–2.17 Prefix-extension semantics | ✅ | `lm_category::LmCategory` | Materialized BYO-LM transition table. Forward BFS multiplies edge probabilities along directed paths; `d(x, y) = -ln π(y\|x)` recorded per Eq 6. |
 | Identity axiom `d(x, x) = 0` | ✅ | `LmCategory::magnitude` (internal) | Enforced before Möbius inversion. `LawvereMetricSpace::hom` diagonal default also returns `Tropical::one()` at `a == b`. |
 | §2.17 Acyclicity hypothesis | ✅ | `LmCategory::add_transition` (v0.1.1) | v0.1.1 rejects non-trivial self-loops (`from == to && prob > 0.0`) at insert time. Cycle-via-path forbidden by BV 2025 §3 acyclicity hypothesis but not detected ahead of `magnitude(t)` (BFS cap surfaces it). |
+| Prop 2.9 (p.8): every autoregressive LM determines a probability mass function `π(−\|x)` on the terminating states `T(x)` | ➖ | `LmCategory` input contract + `tests/bv_2025_acceptance.rs` fixtures | Justification result (why `π` deserves to be called a probability, incl. `⊥`/`†` and the cutoff — the paper flags it as novel vs BTV22/GV24). No computational content to implement: in the BYO-LM crate the pmf property is the *input contract* — `add_transition` documents that row normalization is NOT validated at insert; the acceptance fixtures assert `p_x` is a true pmf per test. |
 
 ### §2.1 Scatteredness (anchored at Leinster 2013 Def 2.1.2; convergence precondition for chain-sum Möbius)
 
@@ -93,6 +95,9 @@
 | §3.5 Möbius inversion `ζ·μ = I` | ✅ | `magnitude::mobius_function::<Q>(space)` | Gaussian elimination on `[ζ \| I]` augmented matrix. `Err(CatgraphError::Composition)` on singular zeta. v0.1.0 limit ~1000 states (O(n³)). |
 | §3.5 Chain-sum Möbius (Leinster 2013 Prop 2.1.3) | ✅ | `mobius_chains::mobius_function_via_chains` | v0.2.0. Implemented as the von-Neumann series `μ = Σ (−1)ᵏ Mᵏ` with `M = ζ − I` (algebraically identical to Prop 2.1.3's chain-sum-of-ζ-products by Mᵏ[a][b] = chain-sum at length k). O(K · n³) matrix-power accumulation with adaptive K = ⌈log(τ) / log(r)⌉, τ = 1e-13, capped at K_MAX = 200. Bound `Q: Ring + From<f64>` (no `Div` needed). Acceptance: chain-sum agrees with v0.1.x `mobius_function` to 1e-9 on hand-built 4-state + proptest n=2-5. Returns `Err` on non-scattered or near-boundary (r ≥ 0.94) input — caller falls back to `mobius_function`. |
 | §3.6 Numerical scoping `TSALLIS_SHANNON_EPS = 1e-6` | ✅ | `lib.rs` | Public constant; threshold for special-case branch and lower bound on Rem 3.11 finite-difference step. |
+| Prop 3.6 (p.14): `ζ_t` is invertible for all `t > 0`; closed form Eq (8) `ζ_t⁻¹(x,y) = Σ_k Σ_{nondeg. paths} (−1)^k Π π^t` via the formal expansion Eq (9) `Σ_k (−1)^k (ζ_t − δ)^k` | ✅ | `magnitude::mobius_function` + `mobius_chains::mobius_function_via_chains` | The chain-sum implementation *is* Eq (9): the von-Neumann series `μ = Σ (−1)^k M^k`, `M = ζ − I`, with `M^k` counting nondegenerate paths (see the §3.5 chain-sum row, where the same surface carries the Leinster 2013 Prop 2.1.3 anchor). Invertibility: `mobius_function` (Gaussian elimination) errors on singular ζ — unreachable for `t > 0` on the acyclic prefix poset per this Prop. |
+| Cor 3.8 (p.15): factorization `ζ_t⁻¹(x,y) = π(y\|x)^t · ζ_L⁻¹(x,y)` | ➖ | — | Proof-layer simplification (via Philip Hall / Leinster 2008 Cor 1.5). The crate computes `ζ_t⁻¹` directly (dense + chain-sum) and separately ships the integer poset Möbius `ζ_L⁻¹` (the Leinster 2008 Cor 1.5 surface below); the factorization itself is not a runtime surface. Its consequence is covered exactly by the Prop 3.10 acceptance gate (`0e0` residual). |
+| Cor 3.9 (p.16): explicit `ζ_t⁻¹` — `−π(y\|x)^t` on one-step extensions `y ∈ L_x^{(1)}`, `1` on the diagonal, `0` otherwise | ➖ | — | Proof-layer step feeding the Prop 3.10 proof. Not asserted entry-wise in tests; verified indirectly and exactly through Prop 3.10 (`0e0` residual at `t ∈ {0.5, 1.5, 2.0, 5.0}` — the identity's consequence, `Mag = (t−1)ΣH_t + #T(⊥)`, holds to machine exactness). |
 
 ### §3.14 Magnitude homology Euler-characteristic identity
 
