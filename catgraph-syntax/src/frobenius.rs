@@ -18,8 +18,9 @@
 //!
 //! - **Def 2.5** — a special commutative Frobenius monoid `(X, μ, η, δ, ε)` and
 //!   its *nine* defining equations (see [`scfm_equations`]). The Hadamard SCFM
-//!   on `R^dim` (Ex 2.16, realized by [`MatKron`](catgraph_applied::mat_kron))
-//!   satisfies them — the S4 milestone law.
+//!   on `R^dim` (an extension of Ex 2.16, realized by
+//!   [`MatKron`](catgraph_applied::mat_kron)) satisfies them — the S4 milestone
+//!   law.
 //! - **Def 2.12** — a hypergraph category: a symmetric monoidal category in
 //!   which every object carries a coherent SCFM, and morphisms respect it.
 //! - **Prop 3.8** — `Cospan` is the theory of SCFMs: an SCFM in a symmetric
@@ -31,8 +32,12 @@
 //!   colour palette is the monochromatic `Λ = {•}` (disclaimer 2), so the free
 //!   hypergraph category is `Cospan` (one spider family), and a wire `•` maps to
 //!   the object `R^dim`.
-//! - **Ex 2.16** — [`MatKron(R)`](catgraph_applied::mat_kron), the Hadamard-SCFM
-//!   Kronecker hypergraph category, the semantic target of [`to_mat_kron`].
+//! - **Ex 2.16 (extended)** — the paper's example says FdVect-with-chosen-basis
+//!   is a hypergraph category \[Kis15\]; the crate extends it from a field to an
+//!   arbitrary rig `R` as [`MatKron(R)`](catgraph_applied::mat_kron), the
+//!   Hadamard-SCFM Kronecker hypergraph category and semantic target of
+//!   [`to_mat_kron`]. The rig-generality is a crate extension, not Ex 2.16's
+//!   stated scope.
 //!
 //! # ⚠ Nine equations, not ten
 //!
@@ -245,8 +250,10 @@ fn expand<G: PropSignature>(n: usize) -> PropExpr<FrobeniusOr<G>> {
 ///
 /// Spiders **fuse**: for a *connecting wire count* `k ≥ 1`, `spider(m, k) ;
 /// spider(k, n)` and `spider(m, n)` denote the same morphism (semantically
-/// checkable via [`to_mat_kron`]) — the defining property of the SCFM spider
-/// calculus (F&S 2019 §2.2). The condition `k ≥ 1` is load-bearing: at `k = 0`
+/// checkable via [`to_mat_kron`]) — the spider-fusion property (F&S 2018
+/// Def 6.54 / Thm 6.55; the "spider" vocabulary is Seven Sketches' — F&S 2019
+/// states the underlying SCFM in §2.2 without it). The condition `k ≥ 1` is
+/// load-bearing: at `k = 0`
 /// the composite is `spider(m, 0) ; spider(0, n) = (… ; ε) ; (η ; …)`, whose
 /// `ε ; η` scalar bridge collapses the connection (its `MatKron` image is the
 /// all-ones outer product, not the identity), so it is **not** `spider(m, n)`.
@@ -442,7 +449,8 @@ fn checked_cells(dim: usize, src: usize, tgt: usize) -> Result<(usize, usize), S
 
 /// Map a Frobenius term to its image in [`MatKron(R)`](catgraph_applied::mat_kron),
 /// the Hadamard-SCFM Kronecker hypergraph category on `R^dim` — the **sound**
-/// semantic checker for the SCFM laws (F&S 2019 Prop 3.8 / Ex 2.16).
+/// semantic checker for the SCFM laws (F&S 2019 Prop 3.8; the rig-general
+/// target extends Ex 2.16's FdVect-with-basis).
 ///
 /// # Mapping (a wire `•` ↦ the object `R^dim`, so a `k`-wire interface ↦ `dim^k`)
 ///

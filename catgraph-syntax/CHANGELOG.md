@@ -7,6 +7,24 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Changed
+
+- **Paper-audit citation reconciliation (Phase 6)** — verified every FS18/FS19
+  anchor in `docs/ANCHORS.md`, `src/**`, README, and examples against the
+  cached papers. Two fixes: (1) the "spider" vocabulary was mis-attributed to
+  F&S 2019 §2.2 — the word never appears in that paper; the name + fusion
+  theorem are Seven Sketches Def 6.54 / Thm 6.55 (§6.3.1), while F&S 2019
+  §2.2/Def 2.5 keeps the SCFM-axiom anchor and Ex 2.8 the apex-1 cospan model
+  (`docs/ANCHORS.md`, `frobenius.rs::spider`); (2) `MatKron(R)` was presented
+  as F&S 2019 Ex 2.16's content — the example states only that
+  FdVect-with-chosen-basis is a hypergraph category \[Kis15\]; the arbitrary-rig
+  Kronecker target is now marked an *extension of* Ex 2.16 (`docs/ANCHORS.md`,
+  `frobenius.rs`; the released [0.3.0] "(Ex 2.16)" wording below is historical).
+  Re-verified as correct: the nine-equation count (FS19 Ex 2.8 + FS18 Def
+  6.52's own nine), basis-ROW/Rem 5.49, Prop 3.8 "special", Thm 3.14, Defs
+  5.25/5.30/5.33/5.45/5.50, Thm 5.53/5.60, and `frobenius.rs`'s left-only
+  unitality/counitality note (PDF p.10 figure check).
+
 ### Added
 
 - **`depth` module — recursion guard for the term interpreters**
