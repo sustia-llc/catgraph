@@ -42,6 +42,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   enforcement stays audited at the §2.17 row. §3 recount `[8,0,0,0,0] →
   [7,0,0,1,0]`, TOTAL `[21,0,0,3,3] → [20,0,0,4,3]` (20 implementable, 100%
   DONE).
+- **`docs/BV25-AUDIT.md` completeness rows added (owner decision, audit
+  Phase 7)** — five previously untracked numbered items now have audited
+  rows: Leinster 2013 **Def 1.1.3** (magnitude via weighting/coweighting, ✅
+  `magnitude::{magnitude, weighting, coweighting}`); BV25 **Prop 2.9** (LM
+  determines a pmf — ➖, materializes as the BYO-LM input contract asserted
+  per-fixture); **Prop 3.6** (ζ_t invertibility + the Eq (9) expansion — ✅,
+  the chain-sum von-Neumann series is exactly Eq (9)); **Cor 3.8/3.9**
+  (proof-layer factorization/closed form — ➖, consequence verified exactly by
+  the Prop 3.10 acceptance gate). Summary `[20,0,0,4,3] of 27 →
+  [22,0,0,7,3] of 32` (22 implementable, 100% DONE); count-guard green.
 
 ## [workspace-v0.2.0] - 2026-07-02
 
