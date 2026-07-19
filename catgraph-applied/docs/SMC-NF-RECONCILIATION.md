@@ -32,6 +32,16 @@
 >   `[23]` = JS-Braided, so his attributions `[22, Thm. 1.2]` (Thm 3.1) and
 >   `[22, Thm. 2.3]` (Thm 3.12) independently corroborate the JS-I theorem
 >   numbers cited below.
+> - **(‡ MMR86 …)** = the flagged statement is corroborated against the cached
+>   Joyal-Street **precursor report** of JS-Braided: *Braided monoidal
+>   categories*, Macquarie Math. Reports 860081 (Nov 1986), the author-hosted
+>   scan Street's own publication list designates as the earlier version of
+>   the 1993 Adv. Math. paper (`js-braided-860081.pdf`/`.txt`, cached
+>   2026-07-19). Same caveat as (‡ Sel): content-level corroboration only —
+>   the report's numbering (axioms B1–B7 / S, relations BG1–BG2,
+>   Proposition 1, Theorem 4) and pagination differ from the 1993 revision,
+>   and some 1993 content (e.g. §6 "balanced") does not exist in the report,
+>   so 1993 locators stay (†).
 
 ## §1 What the normal form is
 
@@ -82,7 +92,9 @@ wide-braid decomposition uses the forward-`;` `(B2)` splitting, i.e.
 
 - Anchors: JS-II §1.2 α-anchor (Remark 1.2.1 p. 6); JS-Braided p. 36 "box
   slides through crossing" (†; ‡ Sel §3.3 p. 14 naturality); JS-Braided Def 2.1
-  axiom (B2) p. 33 (†; ‡ Sel §3.3 pp. 14–15).
+  axiom (B2) p. 33 (†; ‡ Sel §3.3 pp. 14–15; ‡ MMR86 p. 2 — B2 diagram
+  decomposes `c_{A⊗B,C}` exactly as here, with B1 noted as its mirror via
+  `c⁻¹`).
 
 ### §2.2 Wide-braid handling (expand only, never collapse)
 
@@ -104,8 +116,9 @@ compared, so no wide braid survives to the fixpoint check.
 
 - Anchors: JS-Braided Prop 2.1 / axiom (B2) p. 33–34,
   `c_{U⊗V,W} = (c_{U,W} ⊗ 1_V) ∘ (1_U ⊗ c_{V,W})` (†; ‡ Sel §3.3 pp. 14–15 +
-  Ex 3.5); JS-I Ch 2 Thm 2.3 p. 81 via the `S_n` presentation (†; ‡ Sel
-  Thm 3.12 p. 18, attributed `[22, Thm. 2.3]` = JS-I Thm 2.3).
+  Ex 3.5; ‡ MMR86 p. 2 axiom B2); JS-I Ch 2 Thm 2.3 p. 81 via the `S_n`
+  presentation (†; ‡ Sel Thm 3.12 p. 18, attributed `[22, Thm. 2.3]` =
+  JS-I Thm 2.3).
 
 ### §2.3 Canonical order (source order within a layer, earliest layer across)
 
@@ -206,12 +219,12 @@ cached Selinger restatement (see the header caveat).
 | `⊗` bifunctoriality / interchange `(f⊗g);(h⊗k)=(f;h)⊗(g;k)` | JS-I Ch 1 §4 Thm 1.2 p. 71 (†); ‡ Sel §3.1 pp. 9–10 + Thm 3.1 p. 11 (attributed `[22, Thm. 1.2]` = JS-I Thm 1.2) | `pad_and_zip` (§4 p. 69–70), Steps 3(0)/4(c); `ch1_thm_1_2_s4_interchange`, `smc_bifunctoriality_interchange`, `interchange`, `c2_scheduling_witness_converges`, `target_zero_sink_sifts_up` |
 | `;` left/right unitor; invertible diagram `v(Γ)=id` | JS-I Ch 1 §3 p. 65 + Prop 1.1 p. 66 (†) | Step 2 (`try_column_merge` identity cases); `ch1_invertible_left_right_unitor`, `compose_unitors` |
 | `⊗` strict unit `id_0` (bracket-clique skeleton p. 58) | JS-I Ch 1 §1 p. 57 (†); ‡ Sel Table 2 p. 10 (unit = zero wires) | Step 5; `ch1_s1_strict_unit`, `tensor_unitors` |
-| Symmetry axiom (S) `c_{B,A}∘c_{A,B}=1_{A⊗B}` | JS-I Ch 2 §1 axiom (S) p. 73 (†); JS-Braided (S) p. 21 (†); ‡ Sel §3.5 p. 17 (self-inverse def.) | Step 0, Step 2 (`σ;σ → id`); `ch2_s1_axiom_s_braid_involution`, `aligned_braid_band_cancels_through_generators` |
+| Symmetry axiom (S) `c_{B,A}∘c_{A,B}=1_{A⊗B}` | JS-I Ch 2 §1 axiom (S) p. 73 (†); JS-Braided (S) p. 21 (†); ‡ Sel §3.5 p. 17 (self-inverse def.); ‡ MMR86 pp. i, 2 (condition S, verbatim `c_BA c_AB = 1_{A⊗B}`) | Step 0, Step 2 (`σ;σ → id`); `ch2_s1_axiom_s_braid_involution`, `aligned_braid_band_cancels_through_generators` |
 | Braid naturality `σ_{1,1};(g⊗f)=(f⊗g);σ_{1,1}` (anchored form, Cor 2.3 p. 80) | JS-I Ch 2 Thm 2.2 p. 79 (†); ‡ Sel §3.3 p. 14 (braiding is a natural family) | Step 3(a); `ch2_thm_2_2_braid_naturality`, `test_braid_naturality_right` |
 | Free symmetric on `𝒟`; `σ_{2,1}=(id₁⊗σ_{1,1});(σ_{1,1}⊗id₁)` | JS-I Ch 2 Thm 2.3 p. 81 (†); ‡ Sel Thm 3.12 p. 18 (attributed `[22, Thm. 2.3]` = JS-I Thm 2.3) | Step 1; `ch2_thm_2_3_symmetry_on_larger_tensors`, `wide_braid_*` |
-| Hexagon (B2) `c_{U⊗V,W}=(σ_{U,W}⊗1_V)∘(1_U⊗σ_{V,W})` | JS-Braided Def 2.1 (B2) p. 33–34 (†); ‡ Sel §3.3 pp. 14–15 (hexagon axioms + Ex 3.5) | Step 1 (`decompose_braid`); `test_hexagon_sigma_on_tensor` |
-| Yang-Baxter / Artin 3-strand `s_i s_{i+1} s_i = s_{i+1} s_i s_{i+1}` (Reidemeister III) | JS-Braided Example 2.1 (A1) p. 35 (†); ‡ Sel Ex 3.6 p. 16 (Yang-Baxter from hexagon + naturality) | Step 3(b); `test_yang_baxter`, `test_braid_interaction_with_identity` |
-| Reduced-word canonicality of `S_n`; braid run = underlying permutation | JS-Braided Cor 2.6 p. 44 (†); JS-I Ch 2 §1 + Ch 3 p. 84 (†); ‡ Sel Thm 3.12 p. 18 (SMC diagrams equal up to isomorphism — only the permutation matters) | Step 3(b) `canonicalize_braid_runs` |
+| Hexagon (B2) `c_{U⊗V,W}=(σ_{U,W}⊗1_V)∘(1_U⊗σ_{V,W})` | JS-Braided Def 2.1 (B2) p. 33–34 (†); ‡ Sel §3.3 pp. 14–15 (hexagon axioms + Ex 3.5); ‡ MMR86 p. 2 (axiom B2 = this decomposition; B1 = mirror via `c⁻¹`) | Step 1 (`decompose_braid`); `test_hexagon_sigma_on_tensor` |
+| Yang-Baxter / Artin 3-strand `s_i s_{i+1} s_i = s_{i+1} s_i s_{i+1}` (Reidemeister III) | JS-Braided Example 2.1 (A1) p. 35 (†); ‡ Sel Ex 3.6 p. 16 (Yang-Baxter from hexagon + naturality); ‡ MMR86 p. 5 (relation BG1 in the `𝔹_n` presentation, BG2 = distant commutation) | Step 3(b); `test_yang_baxter`, `test_braid_interaction_with_identity` |
+| Reduced-word canonicality of `S_n`; braid run = underlying permutation | JS-Braided Cor 2.6 p. 44 (†); JS-I Ch 2 §1 + Ch 3 p. 84 (†); ‡ Sel Thm 3.12 p. 18 (SMC diagrams equal up to isomorphism — only the permutation matters); ‡ MMR86 Thm 4 p. 17 (`𝔹` free braided on one object — the braided precursor of the freeness family) | Step 3(b) `canonicalize_braid_runs` |
 | Symmetric categories are balanced (transposition squares collapse) | JS-Braided Example 6.1 p. 66 (†); ‡ Sel Rmk 3.10 p. 17 (symmetric = balanced with θ = id) | Step 2 + Step 4; `test_symmetric_collapse_3_strands` |
 | Braid slides through box | JS-Braided p. 36 (†); ‡ Sel §3.3 p. 14 (naturality); JS-II p. 5 canonical iso `α↦⟨α⟩` | Step 3(a) `try_naturality_swap`; `braid_layer_blocks_sift` |
 | Braids-to-input direction | JS-II §1.2 α-anchor (Remark 1.2.1 p. 6) | §2.1; Step 3(a) |
