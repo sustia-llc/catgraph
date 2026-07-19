@@ -15,6 +15,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **Selinger 2011 citation now carries its arXiv id** ([#117](https://github.com/sustia-llc/catgraph/issues/117)
+  step 1): `docs/SMC-NF-RECONCILIATION.md` cites the survey as
+  arXiv:0908.3347 so the private papers-cache `fetch-papers.sh` (arXiv-id
+  auto-discovery) can fetch it, making the ~12 Selinger-anchored SMC-NF
+  lines cache-verifiable.
+
 - **Thm 5.60 presentation completed to E_18** ([#114](https://github.com/sustia-llc/catgraph/issues/114)):
   `matr_presentation<R>` now builds all **18** equation schemas of F&S Thm 5.60
   (p.170) / BE15 Theorem 2 relations (1)–(18), up from 16. The two missing rig-

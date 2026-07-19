@@ -11,7 +11,9 @@
 > the references resolve without renumbering.
 >
 > **Anchor caveat:** the Joyal-Street (JS-I 1991, JS-II, JS-Braided 1993) and
-> Selinger (2011) anchors below are carried over verbatim from the code and
+> Selinger (2011, *A survey of graphical languages for monoidal categories*,
+> [arXiv:0908.3347](https://arxiv.org/abs/0908.3347)) anchors below are carried
+> over verbatim from the code and
 > test citations. None of these four papers is in the local papers cache, so
 > the page/theorem numbers are **cache-unverifiable** pending issue #117
 > (Selinger fetch) and the Joyal-Street fetches. Every such anchor is marked
