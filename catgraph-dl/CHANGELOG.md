@@ -13,6 +13,31 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Paper-audit citation reconciliation (Phase 5)** — verified every CDL / FE /
+  cocycles anchor in `src/**`, `tests/**`, `examples/**`, docs, and README
+  against the cached papers. Fixes: phantom **"Appendix K"** at
+  `architectures/mod.rs:3` → Appendix J (appendices run A–J only); the
+  THEOREM_MAP functor-laws row **Def 1.5 → Def 1.4** (1.4 = Functor, 1.5 =
+  natural transformation; the naturality row drops its stray 1.4);
+  `container.rs` + AUDIT doc cited a fabricated 'Discussion §"Containers and
+  Type-Safe Design"' section — the passage is unnamed prose in **§4 "New
+  Horizons"**; the unroller catalogue now cites **Examples J.1–J.5** (J.1
+  folding and J.5 Moore were missing) with uniqueness split Remark 2.13
+  (algebra) / Remark H.6 (coalgebra); Moore/Mealy `run` docstrings drop the
+  residual "Remark 2.13 dual" for **Remark H.6** and Moore's `run` cites
+  **Example J.5** (iterated; the cell stays I.5) matching the audit table; the
+  AUDIT doc's blanket "all citations are accurate" claim is scoped to the
+  `src/**` numbered anchors its tables actually walk. Adversarially re-verified
+  as correct: Thm G.10, Prop B.18 + Ex B.19/B.20, Rem H.6 quote, Def E.2
+  Eq (7)/(8) + Ex E.4/G.3, Def B.3, Defs 2.3/2.5/2.8/B.2, Ex 2.6/2.12,
+  Rem 2.13, the I.1–I.5/J.1–J.5 catalogues, the FE §6 ripple-carry quote
+  (verbatim), the CDL §3.2 Dudzik cite, [DvGPV24] = arXiv 2306.15632 (by exact
+  title/author match — FE's bibliography prints no arXiv id), the H.1/H.3
+  convention caveat, and all #98/#103 surfaces. 2104.13478 / 2403.13001
+  confirmed bibliography-only.
+
 ### Added
 
 - **`examples/` directory** ([#34](https://github.com/sustia-llc/catgraph/issues/34)):

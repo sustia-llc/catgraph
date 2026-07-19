@@ -1,7 +1,8 @@
 //! Containers — the shape/position presentation of a polynomial endofunctor.
 //!
 //! Abbott–Altenkirch–Ghani 2003, *Categories of Containers*, reached via the
-//! CDL Discussion §"Containers and Type-Safe Design" (issue #41). A container
+//! polynomial-functors passage of CDL §4 "New Horizons" (unnamed prose, not a
+//! titled subsection; issue #41). A container
 //! `S ◁ P` has a set of *shapes* `S` and, for each shape `s`, a set of
 //! *positions* `P(s)`; its extension is the polynomial functor
 //!

@@ -21,7 +21,8 @@
 //! length-independent, and we are hopeful some 'higher-order' version of our
 //! framework could accommodate such cases."
 //!
-//! As of 2026-05-06, **no Hopf-fibration / carry-operation preprint exists**.
+//! As of 2026-05-06 (date of the last literature check), **no
+//! Hopf-fibration / carry-operation preprint exists**.
 //! The cited `[DvGPV24]` reference in FE is the existing
 //! Dudzik-von Glehn-Pascanu-Veličković, *Asynchronous algorithmic alignment
 //! with cocycles* (`LoG` 2024), already cited in CDL ICML 2024 §3.2 — not a

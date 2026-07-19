@@ -1,6 +1,6 @@
 //! Five neural-network architectures as parametric (co)algebras.
 //!
-//! CDL Appendix I + Appendix K — the central catalogue of CDL: five
+//! CDL Appendix I + Appendix J — the central catalogue of CDL: five
 //! standard NN architectures arise as `Para(F)` (co)algebras for specific
 //! endofunctors.
 //!
@@ -16,8 +16,9 @@
 //!
 //! Beyond the typed wrappers, each type has an **unrolling**
 //! method that turns a `cell` into a function over the corresponding
-//! inductive/coinductive carrier (CDL Remark 2.13 / Example J.2 / J.3 /
-//! J.4):
+//! inductive/coinductive carrier (CDL Examples J.1–J.5; uniqueness by
+//! Remark 2.13 for the algebra unrollers and Remark H.6 for the
+//! coalgebra unrollers):
 //!
 //! - [`FoldingRnn::unroll`] — right-fold over `Vec<A>`, the initial
 //!   algebra of `1 + A × −`.

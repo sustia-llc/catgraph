@@ -20,8 +20,8 @@ PR (this is the #70 discipline). Style: reference `<file>::<test_fn>`.
 
 | Witness | Anchor | Law |
 |---|---|---|
-| `functor_laws::list_endo_functor_laws`, `::tree_endo_functor_laws`, `::group_action_endo_functor_laws` | CDL Def 1.5 | Functor identity + composition |
-| `natural_pointed_laws::*_natural_transformation*` | CDL Def 1.4/1.5 | Naturality square `transform ∘ F(f) == G(f) ∘ transform` |
+| `functor_laws::list_endo_functor_laws`, `::tree_endo_functor_laws`, `::group_action_endo_functor_laws` | CDL Def 1.4 | Functor identity + composition |
+| `natural_pointed_laws::*_natural_transformation*` | CDL Def 1.5 | Naturality square `transform ∘ F(f) == G(f) ∘ transform` |
 | `natural_pointed_laws::*_pointed_sigma_naturality` | CDL Def B.3 | σ-naturality `fmap(pure(x), f) == pure(f(x))` |
 | `natural_pointed_laws::*_iso_*` (via `iso::test_support`) | CDL Def 1.5 | `NaturalIso` round-trip + naturality |
 | `common::assert_functor_laws` / `::assert_natural_transformation_naturality` / `::assert_pointed_naturality` | (helpers) | witness-generic drivers for the above |
