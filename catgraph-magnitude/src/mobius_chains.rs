@@ -375,7 +375,7 @@ where
 /// Integer-exact Möbius inversion via Leinster 2008 Cor 1.5.
 ///
 /// Paper anchor: Leinster, *The Euler characteristic of a category*
-/// (arXiv:0610260v1, 2008): §1.4 Cor 1.5 (page 6) for the integer Möbius
+/// (arXiv:math/0610260v1, 2008): Cor 1.5 (page 6) for the integer Möbius
 /// formula. The nilpotency/termination bound is implicit in Cor 1.5 +
 /// circuit-freeness: the nondegenerate-path count vanishes for `n ≥ |𝔸|`
 /// on circuit-free 𝔸 (no separate proposition needed).

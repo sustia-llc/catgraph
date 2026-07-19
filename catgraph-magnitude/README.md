@@ -58,7 +58,7 @@ The workspace `v0.1.0` (2026-07-01) semantic + determinism + coalition layer ove
 - **`yoneda`** (#19) — `LmCategory::yoneda(name)` gives the representable copresheaf `L(x, −)` as a `Copresheaf` (meaning-as-distribution over continuations, `π = exp(−d)`). `semantic_hom` / `semantic_distance` are the **asymmetric** BTV 2021 internal hom `inf_c min{1, b(c)/a(c)}` and its `−ln` distance (`semantic_distance_sym` for a non-canonical symmetric variant). BTV 2021 Lemma 2 Eq 11 / §5.
 - **`determinism`** (#20) — `LmCategory::deterministic_transition_rank()` = `rank MH₁(ℓ = 0)` = the number of covering `π = 1` (deterministic) transitions: a structural memorisation count, **not** a coherence/hallucination signal. BV 2025 / LS 2017.
 - **`semantic`** (#21) — comparison / clustering over the Yoneda embedding. `LmCategory::yoneda_all()` gives every meaning from one `enriched_space()` pass; `k_nearest_from` / `k_nearest_to` rank the nearest meanings to a query in **both** directions of the asymmetric BTV distance (they differ — BTV §5); `cluster_semantic_sym` is a symmetric single-linkage **convenience** over the non-canonical `semantic_distance_sym` (mutually-unreachable meanings never merge). BTV 2021 Lemma 2 Eq 11 / §5.
-- **`coalition`** (#22) — enriched-coalition magnitude surface (gemini-spec §IV.5). A coalition is a **member-restricted, max-product-closed, perfectly-coupled-quotiented** cospan-weighted subgraph of an enriched category (agents = objects, couplings = `UnitInterval` homs); `coalition_magnitude(coalition, t)` is its diversity `Mag(tA|members)` via the BV 2025 §3.5 Eq 7 Möbius sum (`t = 1` canonical arm, `t = 2` collision proxy, `t → ∞` cardinality-like; Möbius sum is cyclic-safe — Thm 3.10's closed form is the acyclic special case). `Coalition::from_enriched` restricts to member homs, closes through member nodes only (couplings via non-members do not count), then skeletalizes members that are perfectly coupled both ways (distance 0) so a fully-coupled coalition reports 1 effective agent instead of a singular ζ — `effective_members()` / `member_classes()` expose the quotient. `coalition_magnitude_from_couplings` is the plain-data entry point (seed of #23 `coalition_value`). BV 2025 §3.5 Eq 7 + BTV 2021 `[0,1]` enrichment + Leinster 2008/2013 skeleton invariance.
+- **`coalition`** (#22) — enriched-coalition magnitude surface (gemini-spec §IV.5). A coalition is a **member-restricted, max-product-closed, perfectly-coupled-quotiented** cospan-weighted subgraph of an enriched category (agents = objects, couplings = `UnitInterval` homs); `coalition_magnitude(coalition, t)` is its diversity `Mag(tA|members)` via the BV 2025 §3.5 Eq 7 Möbius sum (`t = 1` canonical arm, `t = 2` collision proxy, `t → ∞` cardinality-like; Möbius sum is cyclic-safe — Prop 3.10's closed form is the acyclic special case). `Coalition::from_enriched` restricts to member homs, closes through member nodes only (couplings via non-members do not count), then skeletalizes members that are perfectly coupled both ways (distance 0) so a fully-coupled coalition reports 1 effective agent instead of a singular ζ — `effective_members()` / `member_classes()` expose the quotient. `coalition_magnitude_from_couplings` is the plain-data entry point (seed of #23 `coalition_value`). BV 2025 §3.5 Eq 7 + BTV 2021 `[0,1]` enrichment + Leinster 2008/2013 skeleton invariance.
 
 ## API surface
 
@@ -83,10 +83,10 @@ The workspace `v0.1.0` (2026-07-01) semantic + determinism + coalition layer ove
 | `mobius_function_via_chains<Q>(space)` | Leinster 2013 Prop 2.1.3 | Chain-sum via von-Neumann series (scattered-space precondition) |
 | `mobius_function_via_chains_exact<N, Q: ZAlgebra>(poset)` | Leinster 2008 Cor 1.5 | **Integer-exact finite-category Möbius** over `PosetCategory<N>`; `Q: ZAlgebra` bound from `catgraph-applied` |
 | `verify_mobius_recursion<N, Q: ZAlgebra>(poset, mobius)` | Leinster 2008 Def 1.1 | Bidirectional recursion-identity harness |
-| `chain_count_signed_graded<Q>(space, max_chain_length)` | Leinster 2013 Prop 2.1.3 + LS 2017 §2 grading | Per-grade signed chain-count diagnostic |
-| `is_mobius_invertible_at(space, t)` | Leinster 2013 Prop 2.4.17 | Ergonomic Möbius-existence threshold check |
-| `chain_complex::{Chain, enumerate_chains, ChainIndex, boundary_matrix<Q>}` | LS 2017 §2 | Magnitude-homology chain complex `(C_{k,ℓ}, ∂_k)` over Lawvere metric |
-| `chain_complex::magnitude_homology_rank<Q>(idx, k, ℓ)` | LS 2017 §2 + BV 2025 Prop 3.14 | `rank(H_{k,ℓ}(M))` via SNF over Z/p (single-prime + 2-prime cross-check) |
+| `chain_count_signed_graded<Q>(space, max_chain_length)` | Leinster 2013 Prop 2.1.3 + LS 2017 §3 grading | Per-grade signed chain-count diagnostic |
+| `is_mobius_invertible_at(space, t)` | Leinster 2013 Def 2.1.2 + Prop 2.1.3 | Ergonomic Möbius-existence threshold check |
+| `chain_complex::{Chain, enumerate_chains, ChainIndex, boundary_matrix<Q>}` | LS 2017 §3 | Magnitude-homology chain complex `(C_{k,ℓ}, ∂_k)` over Lawvere metric |
+| `chain_complex::magnitude_homology_rank<Q>(idx, k, ℓ)` | LS 2017 §3 + BV 2025 Prop 3.14 | `rank(H_{k,ℓ}(M))` via SNF over Z/p (single-prime + 2-prime cross-check) |
 | `chain_complex::euler_char_identity_at(space, t, max_degree)` | BV 2025 Prop 3.14 | Headline acceptance gate |
 | `snf::smith_normal_form` + `snf::{zmod, echelon, band}` + Phase-1 / Phase-2 helpers | Storjohann 2000 §7 | Custom SNF backend over `MatR<Q>` |
 | `snf::smith_normal_form_integer` | Newman 1972 §1.4 Thm II.9 | Multi-prime CRT lift for invariant-factor recovery |
@@ -140,7 +140,7 @@ cargo run --example coalition_magnitude   # §IV.5 coalition diversity Mag(tA|me
 The full magnitude stack — closed-form `Mag(tM)` on prefix-poset LMs (BV 2025
 Prop 3.10 + Rem 3.11), the (co)weighting + scatteredness + chain-sum Möbius
 primitives (Leinster 2013 §1.1 / Def 2.1.2 / Prop 2.1.3), the Prop 3.14
-magnitude-homology Euler-characteristic identity (LS 2017 §2 chain complex +
+magnitude-homology Euler-characteristic identity (LS 2017 §3 chain complex +
 custom Storjohann §7 SNF over `MatR<Q>`), and Leinster 2008 Cor 1.5 integer-exact
 Möbius (`mobius_function_via_chains_exact` over `PosetCategory<N>` + multi-prime
 CRT SNF lift) — was migrated intact onto the DeepCausality substrate in **reboot

@@ -5,7 +5,7 @@
 //! (Bradley–Terilla–Vlassopoulos 2021, arXiv:2106.07890), and a coalition is a
 //! **member-restricted, max-product-closed** cospan-weighted subgraph. Its
 //! diversity is the magnitude of the induced Lawvere metric space (BV 2025 §3.5
-//! Eq 7 / Thm 3.10, arXiv:2501.06662), read at several `t`:
+//! Eq 7 / Prop 3.10, arXiv:2501.06662), read at several `t`:
 //!
 //! - `t = 1`  — canonical/default arm: Shannon-diversity reading.
 //! - `t = 2`  — collision-probability proxy.

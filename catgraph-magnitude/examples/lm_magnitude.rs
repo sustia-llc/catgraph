@@ -15,7 +15,7 @@
 //!   - **Lower:** `#T(⊥) ≤ Mag(tM)` — the deterministic LM is the lower bound
 //!     (it attains equality in the `t → ∞` limit).
 //!   - **Upper:** `Mag(tM) ≤ #ob(M)` — all states distinct, uniform distribution
-//!     maximises entropy (Eq 4.3 notation).
+//!     maximises entropy (un-numbered intro bounds, p.4; derivable from Prop 3.10).
 //!   - **Monotone:** `Mag(tM)` is non-decreasing in `t` for `t ≥ 1`.
 //!   - **Limit:** `lim_{t→∞} Mag(tM) = #T(⊥)`.
 //!

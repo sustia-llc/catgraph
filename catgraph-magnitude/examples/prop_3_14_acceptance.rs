@@ -13,7 +13,8 @@
 //!
 //! ## Paper anchor
 //!
-//! Bradley & Vigneaux, *Magnitude of Language Models* (arXiv:2501.06662v2,
+//! Bradley & Vigneaux, *The Magnitude of Categories of Texts Enriched by
+//! Language Models* (arXiv:2501.06662v2,
 //! 2025), Prop 3.14 — magnitude-homology Euler-characteristic identity. The
 //! tight upper bound on the omitted-`k > max_degree` chain contribution is
 //!

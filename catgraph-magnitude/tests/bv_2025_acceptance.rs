@@ -2,11 +2,11 @@
 //!
 //! Two paper-anchored numerical tests on a hand-computed 3-state LM:
 //!
-//! 1. **Thm 3.10 closed form.** `Mag(tM) = (t − 1) · Σ_{x ∉ T(⊥)} H_t(p_x) +
+//! 1. **Prop 3.10 closed form.** `Mag(tM) = (t − 1) · Σ_{x ∉ T(⊥)} H_t(p_x) +
 //!    #(T(⊥))` matches the Möbius-sum value from
 //!    [`LmCategory::magnitude`] at `t ∈ {0.5, 1.5, 2.0, 5.0}` (avoiding
 //!    `t = 1` exactly because of the Shannon special case).
-//! 2. **Cor 3.14 Shannon recovery.** `d/dt Mag(tM)|_{t=1} = Σ_{x ∉ T(⊥)}
+//! 2. **Rem 3.11 / Eq (12) Shannon recovery.** `d/dt Mag(tM)|_{t=1} = Σ_{x ∉ T(⊥)}
 //!    H(p_x)` verified by central finite difference with `h = 1e-4`.
 //!
 //! ## Hand-fixture — `A = {a}`, `N = 1`
@@ -63,7 +63,7 @@ fn build_bv_lm() -> LmCategory {
     m
 }
 
-/// Closed-form RHS of Thm 3.10's Tsallis sum: `Σ_{x ∉ T(⊥)} H_t(p_x)`.
+/// Closed-form RHS of Prop 3.10's Tsallis sum: `Σ_{x ∉ T(⊥)} H_t(p_x)`.
 ///
 /// Per BV 2025 Eq (10) the inner sum is over the direct children of `x`
 /// inside the truncated category, equivalently the recorded transition
@@ -83,7 +83,7 @@ fn tsallis_sum(m: &LmCategory, t: f64) -> f64 {
         .sum()
 }
 
-/// Shannon-entropy variant of [`tsallis_sum`] — used by the Cor 3.14 test.
+/// Shannon-entropy variant of [`tsallis_sum`] — used by the Rem 3.11 / Eq (12) test.
 fn shannon_sum(m: &LmCategory) -> f64 {
     m.objects()
         .iter()
@@ -102,7 +102,7 @@ fn shannon_sum(m: &LmCategory) -> f64 {
 }
 
 #[test]
-fn bv_2025_thm_3_10_closed_form() {
+fn bv_2025_prop_3_10_closed_form() {
     let m = build_bv_lm();
     let mut max_residual: f64 = 0.0;
     for &t in &[0.5_f64, 1.5, 2.0, 5.0] {
@@ -112,15 +112,15 @@ fn bv_2025_thm_3_10_closed_form() {
         max_residual = max_residual.max(residual);
         assert!(
             residual < 1e-9,
-            "Thm 3.10 failed at t={t}: lhs={lhs}, rhs={rhs}, residual={residual}"
+            "Prop 3.10 failed at t={t}: lhs={lhs}, rhs={rhs}, residual={residual}"
         );
     }
     // Surface the worst-case residual in test output via panic-free path.
-    eprintln!("BV 2025 Thm 3.10: max |lhs − rhs| over 4 t-values = {max_residual:e}");
+    eprintln!("BV 2025 Prop 3.10: max |lhs − rhs| over 4 t-values = {max_residual:e}");
 }
 
 #[test]
-fn bv_2025_cor_3_14_shannon_recovery() {
+fn bv_2025_rem_3_11_shannon_recovery() {
     let m = build_bv_lm();
     // h = 1e-4 > TSALLIS_SHANNON_EPS = 1e-6 so both f(1±h) hit the
     // Tsallis branch.
@@ -132,7 +132,7 @@ fn bv_2025_cor_3_14_shannon_recovery() {
     let residual = (lhs - rhs).abs();
     assert!(
         residual < 1e-6,
-        "Cor 3.14 failed: lhs={lhs}, rhs={rhs}, residual={residual}"
+        "Rem 3.11 / Eq (12) failed: lhs={lhs}, rhs={rhs}, residual={residual}"
     );
-    eprintln!("BV 2025 Cor 3.14: |fd − shannon| = {residual:e}");
+    eprintln!("BV 2025 Rem 3.11 / Eq (12): |fd − shannon| = {residual:e}");
 }

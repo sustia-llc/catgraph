@@ -22,7 +22,7 @@
 //!   #(T(⊥))`. The two acceptance tests in `tests/bv_2025_acceptance.rs`
 //!   verify this against the Möbius-sum form computed by
 //!   [`magnitude`] function.
-//! - §3.14 Cor: `d/dt Mag(tM)|_{t=1} = Σ_{x ∉ T(⊥)} H(p_x)` (Shannon
+//! - Rem 3.11 / Eq (12): `d/dt Mag(tM)|_{t=1} = Σ_{x ∉ T(⊥)} H(p_x)` (Shannon
 //!   entropy). Verified by central finite difference with `h = 1e-4 >
 //!   TSALLIS_SHANNON_EPS`.
 
@@ -223,11 +223,11 @@ impl LmCategory {
     /// source node, multiplying probabilities along each path. **The
     /// transition table must be acyclic** for the resulting metric to
     /// satisfy BV 2025's tree-poset structure — otherwise the BFS may
-    /// loop and the magnitude will not match the closed form of Thm 3.10.
+    /// loop and the magnitude will not match the closed form of Prop 3.10.
     /// Acyclicity is the caller's responsibility; a debug-only assertion
     /// catches obvious self-loop cases. (Cyclic LMs are mathematically
     /// well-defined via the chain-sum Möbius formula but fall outside the
-    /// poset hypothesis of Thm 3.10 — see BV 2025 §3.7 Remark.)
+    /// poset hypothesis of Prop 3.10 — see BV 2025 §3.7 Remark.)
     ///
     /// # Errors
     ///
@@ -278,7 +278,7 @@ impl LmCategory {
     /// # Cyclic tables and the max-probability-path contract
     ///
     /// **Acyclicity is required only by [`magnitude`](Self::magnitude)** — BV
-    /// 2025's tree-poset hypothesis (Thm 3.10). `enriched_space` itself is
+    /// 2025's tree-poset hypothesis (Prop 3.10). `enriched_space` itself is
     /// well-defined on any [`add_transition`](Self::add_transition)-legal table,
     /// including cyclic (mutually-reachable) ones: `d(i, j)` is the
     /// max-probability path from `i` to `j`, computed by a strict-improvement
