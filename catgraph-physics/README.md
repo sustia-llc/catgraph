@@ -3,6 +3,8 @@
 Wolfram-physics extensions for [catgraph](../catgraph/): hypergraph DPO rewriting, multiway evolution tracking, gauge theory, and branchial spectral analysis.
 
 Part of the [catgraph workspace](https://github.com/sustia-llc/catgraph).
+Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
+[`docs/ANCHORS.md`](docs/ANCHORS.md).
 
 ## Modules
 

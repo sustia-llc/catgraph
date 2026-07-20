@@ -7,9 +7,11 @@
 //! - Fiedler vector (spectral bisection)
 //! - Spectral clustering (k-means on leading eigenvectors)
 //!
-//! The algebraic connectivity λ₂ is a proxy for computational
-//! reducibility/irreducibility in Gorard's framework: higher λ₂
-//! means stronger entanglement between parallel branches.
+//! The algebraic-connectivity (λ₂) reducibility/irreducibility proxy is a
+//! **catgraph extrapolation** over Gorard's branchial-graph substrate — the
+//! cited paper (arXiv:2301.04690) has no spectral/Laplacian content; see
+//! `docs/ANCHORS.md`. The reading: higher λ₂ means stronger entanglement
+//! between parallel branches.
 
 use nalgebra::{DMatrix, DVector};
 
@@ -24,8 +26,9 @@ const EIGENVALUE_ZERO_THRESHOLD: f64 = 1e-10;
 /// The graph Laplacian L = D − A encodes the combinatorial structure
 /// of branching. Its spectrum reveals:
 /// - λ₁ = 0 always (constant eigenvector)
-/// - λ₂ = algebraic connectivity (Fiedler value) — proxy for
-///   computational reducibility in Gorard's framework
+/// - λ₂ = algebraic connectivity (Fiedler value) — catgraph's computational-
+///   reducibility proxy (an extrapolation over the branchial substrate, not
+///   a Gorard result; see `docs/ANCHORS.md`)
 /// - Multiplicity of λ = 0 gives the number of connected components
 #[derive(Clone, Debug)]
 pub struct BranchialSpectrum {

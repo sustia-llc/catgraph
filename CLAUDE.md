@@ -42,6 +42,9 @@ umbrella #36 stays open for hyperdoctrine/vector-bundle/lazy surfaces);
 - **catgraph-applied** — Fong & Spivak 2018 (*Seven Sketches in Compositionality*)
 - **catgraph-magnitude** — Bradley–Vigneaux 2025; Leinster 2008 / 2013 / 2017
 - **catgraph-dl** — Gavranović et al., ICML 2024 (*Categorical Deep Learning*)
+- **catgraph-physics** — Gorard 2023 (*A functorial perspective on
+  (multi)computational irreducibility*); inspiration-anchored, not
+  theorem-anchored — provenance in `catgraph-physics/docs/ANCHORS.md`
 - **catgraph-syntax** — F&S 2018 Ch. 5 (props, presentations, Thm 5.60) + F&S 2019
   (Frobenius/hypergraph layer); haft Arrow via the `arrow_seam` (design: #5)
 

@@ -1,7 +1,9 @@
 //! Rewrite rules for hypergraph transformation.
 //!
 //! Implements the Double-Pushout (DPO) approach to graph rewriting,
-//! where a rule is represented as a span L ← K → R.
+//! where a rule is represented as a span L ← K → R. DPO is the classical
+//! algebraic approach of Ehrig–Pfender–Schneider (1973) — [EPS73] in
+//! `docs/ANCHORS.md` (uncached attribution).
 
 use super::hyperedge::Hyperedge;
 use super::hypergraph::Hypergraph;
