@@ -17,6 +17,16 @@
 //!
 //! This correspondence allows us to analyze multicomputational properties
 //! using the powerful machinery of gauge field theory.
+//!
+//! # Provenance
+//!
+//! The rewrite-rules-as-gauge-transformations reading is inspired by
+//! Gorard's causal-invariance-as-discrete-gauge-covariance result
+//! (\[Gor20a\] in `docs/ANCHORS.md`, uncached); the Wilson-loop / plaquette /
+//! holonomy vocabulary is standard lattice-gauge-theory machinery. The
+//! "causal invariance ⟺ flat gauge field (holonomy = 1)" equivalence as
+//! stated here is a catgraph interpretive gloss, not a theorem of any
+//! cached paper.
 
 /// Trait representing a gauge group in lattice gauge theory.
 ///

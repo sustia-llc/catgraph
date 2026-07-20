@@ -10,7 +10,31 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/ANCHORS.md` provenance note**
+  ([#124](https://github.com/sustia-llc/catgraph/issues/124)): the crate is
+  **inspiration-anchored**, not theorem-anchored — the note maps each
+  attribution site to its source and cache status: [Gor23]
+  (arXiv:2301.04690, cached, ✅ verified in Phase 4) vs the uncached (†)
+  attributions [Gor20a]/[Gor20b]/[Oll09]/[Vil03]/[EPS73]. README + root
+  CLAUDE.md paper-anchor list link it.
+
 ### Changed
+
+- **Unanchored attributions reworded / hedged**
+  ([#124](https://github.com/sustia-llc/catgraph/issues/124)):
+  `branchial_spectrum.rs` no longer credits the λ₂/Fiedler reducibility
+  proxy to "Gorard's framework" — it is a catgraph extrapolation over the
+  branchial substrate (the cached paper has zero spectral/Laplacian
+  content); `gauge.rs` gains a Provenance section (inspired by [Gor20a]'s
+  causal-invariance-as-gauge-covariance; Wilson-loop/plaquette vocabulary =
+  standard lattice gauge theory; "causal invariance ⟺ flat gauge field" is
+  a catgraph interpretive gloss); `rewrite_rule.rs` credits DPO to
+  Ehrig–Pfender–Schneider 1973 [EPS73]; the `ollivier_ricci.rs`
+  `branchial_complexity` "max |scalar| ~1" comment is corrected to the
+  definitional `κ ≤ 1` plus an explicit normalization-convention hedge
+  (negative Ollivier curvature is not bounded below by −1).
 
 - **Paper-audit citation reconciliation (Phase 4)** — verified every Gorard
   2301.04690 anchor in `src/**` against the cached paper and fixed the drifted
