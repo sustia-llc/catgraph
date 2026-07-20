@@ -82,6 +82,7 @@ Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBU
 > fabricated section name), and syntax (#127 — spider vocabulary re-anchored to
 > FS18 Def 6.54/Thm 6.55; MatKron marked an extension of Ex 2.16) are merged.
 > A CI guard (`scripts/check_audit_counts.py`) keeps the FS19/FS18/BV25
-> audit-doc tallies self-consistent. Substantive gaps live as issues
-> (#124 physics ANCHORS note, #126 Prop 5.56 `mat_to_sfg`, #117 Joyal–Street
-> sourcing).
+> audit-doc tallies self-consistent. Follow-ups resolved 2026-07-19: #117
+> (Selinger/JS sourcing — all four papers cached, every SMC-NF anchor
+> verified, (†) marks retired) and #124 (physics `docs/ANCHORS.md`).
+> Remaining substantive gap: #126 (Prop 5.56 `mat_to_sfg`).

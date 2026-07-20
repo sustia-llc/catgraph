@@ -10,38 +10,32 @@
 > implements, keeping the exact numbering the citations use (§2.1–§2.4, §3) so
 > the references resolve without renumbering.
 >
-> **Anchor caveat:** the Joyal-Street (JS-I 1991, JS-II, JS-Braided 1993) and
-> Selinger (2011, *A survey of graphical languages for monoidal categories*,
-> [arXiv:0908.3347](https://arxiv.org/abs/0908.3347)) anchors below were
-> carried over verbatim from the code and test citations. Cache status
-> (2026-07-19, #117 step 2):
+> **Anchor provenance:** the Joyal-Street (JS-I 1991, JS-II, JS-Braided 1993)
+> and Selinger (2011, *A survey of graphical languages for monoidal
+> categories*, [arXiv:0908.3347](https://arxiv.org/abs/0908.3347)) anchors
+> below were carried over verbatim from the code and test citations, and have
+> **all been verified against the private papers cache** (#117: Selinger +
+> JS-II 2026-07-19 by text; JS-I + JS-Braided the same day from page images
+> of the journal scans, after the Elsevier copies were placed — option (b)).
+> Two findings from the verification passes, both handled:
 >
-> - **Selinger** and **JS-II** are in the private papers cache and every anchor
->   below has been re-checked against them; those anchors carry no mark. One
->   correction surfaced: **Thm 3.12 sits on p. 18, not p. 17** — p. 17 holds
->   §3.5's self-inverse symmetry definition, which is the substantively cited
->   content.
-> - **JS-I / JS-Braided** (Elsevier journals, no arXiv version) remain
->   **cache-unverifiable** pending #117 option (b); each such anchor keeps its
->   **(†)** mark. The paper is still the spec (CLAUDE.md Rule 1) — the (†)
->   marks "not yet re-checked against the source", not "suspected wrong".
-> - **(‡ Sel …)** = the flagged statement is restated in the cached Selinger
->   survey at the given location (#117 option (a) cross-check). It corroborates
->   the mathematical content only, not the JS-specific page/theorem locator,
->   which stays (†). Selinger's bibliography maps `[22]` = JS-I and
->   `[23]` = JS-Braided, so his attributions `[22, Thm. 1.2]` (Thm 3.1) and
->   `[22, Thm. 2.3]` (Thm 3.12) independently corroborate the JS-I theorem
->   numbers cited below.
-> - **(‡ MMR86 …)** = the flagged statement is corroborated against the cached
->   Joyal-Street **precursor report** of JS-Braided: *Braided monoidal
->   categories*, Macquarie Math. Reports 860081 (Nov 1986), the author-hosted
->   scan Street's own publication list designates as the earlier version of
->   the 1993 Adv. Math. paper (`js-braided-860081.pdf`/`.txt`, cached
->   2026-07-19). Same caveat as (‡ Sel): content-level corroboration only —
->   the report's numbering (axioms B1–B7 / S, relations BG1–BG2,
->   Proposition 1, Theorem 4) and pagination differ from the 1993 revision,
->   and some 1993 content (e.g. §6 "balanced") does not exist in the report,
->   so 1993 locators stay (†).
+> - Selinger's symmetric-coherence **Thm 3.12 sits on p. 18, not p. 17** —
+>   p. 17 holds §3.5's self-inverse symmetry definition, which is the
+>   substantively cited content (corrected here and in the regression
+>   doc-comment).
+> - JS-I prints **two theorems headed "Theorem 1.2"**: the planar-deformation
+>   theorem (p. 66 — the one Selinger's Thm 3.1 cites as `[22, Thm. 1.2]`)
+>   and the 𝔽(𝒟)-freeness theorem (p. 71, in Ch 1 §4 — the one cited below;
+>   the paper's own p. 81 cross-references call it "Theorem 1.3", so the
+>   p. 71 heading is a misprint in the original). The "Ch 1 §4 … p. 71"
+>   locator used here disambiguates; interchange is its proof item (f) +
+>   Fig 1.9.
+>
+> Every other page/theorem locator below was verified exact as written.
+> Earlier interim scaffolding — (†) cache-unverifiable marks and (‡ Sel /
+> ‡ MMR86) cross-check marks against Selinger's restatements and the 1986
+> Macquarie precursor report — is retired; see the git history / PRs
+> #133–#136 for the audit trail.
 
 ## §1 What the normal form is
 
@@ -91,10 +85,9 @@ wide-braid decomposition uses the forward-`;` `(B2)` splitting, i.e.
 `σ_{1,2}` split and is *not* used.
 
 - Anchors: JS-II §1.2 α-anchor (Remark 1.2.1 p. 6); JS-Braided p. 36 "box
-  slides through crossing" (†; ‡ Sel §3.3 p. 14 naturality); JS-Braided Def 2.1
-  axiom (B2) p. 33 (†; ‡ Sel §3.3 pp. 14–15; ‡ MMR86 p. 2 — B2 diagram
-  decomposes `c_{A⊗B,C}` exactly as here, with B1 noted as its mirror via
-  `c⁻¹`).
+  slides through crossing" (the pictorial naturality proof of `c_{m,n}`);
+  JS-Braided Def 2.1 axiom (B2) p. 33 (B1 = its mirror via `c⁻¹`, noted
+  right below the diagrams).
 
 ### §2.2 Wide-braid handling (expand only, never collapse)
 
@@ -115,10 +108,8 @@ a naturality-emitted wide braid is expanded before braid positions are
 compared, so no wide braid survives to the fixpoint check.
 
 - Anchors: JS-Braided Prop 2.1 / axiom (B2) p. 33–34,
-  `c_{U⊗V,W} = (c_{U,W} ⊗ 1_V) ∘ (1_U ⊗ c_{V,W})` (†; ‡ Sel §3.3 pp. 14–15 +
-  Ex 3.5; ‡ MMR86 p. 2 axiom B2); JS-I Ch 2 Thm 2.3 p. 81 via the `S_n`
-  presentation (†; ‡ Sel Thm 3.12 p. 18, attributed `[22, Thm. 2.3]` =
-  JS-I Thm 2.3).
+  `c_{U⊗V,W} = (c_{U,W} ⊗ 1_V) ∘ (1_U ⊗ c_{V,W})`; JS-I Ch 2 Thm 2.3 p. 81
+  (`𝔽_s(𝒟)` free symmetric) via the `S_n` presentation.
 
 ### §2.3 Canonical order (source order within a layer, earliest layer across)
 
@@ -148,9 +139,9 @@ Two independent choices fix the placement of atoms:
    (`interchange_zero_source_eta_known_gap`, issue #14 follow-up). Target-0
    sinks (`ε : 1 → 0`) have a non-empty source span and sift normally.
 
-- Anchors: JS-I Ch 1 Prop 1.1 p. 66 (rectangle-cover independence) (†); JS-I
-  Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality / interchange) (†; ‡ Sel §3.1
-  pp. 9–10); issue #14.
+- Anchors: JS-I Ch 1 Prop 1.1 p. 66 (rectangle-cover independence); JS-I
+  Ch 1 §4 Thm 1.2 p. 71 (𝔽(𝒟) freeness — interchange is proof item (f) +
+  Fig 1.9; see the header note on the heading misprint); issue #14.
 
 ### §2.4 Termination measure
 
@@ -183,8 +174,7 @@ decreasing whenever the diagram is not yet a fixpoint:
 each sift strictly decreases the sum of the layer indices of `Generator` atoms
 (one generator drops one layer; nothing else moves), bounded below by zero.
 
-- Anchors: JS-I Ch 1 §4 Thm 1.2 p. 71 (†; ‡ Sel §3.1 pp. 9–10); JS-I Ch 2 §1
-  axiom (S) p. 73 (†; ‡ Sel §3.5 p. 17).
+- Anchors: JS-I Ch 1 §4 Thm 1.2 p. 71; JS-I Ch 2 §1 axiom (S) p. 73.
 
 ## §3 Step table and paper coverage matrix
 
@@ -207,33 +197,31 @@ layers.)
 ### Paper coverage matrix
 
 Each SMC statement the code/tests anchor, mapped to the step (§3) or the
-regression test that exercises it. Selinger and JS-II anchors are
-cache-verified (2026-07-19); JS-I / JS-Braided anchors are (†)
-cache-unverifiable, with (‡ Sel …) marking statements corroborated via the
-cached Selinger restatement (see the header caveat).
+regression test that exercises it. All external-paper anchors are
+cache-verified (2026-07-19, #117 — see the header provenance note).
 
 | Statement | Anchor | Step / test |
 |---|---|---|
-| Rectangle-cover independence `v(Γ)=v(Γ[u,b])∘v(Γ[a,u])`; `;` associativity | JS-I Ch 1 Prop 1.1 p. 66 (†) | `lower`; Step 4; `ch1_prop_1_1_compose_associativity`, `compose_associator` |
-| Layering of abstract diagrams | JS-I Ch 2 Prop 2.1 p. 78 (†) | `lower` |
-| `⊗` bifunctoriality / interchange `(f⊗g);(h⊗k)=(f;h)⊗(g;k)` | JS-I Ch 1 §4 Thm 1.2 p. 71 (†); ‡ Sel §3.1 pp. 9–10 + Thm 3.1 p. 11 (attributed `[22, Thm. 1.2]` = JS-I Thm 1.2) | `pad_and_zip` (§4 p. 69–70), Steps 3(0)/4(c); `ch1_thm_1_2_s4_interchange`, `smc_bifunctoriality_interchange`, `interchange`, `c2_scheduling_witness_converges`, `target_zero_sink_sifts_up` |
-| `;` left/right unitor; invertible diagram `v(Γ)=id` | JS-I Ch 1 §3 p. 65 + Prop 1.1 p. 66 (†) | Step 2 (`try_column_merge` identity cases); `ch1_invertible_left_right_unitor`, `compose_unitors` |
-| `⊗` strict unit `id_0` (bracket-clique skeleton p. 58) | JS-I Ch 1 §1 p. 57 (†); ‡ Sel Table 2 p. 10 (unit = zero wires) | Step 5; `ch1_s1_strict_unit`, `tensor_unitors` |
-| Symmetry axiom (S) `c_{B,A}∘c_{A,B}=1_{A⊗B}` | JS-I Ch 2 §1 axiom (S) p. 73 (†); JS-Braided (S) p. 21 (†); ‡ Sel §3.5 p. 17 (self-inverse def.); ‡ MMR86 pp. i, 2 (condition S, verbatim `c_BA c_AB = 1_{A⊗B}`) | Step 0, Step 2 (`σ;σ → id`); `ch2_s1_axiom_s_braid_involution`, `aligned_braid_band_cancels_through_generators` |
-| Braid naturality `σ_{1,1};(g⊗f)=(f⊗g);σ_{1,1}` (anchored form, Cor 2.3 p. 80) | JS-I Ch 2 Thm 2.2 p. 79 (†); ‡ Sel §3.3 p. 14 (braiding is a natural family) | Step 3(a); `ch2_thm_2_2_braid_naturality`, `test_braid_naturality_right` |
-| Free symmetric on `𝒟`; `σ_{2,1}=(id₁⊗σ_{1,1});(σ_{1,1}⊗id₁)` | JS-I Ch 2 Thm 2.3 p. 81 (†); ‡ Sel Thm 3.12 p. 18 (attributed `[22, Thm. 2.3]` = JS-I Thm 2.3) | Step 1; `ch2_thm_2_3_symmetry_on_larger_tensors`, `wide_braid_*` |
-| Hexagon (B2) `c_{U⊗V,W}=(σ_{U,W}⊗1_V)∘(1_U⊗σ_{V,W})` | JS-Braided Def 2.1 (B2) p. 33–34 (†); ‡ Sel §3.3 pp. 14–15 (hexagon axioms + Ex 3.5); ‡ MMR86 p. 2 (axiom B2 = this decomposition; B1 = mirror via `c⁻¹`) | Step 1 (`decompose_braid`); `test_hexagon_sigma_on_tensor` |
-| Yang-Baxter / Artin 3-strand `s_i s_{i+1} s_i = s_{i+1} s_i s_{i+1}` (Reidemeister III) | JS-Braided Example 2.1 (A1) p. 35 (†); ‡ Sel Ex 3.6 p. 16 (Yang-Baxter from hexagon + naturality); ‡ MMR86 p. 5 (relation BG1 in the `𝔹_n` presentation, BG2 = distant commutation) | Step 3(b); `test_yang_baxter`, `test_braid_interaction_with_identity` |
-| Reduced-word canonicality of `S_n`; braid run = underlying permutation | JS-Braided Cor 2.6 p. 44 (†); JS-I Ch 2 §1 + Ch 3 p. 84 (†); ‡ Sel Thm 3.12 p. 18 (SMC diagrams equal up to isomorphism — only the permutation matters); ‡ MMR86 Thm 4 p. 17 (`𝔹` free braided on one object — the braided precursor of the freeness family) | Step 3(b) `canonicalize_braid_runs` |
-| Symmetric categories are balanced (transposition squares collapse) | JS-Braided Example 6.1 p. 66 (†); ‡ Sel Rmk 3.10 p. 17 (symmetric = balanced with θ = id) | Step 2 + Step 4; `test_symmetric_collapse_3_strands` |
-| Braid slides through box | JS-Braided p. 36 (†); ‡ Sel §3.3 p. 14 (naturality); JS-II p. 5 canonical iso `α↦⟨α⟩` | Step 3(a) `try_naturality_swap`; `braid_layer_blocks_sift` |
+| Rectangle-cover independence `v(Γ)=v(Γ[u,b])∘v(Γ[a,u])`; `;` associativity | JS-I Ch 1 Prop 1.1 p. 66 | `lower`; Step 4; `ch1_prop_1_1_compose_associativity`, `compose_associator` |
+| Layering of abstract diagrams | JS-I Ch 2 Prop 2.1 p. 78 | `lower` |
+| `⊗` bifunctoriality / interchange `(f⊗g);(h⊗k)=(f;h)⊗(g;k)` | JS-I Ch 1 §4 Thm 1.2 p. 71 (𝔽(𝒟) freeness; interchange = proof item (f) + Fig 1.9) | `pad_and_zip` (§4 p. 69–70), Steps 3(0)/4(c); `ch1_thm_1_2_s4_interchange`, `smc_bifunctoriality_interchange`, `interchange`, `c2_scheduling_witness_converges`, `target_zero_sink_sifts_up` |
+| `;` left/right unitor; invertible diagram `v(Γ)=id` | JS-I Ch 1 §3 p. 65 + Prop 1.1 p. 66 | Step 2 (`try_column_merge` identity cases); `ch1_invertible_left_right_unitor`, `compose_unitors` |
+| `⊗` strict unit `id_0` (bracket-clique skeleton p. 58) | JS-I Ch 1 §1 p. 57 | Step 5; `ch1_s1_strict_unit`, `tensor_unitors` |
+| Symmetry axiom (S) `c_{B,A}∘c_{A,B}=1_{A⊗B}` | JS-I Ch 2 §1 axiom (S) p. 73; JS-Braided (S) p. 21 | Step 0, Step 2 (`σ;σ → id`); `ch2_s1_axiom_s_braid_involution`, `aligned_braid_band_cancels_through_generators` |
+| Braid naturality `σ_{1,1};(g⊗f)=(f⊗g);σ_{1,1}` (anchored form, Cor 2.3 p. 80) | JS-I Ch 2 Thm 2.2 p. 79 | Step 3(a); `ch2_thm_2_2_braid_naturality`, `test_braid_naturality_right` |
+| Free symmetric on `𝒟`; `σ_{2,1}=(id₁⊗σ_{1,1});(σ_{1,1}⊗id₁)` | JS-I Ch 2 Thm 2.3 p. 81 (`𝔽_s(𝒟)` free symmetric) | Step 1; `ch2_thm_2_3_symmetry_on_larger_tensors`, `wide_braid_*` |
+| Hexagon (B2) `c_{U⊗V,W}=(σ_{U,W}⊗1_V)∘(1_U⊗σ_{V,W})` | JS-Braided Def 2.1 (B2) p. 33–34 (B1 = mirror via `c⁻¹`) | Step 1 (`decompose_braid`); `test_hexagon_sigma_on_tensor` |
+| Yang-Baxter / Artin 3-strand `s_i s_{i+1} s_i = s_{i+1} s_i s_{i+1}` (Reidemeister III) | JS-Braided Example 2.1 (A1) p. 35; JS-I Ch 3 p. 84 (same (A1)/(A2) presentation) | Step 3(b); `test_yang_baxter`, `test_braid_interaction_with_identity` |
+| Reduced-word canonicality of `S_n`; braid run = underlying permutation | JS-Braided Cor 2.6 p. 44 (underlying braid decides commutativity); JS-I Ch 2 §1 + Ch 3 p. 84 (`S_n` = `𝔹_n` + `s_i² = 1`; canonical surjection `𝔹_n → 𝕊_n`) | Step 3(b) `canonicalize_braid_runs` |
+| Symmetric categories are balanced (transposition squares collapse) | JS-Braided Example 6.1 p. 66 | Step 2 + Step 4; `test_symmetric_collapse_3_strands` |
+| Braid slides through box | JS-Braided p. 36 (pictorial naturality of `c_{m,n}`); JS-II p. 5 canonical iso `α↦⟨α⟩` | Step 3(a) `try_naturality_swap`; `braid_layer_blocks_sift` |
 | Braids-to-input direction | JS-II §1.2 α-anchor (Remark 1.2.1 p. 6) | §2.1; Step 3(a) |
 | Planar deformation `id;f;id=f` (empty slice) | JS-II Thm 1.1.2 p. 3–4; Thm 1.1.3 p. 4 | Step 4; `planar_identity_layer_coalesce` |
 | 3D deformation + surgery `σ;(f⊗id₁);σ=id₁⊗f` | JS-II Thm 1.2.2 + Thm 1.2.3 p. 6–7 | Steps 2+3 in tandem; `braid_sandwich_is_identity_tensor` |
 | Generators are uninterpreted formal symbols (distinct symbols stay distinct) | Selinger §2 p. 7 + §3 p. 12 | whole NF; `smc_generators_are_uninterpreted_black_boxes` |
 | SMC self-inverse braid (two crossings cancel; braided would not) | Selinger §3.5 p. 17 (self-inverse def.) + Thm 3.12 p. 18 vs §3.3 Thm 3.7 p. 16 | Step 2; `smc_two_crossings_cancel_but_braided_would_not` |
 | Interchange law; `id_0` as unit ("zero wires") | Selinger Table 2 p. 10 (+ interchange example below it) | Steps 2/5; `smc_bifunctoriality_interchange` |
-| 0-arity sink/source absorption `L1;(X⊗id_k)=X⊗L1` etc. | JS-I Ch 1 §1 + §4 Thm 1.2 p. 71 (†); ‡ Sel p. 10 (interchange + unit-as-zero-wires) | Step 2 `try_unitor_merge`; `unitor_merge_*` |
+| 0-arity sink/source absorption `L1;(X⊗id_k)=X⊗L1` etc. | JS-I Ch 1 §1 + §4 Thm 1.2 p. 71 | Step 2 `try_unitor_merge`; `unitor_merge_*` |
 
 ### Coverage summary
 
