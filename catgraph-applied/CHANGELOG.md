@@ -15,6 +15,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **All Joyal–Street SMC-NF anchors verified; every (†)/(‡) mark retired**
+  ([#117](https://github.com/sustia-llc/catgraph/issues/117) option (b),
+  completes the issue): with the JS-I and JS-Braided journal scans now in
+  the private cache, all 9 JS-I and all 6 JS-Braided page/theorem locators
+  in `docs/SMC-NF-RECONCILIATION.md` were verified from page images —
+  **every one exact as written**; no code or test citation needed changes.
+  One quirk documented: JS-I prints two theorems headed "Theorem 1.2"
+  (p. 66 planar-deformation — the one Selinger cites; p. 71 𝔽(𝒟)-freeness —
+  the one catgraph cites, whose heading is a misprint per the paper's own
+  p. 81 cross-references to "Theorem 1.3"). The interim (†)
+  cache-unverifiable and (‡ Sel / ‡ MMR86) cross-check scaffolding is
+  removed; the header now records the full provenance trail.
 - **JS-Braided precursor report cached; `(‡ MMR86 …)` cross-checks added**
   ([#117](https://github.com/sustia-llc/catgraph/issues/117)): Ross
   Street's publication list designates the author-hosted scan of
