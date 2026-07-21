@@ -341,8 +341,8 @@ fn bench_cc_incompleteness_count_f64rig(c: &mut Criterion) {
     let mut group = c.benchmark_group("functor::cc_incompleteness_count::f64rig");
 
     // Two samples → 4-entry D1 cross-product (a, b) ∈ {0, 1}² inside
-    // `matr_presentation`. Both values are `Copy` + bit-exact `Eq + Hash`
-    // (manual impls via `to_bits()`); no NaN risk for these literals.
+    // `matr_presentation`. Both values are `Copy` + manual `Eq + Hash`
+    // (via `to_bits()`, `-0.0`-normalized); no NaN risk for these literals.
     let rig_samples = vec![F64Rig(0.0), F64Rig(1.0)];
 
     group.throughput(Throughput::Elements(1));

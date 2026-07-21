@@ -36,14 +36,17 @@
 //! # `Eq + Hash` on `f64`-wrapping rigs
 //!
 //! [`UnitInterval`], [`Tropical`], and [`F64Rig`] manually implement `Eq` and
-//! `Hash` via bit-exact `f64::to_bits()`. This is required by the
+//! `Hash` via `f64::to_bits()`. This is required by the
 //! [`PropSignature`](crate::prop::PropSignature) `Eq + Hash` supertrait bounds:
 //! [`SfgGenerator<R>`](crate::sfg::SfgGenerator) now requires `R: Eq + Hash`,
 //! and the [`prop::presentation::kb::CongruenceClosure`](crate::prop::presentation::kb::CongruenceClosure)
-//! term graph uses `SfgGenerator<R>` as a `HashMap` key. NaN caveats inherit
-//! from `PartialEq`: a NaN payload would be non-reflexive; callers should not
-//! construct NaN values in these newtypes (the [`UnitInterval::new`] validator
-//! already rejects them).
+//! term graph uses `SfgGenerator<R>` as a `HashMap` key. Hashing is bit-exact
+//! EXCEPT `-0.0` normalizes to `0.0` so that hashing agrees with the derived
+//! IEEE `PartialEq` (under which `-0.0 == 0.0`) — required by the `Eq`/`Hash`
+//! contract, and the fix for #58 (a `-0.0` and `0.0` splitting a congruence
+//! class). NaN caveats inherit from `PartialEq`: a NaN payload would be
+//! non-reflexive; callers should not construct NaN values in these newtypes
+//! (the [`UnitInterval::new`] validator already rejects them).
 
 use deep_causality_num::{One, Zero};
 use std::ops::{Add, Div, Mul, Neg, Sub};
@@ -167,13 +170,23 @@ impl Mul for UnitInterval {
     }
 }
 
-// Bit-exact `Eq + Hash` for use as a `HashMap` key in the congruence-closure
-// term graph (`PropSignature: Eq + Hash` bound). NaN caveats
-// inherit from `PartialEq`; [`UnitInterval::new`] rejects NaN on construction.
+// `Eq + Hash` for use as a `HashMap` key in the congruence-closure term graph
+// (`PropSignature: Eq + Hash` bound). Hashing is bit-exact via `to_bits()`
+// EXCEPT `-0.0` normalizes to `0.0`, so hashing agrees with the derived IEEE
+// `PartialEq` (under which `-0.0 == 0.0`) — required by the `Eq`/`Hash`
+// contract. NaN caveats inherit from `PartialEq`; [`UnitInterval::new`] rejects
+// NaN on construction.
 impl Eq for UnitInterval {}
 impl std::hash::Hash for UnitInterval {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.to_bits().hash(state);
+        // -0.0 == 0.0 under the derived PartialEq, so they must hash alike
+        // (Eq/Hash contract). All other values keep bit-exact hashing.
+        let bits = if self.0 == 0.0 {
+            0.0f64.to_bits()
+        } else {
+            self.0.to_bits()
+        };
+        bits.hash(state);
     }
 }
 
@@ -223,13 +236,22 @@ impl Mul for Tropical {
     }
 }
 
-// Bit-exact `Eq + Hash` for use as a `HashMap` key in the congruence-closure
-// term graph (`PropSignature: Eq + Hash` bound). NaN caveats
-// inherit from `PartialEq`.
+// `Eq + Hash` for use as a `HashMap` key in the congruence-closure term graph
+// (`PropSignature: Eq + Hash` bound). Hashing is bit-exact via `to_bits()`
+// EXCEPT `-0.0` normalizes to `0.0`, so hashing agrees with the derived IEEE
+// `PartialEq` (under which `-0.0 == 0.0`) — required by the `Eq`/`Hash`
+// contract. NaN caveats inherit from `PartialEq`.
 impl Eq for Tropical {}
 impl std::hash::Hash for Tropical {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.to_bits().hash(state);
+        // -0.0 == 0.0 under the derived PartialEq, so they must hash alike
+        // (Eq/Hash contract). All other values keep bit-exact hashing.
+        let bits = if self.0 == 0.0 {
+            0.0f64.to_bits()
+        } else {
+            self.0.to_bits()
+        };
+        bits.hash(state);
     }
 }
 
@@ -320,13 +342,22 @@ impl From<i64> for F64Rig {
     }
 }
 
-// Bit-exact `Eq + Hash` for use as a `HashMap` key in the congruence-closure
-// term graph (`PropSignature: Eq + Hash` bound). NaN caveats
-// inherit from `PartialEq`.
+// `Eq + Hash` for use as a `HashMap` key in the congruence-closure term graph
+// (`PropSignature: Eq + Hash` bound). Hashing is bit-exact via `to_bits()`
+// EXCEPT `-0.0` normalizes to `0.0`, so hashing agrees with the derived IEEE
+// `PartialEq` (under which `-0.0 == 0.0`) — required by the `Eq`/`Hash`
+// contract. NaN caveats inherit from `PartialEq`.
 impl Eq for F64Rig {}
 impl std::hash::Hash for F64Rig {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.to_bits().hash(state);
+        // -0.0 == 0.0 under the derived PartialEq, so they must hash alike
+        // (Eq/Hash contract). All other values keep bit-exact hashing.
+        let bits = if self.0 == 0.0 {
+            0.0f64.to_bits()
+        } else {
+            self.0.to_bits()
+        };
+        bits.hash(state);
     }
 }
 
@@ -546,5 +577,39 @@ mod tests {
                 }
             }
         }
+    }
+
+    // #58: `-0.0` and `0.0` are `==` under the derived IEEE `PartialEq`, so the
+    // `Eq`/`Hash` contract requires them to hash alike. Before the fix they
+    // hashed differently (`(-0.0).to_bits() != (0.0).to_bits()`), splitting
+    // congruence classes keyed on these rigs. Each rig asserts both halves:
+    // the `==` (documents the contract) and the equal hashes (the fix).
+    // Both values are hashed with the SAME `BuildHasher` — a per-call
+    // `RandomState` reseeds and would make even identical values disagree.
+    fn hashes_agree<T: std::hash::Hash>(a: &T, b: &T) -> bool {
+        use std::hash::{BuildHasher, RandomState};
+        let state = RandomState::new();
+        state.hash_one(a) == state.hash_one(b)
+    }
+
+    #[test]
+    fn f64rig_signed_zero_eq_and_hash_agree() {
+        assert_eq!(F64Rig(0.0), F64Rig(-0.0));
+        assert!(hashes_agree(&F64Rig(0.0), &F64Rig(-0.0)));
+    }
+
+    #[test]
+    fn tropical_signed_zero_eq_and_hash_agree() {
+        assert_eq!(Tropical(0.0), Tropical(-0.0));
+        assert!(hashes_agree(&Tropical(0.0), &Tropical(-0.0)));
+    }
+
+    #[test]
+    fn unit_interval_signed_zero_eq_and_hash_agree() {
+        // `-0.0 >= 0.0`, so `UnitInterval::new(-0.0)` passes the [0, 1] check.
+        let neg_zero = UnitInterval::new(-0.0).unwrap();
+        let pos_zero = UnitInterval::new(0.0).unwrap();
+        assert_eq!(pos_zero, neg_zero);
+        assert!(hashes_agree(&pos_zero, &neg_zero));
     }
 }

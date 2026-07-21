@@ -139,6 +139,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed
 
+- **Signed-zero `Eq`/`Hash` contract violation on the f64-wrapping rigs**
+  ([#58](https://github.com/sustia-llc/catgraph/issues/58)): `UnitInterval`,
+  `Tropical`, and `F64Rig` derive an IEEE `PartialEq` (under which `0.0 == -0.0`)
+  but hashed via `to_bits()` (under which `0.0` and `-0.0` differ), breaking the
+  `a == b ⇒ hash(a) == hash(b)` contract required of their use as
+  congruence-closure `HashMap` keys — equal keys could land in different buckets
+  and split a congruence class. Their `Hash` impls now normalize `-0.0` to `0.0`
+  so hashing agrees with the derived `PartialEq`; all other values (incl. NaN
+  payloads) keep bit-exact hashing. As a result the F64Rig depth-2 CC diagnostic
+  is now deterministic and was re-baselined from the jitter band `2468..=2488` to
+  an exact pin of `2229`.
 - **`try_unitor_merge` source-left ordering** — the `L1 ; (X ⊗ id_k)` case with a
   zero-source `X` (e.g. `η : 0 → 1`) now PREPENDS `X` (was appended), so
   SMC-distinct morphisms like `σ;(η⊗id₂)` vs `σ;(id₂⊗η)` no longer collide.

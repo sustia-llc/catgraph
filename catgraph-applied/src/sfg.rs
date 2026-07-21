@@ -20,8 +20,9 @@
 //! requires `R: Rig + Eq + Hash + Debug`. All four shipped rigs
 //! ([`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
 //! [`crate::rig::Tropical`], [`crate::rig::F64Rig`]) satisfy these — the three
-//! `f64`-wrapping rigs provide manual `Eq + Hash` impls via bit-exact
-//! `to_bits()` (NaN caveats documented on the rig module).
+//! `f64`-wrapping rigs provide manual `Eq + Hash` impls via `to_bits()`
+//! (bit-exact except `-0.0` normalizes to `0.0` to satisfy the `Eq`/`Hash`
+//! contract; NaN caveats documented on the rig module).
 
 use catgraph::errors::CatgraphError;
 
@@ -38,7 +39,8 @@ use crate::{
 /// `Eq + Hash` bounds) by the congruence-closure decision procedure. All four shipped
 /// rig instances — [`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
 /// [`crate::rig::Tropical`], [`crate::rig::F64Rig`] — satisfy both; the three
-/// `f64`-wrapping rigs provide manual `Eq + Hash` via bit-exact `to_bits()`.
+/// `f64`-wrapping rigs provide manual `Eq + Hash` via `to_bits()` (bit-exact
+/// except `-0.0` normalizes to `0.0` to satisfy the `Eq`/`Hash` contract).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SfgGenerator<R: Rig + Eq + std::hash::Hash> {
