@@ -21,8 +21,9 @@
 //!   Paper: JS-II §1.2 α-anchor; JS-Braided p.36 "box slides through crossing".
 //! - **Step 4** — `coalesce_identity_layers`: identity-only layers absorb.
 //!   Paper: JS-I Ch 1 Prop 1.1 p.66; JS-II Thm 1.1.3 p.4.
-//! - **Step 4(c)** — `topological_layer_order`: sift each non-identity-source
-//!   generator up to its earliest braid-free layer (interchange scheduling).
+//! - **Step 4(c)** — `topological_layer_order`: sift each generator up to its
+//!   earliest braid-free layer (interchange scheduling; zero-source `η` via the
+//!   point-span rule, issue #55).
 //!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality / interchange); issue #14.
 //! - **Step 5** — `simplify_units`: remove `Identity(0)` atoms.
 //!   Paper: JS-I Ch 1 §1 p.57; Selinger Table 2 p.10.
@@ -65,9 +66,10 @@ pub enum Atom<G: PropSignature> {
 ///   generator layer is followed by a braid layer.
 /// - No layer contains both a `Braid` and a `Generator` atom (mixed layers are
 ///   split by `isolate_mixed_braid_layers` and never re-created).
-/// - Every `Generator` atom with non-zero source arity occupies its earliest
-///   admissible layer: no generator's consumed wires all pass through
-///   `Identity` atoms in the preceding braid-free layer (Step 4(c)).
+/// - Every `Generator` atom occupies its earliest admissible layer: no
+///   positive-source generator's consumed wires all pass through `Identity`
+///   atoms in the preceding braid-free layer, and no zero-source generator
+///   (`η`) can slide across into that layer at its point coordinate (Step 4(c)).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct StringDiagram<G: PropSignature> {
     pub layers: Vec<Layer<G>>,
@@ -86,13 +88,12 @@ pub struct StringDiagram<G: PropSignature> {
 /// in the free symmetric monoidal category on `G`), `nf(&a) == nf(&b)`. The
 /// converse holds by construction since `nf` applies only SMC-sound rewrites.
 ///
-/// Known exception: a **zero-source generator** (`source == 0`, e.g. `η : 0 → 1`)
-/// sitting mid-layer is not always scheduled canonically — `topological_layer_order`
-/// skips source-0 atoms (their consumed span is empty, so the earliest-layer rule
-/// is positionally ambiguous) and `try_unitor_merge` only absorbs the 2-atom
-/// boundary pattern. So e.g. `nf(F ⊗ η ⊗ G)` and `nf((F ⊗ G) ; (id₁ ⊗ η ⊗ id₁))`
-/// can differ. Generators with `source > 0` are unaffected. Tracked as the
-/// Watch-item in `tests/smc_nf_completeness.rs` (issue #14 follow-up).
+/// Zero-source generators (`source == 0`, e.g. `η : 0 → 1`) sitting mid-layer
+/// are scheduled canonically by the point-span sift (issue #55): the output
+/// point sits at a determined wire coordinate, so `topological_layer_order`
+/// slides `η` into the earliest braid-free layer where that coordinate is an
+/// atom boundary or strictly inside an identity. So e.g. `nf(F ⊗ η ⊗ G)` and
+/// `nf((F ⊗ G) ; (id₁ ⊗ η ⊗ id₁))` now agree.
 pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     let mut sd = lower(expr);
     // Fixpoint loop, terminating by the lexicographic measure
@@ -109,7 +110,9 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     //   emitted by the naturality sweep is decomposed on the next pass before
     //   braid positions are compared (at the fixpoint check no wide braid remains);
     // - the naturality sweep shrinks braid_position_sum (braids move input-ward);
-    // - `topological_layer_order` shrinks generator_position_sum;
+    // - `topological_layer_order` shrinks generator_position_sum (each sift,
+    //   including a zero-source `η` point-span sift, drops exactly one generator
+    //   by one layer and moves nothing else — issue #55);
     // - `coalesce_identity_layers`/`simplify_units` shrink layer_count.
     // See `docs/SMC-NF-RECONCILIATION.md` §2.4.
     loop {
@@ -1136,33 +1139,42 @@ fn merge_adjacent_identities<G: PropSignature>(atoms: Vec<Atom<G>>) -> Vec<Atom<
 /// **Step 4(c)**: sift each `Atom::Generator` up to its earliest admissible
 /// layer.
 ///
-/// Greedy fixpoint: for every `Generator` `g` at layer `j` (`j ≥ 1`) whose
-/// consumed wire span at the `j−1 ; j` boundary is covered entirely by
-/// `Identity` atoms of a **braid-free** layer `j−1`, move `g` up into layer
-/// `j−1` (splitting the covering `Identity` into pre/post pieces around it) and
-/// leave `Identity(atom_target(g))` behind in its old slot. Iterate until no
-/// generator can move.
+/// Greedy fixpoint: for every `Generator` `g` at layer `j` (`j ≥ 1`), move `g`
+/// up into a **braid-free** layer `j−1` when its footprint there is admissible,
+/// leaving `Identity(atom_target(g))` behind in its old slot. Iterate until no
+/// generator can move. Two footprints:
+/// - **Positive source** (`atom_source(g) > 0`): the whole consumed span at the
+///   `j−1 ; j` boundary must lie inside one covering `Identity` (`covering_identity`),
+///   which is split into pre/post pieces around `g`.
+/// - **Zero source** (`η : 0 → n`): the empty span reduces to a single point at
+///   the source cursor; `g` slides in iff that coordinate is an atom boundary of
+///   layer `j−1` or strictly inside one of its identities (`point_placement`),
+///   never strictly inside a generator's output span (issue #55).
 ///
 /// Soundness: this is bifunctoriality / interchange — JS-I Ch 1 §4 Thm 1.2
 /// p.71, `(id ⊗ g) ; (h ⊗ id) = h ⊗ g`, generalized to the identity context
 /// `(id_pre ⊗ g ⊗ id_post) ; (id_pre ⊗ id_g.target ⊗ id_post ⊗ …)`. Moving `g`
-/// earlier through a column of identities preserves the morphism. The pass is
-/// the topological-layer-order canonicalization of issue #14: it forces the
-/// C2-gap witnesses (same morphism, independent atoms scheduled into different
-/// layers) onto a single earliest-schedule form. Paper: JS-I Ch 1 §4 Thm 1.2
-/// p.71.
+/// earlier through a column of identities (or, for `η`, across an atom boundary
+/// where it shares no wire with either neighbour) preserves the morphism. The
+/// pass is the topological-layer-order canonicalization of issue #14: it forces
+/// the C2-gap witnesses (same morphism, independent atoms scheduled into
+/// different layers) onto a single earliest-schedule form. Paper: JS-I Ch 1 §4
+/// Thm 1.2 p.71.
 ///
 /// Termination: each move strictly decreases the sum of the layer indices of
-/// `Generator` atoms (one generator drops by one layer; no other generator or
-/// braid moves), bounded below by zero.
+/// `Generator` atoms (one generator — positive- or zero-source — drops by one
+/// layer; no other generator or braid moves), bounded below by zero.
 ///
 /// Limitations / deliberate guards:
-/// - **Zero-arity-source generators are skipped** (`atom_source(g) == 0`, e.g.
-///   `η : 0 → 1`). Their consumed span is empty, so a covering identity is
-///   found at every boundary position — sifting them is sound but positionally
-///   ambiguous, and would race the `try_unitor_merge` zero-arity watch-item
-///   (see `tests/smc_nf_completeness.rs` header). Target-0 sinks (`ε : 1 → 0`)
-///   have a non-empty source span and sift normally.
+/// - **Zero-source `η` uses the point-span rule, not a covering-identity scan.**
+///   Its consumed span is empty, so the earliest placement is fixed by the
+///   single output coordinate: an atom boundary (leftmost, when a zero-target
+///   atom repeats a coordinate) or a strict-interior split of an identity. It is
+///   blocked only when that coordinate is strictly inside a generator's output
+///   span. This subsumes the `try_unitor_merge` zero-arity source patterns (both
+///   agree on the 2-atom boundary shape) without racing it (both moves only
+///   ever decrease the `nf` fixpoint measure). Target-0 sinks (`ε : 1 → 0`) have
+///   a non-empty source span and sift via the positive-source path.
 /// - **Braids never sift and generators never sift into a braid-bearing layer.**
 ///   Braid placement is `collect_braid_prefix`'s responsibility (braids stay in
 ///   the leading layers); this guard keeps the two passes from oscillating in
@@ -1198,12 +1210,25 @@ struct Sift {
     j: usize,
     /// Index of the generator atom within layer `j`.
     idx: usize,
-    /// Index of the covering `Identity` atom within layer `j − 1`.
-    k: usize,
-    /// Slack identity width preceding the generator inside atom `k`.
-    pre: usize,
-    /// Slack identity width following the generator inside atom `k`.
-    post: usize,
+    /// Where the generator lands in layer `j − 1`.
+    place: Placement,
+}
+
+/// How a sifted generator is inserted into the preceding (braid-free) layer.
+#[derive(Clone, Copy)]
+enum Placement {
+    /// Split the covering `Identity` atom at index `k` into `Identity(pre)`,
+    /// the generator, `Identity(post)` (zero-width pieces suppressed). Used for
+    /// positive-source generators — whose consumed span lies inside one identity
+    /// — and for a zero-source generator (`η`) whose output point falls
+    /// *strictly* inside an identity (`pre > 0` and `post > 0`).
+    SplitIdentity { k: usize, pre: usize, post: usize },
+    /// Insert the (zero-source) generator at atom-boundary index `at`, between
+    /// atoms `at − 1` and `at` (no split; `at == len` appends). Used when the
+    /// output point sits on an atom boundary — e.g. between two generators'
+    /// target spans, as in `[F, G]` — so there is no covering identity to split.
+    /// This is the case the mid-layer-`η` witness needs (issue #55).
+    Boundary { at: usize },
 }
 
 /// Locate the first generator (at layer `≥ start`) that can sift one layer
@@ -1223,18 +1248,29 @@ fn find_sift<G: PropSignature>(sd: &StringDiagram<G>, start: usize) -> Option<Si
         let mut src_pos = 0;
         for (idx, atom) in cur.atoms.iter().enumerate() {
             let s = atom_source(atom);
-            // Skip zero-arity-source generators (η); their span is empty.
-            if matches!(atom, Atom::Generator(_))
-                && s > 0
-                && let Some((k, p, n)) = covering_identity(prev, src_pos, s)
-            {
-                return Some(Sift {
-                    j,
-                    idx,
-                    k,
-                    pre: src_pos - p,
-                    post: (p + n) - (src_pos + s),
-                });
+            if matches!(atom, Atom::Generator(_)) {
+                if s > 0 {
+                    // Positive-source generator: its whole consumed span must lie
+                    // inside a single covering `Identity` of the previous layer.
+                    if let Some((k, p, n)) = covering_identity(prev, src_pos, s) {
+                        return Some(Sift {
+                            j,
+                            idx,
+                            place: Placement::SplitIdentity {
+                                k,
+                                pre: src_pos - p,
+                                post: (p + n) - (src_pos + s),
+                            },
+                        });
+                    }
+                } else {
+                    // Zero-source generator (η): empty consumed span, so its
+                    // placement is fixed by the single wire coordinate `src_pos`
+                    // (the point-span rule, issue #55).
+                    if let Some(place) = point_placement(prev, src_pos) {
+                        return Some(Sift { j, idx, place });
+                    }
+                }
             }
             src_pos += s;
         }
@@ -1264,36 +1300,91 @@ fn covering_identity<G: PropSignature>(
     None
 }
 
+/// Placement for a **zero-source** generator (`η`) whose single output point
+/// sits at wire coordinate `q` on the `j−1 ; j` boundary. Two admissible cases:
+///
+/// 1. `q` *strictly* inside an `Identity(n)` atom's target span `[p, p+n)`
+///    (`p < q < p+n`) → split that identity ([`Placement::SplitIdentity`]).
+/// 2. `q` on an atom boundary (the layer start, the layer end, or a cumulative
+///    boundary between two atoms — including the two edges of an identity)
+///    → insert between the adjacent atoms ([`Placement::Boundary`], no split).
+///
+/// Blocked (returns `None`) when `q` falls *strictly* inside a non-`Identity`
+/// atom's target span: a `Generator`'s output wires (`prev` is braid-free, so
+/// the only non-identity atoms are generators) cannot be split. Soundness is
+/// the same interchange law as the positive-source sift — moving `η` earlier
+/// through a column of identities (or across an atom boundary, where it shares
+/// no wire with either neighbour) preserves the morphism. JS-I Ch 1 §4 Thm 1.2
+/// p.71.
+fn point_placement<G: PropSignature>(prev: &Layer<G>, q: usize) -> Option<Placement> {
+    let mut p = 0; // cumulative target position = boundary before atom `k`
+    for (k, atom) in prev.atoms.iter().enumerate() {
+        if p == q {
+            // On the boundary immediately before atom `k` — insert here. Taking
+            // the first (leftmost) matching boundary is the deterministic
+            // tie-break when a zero-target atom makes a coordinate repeat.
+            return Some(Placement::Boundary { at: k });
+        }
+        let n = atom_target(atom);
+        if p < q && q < p + n {
+            // Strictly inside atom `k`.
+            return match atom {
+                Atom::Identity(_) => Some(Placement::SplitIdentity {
+                    k,
+                    pre: q - p,
+                    post: (p + n) - q,
+                }),
+                // Strictly inside a generator's output span: cannot split.
+                _ => None,
+            };
+        }
+        p += n;
+    }
+    // `q` at (or past) the total target width: boundary at the very end.
+    (p == q).then_some(Placement::Boundary {
+        at: prev.atoms.len(),
+    })
+}
+
 /// Apply a located [`Sift`]: insert the generator into layer `j − 1` (splitting
-/// the covering identity) and leave `Identity(target)` in layer `j`.
+/// a covering identity or inserting at an atom boundary, per the [`Placement`])
+/// and leave `Identity(target)` in layer `j`.
 fn apply_sift<G: PropSignature>(sd: &mut StringDiagram<G>, sift: &Sift) {
-    let Sift {
-        j,
-        idx,
-        k,
-        pre,
-        post,
-    } = *sift;
+    let Sift { j, idx, place } = sift;
+    let (j, idx) = (*j, *idx);
     let g = sd.layers[j].atoms[idx].clone();
     let target = atom_target(&g);
 
-    // Rebuild layer j−1 with the covering identity split into `Identity(pre)`,
-    // the generator, `Identity(post)`; zero-width pieces are suppressed.
+    // Rebuild layer j−1 with the generator inserted per its placement.
     let prev_atoms = std::mem::take(&mut sd.layers[j - 1].atoms);
-    let mut new_prev = Vec::with_capacity(prev_atoms.len() + 2);
-    for (kk, atom) in prev_atoms.into_iter().enumerate() {
-        if kk == k {
-            if pre > 0 {
-                new_prev.push(Atom::Identity(pre));
+    let new_prev = match *place {
+        Placement::SplitIdentity { k, pre, post } => {
+            // Split the covering identity into `Identity(pre)`, the generator,
+            // `Identity(post)`; zero-width pieces are suppressed.
+            let mut new_prev = Vec::with_capacity(prev_atoms.len() + 2);
+            for (kk, atom) in prev_atoms.into_iter().enumerate() {
+                if kk == k {
+                    if pre > 0 {
+                        new_prev.push(Atom::Identity(pre));
+                    }
+                    new_prev.push(g.clone());
+                    if post > 0 {
+                        new_prev.push(Atom::Identity(post));
+                    }
+                } else {
+                    new_prev.push(atom);
+                }
             }
-            new_prev.push(g.clone());
-            if post > 0 {
-                new_prev.push(Atom::Identity(post));
-            }
-        } else {
-            new_prev.push(atom);
+            new_prev
         }
-    }
+        Placement::Boundary { at } => {
+            // Insert the generator between atoms `at−1` and `at` (append if
+            // `at == len`); `Vec::insert` handles both.
+            let mut new_prev = prev_atoms;
+            new_prev.insert(at, g.clone());
+            new_prev
+        }
+    };
     sd.layers[j - 1].atoms = merge_adjacent_identities(new_prev);
 
     // Layer j keeps an identity of the generator's target width in its old slot;

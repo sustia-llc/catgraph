@@ -20,10 +20,12 @@
 //! are ~3 MB each and only exist on the developer's machine; release-gate
 //! reviewers run it manually with `--ignored`.
 //!
-//! **Watch-item:** `try_unitor_merge` only handles the 2-atom sink/source
-//! pattern (`[X, Identity(k)]` and three mirrors). A proptest or golden-
-//! replay failure whose witness has a zero-arity atom (ε, η) embedded
-//! deeper in a layer flags the known limitation for follow-up.
+//! **Zero-arity atoms.** `try_unitor_merge` absorbs the 2-atom sink/source
+//! pattern (`[X, Identity(k)]` and three mirrors); mid-layer zero-source `η`
+//! deeper in a layer is scheduled by the `topological_layer_order` point-span
+//! sift (issue #55, closed — see `interchange_zero_source_eta`). A proptest or
+//! golden-replay failure whose witness carries a target-0 sink (`ε`) in an
+//! unusual position would flag a residual limitation for follow-up.
 
 use catgraph_applied::prop::presentation::smc_nf::nf;
 use catgraph_applied::prop::{PropExpr, PropSignature};
@@ -176,11 +178,11 @@ mod axiom_closure {
         /// See the `issue_14_topological_layer_order` regressions in
         /// `smc_nf_regression.rs`.
         ///
-        /// **Scope of "closed":** for generators with source arity > 0 (this
-        /// test's `arb_expr` emits only `F`, `G : 1 → 1` plus braids/identities).
-        /// A mid-layer **zero-source** atom (`η : 0 → 1`) is still not scheduled
-        /// canonically — see `interchange_zero_source_eta_known_gap` below and the
-        /// Watch-item in this file's header.
+        /// The follow-up mid-layer **zero-source** case (`η : 0 → 1`) is now also
+        /// closed by the point-span sift (issue #55) — see
+        /// `interchange_zero_source_eta` below. This proptest's `arb_expr` emits
+        /// only `F`, `G : 1 → 1` plus braids/identities, so it exercises the
+        /// positive-source scheduling directly.
         #[test]
         fn interchange(
             f in arb_expr(),
@@ -253,17 +255,14 @@ fn known_edge_case_unitor_merge_two_atom_pattern() {
     assert_eq!(nf(&lhs_b), nf(&rhs_b), "η-source-right absorption");
 }
 
-/// Known gap (issue #14 follow-up): a mid-layer **zero-source** generator
-/// (`η : 0 → 1`) is not scheduled canonically. `F ⊗ η ⊗ G` and
+/// Closed (issue #55): a mid-layer **zero-source** generator (`η : 0 → 1`) is
+/// now scheduled canonically by the point-span sift. `F ⊗ η ⊗ G` and
 /// `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)` are SMC-equal (both are `[F(in0), η-fresh,
-/// G(in1)]`) but currently normalize to distinct diagrams: `find_sift` /
-/// `topological_layer_order` skips source-0 atoms (empty consumed span ⇒
-/// positionally ambiguous earliest-layer) and `try_unitor_merge` only absorbs
-/// the 2-atom boundary pattern, not a 3-atom mid-layer η. See the Watch-item in
-/// this file's header. Deliberately NOT closed by a point-span sift (deferred).
+/// G(in1)]`); `topological_layer_order` slides `η` into the earlier layer at its
+/// point coordinate (the boundary between `F`'s and `G`'s target spans), so both
+/// normalize to `[[F, η, G]]`.
 #[test]
-#[ignore = "known gap: mid-layer zero-source (η) scheduling; see Watch-item"]
-fn interchange_zero_source_eta_known_gap() {
+fn interchange_zero_source_eta() {
     let f: PropExpr<TestSig> = PropExpr::Generator(TestSig::F);
     let g: PropExpr<TestSig> = PropExpr::Generator(TestSig::G);
     let eta: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eta); // 0 → 1

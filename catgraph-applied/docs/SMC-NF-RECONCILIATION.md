@@ -131,13 +131,19 @@ Two independent choices fix the placement of atoms:
    the issue-#14 C2 scheduling witnesses (same morphism, independent atoms
    placed in different layers) onto one earliest-schedule form.
 
-   Two atoms are deliberately excluded from the sift: braids never sift (their
-   placement is §2.1's job, and letting both passes move atoms would oscillate
-   the fixpoint), and **zero-source** generators (`η : 0 → 1`) are skipped —
-   their consumed span is empty, so "earliest admissible layer" is positionally
-   ambiguous. That skip is the known mid-layer-`η` gap
-   (`interchange_zero_source_eta_known_gap`, issue #14 follow-up). Target-0
-   sinks (`ε : 1 → 0`) have a non-empty source span and sift normally.
+   **Zero-source** generators (`η : 0 → 1`) sift by the **point-span rule**
+   (issue #55): the empty consumed span reduces to a single output coordinate
+   `q` at the source cursor, so `η` slides into the earliest braid-free layer
+   `j−1` iff `q` is an atom boundary there (insert between the adjacent atoms,
+   e.g. the `[F, G]` boundary in the witness) or strictly inside one of its
+   identities (split that identity). It is blocked only when `q` is strictly
+   inside a generator's output span (whose wires cannot be split). Leftmost
+   boundary is the deterministic tie-break when a target-0 atom repeats a
+   coordinate. This subsumes `try_unitor_merge`'s zero-arity source patterns
+   (both agree on the 2-atom boundary shape) without racing it. Target-0 sinks
+   (`ε : 1 → 0`) have a non-empty source span and sift via the positive-source
+   path. Only **braids** are excluded from the sift (their placement is §2.1's
+   job, and letting both passes move atoms would oscillate the fixpoint).
 
 - Anchors: JS-I Ch 1 Prop 1.1 p. 66 (rectangle-cover independence); JS-I
   Ch 1 §4 Thm 1.2 p. 71 (𝔽(𝒟) freeness — interchange is proof item (f) +
@@ -167,7 +173,7 @@ decreasing whenever the diagram is not yet a fixpoint:
 | `mixed_layer_count` | `isolate_mixed_braid_layers` (inside `collect_braid_prefix`) | the mixed-merge refusal at `reduce_involution`'s merge site stops any step re-creating a mixed layer |
 | `wide_braid_count` | `hexagon_expand` (`Braid(m,n), m+n>2 → Braid(1,1)` bricks) | ordered ahead of `braid_position_sum` so a naturality-emitted wide braid is decomposed before positions are compared |
 | `braid_position_sum` | the naturality sweep (braids move input-ward) | §2.1 |
-| `generator_position_sum` | `topological_layer_order` (Step 4(c)) | one generator drops exactly one layer per sift; bounded below by 0 |
+| `generator_position_sum` | `topological_layer_order` (Step 4(c)) | one generator — positive-source or zero-source `η` (issue #55) — drops exactly one layer per sift; bounded below by 0 |
 | `layer_count` | `coalesce_identity_layers` / `simplify_units` | identity-only layers absorb; `Identity(0)` atoms are removed |
 
 `topological_layer_order` has its own inner termination for the same reason:
@@ -231,7 +237,7 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
 - **Symmetry layer** — `σ² = id`, braid naturality, hexagon/`σ_{m,n}`
   decomposition, Yang-Baxter, `S_n` reduced-word canonicality: **covered** by
   Steps 0–3 and the JS-Braided / JS-II suite.
-- **Known open gap** — mid-layer **zero-source** (`η : 0 → 1`) scheduling is
-  not canonical (§2.3); tracked as `interchange_zero_source_eta_known_gap`
-  (`#[ignore]`) and the Watch-item in `tests/smc_nf_completeness.rs`, issue #14
-  follow-up.
+- **Zero-arity scheduling** — mid-layer **zero-source** (`η : 0 → 1`)
+  scheduling is canonical via the point-span sift (§2.3, issue #55; the former
+  issue #14 follow-up gap); verified by `interchange_zero_source_eta` in
+  `tests/smc_nf_completeness.rs`.
