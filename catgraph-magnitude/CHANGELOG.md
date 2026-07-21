@@ -14,6 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`LmCategory::from_traces` corpus MLE constructor**
+  ([#53](https://github.com/sustia-llc/catgraph/issues/53)) — a prefix-state
+  maximum-likelihood realization of the BTV 2021 syntax category
+  (arXiv:2106.07890v2 §2.2 Def 4 `L(x, y) := π(y | x)`, Eq 8 chain rule
+  `π(z|y)·π(y|x) = π(z|x)`). States are the observed prefixes of the corpus
+  (ε included; state name = tokens joined by a single space), so the table is
+  a tree — no self-loops, no cycles — structurally satisfying the
+  [`magnitude`] acyclicity hypothesis. Probabilities are the MLE
+  `π(p·t | p) = N(p·t) / N(p)` (paper prescribes no estimator; this is the
+  crate's realization), under which Eq (8) holds exactly by construction. A
+  prefix is terminating when some trace ends there; its leaky-row terminal
+  mass `#ends(p)/N(p)` is the BV 2025 `†` mass, so the constructor feeds
+  `magnitude` coherently. Objects are ordered ascending-lexicographically (ε
+  first); edges route through `add_transition` for validation. Rejects an
+  empty corpus and any empty / whitespace-containing token
+  (state-name collision hazard). Tests: hand-checked π/objects/terminating,
+  Eq (8) distance exactness on a depth-≥3 corpus, terminal-mass identity,
+  `magnitude` smoke, the three error cases, and the empty-trace ε case.
+
 ### Changed
 
 - **Paper-audit citation reconciliation (Phase 3, PR #120)** — verified every

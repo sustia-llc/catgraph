@@ -178,6 +178,171 @@ fn enriched_space_prob_one_two_cycle_terminates_with_zero_distance() {
 }
 
 // ---------------------------------------------------------------------------
+// from_traces — corpus MLE constructor (BTV 2021 §2.2 Def 4 + Eq 8, #53)
+// ---------------------------------------------------------------------------
+
+/// Build a name → `NodeId` (position in `objects()`) map for reading
+/// `enriched_space()` distances by state name.
+fn name_index(m: &LmCategory) -> std::collections::HashMap<&str, usize> {
+    m.objects()
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (s.as_str(), i))
+        .collect()
+}
+
+/// Hand-checked small corpus: exact π values, objects, and terminating set.
+///
+/// Corpus `["the","cat"], ["the","dog"], ["a","cat"]`. Prefix counts:
+/// `N(ε)=3, N("the")=2, N("the cat")=1, N("the dog")=1, N("a")=1,
+/// N("a cat")=1`.
+#[test]
+fn from_traces_hand_checked_corpus() {
+    let traces = vec![vec!["the", "cat"], vec!["the", "dog"], vec!["a", "cat"]];
+    let m = LmCategory::from_traces(&traces).expect("valid corpus");
+
+    // Objects: ascending lexicographic order, ε ("") first.
+    assert_eq!(
+        m.objects(),
+        &[
+            String::new(),
+            "a".to_owned(),
+            "a cat".to_owned(),
+            "the".to_owned(),
+            "the cat".to_owned(),
+            "the dog".to_owned(),
+        ]
+    );
+
+    // π(child | parent) = N(child) / N(parent).
+    let pi = |from: &str, to: &str| m.transitions().get(from).and_then(|r| r.get(to)).copied();
+    assert_eq!(pi("", "the"), Some(2.0 / 3.0)); // 2/3
+    assert_eq!(pi("", "a"), Some(1.0 / 3.0)); // 1/3
+    assert_eq!(pi("the", "the cat"), Some(0.5)); // 1/2
+    assert_eq!(pi("the", "the dog"), Some(0.5)); // 1/2
+    assert_eq!(pi("a", "a cat"), Some(1.0)); // 1/1
+
+    // Terminating = prefixes where some trace ends exactly.
+    let mut term: Vec<&String> = m.terminating().iter().collect();
+    term.sort();
+    assert_eq!(
+        term,
+        vec![
+            &"a cat".to_owned(),
+            &"the cat".to_owned(),
+            &"the dog".to_owned(),
+        ]
+    );
+}
+
+/// BTV 2021 §2.2 Eq (8) exactness: for every realized composable pair of
+/// transitions `x → y`, `y → z`, the chain rule `π(z|y)·π(y|x) = π(z|x)`
+/// holds by construction. Read through `enriched_space` as distances:
+/// `d(x, z) == d(x, y) + d(y, z)` within `1e-12`. Corpus depth ≥ 3.
+#[test]
+fn from_traces_eq8_chain_rule_exact() {
+    let traces = vec![vec!["a", "b", "c"], vec!["a", "b", "d"], vec!["a", "e"]];
+    let m = LmCategory::from_traces(&traces).expect("valid corpus");
+    let space = m.enriched_space().expect("tree table has no cycles");
+    let idx = name_index(&m);
+    let d = |from: &str, to: &str| space.distance(&idx[from], &idx[to]).0;
+
+    let mut pairs_checked = 0usize;
+    for (x, row) in m.transitions() {
+        for y in row.keys() {
+            let Some(y_row) = m.transitions().get(y) else {
+                continue;
+            };
+            for z in y_row.keys() {
+                let lhs = d(x, z);
+                let rhs = d(x, y) + d(y, z);
+                assert!(
+                    (lhs - rhs).abs() < 1e-12,
+                    "Eq (8) violated for {x:?} → {y:?} → {z:?}: \
+                     d(x,z)={lhs} != d(x,y)+d(y,z)={rhs}"
+                );
+                pairs_checked += 1;
+            }
+        }
+    }
+    assert!(
+        pairs_checked >= 1,
+        "corpus should realize at least one composable pair"
+    );
+}
+
+/// Terminal mass at a branching-and-terminating state equals `#ends / N`.
+///
+/// Corpus `["the"], ["the","cat"]`: `N("the")=2`, one trace ends at `"the"`,
+/// one continues to `"the cat"`. Row `"the"` = `{"the cat": 1/2}`, so
+/// `1 − Σ row = 0.5 = #ends("the")/N("the") = 1/2`.
+#[test]
+fn from_traces_terminal_mass_matches_ends_over_n() {
+    let traces = vec![vec!["the"], vec!["the", "cat"]];
+    let m = LmCategory::from_traces(&traces).expect("valid corpus");
+
+    let row_sum: f64 = m
+        .transitions()
+        .get("the")
+        .map(|r| r.values().sum())
+        .unwrap_or(0.0);
+    let terminal_mass = 1.0 - row_sum;
+    assert!(
+        (terminal_mass - 0.5).abs() < 1e-12,
+        "terminal mass at \"the\" should be #ends/N = 1/2, got {terminal_mass}"
+    );
+    assert!(m.terminating().contains("the"));
+}
+
+/// `magnitude(t)` smoke: a corpus builds a tree (acyclic) so ζ_t is
+/// invertible and magnitude is a finite `Ok` value.
+#[test]
+fn from_traces_magnitude_smoke() {
+    let traces = vec![vec!["the", "cat"], vec!["the", "dog"], vec!["a", "cat"]];
+    let m = LmCategory::from_traces(&traces).expect("valid corpus");
+    let mag = m.magnitude(2.0).expect("tree table ⇒ invertible ζ_2");
+    assert!(
+        mag.is_finite(),
+        "magnitude at t=2.0 should be finite, got {mag}"
+    );
+}
+
+/// Empty corpus is rejected.
+#[test]
+fn from_traces_empty_corpus_errors() {
+    let traces: Vec<Vec<&str>> = Vec::new();
+    assert!(LmCategory::from_traces(&traces).is_err());
+}
+
+/// A token containing an internal space is rejected (state-name collision).
+#[test]
+fn from_traces_token_with_space_errors() {
+    let traces = vec![vec!["a b"]];
+    assert!(LmCategory::from_traces(&traces).is_err());
+}
+
+/// An empty-string token is rejected.
+#[test]
+fn from_traces_empty_string_token_errors() {
+    let traces = vec![vec!["a", ""]];
+    assert!(LmCategory::from_traces(&traces).is_err());
+}
+
+/// An empty trace in a non-empty corpus makes ε terminating without panic.
+#[test]
+fn from_traces_empty_trace_marks_epsilon_terminating() {
+    let traces = vec![vec![], vec!["a"]];
+    let m = LmCategory::from_traces(&traces).expect("empty trace is a valid observation");
+    assert!(
+        m.terminating().contains(""),
+        "an empty trace should mark ε (\"\") terminating"
+    );
+    // ε is an object; the non-empty trace realizes ε → "a" with π = 1/2.
+    assert!(m.objects().iter().any(|o| o.is_empty()));
+    assert_eq!(m.transitions().get("").and_then(|r| r.get("a")), Some(&0.5));
+}
+
+// ---------------------------------------------------------------------------
 // Intro magnitude-bounds proptest — sanity check on random LMs
 // ---------------------------------------------------------------------------
 

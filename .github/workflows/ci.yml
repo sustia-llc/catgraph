@@ -42,7 +42,7 @@ jobs:
       # FS19 + FS18 (drift fixed in audit Phases 1-2) + BV25 (Phase 3 fixed its
       # §2/§3 summary-vs-detail drift; joined the gate here).
       - name: audit-count guard (#111)
-        run: python3 scripts/check_audit_counts.py catgraph/docs/FS19-AUDIT.md catgraph-applied/docs/FS18-AUDIT.md catgraph-magnitude/docs/BV25-AUDIT.md
+        run: python3 scripts/check_audit_counts.py catgraph/docs/FS19-AUDIT.md catgraph-applied/docs/FS18-AUDIT.md catgraph-magnitude/docs/BV25-AUDIT.md catgraph-magnitude/docs/BTV21-AUDIT.md
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # #85: broken intra-doc links (unresolved / private / redundant) shipped

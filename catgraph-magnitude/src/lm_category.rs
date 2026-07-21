@@ -26,7 +26,7 @@
 //!   entropy). Verified by central finite difference with `h = 1e-4 >
 //!   TSALLIS_SHANNON_EPS`.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::magnitude::magnitude;
 use crate::weighted_cospan::NodeId;
@@ -182,6 +182,142 @@ impl LmCategory {
         }
         for (from, to, prob) in log {
             m.add_transition(from.as_ref(), to.as_ref(), prob)?;
+        }
+        Ok(m)
+    }
+
+    /// Corpus maximum-likelihood constructor — a **prefix-state** realization
+    /// of the BTV 2021 syntax category (arXiv:2106.07890v2 §2.2).
+    ///
+    /// BTV 2021 §2.2 Definition 4 defines the syntax category by
+    /// `L(x, y) := π(y | x)` — the probability that expression `y` extends
+    /// expression `x` (`0` if `x` is not a subtext of `y`) — and §2.2 Eq (8)
+    /// states the chain rule `π(z | y) · π(y | x) = π(z | x)` as an *equality*.
+    /// The paper notes that language models learn these `π` from corpora but
+    /// prescribes **no** estimator; the maximum-likelihood construction below
+    /// is this crate's realization.
+    ///
+    /// # States are observed prefixes
+    ///
+    /// Every distinct prefix of every trace — **including the empty prefix ε**
+    /// — becomes a state. A state name is its tokens joined by a single
+    /// space (`" "`); ε is the empty string `""`. Transitions therefore only
+    /// go `p → p·t` (one-token extensions), so the table is a tree: no
+    /// self-loops and no cycles by construction, which structurally satisfies
+    /// the acyclicity hypothesis of [`magnitude`](Self::magnitude) (BV 2025
+    /// tree-poset, Prop 3.10).
+    ///
+    /// # Maximum-likelihood probabilities
+    ///
+    /// Let `N(p)` be the number of traces having `p` as a prefix (every trace
+    /// counts toward all of its prefixes, so `N(ε)` is the total trace count).
+    /// For each observed one-token extension `p → p·t` the estimate is
+    /// `π(p·t | p) = N(p·t) / N(p)`, which lies in `(0, 1]` because
+    /// `N(p·t) ≤ N(p)` and both are positive. BTV 2021 §2.2 Eq (8) then holds
+    /// **exactly** by construction (up to `f64` rounding): along a prefix chain
+    /// `x → y → z`, `N(z)/N(y) · N(y)/N(x) = N(z)/N(x)`.
+    ///
+    /// # Terminating set and terminal mass
+    ///
+    /// A prefix is marked terminating (added to `T(⊥)` via
+    /// [`mark_terminating`](Self::mark_terminating)) when at least one trace
+    /// ends *exactly* there — including ε when an empty trace is present. The
+    /// leaky-row terminal mass at state `p`,
+    /// `1 − Σ_children π(p·t | p) = #ends(p) / N(p)`, is exactly the BV 2025
+    /// `†` (`T(⊥)`) mass, so this corpus constructor feeds
+    /// [`magnitude`](Self::magnitude) coherently.
+    ///
+    /// # Object order
+    ///
+    /// Objects are listed in **ascending lexicographic order** of their state
+    /// names (ε, the empty string, sorts first). Prefixes are collected into a
+    /// [`BTreeMap`], so the order is deterministic and names are unique by
+    /// construction.
+    ///
+    /// Construction routes every edge through
+    /// [`add_transition`](Self::add_transition) (matching the
+    /// [`from_transition_log`](Self::from_transition_log) precedent), so its
+    /// membership / range / self-loop validation applies.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::Composition`] if:
+    /// - `traces` is empty (no observations to estimate from);
+    /// - any token is the empty string, or contains whitespace (a state-name
+    ///   collision hazard: token `"a b"` would collide with the two-token
+    ///   prefix `["a", "b"]`).
+    #[allow(clippy::cast_precision_loss)]
+    // Corpus counts are small integers relative to f64's 2^53 exact-integer
+    // range; the N(p·t)/N(p) ratio is precision-safe.
+    pub fn from_traces<S: AsRef<str>>(traces: &[Vec<S>]) -> Result<Self, CatgraphError> {
+        if traces.is_empty() {
+            return Err(CatgraphError::Composition {
+                message: "empty corpus — no observations to estimate from".to_owned(),
+            });
+        }
+        for trace in traces {
+            for tok in trace {
+                let t = tok.as_ref();
+                if t.is_empty() {
+                    return Err(CatgraphError::Composition {
+                        message: "empty token in corpus (state-name collision hazard)".to_owned(),
+                    });
+                }
+                if t.chars().any(char::is_whitespace) {
+                    return Err(CatgraphError::Composition {
+                        message: format!(
+                            "token {t:?} contains whitespace (state-name collision hazard: \
+                             tokens are joined by a single space to name prefix states)"
+                        ),
+                    });
+                }
+            }
+        }
+
+        // N(p): number of traces having `p` as a prefix. ε (empty string) is a
+        // prefix of every trace. `terminating` collects prefixes at which some
+        // trace ends exactly. BTreeMap keys give a deterministic, deduplicated
+        // object order (ε sorts first).
+        let mut counts: BTreeMap<String, u64> = BTreeMap::new();
+        let mut terminating: BTreeSet<String> = BTreeSet::new();
+        for trace in traces {
+            *counts.entry(String::new()).or_insert(0) += 1;
+            let mut prefix = String::new();
+            for tok in trace {
+                if prefix.is_empty() {
+                    prefix.push_str(tok.as_ref());
+                } else {
+                    prefix.push(' ');
+                    prefix.push_str(tok.as_ref());
+                }
+                *counts.entry(prefix.clone()).or_insert(0) += 1;
+            }
+            // `prefix` is ε for an empty trace, else the full trace string.
+            terminating.insert(prefix);
+        }
+
+        let names: Vec<String> = counts.keys().cloned().collect();
+        let mut m = Self::new(names);
+        for state in &terminating {
+            m.mark_terminating(state);
+        }
+        // For every non-ε prefix `p·t`, its parent `p` is the name with the
+        // last token dropped. Tokens are whitespace-free, so the parent is the
+        // substring before the final space (ε when there is none). The parent
+        // is always an observed prefix, so `N(p) ≥ N(p·t) > 0`.
+        for (name, &child_count) in &counts {
+            if name.is_empty() {
+                continue; // ε has no parent.
+            }
+            let parent = match name.rsplit_once(' ') {
+                Some((p, _)) => p,
+                None => "",
+            };
+            let parent_count = *counts
+                .get(parent)
+                .expect("invariant: every prefix's parent is an observed prefix");
+            let prob = child_count as f64 / parent_count as f64;
+            m.add_transition(parent, name, prob)?;
         }
         Ok(m)
     }
