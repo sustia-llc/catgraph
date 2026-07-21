@@ -235,10 +235,15 @@ fn from_traces_hand_checked_corpus() {
     );
 }
 
-/// BTV 2021 §2.2 Eq (8) exactness: for every realized composable pair of
-/// transitions `x → y`, `y → z`, the chain rule `π(z|y)·π(y|x) = π(z|x)`
-/// holds by construction. Read through `enriched_space` as distances:
-/// `d(x, z) == d(x, y) + d(y, z)` within `1e-12`. Corpus depth ≥ 3.
+/// BTV 2021 §2.2 Eq (8) on a `from_traces` tree, read through
+/// `enriched_space` as distances: `d(x, z) == d(x, y) + d(y, z)` within
+/// `1e-12` for every realized composable pair. Corpus depth ≥ 3.
+///
+/// Scope: this verifies the *tree metric additivity* half of Eq (8) — on a
+/// prefix tree the path is unique, so additivity holds for any edge values.
+/// The other half (the MLE values themselves, whose telescoping makes Eq (8)
+/// an equality of probabilities) is pinned by
+/// `from_traces_hand_checked_corpus`.
 #[test]
 fn from_traces_eq8_chain_rule_exact() {
     let traces = vec![vec!["a", "b", "c"], vec!["a", "b", "d"], vec!["a", "e"]];

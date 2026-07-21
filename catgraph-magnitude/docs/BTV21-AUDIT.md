@@ -60,10 +60,11 @@
   substrate re-exported here), 7 are N/A (5 motivational or proof-layer, 2 abstract
   enriched-functor setup whose concrete instance is the representable copresheaf).
   That leaves **21 implementable items**, of which **13 are DONE and 8 DEFERRED**.
-- The 8 deferrals are all *algebra above the semantics gate*: the weighted
-  (co)limit calculus (§4, four items), the M̂ weighted (co)product (§5), the
-  semi-tropical module action (§5.1, Thm 6), and the L̂-as-a-category syntax-side
-  layer (§3.2). Weighted (co)limits + the Thm 6 module action are folded into
+- The 8 deferrals are all *algebra above the semantics gate*: the unenriched
+  (co)limit constructions (§1.3, one item), the weighted (co)limit calculus
+  (§4, four items), the M̂ weighted (co)product (§5), the semi-tropical module
+  action (§5.1, Thm 6), and the L̂-as-a-category syntax-side layer (§3.2).
+  The §1.3/§4 (co)limits + the Thm 6 module action are folded into
   [#36](https://github.com/sustia-llc/catgraph/issues/36); the L̂ syntax layer is
   [#53](https://github.com/sustia-llc/catgraph/issues/53) item 2 (research track).
 - The **load-bearing** syntax-category surface (Def 4 + Eq 8) and the **semantic**
@@ -109,8 +110,8 @@ equalities*, verified at v2 lines 504–510).
 | Item | Status | Location | Notes |
 |---|---|---|---|
 | Def 4 — `L(x,y) = π(y\|x)` syntax category (BYO-LM transition table) | ✅ | `lm_category::LmCategory`, `weighted_cospan::WeightedCospan` | The transition table *is* `L(x,y)`; `WeightedCospan` carries per-edge `[0,1]` weights. |
-| Def 4 — corpus-MLE constructor (bigram MLE `count(x→y) / count(x→·)`) | ✅ | `lm_category::LmCategory::from_traces` | **Lands in this change** ([#53](https://github.com/sustia-llc/catgraph/issues/53) item 1): closes the "where do the probabilities come from" gap for real text fixtures. Anti-target from the legacy round-3 verdict carried: BTV21 has *no* production-rule taxonomy — do not invent a terminal/non-terminal split. |
-| Eq 8 — chain-rule equality `π(z\|y)·π(y\|x) = π(z\|x)` | ✅ | `lm_category::LmCategory` (forward-BFS path product) | Holds by construction: `d(x,y) = −ln π(y\|x)` is additive along geodesics, so `π` is multiplicative along composable paths — Eq 8 is exactly geodesic additivity of the `-ln` embedding. |
+| Def 4 — corpus-MLE constructor (prefix-state MLE `π(p·t\|p) = N(p·t)/N(p)`, full-history prefix trie — *not* an order-1 bigram model) | ✅ | `lm_category::LmCategory::from_traces` | **Lands in this change** ([#53](https://github.com/sustia-llc/catgraph/issues/53) item 1): closes the "where do the probabilities come from" gap for real text fixtures. Anti-target from the legacy round-3 verdict carried: BTV21 has *no* production-rule taxonomy — do not invent a terminal/non-terminal split. |
+| Eq 8 — chain-rule equality `π(z\|y)·π(y\|x) = π(z\|x)` | ✅ | `lm_category::LmCategory::from_traces` (prefix-tree tables) | Holds by construction **on the tree-shaped tables `from_traces` produces** (unique path ⇒ `-ln` additivity is exact, and the count MLE telescopes: `N(z)/N(y)·N(y)/N(x) = N(z)/N(x)`). On general BYO-LM tables `enriched_space` computes a *max-probability-path* relaxation (its rustdoc's DAG-with-rejoin caveat), so Eq 8 is a bound, not an equality, there. |
 
 ### §3 Enriched copresheaves
 

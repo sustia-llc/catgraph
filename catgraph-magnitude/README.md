@@ -65,6 +65,7 @@ The workspace `v0.1.0` (2026-07-01) semantic + determinism + coalition layer ove
 | Symbol | Paper anchor | Notes |
 |---|---|---|
 | `LmCategory` | BV 2025 §3 | Materialized BYO-LM transition table |
+| `LmCategory::from_traces(traces)` | BTV 2021 §2.2 Def 4 + Eq (8) | Corpus MLE — prefix-state tree (`π(p·t\|p) = N(p·t)/N(p)`); Eq (8) exact by construction, feeds `magnitude` (#53) |
 | `LmCategory::yoneda(name)` → `Copresheaf` | BTV 2021 (Yoneda) | Representable copresheaf `L(x, −)`, `π = exp(−d)` (#19) |
 | `semantic_hom` / `semantic_distance` / `semantic_distance_sym` | BTV 2021 Lemma 2 Eq 11 / §5 | Asymmetric semantic internal hom + its `−ln` distance (sym variant non-canonical) (#19) |
 | `LmCategory::deterministic_transition_rank()` → `usize` | BV 2025 / LS 2017 §2 | `rank MH₁(ℓ=0)` = #covering deterministic (`π=1`) transitions (#20) |

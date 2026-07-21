@@ -40,7 +40,8 @@ jobs:
       # citations) are hand-maintained and drifted twice before Phase 1 of the
       # paper audit caught them. This recomputes them from the docs themselves.
       # FS19 + FS18 (drift fixed in audit Phases 1-2) + BV25 (Phase 3 fixed its
-      # §2/§3 summary-vs-detail drift; joined the gate here).
+      # §2/§3 summary-vs-detail drift; joined the gate here) + BTV21 (ported
+      # from the archived coalition audit, #53 item 3; joined the gate here).
       - name: audit-count guard (#111)
         run: python3 scripts/check_audit_counts.py catgraph/docs/FS19-AUDIT.md catgraph-applied/docs/FS18-AUDIT.md catgraph-magnitude/docs/BV25-AUDIT.md catgraph-magnitude/docs/BTV21-AUDIT.md
       - run: cargo fmt --all --check

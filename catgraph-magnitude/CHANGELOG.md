@@ -34,6 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (state-name collision hazard). Tests: hand-checked π/objects/terminating,
   Eq (8) distance exactness on a depth-≥3 corpus, terminal-mass identity,
   `magnitude` smoke, the three error cases, and the empty-trace ε case.
+- **`docs/BTV21-AUDIT.md`** ([#53](https://github.com/sustia-llc/catgraph/issues/53)
+  item 3) — section-by-section BTV 2021 coverage audit, ported from the
+  archived `catgraph-coalition` audit and re-expressed against the shipped
+  magnitude surfaces (#19–#23 + `from_traces`): 32 items — 13 DONE /
+  8 DEFERRED / 7 N/A / 4 IN-APPLIED. Corrects legacy citation drift
+  ("§3 Def 4/Eq 8" → §2.2; a phantom "Theorem 2" → Def 10 + Eq (17)–(19) +
+  Lemma 4) and joins the CI audit-count guard (now four docs).
 
 ### Changed
 
