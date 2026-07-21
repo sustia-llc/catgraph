@@ -85,4 +85,5 @@ Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBU
 > audit-doc tallies self-consistent. Follow-ups resolved 2026-07-19: #117
 > (Selinger/JS sourcing — all four papers cached, every SMC-NF anchor
 > verified, (†) marks retired) and #124 (physics `docs/ANCHORS.md`).
-> Remaining substantive gap: #126 (Prop 5.56 `mat_to_sfg`).
+> The last substantive gap closed 2026-07-21: #126 (Prop 5.56 `mat_to_sfg`
+> realization, PR #137) — the audit arc is fully resolved.
