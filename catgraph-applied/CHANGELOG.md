@@ -95,6 +95,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
+- **`mat_to_sfg` — FS18 Prop 5.56 realization** ([#126](https://github.com/sustia-llc/catgraph/issues/126)):
+  the constructive converse of the shipped `sfg_to_mat` functor (Thm 5.53). For an
+  `m × n` matrix `M`, `mat_to_sfg(M)` builds the Prop 5.56 / Exercise 5.59 four-layer
+  composite — copy/discard (`copy_n`) ; scalars ; swaps/identities (a bubble-sort
+  braid network) ; add/zero (`add_n`) — so that exactly one path from input `i` to
+  output `j` carries the single scalar icon `M(i, j)`. The characteristic property
+  `sfg_to_mat(mat_to_sfg(M)) == M` is verified in `tests/mat_to_sfg_roundtrip.rs`
+  (Eq 5.57 2×2 template, Exercise 5.58's three matrices, empty-dimension edge cases,
+  and a round-trip proptest over all four rigs). Every empty dimension degenerates
+  naturally through the general composite — no shape is special-cased. Closes the last
+  §5.3 coverage gap; FS18-AUDIT §5.3 `6/1 → 7/0` DONE/MISSING (TOTAL 27/3/3 → 28/3/2).
+- **`add_n` / `zero_n` SFG helpers** ([#126](https://github.com/sustia-llc/catgraph/issues/126)):
+  the additive duals of `copy_n` / `discard_n`. `add_n(m) : m → 1` sums `m` inputs
+  (`add_n(0) = zero`, `add_n(1) = id`, `add_n(m) = (id ⊗ add_n(m-1)) ; add`);
+  `zero_n(n) : 0 → n` emits `n` additive identities (`zero_n(n) = zero ⊗ zero_n(n-1)`).
 - **Optional `serde` feature** ([#81](https://github.com/sustia-llc/catgraph/issues/81)):
   `Serialize`/`Deserialize` derives on the term-persistence surface —
   `PropExpr<G>`, `Presentation<G>`, `PresentedProp<G>`, `NormalizeEngine`,

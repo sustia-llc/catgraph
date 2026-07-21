@@ -25,18 +25,18 @@
 | §4.4 Categorification + monoidal cats | 5 | 0 | 0 | 2 | 2 | 9 |
 | §4.5 Compact closed categories | 0 | 0 | 0 | 2 | 3 | 5 |
 | §5.2 Props and presentations | 4 | 1 | 0 | 3 | 2 | 10 |
-| §5.3 Signal flow graphs | 6 | 0 | 1 | 0 | 0 | 7 |
+| §5.3 Signal flow graphs | 7 | 0 | 0 | 0 | 0 | 7 |
 | §5.4 Graphical linear algebra | 1 | 0 | 1 | 1 | 0 | 3 |
 | §6.2 Colimits and connection | 0 | 0 | 0 | 2 | 4 | 6 |
 | §6.3 Hypergraph categories | 2 | 0 | 0 | 0 | 7 | 9 |
 | §6.4 Decorated cospans | 4 | 0 | 1 | 1 | 0 | 6 |
 | §6.5 Operads and their algebras | 5 | 2 | 0 | 1 | 0 | 8 |
-| **TOTAL** | **27** | **3** | **3** | **12** | **18** | **63** |
+| **TOTAL** | **28** | **3** | **2** | **12** | **18** | **63** |
 
 **Headline numbers:**
-- **43% DONE / 5% PARTIAL / 5% MISSING / 19% N/A / 29% IN CORE**
-- Of the 63 audited items, 18 are already in catgraph core (the research paper's content), 12 are N/A (pedagogical), leaving **33 implementable items** of which **27 are DONE, 3 PARTIAL, 3 MISSING**.
-- Of implementable items: **82% DONE / 9% PARTIAL / 9% MISSING**
+- **44% DONE / 5% PARTIAL / 3% MISSING / 19% N/A / 29% IN CORE**
+- Of the 63 audited items, 18 are already in catgraph core (the research paper's content), 12 are N/A (pedagogical), leaving **33 implementable items** of which **28 are DONE, 3 PARTIAL, 2 MISSING**.
+- Of implementable items: **85% DONE / 9% PARTIAL / 6% MISSING**
 - §5.4 Thm 5.60 is closed via the opt-in `Presentation::eq_mod_functorial<MatrixNFFunctor<R>>` semantic engine — a complete decision procedure for `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)` (F&S Thm 5.60; proof via Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs, cf. BE15 §6). The default syntactic (CC) engine remains incomplete by design; see the §5.4 Thm 5.60 row for the measured Option-A improvement and the Mat(R) completeness resolution (resolved: functorial-terminal (#15); KB feasibility spike #57).
 - §4.4 carries 3 enriched-category rows (EnrichedCategory, HomMap, LawvereMetricSpace) and the congruence-closure decision procedure as the default `eq_mod` backend.
 - SFG_R, Mat(R), the `sfg_to_mat` functor, `Presentation`, Thm 5.60, and Corel are all closed; §6.3 Ex 6.64 Corel is closed in catgraph core.
@@ -93,7 +93,7 @@
 | Def 5.50: Mat(R) prop of R-matrices | ✅ | catgraph-applied::mat | `MatR<R>` pure-rig matrix prop. F&S convention: morphism m→n is m×n matrix. Composable/Monoidal/SymmetricMonoidalMorphism over any `Rig`; block_diagonal tensor. `mat_f64` nalgebra bridge behind opt-in `f64-rig` feature. |
 | Thm 5.53: prop functor S: SFG_R → Mat(R) | ✅ | catgraph-applied::sfg_to_mat | `sfg_to_mat` structural recursion over `PropExpr<SfgGenerator<R>>`; generator table matches Eq 5.52 exactly. Functoriality (S(f∘g) = S(f)·S(g), S(f⊗g) = S(f)⊕S(g)) verified on all 4 rigs via 13 integration tests. |
 | Prop 5.54: matrix S(g) describes input→output amplification | ✅ | catgraph-applied::sfg_to_mat (implicit) | Implicitly verified by Thm 5.53 functoriality tests; the generator matrices are exact per Eq 5.52. No standalone test. |
-| Prop 5.56: every matrix M∈Mat(R) is realized by some SFG (`S` is surjective/full) | ❌ | — | The converse of the shipped Thm 5.53: there is no `mat_to_sfg` realization. Genuine coverage gap (companion to a shipped theorem); the crate only computes SFG→Mat. |
+| Prop 5.56: every matrix M∈Mat(R) is realized by some SFG (`S` is surjective/full) | ✅ | catgraph-applied::mat_to_sfg | `mat_to_sfg(M)` realizes the converse of Thm 5.53 via the Prop 5.56 / Exercise 5.59 four-layer composite (copy/discard ; scalars ; swaps/identities ; add/zero): exactly one path from input `i` to output `j` carrying the single scalar icon `M(i, j)`. The characteristic property `S(mat_to_sfg(M)) == M` is verified in `tests/mat_to_sfg_roundtrip.rs` — the paper's Eq 5.57 2×2 template + Exercise 5.58's three matrices + empty-dimension edge cases, plus a round-trip proptest over all four rigs (BoolRig / Tropical / UnitInterval / F64Rig). Dual helpers `add_n`/`zero_n` added alongside `copy_n`/`discard_n`. |
 | Eq 5.52: generator → matrix table (copy, discard, add, zero, scalar) | ✅ | catgraph-applied::sfg_to_mat + tests/sfg_to_mat.rs | All 5 generator matrices verified in integration tests across BoolRig, UnitInterval, Tropical, F64Rig. |
 
 ### §5.4 Graphical linear algebra (pp. 168–178)
@@ -259,6 +259,7 @@ This section maps every catgraph workspace module to its paper provenance (or la
 | `sfg.rs` | — | §5.3 Def 5.45 | — | `SignalFlowGraph<R>` free prop on G_R generators. |
 | `mat.rs` | — | §5.3 Def 5.50 | — | `MatR<R>` pure-rig matrix prop. |
 | `sfg_to_mat.rs` | — | §5.3 Thm 5.53 | — | `sfg_to_mat` functor S: SFG_R → Mat(R). |
+| `mat_to_sfg.rs` | — | §5.3 Prop 5.56 + Ex 5.59 | — | `mat_to_sfg` realization (converse of Thm 5.53); four-layer composite; round-trip tested. |
 | `graphical_linalg.rs` | — | §5.4 Thm 5.60 | — | `matr_presentation<R>` 18-equation presentation. Thm 5.60 closed via the semantic Functorial engine; see `prop/presentation/functorial.rs`. |
 | `prop/presentation/smc_nf.rs` | — | §5.2 Def 5.2/5.25 (SMC coherence) | Joyal-Street 1991 Part I, Selinger 2011 | Layer 1 string-diagram normal form — canonicalizes PropExpr up to SMC coherence (associator, unitors, interchange, braid naturality, σ²=id). |
 | `prop/presentation/functorial.rs` | — | §5.4 Thm 5.60 (decision) | Baez-Erbele 2015 (fields); Wadsley–Woods arXiv:1505.00048 (commutative rigs, cf. BE15 §6) | `CompleteFunctor<G>` trait + `MatrixNFFunctor<R>` concrete instance wrapping `sfg_to_mat` as a complete-by-theorem decision procedure for Mat(R). |

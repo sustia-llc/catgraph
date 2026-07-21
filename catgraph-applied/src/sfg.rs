@@ -230,6 +230,49 @@ pub fn discard_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
     }
 }
 
+/// Iterated add (dual of [`copy_n`]): `add_n(0) = zero`, `add_n(1) = id`,
+/// `add_n(m) = (id ⊗ add_n(m-1)) ; add`.
+///
+/// A morphism `m → 1` summing all `m` inputs; `S(add_n(m))` is the all-ones
+/// `m × 1` matrix (the transpose of `copy_n`'s `1 × n` all-ones matrix).
+///
+/// # Errors
+///
+/// In principle this construction is arity-safe, but it returns
+/// `Result<_, CatgraphError>` to match the composition signature and to
+/// surface any bugs in the recursion.
+pub fn add_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+    m: usize,
+) -> Result<SignalFlowGraph<R>, CatgraphError> {
+    match m {
+        0 => Ok(SignalFlowGraph::<R>::zero()),
+        1 => Ok(SignalFlowGraph::<R>::identity(1)),
+        _ => {
+            let rest = add_n::<R>(m - 1)?;
+            let id1_tensor_rest = SignalFlowGraph::<R>::identity(1).tensor(&rest);
+            id1_tensor_rest.compose(&SignalFlowGraph::<R>::add())
+        }
+    }
+}
+
+/// Iterated zero (dual of [`discard_n`]): `zero_n(0) = id(0)`,
+/// `zero_n(n) = zero ⊗ zero_n(n-1)`.
+///
+/// A morphism `0 → n` emitting the additive identity on each of `n` output
+/// wires; `S(zero_n(n))` is the empty `0 × n` matrix.
+#[must_use]
+pub fn zero_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+    n: usize,
+) -> SignalFlowGraph<R> {
+    if n == 0 {
+        SignalFlowGraph::<R>::identity(0)
+    } else {
+        let head = SignalFlowGraph::<R>::zero();
+        let tail = zero_n::<R>(n - 1);
+        head.tensor(&tail)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,5 +376,42 @@ mod tests {
         // structurally this is just `discard`. Arity 1 → 0.
         assert_eq!(d.domain(), 1);
         assert_eq!(d.codomain(), 0);
+    }
+
+    #[test]
+    fn add_n_3_domain_is_3() {
+        let a = add_n::<F64Rig>(3).unwrap();
+        assert_eq!(a.domain(), 3);
+        assert_eq!(a.codomain(), 1);
+    }
+
+    #[test]
+    fn add_n_zero_is_zero() {
+        let a = add_n::<F64Rig>(0).unwrap();
+        // add_n(0) returns zero, which is 0 → 1.
+        assert_eq!(a.domain(), 0);
+        assert_eq!(a.codomain(), 1);
+    }
+
+    #[test]
+    fn add_n_one_is_identity() {
+        let a = add_n::<F64Rig>(1).unwrap();
+        // add_n(1) returns identity(1), which is 1 → 1.
+        assert_eq!(a.domain(), 1);
+        assert_eq!(a.codomain(), 1);
+    }
+
+    #[test]
+    fn zero_n_4_codomain_is_4() {
+        let z = zero_n::<F64Rig>(4);
+        assert_eq!(z.domain(), 0);
+        assert_eq!(z.codomain(), 4);
+    }
+
+    #[test]
+    fn zero_n_zero_is_identity() {
+        let z = zero_n::<F64Rig>(0);
+        assert_eq!(z.domain(), 0);
+        assert_eq!(z.codomain(), 0);
     }
 }
