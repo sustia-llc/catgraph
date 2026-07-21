@@ -6,23 +6,33 @@
 
 //! Parallel-vs-sequential equivalence tests for catgraph's core rayon sites.
 //!
-//! Two `parallel`-feature call sites fan work across rayon workers above a size
-//! threshold: `NamedCospan::find_nodes_by_name_predicate` (threshold 256) and
-//! `FrobeniusLayer::hflip` (threshold 64, reached through `FrobeniusMorphism`).
-//! Each site's per-element work is independent, so the parallel fan-out must
-//! reproduce a plain sequential computation exactly. These tests run each
-//! operation at inputs straddling its threshold and assert the output equals a
-//! hand-rolled sequential reference computed in-test — divergence would signal a
-//! determinism bug, not a threshold mismatch. The same tests run under both the
-//! default (`parallel`) build and `--no-default-features`, so CI exercises both
-//! arms against the same reference.
+//! Two `parallel`-feature call sites fan work across rayon workers via
+//! `with_min_len`: `NamedCospan::find_nodes_by_name_predicate`
+//! (`with_min_len(256)`) and `FrobeniusLayer::hflip` (`with_min_len(64)`,
+//! reached through `FrobeniusMorphism`). Rayon's `LengthSplitter` only
+//! subdivides a task when its length is at least `2·min` — so `with_min_len(m)`
+//! begins fanning across workers at length ≥ 2·m (≥ 512 for find_nodes, ≥ 128
+//! for hflip), and runs as a single sequential task below that. Each site's
+//! per-element work is independent, so the fan-out must reproduce a plain
+//! sequential computation exactly. These tests run each operation at inputs
+//! below the single-task ceiling and at inputs wide enough that rayon genuinely
+//! subdivides, asserting the output equals a hand-rolled sequential reference
+//! computed in-test — divergence would signal a determinism bug. The same tests
+//! run under both the default (`parallel`) build and `--no-default-features`, so
+//! CI exercises both arms against the same reference.
 //!
 //! Content-level guards for the `hflip` rayon site (sequential-reference
-//! equality, involution at block counts straddling 64) live as `#[cfg(test)]`
-//! unit tests in `src/frobenius/operations.rs`, where the `pub(crate)` `hflip`
-//! is directly reachable. The public-API guards here go through
-//! `special_frobenius_morphism` and `cospan_algebra::cospan_to_frobenius`, both
-//! of which call `hflip` internally.
+//! equality, involution) live as `#[cfg(test)]` unit tests in
+//! `src/frobenius/operations.rs`, where `FrobeniusLayer::hflip` (module-private)
+//! and `FrobeniusMorphism::hflip` (`pub(crate)`) are directly reachable. The
+//! public-API guards here go through `special_frobenius_morphism` and
+//! `cospan_algebra::cospan_to_frobenius`, both of which call `hflip` internally.
+//!
+//! Distinct in purpose from `tests/rayon_parallel.rs`: this file pins
+//! parallel-output-equals-sequential-reference *equivalence*, whereas
+//! `rayon_parallel.rs` checks above-threshold *correctness* (that results are
+//! right once the input is large enough to run the parallel arm), mirroring the
+//! same split in `catgraph-applied`.
 //!
 //! Pattern borrowed from the rayon crate's own test suite — the
 //! "deterministic parallel-vs-sequential equivalence" idiom.
@@ -154,30 +164,31 @@ fn find_nodes_at_most_one_short_circuits() {
 // `assert_eq!`.
 
 /// `special_frobenius_morphism(1, n, _)` builds the `(n, 1)` morphism and
-/// `hflip`s it; for n = 128 the flipped layers cross the 64-block threshold, so
-/// this pins run-to-run determinism of the parallel hflip through the public
-/// constructor. Sequential-reference equality and involution are unit-tested in
+/// `hflip`s it; at n = 256 the flipped layers are wide enough (≥ 128) that
+/// rayon's `with_min_len(64)` actually subdivides, so this pins run-to-run
+/// determinism of the parallel hflip through the public constructor.
+/// Sequential-reference equality and involution are unit-tested in
 /// `src/frobenius/operations.rs`.
 #[test]
 fn frobenius_hflip_construction_deterministic() {
-    let a: FrobeniusMorphism<char, String> = special_frobenius_morphism(1, 128, 'a');
-    let b: FrobeniusMorphism<char, String> = special_frobenius_morphism(1, 128, 'a');
+    let a: FrobeniusMorphism<char, String> = special_frobenius_morphism(1, 256, 'a');
+    let b: FrobeniusMorphism<char, String> = special_frobenius_morphism(1, 256, 'a');
     assert!(a == b, "hflip-driven construction must be deterministic");
     assert_eq!(a.domain(), vec!['a']);
-    assert_eq!(a.codomain(), vec!['a'; 128]);
+    assert_eq!(a.codomain(), vec!['a'; 256]);
 }
 
 /// `cospan_algebra::cospan_to_frobenius` epi-mono-decomposes each leg and
-/// `hflip`s the right leg internally. A 130-wide cospan whose right leg is a
-/// reversal permutation yields permutation layers straddling the 64-block
-/// threshold, so converting the same cospan twice guards public-API determinism
-/// of that internal hflip.
+/// `hflip`s the right leg internally. A 260-wide cospan whose right leg is a
+/// reversal permutation yields permutation layers wide enough (≥ 128) that
+/// rayon's `with_min_len(64)` actually subdivides, so converting the same
+/// cospan twice guards public-API determinism of that internal hflip.
 #[test]
 fn cospan_to_frobenius_hflip_deterministic() {
     use catgraph::cospan::Cospan;
     use catgraph::cospan_algebra::cospan_to_frobenius;
 
-    let n: usize = 130;
+    let n: usize = 260;
     let middle: Vec<i32> = (0..n as i32).collect();
     let left: Vec<usize> = (0..n).collect();
     let right: Vec<usize> = (0..n).rev().collect();

@@ -1664,15 +1664,18 @@ mod test {
     // ── hflip determinism / involution (rayon-site guard, #48) ──
     //
     // `FrobeniusLayer::hflip` fans block flips across rayon workers via
-    // `par_iter_mut().with_min_len(PARALLEL_BLOCK_THRESHOLD)` (threshold 64,
-    // `parallel` feature). Each block's flip touches only itself, so the
-    // parallel fan-out must equal a plain sequential loop. These tests build
-    // layers straddling the 64-block threshold and pin that equivalence against
-    // an in-test sequential reference, plus the hflip involution: `hflip ∘ hflip
-    // == id` whenever the block-label changer is involutive, and
-    // `std::convert::identity` is. `FrobeniusLayer`/`FrobeniusMorphism` derive
-    // only `Clone, PartialEq, Eq` (no `Debug`), so equality is asserted with
-    // `assert!(a == b, ..)` rather than `assert_eq!`.
+    // `par_iter_mut().with_min_len(PARALLEL_BLOCK_THRESHOLD)` (min length 64,
+    // `parallel` feature). Rayon's `LengthSplitter` only subdivides a task at
+    // length ≥ 2·min, so a layer actually fans out across workers at ≥ 128
+    // blocks and runs as a single task below that. Each block's flip touches
+    // only itself, so the fan-out must equal a plain sequential loop. These
+    // tests use a 40-block layer (single task) and a 200-block layer (genuinely
+    // subdivided) and pin that equivalence against an in-test sequential
+    // reference, plus the hflip involution: `hflip ∘ hflip == id` whenever the
+    // block-label changer is involutive, and `std::convert::identity` is.
+    // `FrobeniusLayer`/`FrobeniusMorphism` derive only `Clone, PartialEq, Eq`
+    // (no `Debug`), so equality is asserted with `assert!(a == b, ..)` rather
+    // than `assert_eq!`.
 
     /// A single layer of `n` heterogeneous blocks, so `hflip` actually
     /// transforms every block (Unit↔Counit, Mul↔Comul, braiding swap, spider
@@ -1708,22 +1711,22 @@ mod test {
 
     #[test]
     fn frobenius_layer_hflip_matches_sequential_reference() {
-        // Below threshold (64): the method runs its single-task / sequential arm.
+        // 40 blocks < 128: rayon runs this as a single task (no subdivision).
         let small = wide_frobenius_layer(40);
         let mut small_flipped = small.clone();
         small_flipped.hflip(&std::convert::identity);
         assert!(
             small_flipped == hflip_layer_reference(&small),
-            "hflip below the 64-block threshold must match the sequential reference"
+            "single-task hflip (40 blocks) must match the sequential reference"
         );
 
-        // Above threshold (64): `par_iter_mut` fans out across workers.
+        // 200 blocks ≥ 128: `par_iter_mut` genuinely subdivides across workers.
         let large = wide_frobenius_layer(200);
         let mut large_flipped = large.clone();
         large_flipped.hflip(&std::convert::identity);
         assert!(
             large_flipped == hflip_layer_reference(&large),
-            "parallel hflip above the 64-block threshold must match the sequential reference"
+            "subdivided parallel hflip (200 blocks) must match the sequential reference"
         );
     }
 
@@ -1750,16 +1753,17 @@ mod test {
         };
         assert!(
             build() == build(),
-            "parallel hflip must be run-to-run stable above the threshold"
+            "subdivided parallel hflip (200 blocks) must be run-to-run stable"
         );
     }
 
     #[test]
     fn frobenius_morphism_hflip_involution_and_determinism() {
-        // `special_frobenius_morphism(100, 1, _)` builds a deep, multi-layer
-        // morphism whose wider layers cross the 64-block threshold; `hflip`
-        // reverses the layer order and flips each layer.
-        let base: FrobeniusMorphism<char, ()> = special_frobenius_morphism(100, 1, 'a');
+        // `special_frobenius_morphism(200, 1, _)` builds a deep, multi-layer
+        // morphism whose wider layers are ≥ 128 blocks, so rayon's
+        // `with_min_len(64)` genuinely subdivides them; `hflip` reverses the
+        // layer order and flips each layer.
+        let base: FrobeniusMorphism<char, ()> = special_frobenius_morphism(200, 1, 'a');
 
         let mut twice = base.clone();
         twice.hflip(&std::convert::identity);
@@ -1768,11 +1772,11 @@ mod test {
 
         let mut once_a = base.clone();
         once_a.hflip(&std::convert::identity);
-        let mut once_b: FrobeniusMorphism<char, ()> = special_frobenius_morphism(100, 1, 'a');
+        let mut once_b: FrobeniusMorphism<char, ()> = special_frobenius_morphism(200, 1, 'a');
         once_b.hflip(&std::convert::identity);
         assert!(once_a == once_b, "morphism hflip must be run-to-run stable");
 
-        // Sanity: a single flip of a non-self-dual (100→1) morphism is not a no-op.
+        // Sanity: a single flip of a non-self-dual (200→1) morphism is not a no-op.
         assert!(once_a != base);
     }
 }

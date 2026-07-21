@@ -195,3 +195,96 @@ fn cond_iterator_agrees_on_combinations_pattern() {
     );
     assert!(!par, "non-overlapping intervals should report no crossing");
 }
+
+// ---------------------------------------------------------------------------
+// LinearCombination::linear_combine — a SECOND `rayon_cond::CondIterator`
+// dispatch point, independent of `Mul::mul` (it re-implements the dispatch
+// rather than delegating). Its parallel arm is taken only when BOTH operands
+// have >= PARALLEL_MUL_THRESHOLD (32) terms. These tests compare its output
+// against an independent nested-loop sequential reference at sizes below and
+// above the threshold, including a non-injective combiner (coefficient
+// collisions) — the same "parallel-output-equals-sequential-reference" idiom
+// as the core crate's rayon_equivalence.rs.
+// ---------------------------------------------------------------------------
+
+/// `n` distinct terms `(key_offset + i, coeff = i + 1)` — a deterministic,
+/// collision-free input side.
+fn make_terms(n: usize, key_offset: i64) -> Vec<(i64, i64)> {
+    (0..n)
+        .map(|i| {
+            let i = i64::try_from(i).unwrap();
+            (key_offset + i, i + 1)
+        })
+        .collect()
+}
+
+/// Independent sequential reference for `linear_combine`: the generalized
+/// convolution `Σ combiner(k1, k2) · (c1 · c2)` over all term pairs, built with
+/// a plain double loop and public `LinearCombination` operations only — it never
+/// calls `linear_combine`, so it is a genuine cross-check of that method.
+fn linear_combine_reference<V, F>(
+    lhs_terms: &[(i64, i64)],
+    rhs_terms: &[(i64, i64)],
+    combiner: F,
+) -> LinearCombination<i64, V>
+where
+    V: Eq + std::hash::Hash + Clone + Default,
+    F: Fn(i64, i64) -> V,
+{
+    let mut acc: LinearCombination<i64, V> = LinearCombination::default();
+    for &(k1, c1) in lhs_terms {
+        for &(k2, c2) in rhs_terms {
+            acc += LinearCombination::singleton(combiner(k1, k2)) * (c1 * c2);
+        }
+    }
+    acc
+}
+
+/// Injective combiner `(k1, k2)` (no coefficient collisions): `linear_combine`
+/// must equal the sequential reference below (16) and above (40) the 32-term
+/// threshold. The parallel arm is taken only when BOTH sides have >= 32 terms,
+/// so 40/40 exercises it and 16/16 the serial arm.
+#[test]
+fn linear_combine_matches_sequential_reference_small_and_large() {
+    let pair = |a: i64, b: i64| (a, b);
+    for n in [16_usize, 40] {
+        let lhs_terms = make_terms(n, 1);
+        let rhs_terms = make_terms(n, 1000);
+        let lhs: LinearCombination<i64, i64> = lhs_terms.iter().copied().collect();
+        let rhs: LinearCombination<i64, i64> = rhs_terms.iter().copied().collect();
+
+        let got = lhs.linear_combine(rhs, pair);
+        let expected = linear_combine_reference(&lhs_terms, &rhs_terms, pair);
+        assert_eq!(
+            got, expected,
+            "linear_combine must match the sequential reference at n={n}"
+        );
+    }
+}
+
+/// Non-injective combiner `k1 + k2` at above-threshold size (40/40 → parallel
+/// arm): distinct `(k1, k2)` pairs collide onto the same sum, so coefficients
+/// must be summed identically on the parallel and sequential paths. Collisions
+/// are guaranteed by construction — 40×40 = 1600 pairs map into the 79 sums
+/// `0..=78`.
+#[test]
+fn linear_combine_non_injective_combiner_above_threshold() {
+    let add = |a: i64, b: i64| a + b;
+    let n = 40_usize;
+    let lhs_terms = make_terms(n, 0);
+    let rhs_terms = make_terms(n, 0);
+    let lhs: LinearCombination<i64, i64> = lhs_terms.iter().copied().collect();
+    let rhs: LinearCombination<i64, i64> = rhs_terms.iter().copied().collect();
+
+    let got = lhs.linear_combine(rhs, add);
+    let expected = linear_combine_reference(&lhs_terms, &rhs_terms, add);
+    assert_eq!(
+        got, expected,
+        "non-injective combiner (coefficient collisions) must match the reference"
+    );
+    // Domain sanity: every result key is a sum of two keys in 0..40.
+    assert!(
+        got.all_terms_satisfy(|k| (0..=78).contains(k)),
+        "result basis elements must lie in the summed-key range"
+    );
+}

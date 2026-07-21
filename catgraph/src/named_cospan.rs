@@ -303,8 +303,16 @@ where
 
     /// Find boundary nodes whose names satisfy the given predicates.
     ///
-    /// When `at_most_one` is true, short-circuits after the first match.
-    /// Parallelized with rayon when total boundary size >= 256.
+    /// # Output order
+    ///
+    /// When `at_most_one` is false, the result lists all left matches in
+    /// ascending index order, followed by all right matches in ascending index
+    /// order. When `at_most_one` is true, it short-circuits and returns the
+    /// first (lowest-index) left match if any exists, otherwise the first
+    /// (lowest-index) right match, otherwise the empty vector.
+    ///
+    /// Parallelized with rayon when total boundary size >= 256; the ordering
+    /// above holds identically on the parallel and sequential arms.
     pub fn find_nodes_by_name_predicate<F, G>(
         &self,
         left_pred: F,

@@ -15,6 +15,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **`LinearCombination::linear_combine` gains par-vs-seq equivalence coverage**
+  ([#48](https://github.com/sustia-llc/catgraph/issues/48)): `linear_combine` is
+  a second, independent `rayon_cond::CondIterator` dispatch point (it duplicates
+  the `Mul::mul` dispatch rather than delegating to it) and previously had no
+  parallel-vs-sequential test — its functional tests ran far below
+  `PARALLEL_MUL_THRESHOLD` (32). `tests/rayon_equivalence.rs` now compares
+  `linear_combine` against an independent nested-loop sequential reference at
+  sizes straddling the threshold (both operands ≥ 32 to reach the parallel arm),
+  including a non-injective combiner that forces coefficient collisions.
 - **Shared `adjacent_swaps` bubble-sort core extracted**
   ([#138](https://github.com/sustia-llc/catgraph/issues/138)): the adjacent-
   transposition decomposition duplicated in `mat_to_sfg`'s `permutation_sfg`

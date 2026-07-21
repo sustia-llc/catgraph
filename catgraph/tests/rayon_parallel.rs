@@ -5,8 +5,14 @@
 
 //! Rayon threshold correctness validation.
 //!
-//! Verifies that operations produce correct results at sizes above
-//! their rayon parallelism thresholds. Does not test performance.
+//! Verifies that operations produce correct results at sizes large enough to
+//! run the parallel arm. Does not test performance.
+//!
+//! Distinct in purpose from `tests/rayon_equivalence.rs`: this file checks
+//! above-threshold *correctness* (results are right once the input is large
+//! enough to fan out), whereas `rayon_equivalence.rs` pins
+//! parallel-output-equals-sequential-reference *equivalence*, mirroring the
+//! same split in `catgraph-applied`.
 
 use catgraph::{
     category::HasIdentity,
@@ -44,12 +50,13 @@ fn named_cospan_predicate_above_threshold() {
     assert_eq!(right_count, 150);
 }
 
-/// `FrobeniusMorphism` with 128+ blocks via monoidal product (threshold = 64).
+/// `FrobeniusMorphism` with 128+ blocks via monoidal product (`with_min_len(64)`).
 ///
 /// `special_frobenius_morphism(m, 1, wire_type)` for large m builds layers via
 /// recursive monoidal product. Calling `hflip` (through `from_permutation` or
-/// direct `special_frobenius_morphism` with m < n) triggers the parallel path
-/// on layers with 64+ blocks.
+/// direct `special_frobenius_morphism` with m < n) runs the parallel arm, which
+/// rayon actually subdivides once a layer reaches ≥ 128 blocks (`with_min_len(64)`
+/// splits only at length ≥ 2·min).
 #[test]
 fn frobenius_hflip_above_threshold() {
     // Build a large morphism: 128 inputs → 1 output
