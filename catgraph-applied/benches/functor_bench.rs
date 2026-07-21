@@ -40,10 +40,11 @@
 //! Criterion's `BenchmarkId::from_parameter(d)` axes the depth as a parameter,
 //! so the final benchmark IDs displayed by criterion are
 //! `functor::sfg_to_mat::{f64, bool}/{3, 5, 7}` and
-//! `functor::cc_incompleteness_count::{bool, f64rig}/{2, 3}` — the four
+//! `functor::cc_incompleteness_count::{bool, f64rig}/2` — the four
 //! `benchmark_group` names below + the depth parameter, NOT the
 //! `_d{3,5,7}`-suffix form used in the plan + design doc as a prescriptive
-//! example.
+//! example. Both `cc_incompleteness_count` groups run at `d=2` only; the
+//! `d=3`-bool bracket was dropped (#59, see the `size_bound = 3` note below).
 //!
 //! - **`sfg_to_mat::{f64, bool}` groups: depth `d ∈ {3, 5, 7}`.** Balanced
 //!   binary trees of pure `Compose(Scalar(r), Scalar(r))` nodes — no
@@ -68,7 +69,10 @@
 //!
 //! - **Witness-count asymmetry (`BoolRig` vs `F64Rig`).** At `size_bound = 2`
 //!   `BoolRig` produces 1142 witnesses (post-E_18); `F64Rig` produces a
-//!   larger count (~2478) that blows up combinatorially at `size_bound = 3`.
+//!   larger count (2229 exact post-#58 — the tracker baseline measured on the
+//!   4-sample test fixture in `tests/graphical_linalg.rs`; this bench's
+//!   2-sample fixture yields a different, untracked count) that blows up
+//!   combinatorially at `size_bound = 3`.
 //!   The mechanism is
 //!   algebraic, not a measurement artefact: `BoolRig` is idempotent
 //!   (`a ∨ a = a`, `a ∧ a = a`) so the D1 Cayley table
@@ -77,13 +81,15 @@
 //!   generates fresh scalar atoms (`1+1 = 2`) that compound at the next
 //!   bound step.
 //!
-//! - **`cc_incompleteness_count::bool` at `size_bound = 3`** — the "under 60s"
-//!   / `sample_size = 10` figures here were **design-doc estimates, not
-//!   measurements**. Ground truth (release): one `d=2` verifier call is ~7.6 s
-//!   (so the `d=2` bench at criterion defaults is ~13 min), and one `d=3` call
-//!   exceeds 590 s (>10 min) — no criterion configuration brings the `d=3`
-//!   group under 60 s. Marker flag below; re-budgeting these groups (or folding
-//!   the `d=3`-bool bracket back to `d=2`) is tracked in #59.
+//! - **`cc_incompleteness_count::bool` — `size_bound = 3` dropped (#59).** The
+//!   `d=3` bench was removed: one `d=3` verifier call exceeds 590 s (>10 min)
+//!   in release, so no criterion configuration made it runnable (the earlier
+//!   "under 60s" / `sample_size = 10` figures were design-doc estimates, never
+//!   profiled). Depth-3/4 ground truth remains reachable via the `#[ignore]`'d
+//!   `cc_completeness_tracking_*_depth_{3,4}` tests in
+//!   `tests/graphical_linalg.rs` (run with `--ignored`). The two surviving
+//!   `d=2` groups are the live signal; see the "Measured wall times" section
+//!   for their profiled cost.
 //!
 //! - **`cc_incompleteness_count::f64rig` at `size_bound = 2`, `F64Rig` only.**
 //!   Per design doc §3.3.2: `F64Rig` scalar sampling combinatorially blows
@@ -93,6 +99,29 @@
 //!   3 of 4 D1 cross-product entries short-circuit; only `1·1 = 1`
 //!   exercises the free-multiplication path. A non-degenerate alternative
 //!   (e.g. `{2.0, 3.0}`) is a deferred future addition.
+//!
+//! ## Measured wall times
+//!
+//! Measured 2026-07-21, release build, on the maintainer's dev workstation
+//! (single-threaded criterion, `sample_size(10)` / 500 ms warm-up / 5 s
+//! measurement budget). Treat these as machine-relative order-of-magnitude
+//! figures, not portable constants — they replace the earlier un-profiled
+//! design-doc estimates (#59).
+//!
+//! - **`cc_incompleteness_count::bool/2`** — criterion per-call estimate
+//!   **≈ 6.92 s** (median; `[6.90, 6.92, 6.93]` s). Group wall time ≈ 76 s
+//!   measured.
+//! - **`cc_incompleteness_count::f64rig/2`** — criterion per-call estimate
+//!   **≈ 6.73 s** (median; `[6.71, 6.73, 6.74]` s). Group wall time ≈ 75 s
+//!   measured (criterion's "estimated 66.9 s" 10-iteration collection plus
+//!   warm-up).
+//! - **Both cc groups together** — ≈ 2 min 31 s wall (`cargo bench …
+//!   -- cc_incompleteness`, excluding compilation; 76 + 75 ≈ 151 s).
+//!
+//! Group wall time exceeds `10 × per-call + 500 ms` because criterion's
+//! warm-up loop only checks elapsed time *between* iterations — it always
+//! completes at least one full ~7 s call — and per-group analysis adds
+//! overhead.
 //!
 //! ## Trait-bound dispatch tier
 //!
@@ -254,16 +283,19 @@ fn bench_sfg_to_mat_bool(c: &mut Criterion) {
 }
 
 // ---------------------------------------------------------------------------
-// Group 3 — `functor::cc_incompleteness_count_d{2,3}::bool`
+// Group 3 — `functor::cc_incompleteness_count::bool/2`
 // ---------------------------------------------------------------------------
 //
 // `verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(size_bound=2)` returns
 // 1142 CC-incompleteness witnesses (measured empirically, post-E_18; see the
 // `tests/graphical_linalg.rs` module docstring for authoritative semantics).
-// The `size_bound=3` variant is far heavier — one d=3 call exceeds 590 s in
-// release (>10 min), so the "60s wall budget" below was a design-doc estimate,
-// not a measured bound; the reduced sample count + warmup only cap the sample
-// count, they cannot reach it. Re-budgeting/folding is tracked in #59.
+// One d=2 call is ≈6.9 s in release (see "Measured wall times"), so the group
+// is configured at criterion's minimum `sample_size(10)` with a short warm-up +
+// measurement budget — a full 100-sample run would take ~12 min. The
+// `size_bound=3` variant was dropped
+// (#59): one d=3 call exceeds 590 s (>10 min), un-runnable under any criterion
+// config. Depth-3/4 ground truth stays reachable via the `#[ignore]`'d
+// `cc_completeness_tracking_*_depth_{3,4}` tests in `tests/graphical_linalg.rs`.
 
 fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     let mut group = c.benchmark_group("functor::cc_incompleteness_count::bool");
@@ -275,6 +307,15 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     // a tight presentation.
     let rig_samples = vec![BoolRig(true), BoolRig(false)];
 
+    // One d=2 verifier call is ≈6.9 s (see "Measured wall times" in the
+    // module doc); a criterion-default 100-sample run would take ~12 min.
+    // Cap the sampling at criterion's `sample_size(10)` minimum with a short
+    // warm-up + measurement budget. Config MUST precede the `bench_function`
+    // registration below to take effect.
+    group.sample_size(10);
+    group.warm_up_time(std::time::Duration::from_millis(500));
+    group.measurement_time(std::time::Duration::from_secs(5));
+
     // d=2: the canonical signal (1142 witnesses, post-E_18).
     group.throughput(Throughput::Elements(1));
     group.bench_function(BenchmarkId::from_parameter(2u32), |bencher| {
@@ -282,34 +323,6 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
             drop(black_box(
                 verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(
                     black_box(2),
-                    black_box(&rig_samples),
-                ),
-            ));
-        });
-    });
-
-    // Criterion `benchmark_group` config (sample_size / warm_up_time /
-    // measurement_time) applies to all benches registered AFTER the config
-    // call — d=2 above already ran with criterion defaults (100 samples,
-    // 3s warmup); only the d=3 bench below picks up the reduced settings.
-    // This ordering is intentional: d=2 needs full-sample statistical
-    // fidelity for the 1142-witness baseline; d=3 is wall-time-budget-
-    // constrained.
-    //
-    // d=3: heavy — one d=3 verifier call exceeds 590 s in release, so no
-    // criterion config brings this group under the design-doc "60s wall
-    // budget"; the reduced sample count + warmup only cap the sample count.
-    // Re-budgeting, or dropping the d=3-bool variant in favour of d=2, is
-    // tracked in #59 (see the module rustdoc note above).
-    group.sample_size(10);
-    group.warm_up_time(std::time::Duration::from_millis(500));
-    group.measurement_time(std::time::Duration::from_secs(20));
-
-    group.bench_function(BenchmarkId::from_parameter(3u32), |bencher| {
-        bencher.iter(|| {
-            drop(black_box(
-                verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(
-                    black_box(3),
                     black_box(&rig_samples),
                 ),
             ));
@@ -344,6 +357,14 @@ fn bench_cc_incompleteness_count_f64rig(c: &mut Criterion) {
     // `matr_presentation`. Both values are `Copy` + manual `Eq + Hash`
     // (via `to_bits()`, `-0.0`-normalized); no NaN risk for these literals.
     let rig_samples = vec![F64Rig(0.0), F64Rig(1.0)];
+
+    // Same budget as the bool group: one d=2 call is ≈6.7 s here (see
+    // "Measured wall times"), so cap sampling at criterion's `sample_size(10)`
+    // minimum. Config MUST precede the `bench_function` registration below to
+    // take effect.
+    group.sample_size(10);
+    group.warm_up_time(std::time::Duration::from_millis(500));
+    group.measurement_time(std::time::Duration::from_secs(5));
 
     group.throughput(Throughput::Elements(1));
     group.bench_function(BenchmarkId::from_parameter(2u32), |bencher| {
