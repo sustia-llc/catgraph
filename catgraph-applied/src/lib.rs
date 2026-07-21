@@ -78,6 +78,7 @@ pub mod mat;
 #[cfg(feature = "f64-rig")]
 pub mod mat_f64;
 pub mod mat_kron;
+pub mod mat_to_sfg;
 pub mod operad_algebra;
 pub mod operad_functor;
 pub mod petri_net;
