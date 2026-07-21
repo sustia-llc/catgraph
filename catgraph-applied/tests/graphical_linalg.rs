@@ -39,11 +39,12 @@
 //! These stay `#[ignore]`'d — they are diagnostic, and `S(a) == S(b)` (matrix
 //! equality under `sfg_to_mat`) is already decidable via
 //! [`Presentation::eq_mod_functorial(&a, &b, &MatrixNFFunctor::new())`]. The
-//! four depth-2 tests are **bounded regression trackers**. The three
-//! deterministic rigs are **pinned exactly** (`assert_eq!`), so both a rise
-//! (CC/NF regression) and a silent drop (KB-like progress, or an unsound CC
-//! over-merge — both must be noticed) trip the test; F64Rig is a float-jitter
-//! **band**. Depth-3/4 stay `assert_eq!(.., 0)`: they are unmeasured (depth 3 is
+//! four depth-2 tests are **bounded regression trackers**. All four rigs are
+//! **pinned exactly** (`assert_eq!`), so both a rise (CC/NF regression) and a
+//! silent drop (KB-like progress, or an unsound CC over-merge — both must be
+//! noticed) trip the test. (F64Rig was a float-jitter band until #58 normalized
+//! signed zero in the rig Hash impls; see below.) Depth-3/4 stay
+//! `assert_eq!(.., 0)`: they are unmeasured (depth 3 is
 //! over 10 min/rig in release, depth 4 larger still), so on a manual `--ignored`
 //! run the assert's LEFT value IS the true depth-N count (not an expectation).
 //!
@@ -54,18 +55,21 @@
 //! | BoolRig      |       1142 |       20324 |
 //! | UnitInterval |       1634 |       31337 |
 //! | Tropical     |       2234 |       46810 |
-//! | F64Rig       |      ~2478 |       46810 |
+//! | F64Rig       |       2229 |       46810 |
 //!
 //! BoolRig lineage: 2574 plain CC → 1433 atom-canonical `smc_refine` → 1301
 //! post-#14 layer-ordering NF → 1142 post-E_18 (D7/D8 scalar add/zero added).
 //! Completing the presentation to all 18 F&S/BE15 relations gives CC more
 //! equations to identify with, lowering the residual collision count.
 //!
-//! BoolRig/UnitInterval/Tropical counts are deterministic and their tracker
-//! bounds are pinned exactly. F64Rig's count is float-nondeterministic
-//! (observed 2478–2480 — signed-zero `Hash`/`Eq` interacts with HashMap
-//! ordering), so its tracker is an inclusive jitter band (`2468..=2488`,
-//! tracked as #58). All baselines live in the `BASELINE_*_D2` module consts.
+//! All four counts are deterministic and their trackers are pinned exactly.
+//! F64Rig's count was float-nondeterministic until #58 (observed 2478–2480 —
+//! signed-zero `Hash`/`Eq` interacted with HashMap ordering): the fixture's
+//! `-1.0 × 0.0` yields `-0.0`, which the rig `Hash` impls hashed differently
+//! from `0.0` while the derived `PartialEq` treated them equal, splitting a
+//! congruence class. #58 normalized `-0.0` to `0.0` in those `Hash` impls,
+//! restoring the `Eq`/`Hash` contract and pinning F64Rig at an exact 2229. All
+//! baselines live in the `BASELINE_*_D2` module consts.
 //!
 //! [`CongruenceClosure`]: catgraph_applied::prop::presentation::NormalizeEngine::CongruenceClosure
 //! [`MatrixNFFunctor<R>`]: catgraph_applied::prop::presentation::functorial::MatrixNFFunctor
@@ -110,13 +114,14 @@ fn matr_presentation_builds_unit_interval() {
 
 // Post-E_18 depth-2 collision baselines (D7/D8 added, #114) — the single Rust
 // source of truth for each number (mirrored in the module docstring table).
-// BoolRig/UnitInterval/Tropical are deterministic → pinned exactly; F64Rig is
-// float-nondeterministic (signed-zero `Hash`/`Eq` × HashMap ordering; observed
-// 2478–2480) → an inclusive jitter band, tracked as #58.
+// All four rigs are now deterministic → pinned exactly. F64Rig was previously a
+// float-nondeterministic jitter band (signed-zero `Hash`/`Eq` × HashMap
+// ordering; observed 2478–2480); #58 normalized `-0.0` to `0.0` in the rig Hash
+// impls, restoring the Eq/Hash contract and making its count an exact 2229.
 const BASELINE_BOOL_D2: usize = 1142;
 const BASELINE_UNIT_INTERVAL_D2: usize = 1634;
 const BASELINE_TROPICAL_D2: usize = 2234;
-const BASELINE_F64_D2: std::ops::RangeInclusive<usize> = 2468..=2488;
+const BASELINE_F64_D2: usize = 2229;
 
 const IGNORE_REASON: &str = "\
     CC completeness tracking (NOT a Thm 5.60 faithfulness test): F&S Thm 5.60 \
@@ -130,9 +135,9 @@ const IGNORE_REASON: &str = "\
     plain CC stays incomplete by design (Knuth-Bendix completion demoted to \
     the #57 feasibility spike). The depth-2 tests are bounded regression \
     trackers at the post-#14 NF baselines (see the module docstring table and \
-    the `BASELINE_*_D2` consts): the three deterministic rigs are pinned \
-    exactly, F64Rig is a jitter band (#58). `#[ignore]`'d as diagnostic, not a \
-    release gate.\
+    the `BASELINE_*_D2` consts): all four rigs are pinned exactly (F64Rig was a \
+    jitter band until #58 normalized signed zero in the rig Hash impls). \
+    `#[ignore]`'d as diagnostic, not a release gate.\
 ";
 
 // Shared message for the unmeasured depth-3/4 trackers: the assert's LEFT value
@@ -296,21 +301,14 @@ fn cc_completeness_tracking_tropical_depth_4() {
 #[test]
 #[ignore = "CC completeness tracking; see module docstring and IGNORE_REASON"]
 fn cc_completeness_tracking_f64_depth_2() {
-    // Post-E_18 baseline: ~2478 collisions / 46810 expressions. Unlike the
-    // other three rigs, F64Rig's collision count is float-nondeterministic
-    // (signed-zero Hash/Eq interacts with HashMap ordering; tracked in #58), so
-    // it is checked against an inclusive jitter band rather than an exact pin.
-    // A real CC/NF regression moves the count structurally, far outside the band.
+    // Post-#58 baseline: 2229 collisions / 46810 expressions (deterministic;
+    // pinned exactly). Before #58, F64Rig's count was float-nondeterministic
+    // (signed-zero Hash/Eq interacted with HashMap ordering); normalizing `-0.0`
+    // to `0.0` in the rig Hash impls restored the Eq/Hash contract, merging the
+    // `-0.0` produced by `-1.0 × 0.0` with `0.0` and making the count exact.
     let samples = vec![F64Rig(0.0), F64Rig(1.0), F64Rig(2.0), F64Rig(-1.0)];
     let report = verify_sfg_to_mat_is_full_and_faithful::<F64Rig>(2, &samples).unwrap();
-    assert!(
-        BASELINE_F64_D2.contains(&report.collisions_under_s),
-        "F64Rig depth 2: {} expressions, {} collisions outside jitter band {:?} (#58); first witness: {:?}. {IGNORE_REASON}",
-        report.expressions_checked,
-        report.collisions_under_s,
-        BASELINE_F64_D2,
-        witness_debug(&report),
-    );
+    assert_exact_baseline("F64Rig", &report, BASELINE_F64_D2);
 }
 
 #[test]

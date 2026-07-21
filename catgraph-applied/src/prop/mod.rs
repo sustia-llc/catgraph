@@ -53,7 +53,8 @@ use permutations::Permutation;
 ///
 /// - Derived-`PartialEq` types: add `Eq, Hash` to the `#[derive(...)]`.
 /// - Types containing `f64`: provide manual `Eq` + `Hash` impls via
-///   `to_bits()` for bit-exact hashing (see [`crate::rig::UnitInterval`] /
+///   `to_bits()` (bit-exact except `-0.0` normalizes to `0.0` to satisfy the
+///   `Eq`/`Hash` contract; see [`crate::rig::UnitInterval`] /
 ///   [`crate::rig::Tropical`] / [`crate::rig::F64Rig`]).
 pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::Debug {
     /// Source arity `s(g) ∈ ℕ`.
