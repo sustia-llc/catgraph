@@ -410,23 +410,14 @@ fn decompose_braid<G: PropSignature>(m: usize, n: usize) -> Vec<Layer<G>> {
     // a_0..a_{m-1}]. Output position k holds input position perm[k]:
     //   perm[0..n]      = m..m+n  (b-block from input positions m..m+n)
     //   perm[n..n+m]    = 0..m    (a-block from input positions 0..m)
-    let mut perm: Vec<usize> = (0..n).map(|k| m + k).chain(0..m).collect();
-    // Bubble-sort perm to [0..total], recording the swap positions.
-    let mut swaps: Vec<usize> = Vec::new();
-    loop {
-        let mut swapped = false;
-        for i in 0..total - 1 {
-            if perm[i] > perm[i + 1] {
-                perm.swap(i, i + 1);
-                swaps.push(i);
-                swapped = true;
-            }
-        }
-        if !swapped {
-            break;
-        }
-    }
-    // Reversed sequence applied to identity reproduces σ_{m,n}.
+    let perm: Vec<usize> = (0..n).map(|k| m + k).chain(0..m).collect();
+    // Bubble-sort perm to [0..total] via the shared `adjacent_swaps` core,
+    // recording the swap positions.
+    let mut swaps = super::super::adjacent_swaps(&perm);
+    // Reversed sequence applied to identity reproduces σ_{m,n}. The reversal is
+    // relative to `permutation_sfg`'s input→output emission order in
+    // `crate::mat_to_sfg`: the string-diagram normalization pipeline applies
+    // these layers in the opposite direction.
     swaps.reverse();
     swaps
         .into_iter()

@@ -161,6 +161,33 @@ impl<G: PropSignature> Free<G> {
     }
 }
 
+/// Bubble-sort `perm` ascending; return the positions of the adjacent
+/// transpositions in the order performed. `adjacent_swaps(p)[i] = t` means the
+/// `i`-th swap exchanged positions `t` and `t + 1`.
+///
+/// This is the shared decomposition core behind both
+/// [`crate::mat_to_sfg`]'s `permutation_sfg` (which maps each `t` to a braid
+/// layer `id_t ⊗ σ ⊗ id_{k-t-2}`) and
+/// [`presentation::smc_nf`]'s `decompose_braid` (which builds `Layer<G>`
+/// values and reverses the sequence for its string-diagram pipeline). `O(k²)`
+/// swaps for `k = perm.len()`; the empty vector is returned when `perm` is
+/// already sorted (including `k ≤ 1`). Applying the returned swaps to `perm`
+/// left-to-right yields the ascending sort.
+pub(crate) fn adjacent_swaps(perm: &[usize]) -> Vec<usize> {
+    let k = perm.len();
+    let mut arr = perm.to_vec();
+    let mut swaps = Vec::new();
+    for pass in 0..k {
+        for t in 0..k.saturating_sub(pass + 1) {
+            if arr[t] > arr[t + 1] {
+                arr.swap(t, t + 1);
+                swaps.push(t);
+            }
+        }
+    }
+    swaps
+}
+
 // ---- Integration with catgraph trait hierarchy -------------------------------
 
 /// Objects of a prop are natural numbers, encoded as `Vec<()>` of the
@@ -265,3 +292,73 @@ impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
 }
 
 pub mod presentation;
+
+#[cfg(test)]
+mod tests {
+    use super::adjacent_swaps;
+
+    /// Apply a swap sequence to `perm` left-to-right and return the result.
+    fn apply_swaps(perm: &[usize], swaps: &[usize]) -> Vec<usize> {
+        let mut arr = perm.to_vec();
+        for &t in swaps {
+            arr.swap(t, t + 1);
+        }
+        arr
+    }
+
+    #[test]
+    fn empty_perm_has_no_swaps() {
+        assert_eq!(adjacent_swaps(&[]), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn single_element_has_no_swaps() {
+        assert_eq!(adjacent_swaps(&[0]), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn already_sorted_has_no_swaps() {
+        assert_eq!(adjacent_swaps(&[0, 1, 2, 3]), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn full_reversal() {
+        // [2,1,0] bubble-sorts via swaps at positions 0, 1, 0.
+        assert_eq!(adjacent_swaps(&[2, 1, 0]), vec![0, 1, 0]);
+    }
+
+    #[test]
+    fn transpose_riffle_perm() {
+        // mat_to_sfg's L3 regrouping for a 2×3 matrix: input-major i*cols+j
+        // routed to output-major j*rows+i (rows=2, cols=3).
+        let mut perm = vec![0usize; 6];
+        for i in 0..2 {
+            for j in 0..3 {
+                perm[i * 3 + j] = j * 2 + i;
+            }
+        }
+        assert_eq!(perm, vec![0, 2, 4, 1, 3, 5]);
+        let swaps = adjacent_swaps(&perm);
+        assert_eq!(apply_swaps(&perm, &swaps), vec![0, 1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn swaps_sort_the_permutation() {
+        // Property: applying the returned swaps to `perm` yields the sorted array.
+        let cases: &[&[usize]] = &[
+            &[],
+            &[0],
+            &[1, 0],
+            &[2, 0, 1],
+            &[3, 2, 1, 0],
+            &[0, 2, 4, 1, 3, 5],
+            &[4, 3, 2, 1, 0],
+        ];
+        for &perm in cases {
+            let mut sorted = perm.to_vec();
+            sorted.sort_unstable();
+            let swaps = adjacent_swaps(perm);
+            assert_eq!(apply_swaps(perm, &swaps), sorted, "perm = {perm:?}");
+        }
+    }
+}

@@ -115,10 +115,11 @@ pub fn mat_to_sfg<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
 /// (input row `p` → output column `perm[p]`), consistent with `braid_matrix`
 /// in [`crate::sfg_to_mat`].
 ///
-/// The network is produced by a bubble sort of `perm` into ascending order:
-/// each adjacent swap during the sort becomes one braid layer, emitted
-/// input-side first. `O(k²)` braid layers for `k = perm.len()`; the identity
-/// is returned when `perm` is already sorted (including `k ≤ 1`).
+/// The network is produced by a bubble sort of `perm` into ascending order via
+/// the shared [`crate::prop::adjacent_swaps`] core: each adjacent swap during
+/// the sort becomes one braid layer, emitted in the swap order (input-side
+/// first). `O(k²)` braid layers for `k = perm.len()`; the identity is returned
+/// when `perm` is already sorted (including `k ≤ 1`).
 ///
 /// # Errors
 ///
@@ -128,20 +129,14 @@ fn permutation_sfg<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
     perm: &[usize],
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {
     let k = perm.len();
-    let mut arr = perm.to_vec();
     let mut g = SignalFlowGraph::<R>::identity(k);
-    // Bubble sort: swapping physical positions t, t+1 is a braid layer applied
-    // in input→output order, so the wire at position p is routed to perm[p].
-    for pass in 0..k {
-        for t in 0..k.saturating_sub(pass + 1) {
-            if arr[t] > arr[t + 1] {
-                arr.swap(t, t + 1);
-                let layer = SignalFlowGraph::<R>::identity(t)
-                    .tensor(&SignalFlowGraph::<R>::braid_1_1())
-                    .tensor(&SignalFlowGraph::<R>::identity(k - t - 2));
-                g = g.compose(&layer)?;
-            }
-        }
+    // Each swap at position t is a braid layer applied in input→output order, so
+    // the wire at position p is routed to perm[p].
+    for t in crate::prop::adjacent_swaps(perm) {
+        let layer = SignalFlowGraph::<R>::identity(t)
+            .tensor(&SignalFlowGraph::<R>::braid_1_1())
+            .tensor(&SignalFlowGraph::<R>::identity(k - t - 2));
+        g = g.compose(&layer)?;
     }
     Ok(g)
 }
