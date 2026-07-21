@@ -7,7 +7,7 @@ use std::ops::MulAssign;
 
 use deep_causality_num::One;
 use itertools::Itertools;
-use rand::{RngExt, rngs::ThreadRng};
+use rand::RngExt;
 
 use crate::F32_EPSILON;
 use catgraph::{category::HasIdentity, errors::CatgraphError, operadic::Operadic};
@@ -89,21 +89,58 @@ impl E1 {
         }
     }
 
-    /// Generate a random E1 configuration with the given arity.
+    /// Generate a random valid E1 configuration with the given arity.
+    ///
+    /// Draws `2 * cur_arity` samples uniformly from \[0, 1), sorts them, and pairs
+    /// consecutive values into intervals. A raw draw can place adjacent sorted
+    /// samples arbitrarily close, yielding a zero-width or sub-epsilon interval that
+    /// [`E1::new`] rejects; to guarantee a valid result the whole batch is resampled
+    /// until every adjacent pair of sorted coordinates is separated by more than
+    /// `MIN_SEPARATION`.
+    ///
+    /// # Postconditions
+    ///
+    /// - The returned configuration has exactly `cur_arity` intervals (empty when
+    ///   `cur_arity == 0`).
+    /// - Every interval has width greater than `F32_EPSILON` (`1e-6`).
+    /// - Intervals are pairwise strictly disjoint with gaps greater than
+    ///   `MIN_SEPARATION`, formed by pairing sorted coordinates
+    ///   `(s0, s1), (s2, s3), …`.
     ///
     /// # Panics
     ///
-    /// Panics if random `f64` values produce `None` on `partial_cmp` — should not occur.
-    pub fn random(cur_arity: usize, rng: &mut ThreadRng) -> Self {
-        let mut sub_ints: Vec<IntervalCoord> = (0..2 * cur_arity)
-            .map(|_| rng.random_range(0.0..1.0))
-            .collect();
-        sub_ints.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+    /// The sort's `partial_cmp` unwrap panics if any sample is not finite, which
+    /// cannot occur for `random_range(0.0..1.0)`. The terminal `expect` documents
+    /// the resampling invariant and likewise cannot fire.
+    pub fn random(cur_arity: usize, rng: &mut impl RngExt) -> Self {
+        // Strictly above the `E1::new` width threshold (`F32_EPSILON`), with slack,
+        // so every accepted interval has positive width and the neighbouring gaps
+        // clear the overlap check.
+        const MIN_SEPARATION: f32 = 2.0 * F32_EPSILON;
+
+        let sub_ints = loop {
+            let mut sub_ints: Vec<IntervalCoord> = (0..2 * cur_arity)
+                .map(|_| rng.random_range(0.0..1.0))
+                .collect();
+            sub_ints.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+            // An empty sample vec (cur_arity == 0) has no adjacent pairs, so `all`
+            // is vacuously true and the loop exits on the first iteration.
+            let well_separated = sub_ints
+                .iter()
+                .tuple_windows()
+                .all(|(a, b): (&IntervalCoord, &IntervalCoord)| *b - *a > MIN_SEPARATION);
+            if well_separated {
+                break sub_ints;
+            }
+        };
         let sub_intervals: Vec<(IntervalCoord, IntervalCoord)> = sub_ints
             .chunks_exact(2)
             .map(|chunk| (chunk[0], chunk[1]))
             .collect();
-        Self::new(sub_intervals, false).unwrap()
+        Self::new(sub_intervals, false).expect(
+            "invariant: resampled coordinates are strictly separated within [0,1], \
+             so every interval has positive width",
+        )
     }
 
     fn canonicalize(&mut self) {

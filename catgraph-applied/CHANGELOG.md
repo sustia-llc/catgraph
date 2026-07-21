@@ -114,6 +114,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   "§2.6" → §2.3 (mat_kron) / §3.1 (trace), BTV 2021 "§1.4" → §5
   (lawvere_metric), §4.5 page range, `Ring + ZAlgebra` bound in z/integer docs.
 
+### Fixed
+
+- **`E1::random` now guarantees a valid configuration**
+  ([#141](https://github.com/sustia-llc/catgraph/issues/141)): the generator drew
+  `2·arity` uniform samples, sorted them, and paired consecutive values without
+  ensuring adjacent coordinates were separated, so a draw could produce a
+  zero-width or sub-epsilon interval (observed width ≈ 1e-7) that `E1::new`
+  rejects — the terminal `.unwrap()` then panicked. `random` now resamples the
+  whole batch until every adjacent pair of sorted coordinates is separated by more
+  than `2·F32_EPSILON`, making construction infallible (`.unwrap()` → `.expect`
+  documenting the invariant). The signature is generalized from
+  `&mut ThreadRng` to `&mut impl RngExt` (API-affecting; callers passing a
+  `ThreadRng` are unaffected).
+
 ### Added
 
 - **`mat_to_sfg` — FS18 Prop 5.56 realization** ([#126](https://github.com/sustia-llc/catgraph/issues/126)):
