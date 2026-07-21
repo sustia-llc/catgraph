@@ -26,6 +26,7 @@ This crate packages applied-CT modules that build on catgraph's strict Fong-Spiv
 | `mat_kron` | `MatKron<R>` — Kronecker-tensor matrix prop: a genuine hypergraph category over a rig with Hadamard SCFM (η/ε/μ/δ) as inherent generators; speciality δ;μ = id (F&S 2019 *Hypergraph Categories* Ex 2.16, §2.3) |
 | `trace` | Partial trace `Tr_X(f)` for `MatKron<R>`, built from its compact-closed cup/cap generators (strict Kronecker; no associators) (F&S 2019 §3.1) |
 | `sfg_to_mat` | `sfg_to_mat` functor `S: SFG_R → Mat(R)` (F&S Thm 5.53) |
+| `mat_to_sfg` | `mat_to_sfg` realization — converse of Thm 5.53 via the Prop 5.56 / Ex 5.59 four-layer composite; round-trip `S(mat_to_sfg(M)) == M` tested (F&S Prop 5.56) |
 | `graphical_linalg` | `matr_presentation<R>` — 18-equation Thm 5.60 presentation of Mat(R) (F&S §5.4; closed via the Functorial engine — see `prop::presentation::functorial`) |
 | `mat_f64` (feature `f64-rig`) | nalgebra bridge for `MatR<F64Rig>`: determinant, inverse, `DMatrix` roundtrip |
 | `prop::presentation::kb` | Congruence-closure decision procedure (DST 1980 signature-table variant) — the default `eq_mod` backend, with an atom-canonical `smc_refine` fixpoint (BoolRig d=2 collisions 2574 → 1433 → 1301 post-#14 → 1142 post-E_18) |
@@ -71,7 +72,7 @@ Every module depends on catgraph's public API:
 
 ## Paper alignment
 
-See [`docs/FS18-AUDIT.md`](docs/FS18-AUDIT.md) for the section-by-section Seven Sketches coverage audit (Chapters 4–6, 63 items tracked; 82% of implementable items DONE, §5.4 Thm 5.60 closed via Functorial engine). Cross-linked from [`../catgraph/docs/FS19-AUDIT.md`](../catgraph/docs/FS19-AUDIT.md) "Reconciliation" section.
+See [`docs/FS18-AUDIT.md`](docs/FS18-AUDIT.md) for the section-by-section Seven Sketches coverage audit (Chapters 4–6, 63 items tracked; 85% of implementable items DONE, §5.4 Thm 5.60 closed via Functorial engine). Cross-linked from [`../catgraph/docs/FS19-AUDIT.md`](../catgraph/docs/FS19-AUDIT.md) "Reconciliation" section.
 
 ## Changelog
 
