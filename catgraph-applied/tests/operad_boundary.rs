@@ -2,6 +2,8 @@ use catgraph::errors::CatgraphError;
 use catgraph::operadic::Operadic;
 use catgraph_applied::e1_operad::E1;
 use catgraph_applied::e2_operad::E2;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 #[test]
 fn e1_exact_unit_interval() {
@@ -358,58 +360,63 @@ fn e2_change_names_then_substitute() {
 
 #[test]
 fn e1_random_produces_valid_config() {
-    let mut rng = rand::rng();
+    let mut rng = StdRng::seed_from_u64(141);
 
     for arity in 1..=10 {
-        let e1 = E1::random(arity, &mut rng);
-        let intervals = e1.extract_sub_intervals();
+        // Many trials per arity so the seeded run exercises many draws. (Resampling
+        // is rare — roughly 1e-3 per call at these arities — and these seeds happen
+        // not to hit it; the validity assertions below hold either way.)
+        for _ in 0..20 {
+            let e1 = E1::random(arity, &mut rng);
+            let intervals = e1.extract_sub_intervals();
 
-        assert_eq!(
-            intervals.len(),
-            arity,
-            "arity {arity}: interval count should match"
-        );
+            assert_eq!(
+                intervals.len(),
+                arity,
+                "arity {arity}: interval count should match"
+            );
 
-        for (i, &(a, b)) in intervals.iter().enumerate() {
+            for (i, &(a, b)) in intervals.iter().enumerate() {
+                assert!(
+                    a >= 0.0,
+                    "arity {arity}, interval {i}: start {a} should be >= 0"
+                );
+                assert!(
+                    b <= 1.0,
+                    "arity {arity}, interval {i}: end {b} should be <= 1"
+                );
+                assert!(
+                    a < b,
+                    "arity {arity}, interval {i}: ({a}, {b}) should have positive width"
+                );
+            }
+
+            // Intervals should be sorted (canonicalized by extract_sub_intervals)
+            for i in 1..intervals.len() {
+                assert!(
+                    intervals[i].0 >= intervals[i - 1].1,
+                    "arity {arity}: intervals should be non-overlapping and sorted, \
+                     but interval {} ends at {} while interval {} starts at {}",
+                    i - 1,
+                    intervals[i - 1].1,
+                    i,
+                    intervals[i].0,
+                );
+            }
+
+            // The result should be reconstructible with overlap checking enabled
+            let reconstructed = E1::new(intervals, true);
             assert!(
-                a >= 0.0,
-                "arity {arity}, interval {i}: start {a} should be >= 0"
-            );
-            assert!(
-                b <= 1.0,
-                "arity {arity}, interval {i}: end {b} should be <= 1"
-            );
-            assert!(
-                a < b,
-                "arity {arity}, interval {i}: ({a}, {b}) should have positive width"
+                reconstructed.is_ok(),
+                "arity {arity}: random config should pass overlap check: {reconstructed:?}"
             );
         }
-
-        // Intervals should be sorted (canonicalized by extract_sub_intervals)
-        for i in 1..intervals.len() {
-            assert!(
-                intervals[i].0 >= intervals[i - 1].1,
-                "arity {arity}: intervals should be non-overlapping and sorted, \
-                 but interval {} ends at {} while interval {} starts at {}",
-                i - 1,
-                intervals[i - 1].1,
-                i,
-                intervals[i].0,
-            );
-        }
-
-        // The result should be reconstructible with overlap checking enabled
-        let reconstructed = E1::new(intervals, true);
-        assert!(
-            reconstructed.is_ok(),
-            "arity {arity}: random config should pass overlap check: {reconstructed:?}"
-        );
     }
 }
 
 #[test]
 fn e1_random_zero_arity() {
-    let mut rng = rand::rng();
+    let mut rng = StdRng::seed_from_u64(1410);
     let e1 = E1::random(0, &mut rng);
     let intervals = e1.extract_sub_intervals();
     assert!(intervals.is_empty(), "arity 0 should produce no intervals");
