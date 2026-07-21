@@ -165,11 +165,13 @@ impl<G: PropSignature> Free<G> {
 /// transpositions in the order performed. `adjacent_swaps(p)[i] = t` means the
 /// `i`-th swap exchanged positions `t` and `t + 1`.
 ///
-/// This is the shared decomposition core behind both
+/// This is the shared decomposition core behind all three call sites:
 /// [`crate::mat_to_sfg`]'s `permutation_sfg` (which maps each `t` to a braid
-/// layer `id_t ⊗ σ ⊗ id_{k-t-2}`) and
-/// [`presentation::smc_nf`]'s `decompose_braid` (which builds `Layer<G>`
-/// values and reverses the sequence for its string-diagram pipeline). `O(k²)`
+/// layer `id_t ⊗ σ ⊗ id_{k-t-2}`, in swap order) and
+/// [`presentation::smc_nf`]'s `decompose_braid` + `canonicalize_run` (which
+/// build `Layer<G>` values from the REVERSED sequence — their perms are
+/// output-indexed, so the sort word undoes the braid and its reversal
+/// rebuilds it). `O(k²)`
 /// swaps for `k = perm.len()`; the empty vector is returned when `perm` is
 /// already sorted (including `k ≤ 1`). Applying the returned swaps to `perm`
 /// left-to-right yields the ascending sort.

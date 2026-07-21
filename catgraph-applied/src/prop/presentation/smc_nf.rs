@@ -414,10 +414,14 @@ fn decompose_braid<G: PropSignature>(m: usize, n: usize) -> Vec<Layer<G>> {
     // Bubble-sort perm to [0..total] via the shared `adjacent_swaps` core,
     // recording the swap positions.
     let mut swaps = super::super::adjacent_swaps(&perm);
-    // Reversed sequence applied to identity reproduces σ_{m,n}. The reversal is
-    // relative to `permutation_sfg`'s input→output emission order in
-    // `crate::mat_to_sfg`: the string-diagram normalization pipeline applies
-    // these layers in the opposite direction.
+    // Reversed sequence applied to identity reproduces σ_{m,n}: sorting the
+    // OUTPUT-indexed perm above yields the word that UNDOES the braid, and
+    // reversing a word of self-inverse adjacent transpositions inverts the
+    // composite — giving the word that BUILDS it. (A permutation-convention
+    // fact, not a pipeline-direction difference: `permutation_sfg` in
+    // `crate::mat_to_sfg` needs no reversal because its perm is INPUT-indexed —
+    // wire `p` exits at `perm[p]` — and both consumers compose layers in the
+    // same forward order.)
     swaps.reverse();
     swaps
         .into_iter()
@@ -1007,23 +1011,10 @@ fn canonicalize_run<G: PropSignature>(run: &[Layer<G>]) -> Vec<Layer<G>> {
         apply_braid_layer_to_perm(layer, &mut perm);
     }
 
-    // Canonical decomposition of perm via bubble sort (same algorithm as
-    // hexagon_expand's decompose_braid).
-    let mut sorted = perm.clone();
-    let mut swaps: Vec<usize> = Vec::new();
-    loop {
-        let mut swapped = false;
-        for i in 0..total - 1 {
-            if sorted[i] > sorted[i + 1] {
-                sorted.swap(i, i + 1);
-                swaps.push(i);
-                swapped = true;
-            }
-        }
-        if !swapped {
-            break;
-        }
-    }
+    // Canonical decomposition of perm via the shared `adjacent_swaps` core
+    // (the same one behind `decompose_braid`), reversed for the same
+    // undo-word → build-word reason documented there.
+    let mut swaps = super::super::adjacent_swaps(&perm);
     swaps.reverse();
 
     if swaps.is_empty() {
