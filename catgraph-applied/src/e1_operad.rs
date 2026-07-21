@@ -102,27 +102,33 @@ impl E1 {
     ///
     /// - The returned configuration has exactly `cur_arity` intervals (empty when
     ///   `cur_arity == 0`).
-    /// - Every interval has width greater than `F32_EPSILON` (`1e-6`).
+    /// - Every interval has width greater than `MIN_SEPARATION` (`2·F32_EPSILON`,
+    ///   i.e. `2e-6`).
     /// - Intervals are pairwise strictly disjoint with gaps greater than
     ///   `MIN_SEPARATION`, formed by pairing sorted coordinates
     ///   `(s0, s1), (s2, s3), …`.
     ///
     /// # Panics
     ///
-    /// The sort's `partial_cmp` unwrap panics if any sample is not finite, which
+    /// The sort's `partial_cmp` expect panics if any sample is not finite, which
     /// cannot occur for `random_range(0.0..1.0)`. The terminal `expect` documents
     /// the resampling invariant and likewise cannot fire.
     pub fn random(cur_arity: usize, rng: &mut impl RngExt) -> Self {
         // Strictly above the `E1::new` width threshold (`F32_EPSILON`), with slack,
-        // so every accepted interval has positive width and the neighbouring gaps
-        // clear the overlap check.
+        // so every accepted interval has positive width and neighbouring intervals
+        // are strictly disjoint. The guarantee comes entirely from this loop:
+        // `random` constructs with `overlap_check = false`, so `E1::new` only
+        // re-checks widths and bounds, not disjointness.
         const MIN_SEPARATION: f32 = 2.0 * F32_EPSILON;
 
         let sub_ints = loop {
             let mut sub_ints: Vec<IntervalCoord> = (0..2 * cur_arity)
                 .map(|_| rng.random_range(0.0..1.0))
                 .collect();
-            sub_ints.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+            sub_ints.sort_unstable_by(|a, b| {
+                a.partial_cmp(b)
+                    .expect("invariant: samples from random_range(0.0..1.0) are finite")
+            });
             // An empty sample vec (cur_arity == 0) has no adjacent pairs, so `all`
             // is vacuously true and the loop exits on the first iteration.
             let well_separated = sub_ints
@@ -334,7 +340,7 @@ mod test {
 
     #[test]
     fn identity_e1_random() {
-        use super::{E1, IntervalCoord};
+        use super::E1;
         use catgraph::assert_ok;
         use catgraph::category::HasIdentity;
         use catgraph::operadic::Operadic;
@@ -346,16 +352,11 @@ mod test {
 
         for _ in 0..trial_num {
             let used_arity: u8 = rng.random_range(1..arity_max);
-            let mut sub_ints: Vec<IntervalCoord> = (0..2 * used_arity)
-                .map(|_| rng.random_range(0.0..1.0))
-                .collect();
-            sub_ints.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-            let sub_intervals: Vec<(IntervalCoord, IntervalCoord)> = sub_ints
-                .chunks_exact(2)
-                .map(|chunk| (chunk[0], chunk[1]))
-                .collect();
-            let mut as_e1_v1 = E1::new(sub_intervals.clone(), false).unwrap();
-            let as_e1_v2 = E1::new(sub_intervals.clone(), false).unwrap();
+            // Route through `E1::random` (not an inline draw-sort-pair copy of its
+            // old body) so the fixture inherits its minimum-separation guarantee.
+            let mut as_e1_v1 = E1::random(used_arity as usize, &mut rng);
+            let as_e1_v2 = as_e1_v1.clone();
+            let sub_intervals = as_e1_v1.sub_intervals().to_vec();
             let which_to_replace = rng.random_range(0..used_arity);
             let id = E1::identity(&());
             let composed = as_e1_v1.operadic_substitution(which_to_replace as usize, id);
@@ -372,7 +373,7 @@ mod test {
 
     #[test]
     fn two_random_nontrivials() {
-        use super::{E1, IntervalCoord};
+        use super::E1;
         use catgraph::assert_ok;
         use catgraph::operadic::Operadic;
         use rand::RngExt;
@@ -383,26 +384,13 @@ mod test {
 
         for _ in 0..trial_num {
             let used_arity_1: u8 = rng.random_range(1..arity_max);
-            let mut sub_ints: Vec<IntervalCoord> = (0..2 * used_arity_1)
-                .map(|_| rng.random_range(0.0..1.0))
-                .collect();
-            sub_ints.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-            let sub_intervals: Vec<(IntervalCoord, IntervalCoord)> = sub_ints
-                .chunks_exact(2)
-                .map(|chunk| (chunk[0], chunk[1]))
-                .collect();
-            let as_e1_v1 = E1::new(sub_intervals.clone(), false).unwrap();
+            // Route through `E1::random` (not an inline draw-sort-pair copy of its
+            // old body) so both fixtures inherit its minimum-separation guarantee.
+            let as_e1_v1 = E1::random(used_arity_1 as usize, &mut rng);
 
             let used_arity_2: u8 = rng.random_range(1..arity_max);
-            let mut sub_ints: Vec<IntervalCoord> = (0..2 * used_arity_2)
-                .map(|_| rng.random_range(0.0..1.0))
-                .collect();
-            sub_ints.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-            let sub_intervals: Vec<(IntervalCoord, IntervalCoord)> = sub_ints
-                .chunks_exact(2)
-                .map(|chunk| (chunk[0], chunk[1]))
-                .collect();
-            let mut as_e1_v2 = E1::new(sub_intervals.clone(), false).unwrap();
+            let mut as_e1_v2 = E1::random(used_arity_2 as usize, &mut rng);
+            let sub_intervals = as_e1_v2.sub_intervals().to_vec();
 
             let which_to_replace = rng.random_range(0..used_arity_2);
 

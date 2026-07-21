@@ -363,8 +363,9 @@ fn e1_random_produces_valid_config() {
     let mut rng = StdRng::seed_from_u64(141);
 
     for arity in 1..=10 {
-        // Many trials per arity so the seeded run exercises many draws, including
-        // batches that must be resampled to clear the minimum-separation guarantee.
+        // Many trials per arity so the seeded run exercises many draws. (Resampling
+        // is rare — roughly 1e-3 per call at these arities — and these seeds happen
+        // not to hit it; the validity assertions below hold either way.)
         for _ in 0..20 {
             let e1 = E1::random(arity, &mut rng);
             let intervals = e1.extract_sub_intervals();
