@@ -24,7 +24,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   (`bool/2`, `f64rig/2`) now run at criterion's `sample_size(10)` minimum with
   measured wall times documented in the bench module rustdoc (per-call ≈ 6.9 s
   bool / ≈ 6.7 s f64rig; ≈ 2 min 31 s for both groups together), replacing the
-  never-profiled "60 s budget" / "13 min at defaults" estimates.
+  never-profiled "60 s budget" and retiring the criterion-defaults config whose
+  ~13-min cost had already been measured as ground truth.
 - **All Joyal–Street SMC-NF anchors verified; every (†)/(‡) mark retired**
   ([#117](https://github.com/sustia-llc/catgraph/issues/117) option (b),
   completes the issue): with the JS-I and JS-Braided journal scans now in

@@ -69,7 +69,10 @@
 //!
 //! - **Witness-count asymmetry (`BoolRig` vs `F64Rig`).** At `size_bound = 2`
 //!   `BoolRig` produces 1142 witnesses (post-E_18); `F64Rig` produces a
-//!   larger count (~2478) that blows up combinatorially at `size_bound = 3`.
+//!   larger count (2229 exact post-#58 — the tracker baseline measured on the
+//!   4-sample test fixture in `tests/graphical_linalg.rs`; this bench's
+//!   2-sample fixture yields a different, untracked count) that blows up
+//!   combinatorially at `size_bound = 3`.
 //!   The mechanism is
 //!   algebraic, not a measurement artefact: `BoolRig` is idempotent
 //!   (`a ∨ a = a`, `a ∧ a = a`) so the D1 Cayley table
@@ -107,14 +110,18 @@
 //!
 //! - **`cc_incompleteness_count::bool/2`** — criterion per-call estimate
 //!   **≈ 6.92 s** (median; `[6.90, 6.92, 6.93]` s). Group wall time ≈ 76 s
-//!   (500 ms warm-up + 10 measurement iterations at criterion's minimum
-//!   `sample_size`).
+//!   measured.
 //! - **`cc_incompleteness_count::f64rig/2`** — criterion per-call estimate
-//!   **≈ 6.73 s** (median; `[6.71, 6.73, 6.74]` s). Group wall time ≈ 67 s
-//!   (criterion's own "estimated 66.9 s" for the 10-iteration collection),
-//!   plus warm-up.
+//!   **≈ 6.73 s** (median; `[6.71, 6.73, 6.74]` s). Group wall time ≈ 75 s
+//!   measured (criterion's "estimated 66.9 s" 10-iteration collection plus
+//!   warm-up).
 //! - **Both cc groups together** — ≈ 2 min 31 s wall (`cargo bench …
-//!   -- cc_incompleteness`, excluding compilation).
+//!   -- cc_incompleteness`, excluding compilation; 76 + 75 ≈ 151 s).
+//!
+//! Group wall time exceeds `10 × per-call + 500 ms` because criterion's
+//! warm-up loop only checks elapsed time *between* iterations — it always
+//! completes at least one full ~7 s call — and per-group analysis adds
+//! overhead.
 //!
 //! ## Trait-bound dispatch tier
 //!
@@ -282,9 +289,10 @@ fn bench_sfg_to_mat_bool(c: &mut Criterion) {
 // `verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(size_bound=2)` returns
 // 1142 CC-incompleteness witnesses (measured empirically, post-E_18; see the
 // `tests/graphical_linalg.rs` module docstring for authoritative semantics).
-// One d=2 call is ~7.6 s in release, so the group is configured at criterion's
-// minimum `sample_size(10)` with a short warm-up + measurement budget — a full
-// 100-sample run would take ~13 min. The `size_bound=3` variant was dropped
+// One d=2 call is ≈6.9 s in release (see "Measured wall times"), so the group
+// is configured at criterion's minimum `sample_size(10)` with a short warm-up +
+// measurement budget — a full 100-sample run would take ~12 min. The
+// `size_bound=3` variant was dropped
 // (#59): one d=3 call exceeds 590 s (>10 min), un-runnable under any criterion
 // config. Depth-3/4 ground truth stays reachable via the `#[ignore]`'d
 // `cc_completeness_tracking_*_depth_{3,4}` tests in `tests/graphical_linalg.rs`.
@@ -299,10 +307,11 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     // a tight presentation.
     let rig_samples = vec![BoolRig(true), BoolRig(false)];
 
-    // One d=2 verifier call is ~7.6 s; a criterion-default 100-sample run
-    // would take ~13 min. Cap the sampling at criterion's `sample_size(10)`
-    // minimum with a short warm-up + measurement budget. Config MUST precede
-    // the `bench_function` registration below to take effect.
+    // One d=2 verifier call is ≈6.9 s (see "Measured wall times" in the
+    // module doc); a criterion-default 100-sample run would take ~12 min.
+    // Cap the sampling at criterion's `sample_size(10)` minimum with a short
+    // warm-up + measurement budget. Config MUST precede the `bench_function`
+    // registration below to take effect.
     group.sample_size(10);
     group.warm_up_time(std::time::Duration::from_millis(500));
     group.measurement_time(std::time::Duration::from_secs(5));
@@ -349,9 +358,10 @@ fn bench_cc_incompleteness_count_f64rig(c: &mut Criterion) {
     // (via `to_bits()`, `-0.0`-normalized); no NaN risk for these literals.
     let rig_samples = vec![F64Rig(0.0), F64Rig(1.0)];
 
-    // Same budget as the bool group: one d=2 call is ~7.6 s, so cap sampling
-    // at criterion's `sample_size(10)` minimum. Config MUST precede the
-    // `bench_function` registration below to take effect.
+    // Same budget as the bool group: one d=2 call is ≈6.7 s here (see
+    // "Measured wall times"), so cap sampling at criterion's `sample_size(10)`
+    // minimum. Config MUST precede the `bench_function` registration below to
+    // take effect.
     group.sample_size(10);
     group.warm_up_time(std::time::Duration::from_millis(500));
     group.measurement_time(std::time::Duration::from_secs(5));
