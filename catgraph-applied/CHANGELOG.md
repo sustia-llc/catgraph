@@ -15,6 +15,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **Shared `adjacent_swaps` bubble-sort core extracted**
+  ([#138](https://github.com/sustia-llc/catgraph/issues/138)): the adjacent-
+  transposition decomposition duplicated in `mat_to_sfg`'s `permutation_sfg`
+  and `prop::presentation::smc_nf`'s `decompose_braid` **and
+  `canonicalize_run`** (a third copy surfaced in review) now lives in one
+  `pub(crate)` helper (`crate::prop::adjacent_swaps`); each call site maps the
+  returned swap list into its own representation (SFG braid layers in swap
+  order vs. reversed `Layer<G>` values — the smc_nf perms are output-indexed,
+  so the sort word undoes the braid and its reversal rebuilds it).
+  Behavior-preserving — all call sites' existing tests pass unchanged.
 - **`functor_bench` cc groups re-budgeted from unmeasured design-doc estimates**
   ([#59](https://github.com/sustia-llc/catgraph/issues/59)): the
   `cc_incompleteness_count::bool/3` bench was dropped — one `d=3` verifier call
