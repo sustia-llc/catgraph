@@ -8,6 +8,27 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Changed
 
+- **Hardened the core-crate rayon determinism guards ([#48](https://github.com/sustia-llc/catgraph/issues/48))** —
+  extended the parallel-vs-sequential equivalence discipline already applied in
+  `catgraph-applied` to the core crate's two rayon sites, and to a third,
+  previously-untested applied site. The pre-existing `tests/rayon_equivalence.rs`
+  guards were upgraded from set-shape / depth-only checks to exact assertions:
+  `NamedCospan::find_nodes_by_name_predicate` now compares against an in-test
+  hand-rolled sequential reference with exact ordered-`Vec` equality (below and
+  above its size threshold), plus the `at_most_one=true` short-circuit and
+  no-match cases. `FrobeniusMorphism` / `FrobeniusLayer` `hflip` gains direct
+  `#[cfg(test)]` unit tests in `src/frobenius/operations.rs` (reachable in-module:
+  `FrobeniusLayer::hflip` is module-private, `FrobeniusMorphism::hflip` is
+  `pub(crate)`) asserting sequential-reference equality and the `hflip ∘ hflip ==
+  id` involution on layers wide enough that rayon actually subdivides
+  (`with_min_len(m)` only splits at length ≥ 2·m), plus public-API determinism
+  guards through `special_frobenius_morphism` and
+  `cospan_algebra::cospan_to_frobenius`. In `catgraph-applied`,
+  `LinearCombination::linear_combine` — a second `CondIterator` dispatch point
+  that had no equivalence coverage — gains threshold-straddling par-vs-seq tests
+  (including a non-injective combiner that forces coefficient collisions). All
+  guards run under both the default and `--no-default-features` builds.
+
 - **Paper-audit citation reconciliation (Phase 1, PRs #112/#113)** — verified the
   FS19 (Hypergraph Categories) anchors against the cached paper and fixed drifted
   citations: `Thm 1.2 / Thm 4.13` isomorphism-vs-equivalence phrasing in README /
