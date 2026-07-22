@@ -99,9 +99,13 @@
 //! - **The Hopf-fibration / carry-operation construction** — private
 //!   namespace stub only; held until a Dudzik preprint exists. See ⚠️
 //!   CAREFUL section below for the 2026-05-06 evidence update.
-//! - **Truly-infinite final-coalgebra semantics** for [`architectures::UnfoldingRnn`]
-//!   (lazy / `Iterator` / `tokio_stream::Stream` carrier). Bounded-depth
-//!   `unroll_to_vec` is the shipped surface; lazy variant deferred.
+//! - ~~**Truly-infinite final-coalgebra semantics** for
+//!   [`architectures::UnfoldingRnn`]~~ — **shipped** (#36):
+//!   `UnfoldingRnn::unroll_iter` is a genuinely infinite pull-based
+//!   `Iterator` carrier (with lazy `MealyCell::run_iter` /
+//!   `MooreCell::run_iter` siblings); `unroll_to_vec` stays the bounded
+//!   eager surface. No `tokio_stream::Stream` adapter (no async deps) —
+//!   that variant remains unbuilt by design.
 //! - **Upstream haft adoption of `Pointed` / `NaturalTransformation`** — the
 //!   first-class surfaces themselves shipped in [`natural`] and [`container`]
 //!   ([#41](https://github.com/sustia-llc/catgraph/issues/41)); what remains

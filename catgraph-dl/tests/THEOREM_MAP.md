@@ -71,9 +71,9 @@ PR (this is the #70 discipline). Style: reference `<file>::<test_fn>`.
 | `architecture_unrollers::unfolding_rnn_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.3 | UnfoldingRnn unroll = finite prefix of unique coalgebra hom into `Stream(O)` |
 | `architecture_unrollers::mealy_cell_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.4 | Mealy run = input-driven `Cofree<OptionWitness, O>` prefix walk |
 | `architecture_unrollers::moore_cell_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.5 | Moore run = output-then-step `Cofree<OptionWitness, O>` prefix walk |
-| `architecture_unrollers::unfolding_rnn_unroll_iter_agrees_and_is_lazy` (+ proptest) | **CDL Remark H.6** / App I.3 | `UnfoldingRnn::unroll_iter` (lazy #36): `.take(n)` prefix = `unroll_to_vec` = `Cofree` walk; laziness witness |
-| `architecture_unrollers::mealy_cell_run_iter_agrees` (+ proptest) | **CDL Remark H.6** / App I.4 | `MealyCell::run_iter` (lazy #36): full/prefix consumption = `run` = `Cofree` walk |
-| `architecture_unrollers::moore_cell_run_iter_agrees` (+ proptest) | **CDL Remark H.6** / App I.5 | `MooreCell::run_iter` (lazy #36): output-then-step consumption = `run` = `Cofree` walk |
+| `architecture_unrollers::unfolding_rnn_unroll_iter_agrees_and_is_lazy` (+ proptest) | **CDL Remark H.6** / App I.3 | `UnfoldingRnn::unroll_iter`: `.take(n)` prefix = `unroll_to_vec` = `Cofree` walk; laziness witness |
+| `architecture_unrollers::mealy_cell_run_iter_agrees` (+ proptest) | **CDL Remark H.6** / App I.4 | `MealyCell::run_iter`: full/prefix consumption = `run` = `Cofree` walk |
+| `architecture_unrollers::moore_cell_run_iter_agrees` (+ proptest) | **CDL Remark H.6** / App I.5 | `MooreCell::run_iter`: output-then-step consumption = `run` = `Cofree` walk |
 | `architecture_unrollers::gdl_recovery_via_z2_invariant_folding` | CDL Example 2.6 | GDL recovery: Z2-invariant fold |
 | `free_monad_bijections::*` | CDL Example B.19/B.20, Prop B.18 | haft `Free`/`Cofree` ↔ concrete-carrier bijections |
 

@@ -66,7 +66,7 @@ where
 {
     /// Bounded-depth unroll into a `Vec<O>` of length `depth`.
     ///
-    /// CDL Remark 2.13 dual / Example J.2. The unique coalgebra
+    /// CDL Remark H.6 / Example J.2 / App I.3. The unique coalgebra
     /// homomorphism into the final coalgebra `Stream(O)` is conceptually
     /// infinite; this method materialises a finite prefix. Semantics:
     ///
@@ -132,6 +132,12 @@ where
     /// [`unroll_to_vec`]`(s_0, n)` elementwise, for every `n` (`n = 0`
     /// included). It borrows `cell` for the lifetime of the returned iterator.
     ///
+    /// # Panics
+    ///
+    /// If a `cell_o`/`cell_n` call panics and the unwind is caught (e.g.
+    /// `catch_unwind`), the iterator is **poisoned**: any further `.next()`
+    /// call panics rather than silently reporting the stream as exhausted.
+    ///
     /// [`unroll_to_vec`]: UnfoldingRnn::unroll_to_vec
     ///
     /// # Examples
@@ -149,11 +155,19 @@ where
         initial_state: S,
     ) -> impl Iterator<Item = O> + '_ {
         // The state is moved out (into `cell_n`) each step, so it lives behind
-        // an `Option` we `take` from and re-seed; it is `Some` on every call
-        // (the coalgebra is total), so the iterator never terminates.
+        // an `Option` we `take` from and re-seed. On every successful step it
+        // is re-seeded `Some` (the coalgebra is total), so the iterator never
+        // terminates; `None` is reachable only after a caught panic — poisoned,
+        // handled loudly below.
         let mut state = Some(initial_state);
         core::iter::from_fn(move || {
-            let s = state.take()?;
+            // `state` is re-seeded `Some` at the end of every successful step,
+            // so `None` here means a previous `cell_o`/`cell_n` call panicked
+            // and the unwind was caught — the iterator is poisoned. Panic
+            // loudly rather than masquerade as a cleanly exhausted stream.
+            let s = state.take().expect(
+                "UnfoldingRnn::unroll_iter poisoned: a previous cell_o/cell_n call panicked",
+            );
             let p = cell.parameter.clone();
             let s_for_o = s.clone();
             let o = (cell.cell_o)((p, s_for_o));

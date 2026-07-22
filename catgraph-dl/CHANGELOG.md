@@ -75,9 +75,15 @@ All notable changes to this crate are documented here. Format follows
     `(cell_o, cell_n)` coalgebra on demand (`core::iter::from_fn` over the
     threaded state, same output-then-advance sequencing as `unroll_to_vec`).
     Callers bound it with `.take(n)`; `unroll_iter(s_0).take(n)` agrees with
-    `unroll_to_vec(s_0, n)` elementwise. The module doc and the
-    `unroll_to_vec` "Why bounded?" note are reframed accordingly: the deferred
-    "lazy `Lazy`/`Thunk`/`Stream` carrier" is now the shipped `Iterator`.
+    `unroll_to_vec(s_0, n)` elementwise. Every "lazy carrier is deferred"
+    claim is reframed accordingly (unfolding_rnn module doc + "Why bounded?"
+    note, crate-root lib.rs deferred-surfaces list, README deferred-surfaces
+    section, `docs/2402.15332v2-AUDIT.md` open items, and the
+    architecture_unrollers test-module doc): the deferred "lazy
+    `Lazy`/`Thunk`/`Stream` carrier" is now the shipped `Iterator`; a
+    `tokio_stream::Stream` adapter remains unbuilt by design (no async deps).
+    After a caught panic in a cell closure the iterators are **poisoned**
+    (further `.next()` calls panic loudly instead of reporting exhaustion).
   - **`architectures::MealyCell::run_iter(cell, initial_state, inputs) ->
     impl Iterator<Item = O>`** — consumes any `IntoIterator<Item = I>` lazily,
     one Mealy step per pulled item; same two-stage closure shape as `run`.

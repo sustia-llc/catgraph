@@ -124,6 +124,12 @@ where
     /// `inputs` is exhausted. It borrows `cell` for the lifetime of the
     /// returned iterator.
     ///
+    /// # Panics
+    ///
+    /// If a `cell_o`/`cell_n` call panics and the unwind is caught, the
+    /// iterator is **poisoned**: any further `.next()` call panics rather than
+    /// silently reporting the stream as exhausted.
+    ///
     /// [`run`]: MooreCell::run
     ///
     /// # Examples
@@ -154,7 +160,11 @@ where
         let mut iter = inputs.into_iter();
         core::iter::from_fn(move || {
             let i = iter.next()?;
-            let s = state.take()?;
+            // `None` state means a previous cell_o/cell_n call panicked and
+            // the unwind was caught — poisoned; panic rather than end silently.
+            let s = state
+                .take()
+                .expect("MooreCell::run_iter poisoned: a previous cell_o/cell_n call panicked");
             // Output FIRST — Moore-distinctive.
             let p_o = cell.parameter.clone();
             let s_for_o = s.clone();

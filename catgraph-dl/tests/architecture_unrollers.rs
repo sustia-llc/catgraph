@@ -64,9 +64,11 @@
 //! (`UnfoldingRnn`/`MealyCell`/`MooreCell`, CDL App I.3/I.4/I.5). We witness that
 //! dual with `Cofree<OptionWitness, O>`: a **bounded** non-empty stream
 //! prefix (tail `None` terminates; a top-level `Option` carries the empty,
-//! depth-0 case). The truly-infinite stream carrier stays deferred behind
-//! `Lazy`/`Thunk` (see the crate-root "Deferred surfaces" list; #36-adjacent), so these tests
-//! assert the finite-depth prefix only. (Anchor note: the issue body's "Remark
+//! depth-0 case). The truly-infinite stream carrier is now SHIPPED (#36):
+//! `unroll_iter`/`run_iter` are the pull-based `Iterator` carriers, and tests
+//! 14–16 below pin their prefix agreement with both the eager methods and the
+//! `Cofree` walk; the `Cofree`-equivalence tests here still assert the
+//! finite-depth prefix only. (Anchor note: the issue body's "Remark
 //! 2.13 dual / App B + App J" was imprecise — the exact dual statement is
 //! Remark H.6 and the architectures live in App I; corrected here and on #64.)
 
@@ -743,7 +745,7 @@ fn moore_cell_equivalent_to_cofree_cmnd_unroller() {
 /// (Coalgebra direction; CDL Remark H.6, App I.3; lazy-unroll surface #36.)
 ///
 /// The genuinely-infinite `unroll_iter` is the lazy carrier for `Stream(O)`.
-/// Two agreements plus a laziness witness:
+/// Two agreements plus two laziness witnesses:
 ///
 /// - **(i) prefix-equivalence** — `unroll_iter(seed).take(n).collect()` equals
 ///   `unroll_to_vec(seed, n)` for several `n` including `n = 0`;
@@ -752,7 +754,10 @@ fn moore_cell_equivalent_to_cofree_cmnd_unroller() {
 /// - **(iii) laziness** — a `cell_n` that panics once the state passes a bound
 ///   is never tripped by a bounded `.take`, proving the tail is not eagerly
 ///   over-evaluated (an eager unroller could not represent the infinite stream
-///   at all). Counter fixture as tests 4 / 11.
+///   at all). Counter fixture as tests 4 / 11;
+/// - **(iv) exact advancement** — a `Cell` counter proves `.take(n)` calls
+///   `cell_n` exactly `n` times, matching `unroll_to_vec(_, n)` call-for-call
+///   (catches single-step over-advancement that (iii)'s loose bound cannot).
 #[test]
 fn unfolding_rnn_unroll_iter_agrees_and_is_lazy() {
     type CellO = fn((i64, i64)) -> i64;
@@ -800,6 +805,38 @@ fn unfolding_rnn_unroll_iter_agrees_and_is_lazy() {
         vec![0_i64, 1, 2, 3, 4],
         "take(5) yields the first five outputs without tripping the bound guard"
     );
+
+    // (iv) Exact-advancement witness: `.take(n)` must call `cell_n` EXACTLY
+    // `n` times — the same count as `unroll_to_vec(_, n)` — pinning down any
+    // single-step over-advancement regression the loose bound in (iii) would
+    // miss. A `Cell` counter observes the call count directly (`Cell`
+    // mutation through a shared borrow keeps the closure a plain `Fn`).
+    for n in [0_usize, 1, 5] {
+        let advances = core::cell::Cell::new(0_usize);
+        let counting = UnfoldingRnn::new(
+            0_i64,
+            |(_p, s): (i64, i64)| s,
+            |(_p, s): (i64, i64)| {
+                advances.set(advances.get() + 1);
+                s + 1
+            },
+        );
+        let _ = UnfoldingRnn::unroll_iter(&counting, 0)
+            .take(n)
+            .collect::<Vec<_>>();
+        let iter_advances = advances.get();
+        advances.set(0);
+        let _ = UnfoldingRnn::unroll_to_vec(&counting, 0, n);
+        assert_eq!(
+            iter_advances,
+            advances.get(),
+            "unroll_iter.take({n}) must call cell_n exactly as often as unroll_to_vec(_, {n})"
+        );
+        assert_eq!(
+            iter_advances, n,
+            "exactly one cell_n advance per pulled element"
+        );
+    }
 }
 
 /// **Test 15 — `MealyCell::run_iter` lazy-iterator agreement.** (Coalgebra

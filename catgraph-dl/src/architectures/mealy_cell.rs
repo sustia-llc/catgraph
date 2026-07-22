@@ -111,6 +111,12 @@ where
     /// is exhausted. It borrows `cell` for the lifetime of the returned
     /// iterator.
     ///
+    /// # Panics
+    ///
+    /// If a cell/step call panics and the unwind is caught, the iterator is
+    /// **poisoned**: any further `.next()` call panics rather than silently
+    /// reporting the stream as exhausted.
+    ///
     /// [`run`]: MealyCell::run
     ///
     /// # Examples
@@ -141,7 +147,11 @@ where
         let mut iter = inputs.into_iter();
         core::iter::from_fn(move || {
             let i = iter.next()?;
-            let s = state.take()?;
+            // `None` state means a previous cell/step call panicked and the
+            // unwind was caught — poisoned; panic rather than end silently.
+            let s = state
+                .take()
+                .expect("MealyCell::run_iter poisoned: a previous cell/step call panicked");
             let p = cell.parameter.clone();
             let step = (cell.cell)((p, s));
             let (o, s_next) = step(i);
