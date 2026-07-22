@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fresh `coalition_magnitude_from_couplings` path; `coalition_value_with/{hit,
   hit_scratch}` isolates the fast-path `value_with` against `value_with_scratch`.
   Both at `m = 8`/`16`. The `new()`-rebuild measurement **refutes** the koalisi
-  K6 report of a ~13–15× `new()`/fresh ratio attributed to cache extraction: on
+  K6 report of a ~10–15× `new()`/fresh ratio attributed to cache extraction: on
   the same fixture the ratio is **~1.05×** (1.02–1.16× across `m ∈ {3..16}`,
   dense and sparse), so no `new()` optimization was warranted — the koalisi gap
   is a consumer-side measurement artifact, not cache-extraction cost.

@@ -22,9 +22,9 @@ use catgraph_magnitude::coalition_value;
 use catgraph_magnitude::lm_category::LmCategory;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
-// NOTE: `EvalScratch` + the `value_with_scratch`/`evaluator_new`/`value_with_hit`
-// benches below are #33; the scratch surface must exist in `coalition_eval` for
-// this bench to compile.
+// NOTE: `EvalScratch` + the `evaluator_rebuild/{fresh,new}` and
+// `coalition_value_with/{hit,hit_scratch}` benches below are #33; the scratch
+// surface must exist in `coalition_eval` for this bench to compile.
 
 /// Build a deterministic forward-chain `n`-state LM using a minimal inline
 /// LCG (identical to `tests/lm_category.rs::build_random_tree_lm`).
@@ -194,11 +194,11 @@ fn build_fast_path_fixture(m: usize) -> (Vec<usize>, Vec<(usize, usize, f64)>, V
 
 /// #33 (B) — isolate the `CoalitionEvaluator::new` rebuild cost against the fresh
 /// `coalition_magnitude_from_couplings` path on the *same* fixture, to reproduce
-/// (or refute) the koalisi K6 report of a ~13–15× `new()`/fresh ratio attributed
+/// (or refute) the koalisi K6 report of a ~10–15× `new()`/fresh ratio attributed
 /// to cache extraction. Both are measured at `m = 8` and `m = 16` on
 /// [`build_coalition_fixture`].
 ///
-/// **Result (2026-07-22, #33): the 13–15× ratio does NOT reproduce.** Measured
+/// **Result (2026-07-22, #33): the 10–15× ratio does NOT reproduce.** Measured
 /// on this dense fixture:
 /// - `fresh/8` ≈ 54 µs, `new/8` ≈ 57 µs → **1.05×**;
 /// - `fresh/16` ≈ 179 µs, `new/16` ≈ 188 µs → **1.05×**.
