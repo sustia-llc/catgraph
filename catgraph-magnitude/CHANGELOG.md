@@ -16,6 +16,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`snf::integer::hadamard_bound_matr<R>` + `hadamard_bound_integer`**
+  ([#35](https://github.com/sustia-llc/catgraph/issues/35)) — two new public
+  Hadamard-bound entry points beside the existing f64 `hadamard_bound`.
+  `hadamard_bound_matr<R: IntegerLikeRig>(&MatR<R>)` is the `MatR<R>` round-trip
+  wrapper (mirrors `smith_normal_form_matr`'s conversion idiom).
+  `hadamard_bound_integer(&[Vec<i64>])` computes a **valid, float-free** bound —
+  per-row `⌊√(Σ a²)⌋ + 1` via integer `isqrt`, product accumulated in `u128`
+  with `checked_mul`; `∏(⌊√·⌋+1) ≥ ∏√· = H(A)`, so it is always ≥ the f64
+  variant (generally slightly looser) and equally usable by
+  `select_primes_for_bound`.
+
+### Changed
+
+- **`snf::smith_normal_form_integer`: polynomial-DP chain rebalance**
+  ([#35](https://github.com/sustia-llc/catgraph/issues/35)) — the
+  determinantal-divisor computation `D_k = gcd of all k-subset products` now
+  runs in `O(r²)` via a dynamic program (`G'[j] = gcd(G[j], d_i·G[j−1])`, exact
+  for positive integers because `gcd({s·d_i}) = d_i·gcd(S)`) instead of the
+  prior `O(2^r)` subset enumeration. Same results (cross-checked against the
+  enumeration, now a `#[cfg(test)]` oracle, over random small-prime diagonals);
+  overflow escalates strictly less often since `d_i·G[j−1]` is bounded by an
+  actual `j`-subset product.
+- **`snf::crt::select_primes_for_bound`: const prime table, `primal` dropped**
+  ([#35](https://github.com/sustia-llc/catgraph/issues/35)) — replaced the
+  ~72 MB `primal::Sieve::new(1 << 31)` allocation (mod-30 wheel bitset; measured) (walked with a `VecDeque`
+  window) with a baked-in, self-verifying const array of the 16 largest primes
+  below `2^31`. `k_max` is now additionally clamped to the table length. The
+  `primal` dependency is removed from `catgraph-magnitude`. The integer-lift
+  tests drop from ~9 s to <0.01 s each.
+- **`snf::crt_lift` split into `snf::crt` + `snf::integer`**
+  ([#35](https://github.com/sustia-llc/catgraph/issues/35)) — clarity refactor:
+  CRT primitives (prime selection, signed reconstruction, i128 modular helpers)
+  live in `snf::crt`; the integer-SNF composition (Hadamard bound + variants,
+  `smith_normal_form_integer`, chain rebalance) in `snf::integer`. `snf::crt_lift`
+  is retained as a `pub use` shim, so all prior `snf::crt_lift::*` paths keep
+  compiling unchanged.
+
 - **`EvalScratch` + `CoalitionEvaluator::value_with_scratch`**
   ([#33](https://github.com/sustia-llc/catgraph/issues/33) item 1) — an
   allocation-free variant of `value_with` for the koalisi candidate-sweep hot

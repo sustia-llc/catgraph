@@ -14,12 +14,14 @@
 )]
 
 pub mod band;
+pub mod crt;
 pub mod crt_lift;
 pub mod diagonal;
 pub mod echelon;
+pub mod integer;
 pub mod zmod;
 
-pub use crt_lift::smith_normal_form_integer;
+pub use integer::smith_normal_form_integer;
 
 use catgraph::errors::CatgraphError;
 use catgraph_applied::mat::MatR;

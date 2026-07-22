@@ -27,7 +27,6 @@ deep_causality_num = { workspace = true }
 # custom integer SNF (Storjohann + Newman) and `Z(BigInt)` stay on `num`.
 # Rig `Zero`/`One` come from `deep_causality_num` (inherited via the `Rig` bound).
 num.workspace = true
-primal = "0.3"
 
 [dev-dependencies]
 proptest.workspace = true
