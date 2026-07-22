@@ -233,12 +233,15 @@ GitHub issue where one exists, otherwise plainly deferred.
   keep #36 open. The `SetCategoryDefaults` opt-in marker trait closes the
   boilerplate gap for `(Set, ×, 1)`-flavoured ZSTs only; non-`Set` instances
   hand-write their `MonoidalCategory` impl as `F64Monoidal` does.
-- **Truly-infinite final-coalgebra semantics** for `UnfoldingRnn` — the current
-  `unroll_to_vec` is *bounded*; a lazy / `Iterator` / `tokio_stream::Stream`
-  carrier is deferred — [#36](https://github.com/sustia-llc/catgraph/issues/36).
-- **`examples/` closure** — the crate ships no examples; the four planned
-  example files closing the pre-reboot examples-coverage baseline are tracked
-  in [#34](https://github.com/sustia-llc/catgraph/issues/34).
+- ~~**Truly-infinite final-coalgebra semantics** for `UnfoldingRnn`~~ —
+  **shipped** ([#36](https://github.com/sustia-llc/catgraph/issues/36)):
+  `UnfoldingRnn::unroll_iter` is a genuinely infinite pull-based `Iterator`
+  carrier (lazy `MealyCell::run_iter` / `MooreCell::run_iter` siblings);
+  `unroll_to_vec` stays the bounded eager surface. A
+  `tokio_stream::Stream` adapter remains unbuilt by design (no async deps).
+- ~~**`examples/` closure**~~ — **shipped**
+  ([#34](https://github.com/sustia-llc/catgraph/issues/34), closed): four
+  self-checking examples in `examples/`, run by CI.
 - ~~**Property-based exhaustive testing** of `verify_commutes` and
   `FreeMnd`-equivalence~~ — **shipped** ([#40](https://github.com/sustia-llc/catgraph/issues/40)).
   `tests/algebra_homomorphisms.rs` proptests the abs-value equivariance square

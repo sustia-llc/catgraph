@@ -61,6 +61,44 @@ All notable changes to this crate are documented here. Format follows
 
 ### Added
 
+- **Lazy iterator unrollers for the three coalgebraic architecture wrappers
+  ([#36](https://github.com/sustia-llc/catgraph/issues/36), lazy-unrolling
+  bullet).** Each of `UnfoldingRnn` / `MealyCell` / `MooreCell` gains an
+  additive, `Iterator`-returning surface alongside its eager `Vec` method — a
+  plain pull-based Rust `Iterator` is the pragmatic lazy carrier for the
+  conceptually-infinite `Stream(O)` (a final `(O × −)`-coalgebra, CDL Remark
+  H.6), so no `Lazy` / `Thunk` carrier and no async `tokio_stream::Stream`
+  dependency are needed. Strictly additive; the eager `unroll_to_vec` / `run`
+  signatures and behaviour are unchanged.
+  - **`architectures::UnfoldingRnn::unroll_iter(cell, initial_state) ->
+    impl Iterator<Item = O>`** — a **genuinely infinite** stream, stepping the
+    `(cell_o, cell_n)` coalgebra on demand (`core::iter::from_fn` over the
+    threaded state, same output-then-advance sequencing as `unroll_to_vec`).
+    Callers bound it with `.take(n)`; `unroll_iter(s_0).take(n)` agrees with
+    `unroll_to_vec(s_0, n)` elementwise. Every "lazy carrier is deferred"
+    claim is reframed accordingly (unfolding_rnn module doc + "Why bounded?"
+    note, crate-root lib.rs deferred-surfaces list, README deferred-surfaces
+    section, `docs/2402.15332v2-AUDIT.md` open items, and the
+    architecture_unrollers test-module doc): the deferred "lazy
+    `Lazy`/`Thunk`/`Stream` carrier" is now the shipped `Iterator`; a
+    `tokio_stream::Stream` adapter remains unbuilt by design (no async deps).
+    After a caught panic in a cell closure the iterators are **poisoned**
+    (further `.next()` calls panic loudly instead of reporting exhaustion).
+  - **`architectures::MealyCell::run_iter(cell, initial_state, inputs) ->
+    impl Iterator<Item = O>`** — consumes any `IntoIterator<Item = I>` lazily,
+    one Mealy step per pulled item; same two-stage closure shape as `run`.
+    `run_iter(s_0, inputs).collect()` equals `run(s_0, inputs)`.
+  - **`architectures::MooreCell::run_iter(cell, initial_state, inputs) ->
+    impl Iterator<Item = O>`** — same, preserving the Moore output-then-step
+    order (output is a function of state alone, emitted before the step).
+  - **Law tests** — `tests/architecture_unrollers.rs` gains three deterministic
+    tests (+ three proptest lifts): `.take(n)` / full-consumption prefix
+    agreement with the eager method and with the `Cofree<OptionWitness, O>`
+    unfold walk (empty / depth-0 edges included), plus an `UnfoldingRnn`
+    laziness witness — a `cell_n` that panics past a bound is never tripped by
+    a bounded `.take`, proving the infinite tail is not eagerly over-evaluated.
+    `THEOREM_MAP.md` rows added (anchored CDL Remark H.6 / App I.3–I.5, matching
+    the sibling `Cofree`-equivalence rows).
 - **`examples/` directory** ([#34](https://github.com/sustia-llc/catgraph/issues/34)):
   four runnable, self-checking walkthroughs closing the last workspace crate with
   no examples — `para_walkthrough` (Para build/compose/reparameterize, CDL §3.1),
