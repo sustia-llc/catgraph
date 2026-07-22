@@ -98,4 +98,55 @@ where
         }
         out
     }
+
+    /// Lazily run the cell over any input iterable, yielding one output per
+    /// input pulled — an `impl Iterator<Item = O>` that consumes `inputs` on
+    /// demand.
+    ///
+    /// CDL Remark H.6 / Example J.4. The pull-based dual of [`run`]: pulling one
+    /// item from `inputs` produces exactly one Mealy step (`(cell(p, s))(i)`),
+    /// threading the state left-to-right, identical two-stage closure shape.
+    /// `run_iter(s_0, inputs).collect()` equals [`run`]`(s_0, inputs)` for any
+    /// `inputs` (empty included); the iterator is finite, ending when `inputs`
+    /// is exhausted. It borrows `cell` for the lifetime of the returned
+    /// iterator.
+    ///
+    /// [`run`]: MealyCell::run
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // Stateful counter: emit s+i, increment s.
+    /// let cell: MealyCell<_, _, _, i64, i64> = MealyCell::new((), |((), s): ((), i64)| {
+    ///     move |i: i64| (s + i, s + 1)
+    /// });
+    /// let outputs: Vec<i64> = MealyCell::run_iter(&cell, 0, [10, 20, 30]).collect();
+    /// assert_eq!(outputs, vec![10, 21, 32]);
+    /// ```
+    pub fn run_iter<'a, Step, It>(
+        cell: &'a MealyCell<P, S, Cell, I, O>,
+        initial_state: S,
+        inputs: It,
+    ) -> impl Iterator<Item = O> + 'a
+    where
+        Cell: Fn((P, S)) -> Step,
+        Step: FnOnce(I) -> (O, S),
+        It: IntoIterator<Item = I>,
+        It::IntoIter: 'a,
+    {
+        // State is moved into each per-step closure, so it lives behind an
+        // `Option` we `take` from and re-seed; it is `Some` on every step
+        // where an input is still available.
+        let mut state = Some(initial_state);
+        let mut iter = inputs.into_iter();
+        core::iter::from_fn(move || {
+            let i = iter.next()?;
+            let s = state.take()?;
+            let p = cell.parameter.clone();
+            let step = (cell.cell)((p, s));
+            let (o, s_next) = step(i);
+            state = Some(s_next);
+            Some(o)
+        })
+    }
 }

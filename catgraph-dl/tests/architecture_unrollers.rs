@@ -46,9 +46,13 @@
 //! 11. `unfolding_rnn_equivalent_to_cofree_cmnd_unroller` — coalgebra-direction analogue (CDL Remark H.6, App I.3): bounded unroll equals the `Cofree<OptionWitness, O>` prefix walk from the same seed.
 //! 12. `mealy_cell_equivalent_to_cofree_cmnd_unroller` — same for Mealy (App I.4); input-driven prefix, length = `inputs.len()`.
 //! 13. `moore_cell_equivalent_to_cofree_cmnd_unroller` — same for Moore (App I.5); output-then-step prefix.
+//! 14. `unfolding_rnn_unroll_iter_agrees_and_is_lazy` — the lazy `unroll_iter` surface (#36): its `.take(n)` prefix agrees with both `unroll_to_vec` and the `Cofree` prefix walk for several `n` (incl. 0), and a `cell_n` that panics past a bound is never tripped by a bounded `.take` (laziness witness — no eager over-evaluation of the infinite tail).
+//! 15. `mealy_cell_run_iter_agrees` — the lazy `MealyCell::run_iter` surface (#36): full-consumption `.collect()` equals `run`, every `.take(k)` prefix agrees, and it matches the `Cofree` prefix walk.
+//! 16. `moore_cell_run_iter_agrees` — same for `MooreCell::run_iter` (#36), preserving output-then-step order.
 //!
-//! Total: 13 tests + 5 proptests (the spec asked for at least 8). The three
-//! coalgebra tests each get a proptest lift; see "Coalgebra-direction anchor".
+//! Total: 16 tests + 8 proptests (the spec asked for at least 8). The three
+//! Cofree coalgebra tests and the three `run_iter`/`unroll_iter` lazy surfaces
+//! each get a proptest lift; see "Coalgebra-direction anchor".
 //!
 //! ## Coalgebra-direction anchor (#64)
 //!
@@ -735,6 +739,171 @@ fn moore_cell_equivalent_to_cofree_cmnd_unroller() {
     }
 }
 
+/// **Test 14 — `UnfoldingRnn::unroll_iter` lazy-iterator agreement + laziness.**
+/// (Coalgebra direction; CDL Remark H.6, App I.3; lazy-unroll surface #36.)
+///
+/// The genuinely-infinite `unroll_iter` is the lazy carrier for `Stream(O)`.
+/// Two agreements plus a laziness witness:
+///
+/// - **(i) prefix-equivalence** — `unroll_iter(seed).take(n).collect()` equals
+///   `unroll_to_vec(seed, n)` for several `n` including `n = 0`;
+/// - **(ii) Cofree agreement** — the same prefix equals the `Cofree` unfold
+///   walk (`unfold_stream`), tying the lazy surface to the test-11 carrier;
+/// - **(iii) laziness** — a `cell_n` that panics once the state passes a bound
+///   is never tripped by a bounded `.take`, proving the tail is not eagerly
+///   over-evaluated (an eager unroller could not represent the infinite stream
+///   at all). Counter fixture as tests 4 / 11.
+#[test]
+fn unfolding_rnn_unroll_iter_agrees_and_is_lazy() {
+    type CellO = fn((i64, i64)) -> i64;
+    type CellN = fn((i64, i64)) -> i64;
+    let cell: UnfoldingRnn<i64, i64, CellO, CellN, i64> =
+        UnfoldingRnn::new(0_i64, |(_p, s)| s, |(_p, s)| s + 1);
+    let step = |s: i64| {
+        (
+            (cell.cell_o)((cell.parameter, s)),
+            (cell.cell_n)((cell.parameter, s)),
+        )
+    };
+
+    for (seed, n) in [(0_i64, 0_usize), (0, 1), (0, 5), (7, 1), (-2, 4)] {
+        let via_iter: Vec<i64> = UnfoldingRnn::unroll_iter(&cell, seed).take(n).collect();
+        assert_eq!(
+            via_iter,
+            UnfoldingRnn::unroll_to_vec(&cell, seed, n),
+            "unroll_iter({seed}).take({n}) MUST agree with unroll_to_vec({seed}, {n})"
+        );
+        assert_eq!(
+            via_iter,
+            cofree_prefix_to_vec(unfold_stream(seed, step, n)),
+            "unroll_iter({seed}).take({n}) MUST agree with the CofreeCmnd prefix walk"
+        );
+    }
+
+    // (iii) Laziness witness: `cell_n` asserts the state stays under a bound;
+    // a bounded `.take` advances only through states 0..5, never reaching the
+    // bound, so no over-evaluation of the infinite tail occurs.
+    let guarded = UnfoldingRnn::new(
+        0_i64,
+        |(_p, s): (i64, i64)| s,
+        |(_p, s): (i64, i64)| {
+            assert!(
+                s < 100,
+                "unroll_iter over-evaluated the infinite tail past the bound"
+            );
+            s + 1
+        },
+    );
+    let bounded: Vec<i64> = UnfoldingRnn::unroll_iter(&guarded, 0).take(5).collect();
+    assert_eq!(
+        bounded,
+        vec![0_i64, 1, 2, 3, 4],
+        "take(5) yields the first five outputs without tripping the bound guard"
+    );
+}
+
+/// **Test 15 — `MealyCell::run_iter` lazy-iterator agreement.** (Coalgebra
+/// direction; CDL Remark H.6, App I.4; lazy-unroll surface #36.)
+///
+/// `run_iter` consumes any input iterable lazily, one Mealy step per pulled
+/// item. Full-consumption `.collect()` equals `run`; every `.take(k)` prefix
+/// (incl. `k = 0`) agrees with the `run` output truncated to `k`; and the full
+/// output matches the `Cofree` input-driven prefix walk. Stateful-counter
+/// fixture as tests 6 / 12; sweeps the empty-input edge.
+#[test]
+fn mealy_cell_run_iter_agrees() {
+    let cell: MealyCell<(), i64, _, i64, i64> =
+        MealyCell::new((), |((), s): ((), i64)| move |i: i64| (s + i, s + 1));
+    let step = |s: i64, i: i64| ((cell.cell)((cell.parameter, s)))(i);
+
+    for (seed, inputs) in [
+        (0_i64, vec![10_i64, 20, 30]),
+        (5, vec![1, 1, 1]),
+        (0, Vec::<i64>::new()),
+    ] {
+        let via_run = MealyCell::run(&cell, seed, inputs.clone());
+        let via_iter: Vec<i64> = MealyCell::run_iter(&cell, seed, inputs.clone()).collect();
+        assert_eq!(
+            via_iter, via_run,
+            "MealyCell::run_iter(cell, {seed}, {inputs:?}).collect() MUST equal run"
+        );
+
+        // Prefix-equivalence for every `k` including 0.
+        for k in 0..=inputs.len() {
+            let prefix: Vec<i64> = MealyCell::run_iter(&cell, seed, inputs.clone())
+                .take(k)
+                .collect();
+            let expected: Vec<i64> = via_run.iter().copied().take(k).collect();
+            assert_eq!(
+                prefix, expected,
+                "run_iter take({k}) prefix agrees with run"
+            );
+        }
+
+        // Cofree input-driven prefix walk.
+        assert_eq!(
+            via_iter,
+            cofree_prefix_to_vec(unfold_driven(seed, inputs.clone(), step)),
+            "run_iter output MUST equal the CofreeCmnd prefix walk"
+        );
+    }
+}
+
+/// **Test 16 — `MooreCell::run_iter` lazy-iterator agreement.** (Coalgebra
+/// direction; CDL Remark H.6, App I.5; lazy-unroll surface #36.)
+///
+/// Same shape as test 15 for Moore, preserving the output-then-step order: the
+/// head emitted per input is the pre-step output. Full `.collect()` equals
+/// `run`; every `.take(k)` prefix agrees; the full output matches the `Cofree`
+/// walk. Output-then-step fixture as tests 7 / 13; sweeps the empty-input edge.
+#[test]
+fn moore_cell_run_iter_agrees() {
+    type CellO = fn(((), i64)) -> i64;
+    type CellN = fn(((), i64, ())) -> i64;
+    let cell: MooreCell<(), i64, CellO, CellN, (), i64> =
+        MooreCell::new((), |((), s)| s * 2, |((), s, ())| s + 1);
+    let step = |s: i64, i: ()| {
+        (
+            (cell.cell_o)((cell.parameter, s)),
+            (cell.cell_n)((cell.parameter, s, i)),
+        )
+    };
+
+    for (seed, inputs) in [
+        (0_i64, vec![(); 3]),
+        (10, vec![(); 4]),
+        (7, Vec::<()>::new()),
+    ] {
+        let via_run = MooreCell::run(&cell, seed, inputs.clone());
+        let via_iter: Vec<i64> = MooreCell::run_iter(&cell, seed, inputs.clone()).collect();
+        assert_eq!(
+            via_iter,
+            via_run,
+            "MooreCell::run_iter(cell, {seed}, {} inputs).collect() MUST equal run",
+            inputs.len()
+        );
+
+        // Prefix-equivalence for every `k` including 0.
+        for k in 0..=inputs.len() {
+            let prefix: Vec<i64> = MooreCell::run_iter(&cell, seed, inputs.clone())
+                .take(k)
+                .collect();
+            let expected: Vec<i64> = via_run.iter().copied().take(k).collect();
+            assert_eq!(
+                prefix, expected,
+                "run_iter take({k}) prefix agrees with run"
+            );
+        }
+
+        // Cofree input-driven prefix walk.
+        assert_eq!(
+            via_iter,
+            cofree_prefix_to_vec(unfold_driven(seed, inputs.clone(), step)),
+            "run_iter output MUST equal the CofreeCmnd prefix walk"
+        );
+    }
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
@@ -824,5 +993,60 @@ proptest! {
         let direct = MooreCell::run(&cell, seed, inputs.clone());
         let via_cofree = cofree_prefix_to_vec(unfold_driven(seed, inputs, step));
         prop_assert_eq!(direct, via_cofree);
+    }
+
+    /// **`unroll_iter`-equivalence proptest — `UnfoldingRnn` (lazy surface #36).**
+    /// CDL Remark H.6. Counter cell with wrapping advance; the lazy
+    /// `unroll_iter(seed).take(depth)` prefix agrees with `unroll_to_vec(seed,
+    /// depth)` on every seed/depth. Lifts test 14's prefix-equivalence leg.
+    #[test]
+    fn unfolding_rnn_unroll_iter_equivalence_proptest(
+        seed in any::<i64>(),
+        depth in 0..=16_usize,
+    ) {
+        type CellO = fn((i64, i64)) -> i64;
+        type CellN = fn((i64, i64)) -> i64;
+        let cell: UnfoldingRnn<i64, i64, CellO, CellN, i64> =
+            UnfoldingRnn::new(0_i64, |(_p, s)| s, |(_p, s)| s.wrapping_add(1));
+        let via_iter: Vec<i64> = UnfoldingRnn::unroll_iter(&cell, seed).take(depth).collect();
+        let via_vec = UnfoldingRnn::unroll_to_vec(&cell, seed, depth);
+        prop_assert_eq!(via_iter, via_vec);
+    }
+
+    /// **`run_iter`-equivalence proptest — `MealyCell` (lazy surface #36).** CDL
+    /// Remark H.6. Stateful counter with wrapping arithmetic; the lazy
+    /// `run_iter` full consumption agrees with `run` on every seed/input
+    /// sequence. Lifts test 15.
+    #[test]
+    fn mealy_cell_run_iter_equivalence_proptest(
+        seed in any::<i64>(),
+        inputs in prop::collection::vec(any::<i64>(), 0..=16),
+    ) {
+        let cell: MealyCell<(), i64, _, i64, i64> = MealyCell::new(
+            (),
+            |((), s): ((), i64)| move |i: i64| (s.wrapping_add(i), s.wrapping_add(1)),
+        );
+        let via_iter: Vec<i64> = MealyCell::run_iter(&cell, seed, inputs.clone()).collect();
+        let via_run = MealyCell::run(&cell, seed, inputs);
+        prop_assert_eq!(via_iter, via_run);
+    }
+
+    /// **`run_iter`-equivalence proptest — `MooreCell` (lazy surface #36).** CDL
+    /// Remark H.6. Output-then-step cell with wrapping arithmetic; the lazy
+    /// `run_iter` full consumption agrees with `run` on every seed/length.
+    /// Lifts test 16.
+    #[test]
+    fn moore_cell_run_iter_equivalence_proptest(
+        seed in any::<i64>(),
+        len in 0..=16_usize,
+    ) {
+        type CellO = fn(((), i64)) -> i64;
+        type CellN = fn(((), i64, ())) -> i64;
+        let cell: MooreCell<(), i64, CellO, CellN, (), i64> =
+            MooreCell::new((), |((), s)| s.wrapping_mul(2), |((), s, ())| s.wrapping_add(1));
+        let inputs = vec![(); len];
+        let via_iter: Vec<i64> = MooreCell::run_iter(&cell, seed, inputs.clone()).collect();
+        let via_run = MooreCell::run(&cell, seed, inputs);
+        prop_assert_eq!(via_iter, via_run);
     }
 }

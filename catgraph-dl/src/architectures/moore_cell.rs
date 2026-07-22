@@ -110,4 +110,59 @@ where
         }
         out
     }
+
+    /// Lazily run the cell over any input iterable, yielding one output per
+    /// input pulled — an `impl Iterator<Item = O>` that consumes `inputs` on
+    /// demand.
+    ///
+    /// CDL Remark H.6 / Example J.5. The pull-based dual of [`run`], preserving
+    /// the Moore **output-then-step** ordering: pulling one input `i` emits
+    /// `cell_o(p, s)` from the *current* state *before* `cell_n(p, s, i)`
+    /// advances it — the output is a function of state alone, exactly as in
+    /// [`run`]. `run_iter(s_0, inputs).collect()` equals [`run`]`(s_0, inputs)`
+    /// for any `inputs` (empty included); the iterator is finite, ending when
+    /// `inputs` is exhausted. It borrows `cell` for the lifetime of the
+    /// returned iterator.
+    ///
+    /// [`run`]: MooreCell::run
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// // cell_o(p, s) = s * 2; cell_n(p, s, _i) = s + 1.
+    /// let cell: MooreCell<_, _, _, _, (), i64> = MooreCell::new(
+    ///     (),
+    ///     |((), s): ((), i64)| s * 2,
+    ///     |((), s, _i): ((), i64, ())| s + 1,
+    /// );
+    /// let outputs: Vec<i64> = MooreCell::run_iter(&cell, 0, vec![(); 3]).collect();
+    /// assert_eq!(outputs, vec![0, 2, 4]);
+    /// ```
+    pub fn run_iter<'a, It>(
+        cell: &'a MooreCell<P, S, CellO, CellN, I, O>,
+        initial_state: S,
+        inputs: It,
+    ) -> impl Iterator<Item = O> + 'a
+    where
+        It: IntoIterator<Item = I>,
+        It::IntoIter: 'a,
+    {
+        // State is moved into `cell_n` each step, so it lives behind an
+        // `Option` we `take` from and re-seed; it is `Some` on every step
+        // where an input is still available.
+        let mut state = Some(initial_state);
+        let mut iter = inputs.into_iter();
+        core::iter::from_fn(move || {
+            let i = iter.next()?;
+            let s = state.take()?;
+            // Output FIRST — Moore-distinctive.
+            let p_o = cell.parameter.clone();
+            let s_for_o = s.clone();
+            let o = (cell.cell_o)((p_o, s_for_o));
+            // Then advance.
+            let p_n = cell.parameter.clone();
+            state = Some((cell.cell_n)((p_n, s, i)));
+            Some(o)
+        })
+    }
 }
