@@ -18,7 +18,10 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
 ## Dependencies
 
 - `catgraph` — core F&S types (`Composable`, `Cospan`, `Span`)
-- `nalgebra` — dense spectral analysis (`SymmetricEigen` on the branchial Laplacian)
+- `nalgebra` — dense spectral analysis (`SymmetricEigen` on the branchial
+  Laplacian), gated behind the default-on `spectral` feature (gates
+  `multiway::branchial_spectrum`; opt out with `--no-default-features` to drop
+  the nalgebra stack for slim / WASM builds).
 - `petgraph` + `rustworkx-core` — graph algorithms, gated behind the default-on
   `rustworkx` feature (gates `multiway::branchial_analysis`; opt out with
   `--no-default-features` to drop the `rustworkx-core` → `petgraph` chain).
@@ -38,7 +41,8 @@ cargo bench -p catgraph-physics --bench wasserstein_bench
 This crate has no direct rayon call sites yet; the feature wires the
 upstream toggle through so `--no-default-features` produces a
 single-threaded catgraph dep transitively. `--no-default-features` also
-drops the `rustworkx` feature (the `rustworkx-core` → `petgraph` chain),
+drops the `rustworkx` feature (the `rustworkx-core` → `petgraph` chain) and
+the `spectral` feature (the nalgebra stack behind `BranchialSpectrum`),
 which is what makes the plain `wasm32-wasip1` build slim. Both WASI
 sub-targets build clean:
 

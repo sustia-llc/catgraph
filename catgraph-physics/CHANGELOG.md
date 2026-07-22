@@ -22,6 +22,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **`nalgebra` gated behind a default-on `spectral` feature**
+  ([#43](https://github.com/sustia-llc/catgraph/issues/43)): the dense-Laplacian
+  eigendecomposition (`multiway::branchial_spectrum::BranchialSpectrum`) and its
+  `nalgebra` dependency now sit behind the default-on `spectral` feature, a
+  slim-build companion to the
+  [#10](https://github.com/sustia-llc/catgraph/issues/10) `rustworkx` gate. Default builds are
+  unchanged. **Behavioral change for slim consumers:** `--no-default-features`
+  builds no longer include `BranchialSpectrum` unless they enable `spectral`
+  (e.g. `--no-default-features --features spectral`); opting out drops the whole
+  nalgebra stack for slim / WASM builds.
+
 - **Unanchored attributions reworded / hedged**
   ([#124](https://github.com/sustia-llc/catgraph/issues/124)):
   `branchial_spectrum.rs` no longer credits the λ₂/Fiedler reducibility
