@@ -138,7 +138,9 @@ pub use coalition::{
 // O(m³ + k³) fresh evaluations. [`coalition_value_delta`] is the paired-
 // evaluation entry point at the pinned `t = 1` arm.
 pub mod coalition_eval;
-pub use coalition_eval::{CoalitionEvaluator, INCREMENTAL_REL_TOL, coalition_value_delta};
+pub use coalition_eval::{
+    CoalitionEvaluator, EvalScratch, INCREMENTAL_REL_TOL, coalition_value_delta,
+};
 
 // Chain-sum Möbius via Leinster 2013 Prop 2.1.3.
 pub mod mobius_chains;

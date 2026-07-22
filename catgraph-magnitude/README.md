@@ -77,6 +77,8 @@ The workspace `v0.1.0` (2026-07-01) semantic + determinism + coalition layer ove
 | `coalition_magnitude_from_couplings(agents, couplings, members, t)` | BV 2025 §3.5 (gemini-spec §IV.5) | Plain-data entry point; seed of #23 `coalition_value` (#22) |
 | `coalition_value(agents, couplings, members)` → `f64` | BV 2025 §3.5 (gemini-spec §IV.5) | **Stable consumer API** — the pinned `t = 1` scalar for downstream decision policies (koalisi #5 `MagnitudePolicy`); `= coalition_magnitude_from_couplings(…, 1.0)` (#23) |
 | `CoalitionEvaluator` + `CoalitionEvaluator::new(agents, couplings, members, t)` | BV 2025 §3.5 Eq (7) | Caches base coalition `S` (closed table, skeletal `t`-scaled ζ⁻¹, weighting/coweighting); `value_with(candidate)` answers `Mag(S ∪ {x})` via an O(m²) closure border + bordered-Schur update, `base_value()` returns `Mag(S)` (#31) |
+| `CoalitionEvaluator::value_with_scratch(candidate, &mut EvalScratch)` → `f64` | BV 2025 §3.5 Eq (7) | Allocation-free variant of `value_with` — reuses caller-owned buffers across a candidate sweep; **bit-identical** to `value_with` (#33) |
+| `EvalScratch` + `EvalScratch::new()` | — | Caller-owned scratch buffers (the 7 per-call `Vec`s) for `value_with_scratch`; carries no cross-call state, reusable across candidates/evaluators (#33) |
 | `coalition_value_delta(agents, couplings, members, candidate)` → `(f64, f64)` | BV 2025 §3.5 Eq (7) | One-shot `(Mag(S), Mag(S ∪ {candidate}))` pair at the pinned `t = 1` arm (#31) |
 | `INCREMENTAL_REL_TOL` | numerical | Relative tolerance (`1e-9`) of the incremental value vs a fresh `coalition_value` on `S ∪ {x}`; base value is bit-identical (#31) |
 | `magnitude<Q>(space, t)` | BV 2025 §3.5 Eq (7) | Möbius sum at scale `t` |

@@ -165,6 +165,57 @@ pub struct CoalitionEvaluator {
     base_mag: f64,
 }
 
+/// Caller-owned scratch buffers for [`CoalitionEvaluator::value_with_scratch`]
+/// (#33).
+///
+/// Each [`CoalitionEvaluator::value_with`] call heap-allocates seven short-lived
+/// `Vec`s — `g_in`/`g_out`/`c`/`r` (length `m`) plus `u`/`v`/`w_u` (length `k`) —
+/// whose sizes are fixed by the cached coalition. Across an 8-candidate koalisi
+/// join sweep that is ~56 malloc/free pairs per decision on the µs hot path. A
+/// caller that builds one `EvalScratch` and threads it through
+/// [`CoalitionEvaluator::value_with_scratch`] reuses those allocations across the
+/// whole sweep instead.
+///
+/// # Reuse contract
+///
+/// The buffers hold **no cross-call state**: every call resizes them to the
+/// current coalition and overwrites every live entry before reading it, so a
+/// reused `EvalScratch` yields results **bit-identical** to a fresh one (verified
+/// by the module tests). Reuse is purely an allocation optimization — the scratch
+/// carries nothing between candidates. The buffers grow to the largest coalition
+/// they have served and never shrink the backing capacity, so one scratch per
+/// worker thread amortizes to zero steady-state allocation.
+///
+/// The evaluator stays `&self` (shareable, `Sync`); the mutable state lives here,
+/// caller-owned, so no interior mutability is introduced. Build with
+/// [`EvalScratch::new`] (empty — buffers size on first use).
+#[derive(Clone, Debug, Default)]
+pub struct EvalScratch {
+    /// Direct `member_i → candidate` couplings (length `m`).
+    g_in: Vec<f64>,
+    /// Direct `candidate → member_i` couplings (length `m`).
+    g_out: Vec<f64>,
+    /// Bordered closure `c[i] = closed(i → x)` (length `m`).
+    c: Vec<f64>,
+    /// Bordered closure `r[j] = closed(x → j)` (length `m`).
+    r: Vec<f64>,
+    /// Border similarity `u[a] = ζ(rep_a → x)` over skeleton classes (length `k`).
+    u: Vec<f64>,
+    /// Border similarity `v[a] = ζ(x → rep_a)` over skeleton classes (length `k`).
+    v: Vec<f64>,
+    /// `w_u = μ · u` (length `k`).
+    w_u: Vec<f64>,
+}
+
+impl EvalScratch {
+    /// A fresh, empty scratch. The buffers size themselves on the first
+    /// [`CoalitionEvaluator::value_with_scratch`] call and are reused thereafter.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 impl CoalitionEvaluator {
     /// Build an evaluator for coalition `S = members` over `agents`, at scale
     /// `t`, from a sparse coupling table.
@@ -357,13 +408,48 @@ impl CoalitionEvaluator {
     /// by the slow-path re-inversion (the fast path defers a near-singular border
     /// there rather than erroring itself).
     pub fn value_with(&self, candidate: usize) -> Result<f64, CatgraphError> {
-        self.value_with_impl(candidate).map(|(v, _)| v)
+        let mut scratch = EvalScratch::new();
+        self.value_with_impl(candidate, &mut scratch)
+            .map(|(v, _)| v)
+    }
+
+    /// `Mag(S ∪ {candidate})`, reusing caller-owned [`EvalScratch`] buffers
+    /// instead of allocating the seven per-call `Vec`s (#33).
+    ///
+    /// Identical in every respect to [`value_with`](Self::value_with) — same
+    /// arithmetic, same paths, **bit-identical** result — except that the border
+    /// and Schur working vectors are drawn from `scratch` and reused across calls.
+    /// The intended use is a candidate **sweep** against a fixed `S`: build one
+    /// `EvalScratch` (or one per worker thread), then call this per candidate so
+    /// the koalisi join sweep pays no per-decision allocation.
+    ///
+    /// `scratch` carries **no state between calls** — each call resizes and fully
+    /// overwrites the buffers it reads (see [`EvalScratch`]'s reuse contract), so
+    /// the same `scratch` may be reused across candidates, across evaluators, and
+    /// even across coalitions of different sizes with no contamination.
+    ///
+    /// # Errors
+    ///
+    /// Identical to [`value_with`](Self::value_with): [`CatgraphError::Composition`]
+    /// if `candidate` is out of range, is already a member, or the bordered `ζ′`
+    /// is singular (surfaced by the slow-path re-inversion).
+    pub fn value_with_scratch(
+        &self,
+        candidate: usize,
+        scratch: &mut EvalScratch,
+    ) -> Result<f64, CatgraphError> {
+        self.value_with_impl(candidate, scratch).map(|(v, _)| v)
     }
 
     /// Core of [`value_with`](Self::value_with), also returning which
-    /// [`EvalPath`] was taken (for test assertions).
+    /// [`EvalPath`] was taken (for test assertions). Writes its border/Schur
+    /// working vectors into the caller-owned `scratch` (#33).
     #[allow(clippy::similar_names)] // `c`/`r`, `u`/`v`, `p`/`q` are the paper's border names.
-    fn value_with_impl(&self, candidate: usize) -> Result<(f64, EvalPath), CatgraphError> {
+    fn value_with_impl(
+        &self,
+        candidate: usize,
+        scratch: &mut EvalScratch,
+    ) -> Result<(f64, EvalPath), CatgraphError> {
         if candidate >= self.n_agents {
             return Err(CatgraphError::Composition {
                 message: format!(
@@ -382,37 +468,41 @@ impl CoalitionEvaluator {
 
         let m = self.members.len();
 
+        // Size the caller-owned scratch to this coalition. Every entry in
+        // `[0, m)` / `[0, k)` is overwritten before it is read below, so a reused
+        // scratch (from a prior candidate, evaluator, or differently-sized
+        // coalition) carries no stale state — `resize` only adjusts the length,
+        // and the fills that follow set every live entry.
+        scratch.g_in.resize(m, 0.0);
+        scratch.g_out.resize(m, 0.0);
+        scratch.c.resize(m, 0.0);
+        scratch.r.resize(m, 0.0);
+
         // Direct member↔candidate generators (restrict-then-close: only these
         // enter; non-member mediation is absent).
-        let g_in: Vec<f64> = (0..m)
-            .map(|i| {
-                self.couplings
-                    .get(&(self.members[i], candidate))
-                    .copied()
-                    .unwrap_or(0.0)
-            })
-            .collect();
-        let g_out: Vec<f64> = (0..m)
-            .map(|i| {
-                self.couplings
-                    .get(&(candidate, self.members[i]))
-                    .copied()
-                    .unwrap_or(0.0)
-            })
-            .collect();
+        for i in 0..m {
+            scratch.g_in[i] = self
+                .couplings
+                .get(&(self.members[i], candidate))
+                .copied()
+                .unwrap_or(0.0);
+            scratch.g_out[i] = self
+                .couplings
+                .get(&(candidate, self.members[i]))
+                .copied()
+                .unwrap_or(0.0);
+        }
 
         // Border the cached closure — one exact O(m²) pass (see the method docs).
-        let mut c = vec![0.0_f64; m];
-        let mut r = vec![0.0_f64; m];
         for i in 0..m {
             let mut ci = 0.0_f64;
             let mut ri = 0.0_f64;
             for k in 0..m {
-                ci = ci.max(self.closed[i][k] * g_in[k]);
-                ri = ri.max(g_out[k] * self.closed[k][i]);
+                ci = ci.max(self.closed[i][k] * scratch.g_in[k]);
+                ri = ri.max(scratch.g_out[k] * self.closed[k][i]);
             }
-            c[i] = ci;
-            r[i] = ri;
+            scratch.c[i] = ci;
+            scratch.r[i] = ri;
         }
 
         // Borders are constant within a skeletal class (Kolmogorov quotient of
@@ -426,21 +516,21 @@ impl CoalitionEvaluator {
                 let (member_classes, _) = skeletal_classes(&self.closed, m);
                 (0..m).all(|i| {
                     let ra = self.reps[member_classes[i]];
-                    c[i] == c[ra] && r[i] == r[ra]
+                    scratch.c[i] == scratch.c[ra] && scratch.r[i] == scratch.r[ra]
                 })
             },
             "coalition border must be constant within each skeletal ~-class"
         );
 
         // Branch tests (O(m²), short-circuiting).
-        let interior_improvement =
-            (0..m).any(|i| (0..m).any(|j| i != j && c[i] * r[j] > self.closed[i][j]));
-        let skeletal_merge = (0..m).any(|i| c[i] == 1.0 && r[i] == 1.0);
+        let interior_improvement = (0..m)
+            .any(|i| (0..m).any(|j| i != j && scratch.c[i] * scratch.r[j] > self.closed[i][j]));
+        let skeletal_merge = (0..m).any(|i| scratch.c[i] == 1.0 && scratch.r[i] == 1.0);
 
         if interior_improvement || skeletal_merge {
-            return self.value_with_slow(&c, &r, m);
+            return self.value_with_slow(scratch, m);
         }
-        self.value_with_fast(&c, &r, m)
+        self.value_with_fast(scratch, m)
     }
 
     /// Fast path: bordered Schur update against the cached skeletal `μ`.
@@ -455,38 +545,54 @@ impl CoalitionEvaluator {
     #[allow(clippy::similar_names)]
     fn value_with_fast(
         &self,
-        c: &[f64],
-        r: &[f64],
+        scratch: &mut EvalScratch,
         m: usize,
     ) -> Result<(f64, EvalPath), CatgraphError> {
         let k = self.mu.len();
 
         // Border similarities via the exact exp route (not powf) — `u`/`v` over
-        // skeleton classes, using each class representative's border.
-        let u: Vec<f64> = (0..k)
-            .map(|a| zeta_entry(c[self.reps[a]], self.t))
-            .collect();
-        let v: Vec<f64> = (0..k)
-            .map(|a| zeta_entry(r[self.reps[a]], self.t))
-            .collect();
+        // skeleton classes, using each class representative's border. Same
+        // resize-then-fill contract as the `m`-length buffers above.
+        scratch.u.resize(k, 0.0);
+        scratch.v.resize(k, 0.0);
+        for a in 0..k {
+            scratch.u[a] = zeta_entry(scratch.c[self.reps[a]], self.t);
+            scratch.v[a] = zeta_entry(scratch.r[self.reps[a]], self.t);
+        }
 
-        // w_u = μ·u ; Schur complement s = 1 − vᵀμu.
-        let w_u: Vec<f64> = (0..k)
-            .map(|i| (0..k).map(|a| self.mu[i][a] * u[a]).sum())
-            .collect();
-        let vmu: f64 = (0..k).map(|a| v[a] * w_u[a]).sum();
+        // w_u = μ·u ; Schur complement s = 1 − vᵀμu. Accumulation order matches
+        // the prior iterator `.sum()` (row-major, from 0.0), so the result stays
+        // bit-identical to the pre-#33 allocating path.
+        scratch.w_u.resize(k, 0.0);
+        for i in 0..k {
+            let mut acc = 0.0_f64;
+            for a in 0..k {
+                acc += self.mu[i][a] * scratch.u[a];
+            }
+            scratch.w_u[i] = acc;
+        }
+        let mut vmu = 0.0_f64;
+        for a in 0..k {
+            vmu += scratch.v[a] * scratch.w_u[a];
+        }
         let s = 1.0 - vmu;
 
         // Near-singular bordered ζ′ (det(ζ′) = det(ζ_S)·s, ζ_S invertible): the
         // Schur division would amplify cancellation noise past tolerance, so
         // defer to the fresh-equivalent slow path.
         if s.abs() <= SCHUR_SLOW_FALLBACK_TOL * (1.0 + vmu.abs()) {
-            return self.value_with_slow(c, r, m);
+            return self.value_with_slow(scratch, m);
         }
 
         // p = 1ᵀμu = coweighting·u ; q = vᵀμ1 = v·weighting (dual borders).
-        let p: f64 = (0..k).map(|a| self.coweighting[a] * u[a]).sum();
-        let q: f64 = (0..k).map(|a| v[a] * self.weighting[a]).sum();
+        let mut p = 0.0_f64;
+        for a in 0..k {
+            p += self.coweighting[a] * scratch.u[a];
+        }
+        let mut q = 0.0_f64;
+        for a in 0..k {
+            q += scratch.v[a] * self.weighting[a];
+        }
 
         let mag = self.base_mag + (1.0 - p) * (1.0 - q) / s;
         Ok((mag, EvalPath::Fast))
@@ -496,10 +602,11 @@ impl CoalitionEvaluator {
     /// the `(m+1)`-point space with the crate's shared helpers.
     fn value_with_slow(
         &self,
-        c: &[f64],
-        r: &[f64],
+        scratch: &EvalScratch,
         m: usize,
     ) -> Result<(f64, EvalPath), CatgraphError> {
+        let c = &scratch.c;
+        let r = &scratch.r;
         let mut closed_p = vec![vec![0.0_f64; m + 1]; m + 1];
         for i in 0..m {
             for j in 0..m {
@@ -668,7 +775,7 @@ mod tests {
         let members = [0usize, 1, 2];
         let t = 1.0;
         let ev = CoalitionEvaluator::new(&agents, &couplings, &members, t).unwrap();
-        let (inc, path) = ev.value_with_impl(3).unwrap();
+        let (inc, path) = ev.value_with_impl(3, &mut EvalScratch::new()).unwrap();
         assert_eq!(
             path,
             EvalPath::Fast,
@@ -690,7 +797,7 @@ mod tests {
         let members = [0usize, 1];
         let t = 1.0;
         let ev = CoalitionEvaluator::new(&agents, &couplings, &members, t).unwrap();
-        let (inc, path) = ev.value_with_impl(2).unwrap();
+        let (inc, path) = ev.value_with_impl(2, &mut EvalScratch::new()).unwrap();
         assert_eq!(
             path,
             EvalPath::Slow,
@@ -714,7 +821,7 @@ mod tests {
         let members = [0usize, 1];
         let t = 1.0;
         let ev = CoalitionEvaluator::new(&agents, &couplings, &members, t).unwrap();
-        let (inc, path) = ev.value_with_impl(2).unwrap();
+        let (inc, path) = ev.value_with_impl(2, &mut EvalScratch::new()).unwrap();
         assert_eq!(path, EvalPath::Slow, "mutual-1.0 clone must take slow path");
         let fresh = fresh_with(&agents, &couplings, &members, 2, t).unwrap();
         assert!(
@@ -952,7 +1059,7 @@ mod tests {
         let couplings = [(0usize, 1usize, 0.5f64), (1, 0, 0.5)];
         let members = [0usize, 1];
         let ev = CoalitionEvaluator::new(&agents, &couplings, &members, 1.0).unwrap();
-        let (inc, path) = ev.value_with_impl(2).unwrap();
+        let (inc, path) = ev.value_with_impl(2, &mut EvalScratch::new()).unwrap();
         assert_eq!(path, EvalPath::Fast);
         let fresh = fresh_with(&agents, &couplings, &members, 2, 1.0).unwrap();
         assert!(rel_close(inc, fresh));
@@ -960,5 +1067,181 @@ mod tests {
             rel_close(inc, ev.base_value() + 1.0),
             "isolated point adds exactly 1"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // #33 scratch buffers: `value_with_scratch` is bit-identical to `value_with`,
+    // a reused scratch is contamination-free across a candidate sweep, and error
+    // cases still error identically.
+    // -----------------------------------------------------------------------
+
+    /// The dense seeded grid (same shape as `seeded_grid_fresh_vs_incremental`)
+    /// but comparing the scratch path against the allocating path with `==`
+    /// (exact), not a tolerance. Covers both fast- and slow-path candidates.
+    #[test]
+    fn value_with_scratch_bit_identical_to_value_with() {
+        const NAMES: [&str; 12] = [
+            "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11",
+        ];
+        let mut lcg = Lcg::new(0xC0FFEE);
+        let n = NAMES.len();
+
+        for m in 2..=10usize {
+            let mut couplings: Vec<(usize, usize, f64)> = Vec::new();
+            for i in 0..n {
+                for j in 0..n {
+                    if i == j {
+                        continue;
+                    }
+                    if lcg.next_f64() < 0.6 {
+                        let mut p = lcg.next_f64();
+                        if p == 0.0 {
+                            p = 0.01;
+                        }
+                        if lcg.next_f64() < 0.08 {
+                            p = 1.0;
+                        }
+                        couplings.push((i, j, p));
+                    }
+                }
+            }
+
+            let members: Vec<usize> = (0..m).collect();
+            for t in [1.0_f64, 2.0] {
+                let ev = match CoalitionEvaluator::new(&NAMES, &couplings, &members, t) {
+                    Ok(ev) => ev,
+                    Err(_) => continue,
+                };
+                // A single scratch reused across the whole candidate sweep — this
+                // is exactly the koalisi call pattern and the contamination guard.
+                let mut scratch = EvalScratch::new();
+                for candidate in m..n {
+                    let plain = ev.value_with(candidate);
+                    let scr = ev.value_with_scratch(candidate, &mut scratch);
+                    assert_eq!(
+                        plain.is_ok(),
+                        scr.is_ok(),
+                        "m={m} t={t} cand={candidate}: error-parity scratch/plain"
+                    );
+                    if let (Ok(plain), Ok(scr)) = (plain, scr) {
+                        assert_eq!(
+                            plain, scr,
+                            "m={m} t={t} cand={candidate}: scratch must be bit-identical"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// A reused scratch (fed a fast-path candidate, then a slow-path candidate,
+    /// then the fast-path candidate again) yields the *same* value for the
+    /// fast-path candidate as a pristine scratch — i.e. the intervening
+    /// slow-path call left no residue.
+    #[test]
+    fn reused_scratch_no_cross_call_contamination() {
+        // a→b→c chain; x2 (idx 3) weakly single-coupled ⇒ fast; x3 (idx 4)
+        // strongly bridges a↔c ⇒ slow (interior improvement).
+        let agents = ["a", "b", "c", "x2", "x3"];
+        let couplings = [
+            (0usize, 1usize, 0.7f64),
+            (1, 2, 0.5),
+            (2, 3, 0.2),
+            (3, 2, 0.2),
+            (0, 4, 0.99),
+            (4, 2, 0.99),
+        ];
+        let members = [0usize, 1, 2];
+        let ev = CoalitionEvaluator::new(&agents, &couplings, &members, 1.0).unwrap();
+
+        let pristine = ev.value_with_scratch(3, &mut EvalScratch::new()).unwrap();
+
+        let mut scratch = EvalScratch::new();
+        let first = ev.value_with_scratch(3, &mut scratch).unwrap();
+        let _slow = ev.value_with_scratch(4, &mut scratch).unwrap();
+        let again = ev.value_with_scratch(3, &mut scratch).unwrap();
+
+        assert_eq!(first, pristine, "first reuse must match a pristine scratch");
+        assert_eq!(
+            again, pristine,
+            "fast-path value after an intervening slow-path call must be unchanged"
+        );
+    }
+
+    /// A scratch reused across evaluators of *different* member counts stays
+    /// correct — `resize` + full overwrite handles the size change.
+    #[test]
+    fn reused_scratch_across_differently_sized_coalitions() {
+        let agents = ["a", "b", "c", "d", "x"];
+        let couplings = [
+            (0usize, 1usize, 0.6f64),
+            (1, 2, 0.5),
+            (2, 3, 0.4),
+            (3, 4, 0.3),
+            (4, 3, 0.3),
+        ];
+        let big_members = [0usize, 1, 2, 3];
+        let small_members = [0usize, 1];
+        let ev_big = CoalitionEvaluator::new(&agents, &couplings, &big_members, 1.0).unwrap();
+        let ev_small = CoalitionEvaluator::new(&agents, &couplings, &small_members, 1.0).unwrap();
+
+        let mut scratch = EvalScratch::new();
+        // Serve the large coalition first (grows the buffers), then the small.
+        let _ = ev_big.value_with_scratch(4, &mut scratch).unwrap();
+        let small_reused = ev_small.value_with_scratch(4, &mut scratch);
+        let small_fresh = ev_small.value_with_scratch(4, &mut EvalScratch::new());
+        assert_eq!(small_reused.is_ok(), small_fresh.is_ok());
+        if let (Ok(a), Ok(b)) = (small_reused, small_fresh) {
+            assert_eq!(a, b, "shrinking the served coalition must not contaminate");
+        }
+    }
+
+    /// Error cases error identically through the scratch entry point.
+    #[test]
+    fn value_with_scratch_error_parity() {
+        let agents = ["a", "b", "c"];
+        let couplings = [(0usize, 1usize, 0.7f64), (1, 2, 0.5)];
+        let members = [0usize, 1];
+        let ev = CoalitionEvaluator::new(&agents, &couplings, &members, 1.0).unwrap();
+        let mut scratch = EvalScratch::new();
+        assert!(ev.value_with_scratch(0, &mut scratch).is_err(), "member");
+        assert!(ev.value_with_scratch(1, &mut scratch).is_err(), "member");
+        assert!(
+            ev.value_with_scratch(3, &mut scratch).is_err(),
+            "out of range"
+        );
+        // A well-formed call after the error calls still succeeds (no poisoning).
+        assert!(ev.value_with_scratch(2, &mut scratch).is_ok());
+    }
+
+    /// Mirror of the bench's `build_fast_path_fixture` (`benches/magnitude_bench.rs`):
+    /// the `value_with_hit` / `hit_scratch` benches only measure the fast (Schur)
+    /// path if this construction actually takes it. Pinned here so a fixture drift
+    /// that silently pushes the bench onto the slow path is caught by the test
+    /// suite rather than skewing the #33 numbers.
+    #[test]
+    fn bench_fast_path_fixture_is_fast() {
+        for m in [8usize, 16] {
+            let agents: Vec<usize> = (0..=m).collect();
+            let mut couplings: Vec<(usize, usize, f64)> = Vec::new();
+            for i in 0..(m - 1) {
+                couplings.push((i, i + 1, 0.5));
+            }
+            couplings.push((0, m, 0.2));
+            couplings.push((m, 0, 0.2));
+            let members: Vec<usize> = (0..m).collect();
+            let ev = CoalitionEvaluator::new(&agents, &couplings, &members, 1.0).unwrap();
+            // Full skeleton (no perfect-coupling merges) — the fast path does the
+            // full O(k²) Schur work the bench means to measure.
+            assert_eq!(ev.mu.len(), m, "chain fixture must keep k = m");
+            let (_, path) = ev
+                .value_with_impl(m, &mut EvalScratch::new())
+                .expect("candidate must evaluate");
+            assert_eq!(
+                path,
+                EvalPath::Fast,
+                "m={m}: bench fixture must be fast-path"
+            );
+        }
     }
 }
