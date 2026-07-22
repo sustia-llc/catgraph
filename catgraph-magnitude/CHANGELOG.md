@@ -40,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   actual `j`-subset product.
 - **`snf::crt::select_primes_for_bound`: const prime table, `primal` dropped**
   ([#35](https://github.com/sustia-llc/catgraph/issues/35)) — replaced the
-  256 MB `primal::Sieve::new(1 << 31)` allocation (walked with a `VecDeque`
+  ~72 MB `primal::Sieve::new(1 << 31)` allocation (mod-30 wheel bitset; measured) (walked with a `VecDeque`
   window) with a baked-in, self-verifying const array of the 16 largest primes
   below `2^31`. `k_max` is now additionally clamped to the table length. The
   `primal` dependency is removed from `catgraph-magnitude`. The integer-lift

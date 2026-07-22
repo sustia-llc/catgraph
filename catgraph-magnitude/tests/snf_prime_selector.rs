@@ -1,10 +1,9 @@
 //! Multi-prime selector for CRT reconstruction.
 //! Selects primes from `(2^30, 2^31)` whose product exceeds `2 · bound`.
 //!
-//! Runtime: ~9s per test in debug-mode (256MB `Sieve::new(1 << 31)`
-//! allocation dominates); ~0.8s in release. Run with `--release` if test
-//! runtime becomes a CI bottleneck (the Sieve walk itself is O(N) over
-//! ~50M primes; the allocation is the constant-factor cost).
+//! Runtime: effectively instant — the selector reads a baked-in const table
+//! of the 16 largest primes below `2^31` (#35; the former ~9 s / ~72 MB
+//! `primal::Sieve` walk is gone).
 
 use catgraph_magnitude::snf::crt_lift::select_primes_for_bound;
 

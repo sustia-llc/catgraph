@@ -3,9 +3,9 @@
 //! Tests verify the lifted diagonal invariants against canonical fixtures:
 //! Wikipedia 3×3 (diag(2, 2, 156)) + identity + zero + rectangular 2×3.
 //!
-//! Runtime: each test invokes `select_primes_for_bound`, which allocates a
-//! 256 MB `primal::Sieve::new(1 << 31)` (~9 s per test in debug, ~0.8 s in
-//! release). Four tests run sequentially in ~36 s debug + build time.
+//! Runtime: effectively instant — `select_primes_for_bound` reads a baked-in
+//! const table of the 16 largest primes below `2^31` (#35; the former
+//! ~9 s-per-test / ~72 MB `primal::Sieve` allocation is gone).
 
 #![allow(
     clippy::needless_range_loop,
