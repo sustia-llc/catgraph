@@ -683,22 +683,7 @@ where
 mod tests {
     use super::*;
     use crate::coalition::coalition_magnitude_from_couplings;
-
-    /// A tiny deterministic LCG (same shape as the bench / `lm_category` tests)
-    /// — no `rand` dep. Yields `f64` in `[0, 1)`.
-    struct Lcg(u64);
-    impl Lcg {
-        fn new(seed: u64) -> Self {
-            Lcg(seed | 1)
-        }
-        fn next_f64(&mut self) -> f64 {
-            self.0 = self
-                .0
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1_442_695_040_888_963_407);
-            ((self.0 >> 33) as f64) / ((1u64 << 31) as f64)
-        }
-    }
+    use catgraph_testutil::Lcg;
 
     /// Fresh `Mag(S ∪ {candidate})` via the public plain-data path (members in
     /// `S`-then-`candidate` order — magnitude is order-invariant).
@@ -849,7 +834,8 @@ mod tests {
         const NAMES: [&str; 12] = [
             "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11",
         ];
-        let mut lcg = Lcg::new(0xC0FFEE);
+        // `| 1` (seed prep) stays at the call site — see catgraph-testutil (#33).
+        let mut lcg = Lcg::new(0xC0FFEE | 1);
         let n = NAMES.len();
 
         for m in 2..=10usize {
@@ -1083,7 +1069,8 @@ mod tests {
         const NAMES: [&str; 12] = [
             "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11",
         ];
-        let mut lcg = Lcg::new(0xC0FFEE);
+        // `| 1` (seed prep) stays at the call site — see catgraph-testutil (#33).
+        let mut lcg = Lcg::new(0xC0FFEE | 1);
         let n = NAMES.len();
 
         for m in 2..=10usize {

@@ -32,6 +32,8 @@ primal = "0.3"
 [dev-dependencies]
 proptest.workspace = true
 criterion.workspace = true
+# Shared deterministic LCG for seeded test/bench/example fixtures (#33).
+catgraph-testutil.workspace = true
 # Dev-only oracle for tests/snf_modularsnf_integer_oracle.rs (gated by the
 # `modularsnf-oracle` feature). Cargo disallows optional dev-deps, so these are
 # unconditional; the test source is `#![cfg(feature = "modularsnf-oracle")]`.

@@ -22,6 +22,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **`benches/wasserstein_bench.rs` inline LCG replaced by
+  `catgraph-testutil::Lcg`**
+  ([#33](https://github.com/sustia-llc/catgraph/issues/33) item 2) — the bench's
+  local LCG closure moves to the shared, dev-only `catgraph-testutil` crate. The
+  random stream is **byte-identical**: this site historically used the
+  non-standard increment `1` (not the MMIX increment the magnitude sites use),
+  preserved via `Lcg::with_increment(42, 1)`. No behavior change.
 - **`nalgebra` gated behind a default-on `spectral` feature**
   ([#43](https://github.com/sustia-llc/catgraph/issues/43)): the dense-Laplacian
   eigendecomposition (`multiway::branchial_spectrum::BranchialSpectrum`) and its

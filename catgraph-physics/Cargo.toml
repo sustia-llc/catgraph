@@ -37,6 +37,8 @@ petgraph = { version = "0.8", optional = true }
 [dev-dependencies]
 criterion.workspace = true
 proptest.workspace = true
+# Shared deterministic LCG for seeded bench fixtures (#33).
+catgraph-testutil.workspace = true
 
 [[bench]]
 name = "wasserstein_bench"

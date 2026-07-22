@@ -8,6 +8,7 @@ use catgraph_magnitude::weighted_cospan::NodeId;
 use catgraph_magnitude::{
     CatgraphError, F64Rig, LawvereMetricSpace, MatR, TSALLIS_SHANNON_EPS, Tropical,
 };
+use catgraph_testutil::Lcg;
 use proptest::prelude::*;
 
 /// Reference Shannon entropy `-Σ pᵢ ln pᵢ`, with `0 · ln 0 = 0`.
@@ -131,16 +132,8 @@ proptest! {
         seed in any::<u64>(),
     ) {
         // Deterministic small LCG over the seed — avoid pulling in rand.
-        // Precision-loss casts are intentional: we only need ~31 bits of
-        // randomness in [0, 1) for a uniform-distance fixture.
-        let mut state = seed | 1;
-        #[allow(clippy::cast_precision_loss)]
-        let mut next = || {
-            state = state
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1_442_695_040_888_963_407);
-            ((state >> 33) as f64) / ((1u64 << 31) as f64) // [0, 1)
-        };
+        // `| 1` seed prep stays at the call site (#33).
+        let mut rng = Lcg::new(seed | 1);
 
         let objects: Vec<NodeId> = (0..n).collect();
         let mut space = LawvereMetricSpace::new(objects.clone());
@@ -148,7 +141,7 @@ proptest! {
             for j in 0..n {
                 // Distances in [0.1, 5.0] keep zeta entries in [exp(-5), exp(-0.1)] ≈ [6.7e-3, 0.9],
                 // safely away from singularity.
-                let d = 0.1 + 4.9 * next();
+                let d = 0.1 + 4.9 * rng.next_f64();
                 space.set_distance(i, j, Tropical(d));
             }
         }

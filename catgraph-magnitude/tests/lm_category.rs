@@ -10,6 +10,7 @@
 #![allow(clippy::cast_precision_loss)]
 
 use catgraph_magnitude::lm_category::LmCategory;
+use catgraph_testutil::Lcg;
 use proptest::prelude::*;
 
 /// `magnitude(t)` requires no transitions at all to be well-defined: every
@@ -358,14 +359,8 @@ fn from_traces_empty_trace_marks_epsilon_terminating() {
 /// terminating state. This mirrors the BV 2025 §2.15 prefix-poset shape
 /// (forward-only, no cycles, single root); the intro bounds hold in this regime.
 fn build_random_tree_lm(n: usize, seed: u64) -> LmCategory {
-    let mut state = seed | 1;
-    #[allow(clippy::cast_precision_loss)]
-    let mut next = || {
-        state = state
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1_442_695_040_888_963_407);
-        ((state >> 33) as f64) / ((1u64 << 31) as f64)
-    };
+    // `| 1` seed prep stays at the call site (#33).
+    let mut rng = Lcg::new(seed | 1);
 
     let names: Vec<String> = (0..n).map(|i| format!("s{i}")).collect();
     let mut m = LmCategory::new(names.clone());
@@ -376,7 +371,7 @@ fn build_random_tree_lm(n: usize, seed: u64) -> LmCategory {
     for i in 0..(n - 1) {
         let mut raw: Vec<f64> = Vec::with_capacity(n - i - 1);
         for _ in (i + 1)..n {
-            raw.push(next());
+            raw.push(rng.next_f64());
         }
         let total: f64 = raw.iter().sum();
         if total < 1e-9 {
