@@ -15,6 +15,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **E1 test RNG seeds standardized to the bench convention**
+  ([#141](https://github.com/sustia-llc/catgraph/issues/141) follow-up, PR #146):
+  the inline seed literals in `src/e1_operad.rs`'s test module and
+  `tests/operad_boundary.rs` are now documented file/module-level
+  `const SEED: u64` values with `SEED + 1` offsets for independent streams
+  (matching `benches/mat_ops_bench.rs`). Streams are byte-identical or
+  provably unused; test behavior unchanged.
 - **`LinearCombination::linear_combine` gains par-vs-seq equivalence coverage**
   ([#48](https://github.com/sustia-llc/catgraph/issues/48)): `linear_combine` is
   a second, independent `rayon_cond::CondIterator` dispatch point (it duplicates
