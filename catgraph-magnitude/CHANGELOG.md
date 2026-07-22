@@ -16,6 +16,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`EvalScratch` + `CoalitionEvaluator::value_with_scratch`**
+  ([#33](https://github.com/sustia-llc/catgraph/issues/33) item 1) — an
+  allocation-free variant of `value_with` for the koalisi candidate-sweep hot
+  path. `value_with` heap-allocates seven short-lived `Vec`s per call
+  (`g_in`/`g_out`/`c`/`r` of length `m`, `u`/`v`/`w_u` of length `k`);
+  `value_with_scratch(candidate, &mut EvalScratch)` draws them from a
+  caller-owned `EvalScratch` reused across the sweep. The scratch carries **no
+  cross-call state** (each call resizes and fully overwrites the buffers it
+  reads), so results are **bit-identical** to `value_with` — verified across the
+  seeded fast/slow grid with `==`, plus a reuse contamination guard (fast → slow
+  → fast on one scratch) and a differently-sized-coalition reuse test. The
+  evaluator stays `&self` / `Sync` (no interior mutability); `value_with` is
+  unchanged and delegates through a fresh local scratch. Additive; `EvalScratch`
+  is re-exported at the crate root beside `CoalitionEvaluator`, and
+  `value_with_scratch` is a method on it. Bench
+  `coalition_value_with/{hit,hit_scratch}`: ~15%/~9% faster at `m = 8`/`16` on the
+  fast path.
+- **`benches/magnitude_bench.rs`: `evaluator_rebuild` + `coalition_value_with`
+  groups** ([#33](https://github.com/sustia-llc/catgraph/issues/33)) —
+  `evaluator_rebuild/{fresh,new}` isolates `CoalitionEvaluator::new` against the
+  fresh `coalition_magnitude_from_couplings` path; `coalition_value_with/{hit,
+  hit_scratch}` isolates the fast-path `value_with` against `value_with_scratch`.
+  Both at `m = 8`/`16`. The `new()`-rebuild measurement **refutes** the koalisi
+  K6 report of a ~13–15× `new()`/fresh ratio attributed to cache extraction: on
+  the same fixture the ratio is **~1.05×** (1.02–1.16× across `m ∈ {3..16}`,
+  dense and sparse), so no `new()` optimization was warranted — the koalisi gap
+  is a consumer-side measurement artifact, not cache-extraction cost.
 - **`LmCategory::from_traces` corpus MLE constructor**
   ([#53](https://github.com/sustia-llc/catgraph/issues/53)) — a prefix-state
   maximum-likelihood realization of the BTV 2021 syntax category
