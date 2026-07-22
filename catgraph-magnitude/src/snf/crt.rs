@@ -8,85 +8,81 @@
 
 use catgraph::errors::CatgraphError;
 
-/// Select primes `p_1 < p_2 < ...` for CRT reconstruction.
+/// The 16 largest primes below `2^31`, in descending order.
 ///
-/// All primes are in the range `(2^30, 2^31)` (large enough to fit in `i64`
-/// for per-prime `smith_normal_form` arithmetic; small enough that the
-/// product up to `k_max = 16` stays bounded). Returns the shortest such
-/// sequence — i.e., the minimum number of primes whose product exceeds
-/// `2 · bound`.
+/// Every entry lies in `(2^30, 2^31)`: large enough that each fits in `i64`
+/// for per-prime `smith_normal_form` arithmetic, small enough that products
+/// up to `k_max = 16` stay bounded. The product of all 16 is ≈ `2^496`, so
+/// this table always suffices for the magnitude-homology fixture regime.
 ///
-/// The walk runs descending from `2^31` so the largest primes are picked
-/// first, minimising the number of primes needed in total. The Mersenne
-/// `2^31 − 1 = 2 147 483 647` is the first hit.
+/// The list is **self-verifying**: the unit test
+/// `largest_primes_table_is_correct` re-derives it by scanning odd numbers
+/// downward from `2^31 − 1` with trial division and asserts an exact match,
+/// so any typo (a composite, a gap, a mis-ordering) fails the build.
+const LARGEST_PRIMES_BELOW_2_POW_31: [i64; 16] = [
+    2_147_483_647,
+    2_147_483_629,
+    2_147_483_587,
+    2_147_483_579,
+    2_147_483_563,
+    2_147_483_549,
+    2_147_483_543,
+    2_147_483_497,
+    2_147_483_489,
+    2_147_483_477,
+    2_147_483_423,
+    2_147_483_399,
+    2_147_483_353,
+    2_147_483_323,
+    2_147_483_269,
+    2_147_483_249,
+];
+
+/// Select primes `p_1 > p_2 > ...` for CRT reconstruction.
+///
+/// Draws from `LARGEST_PRIMES_BELOW_2_POW_31`, the 16 largest primes in
+/// `(2^30, 2^31)`, in descending order. Accumulates their product until it
+/// exceeds `2 · bound` and returns the shortest such prefix — i.e., the
+/// minimum number of (largest-available) primes whose product exceeds
+/// `2 · bound`. Picking the largest primes first minimises the count needed.
+///
+/// `k_max` caps the number of primes requested; it is additionally capped by
+/// the table length (16), so `k_max > 16` is silently clamped to 16.
 ///
 /// # Errors
 ///
-/// - More than `k_max` primes would be required.
+/// - The available primes (`min(k_max, 16)` of them) are insufficient — their
+///   product does not exceed `2 · bound`. The full table multiplies to ≈
+///   `2^496`, so this only fires for bounds outside the magnitude-homology
+///   fixture regime.
 /// - The target `2 · bound` overflows `u128`.
-/// - The `(2^30, 2^31)` range is exhausted before the target is reached
-///   (vanishingly unlikely for the shipped fixture sizes — there are
-///   ~50 million such primes).
-///
-/// # Panics
-///
-/// Will not panic on any valid input. The internal `.expect` calls on
-/// `i64::try_from(p)` and `u128::try_from(p)` are unreachable by
-/// construction: `primal::Sieve::primes_from(1 << 30)` yields `p: usize`
-/// values, and the `p >= (1 << 31)` break clause guarantees every collected
-/// prime fits in both `i64` and `u128` (whose ranges include all values
-/// up to `2^31`).
 pub fn select_primes_for_bound(bound: u128, k_max: usize) -> Result<Vec<i64>, CatgraphError> {
-    use std::collections::VecDeque;
-
-    use primal::Sieve;
-
-    // Sieve all primes up to 2^31 once (cached for the duration of the call).
-    let sieve = Sieve::new(1 << 31);
     let target = bound
         .checked_mul(2)
         .ok_or_else(|| CatgraphError::Composition {
             message: "select_primes_for_bound: 2·bound overflows u128".to_string(),
         })?;
 
-    // `primal::Sieve::primes_from` is forward-only (`SievePrimes` is not
-    // `DoubleEndedIterator`). To pick primes descending from `2^31 − 1` —
-    // which minimises the count needed to exceed `2 · bound` — collect a
-    // bounded sliding window of size `k_max` during the forward walk; at
-    // end it holds the `k_max` largest primes in `(2^30, 2^31)` in
-    // ascending order. Reversing yields descending. `VecDeque` keeps the
-    // pop-front + push-back at O(1) so the overall walk is O(N) in the
-    // ~50 million primes of the range. Memory is O(k_max), independent of
-    // the range size.
-    let mut window: VecDeque<i64> = VecDeque::with_capacity(k_max);
-    for p in sieve.primes_from(1 << 30) {
-        if p >= (1 << 31) {
-            break;
-        }
-        let p_i64 = i64::try_from(p).expect("prime < 2^31 fits in i64");
-        if window.len() == k_max {
-            window.pop_front();
-        }
-        window.push_back(p_i64);
-    }
-
-    // Walk the window descending: largest primes first.
+    let available = k_max.min(LARGEST_PRIMES_BELOW_2_POW_31.len());
     let mut chosen = Vec::new();
     let mut product: u128 = 1;
-    for p in window.iter().rev() {
-        chosen.push(*p);
-        product = product.saturating_mul(u128::try_from(*p).expect("prime fits in u128"));
+    for &p in LARGEST_PRIMES_BELOW_2_POW_31.iter().take(available) {
+        chosen.push(p);
+        // Each `p < 2^31` fits in u128; `saturating_mul` guards the tail —
+        // saturation at `u128::MAX` only occurs once the true product already
+        // exceeds any `target ≤ u128::MAX`, so the early return stays correct.
+        product = product.saturating_mul(u128::try_from(p).expect("prime fits in u128"));
         if product > target {
             return Ok(chosen);
         }
     }
-    // Exhausted the window (i.e. used all k_max primes) without exceeding
-    // target.
     Err(CatgraphError::Composition {
         message: format!(
-            "select_primes_for_bound: k_max={k_max} primes insufficient for \
-             bound={bound} (product={product} < target={target}); \
-             escalate k_max or use a sparser fixture"
+            "select_primes_for_bound: {available} primes (k_max={k_max}, capped at \
+             {} available) insufficient for bound={bound} (product={product} < \
+             target={target}); the 16 primes below 2^31 multiply to ≈2^496 — a \
+             bound exceeding that is outside the magnitude-homology fixture regime",
+            LARGEST_PRIMES_BELOW_2_POW_31.len()
         ),
     })
 }
@@ -216,4 +212,102 @@ fn mul_mod_i128(a: i128, b: i128, m: i128) -> i128 {
     result
         .to_i128()
         .expect("(a · b) mod m fits in i128 since result is reduced mod m ≤ i128::MAX")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Trial-division primality on `i64` (odd `n > 2`). Cheap for the ≤ 16
+    /// entries checked here: loops to `⌊√n⌋` only.
+    fn is_prime_trial(n: i64) -> bool {
+        if n < 2 {
+            return false;
+        }
+        if n % 2 == 0 {
+            return n == 2;
+        }
+        let mut d = 3_i64;
+        while d.saturating_mul(d) <= n {
+            if n % d == 0 {
+                return false;
+            }
+            d += 2;
+        }
+        true
+    }
+
+    /// Self-verifying: re-derive the 16 largest primes below `2^31` by
+    /// scanning odd numbers downward from `2^31 − 1` and comparing to the
+    /// baked-in [`LARGEST_PRIMES_BELOW_2_POW_31`]. Any typo — a composite, a
+    /// skipped prime, or a mis-ordering — fails this test, keeping the const
+    /// correct forever.
+    #[test]
+    fn largest_primes_table_is_correct() {
+        // Structural invariants.
+        assert_eq!(LARGEST_PRIMES_BELOW_2_POW_31[0], (1_i64 << 31) - 1);
+        for w in LARGEST_PRIMES_BELOW_2_POW_31.windows(2) {
+            assert!(w[0] > w[1], "table must be strictly descending: {w:?}");
+        }
+        for &p in &LARGEST_PRIMES_BELOW_2_POW_31 {
+            assert!(
+                (1_i64 << 30) < p && p < (1_i64 << 31),
+                "prime {p} must lie in (2^30, 2^31)"
+            );
+            assert!(is_prime_trial(p), "table entry {p} must be prime");
+        }
+
+        // Independent re-derivation: the 16 largest primes below 2^31,
+        // scanning odd candidates downward.
+        let mut derived: Vec<i64> = Vec::with_capacity(16);
+        let mut n = (1_i64 << 31) - 1; // 2^31 - 1 is odd
+        while derived.len() < 16 {
+            if is_prime_trial(n) {
+                derived.push(n);
+            }
+            n -= 2;
+        }
+        assert_eq!(
+            derived,
+            LARGEST_PRIMES_BELOW_2_POW_31.to_vec(),
+            "re-derived largest-16 primes disagree with the baked-in table"
+        );
+    }
+
+    #[test]
+    fn select_primes_returns_shortest_prefix() {
+        // Tiny bound → one prime suffices (2^31−1 > 2·10).
+        let one = select_primes_for_bound(10, 16).unwrap();
+        assert_eq!(one, vec![LARGEST_PRIMES_BELOW_2_POW_31[0]]);
+
+        // A bound just above p0/2 forces a second prime.
+        let p0 = u128::try_from(LARGEST_PRIMES_BELOW_2_POW_31[0]).unwrap();
+        let two = select_primes_for_bound(p0, 16).unwrap();
+        assert_eq!(
+            two,
+            vec![
+                LARGEST_PRIMES_BELOW_2_POW_31[0],
+                LARGEST_PRIMES_BELOW_2_POW_31[1]
+            ]
+        );
+    }
+
+    #[test]
+    fn select_primes_k_max_clamped_to_table_len() {
+        // k_max above the table length is clamped, not an error, for a bound
+        // one prime already covers.
+        let chosen = select_primes_for_bound(10, 999).unwrap();
+        assert_eq!(chosen.len(), 1);
+    }
+
+    #[test]
+    fn select_primes_errors_when_insufficient() {
+        // k_max = 1 but bound needs more than a single ~2^31 prime.
+        let p0 = u128::try_from(LARGEST_PRIMES_BELOW_2_POW_31[0]).unwrap();
+        let err = select_primes_for_bound(p0, 1).unwrap_err();
+        let CatgraphError::Composition { message } = err else {
+            panic!("expected Composition error");
+        };
+        assert!(message.contains("insufficient"), "got: {message}");
+    }
 }

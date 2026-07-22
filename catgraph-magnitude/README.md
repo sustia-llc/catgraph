@@ -92,7 +92,8 @@ The workspace `v0.1.0` (2026-07-01) semantic + determinism + coalition layer ove
 | `chain_complex::magnitude_homology_rank<Q>(idx, k, ℓ)` | LS 2017 §3 + BV 2025 Prop 3.14 | `rank(H_{k,ℓ}(M))` via SNF over Z/p (single-prime + 2-prime cross-check) |
 | `chain_complex::euler_char_identity_at(space, t, max_degree)` | BV 2025 Prop 3.14 | Headline acceptance gate |
 | `snf::smith_normal_form` + `snf::{zmod, echelon, band}` + Phase-1 / Phase-2 helpers | Storjohann 2000 §7 | Custom SNF backend over `MatR<Q>` |
-| `snf::smith_normal_form_integer` | Newman 1972 §1.4 Thm II.9 | Multi-prime CRT lift for invariant-factor recovery |
+| `snf::smith_normal_form_integer` | Newman 1972 §1.4 Thm II.9 | Multi-prime CRT lift for invariant-factor recovery (O(r²) determinantal-divisor DP; primes from a const 16-entry table below 2^31) |
+| `snf::integer::hadamard_bound` + `hadamard_bound_matr<R>` + `hadamard_bound_integer` | Hadamard | `H(A) = ∏_i ‖a_i‖₂` upper bound: f64, `MatR<R>` wrapper, and pure-integer (`isqrt`-based, float-free) variants |
 | `PosetCategory<N>` | Leinster 2008 | Finite-category `LawvereMetricSpace`-compatible input type |
 | `weighting<Q>(space)` | Leinster 2013 §1.1 Def 1.1.1 | Solve `ζ · w = u_I` |
 | `coweighting<Q>(space)` | Leinster 2013 §1.1 Def 1.1.1 | Solve `v · ζ = u_J^T` |

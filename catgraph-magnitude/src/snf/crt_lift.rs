@@ -7,4 +7,6 @@
 //! callers keep compiling unchanged.
 
 pub use crate::snf::crt::{crt_reconstruct_signed, select_primes_for_bound};
-pub use crate::snf::integer::{hadamard_bound, smith_normal_form_integer};
+pub use crate::snf::integer::{
+    hadamard_bound, hadamard_bound_integer, hadamard_bound_matr, smith_normal_form_integer,
+};

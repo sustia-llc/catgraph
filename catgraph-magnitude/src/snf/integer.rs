@@ -12,7 +12,9 @@
 //! reconstruction live in [`crate::snf::crt`]; this module composes them.
 
 use catgraph::errors::CatgraphError;
+use catgraph_applied::mat::MatR;
 
+use crate::chain_complex::IntegerLikeRig;
 use crate::snf::crt::{crt_reconstruct_signed, select_primes_for_bound};
 
 /// Compute Hadamard bound `H(A) = ∏_i √(Σ_j a_ij²)`.
@@ -79,6 +81,88 @@ pub fn hadamard_bound(a: &[Vec<i64>]) -> Result<u128, CatgraphError> {
         reason = "bound is positive and finite, verified above"
     )]
     Ok(bound.ceil() as u128)
+}
+
+/// Round-trip wrapper around [`hadamard_bound`] for `MatR<R>` inputs.
+///
+/// `MatR<R>` → `Vec<Vec<i64>>` (via [`IntegerLikeRig::to_i64`]) →
+/// [`hadamard_bound`]. Mirrors the conversion idiom of
+/// [`smith_normal_form_matr`](super::smith_normal_form_matr) so consumers
+/// holding boundary matrices in `MatR<R>` form can size the prime product
+/// without dropping to the raw `Vec<Vec<i64>>` backend.
+///
+/// Returns ⌈H(A)⌉ as `u128`; see [`hadamard_bound`] for the bound's meaning.
+///
+/// # Errors
+///
+/// - Any entry of `m` exceeds `i64` range (propagated from
+///   [`IntegerLikeRig::to_i64`]).
+/// - Any [`hadamard_bound`] error (row-sum / product overflow).
+pub fn hadamard_bound_matr<R>(m: &MatR<R>) -> Result<u128, CatgraphError>
+where
+    R: IntegerLikeRig,
+{
+    let rows = m.rows();
+    let cols = m.cols();
+    let mut entries_i64: Vec<Vec<i64>> = Vec::with_capacity(rows);
+    for row in m.entries() {
+        let mut row_i64 = Vec::with_capacity(cols);
+        for x in row {
+            row_i64.push(x.to_i64()?);
+        }
+        entries_i64.push(row_i64);
+    }
+    hadamard_bound(&entries_i64)
+}
+
+/// Integer-only Hadamard bound: a valid upper bound on `H(A) = ∏_i ||a_i||_2`
+/// computed without any `f64` arithmetic.
+///
+/// Per row, accumulate `Σ_j a_ij²` in `i128` (same checked arithmetic as
+/// [`hadamard_bound`]), take `⌊√(Σ a²)⌋ + 1` (integer `isqrt`, ceil'd up) as
+/// the row-norm, and multiply the row-norms in `u128` with `checked_mul`.
+///
+/// Because `⌊√s⌋ + 1 ≥ ⌈√s⌉ ≥ √s`, the result satisfies
+/// `∏ (⌊√(Σa²)⌋ + 1) ≥ ∏ √(Σa²) = H(A)`, so it is always a **valid** Hadamard
+/// bound — generally slightly looser than [`hadamard_bound`], but free of any
+/// floating-point precision hedging. Both are usable by
+/// [`select_primes_for_bound`].
+///
+/// # Errors
+///
+/// - Any `a_ij²` or row-sum overflows `i128`.
+/// - The ceil'd row-norm exceeds `u128` (unreachable for `i64` entries, but
+///   surfaced rather than truncated).
+/// - The product of row-norms overflows `u128`.
+pub fn hadamard_bound_integer(a: &[Vec<i64>]) -> Result<u128, CatgraphError> {
+    let mut bound: u128 = 1;
+    for row in a {
+        let sum_sq: i128 = row.iter().try_fold(0_i128, |acc, &x| {
+            let x_sq = i128::from(x).checked_mul(i128::from(x)).ok_or_else(|| {
+                CatgraphError::Composition {
+                    message: format!("hadamard_bound_integer: i128 overflow on x^2 where x={x}"),
+                }
+            })?;
+            acc.checked_add(x_sq)
+                .ok_or_else(|| CatgraphError::Composition {
+                    message: format!(
+                        "hadamard_bound_integer: i128 overflow accumulating row-sum (acc={acc}, x={x})"
+                    ),
+                })
+        })?;
+        // ⌊√sum_sq⌋ + 1 ≥ ⌈√sum_sq⌉; sum_sq ≥ 0 so isqrt is well-defined.
+        let row_norm_ceil =
+            u128::try_from(sum_sq.isqrt() + 1).map_err(|_| CatgraphError::Composition {
+                message: "hadamard_bound_integer: ceil'd row norm exceeds u128".to_string(),
+            })?;
+        bound = bound
+            .checked_mul(row_norm_ceil)
+            .ok_or_else(|| CatgraphError::Composition {
+                message: "hadamard_bound_integer: u128 overflow accumulating row-norm product"
+                    .to_string(),
+            })?;
+    }
+    Ok(bound)
 }
 
 /// Integer Smith Normal Form via multi-prime CRT reconstruction.
@@ -292,20 +376,28 @@ pub fn smith_normal_form_integer(
 /// D_r = |∏ d_i|
 /// ```
 ///
-/// We compute `D_k` incrementally as `gcd` over `k`-subset products. For
-/// the small `r ≤ ~20` cases in the magnitude-homology fixtures, the
-/// `2^r` subset enumeration is acceptable; a polynomial dynamic-programming
-/// pass would hoist this if needed.
+/// The `D_k` are computed by an `O(r²)` dynamic program
+/// ([`determinantal_divisors`]) rather than enumerating all `2^r` subsets:
+/// with `G[j]` = gcd of all `j`-subset products of the entries seen so far,
+/// folding in a new entry `d_i` is one multiplication per subset size,
+/// `G'[j] = gcd(G[j], d_i · G[j−1])`. This is exact for positive integers via
+/// the identity `gcd({s · d_i : s ∈ S}) = d_i · gcd(S)` (a common factor
+/// distributes through a gcd), so the "include `d_i`" branch collapses to a
+/// single `d_i · G[j−1]`.
 ///
 /// Returns absolute values throughout (canonical Smith form has
 /// non-negative invariant factors).
 ///
 /// # Errors
 ///
-/// - Subset product overflows `i128` during `D_k` accumulation. For the
-///   magnitude-homology fixtures (`r ≤ 20`, CRT-lifted entries
-///   bounded by `|det(A)|`) this is unreachable, but the explicit error
-///   prevents a silent wrap from corrupting an invariant factor.
+/// - A `d_i · G[j−1]` product overflows `i128` during `D_k` accumulation
+///   ([`determinantal_divisors`]). Because `G[j−1]` divides — hence is no
+///   larger than — the smallest `(j−1)`-subset product, `d_i · G[j−1]` is
+///   bounded by an actual `j`-subset product, so this overflows strictly
+///   less often than the old subset-enumeration path did. For the
+///   magnitude-homology fixtures (CRT-lifted entries bounded by `|det(A)|`)
+///   it is unreachable, but the explicit error prevents a silent wrap from
+///   corrupting an invariant factor.
 /// - An invariant factor `s_k` exceeds `i64` range. Defensive: for the
 ///   magnitude-homology consumer, individual factors are bounded
 ///   by `|det(A)|` which fits comfortably in i64.
@@ -331,49 +423,8 @@ fn integer_chain_rebalance(diag: &[i64]) -> Result<Vec<i64>, CatgraphError> {
     let nonzero: Vec<i128> = abs.iter().copied().filter(|&x| x != 0).collect();
     let zero_count = r - nonzero.len();
 
-    // Compute D_k for k = 0..=nz_len via subset-product GCDs.
-    let nz_len = nonzero.len();
-    let mut det_divisors: Vec<i128> = vec![0; nz_len + 1];
-    det_divisors[0] = 1;
-    #[allow(
-        clippy::needless_range_loop,
-        reason = "k is the cardinality of the subset enumerated at each step, not an iterator over det_divisors; expressing this as enumerate() obscures the D_k = gcd of all k×k principal minors paper-mapping (Newman 1972 §1.4 Thm II.9)"
-    )]
-    for k in 1..=nz_len {
-        let mut g: i128 = 0;
-        let mut overflow: Option<(usize, usize)> = None;
-        // Enumerate all k-subsets of {0, …, nz_len-1} via combinations.
-        // For nz_len ≤ ~20 (the shipped fixture size) this is ≤ ~1M iterations.
-        // Use `checked_mul` so a subset-product overflow
-        // surfaces as an explicit error rather than `saturating_mul`'s
-        // silent `i128::MAX` (which would corrupt the gcd downstream).
-        enumerate_subsets(nz_len, k, &mut |subset| {
-            if overflow.is_some() {
-                return;
-            }
-            let mut prod: i128 = 1;
-            for &i in subset {
-                if let Some(p) = prod.checked_mul(nonzero[i]) {
-                    prod = p;
-                } else {
-                    overflow = Some((k, i));
-                    return;
-                }
-            }
-            g = gcd_i128(g, prod);
-        });
-        if let Some((k_bad, i_bad)) = overflow {
-            return Err(CatgraphError::Composition {
-                message: format!(
-                    "integer_chain_rebalance: i128 overflow during D_{k_bad} subset-product \
-                     accumulation at index {i_bad} (nonzero[{i_bad}]={}); \
-                     escalate to BigInt-native rebalance",
-                    nonzero[i_bad]
-                ),
-            });
-        }
-        det_divisors[k] = g;
-    }
+    // Determinantal divisors D_k for k = 0..=nz_len via the O(r²) DP.
+    let det_divisors = determinantal_divisors(&nonzero)?;
 
     // s_k = D_k / D_{k-1}.
     let mut chain: Vec<i64> = Vec::with_capacity(r);
@@ -396,8 +447,56 @@ fn integer_chain_rebalance(diag: &[i64]) -> Result<Vec<i64>, CatgraphError> {
     Ok(chain)
 }
 
+/// Determinantal divisors `D_0, …, D_{m}` of a diagonal integer matrix, given
+/// its `m` non-negative diagonal entries `nonzero` (already absolute-valued,
+/// all `> 0`). `D_k = gcd of all k×k principal minors` = gcd of all `k`-subset
+/// products of the entries; `D_0 = 1`.
+///
+/// Computed by an `O(m²)` dynamic program rather than enumerating all `2^m`
+/// subsets. Invariant: after folding the first `i` entries, `det_divisors[j]`
+/// holds the gcd of all `j`-subset products drawn from those `i` entries (with
+/// `det_divisors[0] = 1` and `det_divisors[j] = 0` while `j > i`, using
+/// `gcd(0, x) = |x|`). Folding in `d_i` uses
+/// `G'[j] = gcd(G[j], d_i · G[j−1])`, exact because for positive integers
+/// `gcd({s · d_i : s ∈ S}) = d_i · gcd(S)`. The descending `j` sweep keeps
+/// `det_divisors[j−1]` at its pre-fold value while `det_divisors[j]` updates
+/// in place, so a single rolling array suffices.
+///
+/// Returns `Vec<i128>` of length `nonzero.len() + 1`.
+///
+/// # Errors
+///
+/// - `d_i · G[j−1]` overflows `i128`. This is strictly rarer than a raw
+///   subset-product overflow: `G[j−1]` divides the smallest `(j−1)`-subset
+///   product, so the operand is bounded by an actual `j`-subset product. The
+///   escalation error mirrors the enumeration path it replaced.
+fn determinantal_divisors(nonzero: &[i128]) -> Result<Vec<i128>, CatgraphError> {
+    let m = nonzero.len();
+    let mut det_divisors: Vec<i128> = vec![0; m + 1];
+    det_divisors[0] = 1;
+    for &d_i in nonzero {
+        // Descending j: det_divisors[j-1] still holds G[j-1] (pre-fold) when
+        // computing the new det_divisors[j].
+        for j in (1..=m).rev() {
+            let include =
+                d_i.checked_mul(det_divisors[j - 1])
+                    .ok_or_else(|| CatgraphError::Composition {
+                        message: format!(
+                            "determinantal_divisors: i128 overflow forming d_i·G[{}] \
+                         (d_i={d_i}, G[{}]={}); escalate to BigInt-native rebalance",
+                            j - 1,
+                            j - 1,
+                            det_divisors[j - 1]
+                        ),
+                    })?;
+            det_divisors[j] = gcd_i128(det_divisors[j], include);
+        }
+    }
+    Ok(det_divisors)
+}
+
 /// `i128` GCD via Euclid's algorithm, treating `gcd(0, x) = |x|` and
-/// `gcd(0, 0) = 0`. Used by [`integer_chain_rebalance`] for the
+/// `gcd(0, 0) = 0`. Used by [`determinantal_divisors`] for the
 /// determinantal-divisor accumulation.
 fn gcd_i128(a: i128, b: i128) -> i128 {
     let (mut a, mut b) = (a.abs(), b.abs());
@@ -409,41 +508,212 @@ fn gcd_i128(a: i128, b: i128) -> i128 {
     a
 }
 
-/// Iterate every `k`-subset of `{0, …, n−1}` in lexicographic order,
-/// invoking `f` on each subset as a borrowed `&[usize]`. Used by
-/// [`integer_chain_rebalance`] for determinantal-divisor enumeration.
-///
-/// For `n ≤ ~20` (the magnitude-homology fixture size), `C(n, k) ≤ ~1M`
-/// is acceptable. A polynomial DP alternative would apply if larger
-/// fixtures land.
-fn enumerate_subsets<F>(n: usize, k: usize, f: &mut F)
-where
-    F: FnMut(&[usize]),
-{
-    if k == 0 {
-        f(&[]);
-        return;
-    }
-    if k > n {
-        return;
-    }
-    let mut idx: Vec<usize> = (0..k).collect();
-    loop {
-        f(&idx);
-        // Advance to next k-combination in lex order.
-        let mut i = k;
-        while i > 0 {
-            i -= 1;
-            if idx[i] < n - k + i {
-                idx[i] += 1;
-                for j in i + 1..k {
-                    idx[j] = idx[j - 1] + 1;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Iterate every `k`-subset of `{0, …, n−1}` in lexicographic order,
+    /// invoking `f` on each subset as a borrowed `&[usize]`.
+    ///
+    /// Test-only `O(2^n)` oracle: the production [`determinantal_divisors`]
+    /// path uses the `O(n²)` DP; this brute-force enumeration cross-checks it.
+    /// Because it multiplies subset entries unchecked, overflow-parity against
+    /// the production `checked_mul` path is not meaningful here — the DP's
+    /// overflow branch is exercised directly by
+    /// [`chain_rebalance_overflow_escalates`] instead.
+    fn enumerate_subsets<F>(n: usize, k: usize, f: &mut F)
+    where
+        F: FnMut(&[usize]),
+    {
+        if k == 0 {
+            f(&[]);
+            return;
+        }
+        if k > n {
+            return;
+        }
+        let mut idx: Vec<usize> = (0..k).collect();
+        loop {
+            f(&idx);
+            // Advance to next k-combination in lex order.
+            let mut i = k;
+            while i > 0 {
+                i -= 1;
+                if idx[i] < n - k + i {
+                    idx[i] += 1;
+                    for j in i + 1..k {
+                        idx[j] = idx[j - 1] + 1;
+                    }
+                    break;
                 }
-                break;
+                if i == 0 {
+                    return;
+                }
             }
-            if i == 0 {
-                return;
-            }
+        }
+    }
+
+    /// Brute-force oracle: `D_k = gcd of all k-subset products`, via
+    /// [`enumerate_subsets`]. Unchecked multiplication — callers must keep
+    /// entries small enough that no `k`-subset product overflows `i128`.
+    fn det_divisors_via_enumeration(nonzero: &[i128]) -> Vec<i128> {
+        let m = nonzero.len();
+        let mut d = vec![0_i128; m + 1];
+        d[0] = 1;
+        #[allow(
+            clippy::needless_range_loop,
+            reason = "k is the subset cardinality passed to enumerate_subsets, not merely an index into d"
+        )]
+        for k in 1..=m {
+            let mut g = 0_i128;
+            enumerate_subsets(m, k, &mut |subset| {
+                let prod: i128 = subset.iter().map(|&i| nonzero[i]).product();
+                g = gcd_i128(g, prod);
+            });
+            d[k] = g;
+        }
+        d
+    }
+
+    /// Full-rebalance oracle mirroring `integer_chain_rebalance` but with the
+    /// `2^r` enumeration path for `D_k`. Entries must stay small (no overflow).
+    fn rebalance_via_enumeration(diag: &[i64]) -> Vec<i64> {
+        let r = diag.len();
+        let abs: Vec<i128> = diag.iter().map(|&d| i128::from(d).abs()).collect();
+        let nonzero: Vec<i128> = abs.iter().copied().filter(|&x| x != 0).collect();
+        let zero_count = r - nonzero.len();
+        let dd = det_divisors_via_enumeration(&nonzero);
+        let mut chain: Vec<i64> = dd
+            .windows(2)
+            .map(|w| i64::try_from(w[1] / w[0]).expect("oracle factor fits i64"))
+            .collect();
+        chain.extend(std::iter::repeat_n(0, zero_count));
+        chain
+    }
+
+    #[test]
+    fn dp_matches_enumeration_wikipedia() {
+        // Pre-rebalance diag from the Wikipedia 3×3 CRT lift: (2, 6, -52).
+        let diag = [2_i64, 6, -52];
+        assert_eq!(
+            integer_chain_rebalance(&diag).unwrap(),
+            rebalance_via_enumeration(&diag)
+        );
+        // And the canonical integer chain itself.
+        assert_eq!(integer_chain_rebalance(&diag).unwrap(), vec![2, 2, 156]);
+    }
+
+    #[test]
+    fn determinantal_divisors_matches_enumeration_small() {
+        // Shared-factor cases (products of small primes) + duplicates.
+        let cases: &[&[i128]] = &[
+            &[2, 2, 156],
+            &[6, 10, 15],
+            &[12, 18, 24, 30],
+            &[2, 4, 8, 16, 32],
+            &[30, 30, 30],
+            &[1, 7, 49, 343],
+        ];
+        for &c in cases {
+            let dp = determinantal_divisors(c).unwrap();
+            let oracle = det_divisors_via_enumeration(c);
+            assert_eq!(dp, oracle, "DP != enumeration for {c:?}");
+        }
+    }
+
+    #[test]
+    fn hadamard_integer_dominates_float_and_both_select_primes() {
+        let mats: &[Vec<Vec<i64>>] = &[
+            vec![vec![2, 4, 4], vec![-6, 6, 12], vec![10, 4, 16]],
+            vec![vec![1, 2, 3], vec![4, 5, 6]],
+            vec![vec![7]],
+            vec![vec![0, 0], vec![0, 0]],
+        ];
+        for a in mats {
+            let float_bound = hadamard_bound(a).unwrap();
+            let int_bound = hadamard_bound_integer(a).unwrap();
+            assert!(
+                int_bound >= float_bound,
+                "integer bound {int_bound} must dominate float bound {float_bound} for {a:?}"
+            );
+            // Both bounds are usable by the prime selector.
+            assert!(select_primes_for_bound(float_bound, 16).is_ok());
+            assert!(select_primes_for_bound(int_bound, 16).is_ok());
+        }
+    }
+
+    #[test]
+    fn hadamard_bound_matr_matches_raw() {
+        use catgraph_applied::z::Z;
+
+        let entries = vec![vec![2, 4, 4], vec![-6, 6, 12], vec![10, 4, 16]];
+        let m = MatR::<Z>::new(
+            3,
+            3,
+            entries
+                .iter()
+                .map(|row| row.iter().map(|&x| Z::from(x)).collect())
+                .collect(),
+        )
+        .unwrap();
+        assert_eq!(
+            hadamard_bound_matr(&m).unwrap(),
+            hadamard_bound(&entries).unwrap()
+        );
+    }
+
+    #[test]
+    fn chain_rebalance_overflow_escalates() {
+        // Three i64::MAX entries: the 3-subset product i64::MAX³ overflows
+        // i128, so the DP's checked_mul must surface the escalation error.
+        let diag = [i64::MAX, i64::MAX, i64::MAX];
+        let err = integer_chain_rebalance(&diag).unwrap_err();
+        let CatgraphError::Composition { message } = err else {
+            panic!("expected Composition error");
+        };
+        assert!(
+            message.contains("escalate to BigInt-native rebalance"),
+            "got: {message}"
+        );
+    }
+
+    use proptest::prelude::*;
+
+    /// A signed entry that is either `0` or a product of small primes
+    /// `2^a·3^b·5^c·7^d` (≤ 420) — exercises shared factors and duplicates.
+    /// Bounded so no product of up to 12 such entries overflows `i128`
+    /// (`420^12 ≈ 2^105`), keeping the enumeration oracle's unchecked
+    /// multiplication safe.
+    fn small_prime_entry() -> impl Strategy<Value = i64> {
+        prop_oneof![
+            1 => Just(0_i64),
+            6 => (0u32..=2, 0u32..=1, 0u32..=1, 0u32..=1, any::<bool>()).prop_map(
+                |(e2, e3, e5, e7, neg)| {
+                    let v = 2_i64.pow(e2) * 3_i64.pow(e3) * 5_i64.pow(e5) * 7_i64.pow(e7);
+                    if neg { -v } else { v }
+                }
+            ),
+        ]
+    }
+
+    proptest! {
+        /// The O(r²) DP [`determinantal_divisors`] agrees with the `2^r`
+        /// enumeration oracle for random diagonals (r ≤ 12) whose entries are
+        /// products of small primes — exercising shared factors, duplicates,
+        /// and zeros (filtered out, as in the production path).
+        #[test]
+        fn dp_matches_enumeration_random(
+            entries in proptest::collection::vec(small_prime_entry(), 1..=12),
+        ) {
+            let nonzero: Vec<i128> = entries
+                .iter()
+                .map(|&e| i128::from(e).abs())
+                .filter(|&x| x != 0)
+                .collect();
+            prop_assert_eq!(
+                determinantal_divisors(&nonzero).unwrap(),
+                det_divisors_via_enumeration(&nonzero)
+            );
         }
     }
 }
