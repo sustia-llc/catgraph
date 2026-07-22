@@ -52,6 +52,10 @@ jobs:
       - run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
       - run: cargo test --workspace
       - run: cargo test -p catgraph --no-default-features
+      # #43: slim-build exercise for catgraph-physics — proves the crate compiles
+      # and tests green with both the `spectral` (nalgebra) and `rustworkx` gates
+      # off. Also the first CI coverage of the #10 rustworkx slim build.
+      - run: cargo test -p catgraph-physics --no-default-features
       # #81: the opt-in `serde` feature is off by default, so the runs above
       # never exercise its derives or round-trip tests. This targeted run (plus
       # the clippy pass) keeps the serde surface from rotting silently.

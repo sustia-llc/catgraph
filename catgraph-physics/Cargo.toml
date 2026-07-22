@@ -10,7 +10,7 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-default = ["parallel", "rustworkx"]
+default = ["parallel", "rustworkx", "spectral"]
 # Pass-through of `catgraph/parallel`. This crate has no direct rayon sites yet,
 # but `--no-default-features` consumers expect the transitive catgraph build to
 # be single-threaded too.
@@ -21,11 +21,17 @@ parallel = ["catgraph/parallel"]
 # false` to drop the rustworkx-core → petgraph + ndarray chain for slim / WASM
 # builds (issue #10; parity with the sibling crates' slim-build opt-out).
 rustworkx = ["dep:rustworkx-core", "dep:petgraph"]
+# `spectral` gates `multiway::branchial_spectrum` — the dense-Laplacian
+# eigendecomposition (`SymmetricEigen`: algebraic connectivity λ₂, spectral gap,
+# Fiedler vector, spectral clustering). Default-on for source-compatibility; opt
+# out via `default-features = false` to drop the nalgebra stack for slim / WASM
+# builds (issue #43; companion to the #10 rustworkx gate).
+spectral = ["dep:nalgebra"]
 
 [dependencies]
 catgraph = { workspace = true }
 rustworkx-core = { workspace = true, optional = true }
-nalgebra.workspace = true
+nalgebra = { workspace = true, optional = true }
 petgraph = { version = "0.8", optional = true }
 
 [dev-dependencies]
@@ -35,3 +41,6 @@ proptest.workspace = true
 [[bench]]
 name = "wasserstein_bench"
 harness = false
+# The bench compares nalgebra `DMatrix` against the shipped `Vec` implementation,
+# so it needs the nalgebra stack (issue #43).
+required-features = ["spectral"]

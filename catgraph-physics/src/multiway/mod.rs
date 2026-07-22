@@ -16,6 +16,9 @@ pub mod branchial;
 // chain, matching the slim-build opt-out the sibling crates offer (issue #10).
 #[cfg(feature = "rustworkx")]
 pub mod branchial_analysis;
+// nalgebra dense-Laplacian eigendecomposition — gated so `--no-default-features`
+// drops the nalgebra stack for slim / WASM builds (issue #43).
+#[cfg(feature = "spectral")]
 pub mod branchial_spectrum;
 pub mod curvature;
 pub mod evolution_graph;
@@ -30,6 +33,8 @@ pub use branchial::{
 pub use branchial_analysis::{
     branchial_articulation_points, branchial_coloring, branchial_core_numbers,
 };
+// spectral re-export — gated with the dense-Laplacian module above (issue #43).
+#[cfg(feature = "spectral")]
 pub use branchial_spectrum::BranchialSpectrum;
 pub use curvature::{CurvatureFoliation, DiscreteCurvature};
 pub use evolution_graph::{
