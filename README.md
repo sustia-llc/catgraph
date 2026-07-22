@@ -24,7 +24,7 @@ applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions
 | `catgraph-physics` | Wolfram-physics extensions (DPO rewriting, multiway, branchial) |
 | `catgraph-dl` | Gavranović et al., ICML 2024 — *Categorical Deep Learning* |
 | `catgraph-syntax` | F&S 2018 Ch. 5 (props/presentations) + F&S 2019 (Frobenius layer); term language over `catgraph-applied`'s NF engine |
-| `catgraph-testutil` | — dev-only, unpublished (`publish = false`); shared seeded-fixture helpers (deterministic LCG), used only as a `[dev-dependencies]` entry (#33) |
+| `catgraph-testutil` (dev-only, unpublished; `[dev-dependencies]` only, #33) | — |
 
 ## Build
 

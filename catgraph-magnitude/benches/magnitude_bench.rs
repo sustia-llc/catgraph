@@ -6,8 +6,9 @@
 //! - `mag_lm_100`  — 100-state acyclic chain at `t = 2.0`.
 //! - `mag_lm_1000` — 1000-state acyclic chain at `t = 2.0`.
 //!
-//! **Fixture construction:** uses the same deterministic inline PCG-64-style
-//! LCG as `tests/lm_category.rs` (`build_random_tree_lm`).  No `rand` dep.
+//! **Fixture construction:** uses the shared deterministic
+//! `catgraph_testutil::Lcg` (Knuth MMIX multiplier), same stream as
+//! `tests/lm_category.rs` (`build_random_tree_lm`).  No `rand` dep.
 //!
 //! **Complexity:** `magnitude(t)` calls `mobius_function`, which performs
 //! Gaussian elimination on the n×n zeta matrix — O(n³) with small constants
@@ -27,8 +28,9 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 // `coalition_value_with/{hit,hit_scratch}` benches below are #33; the scratch
 // surface must exist in `coalition_eval` for this bench to compile.
 
-/// Build a deterministic forward-chain `n`-state LM using a minimal inline
-/// LCG (identical to `tests/lm_category.rs::build_random_tree_lm`).
+/// Build a deterministic forward-chain `n`-state LM using the shared
+/// `catgraph_testutil::Lcg` (same stream as
+/// `tests/lm_category.rs::build_random_tree_lm`).
 ///
 /// State `i` may only transition to states `j > i`.  The last state is the
 /// sole terminating state.  All transition rows are renormalised to sum to 1.
@@ -86,7 +88,7 @@ const SWEEP_CANDIDATES: usize = 8;
 type CoalitionFixture = (Vec<usize>, Vec<(usize, usize, f64)>, Vec<usize>);
 
 /// Deterministic coalition fixture: `m` members plus [`SWEEP_CANDIDATES`]
-/// candidate agents, over a dense random coupling table (same inline LCG as
+/// candidate agents, over a dense random coupling table (same shared LCG as
 /// [`build_chain_lm`]). Agents are `usize` indices `0..(m + SWEEP_CANDIDATES)`;
 /// members are `0..m`; candidates are `m..(m + SWEEP_CANDIDATES)`.
 ///

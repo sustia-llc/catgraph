@@ -26,8 +26,9 @@
 //!
 //! ## Random generation
 //!
-//! A minimal PCG-32-style `u64` LCG (same as in `tests/lm_category.rs`) seeds
-//! from a fixed constant for full reproducibility, without a `rand` dev-dep.
+//! The shared `catgraph_testutil::Lcg` (Knuth MMIX multiplier, same stream as
+//! `tests/lm_category.rs`) seeds from a fixed constant for full
+//! reproducibility, without a `rand` dev-dep.
 
 use catgraph_magnitude::TSALLIS_SHANNON_EPS;
 use catgraph_magnitude::magnitude::tsallis_entropy;
