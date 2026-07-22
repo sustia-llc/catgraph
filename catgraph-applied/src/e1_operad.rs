@@ -299,6 +299,11 @@ mod test {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
+    /// Single module-level seed (workspace bench convention — see
+    /// `benches/mat_ops_bench.rs`). Tests needing an independent stream
+    /// thread a small offset off this constant.
+    const SEED: u64 = 1001;
+
     #[test]
     fn identity_e1_nullary() {
         use super::E1;
@@ -347,7 +352,7 @@ mod test {
         use rand::RngExt;
 
         let arity_max: u8 = 20;
-        let mut rng = StdRng::seed_from_u64(1001);
+        let mut rng = StdRng::seed_from_u64(SEED);
         let trial_num = 10;
 
         for _ in 0..trial_num {
@@ -379,7 +384,7 @@ mod test {
         use rand::RngExt;
 
         let arity_max: u8 = 20;
-        let mut rng = StdRng::seed_from_u64(1002);
+        let mut rng = StdRng::seed_from_u64(SEED + 1);
         let trial_num = 10;
 
         for _ in 0..trial_num {

@@ -5,6 +5,11 @@ use catgraph_applied::e2_operad::E2;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
+/// Single file-level seed (workspace bench convention — see
+/// `benches/mat_ops_bench.rs`). Tests needing an independent stream thread a
+/// small offset off this constant.
+const SEED: u64 = 141;
+
 #[test]
 fn e1_exact_unit_interval() {
     let e1 = E1::new(vec![(0.0, 1.0)], true);
@@ -360,7 +365,7 @@ fn e2_change_names_then_substitute() {
 
 #[test]
 fn e1_random_produces_valid_config() {
-    let mut rng = StdRng::seed_from_u64(141);
+    let mut rng = StdRng::seed_from_u64(SEED);
 
     for arity in 1..=10 {
         // Many trials per arity so the seeded run exercises many draws. (Resampling
@@ -416,7 +421,9 @@ fn e1_random_produces_valid_config() {
 
 #[test]
 fn e1_random_zero_arity() {
-    let mut rng = StdRng::seed_from_u64(1410);
+    // Independent stream for the zero-arity case (which draws no samples —
+    // the offset just keeps the streams distinct on principle).
+    let mut rng = StdRng::seed_from_u64(SEED + 1);
     let e1 = E1::random(0, &mut rng);
     let intervals = e1.extract_sub_intervals();
     assert!(intervals.is_empty(), "arity 0 should produce no intervals");
