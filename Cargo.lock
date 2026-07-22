@@ -281,6 +281,7 @@ version = "0.3.0"
 dependencies = [
  "catgraph",
  "catgraph-applied",
+ "catgraph-testutil",
  "criterion",
  "deep_causality_num",
  "modularsnf",
@@ -295,6 +296,7 @@ name = "catgraph-physics"
 version = "0.3.0"
 dependencies = [
  "catgraph",
+ "catgraph-testutil",
  "criterion",
  "nalgebra",
  "petgraph",
@@ -314,6 +316,10 @@ dependencies = [
  "serde_json",
  "thiserror",
 ]
+
+[[package]]
+name = "catgraph-testutil"
+version = "0.3.0"
 
 [[package]]
 name = "cc"

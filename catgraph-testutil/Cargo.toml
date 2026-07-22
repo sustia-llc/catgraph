@@ -1,0 +1,13 @@
+[package]
+name = "catgraph-testutil"
+description = "Dev-only test/bench helpers for the catgraph workspace (unpublished). Currently a shared deterministic LCG used by seeded fixtures."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+# Dev-only, workspace-internal: never a `[dependencies]` entry of a published
+# crate, only `[dev-dependencies]`. Keep it off crates.io (#33).
+publish = false
+
+[dependencies]

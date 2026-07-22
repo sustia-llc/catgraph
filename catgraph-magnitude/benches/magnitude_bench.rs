@@ -6,8 +6,9 @@
 //! - `mag_lm_100`  — 100-state acyclic chain at `t = 2.0`.
 //! - `mag_lm_1000` — 1000-state acyclic chain at `t = 2.0`.
 //!
-//! **Fixture construction:** uses the same deterministic inline PCG-64-style
-//! LCG as `tests/lm_category.rs` (`build_random_tree_lm`).  No `rand` dep.
+//! **Fixture construction:** uses the shared deterministic
+//! `catgraph_testutil::Lcg` (Knuth MMIX multiplier), same stream as
+//! `tests/lm_category.rs` (`build_random_tree_lm`).  No `rand` dep.
 //!
 //! **Complexity:** `magnitude(t)` calls `mobius_function`, which performs
 //! Gaussian elimination on the n×n zeta matrix — O(n³) with small constants
@@ -20,26 +21,22 @@ use catgraph_magnitude::coalition::coalition_magnitude_from_couplings;
 use catgraph_magnitude::coalition_eval::{CoalitionEvaluator, EvalScratch};
 use catgraph_magnitude::coalition_value;
 use catgraph_magnitude::lm_category::LmCategory;
+use catgraph_testutil::Lcg;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
 // NOTE: `EvalScratch` + the `evaluator_rebuild/{fresh,new}` and
 // `coalition_value_with/{hit,hit_scratch}` benches below are #33; the scratch
 // surface must exist in `coalition_eval` for this bench to compile.
 
-/// Build a deterministic forward-chain `n`-state LM using a minimal inline
-/// LCG (identical to `tests/lm_category.rs::build_random_tree_lm`).
+/// Build a deterministic forward-chain `n`-state LM using the shared
+/// `catgraph_testutil::Lcg` (same stream as
+/// `tests/lm_category.rs::build_random_tree_lm`).
 ///
 /// State `i` may only transition to states `j > i`.  The last state is the
 /// sole terminating state.  All transition rows are renormalised to sum to 1.
-#[allow(clippy::cast_precision_loss)]
 fn build_chain_lm(n: usize, seed: u64) -> LmCategory {
-    let mut state = seed | 1;
-    let mut next = || -> f64 {
-        state = state
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1_442_695_040_888_963_407);
-        ((state >> 33) as f64) / ((1u64 << 31) as f64)
-    };
+    // `| 1` seed prep stays at the call site (#33).
+    let mut rng = Lcg::new(seed | 1);
 
     let names: Vec<String> = (0..n).map(|i| format!("s{i}")).collect();
     let mut m = LmCategory::new(names.clone());
@@ -48,7 +45,7 @@ fn build_chain_lm(n: usize, seed: u64) -> LmCategory {
     for i in 0..(n - 1) {
         let mut raw: Vec<f64> = Vec::with_capacity(n - i - 1);
         for _ in (i + 1)..n {
-            raw.push(next());
+            raw.push(rng.next_f64());
         }
         let total: f64 = raw.iter().sum();
         if total < 1e-9 {
@@ -91,7 +88,7 @@ const SWEEP_CANDIDATES: usize = 8;
 type CoalitionFixture = (Vec<usize>, Vec<(usize, usize, f64)>, Vec<usize>);
 
 /// Deterministic coalition fixture: `m` members plus [`SWEEP_CANDIDATES`]
-/// candidate agents, over a dense random coupling table (same inline LCG as
+/// candidate agents, over a dense random coupling table (same shared LCG as
 /// [`build_chain_lm`]). Agents are `usize` indices `0..(m + SWEEP_CANDIDATES)`;
 /// members are `0..m`; candidates are `m..(m + SWEEP_CANDIDATES)`.
 ///
@@ -99,22 +96,21 @@ type CoalitionFixture = (Vec<usize>, Vec<(usize, usize, f64)>, Vec<usize>);
 /// the `k = m` skeleton the fast path is measured on).
 fn build_coalition_fixture(m: usize, seed: u64) -> CoalitionFixture {
     let n = m + SWEEP_CANDIDATES;
-    let mut state = seed | 1;
-    let mut next = || -> f64 {
-        state = state
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1_442_695_040_888_963_407);
-        // Map into (0.05, 0.95] — bounded away from 0 (dense closure) and 1
-        // (no perfect-coupling merges).
-        0.05 + 0.90 * ((state >> 33) as f64) / ((1u64 << 31) as f64)
-    };
+    // `| 1` seed prep stays at the call site (#33).
+    let mut rng = Lcg::new(seed | 1);
 
     let agents: Vec<usize> = (0..n).collect();
     let mut couplings: Vec<(usize, usize, f64)> = Vec::new();
     for i in 0..n {
         for j in 0..n {
             if i != j {
-                couplings.push((i, j, next()));
+                // Map a raw draw into (0.05, 0.95] — bounded away from 0 (dense
+                // closure) and 1 (no perfect-coupling merges). Kept as call-site
+                // arithmetic on `next_f64()`: the divisor `2^31` is an exact
+                // power of two, so `0.90 * raw / 2^31` and `0.90 * (raw / 2^31)`
+                // are bit-identical, but a `next_in(0.05, 0.95)` helper would
+                // compute `0.95 - 0.05 != 0.90` and change the stream (#33).
+                couplings.push((i, j, 0.05 + 0.90 * rng.next_f64()));
             }
         }
     }

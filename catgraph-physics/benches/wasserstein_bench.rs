@@ -9,18 +9,15 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use nalgebra::DMatrix;
 
 use catgraph_physics::multiway::wasserstein_1;
+use catgraph_testutil::Lcg;
 
 /// Build a deterministic distance matrix and uniform distributions of size `n`.
 #[allow(clippy::cast_precision_loss)]
 fn make_test_data(n: usize) -> (Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
-    // Simple deterministic PRNG (LCG)
-    let mut state: u64 = 42;
-    let mut next_f64 = || -> f64 {
-        state = state
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1);
-        (state >> 33) as f64 / (1u64 << 31) as f64
-    };
+    // Simple deterministic PRNG (LCG). This bench historically used increment 1
+    // (not the standard MMIX increment the other call sites use); preserved via
+    // `with_increment(42, 1)` to keep the stream byte-identical (#33).
+    let mut rng = Lcg::with_increment(42, 1);
 
     let mass = 1.0 / n as f64;
     let mu = vec![mass; n];
@@ -34,7 +31,7 @@ fn make_test_data(n: usize) -> (Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
     )]
     for i in 0..n {
         for j in (i + 1)..n {
-            let d = next_f64() * 10.0 + 0.1;
+            let d = rng.next_f64() * 10.0 + 0.1;
             dist[i][j] = d;
             dist[j][i] = d;
         }

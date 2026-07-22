@@ -26,50 +26,15 @@
 //!
 //! ## Random generation
 //!
-//! A minimal PCG-32-style `u64` LCG (same as in `tests/lm_category.rs`) seeds
-//! from a fixed constant for full reproducibility, without a `rand` dev-dep.
+//! The shared `catgraph_testutil::Lcg` (Knuth MMIX multiplier, same stream as
+//! `tests/lm_category.rs`) seeds from a fixed constant for full
+//! reproducibility, without a `rand` dev-dep.
 
 use catgraph_magnitude::TSALLIS_SHANNON_EPS;
 use catgraph_magnitude::magnitude::tsallis_entropy;
-
-// ---------------------------------------------------------------------------
-// Minimal deterministic pseudo-random generator
-// ---------------------------------------------------------------------------
-
-/// A `u64` LCG used throughout the catgraph workspace for seeded sampling.
-/// Parameters from Knuth MMIX.
-struct Lcg(u64);
-
-impl Lcg {
-    fn new(seed: u64) -> Self {
-        Self(seed | 1)
-    }
-
-    /// Next value in `[0.0, 1.0)`.
-    #[allow(clippy::cast_precision_loss)]
-    fn next_f64(&mut self) -> f64 {
-        self.0 = self
-            .0
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1_442_695_040_888_963_407);
-        ((self.0 >> 33) as f64) / ((1u64 << 31) as f64)
-    }
-
-    /// Uniform integer in `[lo, hi]` (inclusive).
-    ///
-    /// The two `#[allow]` guards cover the intentional casts: `range` is at most
-    /// 4 here (distributions are size 2–5), well within `f64` precision; the
-    /// result is bounded by `range` so truncation cannot exceed `hi`.
-    #[allow(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss
-    )]
-    fn next_usize(&mut self, lo: usize, hi: usize) -> usize {
-        let range = (hi - lo + 1) as f64;
-        lo + (self.next_f64() * range) as usize
-    }
-}
+// Shared deterministic LCG (`next_f64` / `next_usize`); `seed | 1` prep stays at
+// the call site below (#33).
+use catgraph_testutil::Lcg;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -108,7 +73,8 @@ fn random_distributions(
 
 fn main() {
     // Seed chosen to reproduce across runs; same LCG as tests/lm_category.rs.
-    let mut rng = Lcg::new(42);
+    // `| 1` seed prep stays at the call site (#33).
+    let mut rng = Lcg::new(42 | 1);
     let dists = random_distributions(&mut rng, 50, 2, 5);
 
     // t mesh: six values approaching 1 from above.

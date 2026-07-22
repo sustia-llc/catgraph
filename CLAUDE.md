@@ -21,6 +21,11 @@ catgraph (F&S core) ─▶ catgraph-applied ─▶ catgraph-magnitude
                                           └─▶ catgraph-syntax
 ```
 
+`catgraph-testutil` is a seventh workspace member: a **dev-only, unpublished**
+(`publish = false`) crate of shared test/bench helpers (currently a deterministic
+LCG), pulled in only via `[dev-dependencies]` — never a published crate's
+`[dependencies]` (#33).
+
 `deep_causality_num` / `deep_causality_haft` pinned `=0.4.1` (haft 0.4.1 ships the
 post-0.4.0 categorical machinery — PROP `SymMonoidal`, `ArrowTerm`, native
 `NaturalTransformation`, `Cofree` — re-evaluation #93 resolved 2026-07-19:

@@ -71,6 +71,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Inline LCG copies replaced by `catgraph-testutil::Lcg`**
+  ([#33](https://github.com/sustia-llc/catgraph/issues/33) item 2) — the seeded
+  test/bench/example fixtures (`coalition_eval` test module, `tests/lm_category.rs`,
+  `tests/magnitude.rs`, `benches/magnitude_bench.rs`, `examples/tsallis_shannon.rs`)
+  drop their near-identical inline LCG for the shared, dev-only
+  `catgraph-testutil` crate. Random streams are **byte-identical**: the
+  multiplier/increment/extraction are unchanged, `seed | 1` preparation stays at
+  the call sites, and the `build_coalition_fixture` `(0.05, 0.95]` remap stays as
+  call-site arithmetic (the `2^31` divisor is an exact power of two, so the
+  regrouping is bit-identical). No behavior change; a golden-value unit test in
+  `catgraph-testutil` pins the stream contract.
 - **Paper-audit citation reconciliation (Phase 3, PR #120)** — verified every
   BV25 / Leinster13 / Leinster08 / Leinster–Shulman anchor in `src/**`, tests,
   examples, README, and `docs/BV25-AUDIT.md` against the cached papers and fixed
