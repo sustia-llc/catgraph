@@ -13,6 +13,8 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+## [workspace-v0.4.0] - 2026-07-25
+
 ### Changed
 
 - **`deep_causality_haft` pin bumped `=0.4.1` → `=0.4.2`** (purely additive
@@ -989,7 +991,8 @@ Initial scaffold release. Types-only surface; bodies land in Phase DL-2.
   coherence verification, and the algebra-homomorphism unroller arrive in
   Phase DL-2 with the `catgraph-coalition` v0.4.0 enriched-actegory body.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...HEAD
+[workspace-v0.4.0]: https://github.com/sustia-llc/catgraph/compare/v0.2.1...v0.4.0
 [0.4.1]: https://github.com/tsondru/catgraph/releases/tag/catgraph-dl-v0.4.1
 [0.4.0]: https://github.com/tsondru/catgraph/releases/tag/catgraph-dl-v0.4.0
 [0.3.1]: https://github.com/tsondru/catgraph/releases/tag/catgraph-dl-v0.3.1

@@ -10,6 +10,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.4.0] - 2026-07-25
+
 ### Added
 
 - **`docs/ANCHORS.md` provenance note**
@@ -183,7 +185,8 @@ Branchial analysis toolkit — additive capabilities for `BranchialGraph`.
 - Gauge Wilson-loop fix: `record_transition(from, to, holonomy)` for explicit inter-site gauge links (was erroneously recording self-loops).
 - Multiway APIs exposed for downstream consumers in `irreducible`: `ConfluenceDiamond`, `confluence_diamonds()`, `parallel_independent_events(node_id)`, `events_commute(a, b)`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...HEAD
+[workspace-v0.4.0]: https://github.com/sustia-llc/catgraph/compare/v0.1.0...v0.4.0
 [workspace-v0.1.0]: https://github.com/sustia-llc/catgraph/releases/tag/v0.1.0
 [0.2.2]: https://github.com/tsondru/catgraph/releases/tag/catgraph-physics-v0.2.2
 [0.2.1]: https://github.com/tsondru/catgraph/releases/tag/catgraph-physics-v0.2.1
