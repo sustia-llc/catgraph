@@ -144,9 +144,11 @@ fn cofree_cmnd_smoke() {
     let c: Cofree<TrivialEndo, u32> = Cofree::new(42_u32, ());
     assert_eq!(*c.head(), 42);
 
-    // haft's `Cofree` has no `Clone` (no `CloneFunctor` in 0.4.1); construct an
+    // Carrier `Clone` is deliberately unadopted (#93 owner decision) even though
+    // haft 0.4.2 ships the `CloneFunctor` that would enable it, so construct an
     // equal value and compare structurally through the opt-in `PartialEq`
-    // (`UnitEndo: EqFunctor`, `u32: PartialEq`).
+    // (`UnitEndo: EqFunctor`, `u32: PartialEq`) — which is what this test
+    // certifies; the clone was never part of it.
     let c2: Cofree<TrivialEndo, u32> = Cofree::new(42_u32, ());
     assert_eq!(*c2.head(), 42);
     assert_eq!(c, c2);
