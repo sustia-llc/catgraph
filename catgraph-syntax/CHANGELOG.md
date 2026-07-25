@@ -28,12 +28,14 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 ### Documentation
 
 - **`arrow_seam` `Free`/`FreeWitness` exclusion rationale refreshed for haft
-  0.4.1** ([#93](https://github.com/sustia-llc/catgraph/issues/93)): haft's free
-  monad now has opt-in `Eq`/`Debug` via the `EqFunctor`/`DebugFunctor`
-  capability traits (no longer "opaque by design"), but still no `Clone`/`Hash`/
-  serde — so `PropExpr<G>` (which the congruence-closure engine needs `Eq + Hash`
-  on) stays the term type. No code change; catgraph-syntax does not adopt haft's
-  `Free` (that adoption landed in catgraph-dl per #93).
+  0.4.2** ([#93](https://github.com/sustia-llc/catgraph/issues/93)): haft's free
+  monad now has opt-in `Eq`/`Debug`/`Clone` via the `EqFunctor`/`DebugFunctor`/
+  `CloneFunctor` capability traits (no longer "opaque by design"; `CloneFunctor`
+  arrived in 0.4.2), but still **no `Hash`** and no serde. `Hash` is the
+  load-bearing gap: the congruence-closure engine needs `Eq + Hash` on terms, so
+  `PropExpr<G>` stays the term type and **the exclusion is unchanged by `Clone`
+  having arrived**. No code change; catgraph-syntax does not adopt haft's `Free`
+  (that adoption landed in catgraph-dl per #93).
 
 ### Added
 

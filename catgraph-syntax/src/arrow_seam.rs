@@ -54,10 +54,12 @@
 //!
 //! Some haft Arrow-adjacent names are intentionally **not** re-exported:
 //!
-//! - `Free` / `FreeWitness` — as of haft 0.4.1 the free monad's `Eq` / `Debug`
-//!   are **opt-in** via the `EqFunctor` / `DebugFunctor` capability traits (the
-//!   witness supplies `eq_type` / `fmt_type`), but it still ships **no** `Clone`,
-//!   **no** `Hash`, and **no** serde. Applied's congruence-closure engine
+//! - `Free` / `FreeWitness` — as of haft 0.4.2 the free monad's `Eq` / `Debug` /
+//!   `Clone` are all **opt-in** via the `EqFunctor` / `DebugFunctor` /
+//!   `CloneFunctor` capability traits (the witness supplies `eq_type` /
+//!   `fmt_type` / `clone_type`), but it still ships **no** `Hash` and **no**
+//!   serde — and `Hash` is the load-bearing gap here, so this exclusion is
+//!   unaffected by `Clone` having arrived. Applied's congruence-closure engine
 //!   *requires* `Eq + Hash` on terms (see
 //!   [`PropSignature`](catgraph_applied::prop::PropSignature)). So
 //!   [`PropExpr<G>`](catgraph_applied::prop::PropExpr) — which derives all of

@@ -106,7 +106,7 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
 
 - **`Free<F, Z>`** — realises the paper's `FreeMnd(F)(Z) = Fix(X ↦ F(X) + Z)`
   (CDL Def B.8), plus the cofree-comonad dual **`Cofree`**. Both are
-  `deep_causality_haft` 0.4.1 carriers, adopted per
+  `deep_causality_haft` 0.4.2 carriers, adopted per
   [#93](https://github.com/sustia-llc/catgraph/issues/93) (the box sits inside
   the functor hole: `Suspend(F::Type<Box>)`).
 - **`ListEndo<A>`** with `vec_to_free_mnd` / `free_mnd_to_vec` — the list
@@ -136,7 +136,7 @@ behavioural tests only, with final-coalgebra equivalence tracked in
   (object map `HKT::Type<X>`, morphism map `Functor::fmap`), re-exported through
   `crate::endofunctor` as the single import seam and shared by `algebra`
   (F-algebras and homomorphisms) and `free_monad` (the recursive `Free` /
-  `Cofree` carriers — `deep_causality_haft` 0.4.1, adopted per
+  `Cofree` carriers — `deep_causality_haft` 0.4.2, adopted per
   [#93](https://github.com/sustia-llc/catgraph/issues/93)). Replaces the former
   hand-rolled `EndoFunctor` trait
   ([#12](https://github.com/sustia-llc/catgraph/issues/12)); every shipped

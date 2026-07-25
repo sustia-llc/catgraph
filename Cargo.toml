@@ -27,13 +27,22 @@ catgraph-magnitude = { path = "catgraph-magnitude", version = "0.3.0" }
 catgraph-testutil  = { path = "catgraph-testutil" }
 
 # --- DeepCausality thin substrate — PIN EXACT (DC is 0.x, churning).
-#     haft 0.4.1 (DC v0.15.0 stack, 2026-07-14) now SHIPS the categorical machinery on crates.io
-#     (Category/Kleisli, reified ArrowTerm + interpret_kleisli, symmetric-monoidal PROP, Foldable::fold_map,
-#     NaturalTransformation, + the Cofree comonad & EqFunctor/DebugFunctor) — the -v0.4.0 tag lacked it, so
-#     the git-rev fallback is no longer needed to reach it. Fallback (if ever): { git = "https://github.com/deepcausality-rs/deep_causality", rev = "3280cb844" }
+#     Resolve from crates.io (upstream's own guidance on DC#720). If a git fallback is ever needed,
+#     it MUST pin an exact `rev` — NEVER a branch: upstream tagged + published haft 0.4.2 from a
+#     branch that was never pushed, so DC `main` still reads 0.4.1 in its own Cargo.toml and a
+#     branch-pinned dep silently resolves to PRE-0.4.2 source (deepcausality-rs/deep_causality#720).
+#     Fallback (if ever): { git = "https://github.com/deepcausality-rs/deep_causality", rev = "aeff6549e" }
+#     — the deep_causality_haft-v0.4.2 tag commit; reachable via the tag even though no branch
+#     contains it. (Prior fallback rev, 0.4.1-era: 3280cb844.)
+#     haft 0.4.1 (DC v0.15.0 stack, 2026-07-14) shipped the categorical machinery (Category/Kleisli, reified ArrowTerm +
+#     interpret_kleisli, symmetric-monoidal PROP, Foldable::fold_map, NaturalTransformation, the Cofree
+#     comonad & EqFunctor/DebugFunctor); 0.4.2 adds CloneFunctor + opt-in Clone for Free/Cofree,
+#     Cofree::duplicate, and Functor/CoMonad trait impls on CofreeWitness (purely additive). Carrier
+#     Clone stays UNADOPTED here — #93 owner decision; adoption tracked as #154.
 #     haft is live (catgraph-dl endofunctor layer, #12); num deps-only until a member opts in (#36).
+#     num has no 0.4.2 — it stays at 0.4.1.
 deep_causality_num  = "=0.4.1"
-deep_causality_haft = "=0.4.1"
+deep_causality_haft = "=0.4.2"
 
 # --- math / graph — numeric-only, NOT an algebraic substrate ---
 # (members opt in with `{ workspace = true, optional = true }`; `optional` is illegal here.)

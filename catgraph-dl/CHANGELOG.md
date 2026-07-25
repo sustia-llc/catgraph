@@ -15,6 +15,23 @@ All notable changes to this crate are documented here. Format follows
 
 ### Changed
 
+- **`deep_causality_haft` pin bumped `=0.4.1` → `=0.4.2`** (purely additive
+  upstream; no API change here). 0.4.2 adds the `CloneFunctor` capability trait
+  (the `Clone` sibling of `EqFunctor` / `DebugFunctor`, requested as
+  deepcausality-rs/deep_causality#718), opt-in `Clone` for `Free` / `Cofree`,
+  `Cofree::duplicate`, and `Functor` + `CoMonad` **trait** impls on
+  `CofreeWitness` (previously the comonad surface was inherent methods only).
+  **Carrier `Clone` remains unadopted** — the #93 owner decision declined it on
+  grounds independent of upstream availability: the one site that forced it was
+  incidental (`cofree_cmnd_smoke`'s `.clone()` was never part of what that test
+  certifies), and heap sharing is `Arc`'s job (the #42 pattern). The #93 spike
+  then *confirmed* no need — `into_parts()` walkers never require a clone, and
+  adopting `Cofree::unfold` even dropped the native `S: Clone` seed bound. So
+  0.4.2's arrival does not reverse that. Adopting `CloneFunctor` and
+  the new `CofreeWitness` trait instances is tracked as
+  [#154](https://github.com/sustia-llc/catgraph/issues/154). Note: the pin
+  must resolve from crates.io — DC `main` still reads 0.4.1 in its own manifest
+  (deepcausality-rs/deep_causality#720).
 - **BREAKING — `free_monad` adopts `deep_causality_haft` 0.4.1 `Free` / `Cofree`**
   ([#93](https://github.com/sustia-llc/catgraph/issues/93); reverses the #76
   keep-native decision now that haft 0.4.1 ships a `Cofree` twin and opt-in
@@ -26,8 +43,8 @@ All notable changes to this crate are documented here. Format follows
   (`Suspend(F::Type<Box>)` rather than the old `Roll(Box<F::Type>)`), so the
   enum variants are `Pure` / `Suspend` (not `Pure` / `Roll`); `Cofree` fields are
   private (use `new` / `head` / `tail` / `into_parts`); and there is **no**
-  `Clone` on either carrier (haft ships no `CloneFunctor` yet — construct twice
-  instead). `Eq`/`Debug` are opt-in via the capability traits: `ListEndo` /
+  `Clone` on either carrier (deliberately unadopted per the #93 owner decision —
+  construct twice instead). `Eq`/`Debug` are opt-in via the capability traits: `ListEndo` /
   `TreeEndo` gain `EqFunctor` / `DebugFunctor` impls (bounded `A: PartialEq` /
   `A: Debug`). Gains the library recursion schemes `Free::fold` (the
   catamorphism — the previously-deferred CDL Remark 2.13 `foldr`/`foldl`

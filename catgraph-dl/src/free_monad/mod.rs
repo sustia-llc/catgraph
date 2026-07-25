@@ -79,9 +79,15 @@
 //! capability. haft ships those for its own single-hole witnesses
 //! (`OptionWitness`, `VecWitness`, `BoxWitness`, …); the crate's own `ListEndo` /
 //! `TreeEndo` implement them next to their `HKT`/`Functor` impls (bounded
-//! `A: PartialEq` / `A: Debug`). There is **no** `Clone` on `Free`/`Cofree` in
-//! haft 0.4.1 (no `CloneFunctor` yet); consumers that previously cloned a carrier
-//! construct the value twice instead.
+//! `A: PartialEq` / `A: Debug`). haft 0.4.2 adds a third sibling, `CloneFunctor`
+//! (`clone_type`), which would give `Free`/`Cofree` an opt-in `Clone` the same
+//! way — **deliberately not adopted here** (#93 owner decision): heap sharing is
+//! `Arc`'s job (the #42 `tie_weights` precedent, where `Clone` was *semantic* δ —
+//! carrier `Clone` here is not), and the one site that forced a carrier clone was
+//! incidental. The #93 spike then confirmed no need: the walkers use
+//! `into_parts()` and never require one, and adopting `Cofree::unfold` even
+//! dropped the native `S: Clone` seed bound. Consumers that would otherwise clone
+//! a carrier construct the value twice.
 //!
 //! ## Relationship to haft's `Free` / `Cofree` (#76 → #93)
 //!
