@@ -22,9 +22,12 @@ All notable changes to this crate are documented here. Format follows
   `Cofree::duplicate`, and `Functor` + `CoMonad` **trait** impls on
   `CofreeWitness` (previously the comonad surface was inherent methods only).
   **Carrier `Clone` remains unadopted** — the #93 owner decision declined it on
-  grounds independent of upstream availability (`into_parts()` walkers never need
-  it; `Cofree::unfold` dropped the native `S: Clone` seed bound; sharing is
-  `Arc`'s job), so its arrival does not reverse that. Adopting `CloneFunctor` and
+  grounds independent of upstream availability: the one site that forced it was
+  incidental (`cofree_cmnd_smoke`'s `.clone()` was never part of what that test
+  certifies), and heap sharing is `Arc`'s job (the #42 pattern). The #93 spike
+  then *confirmed* no need — `into_parts()` walkers never require a clone, and
+  adopting `Cofree::unfold` even dropped the native `S: Clone` seed bound. So
+  0.4.2's arrival does not reverse that. Adopting `CloneFunctor` and
   the new `CofreeWitness` trait instances is tracked as
   [#154](https://github.com/sustia-llc/catgraph/issues/154). Note: the pin
   must resolve from crates.io — DC `main` still reads 0.4.1 in its own manifest
