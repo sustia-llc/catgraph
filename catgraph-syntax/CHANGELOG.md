@@ -7,6 +7,28 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Documentation
+
+- **`SfgModel`'s overflow note now cites the policy of record**
+  ([#88](https://github.com/sustia-llc/catgraph/issues/88)): the inherited-from-`R`
+  explanation in `src/eval.rs` points at `catgraph_applied::rig`'s module docs
+  for the per-rig-family matrix and names `catgraph_applied::rig::Checked` as
+  the opt-in detection story — a `⊥` in `eval`'s output vector is exactly the
+  failure the basis-row cross-check cannot catch, since with a plain `i64` the
+  interpreter and the matrix functor wrap identically and agree on the wrong
+  answer. The existing convention-parity explanation is unchanged; docs only.
+
+### Added
+
+- **`Checked<i64>` overflow regression in `tests/eval.rs`**
+  ([#88](https://github.com/sustia-llc/catgraph/issues/88)): the issue's
+  reproducer `"scalar:4000000000 ; scalar:4000000000"` parsed as
+  `PropExpr<SfgGenerator<Checked<i64>>>` and evaluated under
+  `SfgModel<Checked<i64>>` yields a poisoned output (with plain `i64` this is
+  the invisible release-build wrap), plus a `scalar:⊥` print → parse round-trip
+  proving the poison sentinel stays a single lexical atom under the
+  `GeneratorSyntax` token contract.
+
 ## [workspace-v0.4.0] - 2026-07-25
 
 ### Changed

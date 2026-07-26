@@ -13,6 +13,42 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **`Checked<T>` poison-on-overflow rig wrapper**
+  ([#88](https://github.com/sustia-llc/catgraph/issues/88)): `Checked::Value(T)
+  | Checked::Poison` in `src/rig.rs`, satisfying the `Rig` blanket impl so
+  `Checked<i64>` drops unchanged into `MatR::matmul`, `sfg_to_mat`,
+  `MatrixNFFunctor`, and catgraph-syntax's `eval`/`SfgModel`. Overflow becomes
+  the sentinel `⊥` and propagates to the result, where callers test it with
+  `is_poisoned()`. `⊥` is **fully absorbing, including `⊥ × 0 = ⊥`** — the
+  zero special-case would erase a detected overflow and break distributivity in
+  ring extensions. That costs exactly one rig axiom (absorbing zero, only in
+  the poisoned cone); associativity, commutativity and both distributive laws
+  survive, so `verify_rig_axioms` passes on unpoisoned samples and fails with
+  precisely `"absorbing zero"` on a poisoned one. `Display`/`FromStr` render
+  and read `⊥` as a single lexical atom, keeping `scalar:⊥` a valid
+  catgraph-syntax token. No serde derives (rig types deliberately carry none;
+  the [#81](https://github.com/sustia-llc/catgraph/issues/81) serde surface is
+  the term layer only).
+- **`CheckedOps` trait** ([#88](https://github.com/sustia-llc/catgraph/issues/88)):
+  `checked_add`/`checked_mul` returning `Option<Self>`, macro-implemented for
+  the twelve primitive integer types by delegating to the std inherent methods.
+  Catgraph-local rather than a `num-traits` import — only `Zero`/`One` are
+  sourced externally.
+
+### Documentation
+
+- **`rig` module docs gain the workspace overflow policy of record**
+  ([#88](https://github.com/sustia-llc/catgraph/issues/88)): a per-rig-family
+  matrix (Boolean/`[0,1]` cannot overflow; `Tropical`/`F64Rig` keep IEEE
+  `inf`/NaN semantics; `Z(BigInt)` is exact; primitive integers inherit Rust's
+  debug-panic / release-wrap; `Checked<T>` is the opt-in detection story) plus
+  the recorded rejection of saturating arithmetic (silently wrong values and
+  broken distributivity — not offered even as an opt-in). The policy lives
+  once, here; downstream crates cite it. `README.md` carries the same note as a
+  design entry.
+
 ## [workspace-v0.4.0] - 2026-07-25
 
 ### Changed

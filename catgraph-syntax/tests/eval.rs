@@ -5,16 +5,19 @@
 //! (compose is pipe, tensor splits/concats), the error paths
 //! ([`SyntaxError::WireCount`] and [`SyntaxError::ModelArity`]), and the S3
 //! milestone law — the **basis-row cross-check** against the Thm 5.53/5.60
-//! matrix functor — plus a parse → eval end-to-end smoke test.
+//! matrix functor — plus a parse → eval end-to-end smoke test and the
+//! `Checked<i64>` overflow-detection regression
+//! ([#88](https://github.com/sustia-llc/catgraph/issues/88)).
 
 mod common;
 
 use catgraph_applied::prop::presentation::functorial::{CompleteFunctor, MatrixNFFunctor};
 use catgraph_applied::prop::{Free, PropExpr};
+use catgraph_applied::rig::Checked;
 use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::errors::SyntaxError;
-use catgraph_syntax::eval::{ArrowModel, eval};
-use catgraph_syntax::text::parse;
+use catgraph_syntax::eval::{ArrowModel, SfgModel, eval};
+use catgraph_syntax::text::{parse, print};
 use common::sfg_model as model;
 use common::{Sig, arb_expr, arb_sfg_leaf_bounded, basis_i64, g};
 use proptest::prelude::*;
@@ -216,4 +219,55 @@ fn parse_then_eval() {
     let e = parse::<SfgGenerator<i64>>("copy ; add").unwrap();
     // copy ; add : 1 → 1 doubles its input.
     assert_eq!(eval(&e, &model(), vec![4]), Ok(vec![8]));
+}
+
+// ---- Overflow detection under `Checked<i64>` (#88) ---------------------------
+
+#[test]
+fn checked_rig_surfaces_overflow_as_poison() {
+    // The issue's reproducer. With a plain `i64` rig this term is the invisible
+    // release-build wrap: 4e9 · 4e9 = 1.6e19 overflows i64 and a release build
+    // returns a plausible negative. Under `Checked<i64>` the overflow becomes
+    // `⊥` in the output vector, where the caller can see it.
+    let e = parse::<SfgGenerator<Checked<i64>>>("scalar:4000000000 ; scalar:4000000000")
+        .expect("the scalar tokens parse under Checked<i64>'s FromStr");
+    let out = eval(
+        &e,
+        &SfgModel::<Checked<i64>>::new(),
+        vec![Checked::new(1_i64)],
+    )
+    .expect("1 → 1 term applied to a single wire");
+    assert_eq!(out.len(), 1);
+    assert!(
+        out[0].is_poisoned(),
+        "overflow must surface as ⊥, got {:?}",
+        out[0]
+    );
+
+    // The same shape below the overflow boundary stays an ordinary value —
+    // poison is the overflow signal, not a blanket pessimism.
+    let small =
+        parse::<SfgGenerator<Checked<i64>>>("scalar:3 ; scalar:5").expect("small scalars parse");
+    assert_eq!(
+        eval(
+            &small,
+            &SfgModel::<Checked<i64>>::new(),
+            vec![Checked::new(2_i64)]
+        ),
+        Ok(vec![Checked::new(30_i64)])
+    );
+}
+
+#[test]
+fn poisoned_scalar_token_round_trips() {
+    // `⊥` is a single lexical atom, so `scalar:⊥` satisfies the
+    // `GeneratorSyntax` token contract and survives print → parse.
+    let term = g(SfgGenerator::Scalar(Checked::<i64>::Poison));
+    let text = print(&term);
+    assert_eq!(text, "scalar:⊥");
+    assert_eq!(
+        parse::<SfgGenerator<Checked<i64>>>(&text),
+        Ok(term),
+        "a poisoned scalar must reparse to the same generator"
+    );
 }

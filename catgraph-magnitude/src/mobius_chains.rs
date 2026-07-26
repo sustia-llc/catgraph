@@ -411,18 +411,20 @@ where
 ///
 /// # Errors
 ///
-/// Returns [`CatgraphError::Composition`] only if [`MatR::new`] rejects the
-/// final matrix (defensive — the algorithm constructs `n × n` storage by
-/// construction, so this branch is unreachable on well-formed input).
+/// Returns [`CatgraphError::Composition`] if [`MatR::new`] rejects the final
+/// matrix (defensive — the algorithm constructs `n × n` storage by
+/// construction, so this branch is unreachable on well-formed input), or if a
+/// `ζ` arrow count exceeds `i64::MAX` (see the caveat below).
 ///
 /// # Caveats
 ///
-/// Arrow counts from [`PosetCategory::zeta_matrix`] are cast `u64 → i64`
-/// before lifting via [`ZAlgebra::from_i64`]; counts ≥ 2⁶³ wrap silently.
-/// The shipped fixtures stay at ζ entry counts ≤ 3 (immediate-cover arrow
-/// band on `𝔻^inj_2` and similar small posets), well below the wrap
+/// Arrow counts from [`PosetCategory::zeta_matrix`] are `u64` and must cross
+/// into `i64` to be lifted via [`ZAlgebra::from_i64`]; counts above `i64::MAX`
+/// **return an error** naming the offending entry rather than wrapping into a
+/// negative. The shipped fixtures stay at ζ entry counts ≤ 3 (immediate-cover
+/// arrow band on `𝔻^inj_2` and similar small posets), astronomically below the
 /// boundary. A `Q::from_u64` extension on [`ZAlgebra`] is a deferred
-/// nice-to-have (#35).
+/// nice-to-have that would remove the conversion entirely (#35).
 ///
 /// # Panics
 ///
@@ -467,15 +469,14 @@ where
             (0..n)
                 .map(|j| {
                     if i == j {
-                        Q::zero()
+                        Ok(Q::zero())
                     } else {
-                        #[allow(clippy::cast_possible_wrap)]
-                        Q::from_i64(zeta[i][j] as i64)
+                        zeta_entry_to_q::<Q>(zeta[i][j], i, j)
                     }
                 })
-                .collect()
+                .collect::<Result<Vec<Q>, CatgraphError>>()
         })
-        .collect();
+        .collect::<Result<Vec<Vec<Q>>, CatgraphError>>()?;
 
     // Step 2. μ accumulator starts at the k = 0 term: the identity matrix.
     let mut mu: Vec<Vec<Q>> = (0..n)
@@ -538,13 +539,16 @@ where
 /// Returns [`CatgraphError::Composition`] when either `(μ · ζ)[i][j]` or
 /// `(ζ · μ)[i][j]` differs from the Kronecker delta `δᵢⱼ` at any `(i, j)`.
 /// The error message names the direction (right or left inverse) along with
-/// the first failing index and the expected vs actual entry values.
+/// the first failing index and the expected vs actual entry values. The same
+/// variant also reports a `ζ` arrow count above `i64::MAX` (see the caveat
+/// below).
 ///
 /// # Caveats
 ///
-/// Arrow counts from [`PosetCategory::zeta_matrix`] are cast `u64 → i64`
-/// before lifting via [`ZAlgebra::from_i64`]; counts ≥ 2⁶³ wrap silently
-/// (same caveat as [`mobius_function_via_chains_exact`]).
+/// Arrow counts from [`PosetCategory::zeta_matrix`] are `u64` and must cross
+/// into `i64` to be lifted via [`ZAlgebra::from_i64`]; counts above `i64::MAX`
+/// **return an error** naming the offending entry rather than wrapping into a
+/// negative (same caveat as [`mobius_function_via_chains_exact`]).
 ///
 /// # Examples
 ///
@@ -572,13 +576,10 @@ where
     let zeta_q: Vec<Vec<Q>> = (0..n)
         .map(|i| {
             (0..n)
-                .map(|j| {
-                    #[allow(clippy::cast_possible_wrap)]
-                    Q::from_i64(zeta[i][j] as i64)
-                })
-                .collect()
+                .map(|j| zeta_entry_to_q::<Q>(zeta[i][j], i, j))
+                .collect::<Result<Vec<Q>, CatgraphError>>()
         })
-        .collect();
+        .collect::<Result<Vec<Vec<Q>>, CatgraphError>>()?;
 
     // Right inverse: μ · ζ = I (upper-triangular recursion, Leinster 2008
     // Def 1.1).
@@ -619,6 +620,34 @@ where
     Ok(())
 }
 
+/// Lift one `ζ` arrow count into `Q` via the `ℤ → Q` ring homomorphism
+/// [`ZAlgebra::from_i64`].
+///
+/// [`PosetCategory::zeta_matrix`] counts arrows as `u64`; `from_i64` is the
+/// only integer-lifting constructor [`ZAlgebra`] offers, so the count must
+/// cross into `i64`. A count above `i64::MAX` is **rejected** rather than
+/// wrapped into a negative — a silently sign-flipped ζ entry would produce a
+/// plausible-looking but wrong μ. (`Q::from_u64` remains the deferred
+/// nice-to-have that would remove the conversion entirely, #35.)
+///
+/// # Errors
+///
+/// Returns [`CatgraphError::Composition`] naming the `(i, j)` position and the
+/// offending count when it exceeds `i64::MAX`.
+fn zeta_entry_to_q<Q>(count: u64, i: usize, j: usize) -> Result<Q, CatgraphError>
+where
+    Q: ZAlgebra,
+{
+    let signed = i64::try_from(count).map_err(|_| CatgraphError::Composition {
+        message: format!(
+            "ζ arrow count {count} at ({i}, {j}) exceeds i64::MAX ({}); \
+             the ℤ → Q lift via ZAlgebra::from_i64 cannot represent it",
+            i64::MAX
+        ),
+    })?;
+    Ok(Q::from_i64(signed))
+}
+
 /// O(n³) generic matrix multiplication on row-major `Vec<Vec<Q>>`.
 ///
 /// Skips the inner-product accumulation for any zero `a[i][k]` entry (a
@@ -643,4 +672,38 @@ where
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use catgraph_applied::z::Z;
+
+    // The `i64::MAX` rejection branch is unreachable through the public
+    // entry points with any constructible fixture: it needs a single ζ entry
+    // counting more than 2⁶³ arrows between one pair of objects, which no
+    // in-memory `PosetCategory` can hold. The lift is therefore tested at the
+    // helper directly rather than by contorting the public API into producing
+    // an impossible poset.
+    #[test]
+    fn zeta_entry_to_q_lifts_small_counts() {
+        assert_eq!(zeta_entry_to_q::<Z>(3, 0, 1).unwrap(), Z::from(3_i64));
+        assert_eq!(zeta_entry_to_q::<Z>(0, 2, 2).unwrap(), Z::from(0_i64));
+    }
+
+    #[test]
+    fn zeta_entry_to_q_rejects_counts_above_i64_max() {
+        let too_big = u64::try_from(i64::MAX).expect("i64::MAX is non-negative") + 1;
+        let err = zeta_entry_to_q::<Z>(too_big, 4, 7)
+            .expect_err("a count above i64::MAX must be rejected, not wrapped");
+        let message = err.to_string();
+        assert!(
+            message.contains("(4, 7)"),
+            "message names the entry: {message}"
+        );
+        assert!(
+            message.contains("exceeds i64::MAX"),
+            "message names the bound: {message}"
+        );
+    }
 }
