@@ -47,26 +47,29 @@
 | §2.2 The syntax category L | 3 | 0 | 0 | 0 | 0 | 3 |
 | §3 Enriched copresheaves | 4 | 0 | 0 | 2 | 0 | 6 |
 | §3.1 The [0,1]-enriched Yoneda lemma | 1 | 0 | 0 | 2 | 0 | 3 |
-| §3.2 The semantic category L̂ | 2 | 0 | 1 | 0 | 0 | 3 |
+| §3.2 The semantic category L̂ | 3 | 0 | 0 | 0 | 0 | 3 |
 | §4 Weighted products and coproducts | 0 | 0 | 4 | 0 | 0 | 4 |
 | §5 A metric space interpretation | 2 | 0 | 1 | 0 | 1 | 4 |
 | §5.1 Tropical module structure | 0 | 0 | 1 | 0 | 1 | 2 |
 | §6 Conclusion | 0 | 0 | 0 | 1 | 0 | 1 |
-| **TOTAL** | **13** | **0** | **8** | **7** | **4** | **32** |
+| **TOTAL** | **14** | **0** | **7** | **7** | **4** | **32** |
 
 **Headline numbers:**
-- **41% DONE / 0% PARTIAL / 25% DEFERRED / 22% N/A / 13% IN APPLIED**
+- **44% DONE / 0% PARTIAL / 22% DEFERRED / 22% N/A / 13% IN APPLIED**
 - Of the 32 audited items: 4 live in `catgraph-applied` (the enrichment / Tropical
   substrate re-exported here), 7 are N/A (5 motivational or proof-layer, 2 abstract
   enriched-functor setup whose concrete instance is the representable copresheaf).
-  That leaves **21 implementable items**, of which **13 are DONE and 8 DEFERRED**.
-- The 8 deferrals are all *algebra above the semantics gate*: the unenriched
+  That leaves **21 implementable items**, of which **14 are DONE and 7 DEFERRED**.
+- The 7 deferrals are all *algebra above the semantics gate*: the unenriched
   (co)limit constructions (§1.3, one item), the weighted (co)limit calculus
-  (§4, four items), the M̂ weighted (co)product (§5), the semi-tropical module
-  action (§5.1, Thm 6), and the L̂-as-a-category syntax-side layer (§3.2).
-  The §1.3/§4 (co)limits + the Thm 6 module action are folded into
-  [#36](https://github.com/sustia-llc/catgraph/issues/36); the L̂ syntax layer is
-  [#53](https://github.com/sustia-llc/catgraph/issues/53) item 2 (research track).
+  (§4, four items), the M̂ weighted (co)product (§5), and the semi-tropical
+  module action (§5.1, Thm 6) — all folded into
+  [#36](https://github.com/sustia-llc/catgraph/issues/36) except the §4.4
+  implication (research track). The former eighth — the L̂-as-a-category
+  syntax-side layer (§3.2) — resolved **implicit** via
+  `examples/semantic_category.rs` ([#53](https://github.com/sustia-llc/catgraph/issues/53)
+  item 2, design of record 2026-07-25): no reified wrapper, the category
+  structure is exhibited by the shipped objects/homs.
 - The **load-bearing** syntax-category surface (Def 4 + Eq 8) and the **semantic**
   surface (the Yoneda embedding + the L̂ / M̂ hom) are DONE: the syntax→semantics
   arc that gives the paper its title ships end-to-end.
@@ -145,14 +148,18 @@ lemma and Cor 1 are the identities that justify it.
 ### §3.2 The semantic category L̂
 
 Def 8: `L̂ := [0,1]^L`, the `[0,1]`-category of enriched copresheaves on `L`.
-Eq 12: `h^x(c) = π(c\|x)` if `x ≤ c`, else `0`. The copresheaves and their hom
-ship; the L̂-as-a-first-class-category syntax-side layer is research-track.
+Eq 12: `h^x(c) = π(c\|x)` if `x ≤ c`, else `0`. The copresheaves, their hom, and
+the category structure itself all ship — L̂ **implicitly**: a reified wrapper
+type was assessed pure bundling/delegation and declined ([#53](https://github.com/sustia-llc/catgraph/issues/53)
+item 2, design of record 2026-07-25); `examples/semantic_category.rs`
+demonstrates Def 8 end-to-end, including the enriched composition inequality
+`Ĉ(f,g)·Ĉ(g,h) ≤ Ĉ(f,h)` checked over all triples.
 
 | Item | Status | Location | Notes |
 |---|---|---|---|
 | Def 8 — L̂ semantic hom (the `[0,1]`-category structure on copresheaves) | ✅ | `yoneda::semantic_hom` / `semantic_distance`, `semantic` (#21) | The hom object between meanings ships; `semantic` groups whole texts by it. |
 | Eq 12 — representable copresheaf `h^x(c) = π(c\|x)` on the principal ideal of `x` | ✅ | `yoneda::Copresheaf` (a row of the LM space) | Support = extensions of `x`; unreachable contexts map to `0` (infinite distance). |
-| Def 8 — L̂ as a first-class category object + syntax-side layer (`GrammarPort` / L̂ hook) | ⏭️ | — | [#53](https://github.com/sustia-llc/catgraph/issues/53) item 2 (research track). Carries the ratified anti-target: no production-rule taxonomy. |
+| Def 8 — L̂ as a category (implicit) + syntax-side layer | ✅ (implicit) | `examples/semantic_category.rs` | Resolved implicit ([#53](https://github.com/sustia-llc/catgraph/issues/53) item 2, design of record 2026-07-25): L̂'s objects/homs/embedding all ship (rows above); the example demonstrates the Def 8 category structure end-to-end on a `from_traces` corpus — identity `Ĉ(f,f) = 1` and the composition inequality `Ĉ(f,g)·Ĉ(g,h) ≤ Ĉ(f,h)` over all triples, plus the §5 triangle inequality as its `−ln` image. A reified `SemanticCategory` wrapper was assessed pure bundling and declined; the legacy `GrammarPort`/`PortKind` surface was inert and is NOT re-expressed. Anti-target carried: no production-rule taxonomy. |
 
 ### §4 Weighted products and coproducts
 
