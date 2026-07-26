@@ -14,6 +14,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`examples/semantic_category.rs`**
+  ([#53](https://github.com/sustia-llc/catgraph/issues/53) item 2) — BTV 2021
+  **Def 8** demonstrated end-to-end: `from_traces` corpus-MLE → `yoneda_all`
+  meanings with Eq 12 support behavior → `semantic_hom` pairs (Lemma 2 Eq 11) →
+  the enriched **composition inequality `Ĉ(f,g)·Ĉ(g,h) ≤ Ĉ(f,h)` asserted over
+  all triples** (the `[0,1]`-category structure of `L̂`, demonstrated not
+  claimed) → the §5 triangle inequality as its `−ln` image. Per the 2026-07-25
+  design of record, `L̂` ships **implicitly** — a reified wrapper was assessed
+  pure bundling and declined, and the archived `catgraph-coalition` crate's
+  inert `GrammarPort`/`PortKind` surface (never part of this repo) is not
+  re-expressed here. No library code changes.
+
+### Changed
+
+- **`docs/BTV21-AUDIT.md`** — §3.2 Def 8 row flipped ⏭️ → ✅ (implicit),
+  citing `examples/semantic_category.rs` as evidence; summary table, headline
+  percentages and deferrals prose resynced (13→14 DONE, 8→7 DEFERRED,
+  41%→44% / 25%→22%)
+  ([#53](https://github.com/sustia-llc/catgraph/issues/53) item 2).
+
 ## [workspace-v0.4.0] - 2026-07-25
 
 ### Added

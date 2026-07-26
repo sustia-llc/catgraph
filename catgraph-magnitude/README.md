@@ -139,6 +139,7 @@ cargo run --example mock_coalition        # 5-agent WeightedCospan + 3-agent LmC
 cargo run --example prop_3_14_acceptance  # BV 2025 Prop 3.14 magnitude-homology Euler-char identity
 cargo run --example integer_mobius        # Leinster 2008 Cor 1.5 integer-exact Möbius via Z(BigInt)
 cargo run --example semantic_comparison   # BTV 2021 nearest-meaning ranking (both directions) + clustering (#21)
+cargo run --example semantic_category     # BTV 2021 Def 8 — the semantic category L̂, composition inequality over all triples (#53)
 cargo run --example coalition_magnitude   # §IV.5 coalition diversity Mag(tA|members) + restrict-then-close pin (#22)
 ```
 
