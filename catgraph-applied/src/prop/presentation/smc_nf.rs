@@ -125,10 +125,12 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     // - `coalesce_identity_layers`/`simplify_units` shrink layer_count;
     // - `reorder_tied_zero_arity` (Step 6) shrinks tied_inversion_count — each
     //   swap flips exactly one class-inverted pair and leaves every other pair's
-    //   relative order alone. `try_unitor_merge` can *raise* it (its case 3 emits
-    //   η-first, case 4 ε-first), but only while strictly shrinking layer_count,
-    //   an earlier component — so the tuple still drops lexicographically and
-    //   Step 6 repairs the ordering on the same fixpoint pass. Step 6 itself is
+    //   relative order alone. `try_unitor_merge` can *raise* it (its case 1
+    //   prepends an ε ahead of the absorbed layer's atoms, possibly past an η;
+    //   its case 4 appends an η after them, possibly behind an ε; case 3's
+    //   η-prepend is order-canonical), but only while strictly shrinking
+    //   layer_count, an earlier component — so the tuple still drops
+    //   lexicographically and Step 6 repairs the ordering on the same pass. Step 6 itself is
     //   within-layer only: it moves no atom between layers and rewrites no atom,
     //   so every earlier component is untouched by it.
     // See `docs/SMC-NF-RECONCILIATION.md` §2.4.

@@ -196,8 +196,10 @@ Step 6 leaves every earlier component fixed: it never moves an atom across a
 layer boundary, never rewrites an atom, and never changes a layer's membership,
 so `crossings`, `mixed_layer_count`, `wide_braid_count`, the two position sums
 (both layer-index sums) and `layer_count` are all invariant under it. The one
-step that can raise `tied_inversion_count` is `try_unitor_merge` — its case 3
-emits the η first and its case 4 the ε first — but it does so only while
+step that can raise `tied_inversion_count` is `try_unitor_merge` — its case 1
+prepends an ε ahead of the absorbed layer's atoms (possibly past an η) and its
+case 4 appends an η after them (possibly behind an ε); case 3's η-prepend is
+order-canonical — but it does so only while
 strictly shrinking `layer_count`, so the tuple still drops lexicographically and
 Step 6 repairs the ordering on the same fixpoint pass.
 
