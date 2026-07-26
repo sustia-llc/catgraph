@@ -55,11 +55,12 @@ it to normal form. The post-`nf` invariants are listed on the `StringDiagram`
 type: no `Identity(0)`; no `Braid(m,n)` with `m+n > 2`; no `Braid(0,_)` /
 `Braid(_,0)`; no two adjacent all-identity layers; every `Braid` in the
 leading (input-side) layers; no mixed braid+generator layer; every
-positive-source generator in its earliest admissible layer.
+positive-source generator in its earliest admissible layer; and within every
+layer, no adjacent strictly-commuting pair ordered against `scalar < η < ε`.
 
 ## §2 Conventions
 
-The four conventions below are the choices that make the normal form *unique*
+The five conventions below are the choices that make the normal form *unique*
 rather than merely *sound* — each resolves a coherence-equivalent ambiguity in
 one fixed direction.
 
@@ -139,13 +140,17 @@ Two independent choices fix the placement of atoms:
    (`interchange_zero_source_eta_known_gap`, issue #14 follow-up). Target-0
    sinks (`ε : 1 → 0`) have a non-empty source span and sift normally.
 
+   Choice 1 leaves one residual freedom that wire order does not decide — the
+   relative order of *strictly commuting* zero-arity atoms within a layer. §2.5
+   fixes it.
+
 - Anchors: JS-I Ch 1 Prop 1.1 p. 66 (rectangle-cover independence); JS-I
   Ch 1 §4 Thm 1.2 p. 71 (𝔽(𝒟) freeness — interchange is proof item (f) +
   Fig 1.9; see the header note on the heading misprint); issue #14.
 
 ### §2.4 Termination measure
 
-`nf` runs the seven steps of §3 in a fixpoint loop, exiting when a full pass
+`nf` runs the eight steps of §3 in a fixpoint loop, exiting when a full pass
 leaves the diagram unchanged. Termination is by a **lexicographic measure** on
 the tuple
 
@@ -155,7 +160,8 @@ the tuple
  wide_braid_count,
  braid_position_sum,
  generator_position_sum,
- layer_count)
+ layer_count,
+ tied_inversion_count)
 ```
 
 with each step non-increasing on the whole tuple and at least one step strictly
@@ -169,12 +175,84 @@ decreasing whenever the diagram is not yet a fixpoint:
 | `braid_position_sum` | the naturality sweep (braids move input-ward) | §2.1 |
 | `generator_position_sum` | `topological_layer_order` (Step 4(c)) | one generator drops exactly one layer per sift; bounded below by 0 |
 | `layer_count` | `coalesce_identity_layers` / `simplify_units` | identity-only layers absorb; `Identity(0)` atoms are removed |
+| `tied_inversion_count` | `reorder_tied_zero_arity` (Step 6, §2.5) | trailing component; `try_unitor_merge` may *raise* it while strictly shrinking `layer_count`, an earlier component — see below |
 
 `topological_layer_order` has its own inner termination for the same reason:
 each sift strictly decreases the sum of the layer indices of `Generator` atoms
 (one generator drops one layer; nothing else moves), bounded below by zero.
 
+**`tied_inversion_count`, precisely.** Summed over layers, the number of *pairs*
+`i < j` within a layer whose class ranks are inverted, i.e.
+`class(atom_i) > class(atom_j)` for the §2.5 order `scalar < η < ε < solid`. Each
+Step-6 swap flips exactly one such pair from inverted to non-inverted and leaves
+every other pair's relative order untouched, so the count drops by exactly one
+per swap. Counting only *adjacent* inverted pairs would **not** work: in
+`[ε, ε′, η]` the ε's do not commute, so the only available swap moves the η past
+`ε′`, trading the adjacent inversion `(ε′, η)` for the new adjacent inversion
+`(ε, η)` — an adjacent-only count is flat there, while the all-pairs count drops
+2 → 1.
+
+Step 6 leaves every earlier component fixed: it never moves an atom across a
+layer boundary, never rewrites an atom, and never changes a layer's membership,
+so `crossings`, `mixed_layer_count`, `wide_braid_count`, the two position sums
+(both layer-index sums) and `layer_count` are all invariant under it. The one
+step that can raise `tied_inversion_count` is `try_unitor_merge` — its case 1
+prepends an ε ahead of the absorbed layer's atoms (possibly past an η) and its
+case 4 appends an η after them (possibly behind an ε); case 3's η-prepend is
+order-canonical — but it does so only while
+strictly shrinking `layer_count`, so the tuple still drops lexicographically and
+Step 6 repairs the ordering on the same fixpoint pass.
+
 - Anchors: JS-I Ch 1 §4 Thm 1.2 p. 71; JS-I Ch 2 §1 axiom (S) p. 73.
+
+### §2.5 Within-layer order of zero-arity atoms (η before ε)
+
+§2.3's "source order within a layer" leaves one genuine freedom. Two adjacent
+atoms `A`, `B` commute **strictly** — both connecting braids degenerate to
+`σ_{0,n} = id`, so `A ⊗ B` and `B ⊗ A` are the same morphism on the nose — iff
+
+```
+(src A = 0 ∨ src B = 0) ∧ (tgt A = 0 ∨ tgt B = 0)
+```
+
+so η's (`0 → n`) never commute with η's and ε's (`n → 0`) never commute with
+ε's (disjoint non-empty spans fix their relative order); an η and an ε commute
+at a tied adjacency; a `0 → 0` scalar commutes with every atom; and a solid atom
+(`src > 0 ∧ tgt > 0`, including `Identity(n>0)` and every `Braid`) never
+strictly commutes with an η or an ε.
+
+The canonical order is **η before ε, scalars leftmost** (issue #55 Decision 1,
+owner call 2026-07-25):
+
+```
+scalar (0→0)  <  η (0→n)  <  ε (n→0)  <  solid
+```
+
+Step 6 (`reorder_tied_zero_arity`) realizes it as a within-layer bubble reorder:
+swap an adjacent `(A, B)` iff they strictly commute and `class(B) < class(A)`.
+That is the greedy (lex-least) normal form of the layer's word in the trace
+monoid generated by strict commutation. Rationale: it matches the NF's uniform
+"earliest admissible" principle (braids to the leading layers, generators sifted
+to the earliest layer — η goes as early/left as feasible).
+
+Equal classes never swap, so scalar order is **stable** rather than sorted:
+`PropSignature` carries no `Ord` bound and no shipped signature has a `0 → 0`
+generator (Mat(R)/SFG scalars are `1 → 1`; `FrobeniusOr`'s η/ε are `0 → 1` /
+`1 → 0`), so a total scalar order awaits a signature that exercises it.
+
+Stability under substitution: the rule is stated per tied adjacency at a wire
+coordinate, and ambient padding only adds `Identity` atoms with `src, tgt > 0`,
+which never join a tied run — so embedding a layer in a wider context preserves
+its tied runs and hence its canonical order.
+
+This closes the within-layer half of issue #55 (`nf(ε ⊗ η) = nf(η ⊗ ε)`). The
+layer-assignment half — tensor-forms vs compose-forms such as `ε ; η` — remains
+open pending the §2.3 sift rebase (#55 PR2).
+
+- Anchors: JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) specialized to a
+  0-arity edge — the same `id_0`-unitor derivation `try_unitor_merge` uses;
+  JS-I Ch 1 §1 p. 57 (`id_0` as ⊗-unit). Issue #55, design of record
+  `.claude/docs/2026-07-25-55-tensor-order-canonicalization.md`.
 
 ## §3 Step table and paper coverage matrix
 
@@ -189,6 +267,7 @@ each sift strictly decreases the sum of the layer indices of `Generator` atoms
 | 4 | `coalesce_identity_layers` | (a) fuse adjacent `Identity` atoms in a layer; (b) drop pure-identity layers when a non-identity layer remains (keep one as arity carrier otherwise) |
 | 4(c) | `topological_layer_order` | sift each positive-source generator to its earliest admissible braid-free layer (§2.3) |
 | 5 | `simplify_units` | remove `Identity(0)` atoms; drop layers emptied as a result |
+| 6 | `reorder_tied_zero_arity` | within-layer bubble reorder of strictly-commuting zero-arity atoms to `scalar < η < ε < solid` (§2.5) |
 
 (`lower` / `pad_and_zip` run once before the loop: `PropExpr` → one-atom-per-
 layer `StringDiagram`, padding the shorter side of a `⊗` with `Identity`
@@ -222,6 +301,7 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
 | SMC self-inverse braid (two crossings cancel; braided would not) | Selinger §3.5 p. 17 (self-inverse def.) + Thm 3.12 p. 18 vs §3.3 Thm 3.7 p. 16 | Step 2; `smc_two_crossings_cancel_but_braided_would_not` |
 | Interchange law; `id_0` as unit ("zero wires") | Selinger Table 2 p. 10 (+ interchange example below it) | Steps 2/5; `smc_bifunctoriality_interchange` |
 | 0-arity sink/source absorption `L1;(X⊗id_k)=X⊗L1` etc. | JS-I Ch 1 §1 + §4 Thm 1.2 p. 71 | Step 2 `try_unitor_merge`; `unitor_merge_*` |
+| Strictly-commuting zero-arity atoms `ε⊗η=η⊗ε` (both connecting braids `σ_{0,n}=id`) | JS-I Ch 1 §1 p. 57 (`id_0` unit) + Ch 1 §4 Thm 1.2 p. 71 | Step 6 `reorder_tied_zero_arity` (§2.5); `zero_arity_order::*` |
 
 ### Coverage summary
 
@@ -231,7 +311,13 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
 - **Symmetry layer** — `σ² = id`, braid naturality, hexagon/`σ_{m,n}`
   decomposition, Yang-Baxter, `S_n` reduced-word canonicality: **covered** by
   Steps 0–3 and the JS-Braided / JS-II suite.
-- **Known open gap** — mid-layer **zero-source** (`η : 0 → 1`) scheduling is
-  not canonical (§2.3); tracked as `interchange_zero_source_eta_known_gap`
-  (`#[ignore]`) and the Watch-item in `tests/smc_nf_completeness.rs`, issue #14
-  follow-up.
+- **Zero-arity within-layer order** — `scalar < η < ε < solid` at every tied
+  adjacency: **covered** by Step 6 (§2.5) and the `zero_arity_order` tests
+  (issue #55 PR1).
+- **Known open gap** — mid-layer **zero-source** (`η : 0 → 1`) *layer
+  assignment* is not canonical (§2.3): the sift still skips source-0 atoms, so a
+  tensor-form and a compose-form of the same morphism (`ε ⊗ η` vs `ε ; η`, or
+  `F ⊗ η ⊗ G` vs `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)`) can still land in different
+  layers. §2.5 closed the *within-layer* half only. Tracked as
+  `interchange_zero_source_eta_known_gap` (`#[ignore]`) and the Watch-item in
+  `tests/smc_nf_completeness.rs`; issue #14 follow-up, closing in #55 PR2.
