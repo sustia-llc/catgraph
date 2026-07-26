@@ -13,6 +13,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed
+
+- **SMC NF Step 6: within-layer η-before-ε canonical reorder**
+  ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR1, design of
+  record 2026-07-25): new `reorder_tied_zero_arity` pass in `smc_nf::nf`'s
+  fixpoint — adjacent atoms that commute **strictly** (`(src A = 0 ∨ src B = 0)
+  ∧ (tgt A = 0 ∨ tgt B = 0)`, both connecting braids `σ_{0,n} = id`) are
+  bubble-sorted to the canonical class order `scalar (0→0) < η (0→n) <
+  ε (n→0) < solid` — the greedy (lex-least) normal form of the layer's word in
+  the trace monoid. Closes the zero-arity **tensor-order** split
+  (`nf(ε ⊗ η) == nf(η ⊗ ε)`); the layer-assignment half (`ε ; η` compose-forms)
+  remains for PR2's sift rebase. Termination measure gains a trailing
+  `tied_inversion_count` component (all-pairs class inversions;
+  `SMC-NF-RECONCILIATION.md` §2.4 + new §2.5). Scalar order is stable (no
+  shipped signature has a `0 → 0` generator; a total order awaits one).
+- **CC depth-2 collision baselines re-pinned after the drop**
+  ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR1): BoolRig
+  1142 → **972**, UnitInterval 1634 → **1400**, Tropical 2234 → **1930**,
+  F64Rig 2229 → **1925** (release, deterministic, exact two-sided pins). The
+  drop is confirmed KB-like progress, not CC over-merge: every Step-6 swap is
+  an on-the-nose SMC identity (both connecting braids degenerate), and the
+  distinct-morphism regressions (`η ⊗ η′ ≠ η′ ⊗ η`) pin the non-merges.
+  Must-sync sites updated: `tests/graphical_linalg.rs` consts + docstring,
+  FS18-AUDIT Thm 5.60 row + resolution note, README `kb` row,
+  `functor_bench` docs, `mat_operations` / `prop_presentation_nf` examples.
+
 ### Added
 
 - **`Checked<T>` poison-on-overflow rig wrapper**

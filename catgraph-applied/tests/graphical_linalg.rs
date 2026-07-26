@@ -48,17 +48,20 @@
 //! over 10 min/rig in release, depth 4 larger still), so on a manual `--ignored`
 //! run the assert's LEFT value IS the true depth-N count (not an expectation).
 //!
-//! Fresh collision/expression counts (post-E_18, release, depth 2):
+//! Fresh collision/expression counts (post-#55-PR1, release, depth 2):
 //!
 //! | rig          | collisions | expressions |
 //! |--------------|-----------:|------------:|
-//! | BoolRig      |       1142 |       20324 |
-//! | UnitInterval |       1634 |       31337 |
-//! | Tropical     |       2234 |       46810 |
-//! | F64Rig       |       2229 |       46810 |
+//! | BoolRig      |        972 |       20324 |
+//! | UnitInterval |       1400 |       31337 |
+//! | Tropical     |       1930 |       46810 |
+//! | F64Rig       |       1925 |       46810 |
 //!
 //! BoolRig lineage: 2574 plain CC → 1433 atom-canonical `smc_refine` → 1301
-//! post-#14 layer-ordering NF → 1142 post-E_18 (D7/D8 scalar add/zero added).
+//! post-#14 layer-ordering NF → 1142 post-E_18 (D7/D8 scalar add/zero added)
+//! → 972 post-#55-PR1 (Step 6 η-before-ε within-layer reorder closed the
+//! zero-arity tensor-order split; UnitInterval 1634 → 1400, Tropical
+//! 2234 → 1930, F64Rig 2229 → 1925 in the same change).
 //! Completing the presentation to all 18 F&S/BE15 relations gives CC more
 //! equations to identify with, lowering the residual collision count.
 //!
@@ -68,8 +71,9 @@
 //! `-1.0 × 0.0` yields `-0.0`, which the rig `Hash` impls hashed differently
 //! from `0.0` while the derived `PartialEq` treated them equal, splitting a
 //! congruence class. #58 normalized `-0.0` to `0.0` in those `Hash` impls,
-//! restoring the `Eq`/`Hash` contract and pinning F64Rig at an exact 2229. All
-//! baselines live in the `BASELINE_*_D2` module consts.
+//! restoring the `Eq`/`Hash` contract and making F64Rig an exact pin (2229
+//! then; 1925 post-#55-PR1). All baselines live in the `BASELINE_*_D2`
+//! module consts.
 //!
 //! [`CongruenceClosure`]: catgraph_applied::prop::presentation::NormalizeEngine::CongruenceClosure
 //! [`MatrixNFFunctor<R>`]: catgraph_applied::prop::presentation::functorial::MatrixNFFunctor
@@ -112,16 +116,15 @@ fn matr_presentation_builds_unit_interval() {
     matr_presentation::<UnitInterval>(&samples).unwrap();
 }
 
-// Post-E_18 depth-2 collision baselines (D7/D8 added, #114) — the single Rust
-// source of truth for each number (mirrored in the module docstring table).
-// All four rigs are now deterministic → pinned exactly. F64Rig was previously a
-// float-nondeterministic jitter band (signed-zero `Hash`/`Eq` × HashMap
-// ordering; observed 2478–2480); #58 normalized `-0.0` to `0.0` in the rig Hash
-// impls, restoring the Eq/Hash contract and making its count an exact 2229.
-const BASELINE_BOOL_D2: usize = 1142;
-const BASELINE_UNIT_INTERVAL_D2: usize = 1634;
-const BASELINE_TROPICAL_D2: usize = 2234;
-const BASELINE_F64_D2: usize = 2229;
+// Post-#55-PR1 depth-2 collision baselines (Step 6 η-before-ε reorder) — the
+// single Rust source of truth for each number (mirrored in the module
+// docstring table). All four rigs are deterministic → pinned exactly (F64Rig
+// was a float-nondeterministic jitter band until #58 normalized signed zero
+// in the rig Hash impls). Prior pins: 1142/1634/2234/2229 (post-E_18/#58).
+const BASELINE_BOOL_D2: usize = 972;
+const BASELINE_UNIT_INTERVAL_D2: usize = 1400;
+const BASELINE_TROPICAL_D2: usize = 1930;
+const BASELINE_F64_D2: usize = 1925;
 
 const IGNORE_REASON: &str = "\
     CC completeness tracking (NOT a Thm 5.60 faithfulness test): F&S Thm 5.60 \
@@ -134,7 +137,7 @@ const IGNORE_REASON: &str = "\
     `MatrixNFFunctor` is the complete, terminal Mat(R) decision procedure; \
     plain CC stays incomplete by design (Knuth-Bendix completion demoted to \
     the #57 feasibility spike). The depth-2 tests are bounded regression \
-    trackers at the post-#14 NF baselines (see the module docstring table and \
+    trackers at the pinned NF baselines (see the module docstring table and \
     the `BASELINE_*_D2` consts): all four rigs are pinned exactly (F64Rig was a \
     jitter band until #58 normalized signed zero in the rig Hash impls). \
     `#[ignore]`'d as diagnostic, not a release gate.\
@@ -176,7 +179,7 @@ fn assert_exact_baseline<R>(
     assert_eq!(
         report.collisions_under_s,
         baseline,
-        "{rig} depth 2: {} expressions, {} collisions != pinned post-#14 baseline {baseline} \
+        "{rig} depth 2: {} expressions, {} collisions != pinned baseline {baseline} \
          (a rise = CC/NF regression; a drop = KB-like progress or unsound CC over-merge — \
          re-baseline only after confirming which). First witness: {:?}. {IGNORE_REASON}",
         report.expressions_checked,
@@ -190,7 +193,7 @@ fn assert_exact_baseline<R>(
 #[test]
 #[ignore = "CC completeness tracking; see module docstring and IGNORE_REASON"]
 fn cc_completeness_tracking_bool_depth_2() {
-    // Post-E_18 baseline: 1142 collisions / 20324 expressions (deterministic;
+    // Post-#55-PR1 baseline: 972 collisions / 20324 expressions (deterministic;
     // pinned exactly via `assert_exact_baseline`).
     let samples = vec![BoolRig(false), BoolRig(true)];
     let report = verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(2, &samples).unwrap();
@@ -223,7 +226,7 @@ fn cc_completeness_tracking_unit_interval_depth_2() {
         UnitInterval::new(0.5).unwrap(),
         UnitInterval::new(1.0).unwrap(),
     ];
-    // Post-E_18 baseline: 1634 collisions / 31337 expressions (deterministic;
+    // Post-#55-PR1 baseline: 1400 collisions / 31337 expressions (deterministic;
     // pinned exactly).
     let report = verify_sfg_to_mat_is_full_and_faithful::<UnitInterval>(2, &samples).unwrap();
     assert_exact_baseline("UnitInterval", &report, BASELINE_UNIT_INTERVAL_D2);
@@ -264,7 +267,7 @@ fn cc_completeness_tracking_tropical_depth_2() {
         Tropical(1.0),
         Tropical(2.0),
     ];
-    // Post-E_18 baseline: 2234 collisions / 46810 expressions (deterministic;
+    // Post-#55-PR1 baseline: 1930 collisions / 46810 expressions (deterministic;
     // pinned exactly).
     let report = verify_sfg_to_mat_is_full_and_faithful::<Tropical>(2, &samples).unwrap();
     assert_exact_baseline("Tropical", &report, BASELINE_TROPICAL_D2);
@@ -301,7 +304,7 @@ fn cc_completeness_tracking_tropical_depth_4() {
 #[test]
 #[ignore = "CC completeness tracking; see module docstring and IGNORE_REASON"]
 fn cc_completeness_tracking_f64_depth_2() {
-    // Post-#58 baseline: 2229 collisions / 46810 expressions (deterministic;
+    // Post-#55-PR1 baseline: 1925 collisions / 46810 expressions (deterministic;
     // pinned exactly). Before #58, F64Rig's count was float-nondeterministic
     // (signed-zero Hash/Eq interacted with HashMap ordering); normalizing `-0.0`
     // to `0.0` in the rig Hash impls restored the Eq/Hash contract, merging the

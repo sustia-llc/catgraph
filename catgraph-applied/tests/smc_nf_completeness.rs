@@ -25,29 +25,33 @@
 //! replay failure whose witness has a zero-arity atom (ε, η) embedded
 //! deeper in a layer flags the known limitation for follow-up.
 
-use catgraph_applied::prop::presentation::smc_nf::nf;
+use catgraph_applied::prop::presentation::smc_nf::{from_string_diagram, nf};
 use catgraph_applied::prop::{PropExpr, PropSignature};
 use proptest::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum TestSig {
-    F,   // 1 → 1
-    G,   // 1 → 1
-    Eps, // 1 → 0 (sink)
-    Eta, // 0 → 1 (source)
+    F,    // 1 → 1
+    G,    // 1 → 1
+    Eps,  // 1 → 0 (sink)
+    Eta,  // 0 → 1 (source)
+    Eps2, // 2 → 0 (wide sink)
+    Eta2, // 0 → 2 (wide source)
 }
 
 impl PropSignature for TestSig {
     fn source(&self) -> usize {
         match self {
             TestSig::F | TestSig::G | TestSig::Eps => 1,
-            TestSig::Eta => 0,
+            TestSig::Eta | TestSig::Eta2 => 0,
+            TestSig::Eps2 => 2,
         }
     }
     fn target(&self) -> usize {
         match self {
             TestSig::F | TestSig::G | TestSig::Eta => 1,
-            TestSig::Eps => 0,
+            TestSig::Eps | TestSig::Eps2 => 0,
+            TestSig::Eta2 => 2,
         }
     }
 }
@@ -285,4 +289,186 @@ fn interchange_zero_source_eta_known_gap() {
         )),
     );
     assert_eq!(nf(&lhs), nf(&rhs));
+}
+
+// ============================================================================
+// 3. Within-layer zero-arity order (issue #55 PR1, Step 6)
+// ============================================================================
+
+/// Step 6 (`reorder_tied_zero_arity`) canonicalizes the within-layer order of
+/// strictly-commuting zero-arity atoms to `scalar < η < ε < solid` — issue #55
+/// Decision 1 (η-before-ε), design of record 2026-07-25.
+///
+/// `TestSig::Eps` (`1 → 0`) is the ε-class witness (SFG's `Discard`);
+/// `TestSig::Eta` (`0 → 1`) is the η-class witness (SFG's `Zero`).
+///
+/// Not closed here: the **layer-assignment** half of #55 (`ε ; η` compose-forms
+/// vs `ε ⊗ η` tensor-forms), which is PR2's sift rebase. See
+/// `interchange_zero_source_eta_known_gap` above.
+mod zero_arity_order {
+    use super::*;
+    use catgraph_applied::prop::presentation::smc_nf::{Atom, Layer, StringDiagram};
+
+    fn eps() -> PropExpr<TestSig> {
+        PropExpr::Generator(TestSig::Eps)
+    }
+    fn eta() -> PropExpr<TestSig> {
+        PropExpr::Generator(TestSig::Eta)
+    }
+
+    /// The #55 witness pair: `ε ⊗ η` and `η ⊗ ε` are the same morphism `1 → 1`
+    /// (both connecting braids are `σ_{0,n} = id`) and now share one NF, with
+    /// the η first.
+    #[test]
+    fn tied_eta_eps_pair_converges_eta_first() {
+        let lhs = PropExpr::Tensor(Box::new(eps()), Box::new(eta())); // Tensor(Discard, Zero)
+        let rhs = PropExpr::Tensor(Box::new(eta()), Box::new(eps())); // Tensor(Zero, Discard)
+        assert_eq!(nf(&lhs), nf(&rhs), "#55 within-layer split must close");
+
+        let expected = StringDiagram {
+            layers: vec![Layer {
+                atoms: vec![Atom::Generator(TestSig::Eta), Atom::Generator(TestSig::Eps)],
+            }],
+        };
+        assert_eq!(nf(&lhs), expected, "canonical order is η before ε");
+    }
+
+    /// An η bubbles left past a whole run of ε's: `ε ⊗ ε' ⊗ η` → `η ⊗ ε ⊗ ε'`.
+    /// This is the case that forces the termination measure to count *all*
+    /// class-inverted pairs, not just adjacent ones — the first swap trades one
+    /// adjacent inversion for another.
+    #[test]
+    fn eta_bubbles_left_past_an_eps_run() {
+        let e = PropExpr::Tensor(
+            Box::new(eps()),
+            Box::new(PropExpr::Tensor(
+                Box::new(PropExpr::Generator(TestSig::Eps2)),
+                Box::new(eta()),
+            )),
+        );
+        let expected = StringDiagram {
+            layers: vec![Layer {
+                atoms: vec![
+                    Atom::Generator(TestSig::Eta),
+                    Atom::Generator(TestSig::Eps),
+                    Atom::Generator(TestSig::Eps2),
+                ],
+            }],
+        };
+        assert_eq!(nf(&e), expected);
+    }
+
+    /// η's never strictly commute with η's (their targets are both non-empty),
+    /// so two distinct-arity η's keep their relative order — and the two
+    /// orderings stay distinct morphisms.
+    #[test]
+    fn eta_eta_relative_order_is_preserved() {
+        let a = PropExpr::Tensor(
+            Box::new(eta()),
+            Box::new(PropExpr::Generator(TestSig::Eta2)),
+        );
+        let b = PropExpr::Tensor(
+            Box::new(PropExpr::Generator(TestSig::Eta2)),
+            Box::new(eta()),
+        );
+        let atoms = |sd: &StringDiagram<TestSig>| sd.layers[0].atoms.clone();
+        assert_eq!(
+            atoms(&nf(&a)),
+            vec![
+                Atom::Generator(TestSig::Eta),
+                Atom::Generator(TestSig::Eta2)
+            ]
+        );
+        assert_eq!(
+            atoms(&nf(&b)),
+            vec![
+                Atom::Generator(TestSig::Eta2),
+                Atom::Generator(TestSig::Eta)
+            ]
+        );
+        assert_ne!(nf(&a), nf(&b), "η ⊗ η' and η' ⊗ η are different morphisms");
+    }
+
+    /// Likewise for ε's: their sources are both non-empty, so they never
+    /// strictly commute and their relative order is coordinate-determined.
+    #[test]
+    fn eps_eps_relative_order_is_preserved() {
+        let a = PropExpr::Tensor(
+            Box::new(eps()),
+            Box::new(PropExpr::Generator(TestSig::Eps2)),
+        );
+        let b = PropExpr::Tensor(
+            Box::new(PropExpr::Generator(TestSig::Eps2)),
+            Box::new(eps()),
+        );
+        let atoms = |sd: &StringDiagram<TestSig>| sd.layers[0].atoms.clone();
+        assert_eq!(
+            atoms(&nf(&a)),
+            vec![
+                Atom::Generator(TestSig::Eps),
+                Atom::Generator(TestSig::Eps2)
+            ]
+        );
+        assert_eq!(
+            atoms(&nf(&b)),
+            vec![
+                Atom::Generator(TestSig::Eps2),
+                Atom::Generator(TestSig::Eps)
+            ]
+        );
+        assert_ne!(nf(&a), nf(&b), "ε ⊗ ε' and ε' ⊗ ε are different morphisms");
+    }
+
+    /// A solid atom (`src > 0 ∧ tgt > 0`) blocks η mobility: `Identity(1)` does
+    /// not strictly commute with η (both targets are non-empty), so the η must
+    /// stay to the right of it. Moving it would permute the output wires.
+    #[test]
+    fn solid_atom_blocks_eta_mobility() {
+        let e = PropExpr::Tensor(
+            Box::new(eps()),
+            Box::new(PropExpr::Tensor(
+                Box::new(PropExpr::Identity(1)),
+                Box::new(eta()),
+            )),
+        );
+        let expected = StringDiagram {
+            layers: vec![Layer {
+                atoms: vec![
+                    Atom::Generator(TestSig::Eps),
+                    Atom::Identity(1),
+                    Atom::Generator(TestSig::Eta),
+                ],
+            }],
+        };
+        assert_eq!(nf(&e), expected, "η must not cross the Identity(1)");
+    }
+
+    /// Idempotence on the #55 witnesses: re-running `nf` on the expression
+    /// rebuilt from the NF reaches the same fixpoint.
+    #[test]
+    fn idempotent_on_zero_arity_witnesses() {
+        let witnesses: Vec<PropExpr<TestSig>> = vec![
+            PropExpr::Tensor(Box::new(eps()), Box::new(eta())),
+            PropExpr::Tensor(Box::new(eta()), Box::new(eps())),
+            PropExpr::Tensor(
+                Box::new(eps()),
+                Box::new(PropExpr::Tensor(
+                    Box::new(PropExpr::Generator(TestSig::Eps2)),
+                    Box::new(eta()),
+                )),
+            ),
+            PropExpr::Tensor(
+                Box::new(eps()),
+                Box::new(PropExpr::Tensor(
+                    Box::new(PropExpr::Identity(1)),
+                    Box::new(eta()),
+                )),
+            ),
+        ];
+        for e in &witnesses {
+            let once = nf(e);
+            let twice = nf(&from_string_diagram(&once));
+            assert_eq!(once, twice, "nf not idempotent on {e:?}");
+        }
+    }
 }

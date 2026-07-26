@@ -10,7 +10,7 @@
 //! terms and handles user-equation congruence without needing to know about
 //! SMC axioms.
 //!
-//! # Algorithm (6 steps + empty-braid normalization)
+//! # Algorithm (7 steps + empty-braid normalization)
 //!
 //! - **Step 0** — `normalize_empty_braids`: `Braid(0, n) → Identity(n)`.
 //! - **Step 1** — `hexagon_expand`: `σ_{m,n}` (m+n > 2) → bricks of `Braid(1,1)`.
@@ -26,6 +26,10 @@
 //!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality / interchange); issue #14.
 //! - **Step 5** — `simplify_units`: remove `Identity(0)` atoms.
 //!   Paper: JS-I Ch 1 §1 p.57; Selinger Table 2 p.10.
+//! - **Step 6** — `reorder_tied_zero_arity`: within-layer canonical order for
+//!   strictly-commuting zero-arity atoms (scalar < η < ε < solid).
+//!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality) with a 0-arity edge;
+//!   issue #55 Decision 1.
 
 use super::super::{PropExpr, PropSignature};
 
@@ -68,6 +72,8 @@ pub enum Atom<G: PropSignature> {
 /// - Every `Generator` atom with non-zero source arity occupies its earliest
 ///   admissible layer: no generator's consumed wires all pass through
 ///   `Identity` atoms in the preceding braid-free layer (Step 4(c)).
+/// - Within every layer, no adjacent strictly-commuting pair is ordered against
+///   `scalar < η < ε` (tied runs are in canonical η-before-ε order, Step 6).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct StringDiagram<G: PropSignature> {
     pub layers: Vec<Layer<G>>,
@@ -86,18 +92,24 @@ pub struct StringDiagram<G: PropSignature> {
 /// in the free symmetric monoidal category on `G`), `nf(&a) == nf(&b)`. The
 /// converse holds by construction since `nf` applies only SMC-sound rewrites.
 ///
-/// Known exception: a **zero-source generator** (`source == 0`, e.g. `η : 0 → 1`)
-/// sitting mid-layer is not always scheduled canonically — `topological_layer_order`
-/// skips source-0 atoms (their consumed span is empty, so the earliest-layer rule
-/// is positionally ambiguous) and `try_unitor_merge` only absorbs the 2-atom
-/// boundary pattern. So e.g. `nf(F ⊗ η ⊗ G)` and `nf((F ⊗ G) ; (id₁ ⊗ η ⊗ id₁))`
-/// can differ. Generators with `source > 0` are unaffected. Tracked as the
-/// Watch-item in `tests/smc_nf_completeness.rs` (issue #14 follow-up).
+/// Known exception (narrowed by issue #55 PR1): the **within-layer order** of
+/// zero-arity atoms is now canonical — Step 6 (`reorder_tied_zero_arity`) puts
+/// every tied run in η-before-ε order, so `nf(ε ⊗ η) == nf(η ⊗ ε)`. What remains
+/// is the **layer-assignment** ambiguity for a **zero-source generator**
+/// (`source == 0`, e.g. `η : 0 → 1`): `topological_layer_order` still skips
+/// source-0 atoms (their consumed span is empty, so the earliest-layer rule is
+/// positionally ambiguous) and `try_unitor_merge` only absorbs the 2-atom
+/// boundary pattern, so a tensor-form and a compose-form of the same morphism
+/// can still land in different layers — e.g. `nf(F ⊗ η ⊗ G)` vs
+/// `nf((F ⊗ G) ; (id₁ ⊗ η ⊗ id₁))`, or `nf(ε ⊗ η)` vs `nf(ε ; η)`. Closing that
+/// is #55 PR2 (rebase the parked point-span sift onto Step 6's tie-break).
+/// Generators with `source > 0` are unaffected. Tracked as the Watch-item in
+/// `tests/smc_nf_completeness.rs` (issue #14 follow-up).
 pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     let mut sd = lower(expr);
     // Fixpoint loop, terminating by the lexicographic measure
     // (crossings, mixed_layer_count, wide_braid_count, braid_position_sum,
-    //  generator_position_sum, layer_count):
+    //  generator_position_sum, layer_count, tied_inversion_count):
     // - `reduce_involution` shrinks crossings (σ;σ → id); `hexagon_expand` leaves
     //   crossings fixed (it preserves the underlying permutation);
     // - `isolate_mixed_braid_layers` (inside `collect_braid_prefix`) strictly
@@ -110,7 +122,15 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     //   braid positions are compared (at the fixpoint check no wide braid remains);
     // - the naturality sweep shrinks braid_position_sum (braids move input-ward);
     // - `topological_layer_order` shrinks generator_position_sum;
-    // - `coalesce_identity_layers`/`simplify_units` shrink layer_count.
+    // - `coalesce_identity_layers`/`simplify_units` shrink layer_count;
+    // - `reorder_tied_zero_arity` (Step 6) shrinks tied_inversion_count — each
+    //   swap flips exactly one class-inverted pair and leaves every other pair's
+    //   relative order alone. `try_unitor_merge` can *raise* it (its case 3 emits
+    //   η-first, case 4 ε-first), but only while strictly shrinking layer_count,
+    //   an earlier component — so the tuple still drops lexicographically and
+    //   Step 6 repairs the ordering on the same fixpoint pass. Step 6 itself is
+    //   within-layer only: it moves no atom between layers and rewrites no atom,
+    //   so every earlier component is untouched by it.
     // See `docs/SMC-NF-RECONCILIATION.md` §2.4.
     loop {
         let prev = sd.clone();
@@ -121,6 +141,7 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
         sd = coalesce_identity_layers(sd);
         sd = topological_layer_order(sd);
         sd = simplify_units(sd);
+        sd = reorder_tied_zero_arity(sd);
         if sd == prev {
             break;
         }
@@ -1304,6 +1325,104 @@ fn simplify_units<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
         .filter(|layer| !layer.atoms.is_empty())
         .collect();
     StringDiagram { layers }
+}
+
+/// **Step 6**: canonical within-layer order for strictly-commuting zero-arity
+/// atoms.
+///
+/// # Strict commutation criterion
+///
+/// Adjacent atoms `A`, `B` in a layer commute **strictly** — both connecting
+/// braids are `σ_{0,n} = id`, so `A ⊗ B` and `B ⊗ A` are the same morphism on
+/// the nose rather than merely up to symmetry — iff
+///
+/// ```text
+/// (src A == 0 ∨ src B == 0) ∧ (tgt A == 0 ∨ tgt B == 0)
+/// ```
+///
+/// Consequences:
+/// - η's (`src = 0`, `tgt > 0`) never commute with each other, and ε's
+///   (`src > 0`, `tgt = 0`) never commute with each other — their relative order
+///   is coordinate-determined by disjoint non-empty wire spans.
+/// - An η and an ε *do* commute at a tied adjacency.
+/// - A `0 → 0` scalar commutes with **every** atom.
+/// - A solid atom (`src > 0 ∧ tgt > 0`, which includes `Identity(n>0)` and every
+///   `Braid`) never strictly commutes with an η or an ε.
+///
+/// # Canonical order: η before ε, scalars leftmost
+///
+/// Class order (issue #55 Decision 1, design of record 2026-07-25,
+/// `.claude/docs/2026-07-25-55-tensor-order-canonicalization.md`):
+///
+/// ```text
+/// scalar (0→0)  <  η (0→n)  <  ε (n→0)  <  solid
+/// ```
+///
+/// The pass is a within-layer **bubble reorder**: repeatedly swap an adjacent
+/// pair `(A, B)` iff `A` and `B` strictly commute *and* `class(B) < class(A)`.
+/// This is the greedy (lex-least) normal form of the layer's word in the trace
+/// monoid generated by strict commutation — one-directional, so it terminates by
+/// the class-inversion count and is confluent by the usual sorting argument.
+///
+/// Equal-class pairs never swap, so the order **among scalars is stable** (input
+/// order preserved). The design note records "scalars sorted by generator order"
+/// for generality, but `PropSignature` carries no `Ord` bound and no shipped
+/// signature has a `0 → 0` generator (Mat(R)/SFG scalars are `1 → 1`;
+/// `FrobeniusOr`'s η/ε are `0 → 1` / `1 → 0`), so stable-among-scalars is the
+/// deliberate reading here; a total scalar order awaits a signature that
+/// actually exercises it.
+///
+/// The pass is per-layer: it moves no atom across a layer boundary, rewrites no
+/// atom, and is idempotent.
+///
+/// Paper anchor: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality) specialized to a
+/// 0-arity edge — the same `id_0`-unitor derivation [`try_unitor_merge`] uses.
+fn reorder_tied_zero_arity<G: PropSignature>(mut sd: StringDiagram<G>) -> StringDiagram<G> {
+    for layer in &mut sd.layers {
+        let mut swapped_any = false;
+        loop {
+            let mut changed = false;
+            for i in 0..layer.atoms.len().saturating_sub(1) {
+                if strictly_commute(&layer.atoms[i], &layer.atoms[i + 1])
+                    && zero_arity_class(&layer.atoms[i + 1]) < zero_arity_class(&layer.atoms[i])
+                {
+                    layer.atoms.swap(i, i + 1);
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+            swapped_any = true;
+        }
+        if swapped_any {
+            // A `0 → 0` scalar bubbling out from between two `Identity` atoms
+            // leaves them adjacent; re-fuse so `topological_layer_order`'s
+            // merged-identity precondition still holds on the next fixpoint pass.
+            // (Unreachable with today's signatures — no shipped `G` has a 0→0
+            // generator — but cheap and keeps the invariant unconditional.)
+            layer.atoms = merge_adjacent_identities(std::mem::take(&mut layer.atoms));
+        }
+    }
+    sd
+}
+
+/// The strict-commutation criterion of [`reorder_tied_zero_arity`]: `a ⊗ b` and
+/// `b ⊗ a` denote the same morphism because both connecting braids degenerate
+/// to `σ_{0,n} = id`.
+fn strictly_commute<G: PropSignature>(a: &Atom<G>, b: &Atom<G>) -> bool {
+    (atom_source(a) == 0 || atom_source(b) == 0) && (atom_target(a) == 0 || atom_target(b) == 0)
+}
+
+/// Rank of `a` in the canonical class order `scalar < η < ε < solid` used by
+/// [`reorder_tied_zero_arity`].
+fn zero_arity_class<G: PropSignature>(a: &Atom<G>) -> u8 {
+    match (atom_source(a), atom_target(a)) {
+        (0, 0) => 0, // scalar
+        (0, _) => 1, // η (source)
+        (_, 0) => 2, // ε (sink)
+        _ => 3,      // solid
+    }
 }
 
 // -------------------------------------------------------------------------
