@@ -280,6 +280,19 @@ where
 /// not overflow safety — both sides compute the same value and would overflow
 /// together. Callers wanting total value semantics should instantiate a rig with
 /// wrapping or checked arithmetic.
+///
+/// The workspace **policy of record** for this lives once, in
+/// [`catgraph_applied::rig`]'s module docs
+/// ([#88](https://github.com/sustia-llc/catgraph/issues/88)) — it gives the
+/// per-rig-family matrix (exact for `Z(BigInt)`, inherited-from-`R` for the
+/// primitive integers, no integer overflow for the Boolean/float families) and
+/// records why saturating arithmetic is rejected outright. The opt-in detection
+/// story is [`catgraph_applied::rig::Checked`]: wrapping a primitive integer rig
+/// in `Checked<T>` turns an overflow into the absorbing sentinel `⊥`, which
+/// propagates all the way out to `eval`'s result vector where the caller can
+/// test it with `is_poisoned()`. That visibility is exactly what the basis-row
+/// cross-check *cannot* provide — with a plain `i64` both sides wrap identically
+/// and agree on the wrong answer.
 pub struct SfgModel<R: Rig> {
     _phantom: std::marker::PhantomData<R>,
 }

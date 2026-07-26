@@ -25,6 +25,8 @@
 //!   magnitude homology and as the Lawvere-metric enrichment base;
 //!   `d = -ln π` converts `UnitInterval → Tropical`.
 //! - [`F64Rig`] — plain real rig for `Mat(R)` and `SFG_R` demos.
+//! - [`Checked<T>`] — a poison-on-overflow wrapper over a primitive integer
+//!   rig; see the overflow policy below.
 //!
 //! Primitive integer and float types are rigs via the blanket impl, since
 //! `deep_causality_num` provides their `Zero`/`One`. Note that
@@ -47,6 +49,32 @@
 //! class). NaN caveats inherit from `PartialEq`: a NaN payload would be
 //! non-reflexive; callers should not construct NaN values in these newtypes
 //! (the [`UnitInterval::new`] validator already rejects them).
+//!
+//! # Overflow policy (workspace policy of record, #88)
+//!
+//! Rig arithmetic anywhere in the workspace — [`MatR::matmul`](crate::mat::MatR),
+//! [`sfg_to_mat`](crate::sfg_to_mat::sfg_to_mat),
+//! [`MatrixNFFunctor`](crate::prop::presentation::functorial::MatrixNFFunctor),
+//! and catgraph-syntax's `eval` / `SfgModel` — is *exactly* `R`'s own
+//! [`Add`] and [`Mul`]. No layer above `R` inserts a check, so the overflow
+//! behaviour of a computation is decided entirely by the rig you instantiate.
+//! This section is the single place that behaviour is specified; downstream
+//! docs cite it rather than restating it.
+//!
+//! | Rig family | Overflow behaviour |
+//! | --- | --- |
+//! | [`BoolRig`], [`UnitInterval`] | No integer overflow is possible — `∨`/`∧` and `max`/`·` on `[0,1]` are closed. |
+//! | [`Tropical`], [`F64Rig`] | Float families; no integer overflow. They keep IEEE-754 `inf`/NaN semantics, documented honestly rather than papered over (the #58 posture). |
+//! | [`Z`](crate::z::Z) / other BigInt-valued rigs | **Exact.** Arbitrary-precision integers cannot overflow; this is the zero-caveat answer and the recommended coefficient ring whenever counts are unbounded. |
+//! | Primitive integers (`i64`, `u32`, …) via the blanket impl | **Inherited from `R`**, i.e. Rust's profile-dependent behaviour: a debug build panics on overflow, a release build wraps silently. |
+//! | [`Checked<T>`] over a primitive integer | **Opt-in detection.** Overflow produces the absorbing sentinel [`Checked::Poison`], which propagates to the result where a caller can see it. |
+//!
+//! **Saturating arithmetic is rejected**, and is not offered even as an opt-in.
+//! Clamping at `T::MAX` yields a silently *wrong* value that is
+//! indistinguishable from a legitimate one, and it breaks distributivity
+//! (`a·(b+c) ≠ a·b + a·c` once any operand saturates) — so a saturating rig
+//! would not be a rig at all, while also destroying the evidence that anything
+//! went wrong. [`Checked<T>`] loses strictly less (one axiom, visibly).
 
 use deep_causality_num::{One, Zero};
 use std::ops::{Add, Div, Mul, Neg, Sub};
@@ -361,6 +389,245 @@ impl std::hash::Hash for F64Rig {
     }
 }
 
+/// Checked integer arithmetic, the substrate [`Checked<T>`] detects overflow
+/// with.
+///
+/// Implemented for every primitive integer type by delegating to the std
+/// inherent `checked_add` / `checked_mul`; a `None` return **is** the overflow
+/// signal. The trait is catgraph-local rather than a `num-traits` import
+/// because the workspace sources only `Zero` / `One` from an external numeric
+/// crate (`deep_causality_num`) — see the crate-root substrate rules.
+///
+/// Downstream types may implement it to make themselves wrappable in
+/// [`Checked`]; the contract is that `None` means "the exact result is not
+/// representable in `Self`", never "the operation is undefined for other
+/// reasons".
+pub trait CheckedOps: Sized {
+    /// Add, returning `None` when the exact sum is not representable.
+    fn checked_add(&self, rhs: &Self) -> Option<Self>;
+    /// Multiply, returning `None` when the exact product is not representable.
+    fn checked_mul(&self, rhs: &Self) -> Option<Self>;
+}
+
+macro_rules! impl_checked_ops_for_primitive_int {
+    ($($t:ty),+ $(,)?) => {
+        $(
+            impl CheckedOps for $t {
+                fn checked_add(&self, rhs: &Self) -> Option<Self> {
+                    <$t>::checked_add(*self, *rhs)
+                }
+                fn checked_mul(&self, rhs: &Self) -> Option<Self> {
+                    <$t>::checked_mul(*self, *rhs)
+                }
+            }
+        )+
+    };
+}
+
+impl_checked_ops_for_primitive_int!(
+    i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize
+);
+
+/// A rig element that remembers whether an overflow has happened: either a
+/// [`Value`](Checked::Value) or the absorbing poison sentinel
+/// [`Poison`](Checked::Poison), written `⊥`.
+///
+/// `Checked<T>` is the workspace's **opt-in overflow-detection** rig (#88; the
+/// policy of record is in this module's docs). Wrapping a primitive integer
+/// rig in it makes overflow *visible in the result* instead of profile-
+/// dependent: `Checked::new(i64::MAX) + Checked::new(1)` is `⊥`, in both debug
+/// and release builds, and that `⊥` survives every subsequent operation all
+/// the way out to the caller, who can test it with [`is_poisoned`].
+///
+/// It satisfies the [`Rig`] blanket impl (`Clone + PartialEq + Zero + One +
+/// Add + Mul`), so `Checked<i64>` drops into
+/// [`MatR`](crate::mat::MatR), [`sfg_to_mat`](crate::sfg_to_mat::sfg_to_mat),
+/// [`MatrixNFFunctor`](crate::prop::presentation::functorial::MatrixNFFunctor),
+/// and catgraph-syntax's `eval` / `SfgModel` with no change to those call
+/// sites.
+///
+/// # Semantics
+///
+/// `⊥` is **fully absorbing**: if either operand is `⊥` the result is `⊥`, and
+/// `(Value a) ⊕ (Value b)` is `⊥` exactly when the checked primitive operation
+/// reports that the exact result is not representable.
+///
+/// Full absorption deliberately includes **`⊥ × 0 = ⊥`**. Special-casing zero
+/// to give `⊥ × 0 = 0` would erase a detected overflow — a caller could
+/// multiply a poisoned intermediate by zero and get a clean-looking answer
+/// back — and it would break distributivity in any ring extension, where
+/// `⊥ × (1 + (−1))` must agree with `⊥ × 1 + ⊥ × (−1)`.
+///
+/// # Laws
+///
+/// Full absorption is what keeps the algebra well behaved: associativity,
+/// commutativity, and both distributive laws hold on all of `Checked<T>`,
+/// because every equation with a `⊥` anywhere in it evaluates to `⊥` on both
+/// sides.
+///
+/// **Exactly one axiom is lost: the absorbing zero.**
+/// [`verify_rig_axioms`]'s axiom 8 requires `a * 0 == 0`, and that fails for
+/// `a = ⊥` — the one poisoned cone of the value space. Everywhere else
+/// (`Value(_)` samples only) all eight axioms hold, and `verify_rig_axioms`
+/// passes.
+///
+/// The honest reading, mirroring [`F64Rig`]'s NaN posture (#58), is: **a rig on
+/// the unpoisoned subset, with `⊥` adjoined as an absorbing sentinel.** That is
+/// strictly less loss than saturating arithmetic, which gives wrong values
+/// *and* breaks distributivity (see the module-level overflow policy).
+///
+/// # Text form
+///
+/// [`Display`](std::fmt::Display) renders `Poison` as the single character `⊥`
+/// and [`FromStr`](std::str::FromStr) reads it back, so a `Checked<i64>` can be
+/// a `SfgGenerator::Scalar` payload in catgraph-syntax's `scalar:<r>` token
+/// (which must stay one whitespace- and paren-free lexical atom).
+///
+/// [`is_poisoned`]: Checked::is_poisoned
+///
+/// # Examples
+///
+/// ```
+/// use catgraph_applied::rig::Checked;
+/// use deep_causality_num::Zero;
+///
+/// let big = Checked::new(4_000_000_000_i64);
+/// let overflowed = big * big;
+/// assert!(overflowed.is_poisoned());
+///
+/// // ⊥ is fully absorbing — multiplying by zero does NOT clear it.
+/// assert!((overflowed * Checked::zero()).is_poisoned());
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Checked<T> {
+    /// A representable value — no overflow has occurred on any path into it.
+    Value(T),
+    /// `⊥`: an overflow was detected somewhere upstream.
+    Poison,
+}
+
+impl<T> Checked<T> {
+    /// Wrap a value. Never poisoned.
+    #[must_use]
+    pub const fn new(value: T) -> Self {
+        Checked::Value(value)
+    }
+
+    /// `true` if this is `⊥`, i.e. an overflow was detected upstream.
+    #[must_use]
+    pub const fn is_poisoned(&self) -> bool {
+        matches!(self, Checked::Poison)
+    }
+
+    /// Borrow the wrapped value, or `None` if poisoned.
+    #[must_use]
+    pub const fn value(&self) -> Option<&T> {
+        match self {
+            Checked::Value(v) => Some(v),
+            Checked::Poison => None,
+        }
+    }
+
+    /// Unwrap to the value, or `None` if poisoned.
+    #[must_use]
+    pub fn into_value(self) -> Option<T> {
+        match self {
+            Checked::Value(v) => Some(v),
+            Checked::Poison => None,
+        }
+    }
+}
+
+impl<T> From<T> for Checked<T> {
+    fn from(value: T) -> Self {
+        Checked::Value(value)
+    }
+}
+
+impl<T: CheckedOps> Add for Checked<T> {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        match (self, other) {
+            (Checked::Value(a), Checked::Value(b)) => {
+                a.checked_add(&b).map_or(Checked::Poison, Checked::Value)
+            }
+            // Full absorption: a detected overflow is never recoverable.
+            _ => Checked::Poison,
+        }
+    }
+}
+
+impl<T: CheckedOps> Mul for Checked<T> {
+    type Output = Self;
+    fn mul(self, other: Self) -> Self {
+        match (self, other) {
+            (Checked::Value(a), Checked::Value(b)) => {
+                a.checked_mul(&b).map_or(Checked::Poison, Checked::Value)
+            }
+            // Full absorption — including `⊥ * 0 = ⊥`. See the type docs: the
+            // zero special-case would erase a detected overflow.
+            _ => Checked::Poison,
+        }
+    }
+}
+
+impl<T: CheckedOps + Zero> Zero for Checked<T> {
+    fn zero() -> Self {
+        Checked::Value(T::zero())
+    }
+    /// `false` for `⊥` — a poisoned value is not the additive identity.
+    fn is_zero(&self) -> bool {
+        matches!(self, Checked::Value(v) if v.is_zero())
+    }
+}
+
+impl<T: CheckedOps + One> One for Checked<T> {
+    fn one() -> Self {
+        Checked::Value(T::one())
+    }
+    /// `false` for `⊥` — a poisoned value is not the multiplicative identity.
+    fn is_one(&self) -> bool {
+        matches!(self, Checked::Value(v) if v.is_one())
+    }
+}
+
+/// The single-character lexeme for [`Checked::Poison`]. Kept paren-, space-
+/// and metacharacter-free so `scalar:⊥` stays one lexical atom under
+/// catgraph-syntax's `GeneratorSyntax` token contract.
+const POISON_TOKEN: &str = "⊥";
+
+impl<T: std::fmt::Display> std::fmt::Display for Checked<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Checked::Value(v) => write!(f, "{v}"),
+            Checked::Poison => f.write_str(POISON_TOKEN),
+        }
+    }
+}
+
+impl<T: std::str::FromStr> std::str::FromStr for Checked<T> {
+    /// `T`'s own parse error, unchanged. No dedicated error type is needed:
+    /// the `⊥` case is a *success*, not a failure, so nothing but `T`'s
+    /// failures can be reported. Poison is strictly the overflow sentinel and
+    /// is never used as a dumping ground for parse errors.
+    type Err = T::Err;
+
+    /// Exactly `"⊥"` parses to [`Checked::Poison`]; every other input is
+    /// delegated to `T::from_str` and wrapped in [`Checked::Value`].
+    ///
+    /// The `⊥` arm is checked *first*, so a `T` whose own `FromStr` happens to
+    /// accept `"⊥"` is shadowed for that one input. No primitive integer does.
+    ///
+    /// Round-trip law: `s.parse::<Checked<T>>()` recovers `x` from
+    /// `x.to_string()` for both variants whenever `T` itself round-trips.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == POISON_TOKEN {
+            return Ok(Checked::Poison);
+        }
+        s.parse::<T>().map(Checked::Value)
+    }
+}
+
 /// Base-change between rigs: a `From → To` conversion functor.
 ///
 /// Implementations should document whether the conversion preserves rig
@@ -611,5 +878,132 @@ mod tests {
         let pos_zero = UnitInterval::new(0.0).unwrap();
         assert_eq!(pos_zero, neg_zero);
         assert!(hashes_agree(&pos_zero, &neg_zero));
+    }
+
+    // ---- `Checked<T>` (#88) --------------------------------------------------
+
+    /// `4e9 * 4e9 = 1.6e19` exceeds `i64::MAX ≈ 9.22e18` — the issue's own
+    /// overflow witness, which a release build would silently wrap.
+    const BIG: i64 = 4_000_000_000;
+
+    #[test]
+    fn checked_add_overflow_poisons() {
+        let sum = Checked::new(i64::MAX) + Checked::new(1_i64);
+        assert!(sum.is_poisoned());
+        // The non-overflowing neighbour stays a value.
+        assert_eq!(
+            Checked::new(i64::MAX - 1) + Checked::new(1_i64),
+            Checked::new(i64::MAX)
+        );
+    }
+
+    #[test]
+    fn checked_mul_overflow_poisons() {
+        let product = Checked::new(BIG) * Checked::new(BIG);
+        assert!(product.is_poisoned());
+        assert_eq!(product.value(), None);
+        assert_eq!(product.into_value(), None);
+    }
+
+    #[test]
+    fn poison_is_fully_absorbing() {
+        let poison = Checked::<i64>::Poison;
+        let x = Checked::new(7_i64);
+
+        assert!((poison + x).is_poisoned());
+        assert!((x + poison).is_poisoned());
+        assert!((poison * x).is_poisoned());
+        assert!((x * poison).is_poisoned());
+
+        // The pinned law caveat: `⊥ × 0 = ⊥`, NOT `0`. A zero special-case
+        // would erase the detected overflow.
+        assert!((poison * Checked::<i64>::zero()).is_poisoned());
+        assert!((Checked::<i64>::zero() * poison).is_poisoned());
+    }
+
+    #[test]
+    fn checked_zero_and_one_are_unpoisoned() {
+        assert_eq!(Checked::<i64>::zero(), Checked::new(0_i64));
+        assert_eq!(Checked::<i64>::one(), Checked::new(1_i64));
+        assert!(!Checked::<i64>::zero().is_poisoned());
+        assert!(!Checked::<i64>::one().is_poisoned());
+
+        assert!(Checked::<i64>::zero().is_zero());
+        assert!(Checked::<i64>::one().is_one());
+        // Poison is neither identity.
+        assert!(!Checked::<i64>::Poison.is_zero());
+        assert!(!Checked::<i64>::Poison.is_one());
+    }
+
+    #[test]
+    fn verify_axioms_checked_i64_unpoisoned_sample() {
+        // All eight axioms hold on the unpoisoned subset. Values are small
+        // enough that no intermediate product overflows into `⊥`.
+        let samples = [
+            Checked::new(0_i64),
+            Checked::new(1_i64),
+            Checked::new(-3_i64),
+            Checked::new(7_i64),
+        ];
+        for a in &samples {
+            for b in &samples {
+                for c in &samples {
+                    verify_rig_axioms(a, b, c).unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn verify_axioms_checked_i64_poisoned_loses_exactly_absorbing_zero() {
+        // The documented single lost axiom: `⊥ * 0 == 0` is false. Every
+        // earlier axiom passes (full absorption makes both sides `⊥`), so the
+        // first — and only — violation `verify_rig_axioms` reports is #8.
+        let err = verify_rig_axioms(
+            &Checked::<i64>::Poison,
+            &Checked::new(2_i64),
+            &Checked::new(3_i64),
+        )
+        .expect_err("a poisoned sample must violate the absorbing-zero axiom");
+        match err {
+            catgraph::errors::CatgraphError::RigAxiomViolation { axiom, .. } => {
+                assert_eq!(axiom, "absorbing zero");
+            }
+            other => panic!("expected RigAxiomViolation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn checked_display_from_str_round_trip() {
+        let value = Checked::new(-42_i64);
+        assert_eq!(value.to_string(), "-42");
+        assert_eq!("-42".parse::<Checked<i64>>().unwrap(), value);
+
+        let poison = Checked::<i64>::Poison;
+        assert_eq!(poison.to_string(), "⊥");
+        assert_eq!("⊥".parse::<Checked<i64>>().unwrap(), poison);
+
+        // A parse failure stays an error — poison is the overflow sentinel
+        // only, never a dumping ground for unparseable input.
+        assert!("not-a-number".parse::<Checked<i64>>().is_err());
+    }
+
+    #[test]
+    fn checked_poison_propagates_through_matmul() {
+        use crate::mat::MatR;
+
+        // Only the (0, 0) dot product overflows: BIG * BIG.
+        let big = Checked::new(BIG);
+        let zero = Checked::<i64>::zero();
+        let one = Checked::<i64>::one();
+        let m = MatR::new(2, 2, vec![vec![big, zero], vec![zero, one]]).unwrap();
+
+        let product = m.matmul(&m).unwrap();
+        let entries = product.entries();
+        assert!(entries[0][0].is_poisoned());
+        // Untouched entries are unaffected — poison is per-value, not per-matrix.
+        assert_eq!(entries[0][1], zero);
+        assert_eq!(entries[1][0], zero);
+        assert_eq!(entries[1][1], one);
     }
 }

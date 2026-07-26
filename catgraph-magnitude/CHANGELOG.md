@@ -35,6 +35,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   percentages and deferrals prose resynced (13→14 DONE, 8→7 DEFERRED,
   41%→44% / 25%→22%)
   ([#53](https://github.com/sustia-llc/catgraph/issues/53) item 2).
+- **`mobius_chains` ζ-count `u64 → i64` casts are now checked**
+  ([#88](https://github.com/sustia-llc/catgraph/issues/88)): the two
+  `#[allow(clippy::cast_possible_wrap)]` sites in
+  `mobius_function_via_chains_exact` and `verify_mobius_recursion` are replaced
+  by a shared `zeta_entry_to_q` helper using `i64::try_from`; a count above
+  `i64::MAX` now returns `CatgraphError::Composition` naming the offending
+  `(i, j)` entry instead of wrapping into a negative (a sign-flipped ζ entry
+  would have produced a plausible-looking but wrong μ). Both `allow`s removed.
+  The nested collects lift to `collect::<Result<_, _>>()?`; both enclosing
+  functions already returned `Result`, so no signature changed.
+- **Both functions' "counts ≥ 2⁶³ wrap silently" rustdoc caveats corrected**
+  ([#88](https://github.com/sustia-llc/catgraph/issues/88)) — they now error,
+  and the `# Errors` sections name the new failure. The `Q::from_u64`
+  `ZAlgebra` extension that would remove the conversion entirely stays deferred
+  ([#35](https://github.com/sustia-llc/catgraph/issues/35)).
 
 ## [workspace-v0.4.0] - 2026-07-25
 

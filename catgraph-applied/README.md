@@ -20,7 +20,7 @@ This crate packages applied-CT modules that build on catgraph's strict Fong-Spiv
 | `prop` | Symmetric strict monoidal categories with `Ob = ℕ` and the free prop `Free(G)` on a signature (F&S Def 5.2, Def 5.25); `Presentation<G>` with 9-rule SMC quotient (Def 5.33) |
 | `operad_algebra` | Single-sorted operad algebras `F : O → Set` with concrete `CircAlgebra` for `WiringDiagram` (F&S Def 6.99, Ex 6.100) |
 | `operad_functor` | Functors between operads with the canonical `E₁ ↪ E₂` inclusion (F&S Rough Def 6.98) |
-| `rig` | `Rig` trait (semiring) + `BoolRig`, `UnitInterval`, `Tropical`, `F64Rig` instances (F&S Def 5.36) |
+| `rig` | `Rig` trait (semiring) + `BoolRig`, `UnitInterval`, `Tropical`, `F64Rig` instances (F&S Def 5.36); `CheckedOps` + `Checked<T>` poison-on-overflow wrapper, and the workspace overflow policy of record (#88) |
 | `sfg` | `SignalFlowGraph<R>` — free prop on signal-flow generators (F&S Def 5.45) |
 | `mat` | `MatR<R>` — pure-rig matrix prop over any `Rig` R (F&S Def 5.50) |
 | `mat_kron` | `MatKron<R>` — Kronecker-tensor matrix prop: a genuine hypergraph category over a rig with Hadamard SCFM (η/ε/μ/δ) as inherent generators; speciality δ;μ = id (F&S 2019 *Hypergraph Categories* Ex 2.16, §2.3) |
@@ -50,6 +50,16 @@ This crate packages applied-CT modules that build on catgraph's strict Fong-Spiv
   Gaussian elimination needs). That bound stays off `Rig` itself — only `F64Rig`
   carries it — so rigs without subtraction (`BoolRig`, `Tropical`) remain valid
   `Rig` instances.
+- **Overflow policy of record.** Rig arithmetic anywhere in the workspace is
+  exactly `R`'s own `Add`/`Mul` — no layer above `R` inserts a check — so the
+  `rig` module docs are the single place the per-rig-family behaviour is
+  specified, and downstream crates cite it rather than restating it. `Z(BigInt)`
+  is exact; primitive integers inherit Rust's debug-panic / release-wrap; the
+  Boolean and float families cannot overflow an integer. `Checked<T>` is the
+  opt-in detection story: overflow becomes the fully absorbing sentinel `⊥`,
+  which costs exactly one axiom (`⊥ × 0 = ⊥ ≠ 0`) and keeps associativity,
+  commutativity, and distributivity. Saturating arithmetic is rejected outright
+  — wrong values *and* broken distributivity.
 - **`MatR<Q>` in-place mutators** (`row_swap`, `scale_row`, `add_scaled_row`,
   and the column duals, plus `entries_mut`/`entry_mut`) are the substrate for
   the Storjohann SNF port in `catgraph-magnitude`.
