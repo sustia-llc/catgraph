@@ -40,28 +40,42 @@
 //! equality under `sfg_to_mat`) is already decidable via
 //! [`Presentation::eq_mod_functorial(&a, &b, &MatrixNFFunctor::new())`]. The
 //! four depth-2 tests are **bounded regression trackers**. All four rigs are
-//! **pinned exactly** (`assert_eq!`), so both a rise (CC/NF regression) and a
-//! silent drop (KB-like progress, or an unsound CC over-merge — both must be
-//! noticed) trip the test. (F64Rig was a float-jitter band until #58 normalized
+//! **pinned exactly** (`assert_eq!`), so any move — rise or drop — trips the
+//! test and demands an explanation. NOTE (#55 PR2 metric lesson): this count
+//! conflates NF canonicality with bounded-depth *equational reach* (E_18
+//! congruence bridges are co-adapted to the exact NFs), so a pin move is
+//! evidence of change, not by itself proof of an NF regression or
+//! improvement. Canonicality is judged by the `smc_canonicality_probes`
+//! module in `smc_nf_completeness.rs` (SMC-equal pairs asserted NF-equal
+//! directly — the unconfoundable metric); these pins detect *unexplained*
+//! deltas. (F64Rig was a float-jitter band until #58 normalized
 //! signed zero in the rig Hash impls; see below.) Depth-3/4 stay
 //! `assert_eq!(.., 0)`: they are unmeasured (depth 3 is
 //! over 10 min/rig in release, depth 4 larger still), so on a manual `--ignored`
 //! run the assert's LEFT value IS the true depth-N count (not an expectation).
 //!
-//! Fresh collision/expression counts (post-#55-PR1, release, depth 2):
+//! Fresh collision/expression counts (post-#55-PR2, release, depth 2):
 //!
 //! | rig          | collisions | expressions |
 //! |--------------|-----------:|------------:|
-//! | BoolRig      |        972 |       20324 |
-//! | UnitInterval |       1400 |       31337 |
-//! | Tropical     |       1930 |       46810 |
-//! | F64Rig       |       1925 |       46810 |
+//! | BoolRig      |        979 |       20324 |
+//! | UnitInterval |       1432 |       31337 |
+//! | Tropical     |       2017 |       46810 |
+//! | F64Rig       |       2012 |       46810 |
 //!
 //! BoolRig lineage: 2574 plain CC → 1433 atom-canonical `smc_refine` → 1301
 //! post-#14 layer-ordering NF → 1142 post-E_18 (D7/D8 scalar add/zero added)
 //! → 972 post-#55-PR1 (Step 6 η-before-ε within-layer reorder closed the
 //! zero-arity tensor-order split; UnitInterval 1634 → 1400, Tropical
-//! 2234 → 1930, F64Rig 2229 → 1925 in the same change).
+//! 2234 → 1930, F64Rig 2229 → 1925 in the same change)
+//! → 979 post-#55-PR2 (rule-(i) component-anchored η placement + Step 7
+//! component-block reorder; UnitInterval → 1432, Tropical → 2017,
+//! F64Rig → 2012). The PR2 rise (+7/+32/+87/+87) is **equational-reach
+//! churn**, not an NF regression: the depth-2 E_18 congruence bridges were
+//! co-adapted to PR1's exact NFs, and redistributing NFs breaks some
+//! equation-mediated identifications while the NF itself strictly improves —
+//! canonicality on the non-interleaved fragment is witnessed directly by the
+//! `smc_canonicality_probes` module (see the module docstring note above).
 //! Completing the presentation to all 18 F&S/BE15 relations gives CC more
 //! equations to identify with, lowering the residual collision count.
 //!
@@ -72,8 +86,8 @@
 //! from `0.0` while the derived `PartialEq` treated them equal, splitting a
 //! congruence class. #58 normalized `-0.0` to `0.0` in those `Hash` impls,
 //! restoring the `Eq`/`Hash` contract and making F64Rig an exact pin (2229
-//! then; 1925 post-#55-PR1). All baselines live in the `BASELINE_*_D2`
-//! module consts.
+//! then; 1925 post-#55-PR1; 2012 post-#55-PR2). All baselines live in the
+//! `BASELINE_*_D2` module consts.
 //!
 //! [`CongruenceClosure`]: catgraph_applied::prop::presentation::NormalizeEngine::CongruenceClosure
 //! [`MatrixNFFunctor<R>`]: catgraph_applied::prop::presentation::functorial::MatrixNFFunctor
@@ -116,15 +130,19 @@ fn matr_presentation_builds_unit_interval() {
     matr_presentation::<UnitInterval>(&samples).unwrap();
 }
 
-// Post-#55-PR1 depth-2 collision baselines (Step 6 η-before-ε reorder) — the
-// single Rust source of truth for each number (mirrored in the module
-// docstring table). All four rigs are deterministic → pinned exactly (F64Rig
-// was a float-nondeterministic jitter band until #58 normalized signed zero
-// in the rig Hash impls). Prior pins: 1142/1634/2234/2229 (post-E_18/#58).
-const BASELINE_BOOL_D2: usize = 972;
-const BASELINE_UNIT_INTERVAL_D2: usize = 1400;
-const BASELINE_TROPICAL_D2: usize = 1930;
-const BASELINE_F64_D2: usize = 1925;
+// Post-#55-PR2 depth-2 collision baselines (rule-(i) component-anchored η
+// placement + Step 7 component-block reorder) — the single Rust source of
+// truth for each number (mirrored in the module docstring table; the
+// pin-guard in `scripts/check_audit_counts.py` scans the prose sites against
+// these). All four rigs are deterministic → pinned exactly (F64Rig was a
+// float-nondeterministic jitter band until #58 normalized signed zero in the
+// rig Hash impls). Prior pins: 972/1400/1930/1925 (post-#55-PR1);
+// 1142/1634/2234/2229 (post-E_18/#58). The PR2 rise is equational-reach
+// churn — see the module docstring and `smc_canonicality_probes`.
+const BASELINE_BOOL_D2: usize = 979;
+const BASELINE_UNIT_INTERVAL_D2: usize = 1432;
+const BASELINE_TROPICAL_D2: usize = 2017;
+const BASELINE_F64_D2: usize = 2012;
 
 const IGNORE_REASON: &str = "\
     CC completeness tracking (NOT a Thm 5.60 faithfulness test): F&S Thm 5.60 \
@@ -166,9 +184,12 @@ where
     })
 }
 
-/// Two-sided exact pin for a deterministic rig's depth-2 collision count. A rise
-/// is a CC/NF regression; a silent drop is KB-like progress OR an unsound CC
-/// over-merge — both must be noticed, so this pins rather than bounds.
+/// Two-sided exact pin for a deterministic rig's depth-2 collision count. Any
+/// move — rise or drop — must be noticed and explained, so this pins rather
+/// than bounds. The count conflates canonicality with bounded-depth
+/// equational reach (#55 PR2 metric lesson): judge NF changes by the
+/// `smc_canonicality_probes`, use this pin to catch *unexplained* deltas
+/// (e.g. an unsound CC over-merge, or an accidental NF/corpus change).
 fn assert_exact_baseline<R>(
     rig: &str,
     report: &catgraph_applied::graphical_linalg::FaithfulnessReport<R>,
@@ -180,8 +201,9 @@ fn assert_exact_baseline<R>(
         report.collisions_under_s,
         baseline,
         "{rig} depth 2: {} expressions, {} collisions != pinned baseline {baseline} \
-         (a rise = CC/NF regression; a drop = KB-like progress or unsound CC over-merge — \
-         re-baseline only after confirming which). First witness: {:?}. {IGNORE_REASON}",
+         (the count conflates canonicality with depth-2 equational reach — diagnose \
+         via the smc_canonicality_probes and the witness diff; re-baseline only after \
+         the delta is explained). First witness: {:?}. {IGNORE_REASON}",
         report.expressions_checked,
         report.collisions_under_s,
         witness_debug(report),
@@ -193,7 +215,7 @@ fn assert_exact_baseline<R>(
 #[test]
 #[ignore = "CC completeness tracking; see module docstring and IGNORE_REASON"]
 fn cc_completeness_tracking_bool_depth_2() {
-    // Post-#55-PR1 baseline: 972 collisions / 20324 expressions (deterministic;
+    // Post-#55-PR2 baseline: 979 collisions / 20324 expressions (deterministic;
     // pinned exactly via `assert_exact_baseline`).
     let samples = vec![BoolRig(false), BoolRig(true)];
     let report = verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(2, &samples).unwrap();
@@ -226,7 +248,7 @@ fn cc_completeness_tracking_unit_interval_depth_2() {
         UnitInterval::new(0.5).unwrap(),
         UnitInterval::new(1.0).unwrap(),
     ];
-    // Post-#55-PR1 baseline: 1400 collisions / 31337 expressions (deterministic;
+    // Post-#55-PR2 baseline: 1432 collisions / 31337 expressions (deterministic;
     // pinned exactly).
     let report = verify_sfg_to_mat_is_full_and_faithful::<UnitInterval>(2, &samples).unwrap();
     assert_exact_baseline("UnitInterval", &report, BASELINE_UNIT_INTERVAL_D2);
@@ -267,7 +289,7 @@ fn cc_completeness_tracking_tropical_depth_2() {
         Tropical(1.0),
         Tropical(2.0),
     ];
-    // Post-#55-PR1 baseline: 1930 collisions / 46810 expressions (deterministic;
+    // Post-#55-PR2 baseline: 2017 collisions / 46810 expressions (deterministic;
     // pinned exactly).
     let report = verify_sfg_to_mat_is_full_and_faithful::<Tropical>(2, &samples).unwrap();
     assert_exact_baseline("Tropical", &report, BASELINE_TROPICAL_D2);
@@ -304,7 +326,7 @@ fn cc_completeness_tracking_tropical_depth_4() {
 #[test]
 #[ignore = "CC completeness tracking; see module docstring and IGNORE_REASON"]
 fn cc_completeness_tracking_f64_depth_2() {
-    // Post-#55-PR1 baseline: 1925 collisions / 46810 expressions (deterministic;
+    // Post-#55-PR2 baseline: 2012 collisions / 46810 expressions (deterministic;
     // pinned exactly). Before #58, F64Rig's count was float-nondeterministic
     // (signed-zero Hash/Eq interacted with HashMap ordering); normalizing `-0.0`
     // to `0.0` in the rig Hash impls restored the Eq/Hash contract, merging the
