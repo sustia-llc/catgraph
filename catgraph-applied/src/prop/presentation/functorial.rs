@@ -38,7 +38,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
 // `Hash` is imported for the `MatrixNFFunctor<R>` bound only; removing it
-// would break the functor's `R: Rig + Eq + Hash + 'static` constraint
+// would break the functor's `R: Rig + Eq + Hash + Ord + 'static` constraint
 // (inherited from `sfg_to_mat`'s signature). `CompleteFunctor` itself has
 // no `Hash` requirement — see the module-level note.
 
@@ -98,11 +98,11 @@ pub trait CompleteFunctor<G: PropSignature> {
 /// Equality of `MatR<R>` values decides equivalence of signal-flow graphs
 /// under the 18 Thm 5.60 equations — no Knuth-Bendix completion or
 /// congruence closure required.
-pub struct MatrixNFFunctor<R: Rig + Debug + Eq + Hash + 'static> {
+pub struct MatrixNFFunctor<R: Rig + Debug + Eq + Hash + Ord + 'static> {
     _phantom: PhantomData<R>,
 }
 
-impl<R: Rig + Debug + Eq + Hash + 'static> MatrixNFFunctor<R> {
+impl<R: Rig + Debug + Eq + Hash + Ord + 'static> MatrixNFFunctor<R> {
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -111,7 +111,7 @@ impl<R: Rig + Debug + Eq + Hash + 'static> MatrixNFFunctor<R> {
     }
 }
 
-impl<R: Rig + Debug + Eq + Hash + 'static> Default for MatrixNFFunctor<R> {
+impl<R: Rig + Debug + Eq + Hash + Ord + 'static> Default for MatrixNFFunctor<R> {
     fn default() -> Self {
         Self::new()
     }
@@ -119,7 +119,7 @@ impl<R: Rig + Debug + Eq + Hash + 'static> Default for MatrixNFFunctor<R> {
 
 impl<R> CompleteFunctor<SfgGenerator<R>> for MatrixNFFunctor<R>
 where
-    R: Rig + Debug + Eq + Hash + 'static,
+    R: Rig + Debug + Eq + Hash + Ord + 'static,
 {
     type Target = MatR<R>;
 

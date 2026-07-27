@@ -8,12 +8,13 @@
 //! per the "paper coverage matrix" in `docs/SMC-NF-RECONCILIATION.md` (§3 step table).
 
 use catgraph_applied::prop::presentation::smc_nf::{Atom, StringDiagram, nf};
-use catgraph_applied::prop::{PropExpr, PropSignature};
+use catgraph_applied::prop::{PropExpr, PropSignature, mono_word};
+use std::borrow::Cow;
 
 /// Shared test signature covering all four papers' tested arities:
 /// `F, G : 1 → 1`, `H : 2 → 1`, `Eps : 1 → 0`, `Eta : 0 → 1`. `H` exercises
 /// multi-wire generators in interchange/braiding patterns.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum TestSig {
     F,
     G,
@@ -23,6 +24,14 @@ enum TestSig {
 }
 
 impl PropSignature for TestSig {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
     fn source(&self) -> usize {
         match self {
             TestSig::F | TestSig::G | TestSig::Eps => 1,

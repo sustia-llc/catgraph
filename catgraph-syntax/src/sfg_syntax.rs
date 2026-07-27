@@ -47,7 +47,7 @@ const SCALAR_PREFIX: &str = "scalar:";
 
 impl<R> GeneratorSyntax for SfgGenerator<R>
 where
-    R: Rig + core::fmt::Debug + Eq + Hash + Display + FromStr + 'static,
+    R: Rig + core::fmt::Debug + Eq + Hash + Ord + Display + FromStr + 'static,
 {
     fn print_token(&self) -> String {
         match self {

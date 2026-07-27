@@ -73,11 +73,13 @@
 //! **colored** generality (a distinct spider per colour) is out of scope and
 //! tracked as [#79](https://github.com/sustia-llc/catgraph/issues/79).
 
+use std::borrow::Cow;
+
 use catgraph::category::Composable;
 
 use catgraph_applied::mat_kron::MatKron;
 use catgraph_applied::prop::presentation::Presentation;
-use catgraph_applied::prop::{Free, PropExpr, PropSignature};
+use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
 use catgraph_applied::rig::Rig;
 
 use crate::errors::SyntaxError;
@@ -99,7 +101,19 @@ use crate::text::GeneratorSyntax;
 /// | [`Delta`](FrobeniusOr::Delta) | `δ` comultiplication | `1 → 2` |
 /// | [`Epsilon`](FrobeniusOr::Epsilon) | `ε` counit | `1 → 0` |
 /// | [`User(g)`](FrobeniusOr::User) | a `G`-generator | `g.source() → g.target()` |
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+///
+/// # Monochromatic-only, until P3 ([#79](https://github.com/sustia-llc/catgraph/issues/79))
+///
+/// The [`PropSignature`] impl below is available only for a **monochromatic**
+/// user signature (`G::Color = ()`), and its own `Color` is `()`. F&S 2019 Def
+/// 2.5 / Ex 2.9 give *every object* its own special commutative Frobenius
+/// monoid, so a Λ-colored spider calculus needs a spider family per color —
+/// `Mu`/`Eta`/`Delta`/`Epsilon` gain a `Λ` payload. That is #79's P3 shape
+/// change, not a bound relaxation: until it lands there is no honest word for a
+/// colored `Mu`, and this bound says so at the type level rather than inventing
+/// one. It matches the crate's monochromatic scope note (module docs,
+/// disclaimer 2); every shipped `G` is monochromatic, so nothing loses an impl.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FrobeniusOr<G> {
     /// Multiplication `μ : 2 → 1` (the merge).
@@ -119,7 +133,25 @@ pub enum FrobeniusOr<G> {
 /// user equation once lifted into `FrobeniusOr<G>`.
 pub type FrobeniusEquation<G> = (PropExpr<FrobeniusOr<G>>, PropExpr<FrobeniusOr<G>>);
 
-impl<G: PropSignature> PropSignature for FrobeniusOr<G> {
+impl<G: PropSignature<Color = ()>> PropSignature for FrobeniusOr<G> {
+    type Color = ();
+
+    /// The user generator's own word for [`User`](FrobeniusOr::User); the
+    /// monochromatic word of the Def 2.5 arity for the four spiders.
+    fn source_word(&self) -> Cow<'_, [()]> {
+        match self {
+            FrobeniusOr::User(g) => g.source_word(),
+            _ => mono_word(self.source()),
+        }
+    }
+
+    fn target_word(&self) -> Cow<'_, [()]> {
+        match self {
+            FrobeniusOr::User(g) => g.target_word(),
+            _ => mono_word(self.target()),
+        }
+    }
+
     fn source(&self) -> usize {
         match self {
             FrobeniusOr::Mu => 2,
@@ -145,27 +177,27 @@ impl<G: PropSignature> PropSignature for FrobeniusOr<G> {
 // the variant-to-`Free::generator` mapping lives in exactly one place.
 
 /// `μ : 2 → 1` as a term.
-fn mu<G: PropSignature>() -> PropExpr<FrobeniusOr<G>> {
+fn mu<G: PropSignature<Color = ()>>() -> PropExpr<FrobeniusOr<G>> {
     Free::generator(FrobeniusOr::Mu)
 }
 
 /// `η : 0 → 1` as a term.
-fn eta<G: PropSignature>() -> PropExpr<FrobeniusOr<G>> {
+fn eta<G: PropSignature<Color = ()>>() -> PropExpr<FrobeniusOr<G>> {
     Free::generator(FrobeniusOr::Eta)
 }
 
 /// `δ : 1 → 2` as a term.
-fn delta<G: PropSignature>() -> PropExpr<FrobeniusOr<G>> {
+fn delta<G: PropSignature<Color = ()>>() -> PropExpr<FrobeniusOr<G>> {
     Free::generator(FrobeniusOr::Delta)
 }
 
 /// `ε : 1 → 0` as a term.
-fn epsilon<G: PropSignature>() -> PropExpr<FrobeniusOr<G>> {
+fn epsilon<G: PropSignature<Color = ()>>() -> PropExpr<FrobeniusOr<G>> {
     Free::generator(FrobeniusOr::Epsilon)
 }
 
 /// `id_n : n → n` over [`FrobeniusOr<G>`].
-fn id<G: PropSignature>(n: usize) -> PropExpr<FrobeniusOr<G>> {
+fn id<G: PropSignature<Color = ()>>(n: usize) -> PropExpr<FrobeniusOr<G>> {
     Free::identity(n)
 }
 
@@ -187,7 +219,7 @@ fn id<G: PropSignature>(n: usize) -> PropExpr<FrobeniusOr<G>> {
 /// arity-sound and cannot trigger this — but a `PropExpr` assembled by raw
 /// variant construction (documented-legal in applied) may be ill-formed, and a
 /// `Result`-returning API must surface that transparently rather than panic.
-pub fn lift_user<G: PropSignature>(
+pub fn lift_user<G: PropSignature<Color = ()>>(
     expr: PropExpr<G>,
 ) -> Result<PropExpr<FrobeniusOr<G>>, SyntaxError> {
     Ok(match expr {
@@ -204,7 +236,7 @@ pub fn lift_user<G: PropSignature>(
 /// (`m = 1`). Built **iteratively** (a loop, not recursion) so a wide `m` cannot
 /// overflow the stack during construction — only the O(m)-deep *result* term is
 /// recursed over downstream.
-fn collapse<G: PropSignature>(m: usize) -> PropExpr<FrobeniusOr<G>> {
+fn collapse<G: PropSignature<Color = ()>>(m: usize) -> PropExpr<FrobeniusOr<G>> {
     if m == 0 {
         return eta();
     }
@@ -220,7 +252,7 @@ fn collapse<G: PropSignature>(m: usize) -> PropExpr<FrobeniusOr<G>> {
 /// `δ ; ((δ ; (… ⊗ id)) ⊗ id)`. Base cases `ε` (`n = 0`) and `id(1)` (`n = 1`).
 /// Built **iteratively** (a loop, not recursion) so a wide `n` cannot overflow
 /// the stack during construction.
-fn expand<G: PropSignature>(n: usize) -> PropExpr<FrobeniusOr<G>> {
+fn expand<G: PropSignature<Color = ()>>(n: usize) -> PropExpr<FrobeniusOr<G>> {
     if n == 0 {
         return epsilon();
     }
@@ -267,7 +299,7 @@ fn expand<G: PropSignature>(n: usize) -> PropExpr<FrobeniusOr<G>> {
 /// note on the printer/interpreter. Construction itself is iterative and never
 /// recurses.
 #[must_use]
-pub fn spider<G: PropSignature>(m: usize, n: usize) -> PropExpr<FrobeniusOr<G>> {
+pub fn spider<G: PropSignature<Color = ()>>(m: usize, n: usize) -> PropExpr<FrobeniusOr<G>> {
     if m == 1 {
         return expand::<G>(n);
     }
@@ -282,7 +314,7 @@ pub fn spider<G: PropSignature>(m: usize, n: usize) -> PropExpr<FrobeniusOr<G>> 
 /// [`MatKron::cup`](catgraph_applied::mat_kron::MatKron::cup) exactly under
 /// [`to_mat_kron`].
 #[must_use]
-pub fn cup<G: PropSignature>() -> PropExpr<FrobeniusOr<G>> {
+pub fn cup<G: PropSignature<Color = ()>>() -> PropExpr<FrobeniusOr<G>> {
     Free::compose(eta(), delta()).expect("invariant: η:0→1 ; δ:1→2 gives 0→2")
 }
 
@@ -290,7 +322,7 @@ pub fn cup<G: PropSignature>() -> PropExpr<FrobeniusOr<G>> {
 /// [`MatKron::cap`](catgraph_applied::mat_kron::MatKron::cap) exactly under
 /// [`to_mat_kron`].
 #[must_use]
-pub fn cap<G: PropSignature>() -> PropExpr<FrobeniusOr<G>> {
+pub fn cap<G: PropSignature<Color = ()>>() -> PropExpr<FrobeniusOr<G>> {
     Free::compose(mu(), epsilon()).expect("invariant: μ:2→1 ; ε:1→0 gives 2→0")
 }
 
@@ -318,7 +350,7 @@ pub fn cap<G: PropSignature>() -> PropExpr<FrobeniusOr<G>> {
 /// unitality/counitality (Def 2.5's diagrams show only the left) are derivable
 /// via commutativity/cocommutativity and are not among the nine.
 #[must_use]
-pub fn scfm_equations<G: PropSignature>() -> Vec<FrobeniusEquation<G>> {
+pub fn scfm_equations<G: PropSignature<Color = ()>>() -> Vec<FrobeniusEquation<G>> {
     // Local composition shim: every pair below is arity-matched by the arities
     // annotated in this function's rustdoc, so `Free::compose` cannot fail here.
     let c = |f: PropExpr<FrobeniusOr<G>>, g: PropExpr<FrobeniusOr<G>>| {
@@ -397,7 +429,7 @@ pub fn scfm_equations<G: PropSignature>() -> Vec<FrobeniusEquation<G>> {
 /// [`add_equation`](catgraph_applied::prop::presentation::Presentation::add_equation)).
 /// The nine built-in equations are arity-matched by construction; an error here
 /// can only originate in a caller-supplied user equation.
-pub fn hypergraph_presentation<G: PropSignature>(
+pub fn hypergraph_presentation<G: PropSignature<Color = ()>>(
     user_eqs: impl IntoIterator<Item = (PropExpr<G>, PropExpr<G>)>,
 ) -> Result<Presentation<FrobeniusOr<G>>, SyntaxError> {
     let mut presentation = Presentation::<FrobeniusOr<G>>::new();
@@ -510,7 +542,7 @@ pub fn to_mat_kron<G, R>(
     dim: usize,
 ) -> Result<MatKron<R>, SyntaxError>
 where
-    G: PropSignature,
+    G: PropSignature<Color = ()>,
     R: Rig,
 {
     // Pre-flight the recursion depth so `to_mat_kron_inner` cannot overflow the
@@ -531,7 +563,7 @@ fn to_mat_kron_inner<G, R>(
     dim: usize,
 ) -> Result<(MatKron<R>, usize, usize), SyntaxError>
 where
-    G: PropSignature,
+    G: PropSignature<Color = ()>,
     R: Rig,
 {
     match expr {
@@ -609,7 +641,7 @@ where
 /// to clause 2 itself. Every other `G`-token round-trips unchanged (the four
 /// Frobenius names each contain no grammar metacharacter, so they satisfy
 /// clause 2).
-impl<G: GeneratorSyntax> GeneratorSyntax for FrobeniusOr<G> {
+impl<G: GeneratorSyntax<Color = ()>> GeneratorSyntax for FrobeniusOr<G> {
     fn print_token(&self) -> String {
         match self {
             FrobeniusOr::Mu => "mu".to_string(),

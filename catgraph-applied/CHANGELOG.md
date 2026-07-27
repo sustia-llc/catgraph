@@ -15,6 +15,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
+- **Λ-colored prop surface: `prop::colored` check-pass + `ColoredExpr`**
+  ([#79](https://github.com/sustia-llc/catgraph/issues/79) P1): top-down
+  word-flow validation `check(expr, input_word) -> Result<target_word>`
+  (identities and braids are color-polymorphic — colors derive from the
+  ambient word; braids emit the block swap; generators match their
+  `source_word` by value), and `ColoredExpr<G>` — the colored morphism as the
+  checked pair `(source_word, expr)` — with `eq_colored` = layered-NF
+  equality + boundary-word equality (soundness via
+  `SMC-NF-RECONCILIATION.md` §4.2/§4.3 Lemmas 4.1/4.2; canonicality caveat
+  per §4.4 stated in the docs). Serde derives behind the existing opt-in
+  `serde` feature with the #81-style documented trust boundary (Deserialize
+  does not re-run `check`; extending validation is P2).
 - **SMC NF content framework + canonicality status —
   `SMC-NF-RECONCILIATION.md` §4**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) proof phase,
@@ -59,6 +71,39 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **BREAKING: `PropSignature` is Λ-colored and `Ord`-bounded**
+  ([#79](https://github.com/sustia-llc/catgraph/issues/79) P1): the trait
+  gains `type Color: Clone + Eq + Hash + Debug` and **required**
+  `source_word`/`target_word` returning `Cow<'_, [Self::Color]>`;
+  `source()`/`target()` are now **provided** (word length — existing impls
+  keep their overrides, so arities cannot disagree with words); supertraits
+  gain `Ord`. Migration per impl: `type Color = ();`, two one-line word
+  methods via the new `mono_word` helper (ZST-backed, never allocates), and
+  `Ord` in the derive. `SfgGenerator<R>` requires `R: Ord`; the three
+  f64 rig newtypes (`UnitInterval`, `Tropical`, `F64Rig`) gain **lawful**
+  manual total orders — `-0.0`-normalized `f64::total_cmp` with `PartialOrd`
+  re-derived from `Ord` (NOT `to_bits`, which inverts negatives against IEEE
+  order). Note: the rig-module NaN non-reflexivity caveat is **unchanged**
+  (it lives in the derived IEEE `PartialEq`); `Ord` orders NaN equal to
+  itself — the narrow disagreement is documented in the module docs.
+  `Checked<T>` gains derived `PartialOrd + Ord` (canonical sort key only).
+- **SMC NF: residual (b) closed — closed↔closed blocks sort by content**
+  ([#79](https://github.com/sustia-llc/catgraph/issues/79) P1,
+  [#174](https://github.com/sustia-llc/catgraph/issues/174) residual 1):
+  Step 7 breaks equal rule-(i) keys (two closed blocks) by the
+  **lexicographic in-situ reading** of each block (layer-by-layer,
+  left-to-right, kind tag / widths / generator by `Ord` — offset-independent,
+  invariant under the pass's own swaps; equal readings = identical blocks);
+  Step 6 sorts equal-class `0→0` scalars by generator order (vacuous for all
+  shipped signatures — none has a `0→0` generator — so behaviorally inert);
+  `component_slot` uses the same comparator. Witness un-ignored and renamed
+  `closed_closed_order_is_ord_less_residual` →
+  `closed_blocks_sort_by_content_key`; new probe family
+  (`three_closed_blocks_converge_in_reading_key_order`,
+  `tied_scalars_sort_by_generator_order`, …). The four CC baseline pins
+  (979/1432/2017/2012) are **unmoved** — the d = 2 enumeration cannot express
+  two distinct closed components, and no shipped signature has a `0→0`
+  scalar. Residuals (a)/(c)/(d) unchanged (three `#[ignore]`d witnesses).
 - **SMC NF PR2: component-anchored η placement (rule (i)) + Step 7
   component-block reorder**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR2, design of

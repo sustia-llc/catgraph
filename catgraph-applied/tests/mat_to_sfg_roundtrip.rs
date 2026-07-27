@@ -20,7 +20,7 @@ use proptest::prelude::*;
 /// `S(mat_to_sfg(M)) == M`, plus domain/codomain arities `m → n`.
 fn assert_roundtrip<R>(m: &MatR<R>)
 where
-    R: catgraph_applied::rig::Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static,
+    R: catgraph_applied::rig::Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static,
 {
     let g = mat_to_sfg(m).expect("mat_to_sfg is arity-safe for well-formed MatR");
     assert_eq!(g.domain(), m.rows(), "domain arity = rows");

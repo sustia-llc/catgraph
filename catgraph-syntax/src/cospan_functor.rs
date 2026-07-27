@@ -85,7 +85,7 @@ impl CospanFunctor {
 ///   arity-mismatched (surfaced transparently from the cospan pushout).
 pub fn to_cospan<G>(expr: &PropExpr<FrobeniusOr<G>>) -> Result<Cospan<()>, CatgraphError>
 where
-    G: PropSignature,
+    G: PropSignature<Color = ()>,
 {
     // Pre-flight the recursion depth so `to_cospan_inner` cannot overflow the
     // stack on an unbounded programmatically-built term (#99). `CompleteFunctor`
@@ -106,7 +106,7 @@ where
 /// entry so this can recurse freely.
 fn to_cospan_inner<G>(expr: &PropExpr<FrobeniusOr<G>>) -> Result<Cospan<()>, CatgraphError>
 where
-    G: PropSignature,
+    G: PropSignature<Color = ()>,
 {
     match expr {
         // id(k): k → k ← k, one apex vertex per wire.
@@ -156,7 +156,7 @@ where
 
 impl<G> CompleteFunctor<FrobeniusOr<G>> for CospanFunctor
 where
-    G: PropSignature,
+    G: PropSignature<Color = ()>,
 {
     type Target = CospanCanon<()>;
 

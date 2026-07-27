@@ -28,7 +28,7 @@
 use std::error::Error;
 
 use catgraph_applied::mat_kron::MatKron;
-use catgraph_applied::prop::{Free, PropExpr, PropSignature};
+use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
 use catgraph_syntax::errors::SyntaxError;
 use catgraph_syntax::frobenius::{FrobeniusOr, cap, cup, spider, to_mat_kron};
 
@@ -36,13 +36,21 @@ use catgraph_syntax::frobenius::{FrobeniusOr, cap, cup, spider, to_mat_kron};
 /// fixes the `G` in `FrobeniusOr<G>`; its single generator is a wire decorator
 /// that sits **outside** `to_mat_kron`'s Frobenius domain — used below to show
 /// the `NonFrobenius` boundary concretely.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum Sig {
     /// `signal : 1 → 1` — a decorated wire, not a Frobenius generator.
     Signal,
 }
 
 impl PropSignature for Sig {
+    type Color = ();
+
+    fn source_word(&self) -> std::borrow::Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+    fn target_word(&self) -> std::borrow::Cow<'_, [()]> {
+        mono_word(self.target())
+    }
     fn source(&self) -> usize {
         match self {
             Sig::Signal => 1,

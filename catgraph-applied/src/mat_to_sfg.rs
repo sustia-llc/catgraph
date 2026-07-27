@@ -62,7 +62,7 @@ use crate::{
 /// layer arities fail to line up — a construction invariant that holds for all
 /// well-formed [`MatR`], so this cannot occur for values obtained through the
 /// safe [`MatR`] constructors. The `Result` mirrors [`copy_n`]/[`add_n`].
-pub fn mat_to_sfg<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+pub fn mat_to_sfg<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     m: &MatR<R>,
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {
     let rows = m.rows(); // m — input wires
@@ -125,7 +125,7 @@ pub fn mat_to_sfg<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
 ///
 /// Returns [`CatgraphError::CompositionSizeMismatch`] only on an internal
 /// arity bug; the layer widths are constructed to always line up.
-fn permutation_sfg<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+fn permutation_sfg<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     perm: &[usize],
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {
     let k = perm.len();

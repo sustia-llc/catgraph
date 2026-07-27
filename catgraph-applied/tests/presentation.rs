@@ -2,9 +2,10 @@
 
 use catgraph::errors::CatgraphError;
 use catgraph_applied::prop::{
-    Free, PropExpr, PropSignature,
+    Free, PropExpr, PropSignature, mono_word,
     presentation::{NormalizeEngine, Presentation},
 };
+use std::borrow::Cow;
 
 // ---- Tiny signature for testing ----
 //
@@ -12,7 +13,7 @@ use catgraph_applied::prop::{
 // (the signature trait requires the generator type itself to implement
 // `PropSignature` with its own `source()` / `target()` methods).
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 enum TestGen {
     A,
     B,
@@ -20,6 +21,14 @@ enum TestGen {
 }
 
 impl PropSignature for TestGen {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
     fn source(&self) -> usize {
         1
     }

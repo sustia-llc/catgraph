@@ -33,6 +33,7 @@
 //! [`SymmetricMonoidalMorphism<()>`]. Objects are represented as
 //! `Vec<()>` of length `n` (standing for the prop object `n ∈ ℕ`).
 
+use std::borrow::Cow;
 use std::marker::PhantomData;
 
 use catgraph::category::{Composable, HasIdentity};
@@ -40,27 +41,86 @@ use catgraph::errors::CatgraphError;
 use catgraph::monoidal::{Monoidal, SymmetricMonoidalMorphism};
 use permutations::Permutation;
 
-/// A signature `(G, s, t)` for a free prop: every generator has a declared
-/// source arity [`PropSignature::source`] and target arity
-/// [`PropSignature::target`], both natural numbers.
+/// The monochromatic word `•ⁿ` over the one-element palette `Λ = {•}`, which
+/// this crate spells `()`.
+///
+/// Single-sorted [`PropSignature`] impls build their interface words with it:
+/// `fn source_word(&self) -> Cow<'_, [()]> { mono_word(self.source()) }`.
+/// `Vec<()>` is ZST-backed, so the `Cow::Owned` never allocates.
+#[must_use]
+pub fn mono_word(n: usize) -> Cow<'static, [()]> {
+    Cow::Owned(vec![(); n])
+}
+
+/// A signature `(G, s, t)` for a free prop: every generator declares a source
+/// word [`PropSignature::source_word`] and a target word
+/// [`PropSignature::target_word`] over a color alphabet `Λ`
+/// ([`PropSignature::Color`]); the arities [`PropSignature::source`] /
+/// [`PropSignature::target`] are their lengths.
+///
+/// # Λ-colored words ([#79](https://github.com/sustia-llc/catgraph/issues/79))
+///
+/// F&S 2019 Def 3.9 takes the objects of a Λ-colored prop to be the free monoid
+/// `List(Λ)` — objectwise-free over the palette — and Thm 3.14 builds the free
+/// hypergraph category `Cospan_Λ` over it. A generator's interface is therefore
+/// a *word* over `Λ`, not merely a natural number. Choosing `Color = ()`
+/// collapses `List(Λ)` back to `ℕ` and recovers the single-sorted prop of F&S
+/// 2018 Def 5.25; [`mono_word`] is the helper for that case.
+///
+/// # Invariant: overridden arities must equal the word lengths
+///
+/// `source` / `target` are **provided** as `source_word().len()` /
+/// `target_word().len()`. An impl may override them — every single-sorted impl
+/// does, and then derives its words from them — but an override must stay equal
+/// to the corresponding word length. The diagram layer
+/// ([`presentation::smc_nf`]) is positional and reads arities; the colored
+/// well-formedness pass reads words; a divergence would make the two disagree
+/// about the same generator.
 ///
 /// # Supertrait bounds
 ///
-/// `PropSignature` requires `Eq + Hash` in addition to
-/// `Clone + PartialEq + Debug`. These bounds are needed by the
-/// [`presentation::kb::CongruenceClosure`] decision procedure, which uses `G`
-/// as a `HashMap` key in its term graph. Migration:
+/// `PropSignature` requires `Eq + Hash + Ord` in addition to
+/// `Clone + PartialEq + Debug`.
 ///
-/// - Derived-`PartialEq` types: add `Eq, Hash` to the `#[derive(...)]`.
+/// `Eq + Hash` are needed by the [`presentation::kb::CongruenceClosure`]
+/// decision procedure, which uses `G` as a `HashMap` key in its term graph.
+/// `Ord` supplies the *content-derived tie-break* the normal-form engine needs
+/// where two candidate orderings are otherwise indistinguishable — closed↔closed
+/// block order and the scalar tie
+/// ([#174](https://github.com/sustia-llc/catgraph/issues/174) residual (b)).
+/// It is `Ord` rather than a separate key type precisely for the `Ord` law that
+/// equal keys imply equal generators. Migration:
+///
+/// - Derived-`PartialEq` types: add `Eq, Hash, PartialOrd, Ord` to the
+///   `#[derive(...)]`.
 /// - Types containing `f64`: provide manual `Eq` + `Hash` impls via
 ///   `to_bits()` (bit-exact except `-0.0` normalizes to `0.0` to satisfy the
-///   `Eq`/`Hash` contract; see [`crate::rig::UnitInterval`] /
-///   [`crate::rig::Tropical`] / [`crate::rig::F64Rig`]).
-pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::Debug {
-    /// Source arity `s(g) ∈ ℕ`.
-    fn source(&self) -> usize;
-    /// Target arity `t(g) ∈ ℕ`.
-    fn target(&self) -> usize;
+///   `Eq`/`Hash` contract) and a manual `Ord` via `f64::total_cmp` on the same
+///   `-0.0`-normalized value; see [`crate::rig::UnitInterval`] /
+///   [`crate::rig::Tropical`] / [`crate::rig::F64Rig`].
+pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Ord {
+    /// The color alphabet `Λ`. `()` recovers the single-sorted prop.
+    type Color: Clone + Eq + std::hash::Hash + std::fmt::Debug;
+
+    /// Source word `s(g) ∈ List(Λ)` — the colors of the input ports, in order.
+    fn source_word(&self) -> Cow<'_, [Self::Color]>;
+    /// Target word `t(g) ∈ List(Λ)` — the colors of the output ports, in order.
+    fn target_word(&self) -> Cow<'_, [Self::Color]>;
+
+    /// Source arity `s(g) ∈ ℕ`. Provided as the length of [`source_word`];
+    /// an override must agree with it.
+    ///
+    /// [`source_word`]: PropSignature::source_word
+    fn source(&self) -> usize {
+        self.source_word().len()
+    }
+    /// Target arity `t(g) ∈ ℕ`. Provided as the length of [`target_word`];
+    /// an override must agree with it.
+    ///
+    /// [`target_word`]: PropSignature::target_word
+    fn target(&self) -> usize {
+        self.target_word().len()
+    }
 }
 
 /// Arity-tracked free-prop expression tree over a signature `G`.
@@ -293,6 +353,7 @@ impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
     }
 }
 
+pub mod colored;
 pub mod presentation;
 
 #[cfg(test)]

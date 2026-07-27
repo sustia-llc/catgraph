@@ -33,34 +33,55 @@
 //! on its opening side written nested (§4.6(d),
 //! `nested_sink_block_is_column_residual` /
 //! `nested_source_block_is_column_residual`) is a documented residual, not a
-//! new bug.
+//! new bug — **three** residuals, (a), (c) and (d).
+//!
+//! The fourth, residual (b) — two *distinct* closed blocks kept their input
+//! order because rule (i) gives every closed component one key and
+//! `PropSignature` carried no `Ord` to break the tie — is **closed** by
+//! issue #79 P1: the `Ord` supertrait plus Step 7's in-situ reading key
+//! (`closed_blocks_sort_by_content_key` and its companions below).
 
 use catgraph_applied::prop::presentation::smc_nf::{from_string_diagram, nf};
-use catgraph_applied::prop::{PropExpr, PropSignature};
+use catgraph_applied::prop::{PropExpr, PropSignature, mono_word};
 use proptest::prelude::*;
+use std::borrow::Cow;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// Test signature. `Sc(u8)` is a `0 → 0` **scalar** — the shape no *shipped*
+/// signature has (Mat(R)/SFG scalars are `1 → 1`, `FrobeniusOr`'s η/ε are
+/// `0 → 1` / `1 → 0`), and the only one that exercises Step 6's `G::cmp`
+/// tie-break at an equal zero-arity class (issue #79 P1). Its `u8` payload
+/// gives the derived `Ord` something to order.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum TestSig {
-    F,    // 1 → 1
-    G,    // 1 → 1
-    Eps,  // 1 → 0 (sink)
-    Eta,  // 0 → 1 (source)
-    Eps2, // 2 → 0 (wide sink)
-    Eta2, // 0 → 2 (wide source)
+    F,      // 1 → 1
+    G,      // 1 → 1
+    Eps,    // 1 → 0 (sink)
+    Eta,    // 0 → 1 (source)
+    Eps2,   // 2 → 0 (wide sink)
+    Eta2,   // 0 → 2 (wide source)
+    Sc(u8), // 0 → 0 (scalar)
 }
 
 impl PropSignature for TestSig {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
     fn source(&self) -> usize {
         match self {
             TestSig::F | TestSig::G | TestSig::Eps => 1,
-            TestSig::Eta | TestSig::Eta2 => 0,
+            TestSig::Eta | TestSig::Eta2 | TestSig::Sc(_) => 0,
             TestSig::Eps2 => 2,
         }
     }
     fn target(&self) -> usize {
         match self {
             TestSig::F | TestSig::G | TestSig::Eta => 1,
-            TestSig::Eps | TestSig::Eps2 => 0,
+            TestSig::Eps | TestSig::Eps2 | TestSig::Sc(_) => 0,
             TestSig::Eta2 => 2,
         }
     }
@@ -527,7 +548,8 @@ mod zero_arity_order {
 /// Coverage: the two-component counterexample that forced the PR2 re-cut, the
 /// PR1 atomic witnesses, the mid-layer `η` interchange pair, closed-block
 /// placement, the Step-7 block transpositions (including across fused identity
-/// padding), and idempotence on all of them.
+/// padding and among closed blocks, issue #79 P1), Step 6's `G::cmp` scalar
+/// tie-break, and idempotence on all of them.
 mod smc_canonicality_probes {
     use super::*;
     use catgraph_applied::prop::presentation::smc_nf::{Atom, Layer, StringDiagram};
@@ -558,10 +580,19 @@ mod smc_canonicality_probes {
     fn closed_block() -> PropExpr<Sfg> {
         seq(prim(SfgGenerator::Zero), prim(SfgGenerator::Discard))
     }
-    /// `η ; s ; ! : 0 → 0` — a *different* closed block, for the equal-key
-    /// residual (`closed_closed_order_is_ord_less_residual`).
+    /// `η ; s ; ! : 0 → 0` — a *different* closed block, for the closed↔closed
+    /// reading-key order (`closed_blocks_sort_by_content_key`).
     fn long_closed_block() -> PropExpr<Sfg> {
         seq(closed_via_scalar(), prim(SfgGenerator::Discard))
+    }
+    /// `η ; s′ ; ! : 0 → 0` — a *third* closed block, differing from
+    /// `long_closed_block` only in which scalar it carries, so the two are
+    /// separated by the reading key's last resort: `G::cmp` on the generator.
+    fn other_long_closed_block() -> PropExpr<Sfg> {
+        seq(
+            seq(prim(SfgGenerator::Zero), scalar_other()),
+            prim(SfgGenerator::Discard),
+        )
     }
     fn closed_via_scalar() -> PropExpr<Sfg> {
         seq(prim(SfgGenerator::Zero), scalar())
@@ -783,23 +814,181 @@ mod smc_canonicality_probes {
         assert_eq!(nf(&par(closed_block(), solids)), expected);
     }
 
-    /// **Equal-key residual, documented.** Rule (i) gives every closed component
-    /// the same key `(closed, 0)`, and Step 7 — like Step 6 — never swaps equal
-    /// keys. So two *distinct* closed blocks keep their input order: the
-    /// block-level reading of Step 6's stable-among-scalars, and the same
-    /// limitation for the same reason. Sorting them would need a content-derived
-    /// total order on components, which bottoms out in an `Ord` bound on `G` that
-    /// `PropSignature` does not carry (see the scalar caveat on
-    /// `reorder_tied_zero_arity`) — a signature-surface decision, not a
-    /// normalizer one.
+    /// **Closed↔closed order, by content** (issue #79 P1 — formerly residual
+    /// (b)). Rule (i) gives every closed component the same key `(closed, 0)`,
+    /// so until P1 two *distinct* closed blocks kept whichever order they were
+    /// written in. Breaking that tie needs a content-derived total order on
+    /// components, which bottoms out in an `Ord` bound on `G`; `PropSignature`
+    /// now carries one (Decision 2), and Step 7 compares tied blocks by their
+    /// **in-situ reading** — layer by layer, left to right, atoms mapped to
+    /// (kind, widths, generator) and compared lexicographically. The reading
+    /// names no wire coordinate, so it survives the very swap it licenses.
     #[test]
-    #[ignore = "residual: closed blocks share one rule-(i) key and PropSignature has no Ord to break the tie"]
-    fn closed_closed_order_is_ord_less_residual() {
+    fn closed_blocks_sort_by_content_key() {
         assert_eq!(
             nf(&par(closed_block(), long_closed_block())),
             nf(&par(long_closed_block(), closed_block())),
-            "two closed blocks should agree under transposition"
+            "two closed blocks must agree under transposition"
         );
+    }
+
+    /// Three *distinct* closed blocks: all six writings converge on one NF, and
+    /// the blocks land in reading-key order. The readings share their first
+    /// atom (`η`) and separate at the second — `!` before `s·(–)` by atom kind
+    /// and variant, then `s′ = false` before `s = true` by `G::cmp` — so this
+    /// exercises every level of the key, generator order included.
+    #[test]
+    fn three_closed_blocks_converge_in_reading_key_order() {
+        let blocks = [
+            closed_block(),
+            long_closed_block(),
+            other_long_closed_block(),
+        ];
+        let permutations = [
+            [0, 1, 2],
+            [0, 2, 1],
+            [1, 0, 2],
+            [1, 2, 0],
+            [2, 0, 1],
+            [2, 1, 0],
+        ];
+        let expected = StringDiagram {
+            layers: vec![
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Zero),
+                        Atom::Generator(SfgGenerator::Zero),
+                        Atom::Generator(SfgGenerator::Zero),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Generator(SfgGenerator::Scalar(BoolRig(false))),
+                        Atom::Generator(SfgGenerator::Scalar(BoolRig(true))),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Generator(SfgGenerator::Discard),
+                    ],
+                },
+            ],
+        };
+        for p in permutations {
+            let form = par(
+                blocks[p[0]].clone(),
+                par(blocks[p[1]].clone(), blocks[p[2]].clone()),
+            );
+            assert_eq!(nf(&form), expected, "closed-block writing diverged: {p:?}");
+        }
+    }
+
+    /// Two *identical* closed blocks. Their readings are equal, so Step 7 makes
+    /// no swap — and none is needed: equal readings mean the blocks are the
+    /// same, and transposing them is invisible. The tensor and compose writings
+    /// (`A ⊗ A` and `A ; A`, the same `0 → 0` morphism) converge on the
+    /// two-copy layout.
+    #[test]
+    fn identical_closed_blocks_converge_trivially() {
+        let expected = StringDiagram {
+            layers: vec![
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Zero),
+                        Atom::Generator(SfgGenerator::Zero),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Generator(SfgGenerator::Discard),
+                    ],
+                },
+            ],
+        };
+        assert_eq!(nf(&par(closed_block(), closed_block())), expected);
+        assert_eq!(nf(&seq(closed_block(), closed_block())), expected);
+    }
+
+    /// Closed↔closed ordering across the fused identity padding of
+    /// `block_transposition_crosses_fused_identity_padding`: two solid `1 → 1`
+    /// generators padded by a single `Identity(2)`, with two distinct closed
+    /// blocks to place. Step 7's pre-split keeps the two solids apart, and the
+    /// reading key then orders the closed blocks the same way from every
+    /// writing.
+    #[test]
+    fn closed_block_order_crosses_fused_identity_padding() {
+        let solids = || par(scalar(), scalar_other());
+        let baseline = nf(&par(solids(), par(closed_block(), long_closed_block())));
+        for form in [
+            par(solids(), par(long_closed_block(), closed_block())),
+            par(par(closed_block(), long_closed_block()), solids()),
+            par(par(long_closed_block(), closed_block()), solids()),
+            par(closed_block(), par(solids(), long_closed_block())),
+            par(long_closed_block(), par(solids(), closed_block())),
+        ] {
+            assert_eq!(
+                nf(&form),
+                baseline,
+                "closed blocks across fused padding diverged: {form:?}"
+            );
+        }
+        assert_eq!(
+            baseline.layers[0].atoms[0],
+            Atom::Generator(SfgGenerator::Zero),
+            "a closed block still opens layer 0"
+        );
+    }
+
+    /// **Step 6's `G::cmp` scalar tie-break** (issue #79 P1). A `0 → 0` scalar
+    /// strictly commutes with every atom, so two of them at an equal zero-arity
+    /// class are the one case the Decision-1 class order cannot separate. They
+    /// now sort ascending by `G::cmp`. No shipped signature has a `0 → 0`
+    /// generator — hence `TestSig::Sc`, and hence the baseline-inertness of the
+    /// change.
+    #[test]
+    fn tied_scalars_sort_by_generator_order() {
+        let sc = |k: u8| PropExpr::Generator(TestSig::Sc(k));
+        let expected = StringDiagram {
+            layers: vec![Layer {
+                atoms: vec![
+                    Atom::Generator(TestSig::Sc(1)),
+                    Atom::Generator(TestSig::Sc(2)),
+                ],
+            }],
+        };
+        assert_eq!(nf(&par(sc(1), sc(2))), expected);
+        assert_eq!(nf(&par(sc(2), sc(1))), expected);
+    }
+
+    /// The three-scalar companion: every writing of `s₁ ⊗ s₂ ⊗ s₃` converges on
+    /// the ascending order. Two scalars need one swap; three need the bubble
+    /// pass to reach the lex-least word of the trace monoid.
+    #[test]
+    fn three_tied_scalars_converge_in_generator_order() {
+        let sc = |k: u8| PropExpr::Generator(TestSig::Sc(k));
+        let expected = StringDiagram {
+            layers: vec![Layer {
+                atoms: vec![
+                    Atom::Generator(TestSig::Sc(1)),
+                    Atom::Generator(TestSig::Sc(2)),
+                    Atom::Generator(TestSig::Sc(3)),
+                ],
+            }],
+        };
+        for p in [
+            [1u8, 2, 3],
+            [1, 3, 2],
+            [2, 1, 3],
+            [2, 3, 1],
+            [3, 1, 2],
+            [3, 2, 1],
+        ] {
+            let form = par(sc(p[0]), par(sc(p[1]), sc(p[2])));
+            assert_eq!(nf(&form), expected, "scalar writing diverged: {p:?}");
+        }
     }
 
     /// **Trapped-nesting residual, documented** (§4.6(c), found in the #55
@@ -929,6 +1118,24 @@ mod smc_canonicality_probes {
             par(closed_block(), par(scalar(), scalar_other())),
             par(closed_block(), long_closed_block()),
             par(long_closed_block(), closed_block()),
+            par(
+                closed_block(),
+                par(long_closed_block(), other_long_closed_block()),
+            ),
+            par(
+                other_long_closed_block(),
+                par(long_closed_block(), closed_block()),
+            ),
+            par(closed_block(), closed_block()),
+            seq(closed_block(), closed_block()),
+            par(
+                par(scalar(), scalar_other()),
+                par(closed_block(), long_closed_block()),
+            ),
+            par(
+                par(long_closed_block(), closed_block()),
+                par(scalar(), scalar_other()),
+            ),
             seq(
                 par(prim(SfgGenerator::Zero), PropExpr::Identity(1)),
                 par(prim(SfgGenerator::Discard), scalar()),
@@ -944,6 +1151,7 @@ mod smc_canonicality_probes {
         let g: PropExpr<TestSig> = PropExpr::Generator(TestSig::G);
         let eta: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eta);
         let eps: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eps);
+        let sc = |k: u8| PropExpr::Generator(TestSig::Sc(k));
         let test_sig: Vec<PropExpr<TestSig>> = vec![
             seq(eps.clone(), eta.clone()),
             par(eta.clone(), eps),
@@ -952,6 +1160,8 @@ mod smc_canonicality_probes {
                 par(f, g),
                 par(PropExpr::Identity(1), par(eta, PropExpr::Identity(1))),
             ),
+            par(sc(2), sc(1)),
+            par(sc(3), par(sc(1), sc(2))),
         ];
         for e in &test_sig {
             let once = nf(e);

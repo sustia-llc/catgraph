@@ -3,16 +3,25 @@
 
 use catgraph::category::{Composable, HasIdentity};
 use catgraph::monoidal::{Monoidal, SymmetricMonoidalMorphism};
-use catgraph_applied::prop::{Free, PropExpr, PropSignature};
+use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
 use permutations::Permutation;
+use std::borrow::Cow;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 enum Sig {
     Mul,
     Unit,
 }
 
 impl PropSignature for Sig {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
     fn source(&self) -> usize {
         match self {
             Sig::Mul => 2,

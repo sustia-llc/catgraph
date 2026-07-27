@@ -6,9 +6,11 @@
 //! **Joyal-Street string-diagram normal form**: a total function
 //! [`PropExpr`] → [`StringDiagram`] aiming at "SMC-equal iff NF-equal". The
 //! ⇐ direction holds unconditionally (every rewrite is SMC-sound); the ⇒
-//! direction is **probe-verified on the fragment `𝔉`** with four documented
+//! direction is **probe-verified on the fragment `𝔉`** with three documented
 //! residuals — a full proof is open (`docs/SMC-NF-RECONCILIATION.md` §4.4
-//! canonicality status; residual scope on [`nf`]). The sibling
+//! canonicality status; residual scope on [`nf`]). (The fourth, the
+//! closed↔closed *equal-key* case, closed in #79 P1 with the in-situ reading
+//! key — see [`component_reading`].) The sibling
 //! [`super::kb::CongruenceClosure`] (Layer 2) then operates on NF-normalized
 //! terms and handles user-equation congruence without needing to know about
 //! SMC axioms.
@@ -44,6 +46,7 @@
 //! an `η` beside an `ε`, and Step 6 repairs that on the same pass.)
 
 use super::super::{PropExpr, PropSignature};
+use std::cmp::Ordering;
 
 /// A single horizontal slice of a string diagram. Within a layer, atoms are
 /// tensored left-to-right; the layer's `Vec<Atom>` preserves source tensor
@@ -98,7 +101,9 @@ pub enum Atom<G: PropSignature> {
 ///   coordinate) when either atom belongs to a multi-atom component.
 /// - No adjacent *free* pair of connected components (Step 7: at most one
 ///   attaching each boundary, at least one multi-atom, neither interleaved) is
-///   ordered against that same component order.
+///   ordered against that same component order, extended at the one tie that
+///   order admits (two closed blocks) by the in-situ reading key
+///   ([`component_reading`]).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct StringDiagram<G: PropSignature> {
     pub layers: Vec<Layer<G>>,
@@ -138,16 +143,16 @@ pub struct StringDiagram<G: PropSignature> {
 /// - **Block order** — Step 7 (`reorder_component_blocks`) transposes whole
 ///   *free* component blocks into the same rule-(i) order, so the tensor-form
 ///   transpositions close too: `nf((μ;!) ⊗ (η;Δ)) == nf((η;Δ) ⊗ (μ;!))`, and a
-///   closed block sorts leftmost regardless of where it was written.
+///   closed block sorts leftmost regardless of where it was written. Two
+///   *distinct* closed blocks share rule (i)'s one closed key and are separated
+///   by the in-situ reading key ([`component_reading`], #79 P1), so they too
+///   converge from either writing.
 ///
-/// **Residual scope**, four cases. The *interleave guard*: when a component's
+/// **Residual scope**, three cases. The *interleave guard*: when a component's
 /// boundary attachment interleaves another component's on the same boundary,
 /// block transposition is not braid-free and rule (i)'s slot is ill-defined, so
 /// such an `η` is not sifted, Step 6 falls back to the Decision-1 class order
-/// for it, and Step 7 leaves it alone. The *equal-key* case: rule (i) gives
-/// all closed components one key, so two distinct closed blocks keep their input
-/// order — the block-level reading of Step 6's stable-among-scalars, and the
-/// same no-`Ord`-on-`G` limitation. The *trapped-nesting* case (found in
+/// for it, and Step 7 leaves it alone. The *trapped-nesting* case (found in
 /// the #55 proof phase, 2026-07-27): a closed component written strictly inside
 /// another component's wire span does not extract — its `η` is blocked by the
 /// enclosing atom's target span and Step 7 never sees an adjacent free pair;
@@ -159,7 +164,7 @@ pub struct StringDiagram<G: PropSignature> {
 /// inside another component's span converges with none of its free writings — the
 /// missing move is a zero-arity-bounded *column* transposition, between what
 /// Step 6 (atoms) and Step 7 (whole components) can do; see
-/// `docs/SMC-NF-RECONCILIATION.md` §4.5. All four are strictly narrower than
+/// `docs/SMC-NF-RECONCILIATION.md` §4.5. All three are strictly narrower than
 /// the pre-PR2 gap, which covered *every* mid-layer `η`. See
 /// `docs/SMC-NF-RECONCILIATION.md` §2.6 (the component-order anchor and its
 /// carve against §2.5), §4 (content function + canonicality status), and the
@@ -189,14 +194,22 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     // - `coalesce_identity_layers`/`simplify_units` shrink layer_count;
     // - `reorder_component_blocks` (Step 7) shrinks block_inversion_count — each
     //   transposition flips every position pair between the two blocks' runs and
-    //   leaves all other pairs' relative order alone. It changes no layer's
-    //   membership and rewrites no atom, so every earlier component is invariant
-    //   under it. It may *raise* tied_inversion_count (a block move can land an
-    //   η beside an ε), but that is the later component and Step 6 repairs it on
-    //   the same pass;
+    //   leaves all other pairs' relative order alone. The count is taken against
+    //   the lex order (rule-(i) key, in-situ reading key): the reading key
+    //   records no wire coordinates, so — like the keys — it is invariant under
+    //   the swap, and the same all-pairs argument covers the equal-key
+    //   closed↔closed swap the reading key enables (#79 P1). It changes no
+    //   layer's membership and rewrites no atom, so every earlier component is
+    //   invariant under it. It may *raise* tied_inversion_count (a block move
+    //   can land an η beside an ε), but that is the later component and Step 6
+    //   repairs it on the same pass;
     // - `reorder_tied_zero_arity` (Step 6) shrinks tied_inversion_count — each
-    //   swap flips exactly one class-inverted pair and leaves every other pair's
-    //   relative order alone. `try_unitor_merge` can *raise* it (its case 1
+    //   swap flips exactly one order-inverted pair and leaves every other pair's
+    //   relative order alone. The order is `tie_sorts_before`'s: the rule-(i)
+    //   component key where the §2.6 carve hands over, else the Decision-1
+    //   class order, else (two 0→0 scalar generators, the only atoms that can
+    //   strictly commute at an equal class) `G::cmp` — all three total, so the
+    //   count is well-defined. `try_unitor_merge` can *raise* it (its case 1
     //   prepends an ε ahead of the absorbed layer's atoms, possibly past an η;
     //   its case 4 appends an η after them, possibly behind an ε; case 3's
     //   η-prepend is order-canonical), but only while strictly shrinking
@@ -212,7 +225,9 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     //   which the block count excludes by its condition (a), and a tied swap
     //   touching a multi-atom component already fires on the rule-(i) component
     //   order (`tie_sorts_before`), so it can only lower the block count or leave
-    //   it alone.
+    //   it alone. The `G::cmp` scalar tie-break is single-single by
+    //   construction — a 0→0 atom carries no wire, so it is always its own
+    //   component — and so is excluded by condition (a) as well.
     // See `docs/SMC-NF-RECONCILIATION.md` §2.4.
     loop {
         let prev = sd.clone();
@@ -1227,9 +1242,13 @@ fn merge_adjacent_identities<G: PropSignature>(atoms: Vec<Atom<G>>) -> Vec<Atom<
 /// components by (`docs/SMC-NF-RECONCILIATION.md` §2.6).
 ///
 /// The order is `closed < input-anchored < output-only`, each anchored class
-/// ordered by its least attached boundary coordinate. All closed components
-/// share the key `(0, 0)` and so compare equal — "stable among themselves",
-/// the block-level reading of Step 6's scalars-leftmost.
+/// ordered by its least attached boundary coordinate.
+///
+/// Two *distinct* anchored components can never share a key — a least attached
+/// coordinate is a wire owned by exactly one of them — so equal keys mean both
+/// components are closed, all of which share `(0, 0)`. That one tie is broken
+/// by the in-situ reading key ([`component_reading`], #79 P1): closed blocks
+/// order by content, not by the order they were written in.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct CompKey {
     /// `0` = closed (attaches to neither boundary), `1` = input-anchored
@@ -1263,6 +1282,83 @@ struct Components {
     touches_input: Vec<bool>,
     /// Does the component occupy a wire on the diagram's **output** boundary?
     touches_output: Vec<bool>,
+}
+
+/// One atom's contribution to a component's **in-situ reading key**.
+///
+/// The derived order is the intended one: `Identity < Braid < Generator` by
+/// variant tag, then widths numerically, then the generator by
+/// `PropSignature: Ord` (issue #79 P1, Decision 2). No wire coordinate appears
+/// — see [`component_reading`] for why that matters.
+///
+/// A component carrying a `Braid` is never transposed by Step 7 (the braid
+/// guard), so the `Braid` arm exists only to keep the comparator total.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum ReadingAtom<'a, G: PropSignature> {
+    Identity(usize),
+    Braid(usize, usize),
+    Generator(&'a G),
+}
+
+/// The **in-situ reading** of component `c`: its atoms in layer order,
+/// left-to-right within each layer, mapped to [`ReadingAtom`] keys.
+///
+/// This is the content-derived total order that separates two closed
+/// components, which rule (i)'s [`CompKey`] cannot (issue #79 P1, Decision 2).
+/// Compared as a `Vec`, i.e. lexicographically with a prefix sorting before a
+/// longer sequence.
+///
+/// **Offset-independence is the load-bearing property.** The reading records
+/// only what the atoms *are*, never where they sit, so it is invariant under
+/// Step 7's own transpositions — which permute whole runs and rewrite nothing.
+/// A position-sensitive key would change under the swap it just licensed and
+/// the `nf` fixpoint would oscillate instead of terminating (the same failure
+/// mode `analyze_components`' emptiness guard avoids for Step 6). Equal
+/// readings therefore mean the two blocks are identical, and transposing them
+/// is invisible.
+///
+/// `ids` is the caller's per-layer component-id rows, which must be the ones
+/// analysed from `sd` (Step 7 passes its refined pair; [`component_slot`]
+/// passes the unrefined one).
+fn component_reading<'a, G: PropSignature>(
+    sd: &'a StringDiagram<G>,
+    ids: &[Vec<usize>],
+    c: usize,
+) -> Vec<ReadingAtom<'a, G>> {
+    let mut out = Vec::new();
+    for (row, layer) in ids.iter().zip(sd.layers.iter()) {
+        for (&owner, atom) in row.iter().zip(layer.atoms.iter()) {
+            if owner == c {
+                out.push(match atom {
+                    Atom::Identity(n) => ReadingAtom::Identity(*n),
+                    Atom::Braid(m, n) => ReadingAtom::Braid(*m, *n),
+                    Atom::Generator(g) => ReadingAtom::Generator(g),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Does component `b` sort strictly before component `a` in the block order —
+/// rule (i)'s [`CompKey`], then, at the one tie that key admits (two closed
+/// components), the in-situ [`component_reading`]?
+///
+/// Both [`find_block_transposition`] (Step 7) and [`component_slot`] (the
+/// Step 4(c) `η` slot walk) read this one comparator, so the two passes cannot
+/// disagree about which of two closed blocks comes first.
+fn block_sorts_before<G: PropSignature>(
+    sd: &StringDiagram<G>,
+    comps: &Components,
+    ids: &[Vec<usize>],
+    b: usize,
+    a: usize,
+) -> bool {
+    match comps.keys[b].cmp(&comps.keys[a]) {
+        Ordering::Less => true,
+        Ordering::Greater => false,
+        Ordering::Equal => component_reading(sd, ids, b) < component_reading(sd, ids, a),
+    }
 }
 
 /// Half-open wire intervals occupied by each atom on one side of a boundary.
@@ -1594,7 +1690,7 @@ fn find_sift<G: PropSignature>(sd: &StringDiagram<G>, start: usize) -> Option<Si
                     // placement is fixed by the wire coordinate `src_pos`
                     // together with its component's rule-(i) key (issue #55).
                     let c = comps.get_or_insert_with(|| analyze_components(sd));
-                    if let Some(place) = eta_placement(prev, src_pos, c, j, idx) {
+                    if let Some(place) = eta_placement(sd, prev, src_pos, c, j, idx) {
                         return Some(Sift { j, idx, place });
                     }
                 }
@@ -1691,6 +1787,7 @@ fn point_placement<G: PropSignature>(prev: &Layer<G>, q: usize) -> Option<Placem
 /// - **Interleaved** (guard 3) — block transposition is not braid-free there
 ///   and the rule-(i) slot is ill-defined, so the `η` is not sifted at all.
 fn eta_placement<G: PropSignature>(
+    sd: &StringDiagram<G>,
     prev: &Layer<G>,
     q: usize,
     comps: &Components,
@@ -1709,7 +1806,7 @@ fn eta_placement<G: PropSignature>(
                 return None;
             }
             Some(Placement::Boundary {
-                at: component_slot(prev, lo, comps, j - 1, eta_comp),
+                at: component_slot(sd, prev, lo, comps, j - 1, eta_comp),
             })
         }
     }
@@ -1725,14 +1822,24 @@ fn eta_placement<G: PropSignature>(
 /// The §2.6 disjointness carve applies here: a tie between two *single-atom*
 /// components is a strict-commutation freedom governed by Decision 1 / Step 6
 /// (η first), so the `η` stops rather than passing such an atom.
+///
+/// The "sorts before" test is [`block_sorts_before`] — the same comparator
+/// Step 7 uses, so the walk resolves a closed↔closed tie exactly the way the
+/// block pass would (issue #79 P1). It is computed on the analysis this call
+/// site already has, the **unrefined** one: `merge_adjacent_identities` can
+/// fuse an `Identity` across a component boundary and the union-find then joins
+/// those components through it, so the readings here are as coarse as the keys
+/// here already are (§4.1). Step 7 refines before analysing; the analysis-only
+/// refinement that would retire the caveat for this call site belongs to the
+/// column-pass arc (issue #174).
 fn component_slot<G: PropSignature>(
+    sd: &StringDiagram<G>,
     prev: &Layer<G>,
     lo: usize,
     comps: &Components,
     prev_layer: usize,
     eta_comp: usize,
 ) -> usize {
-    let key = comps.keys[eta_comp];
     let eta_is_single = comps.sizes[eta_comp] == 1;
     let mut at = lo;
     while at < prev.atoms.len() && atom_target(&prev.atoms[at]) == 0 {
@@ -1740,7 +1847,7 @@ fn component_slot<G: PropSignature>(
         if (eta_is_single && comps.sizes[c] == 1) || comps.interleaved[c] {
             break;
         }
-        if comps.keys[c] >= key {
+        if !block_sorts_before(sd, comps, &comps.ids, c, eta_comp) {
             break;
         }
         at += 1;
@@ -1853,9 +1960,16 @@ fn simplify_units<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
 /// # Canonical order and adjacency
 ///
 /// Rule (i)'s `CompKey` ascending — `closed(0) < input-anchored(1, coord) <
-/// output-only(2, coord)`. **Equal keys never swap**, so the order among closed
-/// blocks is stable, the block-level reading of Step 6's scalars-leftmost and
-/// the same no-`Ord` caveat (`closed_closed_order_is_ord_less_residual`).
+/// output-only(2, coord)` — with the **in-situ reading key** breaking the one
+/// tie that key admits. Two distinct *anchored* components can never share a
+/// key (a least attached coordinate is a wire owned by exactly one of them), so
+/// equal keys mean both blocks are closed, and [`component_reading`] then
+/// orders them by content: layer by layer, left to right within each layer,
+/// compared lexicographically (issue #79 P1). The reading names no wire
+/// coordinate, so it is invariant under this pass's own swaps; equal readings
+/// mean the two blocks are identical and the transposition is invisible, so no
+/// swap is made and none is needed. The whole comparator is
+/// [`block_sorts_before`], shared with [`component_slot`].
 ///
 /// A pair is *adjacent* when, in **every** layer where both appear, each one's
 /// atoms form a contiguous run and `C1`'s run sits immediately left of `C2`'s —
@@ -1887,12 +2001,16 @@ fn simplify_units<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
 /// # Termination
 ///
 /// Strictly decreases `block_inversion_count` — summed over layers, the number
-/// of position pairs `p < q` whose components form a free pair (a)+(b)+(c) with
-/// inverted keys. A transposition flips every such pair between the two runs and
-/// leaves every other pair's relative order alone, so the count drops by at least
-/// one; and because (c) holds, neither block contributes wires at a boundary the
-/// other attaches to, so all of `keys`, `sizes`, `interleaved` and the
-/// attachment flags are invariant under the swap. `block_inversion_count` sits
+/// of position pairs `p < q` whose components form a free pair (a)+(b)+(c) and
+/// are inverted against the lex order (rule-(i) key, reading key). A
+/// transposition flips every such pair between the two runs and leaves every
+/// other pair's relative order alone, so the count drops by at least one; and
+/// because (c) holds, neither block contributes wires at a boundary the other
+/// attaches to, so all of `keys`, `sizes`, `interleaved` and the attachment
+/// flags are invariant under the swap. The reading keys are invariant too — the
+/// swap permutes whole runs and rewrites no atom, and the reading depends on no
+/// position — so the same all-pairs argument carries the equal-key
+/// closed↔closed swap. `block_inversion_count` sits
 /// between `layer_count` and `tied_inversion_count` in the `nf` measure
 /// (`docs/SMC-NF-RECONCILIATION.md` §2.4).
 ///
@@ -1917,7 +2035,7 @@ fn reorder_component_blocks<G: PropSignature>(sd: StringDiagram<G>) -> StringDia
     let has_braid = braid_bearing_components(&refined, &comps);
     let mut ids = comps.ids.clone();
     let mut swapped = false;
-    while let Some((c1, c2)) = find_block_transposition(&comps, &ids, &has_braid) {
+    while let Some((c1, c2)) = find_block_transposition(&refined, &comps, &ids, &has_braid) {
         apply_block_transposition(&mut refined, &mut ids, c1, c2);
         swapped = true;
     }
@@ -2002,9 +2120,16 @@ fn blocks_are_adjacent(ids: &[Vec<usize>], c1: usize, c2: usize) -> bool {
     true
 }
 
-/// The first adjacent free pair ordered against rule (i), scanning layers
-/// top-to-bottom and positions left-to-right.
-fn find_block_transposition(
+/// The first adjacent free pair ordered against the block order, scanning
+/// layers top-to-bottom and positions left-to-right.
+///
+/// The order is [`block_sorts_before`]: rule (i)'s key, then the in-situ
+/// reading key at the one tie it admits. The key comparison prunes first (it is
+/// two integers); a reading is only ever built for a pair that has already
+/// passed every guard and tied on its key — i.e. two adjacent free closed
+/// blocks.
+fn find_block_transposition<G: PropSignature>(
+    sd: &StringDiagram<G>,
     comps: &Components,
     ids: &[Vec<usize>],
     has_braid: &[bool],
@@ -2013,11 +2138,12 @@ fn find_block_transposition(
         for w in row.windows(2) {
             let (c1, c2) = (w[0], w[1]);
             if c1 == c2
-                || comps.keys[c2] >= comps.keys[c1]
+                || comps.keys[c2] > comps.keys[c1]
                 || has_braid[c1]
                 || has_braid[c2]
                 || !block_pair_is_free(comps, c1, c2)
                 || !blocks_are_adjacent(ids, c1, c2)
+                || !block_sorts_before(sd, comps, ids, c2, c1)
             {
                 continue;
             }
@@ -2120,13 +2246,15 @@ fn block_wiring_is_consistent<G: PropSignature>(sd: &StringDiagram<G>, ids: &[Ve
 /// the inversion count (each swap fixes exactly the pair it swaps and can never
 /// re-invert it) and is confluent by the usual sorting argument.
 ///
-/// Equal keys never swap, so the order **among scalars is stable** (input
-/// order preserved), as is the order among closed blocks. The design note
-/// records "scalars sorted by generator order" for generality, but
-/// `PropSignature` carries no `Ord` bound and no shipped signature has a
+/// Equal *keys* never swap, but equal *classes* among scalars now do: two
+/// `0 → 0` generators sort ascending by `G::cmp`, the design note's "scalars
+/// sorted by generator order", available since `PropSignature` gained its `Ord`
+/// supertrait (issue #79 P1, Decision 2). Two equal generators still never
+/// swap — `Ord`'s law makes that the same atom. No shipped signature has a
 /// `0 → 0` generator (Mat(R)/SFG scalars are `1 → 1`; `FrobeniusOr`'s η/ε are
-/// `0 → 1` / `1 → 0`), so stable-among-scalars is the deliberate reading here;
-/// a total scalar order awaits a signature that actually exercises it.
+/// `0 → 1` / `1 → 0`), so the tie-break is inert on today's baselines and
+/// exercised only by test signatures; it retires the caveat structurally rather
+/// than waiting on a signature to exercise it.
 ///
 /// The pass is per-layer: it moves no atom across a layer boundary, rewrites no
 /// atom, and is idempotent. Strict commutation also makes every swap
@@ -2194,7 +2322,16 @@ fn strictly_commute<G: PropSignature>(a: &Atom<G>, b: &Atom<G>) -> bool {
 /// disjointness carve documented on [`reorder_tied_zero_arity`]: single-atom
 /// pairs (and pairs touching an interleaved component) by the Decision-1 class
 /// order, everything else by the rule-(i) component order with the class order
-/// as tie-break.
+/// as tie-break — and, at an equal class, by `G::cmp` (issue #79 P1).
+///
+/// The generator tie-break is reachable only for a `0 → 0` scalar pair. Equal
+/// classes among strictly-commuting atoms leave no other option: two η's never
+/// strictly commute with each other, nor do two ε's, nor two solids, and
+/// `Identity(0)` — the only non-generator `0 → 0` atom, `Braid(0,0)` having
+/// been normalized to it — is removed by `simplify_units` before this pass
+/// runs. Both such atoms are necessarily their own components (a `0 → 0` atom
+/// carries no wire, so the union-find can never join it), which is why the
+/// tie-break cannot disturb Step 7's block count.
 ///
 /// Each argument is the atom paired with its component index.
 fn tie_sorts_before<G: PropSignature>(
@@ -2208,7 +2345,14 @@ fn tie_sorts_before<G: PropSignature>(
     if by_component && comps.keys[cb] != comps.keys[ca] {
         return comps.keys[cb] < comps.keys[ca];
     }
-    zero_arity_class(b) < zero_arity_class(a)
+    let (class_b, class_a) = (zero_arity_class(b), zero_arity_class(a));
+    if class_b != class_a {
+        return class_b < class_a;
+    }
+    match (b, a) {
+        (Atom::Generator(gb), Atom::Generator(ga)) if class_b == 0 => gb < ga,
+        _ => false,
+    }
 }
 
 /// Rank of `a` in the canonical class order `scalar < η < ε < solid` used by
@@ -2234,11 +2378,19 @@ mod c0_smoke {
 
     /// Minimal signature for smoke tests. Not re-exported — tests in
     /// `tests/smc_nf_regression.rs` define their own per-paper `TestSig`.
-    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
     enum Sig {
         F,
     }
     impl PropSignature for Sig {
+        type Color = ();
+
+        fn source_word(&self) -> std::borrow::Cow<'_, [()]> {
+            crate::prop::mono_word(self.source())
+        }
+        fn target_word(&self) -> std::borrow::Cow<'_, [()]> {
+            crate::prop::mono_word(self.target())
+        }
         fn source(&self) -> usize {
             1
         }
