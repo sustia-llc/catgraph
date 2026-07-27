@@ -10,7 +10,7 @@
 //! residuals — a full proof is open (`docs/SMC-NF-RECONCILIATION.md` §4.4
 //! canonicality status; residual scope on [`nf`]). (The fourth, the
 //! closed↔closed *equal-key* case, closed in #79 P1 with the in-situ reading
-//! key — see [`component_reading`].) The sibling
+//! key — see the private `component_reading` helper.) The sibling
 //! [`super::kb::CongruenceClosure`] (Layer 2) then operates on NF-normalized
 //! terms and handles user-equation congruence without needing to know about
 //! SMC axioms.
@@ -103,7 +103,7 @@ pub enum Atom<G: PropSignature> {
 ///   attaching each boundary, at least one multi-atom, neither interleaved) is
 ///   ordered against that same component order, extended at the one tie that
 ///   order admits (two closed blocks) by the in-situ reading key
-///   ([`component_reading`]).
+///   (the private `component_reading` helper).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct StringDiagram<G: PropSignature> {
     pub layers: Vec<Layer<G>>,
@@ -145,7 +145,7 @@ pub struct StringDiagram<G: PropSignature> {
 ///   transpositions close too: `nf((μ;!) ⊗ (η;Δ)) == nf((η;Δ) ⊗ (μ;!))`, and a
 ///   closed block sorts leftmost regardless of where it was written. Two
 ///   *distinct* closed blocks share rule (i)'s one closed key and are separated
-///   by the in-situ reading key ([`component_reading`], #79 P1), so they too
+///   by the in-situ reading key (`component_reading`, #79 P1), so they too
 ///   converge from either writing.
 ///
 /// **Residual scope**, three cases. The *interleave guard*: when a component's
