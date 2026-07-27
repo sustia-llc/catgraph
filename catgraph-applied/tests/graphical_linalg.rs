@@ -76,10 +76,11 @@
 //! equation-mediated identifications while the NF itself strictly improves —
 //! canonicality on the fragment 𝔉 (SMC-NF-RECONCILIATION.md §4.1: components
 //! clear and boundary-attached) is witnessed directly by the
-//! `smc_canonicality_probes` module (see the module docstring note above) and
-//! proven in SMC-NF-RECONCILIATION.md §4. The §4.6(c) trapped-nesting residual
-//! is structurally invisible at depth 2 (it needs expression depth ≥ 3), so
-//! these pins carry no contribution from it.
+//! `smc_canonicality_probes` module (see the module docstring note above);
+//! a full proof is open (§4.4 canonicality status — the draft was refuted in
+//! review). The §4.6(c)/(d) nesting residuals are structurally invisible at
+//! depth 2 (both need expression depth ≥ 3), so these pins carry no
+//! contribution from them.
 //! Completing the presentation to all 18 F&S/BE15 relations gives CC more
 //! equations to identify with, lowering the residual collision count.
 //!

@@ -15,36 +15,47 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
-- **SMC NF canonicality proof — `SMC-NF-RECONCILIATION.md` §4**
+- **SMC NF content framework + canonicality status —
+  `SMC-NF-RECONCILIATION.md` §4**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) proof phase,
-  2026-07-27): `nf` computes a function of the diagram's **abstract content**
-  (anchored monogamous directed acyclic cospan of Λ-typed hypergraphs — BGKSZ
-  arXiv:1602.06771v2 Def 3.6/3.9, Prop 3.4, Thm 3.12) on the fragment `𝔉`
-  (every component clear of guard 3's marking and boundary-attached) — so NF
-  equality *decides* SMC equality there, strictly stronger than
-  rewrite-confluence. Stated **color-generically** over an arbitrary color set
-  `Λ` so the [#79](https://github.com/sustia-llc/catgraph/issues/79)
-  word-generalized engine inherits it; §4.7 frames the content function as the
-  [#57](https://github.com/sustia-llc/catgraph/issues/57) DPO substrate
-  (BGKSZ §4 convex DPO; MPZ CALCO 2023 Def 7 / Thm 21 / Thm 28 for the
-  commutative-(co)monoid refinement).
-
-### Fixed
-
-- **Fragment claim corrected: third NF residual (trapped nested closed
-  block)** ([#55](https://github.com/sustia-llc/catgraph/issues/55) /
-  [#174](https://github.com/sustia-llc/catgraph/issues/174)): the proof phase
-  found that a closed (0→0) component written strictly *inside* another
-  component's wire span does not extract (its η's gap-closer is foreign; Step 7
-  never sees an adjacent free pair) — SMC-equal nested and free writings reach
-  different fixpoints while sharing identical content, so the residual is
-  irreducibly presentation-level. Canonicality claims re-scoped from "the
-  non-interleaved fragment" to `𝔉` (which also excludes closed components) in
-  the reconciliation doc, `smc_nf` module docs, and both test-suite
-  docstrings; new `#[ignore]`d witness
-  `trapped_closed_block_is_nesting_residual`. The depth-2 collision pins are
-  unaffected (the trap needs expression depth ≥ 3, structurally outside the
-  d = 2 enumeration).
+  2026-07-27): the diagram's **abstract content** (anchored monogamous
+  directed acyclic cospan of Λ-typed hypergraphs — BGKSZ arXiv:1602.06771v2
+  Def 3.6/3.9, Prop 3.4, Thm 3.12) is defined **color-generically** over an
+  arbitrary color set `Λ` (so the
+  [#79](https://github.com/sustia-llc/catgraph/issues/79) word-generalized
+  engine inherits it), with two lemmas proven: content decides SMC-equality
+  (Lemma 4.1), and `nf` preserves content — so NF-equality *implies*
+  SMC-equality unconditionally (Lemma 4.2). The converse (full canonicality
+  on the fragment `𝔉`) is **probe-verified but open**: the draft theorem was
+  refuted in adversarial review (see Fixed below); §4.4 records exactly what
+  is proven, verified, and open, and §4.5 the missing move (zero-arity-bounded
+  *column* transposition) with both repair paths. §4.7 frames the content
+  function as the [#57](https://github.com/sustia-llc/catgraph/issues/57) DPO
+  substrate (BGKSZ §5 convex DPO, Thm 5.6; MPZ CALCO 2023 Def 7 / Thm 21 /
+  Thm 28 for the commutative-(co)monoid refinement). The §1 invariant list
+  gains three previously implicit clauses (intra-layer identity fusion, no
+  pure-identity layer beside a non-identity layer, canonical braid runs).
+- **`Checked<T>` poison-on-overflow rig wrapper**
+  ([#88](https://github.com/sustia-llc/catgraph/issues/88)): `Checked::Value(T)
+  | Checked::Poison` in `src/rig.rs`, satisfying the `Rig` blanket impl so
+  `Checked<i64>` drops unchanged into `MatR::matmul`, `sfg_to_mat`,
+  `MatrixNFFunctor`, and catgraph-syntax's `eval`/`SfgModel`. Overflow becomes
+  the sentinel `⊥` and propagates to the result, where callers test it with
+  `is_poisoned()`. `⊥` is **fully absorbing, including `⊥ × 0 = ⊥`** — the
+  zero special-case would erase a detected overflow and break distributivity in
+  ring extensions. That costs exactly one rig axiom (absorbing zero, only in
+  the poisoned cone); associativity, commutativity and both distributive laws
+  survive, so `verify_rig_axioms` passes on unpoisoned samples and fails with
+  precisely `"absorbing zero"` on a poisoned one. `Display`/`FromStr` render
+  and read `⊥` as a single lexical atom, keeping `scalar:⊥` a valid
+  catgraph-syntax token. No serde derives (rig types deliberately carry none;
+  the [#81](https://github.com/sustia-llc/catgraph/issues/81) serde surface is
+  the term layer only).
+- **`CheckedOps` trait** ([#88](https://github.com/sustia-llc/catgraph/issues/88)):
+  `checked_add`/`checked_mul` returning `Option<Self>`, macro-implemented for
+  the twelve primitive integer types by delegating to the std inherent methods.
+  Catgraph-local rather than a `num-traits` import — only `Zero`/`One` are
+  sourced externally.
 
 ### Changed
 
@@ -114,29 +125,28 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   FS18-AUDIT Thm 5.60 row + resolution note, README `kb` row,
   `functor_bench` docs, `mat_operations` / `prop_presentation_nf` examples.
 
-### Added
+### Fixed
 
-- **`Checked<T>` poison-on-overflow rig wrapper**
-  ([#88](https://github.com/sustia-llc/catgraph/issues/88)): `Checked::Value(T)
-  | Checked::Poison` in `src/rig.rs`, satisfying the `Rig` blanket impl so
-  `Checked<i64>` drops unchanged into `MatR::matmul`, `sfg_to_mat`,
-  `MatrixNFFunctor`, and catgraph-syntax's `eval`/`SfgModel`. Overflow becomes
-  the sentinel `⊥` and propagates to the result, where callers test it with
-  `is_poisoned()`. `⊥` is **fully absorbing, including `⊥ × 0 = ⊥`** — the
-  zero special-case would erase a detected overflow and break distributivity in
-  ring extensions. That costs exactly one rig axiom (absorbing zero, only in
-  the poisoned cone); associativity, commutativity and both distributive laws
-  survive, so `verify_rig_axioms` passes on unpoisoned samples and fails with
-  precisely `"absorbing zero"` on a poisoned one. `Display`/`FromStr` render
-  and read `⊥` as a single lexical atom, keeping `scalar:⊥` a valid
-  catgraph-syntax token. No serde derives (rig types deliberately carry none;
-  the [#81](https://github.com/sustia-llc/catgraph/issues/81) serde surface is
-  the term layer only).
-- **`CheckedOps` trait** ([#88](https://github.com/sustia-llc/catgraph/issues/88)):
-  `checked_add`/`checked_mul` returning `Option<Self>`, macro-implemented for
-  the twelve primitive integer types by delegating to the std inherent methods.
-  Catgraph-local rather than a `num-traits` import — only `Zero`/`One` are
-  sourced externally.
+- **Fragment claims corrected: two new NF residuals (four total)**
+  ([#55](https://github.com/sustia-llc/catgraph/issues/55) /
+  [#174](https://github.com/sustia-llc/catgraph/issues/174)). Residual (c),
+  found in drafting: a closed (0→0) component written strictly *inside*
+  another component's wire span does not extract (its η's gap-closer is
+  foreign; Step 7 never sees an adjacent free pair) — SMC-equal nested and
+  free writings reach different fixpoints while sharing identical content, so
+  the residual is irreducibly presentation-level. Residual (d), found in
+  adversarial review and **refuting the draft §4 theorem**: a *solid-headed*
+  multi-atom zero-arity block written nested converges with none of its free
+  writings even when boundary-attached and unmarked — i.e. *inside* the
+  fragment `𝔉` (probe-verified CE-A family; the draft enclosure lemma missed
+  the wall-opening-at-η/ε escape). Canonicality claims re-scoped from "the
+  non-interleaved fragment" to probe-verified-on-`𝔉` in the reconciliation
+  doc, `smc_nf` module docs, and both test-suite docstrings; three new
+  `#[ignore]`d witnesses (`trapped_closed_block_is_nesting_residual`,
+  `nested_sink_block_is_column_residual`,
+  `nested_source_block_is_column_residual`). The depth-2 collision pins are
+  unaffected (both traps need expression depth ≥ 3, structurally outside the
+  d = 2 enumeration).
 
 ### Documentation
 
