@@ -358,9 +358,11 @@ closed (touches neither boundary)  <  input-anchored  <  output-only
 with each anchored class ordered by its **least attached boundary coordinate**
 (least input coordinate for input-anchored, least output coordinate for
 output-only). A component that touches *both* boundaries counts as
-input-anchored. All closed components share one key and so keep their input
-order — the block-level reading of §2.5's scalars-leftmost, since an atomic
-`0 → 0` scalar *is* a closed component.
+input-anchored. All closed components share one rule-(i) key; among
+themselves they sort by the in-situ reading key (#79 P1 — see
+"Closed↔closed order (resolved)" below), the block-level reading of §2.5's
+scalars-leftmost-then-`G::cmp`, since an atomic `0 → 0` scalar *is* a closed
+component.
 
 **The disjointness carve.** An atomic `η ∥ ε` pair is both a §2.5 tied
 adjacency (η first) and a rule-(i) component transposition (input-anchored ε

@@ -76,7 +76,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   gains `type Color: Clone + Eq + Hash + Debug` and **required**
   `source_word`/`target_word` returning `Cow<'_, [Self::Color]>`;
   `source()`/`target()` are now **provided** (word length — existing impls
-  keep their overrides, so arities cannot disagree with words); supertraits
+  keep their overrides, which **must** stay equal to the word lengths; a
+  documented invariant, not runtime-enforced); supertraits
   gain `Ord`. Migration per impl: `type Color = ();`, two one-line word
   methods via the new `mono_word` helper (ZST-backed, never allocates), and
   `Ord` in the derive. `SfgGenerator<R>` requires `R: Ord`; the three
