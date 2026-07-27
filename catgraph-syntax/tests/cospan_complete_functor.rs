@@ -73,17 +73,25 @@ fn registry_integration_via_eq_mod_functorial() {
 
 /// The completeness payoff, and the whole point of #80: a genuine SCFM equality
 /// that the default congruence-closure engine **fails to decide** but the
-/// complete cospan functor decides `Some(true)`. The witness is a scalar
-/// commuting past a tensor — `(η;ε) ⊗ μ = μ ⊗ (η;ε)` (scalars are central in a
-/// symmetric monoidal category). `eq_mod` (sound but syntactically incomplete,
-/// #15) does not return `Some(true)` here; `eq_mod_functorial` does.
+/// complete cospan functor decides `Some(true)`. The witness is a two-legged
+/// bubble collapsing to the one-legged one — `η ; δ ; (ε ⊗ ε) = η ; ε` — which
+/// holds by the counit law `δ ; (ε ⊗ id) = id` applied under the `η ; – ; ε`
+/// context. `eq_mod` (sound but syntactically incomplete, #15) does not return
+/// `Some(true)` here; `eq_mod_functorial` does.
+///
+/// The original witness was scalar centrality, `(η;ε) ⊗ μ = μ ⊗ (η;ε)`. It
+/// stopped showing a gap once catgraph-applied's SMC normal form learned to
+/// transpose whole connected components into rule-(i) order (issue #55, Step 7
+/// `reorder_component_blocks`): the closed `η;ε` block now sorts leftmost on
+/// both sides, so Layer 1 alone decides it and the hybrid `eq_mod` returns
+/// `Some(true)`. Centrality moved from "CC gap" to "NF theorem" — a strictly
+/// better place for it — so the gap this test pins moved with it.
 #[test]
 fn complete_where_congruence_closure_is_not() {
     let pres = hypergraph_presentation::<Sig>([]).expect("no user equations");
     let f = CospanFunctor::new();
-    let bubble = compose(eta(), epsilon());
-    let a = Free::tensor(bubble.clone(), mu());
-    let b = Free::tensor(mu(), bubble);
+    let a = compose(compose(eta(), delta()), Free::tensor(epsilon(), epsilon()));
+    let b = compose(eta(), epsilon());
 
     // The syntactic CC engine does not prove the equality (no definite Some(true)).
     assert_ne!(

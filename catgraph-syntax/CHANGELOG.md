@@ -7,6 +7,20 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Changed
+
+- **Scalar centrality became an NF theorem — the #80 CC-gap witness migrated**
+  ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR2): the
+  crown-jewel completeness-registry test `(η;ε)⊗μ = μ⊗(η;ε)` in
+  `tests/cospan_complete_functor.rs` documented a CC *gap* (plain congruence
+  closure returned non-`Some(true)`; only `CospanFunctor` decided it). After
+  catgraph-applied's component-anchored NF (rule (i) + Step 7), closed
+  components sort leftmost and plain CC now proves the pair — an unplanned
+  external confirmation that the NF change does real work. The test is
+  migrated to a **counit-law witness** (a pair the NF still cannot decide, so
+  it keeps demonstrating the functor's strictly-finer decision power); an
+  in-test doc comment explains the migration.
+
 ### Documentation
 
 - **`SfgModel`'s overflow note now cites the policy of record**

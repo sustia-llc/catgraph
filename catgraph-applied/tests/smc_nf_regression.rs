@@ -624,4 +624,57 @@ mod review_soundness_fixes {
         let out = nf(&expr);
         assert!(!has_mixed_layer(&out), "no mixed layer: {out:?}");
     }
+
+    /// Termination regression for the issue-#55 PR2 component analysis: the
+    /// `nf` fixpoint must not oscillate.
+    ///
+    /// `(σ ⊗ ε) ⊗ (η ⊗ id₁)` lowers to one mixed layer, which
+    /// `isolate_mixed_braid_layers` splits into a braid layer and
+    /// `[id₂, ε, η, id₁]`. The `ε ∥ η` pair there is a tied adjacency, so Step 6
+    /// decides its order from the components — and a zero-arity atom's wire
+    /// interval at a boundary is *empty*. Testing boundary overlap with the
+    /// usual two-sided `a_start < b_end && b_start < a_end` reports a spurious
+    /// hit for an empty interval that merely touches its neighbour, so the `η`
+    /// was absorbed into the neighbouring component when it sat to the right of
+    /// the `ε` but not when it sat to the left. Step 6's comparator then flipped
+    /// under Step 6's own swap and `nf` looped forever. The emptiness guard in
+    /// `analyze_components` makes component membership independent of
+    /// within-layer position, which is what the fixpoint argument assumes.
+    #[test]
+    fn component_analysis_fixpoint_terminates_on_tied_pair_beside_braid() {
+        let expr = Tensor(
+            b(Tensor(b(Braid(1, 1)), b(Generator(TestSig::Eps)))),
+            b(Tensor(b(Generator(TestSig::Eta)), b(Identity(1)))),
+        );
+        // Reaching this assertion at all is the regression: before the fix `nf`
+        // did not return.
+        let out = nf(&expr);
+        assert_eq!(nf(&expr), out, "nf must be deterministic and terminating");
+    }
+
+    /// Termination regression for the issue-#55 Step 7 block pass over **fused
+    /// identity padding**.
+    ///
+    /// `(F ⊗ G) ⊗ (η;ε)` pads the one-layer `F ⊗ G` with a single `Identity(2)`
+    /// spanning *both* solid components, so `analyze_components` joins them
+    /// through the fused atom. Step 7 works on a refinement in which identities
+    /// are split at wire boundaries, transposes the closed block leftmost past
+    /// each solid in turn, and re-fuses on the way out — and the next fixpoint
+    /// pass then re-runs the whole pipeline over the re-fused form. The split and
+    /// the fuse must not trade places forever: `nf` has to return, and return the
+    /// same value twice.
+    #[test]
+    fn block_pass_fixpoint_terminates_on_fused_identity_padding() {
+        let closed = || Compose(b(Generator(TestSig::Eta)), b(Generator(TestSig::Eps)));
+        let solids = || Tensor(b(Generator(TestSig::F)), b(Generator(TestSig::G)));
+        let expr = Tensor(b(solids()), b(closed()));
+        // Reaching this assertion at all is the regression.
+        let out = nf(&expr);
+        assert_eq!(nf(&expr), out, "nf must be deterministic and terminating");
+        assert_eq!(
+            nf(&Tensor(b(closed()), b(solids()))),
+            out,
+            "the closed block sorts leftmost from either writing"
+        );
+    }
 }

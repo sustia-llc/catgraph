@@ -17,6 +17,18 @@ Checks, for each audit doc passed as an argument:
      checked against the actual `#[test]` count of that file (searched across
      the workspace's */tests/ dirs; skipped if not found uniquely).
 
+Additionally (always, regardless of arguments):
+  5. CC collision-pin guard (#55 A′ landing, 2026-07-27) — the four
+     `BASELINE_*_D2` consts in `catgraph-applied/tests/graphical_linalg.rs`
+     are the single source of truth for the depth-2 collision pins. Every
+     prose site that states a *current* pin (docstring table, FS18-AUDIT
+     re-baseline note, README/FS18-AUDIT/example lineage-chain finals, bench
+     doc comments, per-test baseline comments) is checked against the consts,
+     so a re-pin can never silently miss a doc site (the failure mode that
+     twice required a manual `rg` sweep). Lineage history (old numbers behind
+     earlier arrows) is deliberately NOT flagged — only the claimed-current
+     values are compared.
+
 Exit 1 on any mismatch; prints every check performed.
 """
 
@@ -173,7 +185,122 @@ def check_doc(path: Path) -> None:
                 print(f"{rel}: test-count citation ok ({fname}: {stated_n})")
 
 
+def check_cc_pins() -> None:
+    """Guard 5: prose CC-pin sites vs the BASELINE_*_D2 consts (#55)."""
+    truth_file = WORKSPACE / "catgraph-applied/tests/graphical_linalg.rs"
+    truth = truth_file.read_text()
+    consts: dict[str, int] = {}
+    for name in ("BOOL", "UNIT_INTERVAL", "TROPICAL", "F64"):
+        m = re.search(rf"const BASELINE_{name}_D2: usize = (\d+);", truth)
+        if not m:
+            ERRORS.append(f"cc-pins: BASELINE_{name}_D2 const not found in {truth_file.name}")
+            return
+        consts[name] = int(m.group(1))
+    b, u, t, f = (consts[k] for k in ("BOOL", "UNIT_INTERVAL", "TROPICAL", "F64"))
+
+    def site(rel: str, pattern: str, expect: list[int], label: str) -> None:
+        text = (WORKSPACE / rel).read_text()
+        m = re.search(pattern, text, re.S)
+        if not m:
+            ERRORS.append(f"cc-pins: {rel}: pattern for '{label}' not found (site removed or reworded?)")
+            return
+        got = [int(g) for g in m.groups()]
+        if got != expect:
+            ERRORS.append(f"cc-pins: {rel}: '{label}' states {got} ≠ consts {expect}")
+
+    def chain_final(rel: str, expect: int) -> None:
+        """The lineage chain starting at 2574: its final arrow value is the
+        claimed-current BoolRig pin. History behind earlier arrows is ignored."""
+        text = (WORKSPACE / rel).read_text()
+        idx = text.find("2574")
+        if idx == -1:
+            ERRORS.append(f"cc-pins: {rel}: lineage chain (2574 …) not found")
+            return
+        arrows = re.findall(r"→\s*\(?(\d+)", text[idx : idx + 600])
+        if not arrows:
+            ERRORS.append(f"cc-pins: {rel}: lineage chain has no arrow values")
+            return
+        got = int(arrows[-1])
+        if got != expect:
+            ERRORS.append(f"cc-pins: {rel}: lineage-chain final {got} ≠ BoolRig const {expect}")
+
+    # source-of-truth docstring table mirrors the consts
+    site(
+        "catgraph-applied/tests/graphical_linalg.rs",
+        r"\| BoolRig\s*\|\s*(\d+)\s*\|.*?\| UnitInterval\s*\|\s*(\d+)\s*\|.*?"
+        r"\| Tropical\s*\|\s*(\d+)\s*\|.*?\| F64Rig\s*\|\s*(\d+)\s*\|",
+        [b, u, t, f],
+        "docstring table",
+    )
+    # per-test baseline comments (each cites its rig's current pin)
+    for expect, corpus, label in ((b, 20324, "bool"), (u, 31337, "unit-interval")):
+        site(
+            "catgraph-applied/tests/graphical_linalg.rs",
+            rf"baseline: (\d+) collisions / {corpus} expressions",
+            [expect],
+            f"{label} per-test comment",
+        )
+    tf_stated = [
+        int(m.group(1))
+        for m in re.finditer(r"baseline: (\d+) collisions / 46810 expressions", truth)
+    ]
+    if sorted(tf_stated) != sorted([t, f]):
+        ERRORS.append(
+            f"cc-pins: graphical_linalg.rs: 46810-corpus per-test comments {tf_stated} ≠ consts {[t, f]}"
+        )
+    # FS18-AUDIT re-baseline quadruple + lineage-chain final
+    site(
+        "catgraph-applied/docs/FS18-AUDIT.md",
+        r"BoolRig (\d+), UnitInterval (\d+), Tropical (\d+), F64 (\d+)",
+        [b, u, t, f],
+        "re-baseline note",
+    )
+    chain_final("catgraph-applied/docs/FS18-AUDIT.md", b)
+    chain_final("catgraph-applied/README.md", b)
+    chain_final("catgraph-applied/examples/mat_operations.rs", b)
+    # remaining single-value prose sites
+    site(
+        "catgraph-applied/examples/prop_presentation_nf.rs",
+        r"// (\d+) CC-incompleteness witnesses below",
+        [b],
+        "example comment",
+    )
+    site(
+        "catgraph-applied/benches/functor_bench.rs",
+        r"witness count \((\d+) for",
+        [b],
+        "bench module doc",
+    )
+    site(
+        "catgraph-applied/benches/functor_bench.rs",
+        r"(\d+) CC-incompleteness witnesses on `BoolRig`",
+        [b],
+        "bench d=2 group doc",
+    )
+    site(
+        "catgraph-applied/benches/functor_bench.rs",
+        r"larger count \((\d+) exact",
+        [f],
+        "bench F64 asymmetry note",
+    )
+    site(
+        "catgraph-applied/benches/functor_bench.rs",
+        r"(\d+) CC-incompleteness witnesses \(measured empirically",
+        [b],
+        "bench section comment",
+    )
+    site(
+        "catgraph-applied/benches/functor_bench.rs",
+        r"\((\d+) witnesses, post-",
+        [b],
+        "bench d=2 inline comment",
+    )
+    if not any(e.startswith("cc-pins:") for e in ERRORS):
+        print(f"cc-pin guard: all prose sites match consts {b}/{u}/{t}/{f}")
+
+
 def main() -> int:
+    check_cc_pins()
     for arg in sys.argv[1:]:
         try:
             check_doc(Path(arg).resolve())

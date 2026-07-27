@@ -10,7 +10,7 @@
 //! terms and handles user-equation congruence without needing to know about
 //! SMC axioms.
 //!
-//! # Algorithm (7 steps + empty-braid normalization)
+//! # Algorithm (8 steps + empty-braid normalization)
 //!
 //! - **Step 0** — `normalize_empty_braids`: `Braid(0, n) → Identity(n)`.
 //! - **Step 1** — `hexagon_expand`: `σ_{m,n}` (m+n > 2) → bricks of `Braid(1,1)`.
@@ -21,15 +21,24 @@
 //!   Paper: JS-II §1.2 α-anchor; JS-Braided p.36 "box slides through crossing".
 //! - **Step 4** — `coalesce_identity_layers`: identity-only layers absorb.
 //!   Paper: JS-I Ch 1 Prop 1.1 p.66; JS-II Thm 1.1.3 p.4.
-//! - **Step 4(c)** — `topological_layer_order`: sift each non-identity-source
-//!   generator up to its earliest braid-free layer (interchange scheduling).
+//! - **Step 4(c)** — `topological_layer_order`: sift each generator up to its
+//!   earliest braid-free layer (interchange scheduling; zero-source `η` by the
+//!   component-anchored point-span rule, issue #55).
 //!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality / interchange); issue #14.
 //! - **Step 5** — `simplify_units`: remove `Identity(0)` atoms.
 //!   Paper: JS-I Ch 1 §1 p.57; Selinger Table 2 p.10.
+//! - **Step 7** — `reorder_component_blocks`: transpose adjacent *free* component
+//!   blocks (closed ∥ anything, input-only ∥ output-only) into rule-(i) order.
+//!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 with JS-I Ch 2 §1 axiom (S) p.73 in its
+//!   degenerate `σ_{0,n} = id` form; issue #55 rule (i).
 //! - **Step 6** — `reorder_tied_zero_arity`: within-layer canonical order for
-//!   strictly-commuting zero-arity atoms (scalar < η < ε < solid).
+//!   strictly-commuting zero-arity atoms (scalar < η < ε < solid at single-atom
+//!   ties, component order otherwise).
 //!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality) with a 0-arity edge;
-//!   issue #55 Decision 1.
+//!   issue #55 Decision 1 + rule (i).
+//!
+//! (Step 7 is staged *before* Step 6 in the fixpoint loop: a block move can land
+//! an `η` beside an `ε`, and Step 6 repairs that on the same pass.)
 
 use super::super::{PropExpr, PropSignature};
 
@@ -69,11 +78,18 @@ pub enum Atom<G: PropSignature> {
 ///   generator layer is followed by a braid layer.
 /// - No layer contains both a `Braid` and a `Generator` atom (mixed layers are
 ///   split by `isolate_mixed_braid_layers` and never re-created).
-/// - Every `Generator` atom with non-zero source arity occupies its earliest
-///   admissible layer: no generator's consumed wires all pass through
-///   `Identity` atoms in the preceding braid-free layer (Step 4(c)).
+/// - Every `Generator` atom occupies its earliest admissible layer: no
+///   positive-source generator's consumed wires all pass through `Identity`
+///   atoms in the preceding braid-free layer, and no zero-source generator
+///   (`η`) in a non-interleaved component can slide across into that layer at
+///   its component-anchored coordinate (Step 4(c)).
 /// - Within every layer, no adjacent strictly-commuting pair is ordered against
-///   `scalar < η < ε` (tied runs are in canonical η-before-ε order, Step 6).
+///   the Step 6 order: `scalar < η < ε` at a single-atom tie, and
+///   `closed < input-anchored < output-only` (by least attached boundary
+///   coordinate) when either atom belongs to a multi-atom component.
+/// - No adjacent *free* pair of connected components (Step 7: at most one
+///   attaching each boundary, at least one multi-atom, neither interleaved) is
+///   ordered against that same component order.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct StringDiagram<G: PropSignature> {
     pub layers: Vec<Layer<G>>,
@@ -92,24 +108,41 @@ pub struct StringDiagram<G: PropSignature> {
 /// in the free symmetric monoidal category on `G`), `nf(&a) == nf(&b)`. The
 /// converse holds by construction since `nf` applies only SMC-sound rewrites.
 ///
-/// Known exception (narrowed by issue #55 PR1): the **within-layer order** of
-/// zero-arity atoms is now canonical — Step 6 (`reorder_tied_zero_arity`) puts
-/// every tied run in η-before-ε order, so `nf(ε ⊗ η) == nf(η ⊗ ε)`. What remains
-/// is the **layer-assignment** ambiguity for a **zero-source generator**
-/// (`source == 0`, e.g. `η : 0 → 1`): `topological_layer_order` still skips
-/// source-0 atoms (their consumed span is empty, so the earliest-layer rule is
-/// positionally ambiguous) and `try_unitor_merge` only absorbs the 2-atom
-/// boundary pattern, so a tensor-form and a compose-form of the same morphism
-/// can still land in different layers — e.g. `nf(F ⊗ η ⊗ G)` vs
-/// `nf((F ⊗ G) ; (id₁ ⊗ η ⊗ id₁))`, or `nf(ε ⊗ η)` vs `nf(ε ; η)`. Closing that
-/// is #55 PR2 (rebase the parked point-span sift onto Step 6's tie-break).
-/// Generators with `source > 0` are unaffected. Tracked as the Watch-item in
-/// `tests/smc_nf_completeness.rs` (issue #14 follow-up).
+/// Known exception (issue #55): both halves of the former zero-arity gap are
+/// closed **on the non-interleaved fragment**.
+/// - **Within-layer order** — Step 6 (`reorder_tied_zero_arity`, PR1) puts every
+///   tied run in canonical order, so `nf(ε ⊗ η) == nf(η ⊗ ε)`.
+/// - **Layer assignment** — a zero-source generator (`source == 0`, e.g.
+///   `η : 0 → 1`) is scheduled by the component-anchored point-span sift (PR2,
+///   rule (i)): its slot in the earlier layer is derived from its connected
+///   component's boundary attachment, never from the incidental source cursor.
+///   So `nf(F ⊗ η ⊗ G) == nf((F ⊗ G) ; (id₁ ⊗ η ⊗ id₁))`,
+///   `nf(ε ; η) == nf(η ⊗ ε) == nf(ε ⊗ η)`, and the two-component witness
+///   `nf((μ;!) ; (η;Δ)) == nf((μ;!) ⊗ (η;Δ))`.
+/// - **Block order** — Step 7 (`reorder_component_blocks`) transposes whole
+///   *free* component blocks into the same rule-(i) order, so the tensor-form
+///   transpositions close too: `nf((μ;!) ⊗ (η;Δ)) == nf((η;Δ) ⊗ (μ;!))`, and a
+///   closed block sorts leftmost regardless of where it was written.
+///
+/// **Residual scope**, two guards. The *interleave guard*: when a component's
+/// boundary attachment interleaves another component's on the same boundary,
+/// block transposition is not braid-free and rule (i)'s slot is ill-defined, so
+/// such an `η` is not sifted, Step 6 falls back to the Decision-1 class order
+/// for it, and Step 7 leaves it alone. And the *equal-key* case: rule (i) gives
+/// all closed components one key, so two distinct closed blocks keep their input
+/// order — the block-level reading of Step 6's stable-among-scalars, and the
+/// same no-`Ord`-on-`G` limitation. Both residuals are strictly narrower than
+/// the pre-PR2 gap, which covered *every* mid-layer `η`. See
+/// `docs/SMC-NF-RECONCILIATION.md` §2.6 (the component-order anchor and its
+/// carve against §2.5) and the `smc_canonicality_probes` module in
+/// `tests/smc_nf_completeness.rs`. Generators with `source > 0` were never
+/// affected.
 pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     let mut sd = lower(expr);
     // Fixpoint loop, terminating by the lexicographic measure
     // (crossings, mixed_layer_count, wide_braid_count, braid_position_sum,
-    //  generator_position_sum, layer_count, tied_inversion_count):
+    //  generator_position_sum, layer_count, block_inversion_count,
+    //  tied_inversion_count):
     // - `reduce_involution` shrinks crossings (σ;σ → id); `hexagon_expand` leaves
     //   crossings fixed (it preserves the underlying permutation);
     // - `isolate_mixed_braid_layers` (inside `collect_braid_prefix`) strictly
@@ -121,8 +154,17 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     //   emitted by the naturality sweep is decomposed on the next pass before
     //   braid positions are compared (at the fixpoint check no wide braid remains);
     // - the naturality sweep shrinks braid_position_sum (braids move input-ward);
-    // - `topological_layer_order` shrinks generator_position_sum;
+    // - `topological_layer_order` shrinks generator_position_sum (each sift,
+    //   including a zero-source `η` component-anchored point-span sift, drops
+    //   exactly one generator by one layer and moves nothing else — issue #55);
     // - `coalesce_identity_layers`/`simplify_units` shrink layer_count;
+    // - `reorder_component_blocks` (Step 7) shrinks block_inversion_count — each
+    //   transposition flips every position pair between the two blocks' runs and
+    //   leaves all other pairs' relative order alone. It changes no layer's
+    //   membership and rewrites no atom, so every earlier component is invariant
+    //   under it. It may *raise* tied_inversion_count (a block move can land an
+    //   η beside an ε), but that is the later component and Step 6 repairs it on
+    //   the same pass;
     // - `reorder_tied_zero_arity` (Step 6) shrinks tied_inversion_count — each
     //   swap flips exactly one class-inverted pair and leaves every other pair's
     //   relative order alone. `try_unitor_merge` can *raise* it (its case 1
@@ -130,9 +172,18 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     //   its case 4 appends an η after them, possibly behind an ε; case 3's
     //   η-prepend is order-canonical), but only while strictly shrinking
     //   layer_count, an earlier component — so the tuple still drops
-    //   lexicographically and Step 6 repairs the ordering on the same pass. Step 6 itself is
+    //   lexicographically and Step 6 repairs the ordering on the same pass.
+    //   The point-span sift can likewise land an `η` beside an `ε` and raise
+    //   tied_inversion_count, but only while shrinking generator_position_sum —
+    //   an earlier component still — and Step 6 repairs it on the same pass.
+    //   Step 6 itself is
     //   within-layer only: it moves no atom between layers and rewrites no atom,
-    //   so every earlier component is untouched by it.
+    //   so every earlier component is untouched by it — block_inversion_count
+    //   included: a single-single tied swap involves only single-atom components,
+    //   which the block count excludes by its condition (a), and a tied swap
+    //   touching a multi-atom component already fires on the rule-(i) component
+    //   order (`tie_sorts_before`), so it can only lower the block count or leave
+    //   it alone.
     // See `docs/SMC-NF-RECONCILIATION.md` §2.4.
     loop {
         let prev = sd.clone();
@@ -143,6 +194,7 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
         sd = coalesce_identity_layers(sd);
         sd = topological_layer_order(sd);
         sd = simplify_units(sd);
+        sd = reorder_component_blocks(sd);
         sd = reorder_tied_zero_arity(sd);
         if sd == prev {
             break;
@@ -1138,36 +1190,285 @@ fn merge_adjacent_identities<G: PropSignature>(atoms: Vec<Atom<G>>) -> Vec<Atom<
     out
 }
 
+// -------------------------------------------------------------------------
+// Connected components — the rule-(i) component-order anchor (issue #55)
+// -------------------------------------------------------------------------
+
+/// Boundary attachment of a connected component: the key rule (i) orders
+/// components by (`docs/SMC-NF-RECONCILIATION.md` §2.6).
+///
+/// The order is `closed < input-anchored < output-only`, each anchored class
+/// ordered by its least attached boundary coordinate. All closed components
+/// share the key `(0, 0)` and so compare equal — "stable among themselves",
+/// the block-level reading of Step 6's scalars-leftmost.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct CompKey {
+    /// `0` = closed (attaches to neither boundary), `1` = input-anchored
+    /// (attaches to the input boundary, possibly to both), `2` = output-only.
+    class: u8,
+    /// Least attached coordinate on the anchoring boundary; `0` when closed.
+    coord: usize,
+}
+
+/// Connected-component decomposition of a [`StringDiagram`] with each
+/// component's rule-(i) key.
+///
+/// Two atoms are connected when a wire leaving one at a layer boundary is a
+/// wire entering the other at the same boundary and coordinate. `Identity` and
+/// `Braid` atoms carry wires and so belong to components like any generator.
+struct Components {
+    /// `ids[j][i]` — component index of the atom at layer `j`, position `i`.
+    ids: Vec<Vec<usize>>,
+    /// Per-component rule-(i) key.
+    keys: Vec<CompKey>,
+    /// Per-component atom count. `1` marks the single-atom case that the
+    /// §2.6 disjointness carve hands back to Decision 1 / Step 6.
+    sizes: Vec<usize>,
+    /// Guard 3: components whose attached coordinates on a boundary are not a
+    /// contiguous interval, or into whose span another component intrudes.
+    /// Rule (i)'s slot is ill-defined for these, so they are left alone.
+    interleaved: Vec<bool>,
+    /// Does the component occupy a wire on the diagram's **input** boundary?
+    /// (`class == 1` also covers components that touch *both* boundaries, so
+    /// the flags — not the class — are what Step 7's boundary-freedom test reads.)
+    touches_input: Vec<bool>,
+    /// Does the component occupy a wire on the diagram's **output** boundary?
+    touches_output: Vec<bool>,
+}
+
+/// Half-open wire intervals occupied by each atom on one side of a boundary.
+fn atom_intervals<G: PropSignature>(atoms: &[Atom<G>], use_target: bool) -> Vec<(usize, usize)> {
+    let mut out = Vec::with_capacity(atoms.len());
+    let mut p = 0;
+    for a in atoms {
+        let w = if use_target {
+            atom_target(a)
+        } else {
+            atom_source(a)
+        };
+        out.push((p, p + w));
+        p += w;
+    }
+    out
+}
+
+fn uf_find(parent: &mut [usize], mut x: usize) -> usize {
+    while parent[x] != x {
+        parent[x] = parent[parent[x]];
+        x = parent[x];
+    }
+    x
+}
+
+fn uf_union(parent: &mut [usize], a: usize, b: usize) {
+    let (ra, rb) = (uf_find(parent, a), uf_find(parent, b));
+    if ra != rb {
+        parent[ra.max(rb)] = ra.min(rb);
+    }
+}
+
+/// Component of each wire on a boundary, read left to right.
+fn wire_owners(intervals: &[(usize, usize)], comp_of: &[usize], offset: usize) -> Vec<usize> {
+    let mut out = Vec::new();
+    for (i, (s, e)) in intervals.iter().enumerate() {
+        for _ in *s..*e {
+            out.push(comp_of[offset + i]);
+        }
+    }
+    out
+}
+
+/// Mark every component that breaks the "attached coordinates are disjoint
+/// intervals ordered by least coordinate" condition on this boundary — either
+/// because its own wires are split by another component, or because it sits
+/// inside another component's span.
+fn mark_interleaved(owners: &[usize], interleaved: &mut [bool]) {
+    let mut runs: Vec<usize> = Vec::new();
+    for &c in owners {
+        if runs.last() != Some(&c) {
+            runs.push(c);
+        }
+    }
+    for (i, first) in runs.iter().enumerate() {
+        for (k, second) in runs.iter().enumerate().skip(i + 1) {
+            if first == second {
+                for &m in &runs[i..=k] {
+                    interleaved[m] = true;
+                }
+            }
+        }
+    }
+}
+
+/// Union-find the atoms of `sd` into connected components and classify each by
+/// its boundary attachment (issue #55 rule (i), owner decision 2026-07-26).
+fn analyze_components<G: PropSignature>(sd: &StringDiagram<G>) -> Components {
+    let mut offsets = Vec::with_capacity(sd.layers.len() + 1);
+    let mut total = 0;
+    for l in &sd.layers {
+        offsets.push(total);
+        total += l.atoms.len();
+    }
+    offsets.push(total);
+
+    let mut parent: Vec<usize> = (0..total).collect();
+    // Two atoms connect when their wire intervals at a shared boundary share a
+    // wire. Zero-width intervals (an ε's target, an η's source) contain no wire
+    // and so connect to nothing — a zero-arity atom is joined only through its
+    // non-empty side. The emptiness guard is load-bearing: without it the usual
+    // two-sided overlap test reports a spurious hit for an empty interval that
+    // merely *touches* a neighbour, which makes a zero-arity atom's component
+    // depend on where it sits in its layer. Step 6 permutes exactly such atoms,
+    // so its comparator would change under its own swaps and the `nf` fixpoint
+    // would oscillate instead of terminating.
+    for j in 1..sd.layers.len() {
+        let ups = atom_intervals(&sd.layers[j - 1].atoms, /*use_target=*/ true);
+        let downs = atom_intervals(&sd.layers[j].atoms, /*use_target=*/ false);
+        let (mut a, mut b) = (0, 0);
+        while a < ups.len() && b < downs.len() {
+            let (a_start, a_end) = ups[a];
+            let (b_start, b_end) = downs[b];
+            let shares_a_wire =
+                a_start < a_end && b_start < b_end && a_start < b_end && b_start < a_end;
+            if shares_a_wire {
+                uf_union(&mut parent, offsets[j - 1] + a, offsets[j] + b);
+            }
+            if a_end <= b_end {
+                a += 1;
+            } else {
+                b += 1;
+            }
+        }
+    }
+
+    // Compact the union-find roots into dense component indices.
+    let roots: Vec<usize> = (0..total).map(|x| uf_find(&mut parent, x)).collect();
+    let mut label = vec![usize::MAX; total];
+    let mut ncomp = 0;
+    for &r in &roots {
+        if label[r] == usize::MAX {
+            label[r] = ncomp;
+            ncomp += 1;
+        }
+    }
+    let comp_of: Vec<usize> = roots.iter().map(|&r| label[r]).collect();
+
+    let mut sizes = vec![0usize; ncomp];
+    for &c in &comp_of {
+        sizes[c] += 1;
+    }
+
+    let mut in_min = vec![usize::MAX; ncomp];
+    let mut out_min = vec![usize::MAX; ncomp];
+    let mut interleaved = vec![false; ncomp];
+    if let Some(first) = sd.layers.first() {
+        let owners = wire_owners(
+            &atom_intervals(&first.atoms, /*use_target=*/ false),
+            &comp_of,
+            offsets[0],
+        );
+        for (w, &c) in owners.iter().enumerate() {
+            in_min[c] = in_min[c].min(w);
+        }
+        mark_interleaved(&owners, &mut interleaved);
+    }
+    if let Some(last) = sd.layers.last() {
+        let offset = offsets[sd.layers.len() - 1];
+        let owners = wire_owners(
+            &atom_intervals(&last.atoms, /*use_target=*/ true),
+            &comp_of,
+            offset,
+        );
+        for (w, &c) in owners.iter().enumerate() {
+            out_min[c] = out_min[c].min(w);
+        }
+        mark_interleaved(&owners, &mut interleaved);
+    }
+
+    let keys: Vec<CompKey> = (0..ncomp)
+        .map(|c| {
+            if in_min[c] != usize::MAX {
+                CompKey {
+                    class: 1,
+                    coord: in_min[c],
+                }
+            } else if out_min[c] != usize::MAX {
+                CompKey {
+                    class: 2,
+                    coord: out_min[c],
+                }
+            } else {
+                CompKey { class: 0, coord: 0 }
+            }
+        })
+        .collect();
+
+    let ids: Vec<Vec<usize>> = sd
+        .layers
+        .iter()
+        .enumerate()
+        .map(|(j, l)| comp_of[offsets[j]..offsets[j] + l.atoms.len()].to_vec())
+        .collect();
+
+    let touches_input: Vec<bool> = in_min.iter().map(|&v| v != usize::MAX).collect();
+    let touches_output: Vec<bool> = out_min.iter().map(|&v| v != usize::MAX).collect();
+
+    Components {
+        ids,
+        keys,
+        sizes,
+        interleaved,
+        touches_input,
+        touches_output,
+    }
+}
+
 /// **Step 4(c)**: sift each `Atom::Generator` up to its earliest admissible
 /// layer.
 ///
-/// Greedy fixpoint: for every `Generator` `g` at layer `j` (`j ≥ 1`) whose
-/// consumed wire span at the `j−1 ; j` boundary is covered entirely by
-/// `Identity` atoms of a **braid-free** layer `j−1`, move `g` up into layer
-/// `j−1` (splitting the covering `Identity` into pre/post pieces around it) and
-/// leave `Identity(atom_target(g))` behind in its old slot. Iterate until no
-/// generator can move.
+/// Greedy fixpoint: for every `Generator` `g` at layer `j` (`j ≥ 1`), move `g`
+/// up into a **braid-free** layer `j−1` when its footprint there is admissible,
+/// leaving `Identity(atom_target(g))` behind in its old slot. Iterate until no
+/// generator can move. Two footprints:
+/// - **Positive source** (`atom_source(g) > 0`): the whole consumed span at the
+///   `j−1 ; j` boundary must lie inside one covering `Identity`
+///   (`covering_identity`), which is split into pre/post pieces around `g`.
+/// - **Zero source** (`η : 0 → n`): the empty span reduces to a single point at
+///   the source cursor; `g` slides in iff that coordinate is an atom boundary
+///   of layer `j−1` or strictly inside one of its identities
+///   (`point_placement`), never strictly inside a generator's output span.
+///   Where the coordinate leaves a *choice* of slot — a run of target-0 atoms
+///   all sit at it — the slot is picked by [`component_slot`] from the
+///   components' boundary attachment, **not** from the incidental cursor
+///   (issue #55 rule (i); the cursor is presentation-dependent, which is the
+///   defect the PR2-v2 re-cut fixes).
 ///
 /// Soundness: this is bifunctoriality / interchange — JS-I Ch 1 §4 Thm 1.2
 /// p.71, `(id ⊗ g) ; (h ⊗ id) = h ⊗ g`, generalized to the identity context
 /// `(id_pre ⊗ g ⊗ id_post) ; (id_pre ⊗ id_g.target ⊗ id_post ⊗ …)`. Moving `g`
-/// earlier through a column of identities preserves the morphism. The pass is
-/// the topological-layer-order canonicalization of issue #14: it forces the
-/// C2-gap witnesses (same morphism, independent atoms scheduled into different
-/// layers) onto a single earliest-schedule form. Paper: JS-I Ch 1 §4 Thm 1.2
-/// p.71.
+/// earlier through a column of identities (or, for `η`, across an atom boundary
+/// where it shares no wire with either neighbour) preserves the morphism. The
+/// pass is the topological-layer-order canonicalization of issue #14: it forces
+/// the C2-gap witnesses (same morphism, independent atoms scheduled into
+/// different layers) onto a single earliest-schedule form. Paper: JS-I Ch 1 §4
+/// Thm 1.2 p.71.
 ///
 /// Termination: each move strictly decreases the sum of the layer indices of
-/// `Generator` atoms (one generator drops by one layer; no other generator or
-/// braid moves), bounded below by zero.
+/// `Generator` atoms (one generator — positive- or zero-source — drops by one
+/// layer; no other generator or braid moves), bounded below by zero.
 ///
 /// Limitations / deliberate guards:
-/// - **Zero-arity-source generators are skipped** (`atom_source(g) == 0`, e.g.
-///   `η : 0 → 1`). Their consumed span is empty, so a covering identity is
-///   found at every boundary position — sifting them is sound but positionally
-///   ambiguous, and would race the `try_unitor_merge` zero-arity watch-item
-///   (see `tests/smc_nf_completeness.rs` header). Target-0 sinks (`ε : 1 → 0`)
-///   have a non-empty source span and sift normally.
+/// - **Zero-source `η` uses the component-anchored point-span rule, not a
+///   covering-identity scan.** Its consumed span is empty, so the earliest
+///   placement is fixed by the single output coordinate together with its
+///   component's key. It is blocked when that coordinate is strictly inside a
+///   generator's output span, and skipped entirely when its component is
+///   *interleaved* (guard 3, `Components::interleaved`) — there rule (i)'s slot
+///   is ill-defined and the pre-PR2 behaviour (no sift) stands. This subsumes
+///   the `try_unitor_merge` zero-arity source patterns (both agree on the
+///   2-atom boundary shape) without racing it (both moves only ever decrease
+///   the `nf` fixpoint measure). Target-0 sinks (`ε : 1 → 0`) have a non-empty
+///   source span and sift via the positive-source path.
 /// - **Braids never sift and generators never sift into a braid-bearing layer.**
 ///   Braid placement is `collect_braid_prefix`'s responsibility (braids stay in
 ///   the leading layers); this guard keeps the two passes from oscillating in
@@ -1203,12 +1504,25 @@ struct Sift {
     j: usize,
     /// Index of the generator atom within layer `j`.
     idx: usize,
-    /// Index of the covering `Identity` atom within layer `j − 1`.
-    k: usize,
-    /// Slack identity width preceding the generator inside atom `k`.
-    pre: usize,
-    /// Slack identity width following the generator inside atom `k`.
-    post: usize,
+    /// Where the generator lands in layer `j − 1`.
+    place: Placement,
+}
+
+/// How a sifted generator is inserted into the preceding (braid-free) layer.
+#[derive(Clone, Copy)]
+enum Placement {
+    /// Split the covering `Identity` atom at index `k` into `Identity(pre)`,
+    /// the generator, `Identity(post)` (zero-width pieces suppressed). Used for
+    /// positive-source generators — whose consumed span lies inside one identity
+    /// — and for a zero-source generator (`η`) whose output point falls
+    /// *strictly* inside an identity (`pre > 0` and `post > 0`).
+    SplitIdentity { k: usize, pre: usize, post: usize },
+    /// Insert the (zero-source) generator at atom-boundary index `at`, between
+    /// atoms `at − 1` and `at` (no split; `at == len` appends). Used when the
+    /// output point sits on an atom boundary — e.g. between two generators'
+    /// target spans, as in `[F, G]` — so there is no covering identity to split.
+    /// This is the case the mid-layer-`η` witness needs (issue #55).
+    Boundary { at: usize },
 }
 
 /// Locate the first generator (at layer `≥ start`) that can sift one layer
@@ -1217,6 +1531,9 @@ struct Sift {
 /// layer `j`, resuming from `max(1, j-1)` is complete because every layer below
 /// `j-1` is unchanged and was already non-siftable.
 fn find_sift<G: PropSignature>(sd: &StringDiagram<G>, start: usize) -> Option<Sift> {
+    // Component analysis is only needed by the zero-source (η) branch, and most
+    // diagrams have no η at all — build it on first use.
+    let mut comps: Option<Components> = None;
     for j in start.max(1)..sd.layers.len() {
         let prev = &sd.layers[j - 1];
         // Guard: never sift into a layer that carries a braid.
@@ -1228,18 +1545,30 @@ fn find_sift<G: PropSignature>(sd: &StringDiagram<G>, start: usize) -> Option<Si
         let mut src_pos = 0;
         for (idx, atom) in cur.atoms.iter().enumerate() {
             let s = atom_source(atom);
-            // Skip zero-arity-source generators (η); their span is empty.
-            if matches!(atom, Atom::Generator(_))
-                && s > 0
-                && let Some((k, p, n)) = covering_identity(prev, src_pos, s)
-            {
-                return Some(Sift {
-                    j,
-                    idx,
-                    k,
-                    pre: src_pos - p,
-                    post: (p + n) - (src_pos + s),
-                });
+            if matches!(atom, Atom::Generator(_)) {
+                if s > 0 {
+                    // Positive-source generator: its whole consumed span must lie
+                    // inside a single covering `Identity` of the previous layer.
+                    if let Some((k, p, n)) = covering_identity(prev, src_pos, s) {
+                        return Some(Sift {
+                            j,
+                            idx,
+                            place: Placement::SplitIdentity {
+                                k,
+                                pre: src_pos - p,
+                                post: (p + n) - (src_pos + s),
+                            },
+                        });
+                    }
+                } else {
+                    // Zero-source generator (η): empty consumed span, so its
+                    // placement is fixed by the wire coordinate `src_pos`
+                    // together with its component's rule-(i) key (issue #55).
+                    let c = comps.get_or_insert_with(|| analyze_components(sd));
+                    if let Some(place) = eta_placement(prev, src_pos, c, j, idx) {
+                        return Some(Sift { j, idx, place });
+                    }
+                }
             }
             src_pos += s;
         }
@@ -1269,36 +1598,166 @@ fn covering_identity<G: PropSignature>(
     None
 }
 
+/// Placement for a **zero-source** generator (`η`) whose single output point
+/// sits at wire coordinate `q` on the `j−1 ; j` boundary. Two admissible cases:
+///
+/// 1. `q` *strictly* inside an `Identity(n)` atom's target span `[p, p+n)`
+///    (`p < q < p+n`) → split that identity ([`Placement::SplitIdentity`]).
+/// 2. `q` on an atom boundary (the layer start, the layer end, or a cumulative
+///    boundary between two atoms — including the two edges of an identity)
+///    → insert between the adjacent atoms ([`Placement::Boundary`], no split).
+///
+/// Blocked (returns `None`) when `q` falls *strictly* inside a non-`Identity`
+/// atom's target span: a `Generator`'s output wires (`prev` is braid-free, so
+/// the only non-identity atoms are generators) cannot be split. Soundness is
+/// the same interchange law as the positive-source sift — moving `η` earlier
+/// through a column of identities (or across an atom boundary, where it shares
+/// no wire with either neighbour) preserves the morphism. JS-I Ch 1 §4 Thm 1.2
+/// p.71.
+///
+/// Case 2 returns the **leftmost** matching boundary. When a run of target-0
+/// atoms (`ε`s) makes the coordinate repeat, that is only the *start* of the
+/// admissible range; [`component_slot`] then picks the actual slot inside it.
+fn point_placement<G: PropSignature>(prev: &Layer<G>, q: usize) -> Option<Placement> {
+    let mut p = 0; // cumulative target position = boundary before atom `k`
+    for (k, atom) in prev.atoms.iter().enumerate() {
+        if p == q {
+            return Some(Placement::Boundary { at: k });
+        }
+        let n = atom_target(atom);
+        if p < q && q < p + n {
+            // Strictly inside atom `k`.
+            return match atom {
+                Atom::Identity(_) => Some(Placement::SplitIdentity {
+                    k,
+                    pre: q - p,
+                    post: (p + n) - q,
+                }),
+                // Strictly inside a generator's output span: cannot split.
+                _ => None,
+            };
+        }
+        p += n;
+    }
+    // `q` at (or past) the total target width: boundary at the very end.
+    (p == q).then_some(Placement::Boundary {
+        at: prev.atoms.len(),
+    })
+}
+
+/// The component-anchored placement of a zero-source generator (`η`) — issue
+/// #55 rule (i), owner decision 2026-07-26 (diagnosis-note addendum);
+/// `docs/SMC-NF-RECONCILIATION.md` §2.6.
+///
+/// [`point_placement`] fixes the *coordinate*; when several slots realize that
+/// coordinate (a run of target-0 atoms sits at it) rule (i) fixes *which*.
+/// Three cases, by the class of the `η`'s own component:
+///
+/// - **Input-anchored** — its coordinate is already pinned by the component's
+///   anchored layout, so the leftmost slot (the plain point-span behaviour)
+///   stands.
+/// - **Output-only or closed** — the slot comes from [`component_slot`]:
+///   closed blocks leftmost, then input-anchored blocks, then output-only
+///   blocks by least attached output coordinate.
+/// - **Interleaved** (guard 3) — block transposition is not braid-free there
+///   and the rule-(i) slot is ill-defined, so the `η` is not sifted at all.
+fn eta_placement<G: PropSignature>(
+    prev: &Layer<G>,
+    q: usize,
+    comps: &Components,
+    j: usize,
+    idx: usize,
+) -> Option<Placement> {
+    let eta_comp = comps.ids[j][idx];
+    match point_placement(prev, q)? {
+        // A strict-interior split has exactly one slot — no freedom to anchor.
+        split @ Placement::SplitIdentity { .. } => Some(split),
+        Placement::Boundary { at: lo } => {
+            if comps.keys[eta_comp].class == 1 {
+                return Some(Placement::Boundary { at: lo });
+            }
+            if comps.interleaved[eta_comp] {
+                return None;
+            }
+            Some(Placement::Boundary {
+                at: component_slot(prev, lo, comps, j - 1, eta_comp),
+            })
+        }
+    }
+}
+
+/// Pick the rule-(i) slot inside the admissible range that starts at `lo`.
+///
+/// The range runs from `lo` over the following target-0 atoms: they all sit at
+/// the same wire coordinate, so inserting the `η` anywhere among them denotes
+/// the same morphism. The `η` moves right past every atom whose component sorts
+/// **before** its own, and stops at the first that does not.
+///
+/// The §2.6 disjointness carve applies here: a tie between two *single-atom*
+/// components is a strict-commutation freedom governed by Decision 1 / Step 6
+/// (η first), so the `η` stops rather than passing such an atom.
+fn component_slot<G: PropSignature>(
+    prev: &Layer<G>,
+    lo: usize,
+    comps: &Components,
+    prev_layer: usize,
+    eta_comp: usize,
+) -> usize {
+    let key = comps.keys[eta_comp];
+    let eta_is_single = comps.sizes[eta_comp] == 1;
+    let mut at = lo;
+    while at < prev.atoms.len() && atom_target(&prev.atoms[at]) == 0 {
+        let c = comps.ids[prev_layer][at];
+        if (eta_is_single && comps.sizes[c] == 1) || comps.interleaved[c] {
+            break;
+        }
+        if comps.keys[c] >= key {
+            break;
+        }
+        at += 1;
+    }
+    at
+}
+
 /// Apply a located [`Sift`]: insert the generator into layer `j − 1` (splitting
-/// the covering identity) and leave `Identity(target)` in layer `j`.
+/// a covering identity or inserting at an atom boundary, per the [`Placement`])
+/// and leave `Identity(target)` in layer `j`.
 fn apply_sift<G: PropSignature>(sd: &mut StringDiagram<G>, sift: &Sift) {
-    let Sift {
-        j,
-        idx,
-        k,
-        pre,
-        post,
-    } = *sift;
+    let Sift { j, idx, place } = sift;
+    let (j, idx) = (*j, *idx);
     let g = sd.layers[j].atoms[idx].clone();
     let target = atom_target(&g);
 
-    // Rebuild layer j−1 with the covering identity split into `Identity(pre)`,
-    // the generator, `Identity(post)`; zero-width pieces are suppressed.
+    // Rebuild layer j−1 with the generator inserted per its placement.
     let prev_atoms = std::mem::take(&mut sd.layers[j - 1].atoms);
-    let mut new_prev = Vec::with_capacity(prev_atoms.len() + 2);
-    for (kk, atom) in prev_atoms.into_iter().enumerate() {
-        if kk == k {
-            if pre > 0 {
-                new_prev.push(Atom::Identity(pre));
+    let new_prev = match *place {
+        Placement::SplitIdentity { k, pre, post } => {
+            // Split the covering identity into `Identity(pre)`, the generator,
+            // `Identity(post)`; zero-width pieces are suppressed.
+            let mut new_prev = Vec::with_capacity(prev_atoms.len() + 2);
+            for (kk, atom) in prev_atoms.into_iter().enumerate() {
+                if kk == k {
+                    if pre > 0 {
+                        new_prev.push(Atom::Identity(pre));
+                    }
+                    new_prev.push(g.clone());
+                    if post > 0 {
+                        new_prev.push(Atom::Identity(post));
+                    }
+                } else {
+                    new_prev.push(atom);
+                }
             }
-            new_prev.push(g.clone());
-            if post > 0 {
-                new_prev.push(Atom::Identity(post));
-            }
-        } else {
-            new_prev.push(atom);
+            new_prev
         }
-    }
+        Placement::Boundary { at } => {
+            // Insert the generator between atoms `at−1` and `at` (append if
+            // `at == len`); `Vec::insert` handles both.
+            let mut new_prev = prev_atoms;
+            new_prev.insert(at, g.clone());
+            new_prev
+        }
+    };
     sd.layers[j - 1].atoms = merge_adjacent_identities(new_prev);
 
     // Layer j keeps an identity of the generator's target width in its old slot;
@@ -1327,6 +1786,256 @@ fn simplify_units<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
         .filter(|layer| !layer.atoms.is_empty())
         .collect();
     StringDiagram { layers }
+}
+
+// -------------------------------------------------------------------------
+// Step 7 — block-level component transposition (issue #55 rule (i))
+// -------------------------------------------------------------------------
+
+/// **Step 7**: transpose adjacent **free component blocks** into rule-(i) order.
+///
+/// Step 6 reorders single *atoms* within a layer. Rule (i) states an order
+/// between whole connected components, and transposing two multi-atom blocks is
+/// a coupled multi-layer move that no single-atom pass can make — the residual
+/// the PR2 diagnosis note named (`docs/SMC-NF-RECONCILIATION.md` §2.6). This
+/// pass makes it.
+///
+/// # Free pair
+///
+/// Two components `C1`, `C2` may be transposed when
+///
+/// - **(a)** at least one is multi-atom — single ∥ single pairs are the §2.6
+///   disjointness carve's territory and stay with Decision 1 / Step 6;
+/// - **(b)** neither is interleaved (guard 3);
+/// - **(c)** *boundary freedom*: at most one of the two occupies a wire on the
+///   input boundary, and at most one occupies a wire on the output boundary.
+///
+/// (c) is exactly the condition that makes the transposition an equality rather
+/// than a conjugation by braids. Writing `B1`, `B2` for the two blocks read as
+/// morphisms, `B1 ⊗ B2 = σ ; (B2 ⊗ B1) ; σ′` with `σ = σ_{w1_in, w2_in}` and
+/// `σ′ = σ_{w2_out, w1_out}`; both degenerate to identities precisely when one
+/// of each pair of boundary widths is `0`. Equivalently, at the level of the
+/// diagram's abstract content (anchored port graph): the swap moves no wire
+/// between components and, under (c), leaves both boundary orderings fixed, so
+/// it is the *same* morphism. By class, the free pairs are therefore
+/// `closed ∥ anything` and `input-only ∥ output-only`; a component touching
+/// *both* boundaries is pinned against everything except a closed one.
+///
+/// # Canonical order and adjacency
+///
+/// Rule (i)'s `CompKey` ascending — `closed(0) < input-anchored(1, coord) <
+/// output-only(2, coord)`. **Equal keys never swap**, so the order among closed
+/// blocks is stable, the block-level reading of Step 6's scalars-leftmost and
+/// the same no-`Ord` caveat (`closed_closed_order_is_ord_less_residual`).
+///
+/// A pair is *adjacent* when, in **every** layer where both appear, each one's
+/// atoms form a contiguous run and `C1`'s run sits immediately left of `C2`'s —
+/// so no third component's atoms separate them anywhere. In a layer where only
+/// one appears there is nothing to swap: a component's layer set is an interval,
+/// so the absent one contributes zero wire width at the adjoining boundary and
+/// the present one's wire coordinates do not move.
+///
+/// # Fused identities (the pre-split)
+///
+/// `merge_adjacent_identities` fuses an `Identity` across component boundaries,
+/// and `analyze_components`' union-find then joins those components *through*
+/// the fused atom. The pass therefore works on a refinement in which every
+/// `Identity(n)` is split into `n × Identity(1)` — free, since
+/// `Identity(a+b) = Identity(a) ⊗ Identity(b)` — analyses components there,
+/// transposes, and re-fuses on the way out (the next fixpoint pass re-runs
+/// `coalesce_identity_layers` regardless). The refinement is local to this pass;
+/// Step 4(c) and Step 6 keep reading the unrefined form. If a split still leaves
+/// a third component's atoms between `C1` and `C2`, the pair is simply not
+/// adjacent and is skipped.
+///
+/// # Guards
+///
+/// A component carrying a `Braid` atom is never transposed: braid placement is
+/// `collect_braid_prefix`'s business and `canonicalize_braid_runs` recomputes
+/// braid runs from the underlying permutation, so keeping the two passes off
+/// each other's atoms is what stops them oscillating.
+///
+/// # Termination
+///
+/// Strictly decreases `block_inversion_count` — summed over layers, the number
+/// of position pairs `p < q` whose components form a free pair (a)+(b)+(c) with
+/// inverted keys. A transposition flips every such pair between the two runs and
+/// leaves every other pair's relative order alone, so the count drops by at least
+/// one; and because (c) holds, neither block contributes wires at a boundary the
+/// other attaches to, so all of `keys`, `sizes`, `interleaved` and the
+/// attachment flags are invariant under the swap. `block_inversion_count` sits
+/// between `layer_count` and `tied_inversion_count` in the `nf` measure
+/// (`docs/SMC-NF-RECONCILIATION.md` §2.4).
+///
+/// Paper anchor: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality) plus JS-I Ch 2 §1
+/// axiom (S) p.73 in its degenerate `σ_{0,n} = id` form — the block-level
+/// reading of the same two laws Step 6 uses at the atom level.
+fn reorder_component_blocks<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
+    // A transposition needs two atoms side by side somewhere.
+    if sd.layers.iter().all(|l| l.atoms.len() < 2) {
+        return sd;
+    }
+    let mut refined = StringDiagram {
+        layers: sd
+            .layers
+            .iter()
+            .map(|l| Layer {
+                atoms: explode_identities(&l.atoms),
+            })
+            .collect(),
+    };
+    let comps = analyze_components(&refined);
+    let has_braid = braid_bearing_components(&refined, &comps);
+    let mut ids = comps.ids.clone();
+    let mut swapped = false;
+    while let Some((c1, c2)) = find_block_transposition(&comps, &ids, &has_braid) {
+        apply_block_transposition(&mut refined, &mut ids, c1, c2);
+        swapped = true;
+    }
+    if !swapped {
+        return sd;
+    }
+    debug_assert!(
+        block_wiring_is_consistent(&refined, &ids),
+        "reorder_component_blocks broke the per-wire component correspondence"
+    );
+    StringDiagram {
+        layers: refined
+            .layers
+            .into_iter()
+            .map(|l| Layer {
+                atoms: merge_adjacent_identities(l.atoms),
+            })
+            .collect(),
+    }
+}
+
+/// Which components hold a `Braid` atom (Step 7's braid guard).
+fn braid_bearing_components<G: PropSignature>(
+    sd: &StringDiagram<G>,
+    comps: &Components,
+) -> Vec<bool> {
+    let mut out = vec![false; comps.keys.len()];
+    for (row, layer) in comps.ids.iter().zip(sd.layers.iter()) {
+        for (&c, atom) in row.iter().zip(layer.atoms.iter()) {
+            if matches!(atom, Atom::Braid(_, _)) {
+                out[c] = true;
+            }
+        }
+    }
+    out
+}
+
+/// Positions of component `c` in one layer's id row, as a half-open range.
+/// `None` when `c` is absent from the layer **or** its positions are not
+/// contiguous — Step 7 treats both as "not transposable here", and distinguishes
+/// them via [`layer_holds`].
+fn contiguous_run(row: &[usize], c: usize) -> Option<(usize, usize)> {
+    let first = row.iter().position(|&x| x == c)?;
+    let last = row
+        .iter()
+        .rposition(|&x| x == c)
+        .expect("a first position implies a last one");
+    row[first..=last]
+        .iter()
+        .all(|&x| x == c)
+        .then_some((first, last + 1))
+}
+
+fn layer_holds(row: &[usize], c: usize) -> bool {
+    row.contains(&c)
+}
+
+/// Step 7 conditions (a)–(c): is `{c1, c2}` a *free pair*?
+fn block_pair_is_free(comps: &Components, c1: usize, c2: usize) -> bool {
+    c1 != c2
+        && (comps.sizes[c1] > 1 || comps.sizes[c2] > 1)
+        && !comps.interleaved[c1]
+        && !comps.interleaved[c2]
+        && !(comps.touches_input[c1] && comps.touches_input[c2])
+        && !(comps.touches_output[c1] && comps.touches_output[c2])
+}
+
+/// `c1`'s run immediately left of `c2`'s in every layer holding both.
+fn blocks_are_adjacent(ids: &[Vec<usize>], c1: usize, c2: usize) -> bool {
+    for row in ids {
+        if !layer_holds(row, c1) || !layer_holds(row, c2) {
+            continue;
+        }
+        let (Some((_, b1)), Some((a2, _))) = (contiguous_run(row, c1), contiguous_run(row, c2))
+        else {
+            return false;
+        };
+        if b1 != a2 {
+            return false;
+        }
+    }
+    true
+}
+
+/// The first adjacent free pair ordered against rule (i), scanning layers
+/// top-to-bottom and positions left-to-right.
+fn find_block_transposition(
+    comps: &Components,
+    ids: &[Vec<usize>],
+    has_braid: &[bool],
+) -> Option<(usize, usize)> {
+    for row in ids {
+        for w in row.windows(2) {
+            let (c1, c2) = (w[0], w[1]);
+            if c1 == c2
+                || comps.keys[c2] >= comps.keys[c1]
+                || has_braid[c1]
+                || has_braid[c2]
+                || !block_pair_is_free(comps, c1, c2)
+                || !blocks_are_adjacent(ids, c1, c2)
+            {
+                continue;
+            }
+            return Some((c1, c2));
+        }
+    }
+    None
+}
+
+/// Swap `c1`'s and `c2`'s runs in every layer holding both, keeping each run's
+/// internal order (and the parallel `ids` rows) intact.
+fn apply_block_transposition<G: PropSignature>(
+    sd: &mut StringDiagram<G>,
+    ids: &mut [Vec<usize>],
+    c1: usize,
+    c2: usize,
+) {
+    for (row, layer) in ids.iter_mut().zip(sd.layers.iter_mut()) {
+        if !layer_holds(row, c1) || !layer_holds(row, c2) {
+            continue;
+        }
+        if let (Some((a1, b1)), Some((a2, b2))) = (contiguous_run(row, c1), contiguous_run(row, c2))
+        {
+            debug_assert_eq!(b1, a2, "block transposition on a non-adjacent pair");
+            layer.atoms[a1..b2].rotate_left(b1 - a1);
+            row[a1..b2].rotate_left(b1 - a1);
+        }
+    }
+}
+
+/// Every wire still joins the same two components: the per-wire component
+/// sequence read from layer `j`'s targets must equal the one read from layer
+/// `j + 1`'s sources. Debug-only invariant check for [`reorder_component_blocks`].
+fn block_wiring_is_consistent<G: PropSignature>(sd: &StringDiagram<G>, ids: &[Vec<usize>]) -> bool {
+    (1..sd.layers.len()).all(|j| {
+        let up = wire_owners(
+            &atom_intervals(&sd.layers[j - 1].atoms, /*use_target=*/ true),
+            &ids[j - 1],
+            0,
+        );
+        let down = wire_owners(
+            &atom_intervals(&sd.layers[j].atoms, /*use_target=*/ false),
+            &ids[j],
+            0,
+        );
+        up == down
+    })
 }
 
 /// **Step 6**: canonical within-layer order for strictly-commuting zero-arity
@@ -1360,35 +2069,71 @@ fn simplify_units<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
 /// scalar (0→0)  <  η (0→n)  <  ε (n→0)  <  solid
 /// ```
 ///
+/// # The disjointness carve (rule (i), 2026-07-26)
+///
+/// A tied adjacency between atoms of two *multi-atom* components is not only a
+/// strict-commutation freedom, it is a **component transposition** — and those
+/// are governed by rule (i)'s component-order anchor, not by the class order
+/// (`docs/SMC-NF-RECONCILIATION.md` §2.6). The carve splits the two cleanly:
+///
+/// - both atoms in **single-atom** components → Decision 1 class order above;
+/// - otherwise → component order `closed < input-anchored < output-only`, each
+///   anchored class by least attached boundary coordinate, with the class order
+///   as the tie-break when the two keys coincide (same component, or two closed
+///   blocks);
+/// - either component **interleaved** (guard 3) → fall back to the class order,
+///   which is the pre-rule-(i) behaviour.
+///
 /// The pass is a within-layer **bubble reorder**: repeatedly swap an adjacent
-/// pair `(A, B)` iff `A` and `B` strictly commute *and* `class(B) < class(A)`.
+/// pair `(A, B)` iff `A` and `B` strictly commute *and* `B` sorts before `A`.
 /// This is the greedy (lex-least) normal form of the layer's word in the trace
 /// monoid generated by strict commutation — one-directional, so it terminates by
-/// the class-inversion count and is confluent by the usual sorting argument.
+/// the inversion count (each swap fixes exactly the pair it swaps and can never
+/// re-invert it) and is confluent by the usual sorting argument.
 ///
-/// Equal-class pairs never swap, so the order **among scalars is stable** (input
-/// order preserved). The design note records "scalars sorted by generator order"
-/// for generality, but `PropSignature` carries no `Ord` bound and no shipped
-/// signature has a `0 → 0` generator (Mat(R)/SFG scalars are `1 → 1`;
-/// `FrobeniusOr`'s η/ε are `0 → 1` / `1 → 0`), so stable-among-scalars is the
-/// deliberate reading here; a total scalar order awaits a signature that
-/// actually exercises it.
+/// Equal keys never swap, so the order **among scalars is stable** (input
+/// order preserved), as is the order among closed blocks. The design note
+/// records "scalars sorted by generator order" for generality, but
+/// `PropSignature` carries no `Ord` bound and no shipped signature has a
+/// `0 → 0` generator (Mat(R)/SFG scalars are `1 → 1`; `FrobeniusOr`'s η/ε are
+/// `0 → 1` / `1 → 0`), so stable-among-scalars is the deliberate reading here;
+/// a total scalar order awaits a signature that actually exercises it.
 ///
 /// The pass is per-layer: it moves no atom across a layer boundary, rewrites no
-/// atom, and is idempotent.
+/// atom, and is idempotent. Strict commutation also makes every swap
+/// **connectivity-preserving** — one side of the pair has source width 0 and one
+/// has target width 0, so no other atom's wire coordinates move — which is why
+/// the component analysis stays valid across the whole pass (the per-atom
+/// component ids are permuted alongside the atoms).
 ///
 /// Paper anchor: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality) specialized to a
 /// 0-arity edge — the same `id_0`-unitor derivation [`try_unitor_merge`] uses.
 fn reorder_tied_zero_arity<G: PropSignature>(mut sd: StringDiagram<G>) -> StringDiagram<G> {
-    for layer in &mut sd.layers {
+    // No tied adjacency anywhere ⇒ nothing to reorder, and no reason to pay for
+    // the component analysis (the common case: diagrams with no 0-arity atom).
+    if !sd
+        .layers
+        .iter()
+        .any(|l| l.atoms.windows(2).any(|w| strictly_commute(&w[0], &w[1])))
+    {
+        return sd;
+    }
+    let comps = analyze_components(&sd);
+    for (j, layer) in sd.layers.iter_mut().enumerate() {
+        let mut ids = comps.ids[j].clone();
         let mut swapped_any = false;
         loop {
             let mut changed = false;
             for i in 0..layer.atoms.len().saturating_sub(1) {
                 if strictly_commute(&layer.atoms[i], &layer.atoms[i + 1])
-                    && zero_arity_class(&layer.atoms[i + 1]) < zero_arity_class(&layer.atoms[i])
+                    && tie_sorts_before(
+                        &comps,
+                        (&layer.atoms[i + 1], ids[i + 1]),
+                        (&layer.atoms[i], ids[i]),
+                    )
                 {
                     layer.atoms.swap(i, i + 1);
+                    ids.swap(i, i + 1);
                     changed = true;
                 }
             }
@@ -1414,6 +2159,27 @@ fn reorder_tied_zero_arity<G: PropSignature>(mut sd: StringDiagram<G>) -> String
 /// to `σ_{0,n} = id`.
 fn strictly_commute<G: PropSignature>(a: &Atom<G>, b: &Atom<G>) -> bool {
     (atom_source(a) == 0 || atom_source(b) == 0) && (atom_target(a) == 0 || atom_target(b) == 0)
+}
+
+/// Does `b` sort strictly before `a` at a tied adjacency? Implements the §2.6
+/// disjointness carve documented on [`reorder_tied_zero_arity`]: single-atom
+/// pairs (and pairs touching an interleaved component) by the Decision-1 class
+/// order, everything else by the rule-(i) component order with the class order
+/// as tie-break.
+///
+/// Each argument is the atom paired with its component index.
+fn tie_sorts_before<G: PropSignature>(
+    comps: &Components,
+    (b, cb): (&Atom<G>, usize),
+    (a, ca): (&Atom<G>, usize),
+) -> bool {
+    let by_component = (comps.sizes[ca] > 1 || comps.sizes[cb] > 1)
+        && !comps.interleaved[ca]
+        && !comps.interleaved[cb];
+    if by_component && comps.keys[cb] != comps.keys[ca] {
+        return comps.keys[cb] < comps.keys[ca];
+    }
+    zero_arity_class(b) < zero_arity_class(a)
 }
 
 /// Rank of `a` in the canonical class order `scalar < η < ε < solid` used by

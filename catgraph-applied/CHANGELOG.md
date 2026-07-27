@@ -15,6 +15,48 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **SMC NF PR2: component-anchored η placement (rule (i)) + Step 7
+  component-block reorder**
+  ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR2, design of
+  record 2026-07-25 + proof-phase addendum 2026-07-26): the point-span η sift
+  is re-cut at **connected-component granularity** — an η's insertion slot is
+  derived from its component's boundary attachment (union-find over the wire
+  arithmetic; fused identities pre-split pass-locally), never from the
+  incidental sift-time cursor, eliminating the presentation-dependent anchor
+  found in the PR2-STOP diagnosis (`A;B` vs `A⊗B` block transposition). New
+  `reorder_component_blocks` pass (Step 7) orders wire-disjoint component
+  blocks by class — **closed (0→0) < input-anchored < output-only** — each
+  anchored class by least attached boundary coordinate (the block-level
+  extension of Decision 1's scalars-leftmost). Interleaved output-only
+  components are conservatively NOT sifted (documented residual, strictly
+  narrower than the pre-PR2 gap); closed↔closed order is stable but `Ord`-less
+  (residual). Both residuals tracked in
+  [#174](https://github.com/sustia-llc/catgraph/issues/174).
+- **`smc_canonicality_probes` — the canonicality gate of record**
+  ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR2): new test
+  module asserting SMC-equal pairs NF-equal **directly** (the diagnosis
+  counterexample `Add;Discard` / `Zero;Copy`, full three-member families,
+  the mid-layer η interchange pair, closed-block transpositions). This is the
+  unconfoundable metric: the CC collision count conflates canonicality with
+  bounded-depth E_18 equational reach, so NF changes are judged by the
+  probes; the pins only catch unexplained deltas. Bonus: **scalar centrality
+  is now an NF theorem** — the catgraph-syntax #80 CC-gap test migrated to a
+  counit-law witness.
+- **CC depth-2 collision baselines re-pinned (a deliberate rise)**
+  ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR2): BoolRig
+  972 → **979**, UnitInterval 1400 → **1432**, Tropical 1930 → **2017**,
+  F64Rig 1925 → **2012** (release, deterministic, exact two-sided pins).
+  Witness-diff analysis (proof-phase diagnosis, 2026-07-26): the rise is
+  **equational-reach churn** — depth-2 E_18 congruence bridges are co-adapted
+  to the previous exact NFs, and no NF improvement can beat pins measured
+  against them (mechanism tracked in
+  [#173](https://github.com/sustia-llc/catgraph/issues/173)). The old "a rise
+  is a STOP" gate is retired (owner call A′,
+  2026-07-27); `scripts/check_audit_counts.py` now scans the prose pin sites
+  against the `BASELINE_*_D2` consts so a re-pin can never miss a doc site.
+  Must-sync sites updated: `tests/graphical_linalg.rs` consts + docstring,
+  FS18-AUDIT Thm 5.60 row + §15 resolution note, README `kb` row,
+  `functor_bench` docs, `mat_operations` / `prop_presentation_nf` examples.
 - **SMC NF Step 6: within-layer η-before-ε canonical reorder**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR1, design of
   record 2026-07-25): new `reorder_tied_zero_arity` pass in `smc_nf::nf`'s

@@ -319,7 +319,9 @@ fn main() {
     // while still surfacing the CC-incompleteness witnesses the atom-canonical
     // `smc_refine` partially closes: BoolRig d=2 collisions
     // 2574 → 1433 (smc_refine) → 1301 (post-#14 NF) → 1142 (post-E_18)
-    // → 972 (post-#55-PR1 η-before-ε reorder).
+    // → 972 (post-#55-PR1 η-before-ε reorder) → 979 (post-#55-PR2
+    // component-anchored sift; the uptick is equational-reach churn — see
+    // tests/graphical_linalg.rs).
     let report = verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(2, &bool_samples)
         .expect("verifier runs on BoolRig size_bound=2");
     println!("  FaithfulnessReport (BoolRig, size_bound=2):");
