@@ -23,11 +23,17 @@
 //! **Zero-arity atoms.** `try_unitor_merge` absorbs the 2-atom sink/source
 //! pattern (`[X, Identity(k)]` and three mirrors); mid-layer zero-source `η`
 //! deeper in a layer is scheduled by the `topological_layer_order`
-//! component-anchored point-span sift (issue #55, closed on the
-//! non-interleaved fragment — see `interchange_zero_source_eta` and the
-//! `smc_canonicality_probes` module). A proptest or golden-replay failure whose
-//! witness has an `η` in an *interleaved* component is the documented residual
-//! (guard 3), not a new bug.
+//! component-anchored point-span sift (issue #55, closed on the fragment 𝔉 —
+//! SMC-NF-RECONCILIATION.md §4.1; probe-verified, full proof open per the
+//! §4.4 canonicality status; see `interchange_zero_source_eta` and the
+//! `smc_canonicality_probes` module). A proptest or golden-replay failure
+//! whose witness has an `η` in an *interleaved* component (guard 3), a closed
+//! component written nested inside another component's span (§4.6(c),
+//! `trapped_closed_block_is_nesting_residual`), or a zero-arity block solid
+//! on its opening side written nested (§4.6(d),
+//! `nested_sink_block_is_column_residual` /
+//! `nested_source_block_is_column_residual`) is a documented residual, not a
+//! new bug.
 
 use catgraph_applied::prop::presentation::smc_nf::{from_string_diagram, nf};
 use catgraph_applied::prop::{PropExpr, PropSignature};
@@ -793,6 +799,119 @@ mod smc_canonicality_probes {
             nf(&par(closed_block(), long_closed_block())),
             nf(&par(long_closed_block(), closed_block())),
             "two closed blocks should agree under transposition"
+        );
+    }
+
+    /// **Trapped-nesting residual, documented** (§4.6(c), found in the #55
+    /// proof phase 2026-07-27; issue #174). A closed block written strictly
+    /// *inside* another component's wire span cannot escape: its `η`'s
+    /// coordinate falls strictly inside the enclosing atom's target span (the
+    /// point-span sift is blocked — correctly, since the gap-closer is
+    /// foreign), and Step 7 never sees an adjacent free pair because the
+    /// identity wires surrounding the closed block belong to the *enclosing*
+    /// component. The nested and free writings have identical abstract
+    /// content, so no content-level fragment condition separates them — the
+    /// residual is irreducibly presentation-level, and the §4 proof excludes
+    /// closed components from `𝔉` outright. Only closed components can be
+    /// trapped: a nested *anchored* component's attachment is enclosed by the
+    /// other's, so guard 3 marks both (residual (a)). Fix shape: a closed-block
+    /// extraction move (`id₁ ⊗ s = s ⊗ id₁` sideways past identity
+    /// wire-columns) — tracked on #174.
+    #[test]
+    #[ignore = "residual: a closed component written nested inside another component's span does not extract (§4.6(c), #174)"]
+    fn trapped_closed_block_is_nesting_residual() {
+        // Copy ; (id₁ ⊗ Zero ⊗ id₁) ; (id₁ ⊗ Discard ⊗ id₁) ; Add — the closed
+        // {Zero, Discard} loop written between Copy's two output wires.
+        let id1 = || PropExpr::Identity(1);
+        let nested = seq(
+            seq(
+                seq(
+                    prim(SfgGenerator::Copy),
+                    par(id1(), par(prim(SfgGenerator::Zero), id1())),
+                ),
+                par(id1(), par(prim(SfgGenerator::Discard), id1())),
+            ),
+            prim(SfgGenerator::Add),
+        );
+        // The same content written free: (Zero;Discard) ⊗ (Copy;Add).
+        let free = par(
+            closed_block(),
+            seq(prim(SfgGenerator::Copy), prim(SfgGenerator::Add)),
+        );
+        assert_eq!(
+            nf(&nested),
+            nf(&free),
+            "a nested closed block should extract to the free layout"
+        );
+    }
+
+    /// **Nested-column residual, sink form (CE-A)** (§4.6(d), found in the
+    /// 2026-07-27 adversarial review of the draft §4 proof — the refutation
+    /// of its full-canonicality theorem; issue #174). A solid-headed
+    /// multi-atom `1 → 0` block (`Scalar;Discard`) written at a coordinate
+    /// strictly inside the `{Zero, …, Add}` component's span cannot reach its
+    /// free writing: Step 6 never bubbles `Zero` past the solid `Scalar`
+    /// head, and Step 7's free-pair test is whole-component while the actual
+    /// SMC freedom is column-vs-block (`Zero ⊗ ε = ε ⊗ Zero`). Both
+    /// components are boundary-attached and unmarked, so the pair sits
+    /// *inside* the fragment `𝔉` — same content, different fixpoints. The
+    /// missing move is the §4.5 zero-arity-bounded column transposition.
+    #[test]
+    #[ignore = "residual: a solid-headed zero-arity block written nested inside another component's span does not converge with its free writing (§4.6(d), #174)"]
+    fn nested_sink_block_is_column_residual() {
+        let id1 = || PropExpr::Identity(1);
+        // (Zero ⊗ Scalar ⊗ id₁) ; (id₁ ⊗ Discard ⊗ id₁) ; Add : 2 → 1
+        let nested = seq(
+            seq(
+                par(prim(SfgGenerator::Zero), par(scalar(), id1())),
+                par(id1(), par(prim(SfgGenerator::Discard), id1())),
+            ),
+            prim(SfgGenerator::Add),
+        );
+        // (Scalar;Discard) ⊗ ((Zero ⊗ id₁) ; Add) : 2 → 1
+        let free = par(
+            seq(scalar(), prim(SfgGenerator::Discard)),
+            seq(
+                par(prim(SfgGenerator::Zero), id1()),
+                prim(SfgGenerator::Add),
+            ),
+        );
+        assert_eq!(
+            nf(&nested),
+            nf(&free),
+            "a nested solid-headed sink block should converge with its free writing"
+        );
+    }
+
+    /// **Nested-column residual, source form (CE-A3)** — the time-reversed
+    /// mirror of `nested_sink_block_is_column_residual`: the enclosing wall
+    /// opens at an `ε` (`Discard`) *below* instead of an `η` above, and the
+    /// nested block is output-only (`Zero;Scalar`). Same mechanism, same
+    /// missing move (§4.5); issue #174.
+    #[test]
+    #[ignore = "residual: mirror of nested_sink_block_is_column_residual — output-only nested block, wall opens at an ε (§4.6(d), #174)"]
+    fn nested_source_block_is_column_residual() {
+        let id1 = || PropExpr::Identity(1);
+        // Copy ; (id₁ ⊗ Zero ⊗ id₁) ; (Discard ⊗ Scalar ⊗ id₁) : 1 → 2
+        let nested = seq(
+            seq(
+                prim(SfgGenerator::Copy),
+                par(id1(), par(prim(SfgGenerator::Zero), id1())),
+            ),
+            par(prim(SfgGenerator::Discard), par(scalar(), id1())),
+        );
+        // (Zero;Scalar) ⊗ (Copy ; (Discard ⊗ id₁)) : 1 → 2
+        let free = par(
+            seq(prim(SfgGenerator::Zero), scalar()),
+            seq(
+                prim(SfgGenerator::Copy),
+                par(prim(SfgGenerator::Discard), id1()),
+            ),
+        );
+        assert_eq!(
+            nf(&nested),
+            nf(&free),
+            "a nested output-only solid-tailed block should converge with its free writing"
         );
     }
 

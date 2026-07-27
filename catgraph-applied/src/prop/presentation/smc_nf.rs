@@ -4,8 +4,11 @@
 //!
 //! This module provides, in place of the plain `apply_smc_rules` pre-pass, a
 //! **Joyal-Street string-diagram normal form**: a total function
-//! [`PropExpr`] → [`StringDiagram`] such that two expressions are SMC-equal
-//! iff their NF values are structurally equal. The sibling
+//! [`PropExpr`] → [`StringDiagram`] aiming at "SMC-equal iff NF-equal". The
+//! ⇐ direction holds unconditionally (every rewrite is SMC-sound); the ⇒
+//! direction is **probe-verified on the fragment `𝔉`** with four documented
+//! residuals — a full proof is open (`docs/SMC-NF-RECONCILIATION.md` §4.4
+//! canonicality status; residual scope on [`nf`]). The sibling
 //! [`super::kb::CongruenceClosure`] (Layer 2) then operates on NF-normalized
 //! terms and handles user-equation congruence without needing to know about
 //! SMC axioms.
@@ -74,6 +77,12 @@ pub enum Atom<G: PropSignature> {
 /// - No `Atom::Braid(m,n)` with `m+n > 2` (all hexagon-expanded to `Braid(1,1)`).
 /// - No `Atom::Braid(0, _)` or `Atom::Braid(_, 0)` (normalized to `Identity`).
 /// - No two adjacent layers both consisting entirely of `Identity` atoms.
+/// - No two adjacent `Identity` atoms within a layer (intra-layer fusion,
+///   `coalesce_identity_layers` (a) / `merge_adjacent_identities`).
+/// - No pure-identity layer while any non-identity layer remains (one
+///   survives as the arity carrier only in an all-identity diagram).
+/// - Every maximal run of braid layers is the canonical bubble-sort schedule
+///   of its underlying permutation (`canonicalize_braid_runs`, Step 3(b)).
 /// - All `Atom::Braid` atoms appear in the leading (input-side) layers; no
 ///   generator layer is followed by a braid layer.
 /// - No layer contains both a `Braid` and a `Generator` atom (mixed layers are
@@ -104,12 +113,19 @@ pub struct StringDiagram<G: PropSignature> {
 /// Totality: `nf` is defined on every arity-well-formed `PropExpr<G>` and
 /// always terminates (see the termination measure in `docs/SMC-NF-RECONCILIATION.md` §2.4).
 ///
-/// Canonicality claim: for any two SMC-equal expressions `a`, `b` (i.e., equal
-/// in the free symmetric monoidal category on `G`), `nf(&a) == nf(&b)`. The
-/// converse holds by construction since `nf` applies only SMC-sound rewrites.
+/// Canonicality: the *soundness* direction — `nf(&a) == nf(&b)` implies `a`
+/// and `b` are SMC-equal (equal in the free symmetric monoidal category on
+/// `G`) — holds unconditionally, since `nf` applies only SMC-sound rewrites.
+/// The *canonicality* direction — SMC-equal expressions get equal NFs — is
+/// probe-verified on the fragment 𝔉, not proven (docs §4.4).
 ///
 /// Known exception (issue #55): both halves of the former zero-arity gap are
-/// closed **on the non-interleaved fragment**.
+/// closed — **probe-verified, not proven** — on the fragment 𝔉
+/// (`docs/SMC-NF-RECONCILIATION.md` §4.1: every connected component clear of
+/// guard 3's marking *and* touching a boundary; the closed-component
+/// exclusion was added 2026-07-27, §4.6(c), and the draft §4 proof was
+/// refuted the same day by a residual *inside* 𝔉, §4.6(d) — see the §4.4
+/// canonicality status).
 /// - **Within-layer order** — Step 6 (`reorder_tied_zero_arity`, PR1) puts every
 ///   tied run in canonical order, so `nf(ε ⊗ η) == nf(η ⊗ ε)`.
 /// - **Layer assignment** — a zero-source generator (`source == 0`, e.g.
@@ -124,19 +140,32 @@ pub struct StringDiagram<G: PropSignature> {
 ///   transpositions close too: `nf((μ;!) ⊗ (η;Δ)) == nf((η;Δ) ⊗ (μ;!))`, and a
 ///   closed block sorts leftmost regardless of where it was written.
 ///
-/// **Residual scope**, two guards. The *interleave guard*: when a component's
+/// **Residual scope**, four cases. The *interleave guard*: when a component's
 /// boundary attachment interleaves another component's on the same boundary,
 /// block transposition is not braid-free and rule (i)'s slot is ill-defined, so
 /// such an `η` is not sifted, Step 6 falls back to the Decision-1 class order
-/// for it, and Step 7 leaves it alone. And the *equal-key* case: rule (i) gives
+/// for it, and Step 7 leaves it alone. The *equal-key* case: rule (i) gives
 /// all closed components one key, so two distinct closed blocks keep their input
 /// order — the block-level reading of Step 6's stable-among-scalars, and the
-/// same no-`Ord`-on-`G` limitation. Both residuals are strictly narrower than
+/// same no-`Ord`-on-`G` limitation. The *trapped-nesting* case (found in
+/// the #55 proof phase, 2026-07-27): a closed component written strictly inside
+/// another component's wire span does not extract — its `η` is blocked by the
+/// enclosing atom's target span and Step 7 never sees an adjacent free pair;
+/// the nested and free writings have identical abstract content, so this
+/// residual is irreducibly presentation-level (issue #174). And the
+/// *nested-column* case (found in adversarial review the same day, *inside*
+/// 𝔉): a multi-atom zero-arity block, solid on the side facing its enclosing
+/// wall's opening (solid-headed sink / solid-tailed source), written nested
+/// inside another component's span converges with none of its free writings — the
+/// missing move is a zero-arity-bounded *column* transposition, between what
+/// Step 6 (atoms) and Step 7 (whole components) can do; see
+/// `docs/SMC-NF-RECONCILIATION.md` §4.5. All four are strictly narrower than
 /// the pre-PR2 gap, which covered *every* mid-layer `η`. See
 /// `docs/SMC-NF-RECONCILIATION.md` §2.6 (the component-order anchor and its
-/// carve against §2.5) and the `smc_canonicality_probes` module in
-/// `tests/smc_nf_completeness.rs`. Generators with `source > 0` were never
-/// affected.
+/// carve against §2.5), §4 (content function + canonicality status), and the
+/// `smc_canonicality_probes` module in `tests/smc_nf_completeness.rs`.
+/// Generators with `source > 0` were never affected by the *zero-arity* gap,
+/// though a nested zero-arity block can distort their layers too (§4.4).
 pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     let mut sd = lower(expr);
     // Fixpoint loop, terminating by the lexicographic measure
