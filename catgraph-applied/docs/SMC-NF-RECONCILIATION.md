@@ -367,8 +367,11 @@ least coordinate. When one component's attachment interleaves another's on the
 same boundary, block transposition is not braid-free and the rule-(i) slot is
 ill-defined. Such components are marked and left alone: their `η`s are not
 sifted, and Step 6 falls back to the §2.5 class order for them. Canonicality is
-claimed and proven on the **non-interleaved fragment**; the residual is strictly
-narrower than the pre-PR2 gap, which covered *every* mid-layer `η`.
+claimed and proven on the **fragment `𝔉` of §4.1** — every component clear
+(unmarked) *and* boundary-attached; the closed-component exclusion was added
+2026-07-27 when the proof phase found the trapped-nesting residual, §4.6(c).
+The residuals are strictly narrower than the pre-PR2 gap, which covered
+*every* mid-layer `η`.
 
 **The block pass (Step 7, `reorder_component_blocks`).** Rule (i) states an order
 between whole components, and the two atom-level moves — the single-atom sift (up
@@ -495,9 +498,9 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
   single-atom tied adjacency: **covered** by Step 6 (§2.5) and the
   `zero_arity_order` tests (issue #55 PR1).
 - **Zero-arity scheduling** — mid-layer **zero-source** (`η : 0 → 1`) *layer
-  assignment* is canonical on the **non-interleaved fragment**, via the
-  component-anchored point-span sift (§2.3 + §2.6, issue #55 PR2; the former
-  issue #14 follow-up gap). Tensor- and compose-forms of the same morphism
+  assignment* is canonical on the **fragment `𝔉`** (§4.1: components clear and
+  boundary-attached; proven in §4), via the component-anchored point-span sift
+  (§2.3 + §2.6, issue #55 PR2; the former issue #14 follow-up gap). Tensor- and compose-forms of the same morphism
   converge (`ε ⊗ η` = `ε ; η`, `F ⊗ η ⊗ G` = `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)`,
   `(μ;!) ; (η;Δ)` = `(μ;!) ⊗ (η;Δ)`); verified by `interchange_zero_source_eta`,
   the `zero_arity_order` tests, and the `smc_canonicality_probes` module in
@@ -508,9 +511,330 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
   = `(μ;!) ; (η;Δ)`, and `(η;!) ⊗ s` = `s ⊗ (η;!)`. Verified by
   `smc_canonicality_probes::block_transposition_converges` and
   `block_transposition_crosses_fused_identity_padding`.
-- **Documented residuals**, both in §2.6 and both narrower than the pre-PR2 gap:
-  (a) an `η` whose component's boundary attachment **interleaves** another's is
-  not sifted, and its component is not transposed (guard 3); (b) two distinct
-  **closed** blocks share one rule-(i) key, so neither Step 6 nor Step 7 swaps
-  them — the same no-`Ord`-on-`G` limitation as scalar order, tracked as
-  `closed_closed_order_is_ord_less_residual` (`#[ignore]`).
+- **Documented residuals**, all three in §2.6/§4.6 and all narrower than the
+  pre-PR2 gap: (a) an `η` whose component's boundary attachment **interleaves**
+  another's is not sifted, and its component is not transposed (guard 3);
+  (b) two distinct **closed** blocks share one rule-(i) key, so neither Step 6
+  nor Step 7 swaps them — the same no-`Ord`-on-`G` limitation as scalar order,
+  tracked as `closed_closed_order_is_ord_less_residual` (`#[ignore]`); (c) a
+  closed component **written strictly inside** another component's wire span
+  does not extract (found in the §4 proof phase, 2026-07-27) — tracked as
+  `trapped_closed_block_is_nesting_residual` (`#[ignore]`), issue #174.
+
+## §4 Canonicality on the anchored fragment (the proof)
+
+> Added 2026-07-27 (issue #55, the proof phase; owner call: proof-first with
+> the honest fragment). This section proves that `nf` computes a *function of
+> the diagram's abstract content* on the fragment defined in §4.1 — canonicality
+> outright, strictly stronger than confluence of the §3 rewrite pipeline. It is
+> stated **color-generically** over an arbitrary color set `Λ` so that the
+> issue-#79 word-generalized engine inherits it unchanged, and it doubles as
+> the DPO-substrate specification for the issue-#57 knowledge-base spike
+> (§4.7). External anchors: Bonchi–Gadducci–Kissinger–Sobociński–Zanasi
+> (**BGKSZ**, arXiv:1602.06771v2, *Rewriting modulo symmetric monoidal
+> structure*), Milosavljević–Piedeleu–Zanasi (**MPZ**, CALCO 2023, *String
+> Diagram Rewriting Modulo Commutative (Co)Monoid Structure*, VoR of
+> arXiv:2204.04274), and Lafont (*Towards an algebraic theory of Boolean
+> circuits*, JPAA 184 (2003) 257–310). All locators verified against the
+> private papers cache 2026-07-27.
+
+### §4.1 Setting, content invariants, and the fragment 𝔉
+
+Fix an arbitrary set of **colors** `Λ`. A signature assigns each generator
+`g ∈ G` a source word `s(g) ∈ Λ*` and a target word `t(g) ∈ Λ*`; expressions,
+identities `id_w` (`w ∈ Λ*`), braids `σ_{u,v}`, `;` and `⊗` are as in §1, with
+arities in `Λ*` and word concatenation for `⊗`. The shipped `PropSignature` is
+the monochromatic instance `Λ = {•}` (words collapse to their lengths); nothing
+below ever uses `|Λ| = 1`, which is what makes the section #79-stable. Write
+`e =_SMC e′` for equality in the free symmetric strict monoidal category
+(equivalently the free colored prop) on the signature.
+
+**Abstract content.** Following BGKSZ §3, interpret an arity-well-formed
+expression `e : n → m` as a **cospan of Λ-typed directed hypergraphs**
+`n → H ← m`: nodes are wires (typed by `Λ`), hyperedges are generator
+occurrences with ordered, type-respecting source and target tentacles, and the
+two anchoring maps embed the boundary words. The interpretation — BGKSZ's
+`⟦·⟧`, their Prop 3.4 — sends a generator to the single-hyperedge cospan, an
+identity to a discrete bijective cospan, a braid to a discrete cospan with the
+permuted anchor, `;` to pushout gluing over the shared foot, and `⊗` to
+disjoint union with concatenated anchors. Define the **content** `C(e)` as this
+cospan up to isomorphism *under both feet* (iso on the carrier `H` commuting
+with the anchors, identity on `n` and `m`). "Anchored" is load-bearing:
+because the feet are held pointwise fixed, every boundary *coordinate* is a
+content invariant. By BGKSZ Thm 3.12 the cospans that arise are exactly the
+**monogamous** (Def 3.6: anchors mono; interior nodes have in/out-degree
+exactly 1, boundary nodes 0 on their anchored side) **directed acyclic**
+(Def 3.9) ones.
+
+**Derived invariants** (all functions of `C(e)`, since cospan iso is the
+identity on the feet):
+
+- **Components.** Connected components of the underlying hypergraph of
+  `C(e)`. (At the diagram level this matches §2.6's union-find: `Identity` and
+  `Braid` atoms carry wires and belong to the component of their wires; the
+  empty-interval guard implements "a zero-arity hyperedge is connected exactly
+  through its non-empty side".)
+- **Boundary attachment.** For a component `K`, the coordinate sets
+  `in(K) ⊆ {0..|n|}` and `out(K) ⊆ {0..|m|}` of anchored nodes, and the
+  rule-(i) key of §2.6 (class `closed < input-anchored < output-only`, least
+  attached coordinate).
+- **Owner words and clearness.** On each boundary read the **owner word**: the
+  component owning each coordinate, left to right, with adjacent repeats
+  collapsed to runs. A component is **marked** (guard 3,
+  `mark_interleaved`) if it occurs in two distinct runs of either boundary's
+  owner word, or lies between two occurrences of a component that does; it is
+  **clear** otherwise. Note this marks both genuine alternation (`a b a b`)
+  and nested attachment (`a b b a` — both `a` and `b` marked), matching the
+  shipped `mark_interleaved` exactly.
+
+**The fragment.** `𝔉` consists of the arity-well-formed expressions `e` such
+that in `C(e)`:
+
+1. every component is **clear** (no marking on either boundary), and
+2. every component **touches a boundary** (no closed components).
+
+Both conditions are content invariants, so membership in `𝔉` is itself a
+property of the SMC class. Condition 2 is the 2026-07-27 correction to the
+pre-proof claim ("the non-interleaved fragment"): closed components admit a
+genuinely presentation-dependent pathology — §4.6, residual (c) — that no
+content-level condition can carve around, because the nested and un-nested
+writings of a closed block have *identical* content.
+
+### §4.2 Content decides SMC-equality (color-generically)
+
+**Lemma 4.1.** For arity-well-formed `e, e′ : n → m`:
+`e =_SMC e′` **iff** `C(e) = C(e′)`.
+
+*Proof.* (⇒) BGKSZ define `⟦·⟧` on the free prop `S_Σ`, whose arrows *are*
+SMC-classes, so well-definedness on classes is part of their construction
+(functoriality of the coproduct injection `⟦·⟧ : S_Σ → FTerm_Σ`, BGKSZ §3).
+(⇐) is faithfulness, BGKSZ **Prop 3.4** (proved in their Appendix A from
+properties of coproducts of PROPs). BGKSZ **Thm 3.12** identifies the image:
+`n → H ← m` is in the image of `⟦·⟧` iff it is monogamous directed acyclic —
+so `C` is a bijection between SMC-classes and anchored monogamous directed
+acyclic cospans up to iso.
+
+*Color-genericity.* BGKSZ state the section for a one-sorted signature. The
+`Λ`-typed lift is verbatim: typed hypergraphs, their pushouts and coproducts
+are computed sortwise; Lemma 3.11's convex-subgraph factorization and
+Thm 3.12's induction on the number of hyperedges never inspect the node sort;
+Prop 3.4's coproduct argument is sort-blind. No step of the proofs below
+mentions monochromaticity either. ∎
+
+By Lemma 4.1, proving "`nf` is a function of content on `𝔉`" *is* proving
+canonicality on `𝔉`: SMC-equal expressions have equal content, hence equal NF.
+
+### §4.3 `nf` preserves content
+
+**Lemma 4.2.** Every rewrite the §3 pipeline applies preserves `C`, and the
+readback of `nf(e)` (compose its layers, tensor each layer's atoms) is
+SMC-equal to `e`.
+
+*Proof.* Each step is an instance of an SMC axiom — the §3 paper coverage
+matrix lists the axiom and anchor per step — and `C` is SMC-invariant by
+Lemma 4.1(⇒). Lowering (`lower` / `pad_and_zip`) reads off the expression
+tree and changes nothing up to associativity/unitor/interchange instances. ∎
+
+### §4.4 Rigidity: the invariants pin the diagram
+
+The §1 invariant list (the post-`nf` clauses on `StringDiagram`) is what the
+fixpoint loop guarantees. Rigidity says the list leaves no freedom on `𝔉`:
+
+**Theorem 4.3 (rigidity).** Let `D`, `D′` be layered diagrams satisfying the
+§1 post-`nf` invariants, with `C(D) = C(D′) ∈ 𝔉`. Then `D = D′`.
+
+Throughout, split `D = B ; S` into the **braid prefix** `B` (the leading
+braid-bearing layers) and the **suffix** `S` (braid-free): the invariants "all
+braids in leading layers" and "no mixed layers" force this shape.
+
+**(4.4.1) Positional monotonicity.** In a braid-free layer, each atom occupies
+a contiguous source interval and a contiguous target interval, and the atom
+order induces the same linear order on both boundaries. Consequently wires
+never cross in `S`: if two wires `w < w′` coexist at two boundaries, their
+order agrees. (Immediate from §2.1's source-order convention; this is the
+planarity that lets us speak of a wire's *position* consistently.)
+
+**(4.4.2) Enclosure.** Say foreign matter `x` (a wire, or a zero-width
+atom-point, of component `K′ ≠ K`) is **enclosed** by `K` at a boundary of `S`
+when `K`-wires `w_l < x < w_r` flank it there. *Claim: in `𝔉`, enclosed
+foreign matter does not exist.* Trace the flanking wires: upward, a flank
+either persists (an identity wire) or terminates at a `K`-atom, whose own
+source wires (ordered around the region by monotonicity) continue the wall —
+except when that atom has no sources on the relevant side (an `η` of `K`),
+where the wall opens; dually downward (an `ε` of `K` opens the wall below).
+By monotonicity `x`'s component can never cross a wall wire, and it cannot
+pass through a `K`-atom (sharing a wire with one would mean `K′ = K`). Two
+exhaustive outcomes:
+
+- `K′` reaches an outer boundary through an opening whose *both* sides reach
+  that boundary flanked by `K`-wires — then the owner word reads
+  `… K … K′ … K …`, `K` occurs in two runs, and both components are marked:
+  excluded from `𝔉` by clearness. (This includes the nested-attachment
+  pattern `a b b a`.)
+- `K′` never reaches an outer boundary — it is walled in above and below
+  (positions strictly inside an atom's span at the boundary adjacent to that
+  atom are that atom's own wires, by monogamy, so entry/exit through a wall
+  atom's span is impossible for foreign wires): `K′` is **closed**, excluded
+  from `𝔉` by condition 2. ∎
+
+Enclosure is the load-bearing geometric fact, and both fragment conditions
+are exactly its two escape hatches — which is why `𝔉` is the natural
+statement and why dropping condition 2 is not a wording matter (§4.6(c)).
+
+**(4.4.3) Layers are forced.** Define, on content, the **longest-path depth**
+of a hyperedge (`ldepth(h) = 0` if every source node of `h` is
+input-boundary-anchored or `h` has no sources and is unblocked all the way;
+else `1 + max` over producers/gap-closers as below). Precisely, in any
+invariant diagram with content in `𝔉`:
+
+- *Positive-source atoms.* An atom `g` with `s(g) ≠ ε` sits at suffix layer
+  `1 + max{layer(p) : p a producer of g}` (layer `0` when all sources are
+  boundary wires). "≥" is well-formedness (a producer sits strictly above its
+  consumer). "≤": suppose every producer of `g` sits at layer `≤ j−2`. Then
+  every wire of `g`'s source span passes layer `j−1` inside `Identity` atoms;
+  by enclosure no zero-width foreign point sits strictly inside the span, and
+  no positive-width atom does (it would own span wires, i.e. be a producer at
+  `j−1`); with adjacent identities fused (§1 invariant) one `Identity` covers
+  the span — the sift invariant ("no positive-source generator's consumed
+  wires all pass through `Identity` atoms in the preceding braid-free layer")
+  is violated. So some producer sits at `j−1`. By induction on layers, forced.
+- *Zero-source atoms (`η`).* At fixpoint an `η` at layer `j ≥ 1` is blocked at
+  `j−1`, which by the §2.3 point-span rule means its output coordinate falls
+  strictly inside some atom `p`'s target span there. By enclosure `p` belongs
+  to the `η`'s **own component** (a foreign `p` would enclose the `η`'s
+  wires). So `layer(η) = layer(p) + 1` for its content-determined
+  *gap-closer* `p` — the deepest own-component atom whose target span strictly
+  contains the `η`'s wire gap — or `0` when no atom closes the gap. Forced.
+
+**(4.4.4) Within-layer order is forced.** Positions in a layer are the atom
+order (widths sum). Atoms consuming existing wires sit at their consumed
+span's position — forced by monotonicity from the layers above. What remains
+are zero-source coordinates and tied runs:
+
+- An `η` whose component is input-anchored inherits its coordinate from its
+  consumers' wiring relative to already-positioned wires (its output tentacle
+  order at the consumer fixes its gap) — content.
+- An `η`-headed **output-only** block carries no wiring constraint against
+  the input-anchored part ("free-floating"); its slot is rule (i)'s: ordered
+  by the component's least attached *output* coordinate — content
+  (`component_slot`).
+- Within a tied run (§2.5 strict commutation), the comparator is total on
+  `𝔉`: distinct anchored components have distinct keys (each boundary
+  coordinate belongs to exactly one component, so least coordinates differ);
+  a single-atom tie inside one component or across equal-key blocks falls to
+  the Decision-1 class order `η < ε` (two `η`s or two `ε`s never strictly
+  commute); and `𝔉` has no closed components, hence no `0→0` scalars and no
+  equal-key closed pair — the §2.5/§2.6 stability caveats are vacuous here.
+- Identity padding is forced: the wires passing through a layer are
+  determined, and maximal fusion (§1) fixes their grouping.
+
+**(4.4.5) The prefix is forced.** By 4.4.3–4.4.4 the suffix `S` is determined
+by content up to its input-boundary order; reading each top wire's origin
+against the anchored input coordinates of `C` gives one permutation `π` —
+content-determined. The prefix `B` realizes `π` as the canonical reduced word
+in layered `Braid(1,1)` bricks (§2.2, Step 3(b) invariants: bubble-sort word
+of the underlying permutation, JS-I Ch 2 Thm 2.3 p. 81) — unique. `D = B ; S`
+is therefore determined by `C(D)`; likewise `D′`, so `D = D′`. ∎
+
+### §4.5 The canonicality theorem
+
+**Theorem 4.4 (canonicality on `𝔉`).** For `e, e′ ∈ 𝔉`:
+
+```
+nf(e) = nf(e′)   ⟺   e =_SMC e′
+```
+
+*Proof.* (⇐) `nf` terminates (§2.4) and its output satisfies the §1
+invariants; by Lemma 4.2 `C(nf(e)) = C(e)`, and `C(e) = C(e′)` by Lemma 4.1.
+Theorem 4.3 applies (membership in `𝔉` is a content property): `nf(e)` and
+`nf(e′)` are invariant diagrams with the same content in `𝔉`, hence equal.
+(⇒) Lemma 4.2's readback: `e =_SMC nf(e) = nf(e′) =_SMC e′`. ∎
+
+Equivalently: on `𝔉`, `nf(e)` *is* the unique invariant-satisfying diagram
+with content `C(e)` — a normal form defined by its universal description, not
+by the pipeline that happens to compute it.
+
+**Canonicality vs. confluence.** The classical route to uniqueness —
+termination plus local confluence (Newman; cf. Lafont, Appendix A
+*Rewriting*, §A.2 *Termination* p. 299, and the Lemma 15 equivalences,
+for exactly this method applied to circuit presentations) — would require
+joining every critical pair of the nine-step pipeline. Theorem 4.4 is
+stronger and independent of the rewrite strategy: *any* reduction to an
+invariant-satisfying diagram lands on the same object. The §2.4 lexicographic
+measure plays the termination role of Lafont's §A.2; rigidity replaces the
+confluence half.
+
+### §4.6 Beyond 𝔉: closed components, three residuals
+
+Diagrams outside `𝔉` still normalize soundly and terminate; what weakens is
+uniqueness. The three residuals, in decreasing severity of the freedom left:
+
+- **(a) Marked (interleaved) components** — guard 3 leaves a marked
+  component's `η`s unsifted and its blocks untransposed; rule (i)'s slot is
+  ill-defined there because block transposition is not braid-free. The §4.4
+  induction stops at the first marked component. Tracked on issue #174
+  (residual 2).
+- **(b) Closed↔closed order** — all closed components share the rule-(i) key
+  `(closed, 0)`; distinct closed blocks keep their presentation order (no
+  content-derived tie-break without an `Ord` on `G`). Witness:
+  `closed_closed_order_is_ord_less_residual` (`#[ignore]`). Retired for free
+  by #79's stable-generator-key design input. Issue #174 (residual 1).
+- **(c) Trapped nested closed blocks** *(found in this proof phase,
+  2026-07-27; the reason condition 2 is in `𝔉`).* A closed component written
+  strictly inside another component's wire span cannot escape: its `η`'s
+  coordinate falls strictly inside the enclosing atom's target span (sift
+  blocked — correctly, §4.4.3's gap-closer analysis does not apply since the
+  closing atom is foreign), and Step 7 never sees an adjacent free pair
+  because the surrounding identity wires belong to the *enclosing* component,
+  so the closed block's run is never adjacent to a whole-component run.
+  Probe-verified witness (`trapped_closed_block_is_nesting_residual`,
+  `#[ignore]`):
+
+  ```
+  nf( Copy ; (id₁ ⊗ Zero ⊗ id₁) ; (id₁ ⊗ Discard ⊗ id₁) ; Add )
+    ≠ nf( (Zero ; Discard) ⊗ (Copy ; Add) )
+  ```
+
+  though the two are SMC-equal (bifunctoriality with `id₀`; both sides have
+  the same content — one closed loop, one through-component). The nested and
+  free writings have identical content, so *no content-level fragment
+  condition can include the free writing and exclude the nested one* — the
+  residual is irreducibly presentation-level, and the honest theorem excludes
+  closed components from `𝔉` altogether. Two mitigating structure facts:
+  **only closed components can be trapped** — a nested component that touches
+  a boundary has its attachment enclosed by the surrounding component's, so
+  both are marked by guard 3 and already sit in residual (a); and the d = 2
+  collision trackers cannot see the trap (a nested closed block needs a
+  producer above, `η` and `ε` inside, and a consumer below — expression depth
+  ≥ 3), so the pinned baselines carry no contribution from it. Fix shape (a
+  candidate PR3, tracked on #174): an *extraction move* sliding a closed
+  block sideways past identity wire-columns (`id₁ ⊗ s = s ⊗ id₁`, the
+  degenerate symmetry), after which the existing sift and Step 7 finish; it
+  needs its own measure component and a re-measure of the pins.
+
+  For diagrams whose closed components are all written *un-nested* (every
+  closed block's atoms adjacent only to identity wires of no component or to
+  whole-block runs), the §4.4 argument extends: closed blocks sort leftmost
+  as a class (rule (i)), are placed canonically among themselves up to
+  residual (b), and Theorem 4.4 holds relative to that closed-block order.
+  The `smc_canonicality_probes` exercise exactly this extension
+  (`closed_block_placement_converges`, `block_transposition_converges`,
+  `block_transposition_crosses_fused_identity_padding`).
+
+### §4.7 The content function as the #57 DPO substrate
+
+The content cospans of §4.1 are precisely the objects BGKSZ's §4 rewrites:
+DPO rewriting of (Λ-typed) hypergraphs with **convex** matchings implements
+rewriting modulo SMC structure (their Thm on convexity via Lemma 3.11 and
+Thm 3.12's factorization), and MPZ extend the correspondence when the
+signature carries a chosen commutative (co)monoid structure — **Def 7**
+(right-monogamy) relaxes Def 3.6, **Thm 21** (`S_Σ + CMon ≅
+RMACsp_D(Hyp_Σ)`) is the analogue of Thm 3.12, and **Thm 28** the rewriting
+correspondence — which is the direction a Frobenius/`E_frob`-aware layer
+would take. A #57 knowledge base would therefore: represent terms by their
+content (this section's `C`), rewrite by convex DPO on content, and use `nf`
+as the canonical *readback* from content to a layered term — Theorem 4.4 is
+exactly the statement that the readback is well defined on `𝔉`. What #57
+would add over the §2.4 pipeline is rewriting modulo *user equations* on the
+same substrate; what it inherits from this section is that SMC-coherence
+never needs rewriting at all — it is quotiented away by `C` itself.

@@ -74,8 +74,12 @@
 //! churn**, not an NF regression: the depth-2 E_18 congruence bridges were
 //! co-adapted to PR1's exact NFs, and redistributing NFs breaks some
 //! equation-mediated identifications while the NF itself strictly improves —
-//! canonicality on the non-interleaved fragment is witnessed directly by the
-//! `smc_canonicality_probes` module (see the module docstring note above).
+//! canonicality on the fragment 𝔉 (SMC-NF-RECONCILIATION.md §4.1: components
+//! clear and boundary-attached) is witnessed directly by the
+//! `smc_canonicality_probes` module (see the module docstring note above) and
+//! proven in SMC-NF-RECONCILIATION.md §4. The §4.6(c) trapped-nesting residual
+//! is structurally invisible at depth 2 (it needs expression depth ≥ 3), so
+//! these pins carry no contribution from it.
 //! Completing the presentation to all 18 F&S/BE15 relations gives CC more
 //! equations to identify with, lowering the residual collision count.
 //!

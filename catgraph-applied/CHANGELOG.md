@@ -13,6 +13,39 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **SMC NF canonicality proof — `SMC-NF-RECONCILIATION.md` §4**
+  ([#55](https://github.com/sustia-llc/catgraph/issues/55) proof phase,
+  2026-07-27): `nf` computes a function of the diagram's **abstract content**
+  (anchored monogamous directed acyclic cospan of Λ-typed hypergraphs — BGKSZ
+  arXiv:1602.06771v2 Def 3.6/3.9, Prop 3.4, Thm 3.12) on the fragment `𝔉`
+  (every component clear of guard 3's marking and boundary-attached) — so NF
+  equality *decides* SMC equality there, strictly stronger than
+  rewrite-confluence. Stated **color-generically** over an arbitrary color set
+  `Λ` so the [#79](https://github.com/sustia-llc/catgraph/issues/79)
+  word-generalized engine inherits it; §4.7 frames the content function as the
+  [#57](https://github.com/sustia-llc/catgraph/issues/57) DPO substrate
+  (BGKSZ §4 convex DPO; MPZ CALCO 2023 Def 7 / Thm 21 / Thm 28 for the
+  commutative-(co)monoid refinement).
+
+### Fixed
+
+- **Fragment claim corrected: third NF residual (trapped nested closed
+  block)** ([#55](https://github.com/sustia-llc/catgraph/issues/55) /
+  [#174](https://github.com/sustia-llc/catgraph/issues/174)): the proof phase
+  found that a closed (0→0) component written strictly *inside* another
+  component's wire span does not extract (its η's gap-closer is foreign; Step 7
+  never sees an adjacent free pair) — SMC-equal nested and free writings reach
+  different fixpoints while sharing identical content, so the residual is
+  irreducibly presentation-level. Canonicality claims re-scoped from "the
+  non-interleaved fragment" to `𝔉` (which also excludes closed components) in
+  the reconciliation doc, `smc_nf` module docs, and both test-suite
+  docstrings; new `#[ignore]`d witness
+  `trapped_closed_block_is_nesting_residual`. The depth-2 collision pins are
+  unaffected (the trap needs expression depth ≥ 3, structurally outside the
+  d = 2 enumeration).
+
 ### Changed
 
 - **SMC NF PR2: component-anchored η placement (rule (i)) + Step 7

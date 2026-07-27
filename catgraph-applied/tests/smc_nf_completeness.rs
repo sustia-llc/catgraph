@@ -23,11 +23,13 @@
 //! **Zero-arity atoms.** `try_unitor_merge` absorbs the 2-atom sink/source
 //! pattern (`[X, Identity(k)]` and three mirrors); mid-layer zero-source `η`
 //! deeper in a layer is scheduled by the `topological_layer_order`
-//! component-anchored point-span sift (issue #55, closed on the
-//! non-interleaved fragment — see `interchange_zero_source_eta` and the
-//! `smc_canonicality_probes` module). A proptest or golden-replay failure whose
-//! witness has an `η` in an *interleaved* component is the documented residual
-//! (guard 3), not a new bug.
+//! component-anchored point-span sift (issue #55, closed on the fragment 𝔉 —
+//! SMC-NF-RECONCILIATION.md §4.1, proven §4; see `interchange_zero_source_eta`
+//! and the `smc_canonicality_probes` module). A proptest or golden-replay
+//! failure whose witness has an `η` in an *interleaved* component (guard 3) or
+//! a closed component written nested inside another component's span
+//! (§4.6(c), `trapped_closed_block_is_nesting_residual`) is a documented
+//! residual, not a new bug.
 
 use catgraph_applied::prop::presentation::smc_nf::{from_string_diagram, nf};
 use catgraph_applied::prop::{PropExpr, PropSignature};
@@ -793,6 +795,49 @@ mod smc_canonicality_probes {
             nf(&par(closed_block(), long_closed_block())),
             nf(&par(long_closed_block(), closed_block())),
             "two closed blocks should agree under transposition"
+        );
+    }
+
+    /// **Trapped-nesting residual, documented** (§4.6(c), found in the #55
+    /// proof phase 2026-07-27; issue #174). A closed block written strictly
+    /// *inside* another component's wire span cannot escape: its `η`'s
+    /// coordinate falls strictly inside the enclosing atom's target span (the
+    /// point-span sift is blocked — correctly, since the gap-closer is
+    /// foreign), and Step 7 never sees an adjacent free pair because the
+    /// identity wires surrounding the closed block belong to the *enclosing*
+    /// component. The nested and free writings have identical abstract
+    /// content, so no content-level fragment condition separates them — the
+    /// residual is irreducibly presentation-level, and the §4 proof excludes
+    /// closed components from `𝔉` outright. Only closed components can be
+    /// trapped: a nested *anchored* component's attachment is enclosed by the
+    /// other's, so guard 3 marks both (residual (a)). Fix shape: a closed-block
+    /// extraction move (`id₁ ⊗ s = s ⊗ id₁` sideways past identity
+    /// wire-columns) — tracked on #174.
+    #[test]
+    #[ignore = "residual: a closed component written nested inside another component's span does not extract (§4.6(c), #174)"]
+    fn trapped_closed_block_is_nesting_residual() {
+        // Copy ; (id₁ ⊗ Zero ⊗ id₁) ; (id₁ ⊗ Discard ⊗ id₁) ; Add — the closed
+        // {Zero, Discard} loop written between Copy's two output wires.
+        let id1 = || PropExpr::Identity(1);
+        let nested = seq(
+            seq(
+                seq(
+                    prim(SfgGenerator::Copy),
+                    par(id1(), par(prim(SfgGenerator::Zero), id1())),
+                ),
+                par(id1(), par(prim(SfgGenerator::Discard), id1())),
+            ),
+            prim(SfgGenerator::Add),
+        );
+        // The same content written free: (Zero;Discard) ⊗ (Copy;Add).
+        let free = par(
+            closed_block(),
+            seq(prim(SfgGenerator::Copy), prim(SfgGenerator::Add)),
+        );
+        assert_eq!(
+            nf(&nested),
+            nf(&free),
+            "a nested closed block should extract to the free layout"
         );
     }
 

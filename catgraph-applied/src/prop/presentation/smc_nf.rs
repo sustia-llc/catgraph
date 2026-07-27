@@ -5,7 +5,8 @@
 //! This module provides, in place of the plain `apply_smc_rules` pre-pass, a
 //! **Joyal-Street string-diagram normal form**: a total function
 //! [`PropExpr`] → [`StringDiagram`] such that two expressions are SMC-equal
-//! iff their NF values are structurally equal. The sibling
+//! iff their NF values are structurally equal — proven on the fragment `𝔉`
+//! (`docs/SMC-NF-RECONCILIATION.md` §4; residual scope on [`nf`]). The sibling
 //! [`super::kb::CongruenceClosure`] (Layer 2) then operates on NF-normalized
 //! terms and handles user-equation congruence without needing to know about
 //! SMC axioms.
@@ -109,7 +110,9 @@ pub struct StringDiagram<G: PropSignature> {
 /// converse holds by construction since `nf` applies only SMC-sound rewrites.
 ///
 /// Known exception (issue #55): both halves of the former zero-arity gap are
-/// closed **on the non-interleaved fragment**.
+/// closed **on the fragment 𝔉** (`docs/SMC-NF-RECONCILIATION.md` §4.1: every
+/// connected component clear of guard 3's marking *and* touching a boundary —
+/// the closed-component exclusion was added 2026-07-27, §4.6(c)).
 /// - **Within-layer order** — Step 6 (`reorder_tied_zero_arity`, PR1) puts every
 ///   tied run in canonical order, so `nf(ε ⊗ η) == nf(η ⊗ ε)`.
 /// - **Layer assignment** — a zero-source generator (`source == 0`, e.g.
@@ -124,17 +127,23 @@ pub struct StringDiagram<G: PropSignature> {
 ///   transpositions close too: `nf((μ;!) ⊗ (η;Δ)) == nf((η;Δ) ⊗ (μ;!))`, and a
 ///   closed block sorts leftmost regardless of where it was written.
 ///
-/// **Residual scope**, two guards. The *interleave guard*: when a component's
+/// **Residual scope**, three cases. The *interleave guard*: when a component's
 /// boundary attachment interleaves another component's on the same boundary,
 /// block transposition is not braid-free and rule (i)'s slot is ill-defined, so
 /// such an `η` is not sifted, Step 6 falls back to the Decision-1 class order
-/// for it, and Step 7 leaves it alone. And the *equal-key* case: rule (i) gives
+/// for it, and Step 7 leaves it alone. The *equal-key* case: rule (i) gives
 /// all closed components one key, so two distinct closed blocks keep their input
 /// order — the block-level reading of Step 6's stable-among-scalars, and the
-/// same no-`Ord`-on-`G` limitation. Both residuals are strictly narrower than
-/// the pre-PR2 gap, which covered *every* mid-layer `η`. See
-/// `docs/SMC-NF-RECONCILIATION.md` §2.6 (the component-order anchor and its
-/// carve against §2.5) and the `smc_canonicality_probes` module in
+/// same no-`Ord`-on-`G` limitation. And the *trapped-nesting* case (found in
+/// the #55 proof phase, 2026-07-27): a closed component written strictly inside
+/// another component's wire span does not extract — its `η` is blocked by the
+/// enclosing atom's target span and Step 7 never sees an adjacent free pair;
+/// the nested and free writings have identical abstract content, so this
+/// residual is irreducibly presentation-level (issue #174). All three are
+/// strictly narrower than the pre-PR2 gap, which covered *every* mid-layer
+/// `η`. See `docs/SMC-NF-RECONCILIATION.md` §2.6 (the component-order anchor
+/// and its carve against §2.5), §4 (the canonicality proof and its fragment
+/// `𝔉`), and the `smc_canonicality_probes` module in
 /// `tests/smc_nf_completeness.rs`. Generators with `source > 0` were never
 /// affected.
 pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
