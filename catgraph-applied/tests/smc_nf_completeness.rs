@@ -520,7 +520,8 @@ mod zero_arity_order {
 ///
 /// Coverage: the two-component counterexample that forced the PR2 re-cut, the
 /// PR1 atomic witnesses, the mid-layer `η` interchange pair, closed-block
-/// placement, and idempotence on all of them.
+/// placement, the Step-7 block transpositions (including across fused identity
+/// padding), and idempotence on all of them.
 mod smc_canonicality_probes {
     use super::*;
     use catgraph_applied::prop::presentation::smc_nf::{Atom, Layer, StringDiagram};
@@ -551,8 +552,22 @@ mod smc_canonicality_probes {
     fn closed_block() -> PropExpr<Sfg> {
         seq(prim(SfgGenerator::Zero), prim(SfgGenerator::Discard))
     }
+    /// `η ; s ; ! : 0 → 0` — a *different* closed block, for the equal-key
+    /// residual (`closed_closed_order_is_ord_less_residual`).
+    fn long_closed_block() -> PropExpr<Sfg> {
+        seq(closed_via_scalar(), prim(SfgGenerator::Discard))
+    }
+    fn closed_via_scalar() -> PropExpr<Sfg> {
+        seq(prim(SfgGenerator::Zero), scalar())
+    }
+    /// A **solid** `1 → 1` generator — `SfgGenerator::Scalar` is scalar
+    /// *multiplication*, not a `0 → 0` closed atom, so it touches both
+    /// boundaries and pairs freely only with a closed block.
     fn scalar() -> PropExpr<Sfg> {
         prim(SfgGenerator::Scalar(BoolRig(true)))
+    }
+    fn scalar_other() -> PropExpr<Sfg> {
+        prim(SfgGenerator::Scalar(BoolRig(false)))
     }
 
     /// **The decisive counterexample** (diagnosis note 2026-07-26 §2). With
@@ -651,9 +666,8 @@ mod smc_canonicality_probes {
     /// closed block's `η` is scheduled by rule (i)'s closed branch — leftmost
     /// within the slots its coordinate admits.
     ///
-    /// Note what this does *not* assert: `(η;!) ⊗ s` and `s ⊗ (η;!)` are also
-    /// SMC-equal, and they do **not** converge — see
-    /// `closed_block_transposition_is_a_documented_residual`.
+    /// The block-level companion — `(η;!) ⊗ s` against `s ⊗ (η;!)` — is
+    /// `block_transposition_converges`.
     #[test]
     fn closed_block_placement_converges() {
         // Left placement: (η;!) ⊗ s  ==  (η ⊗ id₁) ; (! ⊗ s).
@@ -681,31 +695,104 @@ mod smc_canonicality_probes {
         );
     }
 
-    /// **Documented residual, not a silent gap.** Rule (i) orders whole
-    /// components `closed < input-anchored < output-only`, but the only moves
-    /// the pipeline has are the *single-atom* sift (up one layer) and Step 6's
-    /// *within-layer* reorder. Transposing two multi-atom blocks is neither: it
-    /// is the coupled multi-layer block move the diagnosis note (§2) already
-    /// identified as out of Step 6's reach. So `(η;!) ⊗ s` and `s ⊗ (η;!)` —
-    /// SMC-equal because both connecting braids are `σ_{0,n} = id` at block
-    /// level — still normalize apart, as do `A ⊗ B` and `B ⊗ A` for the
-    /// counterexample's blocks.
+    /// **Block transposition converges** — Step 7 (`reorder_component_blocks`).
+    /// Rule (i) orders whole components, and until Step 7 the pipeline's only
+    /// moves were the single-atom sift (up one layer) and Step 6's within-layer
+    /// reorder, neither of which can perform the coupled multi-layer block move
+    /// the diagnosis note (§2) identified. Step 7 performs it, so the tensor-form
+    /// transpositions converge too.
     ///
-    /// Realizing this needs a block-level analogue of Step 6 (reorder whole
-    /// strictly-commuting components across the layers they span), which is a
-    /// separate pass and a separate scope decision — it is not part of PR2-v2.
+    /// Two families:
+    /// - `A = μ;! : 2 → 0` (input-only) against `B = η;Δ : 0 → 2` (output-only):
+    ///   the **full three-member family** — both tensor orders and the compose
+    ///   form — lands on the one rule-(i) layout;
+    /// - a closed block against a solid `1 → 1` generator. The solid one touches
+    ///   *both* boundaries, and `closed ∥ both` is still a free pair (a closed
+    ///   component occupies no boundary wire at all), so the closed block sorts
+    ///   leftmost from either writing.
     #[test]
-    #[ignore = "residual: multi-atom block transposition needs a block-level Step 6; see doc comment"]
-    fn closed_block_transposition_is_a_documented_residual() {
+    fn block_transposition_converges() {
+        let expected = StringDiagram {
+            layers: vec![
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Add),
+                        Atom::Generator(SfgGenerator::Zero),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Generator(SfgGenerator::Copy),
+                    ],
+                },
+            ],
+        };
+        for form in [
+            par(sink_block(), source_block()),
+            par(source_block(), sink_block()),
+            seq(sink_block(), source_block()),
+        ] {
+            assert_eq!(nf(&form), expected, "block-order family diverged: {form:?}");
+        }
+
+        let closed_left = nf(&par(closed_block(), scalar()));
         assert_eq!(
-            nf(&par(closed_block(), scalar())),
             nf(&par(scalar(), closed_block())),
-            "closed block should sort leftmost in both"
+            closed_left,
+            "a closed block sorts leftmost against a solid generator"
         );
         assert_eq!(
-            nf(&par(sink_block(), source_block())),
-            nf(&par(source_block(), sink_block())),
-            "input-anchored block should sort before the output-only block"
+            closed_left.layers[0].atoms[0],
+            Atom::Generator(SfgGenerator::Zero),
+            "…and leftmost means the closed block's η opens layer 0"
+        );
+    }
+
+    /// Fused identity padding. `(s ⊗ s′) ⊗ (η;!)` pads the one-layer `s ⊗ s′`
+    /// with a single `Identity(2)` spanning **both** solid components, and the
+    /// plain union-find joins those two through it. Step 7 pre-splits every
+    /// `Identity(n)` at wire boundaries before analysing — free, since
+    /// `Identity(a+b) = Identity(a) ⊗ Identity(b)` — which keeps them apart and
+    /// lets the closed block bubble left past each in turn; the identity re-fuses
+    /// on the way out.
+    #[test]
+    fn block_transposition_crosses_fused_identity_padding() {
+        let solids = par(scalar(), scalar_other());
+        let expected = StringDiagram {
+            layers: vec![
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Zero),
+                        Atom::Generator(SfgGenerator::Scalar(BoolRig(true))),
+                        Atom::Generator(SfgGenerator::Scalar(BoolRig(false))),
+                    ],
+                },
+                Layer {
+                    atoms: vec![Atom::Generator(SfgGenerator::Discard), Atom::Identity(2)],
+                },
+            ],
+        };
+        assert_eq!(nf(&par(solids.clone(), closed_block())), expected);
+        assert_eq!(nf(&par(closed_block(), solids)), expected);
+    }
+
+    /// **Equal-key residual, documented.** Rule (i) gives every closed component
+    /// the same key `(closed, 0)`, and Step 7 — like Step 6 — never swaps equal
+    /// keys. So two *distinct* closed blocks keep their input order: the
+    /// block-level reading of Step 6's stable-among-scalars, and the same
+    /// limitation for the same reason. Sorting them would need a content-derived
+    /// total order on components, which bottoms out in an `Ord` bound on `G` that
+    /// `PropSignature` does not carry (see the scalar caveat on
+    /// `reorder_tied_zero_arity`) — a signature-surface decision, not a
+    /// normalizer one.
+    #[test]
+    #[ignore = "residual: closed blocks share one rule-(i) key and PropSignature has no Ord to break the tie"]
+    fn closed_closed_order_is_ord_less_residual() {
+        assert_eq!(
+            nf(&par(closed_block(), long_closed_block())),
+            nf(&par(long_closed_block(), closed_block())),
+            "two closed blocks should agree under transposition"
         );
     }
 
@@ -716,8 +803,13 @@ mod smc_canonicality_probes {
         let sfg: Vec<PropExpr<Sfg>> = vec![
             seq(sink_block(), source_block()),
             par(sink_block(), source_block()),
+            par(source_block(), sink_block()),
             par(closed_block(), scalar()),
             par(scalar(), closed_block()),
+            par(par(scalar(), scalar_other()), closed_block()),
+            par(closed_block(), par(scalar(), scalar_other())),
+            par(closed_block(), long_closed_block()),
+            par(long_closed_block(), closed_block()),
             seq(
                 par(prim(SfgGenerator::Zero), PropExpr::Identity(1)),
                 par(prim(SfgGenerator::Discard), scalar()),

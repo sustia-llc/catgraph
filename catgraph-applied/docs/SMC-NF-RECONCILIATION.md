@@ -56,9 +56,11 @@ type: no `Identity(0)`; no `Braid(m,n)` with `m+n > 2`; no `Braid(0,_)` /
 `Braid(_,0)`; no two adjacent all-identity layers; every `Braid` in the
 leading (input-side) layers; no mixed braid+generator layer; every generator in
 its earliest admissible layer (positive-source by covering span, zero-source by
-the component-anchored point span); and within every layer, no adjacent
+the component-anchored point span); within every layer, no adjacent
 strictly-commuting pair ordered against the Step 6 order — `scalar < η < ε` at a
-single-atom tie, `closed < input-anchored < output-only` otherwise (§2.6).
+single-atom tie, `closed < input-anchored < output-only` otherwise (§2.6); and no
+adjacent *free* pair of connected components ordered against that same component
+order (Step 7, §2.6).
 
 ## §2 Conventions
 
@@ -163,7 +165,7 @@ Two independent choices fix the placement of atoms:
 
 ### §2.4 Termination measure
 
-`nf` runs the eight steps of §3 in a fixpoint loop, exiting when a full pass
+`nf` runs the nine steps of §3 in a fixpoint loop, exiting when a full pass
 leaves the diagram unchanged. Termination is by a **lexicographic measure** on
 the tuple
 
@@ -174,6 +176,7 @@ the tuple
  braid_position_sum,
  generator_position_sum,
  layer_count,
+ block_inversion_count,
  tied_inversion_count)
 ```
 
@@ -188,7 +191,8 @@ decreasing whenever the diagram is not yet a fixpoint:
 | `braid_position_sum` | the naturality sweep (braids move input-ward) | §2.1 |
 | `generator_position_sum` | `topological_layer_order` (Step 4(c)) | one generator — positive-source or zero-source `η` (issue #55) — drops exactly one layer per sift; bounded below by 0 |
 | `layer_count` | `coalesce_identity_layers` / `simplify_units` | identity-only layers absorb; `Identity(0)` atoms are removed |
-| `tied_inversion_count` | `reorder_tied_zero_arity` (Step 6, §2.5 + §2.6) | trailing component; `try_unitor_merge` and the zero-source sift may *raise* it while strictly shrinking an earlier component (`layer_count` / `generator_position_sum`) — see below |
+| `block_inversion_count` | `reorder_component_blocks` (Step 7, §2.6) | one transposition flips every position pair between the two blocks' runs; the pass changes no layer's membership and rewrites no atom, so every earlier component is invariant under it |
+| `tied_inversion_count` | `reorder_tied_zero_arity` (Step 6, §2.5 + §2.6) | trailing component; `try_unitor_merge`, the zero-source sift and Step 7 may *raise* it while strictly shrinking an earlier component (`layer_count` / `generator_position_sum` / `block_inversion_count`) — see below |
 
 `topological_layer_order` has its own inner termination for the same reason:
 each sift strictly decreases the sum of the layer indices of `Generator` atoms
@@ -205,11 +209,27 @@ per swap. Counting only *adjacent* inverted pairs would **not** work: in
 `(ε, η)` — an adjacent-only count is flat there, while the all-pairs count drops
 2 → 1.
 
+**`block_inversion_count`, precisely.** Summed over layers, the number of
+*pairs* `p < q` within a layer whose two components form a §2.6 *free pair* — at
+least one multi-atom, neither interleaved, at most one attaching each boundary —
+with inverted rule-(i) keys. A Step-7 transposition flips every such pair between
+the two runs (at least one, since the two are adjacent in some layer) and leaves
+every other pair's relative order untouched. The comparator is stable across the
+swap: boundary freedom means neither block occupies a wire on a boundary the
+other attaches to, so the swap moves no boundary wire and `keys`, `sizes`,
+`interleaved` and the attachment flags are all invariant under it.
+
 Step 6 leaves every earlier component fixed: it never moves an atom across a
 layer boundary, never rewrites an atom, and never changes a layer's membership,
 so `crossings`, `mixed_layer_count`, `wide_braid_count`, the two position sums
-(both layer-index sums) and `layer_count` are all invariant under it. Two steps
-can raise `tied_inversion_count`. `try_unitor_merge` — its case 1
+(both layer-index sums) and `layer_count` are all invariant under it.
+`block_inversion_count` too: a Step-6 swap changes the relative order of exactly
+the pair it swaps, and either that pair is two *single-atom* components — which
+`block_inversion_count` excludes by the free-pair condition — or it is already
+decided by the rule-(i) component order (`tie_sorts_before`), so the swap lowers
+the block count or leaves it alone. Never raises it.
+
+Three steps can raise `tied_inversion_count`. `try_unitor_merge` — its case 1
 prepends an ε ahead of the absorbed layer's atoms (possibly past an η) and its
 case 4 appends an η after them (possibly behind an ε); case 3's η-prepend is
 order-canonical — but it does so only while
@@ -217,7 +237,9 @@ strictly shrinking `layer_count`, so the tuple still drops lexicographically and
 Step 6 repairs the ordering on the same fixpoint pass. The zero-source
 point-span sift can likewise land an `η` beside an `ε` in the earlier layer, but
 only while strictly shrinking `generator_position_sum`, an earlier component
-still — same argument, same repair.
+still — same argument, same repair. So can a Step-7 block move, while strictly
+shrinking `block_inversion_count` — which is why Step 7 is staged *ahead* of
+Step 6 in the loop.
 
 `tied_inversion_count` is read against the *Step 6 order* of §2.5 + §2.6, not
 the class order alone: an "inversion" is an adjacent strictly-commuting pair
@@ -348,14 +370,58 @@ sifted, and Step 6 falls back to the §2.5 class order for them. Canonicality is
 claimed and proven on the **non-interleaved fragment**; the residual is strictly
 narrower than the pre-PR2 gap, which covered *every* mid-layer `η`.
 
-**Residual, second kind.** Rule (i) states an order between whole components,
-but the pipeline's only moves are the single-atom sift (up one layer) and Step
-6's within-layer reorder. Transposing two *multi-atom* blocks is neither — it is
-a coupled multi-layer block move — so tensor-form block transpositions such as
-`(η;!) ⊗ s` vs `s ⊗ (η;!)`, or `A ⊗ B` vs `B ⊗ A` above, still normalize apart.
-Realizing them needs a block-level analogue of Step 6 and is out of PR2's scope;
-it is recorded as `closed_block_transposition_is_a_documented_residual`
-(`#[ignore]`) in `tests/smc_nf_completeness.rs`.
+**The block pass (Step 7, `reorder_component_blocks`).** Rule (i) states an order
+between whole components, and the two atom-level moves — the single-atom sift (up
+one layer) and Step 6's within-layer reorder — cannot realize it: transposing two
+*multi-atom* blocks is a coupled multi-layer move. Step 7 makes that move.
+
+It transposes an **adjacent free pair** of components. A pair `{C1, C2}` is
+*free* when (a) at least one is multi-atom — single ∥ single pairs stay with the
+disjointness carve above — (b) neither is interleaved, and (c) at most one
+occupies a wire on the input boundary and at most one on the output boundary.
+Condition (c) is exactly what makes the transposition an equality rather than a
+conjugation: reading the blocks as morphisms, `B1 ⊗ B2 = σ ; (B2 ⊗ B1) ; σ′` with
+`σ = σ_{w1_in, w2_in}` and `σ′ = σ_{w2_out, w1_out}`, and both braids degenerate
+to identities precisely when one of each pair of boundary widths is `0`. Read on
+the abstract content instead: the swap moves no wire between components and,
+under (c), fixes both boundary orderings, so it is the same anchored port graph.
+By class the free pairs are therefore `closed ∥ anything` and
+`input-only ∥ output-only`; a component touching *both* boundaries is pinned
+against everything except a closed one.
+
+A pair is *adjacent* when, in every layer holding both, each one's atoms form a
+contiguous run and `C1`'s sits immediately left of `C2`'s — no third component
+between them anywhere. In a layer holding only one there is nothing to swap: a
+component's layer set is an interval, so the absent one contributes zero wire
+width at the adjoining boundary and the present one's coordinates do not move.
+
+**Fused identities.** `merge_adjacent_identities` fuses an `Identity` across
+component boundaries, and the union-find then joins those components *through*
+the fused atom. Step 7 therefore analyses a refinement in which every
+`Identity(n)` is split into `n × Identity(1)` — free, since
+`Identity(a+b) = Identity(a) ⊗ Identity(b)` — transposes there, and re-fuses on
+the way out. The refinement is local to Step 7; §2.3's sift and §2.5's Step 6
+keep reading the unrefined form. A component carrying a `Braid` is never
+transposed: braid placement belongs to §2.1's pass, and keeping the two off each
+other's atoms is what stops them oscillating.
+
+**Residual, second kind (equal keys).** All closed components share one rule-(i)
+key, and Step 7 — like Step 6 — never swaps equal keys, so two *distinct* closed
+blocks keep their input order. That is the block-level reading of §2.5's
+stable-among-scalars and the same limitation for the same reason: sorting them
+needs a content-derived total order on components, which bottoms out in an `Ord`
+bound on `G` that `PropSignature` does not carry. Recorded as
+`closed_closed_order_is_ord_less_residual` (`#[ignore]`) in
+`tests/smc_nf_completeness.rs`, beside the now-converging
+`block_transposition_converges`.
+
+**Downstream effect.** Closing the block-order gap moved scalar centrality —
+`(η;ε) ⊗ μ = μ ⊗ (η;ε)` in the SCFM fragment — out of catgraph-syntax's
+congruence-closure gap and into Layer 1: the closed `η;ε` block now sorts
+leftmost on both sides, so `eq_mod` decides it without consulting `E_frob`. The
+`complete_where_congruence_closure_is_not` test in
+`catgraph-syntax/tests/cospan_complete_functor.rs` was re-pointed at a harder
+witness accordingly.
 
 - Source: issue #55 owner decision 2026-07-26, diagnosis-note addendum
   (`2026-07-26-55-proof-phase-diagnosis.md`), refining the design of record
@@ -376,7 +442,11 @@ it is recorded as `closed_block_transposition_is_a_documented_residual`
 | 4 | `coalesce_identity_layers` | (a) fuse adjacent `Identity` atoms in a layer; (b) drop pure-identity layers when a non-identity layer remains (keep one as arity carrier otherwise) |
 | 4(c) | `topological_layer_order` | sift each generator to its earliest admissible braid-free layer — covering-identity span for positive source, component-anchored point-span rule for zero-source `η` (§2.3, §2.6) |
 | 5 | `simplify_units` | remove `Identity(0)` atoms; drop layers emptied as a result |
+| 7 | `reorder_component_blocks` | transpose adjacent *free* component blocks (`closed ∥ anything`, `input-only ∥ output-only`) into rule-(i) order, over an identity-split refinement (§2.6) |
 | 6 | `reorder_tied_zero_arity` | within-layer bubble reorder of strictly-commuting zero-arity atoms — `scalar < η < ε < solid` at single-atom ties (§2.5), component order otherwise (§2.6) |
+
+(Step 7 is staged *ahead* of Step 6 in the loop — a block move can land an `η`
+beside an `ε`, and Step 6 repairs that on the same pass.)
 
 (`lower` / `pad_and_zip` run once before the loop: `PropExpr` → one-atom-per-
 layer `StringDiagram`, padding the shorter side of a `⊗` with `Identity`
@@ -411,6 +481,7 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
 | Interchange law; `id_0` as unit ("zero wires") | Selinger Table 2 p. 10 (+ interchange example below it) | Steps 2/5; `smc_bifunctoriality_interchange` |
 | 0-arity sink/source absorption `L1;(X⊗id_k)=X⊗L1` etc. | JS-I Ch 1 §1 + §4 Thm 1.2 p. 71 | Step 2 `try_unitor_merge`; `unitor_merge_*` |
 | Strictly-commuting zero-arity atoms `ε⊗η=η⊗ε` (both connecting braids `σ_{0,n}=id`) | JS-I Ch 1 §1 p. 57 (`id_0` unit) + Ch 1 §4 Thm 1.2 p. 71 | Step 6 `reorder_tied_zero_arity` (§2.5); `zero_arity_order::*` |
+| Free component blocks commute `B1⊗B2=B2⊗B1` (both connecting braids `σ_{0,n}=id` at block level) | JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) + Ch 2 §1 axiom (S) p. 73 (degenerate case) | Step 7 `reorder_component_blocks` (§2.6); `smc_canonicality_probes::block_transposition_*` |
 
 ### Coverage summary
 
@@ -431,9 +502,15 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
   `(μ;!) ; (η;Δ)` = `(μ;!) ⊗ (η;Δ)`); verified by `interchange_zero_source_eta`,
   the `zero_arity_order` tests, and the `smc_canonicality_probes` module in
   `tests/smc_nf_completeness.rs`.
+- **Block order** — transposing two **multi-atom blocks** is covered by Step 7
+  (§2.6) on the free pairs (`closed ∥ anything`, `input-only ∥ output-only`), so
+  the tensor-form transpositions converge too: `(μ;!) ⊗ (η;Δ)` = `(η;Δ) ⊗ (μ;!)`
+  = `(μ;!) ; (η;Δ)`, and `(η;!) ⊗ s` = `s ⊗ (η;!)`. Verified by
+  `smc_canonicality_probes::block_transposition_converges` and
+  `block_transposition_crosses_fused_identity_padding`.
 - **Documented residuals**, both in §2.6 and both narrower than the pre-PR2 gap:
   (a) an `η` whose component's boundary attachment **interleaves** another's is
-  not sifted (guard 3); (b) transposing two **multi-atom blocks** needs a
-  block-level analogue of Step 6 that the pipeline does not have, so
-  `(η;!) ⊗ s` and `s ⊗ (η;!)` still normalize apart — tracked as
-  `closed_block_transposition_is_a_documented_residual` (`#[ignore]`).
+  not sifted, and its component is not transposed (guard 3); (b) two distinct
+  **closed** blocks share one rule-(i) key, so neither Step 6 nor Step 7 swaps
+  them — the same no-`Ord`-on-`G` limitation as scalar order, tracked as
+  `closed_closed_order_is_ord_less_residual` (`#[ignore]`).

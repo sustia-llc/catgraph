@@ -651,4 +651,30 @@ mod review_soundness_fixes {
         let out = nf(&expr);
         assert_eq!(nf(&expr), out, "nf must be deterministic and terminating");
     }
+
+    /// Termination regression for the issue-#55 Step 7 block pass over **fused
+    /// identity padding**.
+    ///
+    /// `(F ⊗ G) ⊗ (η;ε)` pads the one-layer `F ⊗ G` with a single `Identity(2)`
+    /// spanning *both* solid components, so `analyze_components` joins them
+    /// through the fused atom. Step 7 works on a refinement in which identities
+    /// are split at wire boundaries, transposes the closed block leftmost past
+    /// each solid in turn, and re-fuses on the way out — and the next fixpoint
+    /// pass then re-runs the whole pipeline over the re-fused form. The split and
+    /// the fuse must not trade places forever: `nf` has to return, and return the
+    /// same value twice.
+    #[test]
+    fn block_pass_fixpoint_terminates_on_fused_identity_padding() {
+        let closed = || Compose(b(Generator(TestSig::Eta)), b(Generator(TestSig::Eps)));
+        let solids = || Tensor(b(Generator(TestSig::F)), b(Generator(TestSig::G)));
+        let expr = Tensor(b(solids()), b(closed()));
+        // Reaching this assertion at all is the regression.
+        let out = nf(&expr);
+        assert_eq!(nf(&expr), out, "nf must be deterministic and terminating");
+        assert_eq!(
+            nf(&Tensor(b(closed()), b(solids()))),
+            out,
+            "the closed block sorts leftmost from either writing"
+        );
+    }
 }
