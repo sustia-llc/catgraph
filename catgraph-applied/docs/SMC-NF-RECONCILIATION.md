@@ -42,10 +42,13 @@
 `smc_nf::nf` is a total function `PropExpr<G> → StringDiagram<G>` that
 canonicalizes a prop expression up to symmetric-monoidal-category (SMC)
 coherence: associativity and unitors of `;` and `⊗`, bifunctoriality /
-interchange, braid naturality, and the symmetry axiom `σ² = id`. Two
-expressions that are equal in the free SMC on the signature `G` reach the same
-`StringDiagram`; the converse holds by construction, since every rewrite the
-pipeline applies is SMC-sound.
+interchange, braid naturality, and the symmetry axiom `σ² = id`. The aim is
+"SMC-equal iff same `StringDiagram`". The *soundness* direction — equal NFs
+imply SMC-equal expressions — holds unconditionally, since every rewrite the
+pipeline applies is SMC-sound (§4.3). The *canonicality* direction —
+SMC-equal expressions reach the same `StringDiagram` — is probe-verified on
+the fragment `𝔉` with four documented residuals; a full proof is open (§4.4
+status).
 
 A `StringDiagram` is a sequence of `Layer`s `L_0 ; L_1 ; … ; L_{k-1}`; each
 `Layer` is a left-to-right tensor of `Atom`s (`Identity(n)`, `Braid(m,n)`,
@@ -358,8 +361,11 @@ first). The two freedom classes are carved apart by component size:
   with the §2.5 class order as the tie-break when the two component keys
   coincide (the same component, or two closed blocks).
 
-Both sides of the carve are functions of the abstract content (component
-membership and size are content), so the normal form stays well defined. The
+Both sides of the carve are *meant to be* functions of the abstract content —
+with two caveats recorded in §4: component membership and size are content
+only modulo the fused-identity coarsening that the sift and Step 6 read
+(§4.1's honesty note), and well-definedness of the normal form on all of `𝔉`
+is exactly what residual §4.6(d) leaves open pending the §4.5 column move. The
 carve is applied in two places, consistently: `component_slot` picks the sift's
 insertion slot inside the run of slots the coordinate admits — for output-only
 and closed components; an *input-anchored* `η` takes the leftmost admissible
@@ -532,9 +538,10 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
   `closed_closed_order_is_ord_less_residual` (`#[ignore]`); (c) a closed
   component **written strictly inside** another component's wire span does not
   extract (found in the §4 proof phase, 2026-07-27) — tracked as
-  `trapped_closed_block_is_nesting_residual` (`#[ignore]`); (d) a
-  **solid-headed zero-arity block** written nested inside another component's
-  span — *inside* `𝔉`, the refutation of the draft §4 theorem — tracked as
+  `trapped_closed_block_is_nesting_residual` (`#[ignore]`); (d) a nested
+  **zero-arity block solid on its opening side** (solid-headed sink /
+  solid-tailed source) — *inside* `𝔉`, the refutation of the draft §4
+  theorem — tracked as
   `nested_sink_block_is_column_residual` /
   `nested_source_block_is_column_residual` (`#[ignore]`). All on issue #174.
 
@@ -753,7 +760,8 @@ never strictly commutes with anything; Step 7 transposes only whole
 both sides) is never free against the block under condition (c). A
 single-atom `η` does escape via Step 6 when the neighbouring block is
 η-headed — the convergences review confirmed — which is exactly why only
-**solid-headed** nestings witness the residual.
+nestings **solid on the opening side** (solid-headed sink blocks,
+solid-tailed source blocks) witness the residual.
 
 Two repair paths, tracked on issue #174:
 
@@ -827,11 +835,12 @@ it, which is what refuted the draft theorem (§4.4):
   `block_transposition_crosses_fused_identity_padding` (no proof claim,
   pending §4.5).
 
-- **(d) Nested solid-headed zero-arity blocks** *(found in adversarial
+- **(d) Nested zero-arity blocks, solid on the opening side** *(found in adversarial
   review, 2026-07-27 — the refutation of the draft theorem; inside `𝔉`).*
   A multi-atom `n → 0` (or dually `0 → n`) block written at a coordinate
-  strictly inside another component's span, with a **solid** atom at the
-  head, converges with none of its free writings. Probe-verified witnesses
+  strictly inside another component's span, with a **solid** atom on the side
+  facing the enclosing wall's opening (head of a sink block, *tail* of a
+  source block), converges with none of its free writings. Probe-verified witnesses
   (`nested_sink_block_is_column_residual`,
   `nested_source_block_is_column_residual`, both `#[ignore]`):
 

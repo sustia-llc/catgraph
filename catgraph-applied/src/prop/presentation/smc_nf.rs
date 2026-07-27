@@ -113,9 +113,11 @@ pub struct StringDiagram<G: PropSignature> {
 /// Totality: `nf` is defined on every arity-well-formed `PropExpr<G>` and
 /// always terminates (see the termination measure in `docs/SMC-NF-RECONCILIATION.md` §2.4).
 ///
-/// Canonicality claim: for any two SMC-equal expressions `a`, `b` (i.e., equal
-/// in the free symmetric monoidal category on `G`), `nf(&a) == nf(&b)`. The
-/// converse holds by construction since `nf` applies only SMC-sound rewrites.
+/// Canonicality: the *soundness* direction — `nf(&a) == nf(&b)` implies `a`
+/// and `b` are SMC-equal (equal in the free symmetric monoidal category on
+/// `G`) — holds unconditionally, since `nf` applies only SMC-sound rewrites.
+/// The *canonicality* direction — SMC-equal expressions get equal NFs — is
+/// probe-verified on the fragment 𝔉, not proven (docs §4.4).
 ///
 /// Known exception (issue #55): both halves of the former zero-arity gap are
 /// closed — **probe-verified, not proven** — on the fragment 𝔉
@@ -152,8 +154,9 @@ pub struct StringDiagram<G: PropSignature> {
 /// the nested and free writings have identical abstract content, so this
 /// residual is irreducibly presentation-level (issue #174). And the
 /// *nested-column* case (found in adversarial review the same day, *inside*
-/// 𝔉): a solid-headed multi-atom zero-arity block written nested inside
-/// another component's span converges with none of its free writings — the
+/// 𝔉): a multi-atom zero-arity block, solid on the side facing its enclosing
+/// wall's opening (solid-headed sink / solid-tailed source), written nested
+/// inside another component's span converges with none of its free writings — the
 /// missing move is a zero-arity-bounded *column* transposition, between what
 /// Step 6 (atoms) and Step 7 (whole components) can do; see
 /// `docs/SMC-NF-RECONCILIATION.md` §4.5. All four are strictly narrower than

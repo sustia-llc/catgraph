@@ -135,9 +135,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   foreign; Step 7 never sees an adjacent free pair) — SMC-equal nested and
   free writings reach different fixpoints while sharing identical content, so
   the residual is irreducibly presentation-level. Residual (d), found in
-  adversarial review and **refuting the draft §4 theorem**: a *solid-headed*
-  multi-atom zero-arity block written nested converges with none of its free
-  writings even when boundary-attached and unmarked — i.e. *inside* the
+  adversarial review and **refuting the draft §4 theorem**: a multi-atom
+  zero-arity block, solid on the side facing its enclosing wall's opening
+  (solid-headed sink / solid-tailed source), written nested converges with
+  none of its free writings even when boundary-attached and unmarked — i.e. *inside* the
   fragment `𝔉` (probe-verified CE-A family; the draft enclosure lemma missed
   the wall-opening-at-η/ε escape). Canonicality claims re-scoped from "the
   non-interleaved fragment" to probe-verified-on-`𝔉` in the reconciliation

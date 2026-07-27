@@ -29,8 +29,9 @@
 //! `smc_canonicality_probes` module). A proptest or golden-replay failure
 //! whose witness has an `η` in an *interleaved* component (guard 3), a closed
 //! component written nested inside another component's span (§4.6(c),
-//! `trapped_closed_block_is_nesting_residual`), or a solid-headed zero-arity
-//! block written nested (§4.6(d), `nested_sink_block_is_column_residual` /
+//! `trapped_closed_block_is_nesting_residual`), or a zero-arity block solid
+//! on its opening side written nested (§4.6(d),
+//! `nested_sink_block_is_column_residual` /
 //! `nested_source_block_is_column_residual`) is a documented residual, not a
 //! new bug.
 
