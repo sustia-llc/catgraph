@@ -20,10 +20,14 @@
 //! are ~3 MB each and only exist on the developer's machine; release-gate
 //! reviewers run it manually with `--ignored`.
 //!
-//! **Watch-item:** `try_unitor_merge` only handles the 2-atom sink/source
-//! pattern (`[X, Identity(k)]` and three mirrors). A proptest or golden-
-//! replay failure whose witness has a zero-arity atom (ε, η) embedded
-//! deeper in a layer flags the known limitation for follow-up.
+//! **Zero-arity atoms.** `try_unitor_merge` absorbs the 2-atom sink/source
+//! pattern (`[X, Identity(k)]` and three mirrors); mid-layer zero-source `η`
+//! deeper in a layer is scheduled by the `topological_layer_order`
+//! component-anchored point-span sift (issue #55, closed on the
+//! non-interleaved fragment — see `interchange_zero_source_eta` and the
+//! `smc_canonicality_probes` module). A proptest or golden-replay failure whose
+//! witness has an `η` in an *interleaved* component is the documented residual
+//! (guard 3), not a new bug.
 
 use catgraph_applied::prop::presentation::smc_nf::{from_string_diagram, nf};
 use catgraph_applied::prop::{PropExpr, PropSignature};
@@ -180,11 +184,11 @@ mod axiom_closure {
         /// See the `issue_14_topological_layer_order` regressions in
         /// `smc_nf_regression.rs`.
         ///
-        /// **Scope of "closed":** for generators with source arity > 0 (this
-        /// test's `arb_expr` emits only `F`, `G : 1 → 1` plus braids/identities).
-        /// A mid-layer **zero-source** atom (`η : 0 → 1`) is still not scheduled
-        /// canonically — see `interchange_zero_source_eta_known_gap` below and the
-        /// Watch-item in this file's header.
+        /// The follow-up mid-layer **zero-source** case (`η : 0 → 1`) is now also
+        /// closed by the component-anchored point-span sift (issue #55) — see
+        /// `interchange_zero_source_eta` below. This proptest's `arb_expr` emits
+        /// only `F`, `G : 1 → 1` plus braids/identities, so it exercises the
+        /// positive-source scheduling directly.
         #[test]
         fn interchange(
             f in arb_expr(),
@@ -257,17 +261,14 @@ fn known_edge_case_unitor_merge_two_atom_pattern() {
     assert_eq!(nf(&lhs_b), nf(&rhs_b), "η-source-right absorption");
 }
 
-/// Known gap (issue #14 follow-up): a mid-layer **zero-source** generator
-/// (`η : 0 → 1`) is not scheduled canonically. `F ⊗ η ⊗ G` and
-/// `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)` are SMC-equal (both are `[F(in0), η-fresh,
-/// G(in1)]`) but currently normalize to distinct diagrams: `find_sift` /
-/// `topological_layer_order` skips source-0 atoms (empty consumed span ⇒
-/// positionally ambiguous earliest-layer) and `try_unitor_merge` only absorbs
-/// the 2-atom boundary pattern, not a 3-atom mid-layer η. See the Watch-item in
-/// this file's header. Deliberately NOT closed by a point-span sift (deferred).
+/// Closed (issue #55): a mid-layer **zero-source** generator (`η : 0 → 1`) is
+/// now scheduled canonically by the component-anchored point-span sift.
+/// `F ⊗ η ⊗ G` and `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)` are SMC-equal (both are
+/// `[F(in0), η-fresh, G(in1)]`); `topological_layer_order` slides `η` into the
+/// earlier layer at its point coordinate (the boundary between `F`'s and `G`'s
+/// target spans), so both normalize to `[[F, η, G]]`.
 #[test]
-#[ignore = "known gap: mid-layer zero-source (η) scheduling; see Watch-item"]
-fn interchange_zero_source_eta_known_gap() {
+fn interchange_zero_source_eta() {
     let f: PropExpr<TestSig> = PropExpr::Generator(TestSig::F);
     let g: PropExpr<TestSig> = PropExpr::Generator(TestSig::G);
     let eta: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eta); // 0 → 1
@@ -302,9 +303,10 @@ fn interchange_zero_source_eta_known_gap() {
 /// `TestSig::Eps` (`1 → 0`) is the ε-class witness (SFG's `Discard`);
 /// `TestSig::Eta` (`0 → 1`) is the η-class witness (SFG's `Zero`).
 ///
-/// Not closed here: the **layer-assignment** half of #55 (`ε ; η` compose-forms
-/// vs `ε ⊗ η` tensor-forms), which is PR2's sift rebase. See
-/// `interchange_zero_source_eta_known_gap` above.
+/// The **layer-assignment** half of #55 (`ε ; η` compose-forms vs `ε ⊗ η`
+/// tensor-forms) is closed too, by the component-anchored point-span sift
+/// (PR2) — see `interchange_zero_source_eta` above and
+/// `compose_form_converges_with_tensor_forms` below.
 mod zero_arity_order {
     use super::*;
     use catgraph_applied::prop::presentation::smc_nf::{Atom, Layer, StringDiagram};
@@ -331,6 +333,36 @@ mod zero_arity_order {
             }],
         };
         assert_eq!(nf(&lhs), expected, "canonical order is η before ε");
+    }
+
+    /// The full #55 witness class converges: the **compose**-form `ε ; η`
+    /// (`1 → 0 → 1`) is the same morphism `1 → 1` as either tensor-form, and the
+    /// component-anchored point-span sift (PR2) lifts its `η` into the `ε`'s
+    /// layer. Both are single-atom components, so the §2.6 disjointness carve
+    /// hands the resulting tie back to Decision 1 / Step 6 (PR1) — η first. All
+    /// three share the one NF `[[η, ε]]`.
+    #[test]
+    fn compose_form_converges_with_tensor_forms() {
+        let compose_form = PropExpr::Compose(Box::new(eps()), Box::new(eta()));
+        let tensor_eta_first = PropExpr::Tensor(Box::new(eta()), Box::new(eps()));
+        let tensor_eps_first = PropExpr::Tensor(Box::new(eps()), Box::new(eta()));
+
+        let expected = StringDiagram {
+            layers: vec![Layer {
+                atoms: vec![Atom::Generator(TestSig::Eta), Atom::Generator(TestSig::Eps)],
+            }],
+        };
+        assert_eq!(nf(&compose_form), expected, "ε ; η must sift to [[η, ε]]");
+        assert_eq!(
+            nf(&compose_form),
+            nf(&tensor_eta_first),
+            "#55 layer-assignment half must close (η ⊗ ε)"
+        );
+        assert_eq!(
+            nf(&compose_form),
+            nf(&tensor_eps_first),
+            "#55 layer-assignment half must close (ε ⊗ η)"
+        );
     }
 
     /// An η bubbles left past a whole run of ε's: `ε ⊗ ε' ⊗ η` → `η ⊗ ε ⊗ ε'`.
@@ -450,6 +482,7 @@ mod zero_arity_order {
         let witnesses: Vec<PropExpr<TestSig>> = vec![
             PropExpr::Tensor(Box::new(eps()), Box::new(eta())),
             PropExpr::Tensor(Box::new(eta()), Box::new(eps())),
+            PropExpr::Compose(Box::new(eps()), Box::new(eta())),
             PropExpr::Tensor(
                 Box::new(eps()),
                 Box::new(PropExpr::Tensor(
@@ -466,6 +499,250 @@ mod zero_arity_order {
             ),
         ];
         for e in &witnesses {
+            let once = nf(e);
+            let twice = nf(&from_string_diagram(&once));
+            assert_eq!(once, twice, "nf not idempotent on {e:?}");
+        }
+    }
+}
+
+// ============================================================================
+// 4. Pure-SMC canonicality probes (issue #55 PR2)
+// ============================================================================
+
+/// **Unconfoundable canonicality metric.** Every pair here is SMC-equal by
+/// construction, so `nf(lhs) == nf(rhs)` is a direct test of the normal form —
+/// unlike `collisions_under_s`, which measures NF *plus* bounded-depth
+/// E_18 congruence against matrix ground truth and so moves in either direction
+/// when a sound NF change redistributes which equation-mediated identifications
+/// succeed (diagnosis note 2026-07-26 §1, "metric lesson"). Read the collision
+/// pins alongside these probes, never alone.
+///
+/// Coverage: the two-component counterexample that forced the PR2 re-cut, the
+/// PR1 atomic witnesses, the mid-layer `η` interchange pair, closed-block
+/// placement, and idempotence on all of them.
+mod smc_canonicality_probes {
+    use super::*;
+    use catgraph_applied::prop::presentation::smc_nf::{Atom, Layer, StringDiagram};
+    use catgraph_applied::rig::BoolRig;
+    use catgraph_applied::sfg::SfgGenerator;
+
+    type Sfg = SfgGenerator<BoolRig>;
+
+    fn prim(x: Sfg) -> PropExpr<Sfg> {
+        PropExpr::Generator(x)
+    }
+    fn seq<G: PropSignature>(a: PropExpr<G>, b: PropExpr<G>) -> PropExpr<G> {
+        PropExpr::Compose(Box::new(a), Box::new(b))
+    }
+    fn par<G: PropSignature>(a: PropExpr<G>, b: PropExpr<G>) -> PropExpr<G> {
+        PropExpr::Tensor(Box::new(a), Box::new(b))
+    }
+
+    /// `A = μ ; ! : 2 → 0` — the input-anchored two-atom block.
+    fn sink_block() -> PropExpr<Sfg> {
+        seq(prim(SfgGenerator::Add), prim(SfgGenerator::Discard))
+    }
+    /// `B = η ; Δ : 0 → 2` — the output-only two-atom block.
+    fn source_block() -> PropExpr<Sfg> {
+        seq(prim(SfgGenerator::Zero), prim(SfgGenerator::Copy))
+    }
+    /// `η ; ! : 0 → 0` — a closed two-atom block.
+    fn closed_block() -> PropExpr<Sfg> {
+        seq(prim(SfgGenerator::Zero), prim(SfgGenerator::Discard))
+    }
+    fn scalar() -> PropExpr<Sfg> {
+        prim(SfgGenerator::Scalar(BoolRig(true)))
+    }
+
+    /// **The decisive counterexample** (diagnosis note 2026-07-26 §2). With
+    /// `A = μ;! : 2 → 0` and `B = η;Δ : 0 → 2`, bifunctoriality with `id₀` gives
+    /// `A ; B = A ⊗ B : 2 → 2`. The parked point-span sift anchored `B`'s `η` at
+    /// its incidental source cursor and block-transposed the two components in
+    /// the compose-form; the component anchor (rule (i)) puts the
+    /// input-anchored block left in both, converging on the tensor-form layout
+    /// `pad_and_zip` already produces.
+    #[test]
+    fn two_component_counterexample_converges_to_tensor_layout() {
+        let compose_form = seq(sink_block(), source_block());
+        let tensor_form = par(sink_block(), source_block());
+
+        let expected = StringDiagram {
+            layers: vec![
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Add),
+                        Atom::Generator(SfgGenerator::Zero),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Generator(SfgGenerator::Copy),
+                    ],
+                },
+            ],
+        };
+        assert_eq!(
+            nf(&compose_form),
+            nf(&tensor_form),
+            "(μ;!);(η;Δ) and (μ;!)⊗(η;Δ) are the same morphism"
+        );
+        assert_eq!(
+            nf(&compose_form),
+            expected,
+            "canonical layout is the tensor zip, input-anchored block left"
+        );
+    }
+
+    /// The PR1 atomic witnesses, re-asserted as a probe set: all three forms of
+    /// the tied `η ∥ ε` pair share one NF. Both components are single atoms, so
+    /// the §2.6 disjointness carve routes this to Decision 1 (η first) rather
+    /// than to rule (i)'s component order.
+    #[test]
+    fn atomic_eta_eps_witnesses_converge() {
+        let eps: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eps);
+        let eta: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eta);
+        let forms = [
+            seq(eps.clone(), eta.clone()),
+            par(eta.clone(), eps.clone()),
+            par(eps, eta),
+        ];
+        let expected = StringDiagram {
+            layers: vec![Layer {
+                atoms: vec![Atom::Generator(TestSig::Eta), Atom::Generator(TestSig::Eps)],
+            }],
+        };
+        for form in &forms {
+            assert_eq!(nf(form), expected, "atomic witness diverged: {form:?}");
+        }
+    }
+
+    /// The mid-layer `η` interchange pair: `F ⊗ η ⊗ G` against
+    /// `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)`. The `η`'s component is output-only and
+    /// non-interleaved, so the sift slides it into the earlier layer at the
+    /// `F | G` atom boundary.
+    #[test]
+    fn mid_layer_eta_interchange_converges() {
+        let f: PropExpr<TestSig> = PropExpr::Generator(TestSig::F);
+        let g: PropExpr<TestSig> = PropExpr::Generator(TestSig::G);
+        let eta: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eta);
+
+        let tensor_form = par(f.clone(), par(eta.clone(), g.clone()));
+        let compose_form = seq(
+            par(f, g),
+            par(PropExpr::Identity(1), par(eta, PropExpr::Identity(1))),
+        );
+        let expected = StringDiagram {
+            layers: vec![Layer {
+                atoms: vec![
+                    Atom::Generator(TestSig::F),
+                    Atom::Generator(TestSig::Eta),
+                    Atom::Generator(TestSig::G),
+                ],
+            }],
+        };
+        assert_eq!(nf(&tensor_form), nf(&compose_form));
+        assert_eq!(nf(&tensor_form), expected);
+    }
+
+    /// A **closed** (`0 → 0`) two-atom block placed beside a solid generator:
+    /// the compose-form and the tensor-form of each placement converge. The
+    /// closed block's `η` is scheduled by rule (i)'s closed branch — leftmost
+    /// within the slots its coordinate admits.
+    ///
+    /// Note what this does *not* assert: `(η;!) ⊗ s` and `s ⊗ (η;!)` are also
+    /// SMC-equal, and they do **not** converge — see
+    /// `closed_block_transposition_is_a_documented_residual`.
+    #[test]
+    fn closed_block_placement_converges() {
+        // Left placement: (η;!) ⊗ s  ==  (η ⊗ id₁) ; (! ⊗ s).
+        let left_tensor = par(closed_block(), scalar());
+        let left_compose = seq(
+            par(prim(SfgGenerator::Zero), PropExpr::Identity(1)),
+            par(prim(SfgGenerator::Discard), scalar()),
+        );
+        assert_eq!(
+            nf(&left_tensor),
+            nf(&left_compose),
+            "closed block on the left"
+        );
+
+        // Right placement: s ⊗ (η;!)  ==  (id₁ ⊗ η) ; (s ⊗ !).
+        let right_tensor = par(scalar(), closed_block());
+        let right_compose = seq(
+            par(PropExpr::Identity(1), prim(SfgGenerator::Zero)),
+            par(scalar(), prim(SfgGenerator::Discard)),
+        );
+        assert_eq!(
+            nf(&right_tensor),
+            nf(&right_compose),
+            "closed block on the right"
+        );
+    }
+
+    /// **Documented residual, not a silent gap.** Rule (i) orders whole
+    /// components `closed < input-anchored < output-only`, but the only moves
+    /// the pipeline has are the *single-atom* sift (up one layer) and Step 6's
+    /// *within-layer* reorder. Transposing two multi-atom blocks is neither: it
+    /// is the coupled multi-layer block move the diagnosis note (§2) already
+    /// identified as out of Step 6's reach. So `(η;!) ⊗ s` and `s ⊗ (η;!)` —
+    /// SMC-equal because both connecting braids are `σ_{0,n} = id` at block
+    /// level — still normalize apart, as do `A ⊗ B` and `B ⊗ A` for the
+    /// counterexample's blocks.
+    ///
+    /// Realizing this needs a block-level analogue of Step 6 (reorder whole
+    /// strictly-commuting components across the layers they span), which is a
+    /// separate pass and a separate scope decision — it is not part of PR2-v2.
+    #[test]
+    #[ignore = "residual: multi-atom block transposition needs a block-level Step 6; see doc comment"]
+    fn closed_block_transposition_is_a_documented_residual() {
+        assert_eq!(
+            nf(&par(closed_block(), scalar())),
+            nf(&par(scalar(), closed_block())),
+            "closed block should sort leftmost in both"
+        );
+        assert_eq!(
+            nf(&par(sink_block(), source_block())),
+            nf(&par(source_block(), sink_block())),
+            "input-anchored block should sort before the output-only block"
+        );
+    }
+
+    /// Idempotence on every probe witness: re-running `nf` on the expression
+    /// rebuilt from the NF reaches the same fixpoint.
+    #[test]
+    fn probe_witnesses_are_idempotent() {
+        let sfg: Vec<PropExpr<Sfg>> = vec![
+            seq(sink_block(), source_block()),
+            par(sink_block(), source_block()),
+            par(closed_block(), scalar()),
+            par(scalar(), closed_block()),
+            seq(
+                par(prim(SfgGenerator::Zero), PropExpr::Identity(1)),
+                par(prim(SfgGenerator::Discard), scalar()),
+            ),
+        ];
+        for e in &sfg {
+            let once = nf(e);
+            let twice = nf(&from_string_diagram(&once));
+            assert_eq!(once, twice, "nf not idempotent on {e:?}");
+        }
+
+        let f: PropExpr<TestSig> = PropExpr::Generator(TestSig::F);
+        let g: PropExpr<TestSig> = PropExpr::Generator(TestSig::G);
+        let eta: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eta);
+        let eps: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eps);
+        let test_sig: Vec<PropExpr<TestSig>> = vec![
+            seq(eps.clone(), eta.clone()),
+            par(eta.clone(), eps),
+            par(f.clone(), par(eta.clone(), g.clone())),
+            seq(
+                par(f, g),
+                par(PropExpr::Identity(1), par(eta, PropExpr::Identity(1))),
+            ),
+        ];
+        for e in &test_sig {
             let once = nf(e);
             let twice = nf(&from_string_diagram(&once));
             assert_eq!(once, twice, "nf not idempotent on {e:?}");

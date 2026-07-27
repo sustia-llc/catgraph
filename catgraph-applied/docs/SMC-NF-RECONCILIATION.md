@@ -54,13 +54,15 @@ into a one-atom-per-layer diagram; the canonicalization steps in §3 then drive
 it to normal form. The post-`nf` invariants are listed on the `StringDiagram`
 type: no `Identity(0)`; no `Braid(m,n)` with `m+n > 2`; no `Braid(0,_)` /
 `Braid(_,0)`; no two adjacent all-identity layers; every `Braid` in the
-leading (input-side) layers; no mixed braid+generator layer; every
-positive-source generator in its earliest admissible layer; and within every
-layer, no adjacent strictly-commuting pair ordered against `scalar < η < ε`.
+leading (input-side) layers; no mixed braid+generator layer; every generator in
+its earliest admissible layer (positive-source by covering span, zero-source by
+the component-anchored point span); and within every layer, no adjacent
+strictly-commuting pair ordered against the Step 6 order — `scalar < η < ε` at a
+single-atom tie, `closed < input-anchored < output-only` otherwise (§2.6).
 
 ## §2 Conventions
 
-The five conventions below are the choices that make the normal form *unique*
+The six conventions below are the choices that make the normal form *unique*
 rather than merely *sound* — each resolves a coherence-equivalent ambiguity in
 one fixed direction.
 
@@ -122,9 +124,9 @@ Two independent choices fix the placement of atoms:
    identity fusion (`merge_adjacent_identities` in `pad_and_zip`) and by
    boundary refinement (`refine_to_common_boundaries`) before column merges.
 
-2. **Across layers** — every `Generator` with positive source arity is sifted
-   up to its **earliest admissible (braid-free) layer** by
-   `topological_layer_order` (Step 4(c)). "Admissible" means the generator's
+2. **Across layers** — every `Generator` is sifted up to its **earliest
+   admissible (braid-free) layer** by `topological_layer_order` (Step 4(c)).
+   For a generator with **positive source arity**, "admissible" means the
    consumed wire span at the `j−1 ; j` boundary is fully covered by an
    `Identity` region of a braid-free layer `j−1`; the covering identity is
    split around the generator and an `Identity(target)` is left behind. This is
@@ -132,17 +134,28 @@ Two independent choices fix the placement of atoms:
    the issue-#14 C2 scheduling witnesses (same morphism, independent atoms
    placed in different layers) onto one earliest-schedule form.
 
-   Two atoms are deliberately excluded from the sift: braids never sift (their
-   placement is §2.1's job, and letting both passes move atoms would oscillate
-   the fixpoint), and **zero-source** generators (`η : 0 → 1`) are skipped —
-   their consumed span is empty, so "earliest admissible layer" is positionally
-   ambiguous. That skip is the known mid-layer-`η` gap
-   (`interchange_zero_source_eta_known_gap`, issue #14 follow-up). Target-0
-   sinks (`ε : 1 → 0`) have a non-empty source span and sift normally.
+   **Zero-source** generators (`η : 0 → 1`) sift by the **component-anchored
+   point-span rule** (issue #55 PR2): the empty consumed span reduces to a
+   single output coordinate `q` at the source cursor, so `η` slides into the
+   earliest braid-free layer `j−1` iff `q` is an atom boundary there (insert
+   between the adjacent atoms, e.g. the `[F, G]` boundary in the witness) or
+   strictly inside one of its identities (split that identity). It is blocked
+   when `q` is strictly inside a generator's output span (whose wires cannot be
+   split).
+
+   Where `q` admits **several** slots — a run of target-0 atoms all sits at that
+   coordinate — the choice is *not* made from the cursor. The cursor position of
+   a zero-source atom is presentation-dependent, and anchoring on it makes the
+   normal form presentation-dependent too (the counterexample recorded in the
+   2026-07-26 diagnosis note §2). The slot comes instead from the **component
+   order anchor**, rule (i) — see §2.6. Target-0 sinks (`ε : 1 → 0`) have a
+   non-empty source span and sift via the positive-source path. Only **braids**
+   are excluded from the sift entirely (their placement is §2.1's job, and
+   letting both passes move atoms would oscillate the fixpoint).
 
    Choice 1 leaves one residual freedom that wire order does not decide — the
    relative order of *strictly commuting* zero-arity atoms within a layer. §2.5
-   fixes it.
+   fixes it at the atom level, §2.6 at the component level.
 
 - Anchors: JS-I Ch 1 Prop 1.1 p. 66 (rectangle-cover independence); JS-I
   Ch 1 §4 Thm 1.2 p. 71 (𝔽(𝒟) freeness — interchange is proof item (f) +
@@ -173,9 +186,9 @@ decreasing whenever the diagram is not yet a fixpoint:
 | `mixed_layer_count` | `isolate_mixed_braid_layers` (inside `collect_braid_prefix`) | the mixed-merge refusal at `reduce_involution`'s merge site stops any step re-creating a mixed layer |
 | `wide_braid_count` | `hexagon_expand` (`Braid(m,n), m+n>2 → Braid(1,1)` bricks) | ordered ahead of `braid_position_sum` so a naturality-emitted wide braid is decomposed before positions are compared |
 | `braid_position_sum` | the naturality sweep (braids move input-ward) | §2.1 |
-| `generator_position_sum` | `topological_layer_order` (Step 4(c)) | one generator drops exactly one layer per sift; bounded below by 0 |
+| `generator_position_sum` | `topological_layer_order` (Step 4(c)) | one generator — positive-source or zero-source `η` (issue #55) — drops exactly one layer per sift; bounded below by 0 |
 | `layer_count` | `coalesce_identity_layers` / `simplify_units` | identity-only layers absorb; `Identity(0)` atoms are removed |
-| `tied_inversion_count` | `reorder_tied_zero_arity` (Step 6, §2.5) | trailing component; `try_unitor_merge` may *raise* it while strictly shrinking `layer_count`, an earlier component — see below |
+| `tied_inversion_count` | `reorder_tied_zero_arity` (Step 6, §2.5 + §2.6) | trailing component; `try_unitor_merge` and the zero-source sift may *raise* it while strictly shrinking an earlier component (`layer_count` / `generator_position_sum`) — see below |
 
 `topological_layer_order` has its own inner termination for the same reason:
 each sift strictly decreases the sum of the layer indices of `Generator` atoms
@@ -195,13 +208,24 @@ per swap. Counting only *adjacent* inverted pairs would **not** work: in
 Step 6 leaves every earlier component fixed: it never moves an atom across a
 layer boundary, never rewrites an atom, and never changes a layer's membership,
 so `crossings`, `mixed_layer_count`, `wide_braid_count`, the two position sums
-(both layer-index sums) and `layer_count` are all invariant under it. The one
-step that can raise `tied_inversion_count` is `try_unitor_merge` — its case 1
+(both layer-index sums) and `layer_count` are all invariant under it. Two steps
+can raise `tied_inversion_count`. `try_unitor_merge` — its case 1
 prepends an ε ahead of the absorbed layer's atoms (possibly past an η) and its
 case 4 appends an η after them (possibly behind an ε); case 3's η-prepend is
 order-canonical — but it does so only while
 strictly shrinking `layer_count`, so the tuple still drops lexicographically and
-Step 6 repairs the ordering on the same fixpoint pass.
+Step 6 repairs the ordering on the same fixpoint pass. The zero-source
+point-span sift can likewise land an `η` beside an `ε` in the earlier layer, but
+only while strictly shrinking `generator_position_sum`, an earlier component
+still — same argument, same repair.
+
+`tied_inversion_count` is read against the *Step 6 order* of §2.5 + §2.6, not
+the class order alone: an "inversion" is an adjacent strictly-commuting pair
+that Step 6 would swap. Each swap fixes exactly the pair it swaps and can never
+re-invert it (the comparator is fixed for a given diagram, and every swap is
+connectivity-preserving, so the component keys it reads do not change), so the
+count drops by one per swap regardless of which branch of the §2.6 carve
+governs.
 
 - Anchors: JS-I Ch 1 §4 Thm 1.2 p. 71; JS-I Ch 2 §1 axiom (S) p. 73.
 
@@ -245,14 +269,99 @@ coordinate, and ambient padding only adds `Identity` atoms with `src, tgt > 0`,
 which never join a tied run — so embedding a layer in a wider context preserves
 its tied runs and hence its canonical order.
 
-This closes the within-layer half of issue #55 (`nf(ε ⊗ η) = nf(η ⊗ ε)`). The
-layer-assignment half — tensor-forms vs compose-forms such as `ε ; η` — remains
-open pending the §2.3 sift rebase (#55 PR2).
+This closes the within-layer half of issue #55 (`nf(ε ⊗ η) = nf(η ⊗ ε)`) **at
+single-atom ties**. The layer-assignment half — tensor-forms vs compose-forms
+such as `ε ; η` — is also closed, by the §2.3 point-span sift together with the
+component anchor of §2.6, which is where multi-atom ties are decided.
 
 - Anchors: JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) specialized to a
   0-arity edge — the same `id_0`-unitor derivation `try_unitor_merge` uses;
   JS-I Ch 1 §1 p. 57 (`id_0` as ⊗-unit). Issue #55, design of record
   `.claude/docs/2026-07-25-55-tensor-order-canonicalization.md`.
+
+### §2.6 Component-order anchor (rule (i))
+
+§2.5 orders *atoms* at a tied adjacency. That is not enough to make the normal
+form a function of the diagram's abstract content: a zero-source atom's wire
+coordinate is presentation-dependent, so anchoring its placement on the cursor
+lets two SMC-equal expressions reach different fixpoints. The decisive
+counterexample: with `A = μ ; ! : 2 → 0` and `B = η ; Δ : 0 → 2`,
+bifunctoriality with `id₀` gives `A ; B = A ⊗ B`, yet a cursor-anchored sift
+block-transposes the two connected components in the compose-form.
+
+Rule (i) fixes the freedom at **component** granularity. Take the connected
+components of the diagram — union-find over *all* atoms (`Identity` and `Braid`
+atoms carry wires and belong to components too), joining two atoms whenever a
+wire leaving one at a layer boundary is a wire entering the other at the same
+boundary and coordinate.
+
+The join must be on a **shared wire**, not on touching intervals: a zero-arity
+atom's interval at one boundary is empty (an `ε` has no target wire, an `η` no
+source wire), and an empty interval shares no wire with the neighbour it abuts.
+Getting this wrong makes a zero-arity atom's component depend on where it sits
+in its layer — which is exactly what Step 6 permutes, so the comparator would
+change under Step 6's own swaps and the `nf` fixpoint would oscillate rather
+than terminate. (Regression:
+`component_analysis_fixpoint_terminates_on_tied_pair_beside_braid` in
+`tests/smc_nf_regression.rs`.) With the guard, component membership is a
+function of the diagram's connectivity alone, and every strictly-commuting swap
+leaves it invariant.
+
+Classify each component by its boundary attachment and order the classes:
+
+```
+closed (touches neither boundary)  <  input-anchored  <  output-only
+```
+
+with each anchored class ordered by its **least attached boundary coordinate**
+(least input coordinate for input-anchored, least output coordinate for
+output-only). A component that touches *both* boundaries counts as
+input-anchored. All closed components share one key and so keep their input
+order — the block-level reading of §2.5's scalars-leftmost, since an atomic
+`0 → 0` scalar *is* a closed component.
+
+**The disjointness carve.** An atomic `η ∥ ε` pair is both a §2.5 tied
+adjacency (η first) and a rule-(i) component transposition (input-anchored ε
+first). The two freedom classes are carved apart by component size:
+
+- **tied pairs of single-atom components** → §2.5 / Decision 1, η first;
+- **anything involving a multi-atom component** → rule (i)'s component order,
+  with the §2.5 class order as the tie-break when the two component keys
+  coincide (the same component, or two closed blocks).
+
+Both sides of the carve are functions of the abstract content (component
+membership and size are content), so the normal form stays well defined. The
+carve is applied in two places, consistently: `component_slot` picks the sift's
+insertion slot inside the run of slots the coordinate admits, and Step 6's
+comparator (`tie_sorts_before`) decides tied adjacencies. Because a
+strictly-commuting swap moves an atom with source width 0 past one with target
+width 0, it changes no other atom's wire coordinates — the component analysis is
+invariant under Step 6, which is why the two passes agree and do not oscillate
+(the sift moves atoms only up a layer, Step 6 only within a layer).
+
+**Interleave guard (guard 3).** Rule (i)'s order only makes sense when the
+components' attached coordinates on a boundary are disjoint intervals ordered by
+least coordinate. When one component's attachment interleaves another's on the
+same boundary, block transposition is not braid-free and the rule-(i) slot is
+ill-defined. Such components are marked and left alone: their `η`s are not
+sifted, and Step 6 falls back to the §2.5 class order for them. Canonicality is
+claimed and proven on the **non-interleaved fragment**; the residual is strictly
+narrower than the pre-PR2 gap, which covered *every* mid-layer `η`.
+
+**Residual, second kind.** Rule (i) states an order between whole components,
+but the pipeline's only moves are the single-atom sift (up one layer) and Step
+6's within-layer reorder. Transposing two *multi-atom* blocks is neither — it is
+a coupled multi-layer block move — so tensor-form block transpositions such as
+`(η;!) ⊗ s` vs `s ⊗ (η;!)`, or `A ⊗ B` vs `B ⊗ A` above, still normalize apart.
+Realizing them needs a block-level analogue of Step 6 and is out of PR2's scope;
+it is recorded as `closed_block_transposition_is_a_documented_residual`
+(`#[ignore]`) in `tests/smc_nf_completeness.rs`.
+
+- Source: issue #55 owner decision 2026-07-26, diagnosis-note addendum
+  (`2026-07-26-55-proof-phase-diagnosis.md`), refining the design of record
+  `.claude/docs/2026-07-25-55-tensor-order-canonicalization.md`.
+- Anchors: JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) with a 0-arity edge, as
+  in §2.5; JS-I Ch 1 §1 p. 57 (`id_0` as ⊗-unit).
 
 ## §3 Step table and paper coverage matrix
 
@@ -265,9 +374,9 @@ open pending the §2.3 sift rebase (#55 PR2).
 | 2 | `reduce_involution` | column-wise adjacent-layer compose: `id;id`, `id;X`, `X;id`, and `σ_{m,n};σ_{n,m} → id_{m+n}`; also `try_unitor_merge` 0-arity sink/source absorption; mixed layers refused at the merge site |
 | 3 | `collect_braid_prefix` | (0) `isolate_mixed_braid_layers`, (a) naturality sweep (braids → input, §2.1), (b) `canonicalize_braid_runs` (permutation → canonical bubble-sort word) |
 | 4 | `coalesce_identity_layers` | (a) fuse adjacent `Identity` atoms in a layer; (b) drop pure-identity layers when a non-identity layer remains (keep one as arity carrier otherwise) |
-| 4(c) | `topological_layer_order` | sift each positive-source generator to its earliest admissible braid-free layer (§2.3) |
+| 4(c) | `topological_layer_order` | sift each generator to its earliest admissible braid-free layer — covering-identity span for positive source, component-anchored point-span rule for zero-source `η` (§2.3, §2.6) |
 | 5 | `simplify_units` | remove `Identity(0)` atoms; drop layers emptied as a result |
-| 6 | `reorder_tied_zero_arity` | within-layer bubble reorder of strictly-commuting zero-arity atoms to `scalar < η < ε < solid` (§2.5) |
+| 6 | `reorder_tied_zero_arity` | within-layer bubble reorder of strictly-commuting zero-arity atoms — `scalar < η < ε < solid` at single-atom ties (§2.5), component order otherwise (§2.6) |
 
 (`lower` / `pad_and_zip` run once before the loop: `PropExpr` → one-atom-per-
 layer `StringDiagram`, padding the shorter side of a `⊗` with `Identity`
@@ -283,7 +392,7 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
 |---|---|---|
 | Rectangle-cover independence `v(Γ)=v(Γ[u,b])∘v(Γ[a,u])`; `;` associativity | JS-I Ch 1 Prop 1.1 p. 66 | `lower`; Step 4; `ch1_prop_1_1_compose_associativity`, `compose_associator` |
 | Layering of abstract diagrams | JS-I Ch 2 Prop 2.1 p. 78 | `lower` |
-| `⊗` bifunctoriality / interchange `(f⊗g);(h⊗k)=(f;h)⊗(g;k)` | JS-I Ch 1 §4 Thm 1.2 p. 71 (𝔽(𝒟) freeness; interchange = proof item (f) + Fig 1.9) | `pad_and_zip` (§4 p. 69–70), Steps 3(0)/4(c); `ch1_thm_1_2_s4_interchange`, `smc_bifunctoriality_interchange`, `interchange`, `c2_scheduling_witness_converges`, `target_zero_sink_sifts_up` |
+| `⊗` bifunctoriality / interchange `(f⊗g);(h⊗k)=(f;h)⊗(g;k)` | JS-I Ch 1 §4 Thm 1.2 p. 71 (𝔽(𝒟) freeness; interchange = proof item (f) + Fig 1.9) | `pad_and_zip` (§4 p. 69–70), Steps 3(0)/4(c); `ch1_thm_1_2_s4_interchange`, `smc_bifunctoriality_interchange`, `interchange`, `c2_scheduling_witness_converges`, `target_zero_sink_sifts_up`, `interchange_zero_source_eta`, `smc_canonicality_probes::*` |
 | `;` left/right unitor; invertible diagram `v(Γ)=id` | JS-I Ch 1 §3 p. 65 + Prop 1.1 p. 66 | Step 2 (`try_column_merge` identity cases); `ch1_invertible_left_right_unitor`, `compose_unitors` |
 | `⊗` strict unit `id_0` (bracket-clique skeleton p. 58) | JS-I Ch 1 §1 p. 57 | Step 5; `ch1_s1_strict_unit`, `tensor_unitors` |
 | Symmetry axiom (S) `c_{B,A}∘c_{A,B}=1_{A⊗B}` | JS-I Ch 2 §1 axiom (S) p. 73; JS-Braided (S) p. 21 | Step 0, Step 2 (`σ;σ → id`); `ch2_s1_axiom_s_braid_involution`, `aligned_braid_band_cancels_through_generators` |
@@ -311,13 +420,20 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
 - **Symmetry layer** — `σ² = id`, braid naturality, hexagon/`σ_{m,n}`
   decomposition, Yang-Baxter, `S_n` reduced-word canonicality: **covered** by
   Steps 0–3 and the JS-Braided / JS-II suite.
-- **Zero-arity within-layer order** — `scalar < η < ε < solid` at every tied
-  adjacency: **covered** by Step 6 (§2.5) and the `zero_arity_order` tests
-  (issue #55 PR1).
-- **Known open gap** — mid-layer **zero-source** (`η : 0 → 1`) *layer
-  assignment* is not canonical (§2.3): the sift still skips source-0 atoms, so a
-  tensor-form and a compose-form of the same morphism (`ε ⊗ η` vs `ε ; η`, or
-  `F ⊗ η ⊗ G` vs `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)`) can still land in different
-  layers. §2.5 closed the *within-layer* half only. Tracked as
-  `interchange_zero_source_eta_known_gap` (`#[ignore]`) and the Watch-item in
-  `tests/smc_nf_completeness.rs`; issue #14 follow-up, closing in #55 PR2.
+- **Zero-arity within-layer order** — `scalar < η < ε < solid` at every
+  single-atom tied adjacency: **covered** by Step 6 (§2.5) and the
+  `zero_arity_order` tests (issue #55 PR1).
+- **Zero-arity scheduling** — mid-layer **zero-source** (`η : 0 → 1`) *layer
+  assignment* is canonical on the **non-interleaved fragment**, via the
+  component-anchored point-span sift (§2.3 + §2.6, issue #55 PR2; the former
+  issue #14 follow-up gap). Tensor- and compose-forms of the same morphism
+  converge (`ε ⊗ η` = `ε ; η`, `F ⊗ η ⊗ G` = `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)`,
+  `(μ;!) ; (η;Δ)` = `(μ;!) ⊗ (η;Δ)`); verified by `interchange_zero_source_eta`,
+  the `zero_arity_order` tests, and the `smc_canonicality_probes` module in
+  `tests/smc_nf_completeness.rs`.
+- **Documented residuals**, both in §2.6 and both narrower than the pre-PR2 gap:
+  (a) an `η` whose component's boundary attachment **interleaves** another's is
+  not sifted (guard 3); (b) transposing two **multi-atom blocks** needs a
+  block-level analogue of Step 6 that the pipeline does not have, so
+  `(η;!) ⊗ s` and `s ⊗ (η;!)` still normalize apart — tracked as
+  `closed_block_transposition_is_a_documented_residual` (`#[ignore]`).

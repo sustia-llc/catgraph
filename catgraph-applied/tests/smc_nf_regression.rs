@@ -624,4 +624,31 @@ mod review_soundness_fixes {
         let out = nf(&expr);
         assert!(!has_mixed_layer(&out), "no mixed layer: {out:?}");
     }
+
+    /// Termination regression for the issue-#55 PR2 component analysis: the
+    /// `nf` fixpoint must not oscillate.
+    ///
+    /// `(σ ⊗ ε) ⊗ (η ⊗ id₁)` lowers to one mixed layer, which
+    /// `isolate_mixed_braid_layers` splits into a braid layer and
+    /// `[id₂, ε, η, id₁]`. The `ε ∥ η` pair there is a tied adjacency, so Step 6
+    /// decides its order from the components — and a zero-arity atom's wire
+    /// interval at a boundary is *empty*. Testing boundary overlap with the
+    /// usual two-sided `a_start < b_end && b_start < a_end` reports a spurious
+    /// hit for an empty interval that merely touches its neighbour, so the `η`
+    /// was absorbed into the neighbouring component when it sat to the right of
+    /// the `ε` but not when it sat to the left. Step 6's comparator then flipped
+    /// under Step 6's own swap and `nf` looped forever. The emptiness guard in
+    /// `analyze_components` makes component membership independent of
+    /// within-layer position, which is what the fixpoint argument assumes.
+    #[test]
+    fn component_analysis_fixpoint_terminates_on_tied_pair_beside_braid() {
+        let expr = Tensor(
+            b(Tensor(b(Braid(1, 1)), b(Generator(TestSig::Eps)))),
+            b(Tensor(b(Generator(TestSig::Eta)), b(Identity(1)))),
+        );
+        // Reaching this assertion at all is the regression: before the fix `nf`
+        // did not return.
+        let out = nf(&expr);
+        assert_eq!(nf(&expr), out, "nf must be deterministic and terminating");
+    }
 }
