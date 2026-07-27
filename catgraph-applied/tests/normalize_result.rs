@@ -1,15 +1,24 @@
 //! Tests for the `NormalizeResult` struct semantics.
 
 use catgraph_applied::prop::presentation::Presentation;
-use catgraph_applied::prop::{Free, PropExpr, PropSignature};
+use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
+use std::borrow::Cow;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 enum G {
     A,
     B,
 }
 
 impl PropSignature for G {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
     fn source(&self) -> usize {
         1
     }

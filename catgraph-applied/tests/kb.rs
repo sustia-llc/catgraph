@@ -1,9 +1,10 @@
 //! Tests for the congruence-closure engine in `prop::presentation::kb`.
 
 use catgraph_applied::prop::presentation::kb::CongruenceClosure;
-use catgraph_applied::prop::{Free, PropExpr, PropSignature};
+use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
+use std::borrow::Cow;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum G {
     A,
     B,
@@ -11,6 +12,14 @@ enum G {
 }
 
 impl PropSignature for G {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
     fn source(&self) -> usize {
         1
     }

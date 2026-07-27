@@ -101,7 +101,7 @@ use catgraph_applied::{
     ZAlgebra,
     graphical_linalg::{matr_presentation, verify_sfg_to_mat_is_full_and_faithful},
     prop::{
-        Free, PropExpr, PropSignature,
+        Free, PropExpr, PropSignature, mono_word,
         presentation::{
             NormalizeEngine, NormalizeResult, Presentation, PresentedProp,
             functorial::{CompleteFunctor, MatrixNFFunctor},
@@ -123,13 +123,21 @@ use catgraph_applied::{
 /// section pivots to [`SfgGenerator<BoolRig>`] for the
 /// [`MatrixNFFunctor`]-based comparison (see module rustdoc
 /// "Paper-correctness pivot at §4").
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 enum Sig {
     A,
     B,
 }
 
 impl PropSignature for Sig {
+    type Color = ();
+
+    fn source_word(&self) -> std::borrow::Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+    fn target_word(&self) -> std::borrow::Cow<'_, [()]> {
+        mono_word(self.target())
+    }
     fn source(&self) -> usize {
         1
     }

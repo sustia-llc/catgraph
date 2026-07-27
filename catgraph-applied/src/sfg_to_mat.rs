@@ -36,13 +36,13 @@ use crate::{
 /// [`PropExpr`] is ill-formed. For values built through the safe
 /// [`SignalFlowGraph`] constructors this cannot occur; the error arm exists
 /// to surface misuse via direct `PropExpr` construction.
-pub fn sfg_to_mat<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+pub fn sfg_to_mat<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     sfg: &SignalFlowGraph<R>,
 ) -> Result<MatR<R>, CatgraphError> {
     sfg_to_mat_inner(sfg.as_prop_expr())
 }
 
-fn sfg_to_mat_inner<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+fn sfg_to_mat_inner<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     expr: &PropExpr<SfgGenerator<R>>,
 ) -> Result<MatR<R>, CatgraphError> {
     match expr {

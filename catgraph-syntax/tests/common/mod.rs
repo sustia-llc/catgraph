@@ -20,12 +20,13 @@
 #![allow(dead_code)]
 
 use catgraph_applied::mat::MatR;
-use catgraph_applied::prop::{Free, PropExpr, PropSignature};
+use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
 use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::eval::SfgModel;
 use catgraph_syntax::frobenius::FrobeniusOr;
 use catgraph_syntax::text::GeneratorSyntax;
 use proptest::prelude::*;
+use std::borrow::Cow;
 
 /// The shared `i64` SFG interpreter model — used by both the S3 interpreter suite
 /// ([`eval`](../eval.rs)) and the S5 typed-builder coherence suite
@@ -35,7 +36,7 @@ pub fn sfg_model() -> SfgModel<i64> {
 }
 
 /// A four-generator monochromatic test signature.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Sig {
     /// `copy : 1 → 2`.
     Copy,
@@ -48,6 +49,16 @@ pub enum Sig {
 }
 
 impl PropSignature for Sig {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
+
     fn source(&self) -> usize {
         match self {
             Sig::Copy => 1,
@@ -93,10 +104,20 @@ impl GeneratorSyntax for Sig {
 /// so a printed generator re-lexes as two atoms and does not reparse to the
 /// original generator. Used by the negative round-trip test to prove the suite
 /// detects violating implementations.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BadSig;
 
 impl PropSignature for BadSig {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
+
     fn source(&self) -> usize {
         1
     }
@@ -122,10 +143,20 @@ impl GeneratorSyntax for BadSig {
 /// using it would even typecheck). Used by the S4 negative test to prove
 /// `FrobeniusOr`'s Frobenius-first `parse_token` **shadows** such a user token
 /// (so its clause-1 round-trip breaks), the analogue of S2's [`BadSig`].
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ShadowSig;
 
 impl PropSignature for ShadowSig {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
+
     fn source(&self) -> usize {
         2
     }

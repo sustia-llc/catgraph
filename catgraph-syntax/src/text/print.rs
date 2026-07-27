@@ -108,12 +108,16 @@ fn fmt_node<G: GeneratorSyntax>(expr: &PropExpr<G>, f: &mut fmt::Formatter<'_>) 
 /// docs for the grammar and precedence rules.
 ///
 /// ```
-/// use catgraph_applied::prop::{Free, PropSignature};
+/// use std::borrow::Cow;
+/// use catgraph_applied::prop::{Free, PropSignature, mono_word};
 /// use catgraph_syntax::text::{GeneratorSyntax, Pretty};
 ///
-/// #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 /// struct G;
 /// impl PropSignature for G {
+///     type Color = ();
+///     fn source_word(&self) -> Cow<'_, [()]> { mono_word(self.source()) }
+///     fn target_word(&self) -> Cow<'_, [()]> { mono_word(self.target()) }
 ///     fn source(&self) -> usize { 1 }
 ///     fn target(&self) -> usize { 1 }
 /// }

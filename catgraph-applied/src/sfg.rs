@@ -15,19 +15,25 @@
 //!
 //! ## Trait-bound story
 //!
-//! [`PropSignature`] requires `Clone + PartialEq + Eq + Hash +
-//! Debug`. [`SfgGenerator<R>`] derives all five uniformly and therefore
-//! requires `R: Rig + Eq + Hash + Debug`. All four shipped rigs
+//! [`PropSignature`] requires `Clone + PartialEq + Eq + Hash + Debug + Ord`.
+//! [`SfgGenerator<R>`] derives all of them uniformly and therefore requires
+//! `R: Rig + Eq + Hash + Ord + Debug`. All four shipped rigs
 //! ([`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
 //! [`crate::rig::Tropical`], [`crate::rig::F64Rig`]) satisfy these — the three
-//! `f64`-wrapping rigs provide manual `Eq + Hash` impls via `to_bits()`
-//! (bit-exact except `-0.0` normalizes to `0.0` to satisfy the `Eq`/`Hash`
-//! contract; NaN caveats documented on the rig module).
+//! `f64`-wrapping rigs provide manual `Eq + Hash` impls via `to_bits()` and a
+//! manual `Ord` via `total_cmp` on the same `-0.0`-normalized payload (NaN
+//! caveats documented on the rig module).
+//!
+//! `SFG_R` is single-sorted: [`SfgGenerator`]'s
+//! [`Color`](PropSignature::Color) is `()` and its interface words are
+//! [`mono_word`]s of the Def 5.45 arities.
+
+use std::borrow::Cow;
 
 use catgraph::errors::CatgraphError;
 
 use crate::{
-    prop::{Free, PropExpr, PropSignature},
+    prop::{Free, PropExpr, PropSignature, mono_word},
     rig::Rig,
 };
 
@@ -36,12 +42,15 @@ use crate::{
 /// Parameterised over the rig `R` so that `Scalar(r)` ranges over `R`-values.
 ///
 /// The `Eq + Hash` bounds on `R` are required (via the `PropSignature`
-/// `Eq + Hash` bounds) by the congruence-closure decision procedure. All four shipped
-/// rig instances — [`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
-/// [`crate::rig::Tropical`], [`crate::rig::F64Rig`] — satisfy both; the three
-/// `f64`-wrapping rigs provide manual `Eq + Hash` via `to_bits()` (bit-exact
-/// except `-0.0` normalizes to `0.0` to satisfy the `Eq`/`Hash` contract).
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// `Eq + Hash` bounds) by the congruence-closure decision procedure, and `Ord`
+/// by the `PropSignature: Ord` supertrait — `Scalar(r)` is the one variant
+/// whose ordering has to consult `R`. All four shipped rig instances —
+/// [`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
+/// [`crate::rig::Tropical`], [`crate::rig::F64Rig`] — satisfy all three; the
+/// three `f64`-wrapping rigs provide manual `Eq + Hash` via `to_bits()`
+/// (bit-exact except `-0.0` normalizes to `0.0` to satisfy the `Eq`/`Hash`
+/// contract) and a manual `Ord` via `total_cmp` on the same normalized payload.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SfgGenerator<R: Rig + Eq + std::hash::Hash> {
     /// `Δ : 1 → 2` — duplicate a wire.
@@ -56,7 +65,19 @@ pub enum SfgGenerator<R: Rig + Eq + std::hash::Hash> {
     Scalar(R),
 }
 
-impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static> PropSignature for SfgGenerator<R> {
+impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> PropSignature
+    for SfgGenerator<R>
+{
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
+
     fn source(&self) -> usize {
         match self {
             SfgGenerator::Copy | SfgGenerator::Discard | SfgGenerator::Scalar(_) => 1,
@@ -79,7 +100,7 @@ impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static> PropSignature fo
 ///
 /// Primarily a documentation / type-level marker; actual prop operations go
 /// through [`SignalFlowGraph`] and [`Free::<SfgGenerator<R>>`].
-pub struct SfgSignature<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+pub struct SfgSignature<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     std::marker::PhantomData<R>,
 );
 
@@ -90,11 +111,11 @@ pub struct SfgSignature<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'stati
 /// F&S Thm 5.60 quotient (matrix equivalence of signal-flow graphs) is
 /// presentation-layer work.
 #[derive(Clone, Debug)]
-pub struct SignalFlowGraph<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+pub struct SignalFlowGraph<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     PropExpr<SfgGenerator<R>>,
 );
 
-impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static> SignalFlowGraph<R> {
+impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> SignalFlowGraph<R> {
     /// `Δ : 1 → 2` — the copy generator.
     #[must_use]
     pub fn copy() -> Self {
@@ -203,7 +224,7 @@ impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static> SignalFlowGraph<
 /// In principle this construction is arity-safe, but it returns
 /// `Result<_, CatgraphError>` to match the composition signature and to
 /// surface any bugs in the recursion.
-pub fn copy_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+pub fn copy_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     n: usize,
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {
     match n {
@@ -220,7 +241,7 @@ pub fn copy_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
 /// Iterated discard: `discard_n(0) = id(0)`,
 /// `discard_n(n) = discard ⊗ discard_n(n-1)`.
 #[must_use]
-pub fn discard_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+pub fn discard_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     n: usize,
 ) -> SignalFlowGraph<R> {
     if n == 0 {
@@ -243,7 +264,7 @@ pub fn discard_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
 /// In principle this construction is arity-safe, but it returns
 /// `Result<_, CatgraphError>` to match the composition signature and to
 /// surface any bugs in the recursion.
-pub fn add_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+pub fn add_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     m: usize,
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {
     match m {
@@ -263,7 +284,7 @@ pub fn add_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
 /// A morphism `0 → n` emitting the additive identity on each of `n` output
 /// wires; `S(zero_n(n))` is the empty `0 × n` matrix.
 #[must_use]
-pub fn zero_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 'static>(
+pub fn zero_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     n: usize,
 ) -> SignalFlowGraph<R> {
     if n == 0 {

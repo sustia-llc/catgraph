@@ -9,6 +9,18 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ### Changed
 
+- **BREAKING: `FrobeniusOr<G>` is monochromatic-gated pending colored
+  spiders** ([#79](https://github.com/sustia-llc/catgraph/issues/79) P1):
+  following catgraph-applied's Λ-colored `PropSignature` extension, the
+  `PropSignature`/`GeneratorSyntax` impls for `FrobeniusOr<G>` (and ~20
+  Frobenius-facing generic bounds in `frobenius.rs`/`cospan_functor.rs`)
+  require `G: PropSignature<Color = ()>` — the spider variants
+  `Mu/Eta/Delta/Epsilon` have no per-color shape yet (that is P3's ratified
+  change: they gain a `Λ` payload, per FS19's per-object Frobenius
+  structure), so the crate's monochromatic scope note now holds by
+  construction rather than by convention. `FrobeniusOr` derives
+  `PartialOrd + Ord`; signature impls migrate per the applied-crate
+  migration note (`type Color = ()` + `mono_word`-backed word methods).
 - **Scalar centrality became an NF theorem — the #80 CC-gap witness migrated**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR2): the
   crown-jewel completeness-registry test `(η;ε)⊗μ = μ⊗(η;ε)` in

@@ -35,7 +35,7 @@
 //! it does not implement `deep_causality_num::{Zero, One}`; a downstream impl
 //! would be required to use it as a `Rig` coefficient.
 //!
-//! # `Eq + Hash` on `f64`-wrapping rigs
+//! # `Eq + Hash + Ord` on `f64`-wrapping rigs
 //!
 //! [`UnitInterval`], [`Tropical`], and [`F64Rig`] manually implement `Eq` and
 //! `Hash` via `f64::to_bits()`. This is required by the
@@ -46,9 +46,24 @@
 //! EXCEPT `-0.0` normalizes to `0.0` so that hashing agrees with the derived
 //! IEEE `PartialEq` (under which `-0.0 == 0.0`) — required by the `Eq`/`Hash`
 //! contract, and the fix for #58 (a `-0.0` and `0.0` splitting a congruence
-//! class). NaN caveats inherit from `PartialEq`: a NaN payload would be
-//! non-reflexive; callers should not construct NaN values in these newtypes
-//! (the [`UnitInterval::new`] validator already rejects them).
+//! class).
+//!
+//! The same three also implement `Ord` manually — the
+//! [`PropSignature`](crate::prop::PropSignature) `Ord` supertrait (#79) reaches
+//! them through `SfgGenerator::Scalar(r)`. The order is `f64::total_cmp` on the
+//! same `-0.0`-normalized payload, so it is total, agrees with the IEEE order
+//! wherever that is defined, and ranks equal exactly the values that hash alike.
+//! It is **not** a `to_bits()` order, which would invert the ordering of
+//! negative values. `PartialOrd` is re-derived from `Ord` (`Some(self.cmp(..))`)
+//! so the two cannot drift; the derived `PartialOrd` these replace is gone.
+//! Ordering is a canonicalization key only — no rig operation consults it, and
+//! [`Tropical::add`] still takes the min of the raw payloads.
+//!
+//! NaN caveats still inherit from `PartialEq`: a NaN payload is non-reflexive
+//! under `==` even though `Ord` orders it, so `Ord` and `PartialEq` disagree
+//! there and the manual `Eq` is a promise the caller must keep. Callers should
+//! not construct NaN values in these newtypes (the [`UnitInterval::new`]
+//! validator already rejects them).
 //!
 //! # Overflow policy (workspace policy of record, #88)
 //!
@@ -78,6 +93,12 @@
 
 use deep_causality_num::{One, Zero};
 use std::ops::{Add, Div, Mul, Neg, Sub};
+
+/// Normalize `-0.0` to `0.0`, so that the `Ord` impls on the `f64`-wrapping
+/// rigs agree with their `Eq`/`Hash` impls (under which `-0.0 == 0.0`).
+fn norm_zero(x: f64) -> f64 {
+    if x == 0.0 { 0.0 } else { x }
+}
 
 /// A rig (semiring). Blanket-impl'd for any `T: Clone + PartialEq + Zero + One + Add + Mul`.
 ///
@@ -140,7 +161,7 @@ impl Mul for BoolRig {
 /// matrix representations via `Mat(UnitInterval)`). Magnitude computations
 /// in BV 2025 operate via the embedding `UnitInterval → ℝ` via `-ln`, not
 /// via rig arithmetic directly.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UnitInterval(f64);
 
 impl UnitInterval {
@@ -218,6 +239,26 @@ impl std::hash::Hash for UnitInterval {
     }
 }
 
+// A lawful total order, required by the `PropSignature: Ord` supertrait (#79)
+// via `SfgGenerator<R>`. Consistent with the `Eq`/`Hash` impls above: `-0.0` is
+// normalized to `0.0` first, so values that hash alike also compare `Equal`.
+// `f64::total_cmp` agrees with the IEEE order wherever that is defined, and
+// totally orders NaN besides. Deliberately **not** a `to_bits()` order — the
+// sign-magnitude bit layout inverts the ordering of negatives, which would rank
+// `Tropical(-1.0)` below `Tropical(-2.0)`. `PartialOrd` is re-derived from `Ord`
+// so the two cannot drift apart. See the module's NaN caveat for the one place
+// `Ord` and `PartialEq` still disagree.
+impl Ord for UnitInterval {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        norm_zero(self.0).total_cmp(&norm_zero(other.0))
+    }
+}
+impl PartialOrd for UnitInterval {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 /// Tropical (min-plus) semiring over `[0, ∞]`, with `+∞` as the additive
 /// zero and `0` as the multiplicative unit. Represents Lawvere metric-space
 /// distances directly; use as the enrichment base for
@@ -225,7 +266,7 @@ impl std::hash::Hash for UnitInterval {
 ///
 /// Axioms: `(min, +∞)` is commutative monoid; `(+, 0)` is commutative monoid;
 /// `+` distributes over `min`; `+∞ + x = +∞` (absorbing).
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tropical(pub f64);
 
 impl Zero for Tropical {
@@ -283,13 +324,32 @@ impl std::hash::Hash for Tropical {
     }
 }
 
+// Lawful total order for the `PropSignature: Ord` supertrait (#79), matching
+// the `-0.0`-normalizing `Eq`/`Hash` above and re-deriving `PartialOrd` from
+// `Ord`. `f64::total_cmp`, not `to_bits`: the bit order inverts on negatives,
+// so `to_bits` would rank `Tropical(-1.0)` below `Tropical(-2.0)` — wrong over
+// exactly the range min-plus distances occupy. Note this order is the ordinary
+// real order on the payload, i.e. the *opposite* of the rig's additive order
+// (`Tropical::add` takes the min); it is a canonicalization key, not a
+// semantic one, and `Tropical::add` keeps reading the raw `f64`.
+impl Ord for Tropical {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        norm_zero(self.0).total_cmp(&norm_zero(other.0))
+    }
+}
+impl PartialOrd for Tropical {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 /// Plain real rig `(ℝ, 0, 1, +, ·)`.
 ///
 /// Included primarily for `Mat(R)` and `SFG_R` demonstration purposes. Note
 /// that `F64Rig` is actually a **ring** (has negatives); we use the rig
 /// layer because the Thm 5.60 presentation and Mat(R) theory only require
 /// rig axioms.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct F64Rig(pub f64);
 
 impl Zero for F64Rig {
@@ -386,6 +446,21 @@ impl std::hash::Hash for F64Rig {
             self.0.to_bits()
         };
         bits.hash(state);
+    }
+}
+
+// Lawful total order for the `PropSignature: Ord` supertrait (#79), matching
+// the `-0.0`-normalizing `Eq`/`Hash` above and re-deriving `PartialOrd` from
+// `Ord`. `f64::total_cmp`, not `to_bits`: the bit order inverts on negatives,
+// and `F64Rig` is the one shipped rig with genuine negatives (`Neg`/`Sub` below).
+impl Ord for F64Rig {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        norm_zero(self.0).total_cmp(&norm_zero(other.0))
+    }
+}
+impl PartialOrd for F64Rig {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -498,7 +573,11 @@ impl_checked_ops_for_primitive_int!(
 /// // ⊥ is fully absorbing — multiplying by zero does NOT clear it.
 /// assert!((overflowed * Checked::zero()).is_poisoned());
 /// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// `PartialOrd + Ord` are derived (not hand-written): they exist only to satisfy
+// the `PropSignature: Ord` supertrait (#79) for `SfgGenerator<Checked<T>>`, and
+// the derived variant order — every `Value` below `Poison` — is a canonical
+// sort key, not a claim that `⊥` is arithmetically the largest element.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Checked<T> {
     /// A representable value — no overflow has occurred on any path into it.
     Value(T),

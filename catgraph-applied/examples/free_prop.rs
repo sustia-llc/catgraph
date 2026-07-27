@@ -5,15 +5,25 @@
 //! `(Unit ⊗ id₁) ; Mul : 1 → 1` to exhibit compose + tensor + arity
 //! tracking.
 
-use catgraph_applied::prop::{Free, PropSignature};
+use std::borrow::Cow;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+use catgraph_applied::prop::{Free, PropSignature, mono_word};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 enum Sig {
     Mul,
     Unit,
 }
 
 impl PropSignature for Sig {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
     fn source(&self) -> usize {
         match self {
             Sig::Mul => 2,
