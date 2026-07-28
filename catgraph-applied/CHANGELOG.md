@@ -15,6 +15,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
+- **Worded complete-functor surface: `ColoredCompleteFunctor` +
+  `Presentation::eq_mod_functorial_colored`**
+  ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3a):
+  `CompleteFunctor::apply` takes a bare `PropExpr`, which is word-blind *by
+  shape* — `Identity(n)`/`Braid(m, n)` carry only a width — so a colored
+  decision functor cannot be expressed through it. `ColoredCompleteFunctor<G>`
+  consumes a `ColoredExpr<G>` instead, and `eq_mod_functorial_colored` compares
+  images **only after** checking that the two morphisms are parallel (equal
+  source *and* target words): the trait asks a target to decide equality within
+  a hom-set, not to separate hom-sets from each other, so image equality alone
+  could over-identify. Differing boundary words therefore decide `Some(false)`
+  without consulting the functor. The word-blind `CompleteFunctor` and every
+  existing impl are unchanged; catgraph-syntax's `CospanFunctor` now implements
+  both.
 - **Λ-colored prop surface: `prop::colored` check-pass + `ColoredExpr`**
   ([#79](https://github.com/sustia-llc/catgraph/issues/79) P1): top-down
   word-flow validation `check(expr, input_word) -> Result<target_word>`

@@ -8,9 +8,12 @@
 //!   [a] = [b] in Free(G)/⟨E⟩     iff     F(a) = F(b) in T
 //! ```
 //!
-//! This module exposes two pieces:
+//! This module exposes three pieces:
 //!
 //! - [`CompleteFunctor<G>`] — a generic trait for any such decision functor.
+//! - [`ColoredCompleteFunctor<G>`] — its Λ-colored sibling, consuming a
+//!   [`ColoredExpr<G>`](crate::prop::colored::ColoredExpr) so the functor sees
+//!   the interface word a bare [`PropExpr`] cannot carry.
 //! - [`MatrixNFFunctor<R>`] — concrete instance wrapping [`crate::sfg_to_mat`]
 //!   for the canonical `S: SFG_R → Mat(R)` functor. Complete on the
 //!   presentation `Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)` by F&S Thm 5.60 (proof via
@@ -46,7 +49,7 @@ use catgraph::errors::CatgraphError;
 
 use crate::{
     mat::MatR,
-    prop::{PropExpr, PropSignature},
+    prop::{PropExpr, PropSignature, colored::ColoredExpr},
     rig::Rig,
     sfg::{SfgGenerator, SignalFlowGraph},
     sfg_to_mat::sfg_to_mat,
@@ -87,6 +90,41 @@ pub trait CompleteFunctor<G: PropSignature> {
     /// API this cannot occur; the error path exists for expressions
     /// constructed directly via `PropExpr`.
     fn apply(&self, expr: &PropExpr<G>) -> Result<Self::Target, CatgraphError>;
+}
+
+/// The Λ-colored sibling of [`CompleteFunctor`]: a functor
+/// `F : Free_Λ(G) → T` that is *complete* for a presentation of the **colored**
+/// free prop ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3a).
+///
+/// # Why a second trait rather than a bound relaxation
+///
+/// [`CompleteFunctor::apply`] takes a bare [`PropExpr<G>`], which is word-blind
+/// *by shape*: `Identity(n)` and `Braid(m, n)` carry only a width, so a colored
+/// functor handed one has no way to know which colours flow through it (see
+/// [`crate::prop::colored`]). The colored morphism is the pair
+/// `(source word, expression)` — [`ColoredExpr`] — so the colored functor must
+/// consume that pair. A monochromatic functor can implement both: the word-blind
+/// entry point recovers the unique word of the right length via
+/// [`mono_word`](crate::prop::mono_word).
+///
+/// Completeness is, as for [`CompleteFunctor`], a claim about a particular
+/// presentation; implementors cite its source in their rustdoc.
+pub trait ColoredCompleteFunctor<G: PropSignature> {
+    /// The codomain of the functor. Equality in `Target` is the decision
+    /// procedure's discriminator — hence only `PartialEq` is required, matching
+    /// [`CompleteFunctor::Target`].
+    type Target: Clone + Debug + PartialEq;
+
+    /// Apply the functor to a checked colored morphism.
+    ///
+    /// # Errors
+    ///
+    /// Implementations may return a [`CatgraphError`] if the expression lies
+    /// outside the functor's domain (e.g. a generator with no image). A
+    /// [`ColoredExpr`] is word-well-formed by construction, so the arity/colour
+    /// failures [`CompleteFunctor`] documents cannot arise here — except through
+    /// the documented serde trust boundary on [`ColoredExpr`] itself.
+    fn apply_colored(&self, expr: &ColoredExpr<G>) -> Result<Self::Target, CatgraphError>;
 }
 
 /// The matrix functor `S : SFG_R → Mat(R)` (F&S 2018 Thm 5.53), complete

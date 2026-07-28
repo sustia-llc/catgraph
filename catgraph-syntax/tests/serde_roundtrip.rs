@@ -17,8 +17,8 @@ type G = FrobeniusOr<SfgGenerator<i64>>;
 /// `User(SfgGenerator::Scalar)`.
 fn sample_term() -> PropExpr<G> {
     // eta : 0 → 1 ; delta : 1 → 2  →  0 → 2
-    let eta = Free::generator(FrobeniusOr::Eta);
-    let delta = Free::generator(FrobeniusOr::Delta);
+    let eta = Free::generator(FrobeniusOr::Eta(()));
+    let delta = Free::generator(FrobeniusOr::Delta(()));
     let left = Free::compose(eta, delta).expect("eta(0→1) ; delta(1→2)");
     // tensor a User scalar (1 → 1) alongside — result 1 → 1, then no compose.
     let user_scalar: PropExpr<G> = Free::generator(FrobeniusOr::User(SfgGenerator::Scalar(7)));
@@ -40,10 +40,10 @@ fn frobenius_term_json_round_trip_is_identity() {
 #[test]
 fn every_variant_round_trips() {
     let variants: [G; 5] = [
-        FrobeniusOr::Mu,
-        FrobeniusOr::Eta,
-        FrobeniusOr::Delta,
-        FrobeniusOr::Epsilon,
+        FrobeniusOr::Mu(()),
+        FrobeniusOr::Eta(()),
+        FrobeniusOr::Delta(()),
+        FrobeniusOr::Epsilon(()),
         FrobeniusOr::User(SfgGenerator::Add),
     ];
     for v in variants {

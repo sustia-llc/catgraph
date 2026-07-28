@@ -9,6 +9,47 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ### Changed
 
+- **BREAKING: the Frobenius layer is Λ-colored**
+  ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3a). FS19 Def 2.12
+  equips *each object* with a Frobenius structure, so the spider family is
+  per-colour and the four variants gain a `Λ` payload:
+  - `FrobeniusOr<G>` becomes `Mu(G::Color)` / `Eta(G::Color)` /
+    `Delta(G::Color)` / `Epsilon(G::Color)` / `User(G)`, with
+    `G: PropSignature` now a bound on the enum itself and `type Color =
+    G::Color` (colour-transparent). Mono callers write `Mu(())`. `Ord` /
+    `PartialOrd` are hand-written under `where G::Color: Ord` — `Color`'s own
+    bounds are only `Clone + Eq + Hash + Debug`, and that same bound rides the
+    `PropSignature` impl and every Frobenius-facing signature.
+  - Builders take their colour first: `spider(c, m, n)`, `cup(c)`, `cap(c)`,
+    `scfm_equations(c)`. `hypergraph_presentation(colors, user_eqs)` seeds the
+    nine SCFM equations at **every** palette colour (FS19 Lemma 3.10 / Ex 2.9:
+    a structure per `l ∈ Λ` induces the whole hypergraph structure). The P1
+    `Color = ()` gates are lifted from every genuinely colour-generic bound
+    (`lift_user` included).
+  - `to_mat_kron(expr, source_word, dims)` takes an interface word and a
+    **per-colour** dimension function; a wire of colour `c` maps to
+    `R^dims(c)` and a word to the product of its letters' dimensions. Colours
+    flow top-down as in applied's `prop::colored::check`, so a spider fed the
+    wrong colour is rejected (`CatgraphError::Composition`) and a wrong-length
+    word is `CompositionSizeMismatch`. The overflow guard moves from `dim^k`
+    exponents to checked word products, and `SyntaxError::DimensionOverflow`'s
+    fields change from `{ dim, exponent }` to `{ product, factor }` — with
+    per-colour dimensions there is no single `dim` to report, so the variant
+    now names the multiplication that overflowed. The
+    "usize-overflow rejection ≠ OOM protection" posture is unchanged.
+  - `to_cospan(expr, source_word)` returns `Cospan<G::Color>`: apex vertices
+    carry the colours that flow through them (FS19 Ex 3.12 transports Ex 2.8's
+    generators to each `l ∈ Λ`). An arity mismatch now surfaces from the word
+    pass as `CompositionSizeMismatch` rather than from the pushout as
+    `Composition`. `CospanFunctor` keeps its monochromatic
+    `CompleteFunctor<FrobeniusOr<G>>` impl (`Target = CospanCanon<()>`) and
+    gains a `ColoredCompleteFunctor<FrobeniusOr<G>>` impl with
+    `Target = CospanCanon<G::Color>` for `G::Color: Copy + Ord`, anchored on
+    Thm 3.14 (`Cospan_Λ` is the free hypergraph category on `Λ`).
+  - `GeneratorSyntax for FrobeniusOr<G>` **keeps** its `Color = ()` gate: the
+    colour-annotated token grammar (`mu@A`, generator declarations) is P3b.
+    The crate's scope note narrows accordingly — the calculus is colored, the
+    text is not.
 - **BREAKING: `FrobeniusOr<G>` is monochromatic-gated pending colored
   spiders** ([#79](https://github.com/sustia-llc/catgraph/issues/79) P1):
   following catgraph-applied's Λ-colored `PropSignature` extension, the

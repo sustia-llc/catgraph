@@ -12,9 +12,10 @@
 //! round-trip and presentation files), the *interpreter*
 //! ([`eval`] — the executable term-action of Def 5.25, with the R-linear
 //! [`SfgModel`](eval::SfgModel) as its worked example), the *Frobenius layer*
-//! ([`frobenius`] — the monochromatic free hypergraph category as
+//! ([`frobenius`] — the free hypergraph category on a colour palette `Λ` as
 //! [`FrobeniusOr<G>`](frobenius::FrobeniusOr), its spider calculus, the nine
-//! SCFM equations, and the sound [`to_mat_kron`](frobenius::to_mat_kron) checker,
+//! SCFM equations per colour, and the sound
+//! [`to_mat_kron`](frobenius::to_mat_kron) checker,
 //! F&S 2019), and the *typed builder* ([`traced`] — a
 //! [`Traced<A, G>`](traced::Traced) pairs an executable haft
 //! [`Arrow`](arrow_seam::Arrow) with the [`PropExpr`](catgraph_applied::prop::PropExpr)
@@ -53,14 +54,21 @@
 //! (Seven Sketches Thm 5.60). Nothing in `catgraph-syntax` promotes an
 //! incomplete `None` into a decision.
 //!
-//! ### 2. The monochromatic-fragment scope
+//! ### 2. The monochromatic *textual* scope
 //!
-//! The [`frobenius`] layer (S4, live) presents the *single-sort* (monochromatic)
-//! free hypergraph category — the object palette is `Λ = {•}`, one wire colour,
-//! one spider family. F&S 2019 Thm 3.14's full **colored** generality (a distinct
-//! spider family per colour) is out of scope here and tracked separately as
-//! [#79](https://github.com/sustia-llc/catgraph/issues/79); multi-sorted /
-//! Λ-colored prop expressions are an applied-side extension.
+//! The [`frobenius`] layer's calculus is **Λ-colored** since
+//! [#79](https://github.com/sustia-llc/catgraph/issues/79) P3a: the four spider
+//! variants carry their colour, [`FrobeniusOr`](frobenius::FrobeniusOr) is
+//! colour-transparent, and both interpreters
+//! ([`to_mat_kron`](frobenius::to_mat_kron),
+//! [`to_cospan`](cospan_functor::to_cospan)) thread an interface word top-down,
+//! realising F&S 2019 Thm 3.14's colored `Cospan_Λ`.
+//!
+//! The **textual** surface is not there yet. [`GeneratorSyntax`](text::GeneratorSyntax)
+//! for `FrobeniusOr<G>` is gated to `Color = ()` and prints bare
+//! `mu`/`eta`/`delta`/`epsilon`; the colour-annotated token grammar (`mu@A`, plus
+//! generator declarations carrying the palette) is #79's **P3b**. So colored
+//! *terms* round-trip through the engine, and colored *files* do not yet exist.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

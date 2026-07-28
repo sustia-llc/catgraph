@@ -346,10 +346,10 @@ pub fn arb_sfg_gen_bounded() -> impl Strategy<Value = SfgGenerator<i64>> {
 /// `GeneratorSyntax` impl does not bite this signature.
 pub fn arb_frob_gen() -> impl Strategy<Value = FrobeniusOr<Sig>> {
     prop_oneof![
-        Just(FrobeniusOr::Mu),
-        Just(FrobeniusOr::Eta),
-        Just(FrobeniusOr::Delta),
-        Just(FrobeniusOr::Epsilon),
+        Just(FrobeniusOr::Mu(())),
+        Just(FrobeniusOr::Eta(())),
+        Just(FrobeniusOr::Delta(())),
+        Just(FrobeniusOr::Epsilon(())),
         arb_sig_gen().prop_map(FrobeniusOr::User),
     ]
 }
@@ -359,6 +359,52 @@ pub fn arb_frob_gen() -> impl Strategy<Value = FrobeniusOr<Sig>> {
 /// the same leaf definition as every other signature.
 pub fn arb_frob_leaf() -> impl Strategy<Value = PropExpr<FrobeniusOr<Sig>>> {
     arb_leaf_from(arb_frob_gen())
+}
+
+// ---- Λ-colored fixtures (#79 P3a) --------------------------------------------
+
+/// A two-letter colour palette `Λ = {A, B}` for the colored Frobenius suite.
+///
+/// Deliberately given **different dimensions** by [`hue_dim`] so a mixed word's
+/// object dimension is a genuine product, not a power — the case a
+/// single-`dim` interpreter cannot express.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Hue {
+    /// The 2-dimensional colour.
+    A,
+    /// The 3-dimensional colour.
+    B,
+}
+
+/// Object dimensions for [`Hue`]: `dim(A) = 2`, `dim(B) = 3`.
+pub fn hue_dim(c: &Hue) -> usize {
+    match c {
+        Hue::A => 2,
+        Hue::B => 3,
+    }
+}
+
+/// A two-colour user signature over [`Hue`]: `swap : A B → B A`, the smallest
+/// generator that is colour-sensitive (its arities are symmetric, so only the
+/// *words* distinguish a correct threading from a wrong one).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ColoredSig {
+    /// `swap : [A, B] → [B, A]`.
+    Swap,
+}
+
+impl PropSignature for ColoredSig {
+    type Color = Hue;
+
+    fn source_word(&self) -> Cow<'_, [Hue]> {
+        Cow::Owned(vec![Hue::A, Hue::B])
+    }
+
+    fn target_word(&self) -> Cow<'_, [Hue]> {
+        Cow::Owned(vec![Hue::B, Hue::A])
+    }
 }
 
 /// A length-`len` standard basis **row** vector over `i64`: `1` at index `i`,
