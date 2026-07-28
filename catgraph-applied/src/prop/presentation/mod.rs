@@ -1,10 +1,11 @@
 //! Prop presentations (F&S Def 5.33): equations quotienting `Free(G)`.
 //!
-//! A presentation `(G, s, t, E)` consists of a signature `G` with arity maps
-//! `s, t` (provided via [`super::PropSignature`]) and a set `E` of equations,
-//! each a pair `(lhs, rhs)` of [`super::PropExpr<G>`] with matching arity. The
-//! presented prop is `Free(G)` quotiented by the smallest congruence
-//! containing `E` plus the SMC axioms.
+//! A presentation `(G, s, t, E)` consists of a signature `G` with interface
+//! maps `s, t` (provided via [`super::PropSignature`]) and a set `E` of
+//! equations, each a pair `(lhs, rhs)` of [`super::PropExpr<G>`] that are
+//! *parallel* — same source and target **words** over `Λ`, inferred by
+//! [`Presentation::add_equation`]. The presented prop is `Free(G)` quotiented
+//! by the smallest congruence containing `E` plus the SMC axioms.
 //!
 //! # Implementation
 //!
@@ -90,11 +91,15 @@ pub struct NormalizeResult<G: PropSignature> {
 /// # Serde (feature `serde`)
 ///
 /// `Serialize`/`Deserialize` round-trip the full state (equations, depth,
-/// engine). **Deserialization does not re-run [`Self::add_equation`]'s arity
-/// check** — it reconstructs the fields directly, so a hand-crafted document
-/// could carry an arity-mismatched equation. Round-tripping a value produced by
-/// this crate is always safe; when ingesting untrusted documents, re-validate
-/// (e.g. rebuild via [`Self::add_equation`]).
+/// engine). **Deserialization does not re-run [`Self::add_equation`]'s check**
+/// — it reconstructs the fields directly. Since #79 P2 that check is
+/// boundary-*word* equality, so a hand-crafted document could carry an equation
+/// that is word-ill-formed (an inner subterm handed the wrong number of wires)
+/// or color-mismatched between its two sides, not merely arity-mismatched.
+/// Round-tripping a value produced by this crate is always safe; when ingesting
+/// untrusted documents, re-validate by rebuilding via [`Self::add_equation`].
+/// The same boundary applies to
+/// [`ColoredExpr`](crate::prop::colored::ColoredExpr).
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Presentation<G: PropSignature> {
@@ -152,26 +157,57 @@ impl<G: PropSignature> Presentation<G> {
         self.engine = engine;
     }
 
-    /// Add an equation `lhs = rhs`. Both sides must have matching arity.
+    /// Add an equation `lhs = rhs`. Both sides must be **parallel morphisms
+    /// over a common source word** — boundary-*word* equality, not merely
+    /// matching arities ([#79](https://github.com/sustia-llc/catgraph/issues/79)
+    /// P2).
+    ///
+    /// The check is the word-inference pass sibling of
+    /// [`crate::prop::colored::check`]: fresh variables stand for the unknown
+    /// source colors, and *both* sides are threaded through the same variables,
+    /// so a constraint discovered on either side propagates to the other. The
+    /// two resulting target words are then unified pairwise. Acceptance means
+    /// such a shared source word exists (the most general one, given the
+    /// inferred constraints).
+    ///
+    /// # Monochromatic signatures
+    ///
+    /// With `Color = ()` every unification succeeds and the pass reduces to
+    /// length checks — but it is still **stronger** than the pre-P2 check,
+    /// which compared only the two sides' top-level [`PropExpr::source`] /
+    /// [`PropExpr::target`]. [`PropExpr`]'s variants are public, so a
+    /// hand-built ill-composed tree — `Identity(1) ; (Identity(2) ; Identity(1))`
+    /// reads `1 → 1` at the top while its inner `Identity(2)` is handed one
+    /// wire — used to be accepted and is now rejected with
+    /// [`CatgraphError::CompositionSizeMismatch`]. Terms built through
+    /// [`Free`](crate::prop::Free) are unaffected.
+    ///
+    /// # Polymorphic equations
+    ///
+    /// Sides that are individually color-polymorphic but *jointly* constrained
+    /// are accepted: `Identity(2) = Braid(1,1)` forces the two source positions
+    /// to share a color, and is well-formed at every word that does. The
+    /// inferred constraint is **not stored**, and rewriting by user equations
+    /// ([`Self::normalize`], [`Self::eq_mod`]) is word-blind — it operates on
+    /// [`PropExpr`], and no in-tree API applies user equations to a
+    /// [`ColoredExpr`](crate::prop::colored::ColoredExpr) — so there is no
+    /// rewrite site that could observe the omission.
     ///
     /// # Errors
     ///
-    /// Returns [`CatgraphError::Presentation`] if the two sides have
-    /// different source or target arities.
+    /// - [`CatgraphError::CompositionSizeMismatch`] on any length
+    ///   disagreement: a subterm handed a word of the wrong length, `rhs`'s
+    ///   source arity differing from `lhs`'s, or target words of different
+    ///   lengths.
+    /// - [`CatgraphError::Composition`] when the lengths agree but the colors
+    ///   conflict — the message names the generator and position, or the target
+    ///   position, and both colors.
     pub fn add_equation(
         &mut self,
         lhs: PropExpr<G>,
         rhs: PropExpr<G>,
     ) -> Result<(), CatgraphError> {
-        let ls = lhs.source();
-        let lt = lhs.target();
-        let rs = rhs.source();
-        let rt = rhs.target();
-        if ls != rs || lt != rt {
-            return Err(CatgraphError::Presentation {
-                message: format!("arity mismatch: lhs ({ls} → {lt}), rhs ({rs} → {rt})"),
-            });
-        }
+        super::colored::check_equation(&lhs, &rhs)?;
         self.equations.push((lhs, rhs));
         Ok(())
     }

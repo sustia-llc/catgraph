@@ -93,16 +93,14 @@ fn functorial_engine_ignores_presentation_equations() {
     // expressions equal syntactically, the functor's verdict depends
     // only on `f(a) == f(b)`.
     let mut pres = Presentation::<SfgGenerator<BoolRig>>::new();
-    // Seed a bogus equation `Identity(1) = Identity(2)` (arity would
-    // normally block this via `add_equation` — but the mismatch check is
-    // on source+target not dimension equality; skip the test if arity
-    // check fires). Use matching-arity expressions instead: seed
-    // `Identity(1) = Scalar(false)`. The functor should still report
-    // the two as *distinct* (matrix [[1]] ≠ [[0]]).
+    // `add_equation` only admits parallel morphisms, so the bogus equation has
+    // to be *well-typed* and semantically wrong rather than ill-typed: seed
+    // `Identity(1) = Scalar(false)`, both `1 → 1`. The functor should still
+    // report the two as *distinct* (matrix [[1]] ≠ [[0]]).
     let lhs = identity_sfg::<BoolRig>(1);
     let rhs = scalar_sfg::<BoolRig>(BoolRig(false));
     pres.add_equation(lhs.clone(), rhs.clone())
-        .expect("same arity 1→1");
+        .expect("both sides are 1 → 1 over the monochromatic word");
     let f = MatrixNFFunctor::<BoolRig>::new();
     assert_eq!(
         pres.eq_mod_functorial(&lhs, &rhs, &f).unwrap(),

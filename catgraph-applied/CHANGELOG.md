@@ -26,7 +26,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   `SMC-NF-RECONCILIATION.md` §4.2/§4.3 Lemmas 4.1/4.2; canonicality caveat
   per §4.4 stated in the docs). Serde derives behind the existing opt-in
   `serde` feature with the #81-style documented trust boundary (Deserialize
-  does not re-run `check`; extending validation is P2).
+  does not re-run `check`; re-validate by rebuilding via `ColoredExpr::new`).
 - **SMC NF content framework + canonicality status —
   `SMC-NF-RECONCILIATION.md` §4**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) proof phase,
@@ -71,6 +71,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **BREAKING: `Presentation::add_equation` checks boundary-*word* equality**
+  ([#79](https://github.com/sustia-llc/catgraph/issues/79) P2): the two sides
+  of an equation must now be parallel morphisms over a **common source word**,
+  not merely have matching top-level arities. An equation declares no source
+  word, so one is *inferred*: a variable-threaded sibling of P1's
+  `prop::colored::check` runs both sides through the same fresh source
+  variables (so a constraint found on either side propagates to the other) and
+  unifies the two target words pairwise. Acceptance means such a shared word
+  exists — the most general one under the inferred constraints — which keeps
+  jointly-constrained polymorphic equations like `Identity(2) = Braid(1,1)`
+  valid; the inferred constraint is not stored, and user-equation rewriting
+  stays word-blind (no in-tree API rewrites a `ColoredExpr`). Two breaking
+  consequences: the rejection error is now
+  `CatgraphError::CompositionSizeMismatch` (lengths) or
+  `CatgraphError::Composition` (colors) instead of
+  `CatgraphError::Presentation`; and the check is **stronger even at
+  `Color = ()`** — `PropExpr`'s variants are public, so a hand-built
+  ill-composed tree (`Identity(1) ; (Identity(2) ; Identity(1))` reads `1 → 1`
+  at the top while its inner `Identity(2)` is handed one wire) is now
+  rejected. Terms built through `Free` are unaffected; every shipped
+  presentation (Thm 5.60's `E_18`, catgraph-syntax's `E_frob`) is accepted
+  unchanged. `Presentation`'s serde trust boundary (#81) is restated in
+  word terms: `Deserialize` still does not re-run the check, so an untrusted
+  document may now carry a word-ill-formed or color-mismatched equation.
 - **BREAKING: `PropSignature` is Λ-colored and `Ord`-bounded**
   ([#79](https://github.com/sustia-llc/catgraph/issues/79) P1): the trait
   gains `type Color: Clone + Eq + Hash + Debug` and **required**

@@ -44,9 +44,18 @@
 //! survives is probe-verified rather than proven. So a `true` from
 //! `eq_colored` is sound; a `false` is not a proof of distinctness.
 //!
+//! # Equations
+//!
+//! An equation `lhs = rhs` has no *declared* source word — the two sides are
+//! required to be parallel over *some* common one. That is the P2 inference
+//! pass behind [`Presentation::add_equation`]: fresh variables stand for the
+//! unknown source colors, both sides are threaded through the same variables,
+//! and the two target words are unified pairwise. See `check_equation`.
+//!
 //! [module docs]: super
 //! [`PropExpr::Identity`]: super::PropExpr::Identity
 //! [`PropExpr::Braid`]: super::PropExpr::Braid
+//! [`Presentation::add_equation`]: super::presentation::Presentation::add_equation
 
 use catgraph::errors::CatgraphError;
 
@@ -159,6 +168,196 @@ fn expect_at_least<C>(expected: usize, input: &[C]) -> Result<(), CatgraphError>
     }
 }
 
+// ---- Equation-level word inference (#79 P2) ---------------------------------
+
+/// A letter of an *inferred* word: a unification variable standing for an
+/// as-yet-unconstrained color, or a concrete color.
+#[derive(Clone, Debug)]
+enum Term<C> {
+    Var(usize),
+    Const(C),
+}
+
+/// Union-find over an equation's source variables, one optional color binding
+/// per class.
+///
+/// Variables may alias other variables and bind to colors; a class carries at
+/// most one color, so binding a second, different one is the color conflict the
+/// caller reports. Conflicts surface as the `(left, right)` pair of colors, in
+/// the argument order [`Self::unify`] was called with.
+struct Unifier<C> {
+    parent: Vec<usize>,
+    color: Vec<Option<C>>,
+}
+
+impl<C: Clone + PartialEq> Unifier<C> {
+    fn new() -> Self {
+        Self {
+            parent: Vec::new(),
+            color: Vec::new(),
+        }
+    }
+
+    fn fresh(&mut self) -> usize {
+        let v = self.parent.len();
+        self.parent.push(v);
+        self.color.push(None);
+        v
+    }
+
+    fn find(&mut self, v: usize) -> usize {
+        let mut root = v;
+        while self.parent[root] != root {
+            root = self.parent[root];
+        }
+        let mut cur = v;
+        while self.parent[cur] != cur {
+            let next = self.parent[cur];
+            self.parent[cur] = root;
+            cur = next;
+        }
+        root
+    }
+
+    /// Bind `v`'s class to `c`. `Err((found, c))` if it already carries another.
+    fn bind(&mut self, v: usize, c: &C) -> Result<(), (C, C)> {
+        let root = self.find(v);
+        match &self.color[root] {
+            Some(found) if found != c => Err((found.clone(), c.clone())),
+            Some(_) => Ok(()),
+            None => {
+                self.color[root] = Some(c.clone());
+                Ok(())
+            }
+        }
+    }
+
+    fn unify(&mut self, a: &Term<C>, b: &Term<C>) -> Result<(), (C, C)> {
+        match (a, b) {
+            (Term::Var(x), Term::Var(y)) => {
+                let (rx, ry) = (self.find(*x), self.find(*y));
+                if rx == ry {
+                    return Ok(());
+                }
+                match (self.color[rx].clone(), self.color[ry].clone()) {
+                    (Some(cx), Some(cy)) if cx != cy => return Err((cx, cy)),
+                    (Some(cx), None) => self.color[ry] = Some(cx),
+                    _ => {}
+                }
+                self.parent[rx] = ry;
+                Ok(())
+            }
+            (Term::Var(x), Term::Const(c)) => self.bind(*x, c),
+            // `bind` reports `(found, given)`; `found` is the *right* term here.
+            (Term::Const(c), Term::Var(y)) => {
+                self.bind(*y, c).map_err(|(found, given)| (given, found))
+            }
+            (Term::Const(x), Term::Const(y)) => {
+                if x == y {
+                    Ok(())
+                } else {
+                    Err((x.clone(), y.clone()))
+                }
+            }
+        }
+    }
+}
+
+/// Thread `input` through `expr`, recording the color constraints it implies.
+///
+/// The variable-threaded sibling of [`check`]: identical control flow, with
+/// [`Term`]s in place of colors and unification in place of the generator's
+/// word equality test. Errors follow [`check`]'s convention.
+fn infer<G: PropSignature>(
+    expr: &PropExpr<G>,
+    input: &[Term<G::Color>],
+    u: &mut Unifier<G::Color>,
+) -> Result<Vec<Term<G::Color>>, CatgraphError> {
+    match expr {
+        PropExpr::Identity(n) => {
+            expect_len(*n, input)?;
+            Ok(input.to_vec())
+        }
+        PropExpr::Braid(m, n) => {
+            expect_len(m + n, input)?;
+            let mut out = Vec::with_capacity(input.len());
+            out.extend_from_slice(&input[*m..]);
+            out.extend_from_slice(&input[..*m]);
+            Ok(out)
+        }
+        PropExpr::Generator(g) => {
+            let want = g.source_word();
+            expect_len(want.len(), input)?;
+            for (i, (have, declared)) in input.iter().zip(want.iter()).enumerate() {
+                u.unify(have, &Term::Const(declared.clone()))
+                    .map_err(|(found, _)| CatgraphError::Composition {
+                        message: format!(
+                            "colored inference: generator {g:?} declares source color {declared:?} at position {i} but the incoming word carries {found:?}"
+                        ),
+                    })?;
+            }
+            Ok(g.target_word().iter().cloned().map(Term::Const).collect())
+        }
+        PropExpr::Compose(f, h) => {
+            let mid = infer(f, input, u)?;
+            infer(h, &mid, u)
+        }
+        PropExpr::Tensor(f, h) => {
+            let split = f.source();
+            expect_at_least(split, input)?;
+            let (left, right) = input.split_at(split);
+            let mut out = infer(f, left, u)?;
+            out.extend(infer(h, right, u)?);
+            Ok(out)
+        }
+    }
+}
+
+/// Check that `lhs` and `rhs` are parallel morphisms over a **common source
+/// word** — the boundary-word equality test behind
+/// [`Presentation::add_equation`].
+///
+/// Both sides are threaded through the *same* fresh source variables, so a
+/// constraint discovered on either side propagates to the other; the two target
+/// words are then unified pairwise. Success means such a shared word exists
+/// (the most general one under the inferred constraints). The constraint itself
+/// is not returned — see the caller's rustdoc for why that is sound today.
+///
+/// # Errors
+///
+/// - [`CatgraphError::CompositionSizeMismatch`] on any length disagreement: a
+///   subterm handed a word of the wrong length, `rhs`'s source arity differing
+///   from `lhs`'s, or target words of different lengths.
+/// - [`CatgraphError::Composition`] when the lengths agree but the colors
+///   conflict — the message names the generator and position, or the target
+///   position, and both colors.
+///
+/// [`Presentation::add_equation`]: super::presentation::Presentation::add_equation
+pub(crate) fn check_equation<G: PropSignature>(
+    lhs: &PropExpr<G>,
+    rhs: &PropExpr<G>,
+) -> Result<(), CatgraphError> {
+    let mut u = Unifier::new();
+    let source: Vec<Term<G::Color>> = (0..lhs.source()).map(|_| Term::Var(u.fresh())).collect();
+    let lhs_target = infer(lhs, &source, &mut u)?;
+    let rhs_target = infer(rhs, &source, &mut u)?;
+    if lhs_target.len() != rhs_target.len() {
+        return Err(CatgraphError::CompositionSizeMismatch {
+            expected: lhs_target.len(),
+            actual: rhs_target.len(),
+        });
+    }
+    for (i, (l, r)) in lhs_target.iter().zip(rhs_target.iter()).enumerate() {
+        u.unify(l, r)
+            .map_err(|(left, right)| CatgraphError::Composition {
+                message: format!(
+                    "colored inference: target position {i} is {left:?} on the lhs but {right:?} on the rhs"
+                ),
+            })?;
+    }
+    Ok(())
+}
+
 /// A morphism of the free **Λ-colored** prop: the pair `(source word, expr)`,
 /// together with the target word [`check`] derived from them.
 ///
@@ -182,11 +381,12 @@ fn expect_at_least<C>(expected: usize, input: &[C]) -> Result<(), CatgraphError>
 /// hand-crafted document could carry a target word that the expression does not
 /// actually produce, or an expression that is not word-well-formed at all.
 /// Constructing through serde is a *trusted* path; round-tripping a value
-/// produced by this crate is always safe. This mirrors the boundary already
-/// documented on [`Presentation`] (#81); extending validation to the colored
-/// surface belongs to #79 P2, which upgrades `add_equation`'s arity check to
-/// boundary-word equality. When ingesting untrusted documents, re-validate by
-/// rebuilding via [`Self::new`].
+/// produced by this crate is always safe. This mirrors the boundary documented
+/// on [`Presentation`] (#81), whose [`add_equation`] check is boundary-word
+/// equality since #79 P2 and is likewise not re-run on deserialization. When
+/// ingesting untrusted documents, re-validate by rebuilding via [`Self::new`].
+///
+/// [`add_equation`]: super::presentation::Presentation::add_equation
 ///
 /// [`Presentation`]: super::presentation::Presentation
 #[derive(Clone, Debug, PartialEq, Eq)]
