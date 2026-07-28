@@ -242,29 +242,32 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     //   later component, which Step 6 repairs on the same pass;
     // - `reorder_tied_zero_arity` (Step 6) shrinks tied_inversion_count — each
     //   swap flips exactly one order-inverted pair and leaves every other pair's
-    //   relative order alone. The order is `tie_sorts_before`'s: the rule-(i)
-    //   component key where the §2.6 carve hands over, else the Decision-1
-    //   class order, else (two 0→0 scalar generators, the only atoms that can
-    //   strictly commute at an equal class) `G::cmp` — all three total, so the
-    //   count is well-defined. `try_unitor_merge` can *raise* it (its case 1
-    //   prepends an ε ahead of the absorbed layer's atoms, possibly past an η;
-    //   its case 4 appends an η after them, possibly behind an ε; case 3's
-    //   η-prepend is order-canonical), but only while strictly shrinking
-    //   layer_count, an earlier component — so the tuple still drops
-    //   lexicographically and Step 6 repairs the ordering on the same pass.
-    //   The point-span sift can likewise land an `η` beside an `ε` and raise
-    //   tied_inversion_count, but only while shrinking generator_position_sum —
-    //   an earlier component still — and Step 6 repairs it on the same pass.
-    //   Step 6 itself is
-    //   within-layer only: it moves no atom between layers and rewrites no atom,
-    //   so every earlier component is untouched by it — block_inversion_count
-    //   included: a single-single tied swap involves only single-atom components,
-    //   which the block count excludes by its condition (a), and a tied swap
-    //   touching a multi-atom component already fires on the rule-(i) component
-    //   order (`tie_sorts_before`), so it can only lower the block count or leave
-    //   it alone. The `G::cmp` scalar tie-break is single-single by
-    //   construction — a 0→0 atom carries no wire, so it is always its own
-    //   component — and so is excluded by condition (a) as well.
+    //   relative order alone. The order is `tie_sorts_before`'s: the Decision-1
+    //   class order, then (two 0→0 scalar generators, the only atoms that can
+    //   strictly commute at an equal class) `G::cmp`. Since #174 retired its
+    //   rule-(i) branch, that order reads the two atoms and nothing else, so it
+    //   cannot change under any pass and the count is well-defined without an
+    //   invariance argument. Step 6 is within-layer only — it moves no atom
+    //   between layers and rewrites no atom — so every earlier component is
+    //   untouched, block_inversion_count and column_inversion_count included:
+    //   a tied swap changes the relative order of exactly the pair it swaps, and
+    //   both of those counts either exclude that pair (single∥single, marked,
+    //   braid-carrying, or equal-key) or already order it the same way.
+    //
+    // Three steps can *raise* a later component while strictly shrinking an
+    // earlier one, so the tuple still drops lexicographically and the later
+    // pass repairs the ordering on the same fixpoint pass:
+    // - `try_unitor_merge` raises tied_inversion_count (its case 1 prepends an ε
+    //   ahead of the absorbed layer's atoms, possibly past an η; its case 4
+    //   appends an η after them, possibly behind an ε; case 3's η-prepend is
+    //   order-canonical) while shrinking layer_count. It changes no component's
+    //   key, size or marking, so it cannot raise column_inversion_count.
+    // - the point-span sift can land an `η` beside an `ε` (raising
+    //   tied_inversion_count) and moves an atom between layers (so it *can*
+    //   raise column_inversion_count) while shrinking generator_position_sum.
+    // - a Step-7 block move raises tied_inversion_count while shrinking
+    //   block_inversion_count; it cannot raise column_inversion_count, since
+    //   both counts order the swapped pair by the same `component_key_order`.
     // See `docs/SMC-NF-RECONCILIATION.md` §2.4.
     loop {
         let prev = sd.clone();
