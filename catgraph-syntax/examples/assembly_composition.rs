@@ -28,8 +28,8 @@ type Sfg = PropExpr<SfgGenerator<i64>>;
 fn library() -> Result<BTreeMap<&'static str, Sfg>, Box<dyn Error>> {
     let catalogue = [
         ("split", "copy"),          // 1 → 2  fan the signal out
-        ("left_gain", "scalar:2"),  // 1 → 1  amplify the left copy
-        ("right_gain", "scalar:3"), // 1 → 1  amplify the right copy
+        ("left_gain", "scalar_2"),  // 1 → 1  amplify the left copy
+        ("right_gain", "scalar_3"), // 1 → 1  amplify the right copy
         ("combine", "add"),         // 2 → 1  merge the two copies
     ];
     let mut lib = BTreeMap::new();

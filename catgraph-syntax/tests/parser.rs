@@ -60,6 +60,21 @@ fn clause2_violation_breaks_roundtrip() {
     assert!(parse::<BadSig>(&printed).is_err());
 }
 
+/// The same enforcement over `:`, reserved as the presentation-file declaration
+/// separator by #79 P3b. `@` needs no companion test: it is deliberately *not*
+/// a delimiter (so `mu@A` lexes as one atom), and what its reservation buys is
+/// non-collision with a colored spider token — asserted in
+/// [`colored_text`](../colored_text.rs).
+#[test]
+fn colon_in_a_token_breaks_roundtrip() {
+    use common::ColonSig;
+    let e = Free::generator(ColonSig);
+    let printed = print(&e); // "pre:post"
+    assert_eq!(printed, "pre:post");
+    // Re-lexes as three atoms; the first ("pre") is not a known generator token.
+    assert!(parse::<ColonSig>(&printed).is_err());
+}
+
 // ---- Unicode tensor ----------------------------------------------------------
 
 #[test]
@@ -138,7 +153,7 @@ fn braid_second_argument_error_offset_points_at_it() {
 fn scalar_token_parses() {
     let s = SfgGenerator::Scalar(-7i64);
     assert_eq!(
-        parse::<SfgGenerator<i64>>("scalar:-7"),
+        parse::<SfgGenerator<i64>>("scalar_-7"),
         Ok(Free::generator(s))
     );
     // A scalar token in composed position: scalar (1 → 1) ; copy (1 → 2) is
@@ -149,7 +164,7 @@ fn scalar_token_parses() {
         Free::generator(SfgGenerator::Copy),
     )
     .unwrap();
-    assert_eq!(parse::<SfgGenerator<i64>>("scalar:3 ; copy"), Ok(expected));
+    assert_eq!(parse::<SfgGenerator<i64>>("scalar_3 ; copy"), Ok(expected));
 }
 
 // ---- Nesting-depth bound -----------------------------------------------------

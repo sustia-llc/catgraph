@@ -77,6 +77,45 @@ fn parse_error_offset_is_whole_input_relative() {
     }
 }
 
+// ---- Declarations under a monochromatic signature (#79 P3b) -------------------
+
+#[test]
+fn a_monochromatic_presentation_prints_no_declarations() {
+    // `()` is the all-implicit palette, so no port has a colour to show and the
+    // file is byte-for-byte the pre-#79 one (asserted in `presentation_round_trips`).
+    assert!(!print_presentation(&sample_presentation()).contains(':'));
+}
+
+#[test]
+fn explicit_unit_sort_declarations_are_accepted_on_input() {
+    // `•` is the written form of the implicit sort, so a monochromatic file may
+    // spell its declarations out. They are checked and then dropped — printing
+    // normalises them away, since `()` has no colour to show.
+    let text = "copy : • -> • •\nadd : • • -> •\ncopy ; add = id(1)\nbraid(1,1) = id(2)";
+    let p = parse_presentation::<Sig>(text).expect("explicit unit-sort declarations check out");
+    assert_eq!(p.equations(), sample_presentation().equations());
+    assert_eq!(
+        print_presentation(&p),
+        print_presentation(&sample_presentation())
+    );
+
+    // The same drift check applies: `copy` is `1 → 2`, not `1 → 1`.
+    assert!(matches!(
+        parse_presentation::<Sig>("copy : • -> •"),
+        Err(SyntaxError::Parse { .. })
+    ));
+}
+
+#[test]
+fn a_line_with_both_separators_is_read_as_an_equation() {
+    // `=` classifies first, so `:` lands inside an expression side — where the
+    // lexer has no production for it.
+    match parse_presentation::<Sig>("copy : • -> • = id(1)") {
+        Err(SyntaxError::Parse { offset, .. }) => assert_eq!(offset, 5, "points at the `:`"),
+        other => panic!("expected Parse, got {other:?}"),
+    }
+}
+
 #[test]
 fn empty_input_is_empty_presentation() {
     let p = parse_presentation::<Sig>("").unwrap();

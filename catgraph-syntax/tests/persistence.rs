@@ -58,9 +58,10 @@ use common::{Sig, g, sfg_model};
 /// SfgModel-valid identities: under the [`sfg_model`] used by
 /// `standalone_terms_round_trip_and_eval_agrees` below, `copy ; add` doubles and
 /// `braid(1,1)` swaps, so neither holds *semantically*. A presentation is
-/// model-free — `add_equation` only arity-checks — so declaring them here is
-/// exactly the point: we exercise persistence of a quotient's defining relations,
-/// independent of any model that might satisfy or refute them.
+/// model-free — `add_equation` only checks the two sides' boundary *words* — so
+/// declaring them here is exactly the point: we exercise persistence of a
+/// quotient's defining relations, independent of any model that might satisfy
+/// or refute them.
 fn demo_equations() -> Vec<(PropExpr<Sig>, PropExpr<Sig>)> {
     vec![
         (
@@ -176,7 +177,7 @@ fn standalone_terms_round_trip_and_eval_agrees() {
     // (source term string, an input vector of the right length).
     let cases: [(&str, Vec<i64>); 3] = [
         ("copy ; add", vec![4]),                       // 1 → 1  doubles
-        ("copy ; scalar:2 * scalar:3 ; add", vec![6]), // 1 → 1  x ↦ 5x
+        ("copy ; scalar_2 * scalar_3 ; add", vec![6]), // 1 → 1  x ↦ 5x
         ("braid(1,1)", vec![10, 20]),                  // 2 → 2  swaps
     ];
     for (src, input) in cases {

@@ -46,9 +46,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("raw  (Free::* plumbing) : {}", print(&raw));
 
     // (2) The same morphism, read from one line of text. `;` binds loosest and
-    // `*` tighter, so `copy ; scalar:2 * scalar:3 ; add` groups as
-    // `((copy ; (scalar:2 * scalar:3)) ; add)` — exactly the raw tree above.
-    let source = "copy ; scalar:2 * scalar:3 ; add";
+    // `*` tighter, so `copy ; scalar_2 * scalar_3 ; add` groups as
+    // `((copy ; (scalar_2 * scalar_3)) ; add)` — exactly the raw tree above.
+    let source = "copy ; scalar_2 * scalar_3 ; add";
     let parsed = parse::<SfgGenerator<i64>>(source)?;
     println!("parsed(\"{source}\") : {}", print(&parsed));
 

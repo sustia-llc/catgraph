@@ -79,18 +79,19 @@
 //! [`CospanFunctor`](crate::cospan_functor::CospanFunctor) (F&S Prop 3.8 /
 //! Thm 3.14, #80).
 //!
-//! # Colour scope: the calculus is Λ-colored, the *text* is not yet
+//! # Colour scope: Λ-colored end to end
 //!
-//! Since [#79](https://github.com/sustia-llc/catgraph/issues/79) P3a the in-code
-//! spider calculus is Λ-colored: `Mu(c)`/`Eta(c)`/`Delta(c)`/`Epsilon(c)` carry
-//! their colour, [`FrobeniusOr<G>`]'s own `Color` is `G`'s, and both interpreters
+//! Since [#79](https://github.com/sustia-llc/catgraph/issues/79) the layer is
+//! colored at every level. P3a coloured the calculus —
+//! `Mu(c)`/`Eta(c)`/`Delta(c)`/`Epsilon(c)` carry their colour,
+//! [`FrobeniusOr<G>`]'s own `Color` is `G`'s, and both interpreters
 //! ([`to_mat_kron`], [`to_cospan`](crate::cospan_functor::to_cospan)) thread an
-//! interface word top-down. What is still monochromatic is the **textual**
-//! surface: [`GeneratorSyntax`] for `FrobeniusOr<G>` is gated to `G::Color = ()`
-//! and prints bare `mu`/`eta`/`delta`/`epsilon`, because the colour-annotated
-//! token grammar (`mu@A`, plus generator declarations) is #79's P3b. The
-//! remaining scope notes in the crate's [module docs](crate) and README are
-//! P3b's to drop.
+//! interface word top-down. P3b coloured the *text*: [`GeneratorSyntax`] for
+//! `FrobeniusOr<G>` holds for any [`ColorSyntax`] palette, spiders print and
+//! parse as `mu@A` / `eta@A` / `delta@A` / `epsilon@A`, and presentation files
+//! carry generator declarations (`g : A B -> C`). A monochromatic signature is
+//! the palette whose one letter is implicit, so its files are byte-for-byte the
+//! pre-#79 ones.
 
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -104,7 +105,16 @@ use catgraph_applied::prop::{Free, PropExpr, PropSignature};
 use catgraph_applied::rig::Rig;
 
 use crate::errors::SyntaxError;
-use crate::text::GeneratorSyntax;
+use crate::text::{AT, ColorSyntax, GeneratorSyntax};
+
+/// Reserved token for the multiplication spider `μ`.
+const KW_MU: &str = "mu";
+/// Reserved token for the unit spider `η`.
+const KW_ETA: &str = "eta";
+/// Reserved token for the comultiplication spider `δ`.
+const KW_DELTA: &str = "delta";
+/// Reserved token for the counit spider `ε`.
+const KW_EPSILON: &str = "epsilon";
 
 /// A user signature `G` extended with the four special-commutative-Frobenius
 /// generators **at each colour** — the generators of the free hypergraph
@@ -906,19 +916,24 @@ where
 }
 
 /// [`GeneratorSyntax`] for [`FrobeniusOr<G>`]: the four Frobenius generators
-/// print/parse as the reserved tokens `mu` / `eta` / `delta` / `epsilon`, and
+/// print/parse as the reserved tokens `mu` / `eta` / `delta` / `epsilon`,
+/// **annotated with their colour** where the palette has one to show, and
 /// [`User(g)`](FrobeniusOr::User) delegates to `g`'s own token.
 ///
-/// # Monochromatic-only, until P3b ([#79](https://github.com/sustia-llc/catgraph/issues/79))
+/// # Colour annotation: `mu@A` ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3b)
 ///
-/// This impl is gated to a **monochromatic** user signature (`G::Color = ()`), so
-/// the spider variants match `Mu(())` … and print bare `mu`. The Λ-payload landed
-/// in P3a — what is still missing is the *textual* surface: colored spiders are
-/// to print and parse as `mu@A` / `eta@A` / `delta@A` / `epsilon@A`, with `@`
-/// joining the grammar's reserved alphabet and generator declarations
-/// (`g : A B -> C`) carrying the palette. That token grammar is #79's **P3b**;
-/// until it lands there is no spelling for a colored spider, and this bound says
-/// so at the type level rather than inventing one.
+/// A spider prints `mu@A` when its colour's
+/// [`print_color`](ColorSyntax::print_color) is `Some("A")`, and bare `mu` when
+/// the colour is the palette's implicit sort. Parsing mirrors that: `mu@A` reads
+/// the annotation through [`parse_color`](ColorSyntax::parse_color), while a bare
+/// `mu` takes the palette's [`implicit`](ColorSyntax::implicit) sort — and is a
+/// **parse failure** under a palette that has none, since there would be no
+/// colour to give the spider. The monochromatic palette `()` is all-implicit, so
+/// a single-sorted signature prints and parses exactly the pre-#79 tokens.
+///
+/// The joiner `@` is reserved in the [`GeneratorSyntax`] clause-2 alphabet, so a
+/// user token can never be spelled `mu@…` and the split on `@` cannot cut a
+/// `G`-token in two.
 ///
 /// # `mu`/`eta`/`delta`/`epsilon` are reserved *within* `FrobeniusOr`
 ///
@@ -933,24 +948,49 @@ where
 /// to clause 2 itself. Every other `G`-token round-trips unchanged (the four
 /// Frobenius names each contain no grammar metacharacter, so they satisfy
 /// clause 2).
-impl<G: GeneratorSyntax<Color = ()>> GeneratorSyntax for FrobeniusOr<G> {
+impl<G> GeneratorSyntax for FrobeniusOr<G>
+where
+    G: GeneratorSyntax,
+    G::Color: ColorSyntax + Ord,
+{
     fn print_token(&self) -> String {
         match self {
-            FrobeniusOr::Mu(()) => "mu".to_string(),
-            FrobeniusOr::Eta(()) => "eta".to_string(),
-            FrobeniusOr::Delta(()) => "delta".to_string(),
-            FrobeniusOr::Epsilon(()) => "epsilon".to_string(),
+            FrobeniusOr::Mu(c) => spider_token(KW_MU, c),
+            FrobeniusOr::Eta(c) => spider_token(KW_ETA, c),
+            FrobeniusOr::Delta(c) => spider_token(KW_DELTA, c),
+            FrobeniusOr::Epsilon(c) => spider_token(KW_EPSILON, c),
             FrobeniusOr::User(g) => g.print_token(),
         }
     }
 
     fn parse_token(token: &str) -> Option<Self> {
-        match token {
-            "mu" => Some(FrobeniusOr::Mu(())),
-            "eta" => Some(FrobeniusOr::Eta(())),
-            "delta" => Some(FrobeniusOr::Delta(())),
-            "epsilon" => Some(FrobeniusOr::Epsilon(())),
-            _ => G::parse_token(token).map(FrobeniusOr::User),
-        }
+        let (name, annotation) = match token.split_once(AT) {
+            Some((name, color)) => (name, Some(color)),
+            None => (token, None),
+        };
+        let spider: fn(G::Color) -> Self = match name {
+            KW_MU => FrobeniusOr::Mu,
+            KW_ETA => FrobeniusOr::Eta,
+            KW_DELTA => FrobeniusOr::Delta,
+            KW_EPSILON => FrobeniusOr::Epsilon,
+            // Not a spider name. The *whole* token goes to `G` — annotation
+            // included, so a clause-2-violating `@` in a user token cannot be
+            // silently trimmed away here.
+            _ => return G::parse_token(token).map(FrobeniusOr::User),
+        };
+        let color = match annotation {
+            Some(tok) => G::Color::parse_color(tok)?,
+            None => G::Color::implicit()?,
+        };
+        Some(spider(color))
+    }
+}
+
+/// A spider's token: the bare reserved `name` at the implicit sort, `name@c`
+/// once the colour has a token of its own.
+fn spider_token<C: ColorSyntax>(name: &str, color: &C) -> String {
+    match color.print_color() {
+        Some(tok) => format!("{name}{AT}{tok}"),
+        None => name.to_string(),
     }
 }

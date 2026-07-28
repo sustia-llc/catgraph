@@ -229,7 +229,7 @@ fn checked_rig_surfaces_overflow_as_poison() {
     // release-build wrap: 4e9 · 4e9 = 1.6e19 overflows i64 and a release build
     // returns a plausible negative. Under `Checked<i64>` the overflow becomes
     // `⊥` in the output vector, where the caller can see it.
-    let e = parse::<SfgGenerator<Checked<i64>>>("scalar:4000000000 ; scalar:4000000000")
+    let e = parse::<SfgGenerator<Checked<i64>>>("scalar_4000000000 ; scalar_4000000000")
         .expect("the scalar tokens parse under Checked<i64>'s FromStr");
     let out = eval(
         &e,
@@ -247,7 +247,7 @@ fn checked_rig_surfaces_overflow_as_poison() {
     // The same shape below the overflow boundary stays an ordinary value —
     // poison is the overflow signal, not a blanket pessimism.
     let small =
-        parse::<SfgGenerator<Checked<i64>>>("scalar:3 ; scalar:5").expect("small scalars parse");
+        parse::<SfgGenerator<Checked<i64>>>("scalar_3 ; scalar_5").expect("small scalars parse");
     assert_eq!(
         eval(
             &small,
@@ -260,11 +260,11 @@ fn checked_rig_surfaces_overflow_as_poison() {
 
 #[test]
 fn poisoned_scalar_token_round_trips() {
-    // `⊥` is a single lexical atom, so `scalar:⊥` satisfies the
+    // `⊥` is a single lexical atom, so `scalar_⊥` satisfies the
     // `GeneratorSyntax` token contract and survives print → parse.
     let term = g(SfgGenerator::Scalar(Checked::<i64>::Poison));
     let text = print(&term);
-    assert_eq!(text, "scalar:⊥");
+    assert_eq!(text, "scalar_⊥");
     assert_eq!(
         parse::<SfgGenerator<Checked<i64>>>(&text),
         Ok(term),
