@@ -15,6 +15,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
+- **SMC NF Step 6½ — zero-arity column transposition
+  (`reorder_zero_arity_columns`)**
+  ([#174](https://github.com/sustia-llc/catgraph/issues/174)): the move strictly
+  between Step 6 (adjacent *atoms*) and Step 7 (whole *components*). Over the
+  identity-split refinement, two adjacent **interval-aligned columns** transpose
+  when their block arities strictly commute at the interval's own boundaries —
+  `(src X = 0 ∨ src B = 0) ∧ (tgt X = 0 ∨ tgt B = 0)`, Step 6's criterion read at
+  column granularity. Direction is rule (i)'s plain `CompKey`, the same core
+  Step 7 reads, so the two *rewriting* passes cannot disagree with each other;
+  the guards are Step 7's (no braid-carrying or marked component, at least one
+  multi-atom), plus a carve leaving the closed↔closed tie to Step 7's reading
+  key. Termination adds `column_inversion_count` to the lexicographic measure,
+  between `block_inversion_count` and `tied_inversion_count`
+  (`docs/SMC-NF-RECONCILIATION.md` §2.4, §4.5). Steps 7 and 6½ now share one
+  identity-split refinement and one component analysis per fixpoint iteration
+  rather than building the same pair twice.
+
 - **Worded complete-functor surface: `ColoredCompleteFunctor` +
   `Presentation::eq_mod_functorial_colored`**
   ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3a):
@@ -143,6 +160,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   (979/1432/2017/2012) are **unmoved** — the d = 2 enumeration cannot express
   two distinct closed components, and no shipped signature has a `0→0`
   scalar. Residuals (a)/(c)/(d) unchanged (three `#[ignore]`d witnesses).
+
+  > **Superseded within this release by the #174 design round (2026-07-28):**
+  > `component_slot` is deleted, so "`component_slot` uses the same comparator"
+  > no longer applies — no free decision site reads the component order. The
+  > pins quoted here as unmoved were re-baselined to 980/1433/2018/2013 by the
+  > same round.
 - **SMC NF PR2: component-anchored η placement (rule (i)) + Step 7
   component-block reorder**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR2, design of
@@ -160,6 +183,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   narrower than the pre-PR2 gap); closed↔closed order is stable but `Ord`-less
   (residual). Both residuals tracked in
   [#174](https://github.com/sustia-llc/catgraph/issues/174).
+
+  > **Superseded within this release by the #174 design round (2026-07-28):**
+  > the slot derivation described here is **retired**. An `η`'s insertion slot is
+  > no longer derived from its component's boundary attachment — it is the
+  > leftmost slot its wire coordinate admits — because importing rule (i)'s
+  > coordinates into a free choice made the normal form writing-dependent
+  > (CE-R1). Guard 3 correspondingly no longer gates the sift, so the
+  > "interleaved output-only components are not sifted" clause no longer holds
+  > either; the guard survives in Steps 7 and 6½ only. What does survive from
+  > this entry: `reorder_component_blocks` (Step 7) and rule (i)'s class order
+  > as *its* comparator. The pins quoted in the sibling entries were
+  > re-baselined to 980/1433/2018/2013 by the same round.
 - **`smc_canonicality_probes` — the canonicality gate of record**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR2): new test
   module asserting SMC-equal pairs NF-equal **directly** (the diagnosis
@@ -211,6 +246,48 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed
 
+- **SMC NF residuals (c) and (d) closed**
+  ([#174](https://github.com/sustia-llc/catgraph/issues/174)) — the two nesting
+  residuals of `docs/SMC-NF-RECONCILIATION.md` §4.6, by two different means. A
+  **closed** block written strictly inside another component's wire span now
+  extracts to its free writing (residual (c)), and so does a nested **sink**
+  block solid on the side facing its encloser's opening — both by the Step 6½
+  column pass. The **source** form of (d), CE-A3, turned out *not* to be a column
+  residual at all: it was blocked by Step 6's tied comparator ranking components
+  ahead of the class order, and it converges once that branch is retired
+  (below). Ablating Step 6½ leaves CE-A3 converging and re-breaks the other five
+  column witnesses — the attribution is measured, not assumed. All three formerly
+  `#[ignore]`d witnesses in `tests/smc_nf_completeness.rs` are live regressions,
+  renamed to describe behaviour (`trapped_closed_block_extracts`,
+  `nested_sink_block_converges_with_free_writing`,
+  `nested_source_block_converges_with_free_writing`) per the residual-(b)
+  precedent.
+- **Free decision sites no longer read component order**
+  ([#174](https://github.com/sustia-llc/catgraph/issues/174)) — the design
+  round's central change. `component_slot` (the Step 4(c) `η` slot walk) is
+  **deleted**, and `tie_sorts_before`'s rule-(i) branch with it: the `η` sift
+  takes the leftmost slot its coordinate admits, and a tied adjacency is decided
+  by the Decision-1 class order and `G::cmp` alone. Rule (i)'s boundary
+  coordinates now live only in the two *rewriting* passes, Steps 7 and 6½, which
+  verify braid-freedom at the boundaries they span before moving anything.
+  Rationale: a free choice is not pinned by the diagram, so importing
+  writing-dependent coordinates into it makes the normal form
+  writing-dependent — witnessed by **CE-R1**, an SMC-equal pair inside `𝔉` that
+  the imported order separated. Guard 3 correspondingly stops gating the sift and
+  the tied comparator (it survives in Steps 7 and 6½): a marked component's `η`
+  now sifts, and marked-case divergences on the differential corpus fell 888 →
+  23. In-`𝔉` divergences fell 192 → 128 and total divergences 1311 → 253 over the
+  same 100 000-pair corpus.
+  CE-R1 and CE-R2 are committed as regression witnesses.
+- **Depth-2 collision pins re-baselined `+1` on every rig** — BoolRig 979 →
+  **980**, UnitInterval 1432 → **1433**, Tropical 2017 → **2018**, F64Rig 2012 →
+  **2013** (release, deterministic, exact two-sided pins). One new collision
+  pair, none lost, attributable to the tie-branch retirement rather than to the
+  column pass — the same act that closes CE-A3, so the collision and the closure
+  are inseparable. The witness pair and the full lineage are in the
+  `tests/graphical_linalg.rs` module docstring; must-sync sites updated
+  (`BASELINE_*_D2`, docstring table, per-test comments, FS18-AUDIT §15 + the Thm
+  5.60 row, `functor_bench` docs, applied README, both examples).
 - **Fragment claims corrected: two new NF residuals (four total)**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) /
   [#174](https://github.com/sustia-llc/catgraph/issues/174)). Residual (c),
@@ -232,6 +309,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   `nested_source_block_is_column_residual`). The depth-2 collision pins are
   unaffected (both traps need expression depth ≥ 3, structurally outside the
   d = 2 enumeration).
+
+  > **Superseded within this release by the #174 design round (2026-07-28):**
+  > residuals (c) and (d) are both closed — (c) and (d)'s sink form by the Step
+  > 6½ column pass, (d)'s source form by the free-site retirement — and the
+  > three witnesses named above are un-ignored and renamed
+  > (`trapped_closed_block_extracts`,
+  > `nested_sink_block_converges_with_free_writing`,
+  > `nested_source_block_converges_with_free_writing`). The framing "four
+  > residuals (total)" is also withdrawn: §4.6 is a ledger of *named* residuals,
+  > not a bound, and a differential sweep finds in-`𝔉` divergences outside all
+  > four letters on every build the project has shipped. The pins named here as
+  > unaffected did move `+1` — for the retirement, not for the column pass.
 
 ### Documentation
 

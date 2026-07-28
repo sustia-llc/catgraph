@@ -41,8 +41,10 @@
 //! soundness direction `nf(e) = nf(e′) ⇒ e =_SMC e′` on every diagram).
 //! The converse is **not** established: §4.4 records that the draft
 //! canonicality theorem was refuted on the fragment `𝔉` itself, and what
-//! survives is probe-verified rather than proven. So a `true` from
-//! `eq_colored` is sound; a `false` is not a proof of distinctness.
+//! survives is probe-verified rather than proven. (The refuting family
+//! converges since the #174 column pass, but the argument it broke has not
+//! been repaired.) So a `true` from `eq_colored` is sound; a `false` is not a
+//! proof of distinctness.
 //!
 //! # Equations
 //!
