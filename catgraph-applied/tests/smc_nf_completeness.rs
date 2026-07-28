@@ -1954,7 +1954,7 @@ mod smc_canonicality_probes {
     /// witnesses, the CHANGELOG said four).
     ///
     /// Each column-family pair runs through `nf` and through
-    /// `nf_without_column_pass` (the `internal-ablation` hook), pinning the
+    /// `nf_without_column_pass` (the `internal-probes` hook), pinning the
     /// split: five pairs converge **only** with the pass, two converge either
     /// way. The `assert_ne!` half is the load-bearing one — it fails the day the
     /// column pass stops mattering for a witness that is documented as needing

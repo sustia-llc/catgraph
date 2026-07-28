@@ -216,7 +216,7 @@ pub fn nf_without_column_pass<G: PropSignature>(expr: &PropExpr<G>) -> StringDia
 }
 
 /// The pipeline proper. `run_columns` is always `true` outside the
-/// `internal-ablation` hook above.
+/// `internal-probes` hook above.
 fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDiagram<G> {
     let mut sd = lower(expr);
     // Fixpoint loop, terminating by the lexicographic measure
