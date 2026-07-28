@@ -85,11 +85,69 @@ fn eq_mod_detects_smc_interchange() {
 
 #[test]
 fn arity_mismatch_on_add_equation_rejected() {
-    // A is 1→1; (A ⊗ A) is 2→2. Can't equate them.
+    // A is 1→1; (A ⊗ A) is 2→2. Can't equate them. Since #79 P2 the rejection
+    // comes from the boundary-word pass, so the error is the shared
+    // size-mismatch variant rather than `Presentation`: threading the single
+    // inferred source letter through `A ⊗ A` leaves the right factor with none.
     let mut pres = Presentation::<TestGen>::new();
     let a_tensor_a = Free::<TestGen>::tensor(g(TestGen::A), g(TestGen::A));
     let result = pres.add_equation(g(TestGen::A), a_tensor_a);
-    assert!(matches!(result, Err(CatgraphError::Presentation { .. })));
+    assert!(
+        matches!(
+            result,
+            Err(CatgraphError::CompositionSizeMismatch {
+                expected: 1,
+                actual: 0
+            })
+        ),
+        "expected a size mismatch, got {result:?}"
+    );
+}
+
+#[test]
+fn mono_equation_with_matching_words_still_accepted() {
+    // Regression: the ordinary mono path is untouched by P2. `A ; A` and `B`
+    // are both 1 → 1 and both well-composed.
+    let mut pres = Presentation::<TestGen>::new();
+    let a_semi_a = Free::<TestGen>::compose(g(TestGen::A), g(TestGen::A)).unwrap();
+    pres.add_equation(a_semi_a, g(TestGen::B))
+        .expect("1 → 1 on both sides");
+}
+
+#[test]
+fn ill_composed_tree_rejected_even_though_top_arities_match() {
+    // The P2 strengthening witness. `PropExpr`'s variants are public, so a tree
+    // can be assembled without going through `Free::compose`'s check:
+    // `Identity(1) ; (Identity(2) ; Identity(1))` reads 1 → 1 at the top
+    // (source from the outermost left, target from the innermost right), which
+    // the pre-P2 top-level-arity check accepted — but the inner `Identity(2)`
+    // is handed a one-letter word.
+    let ill = PropExpr::Compose(
+        Box::new(PropExpr::Identity(1)),
+        Box::new(PropExpr::Compose(
+            Box::new(PropExpr::Identity(2)),
+            Box::new(PropExpr::Identity(1)),
+        )),
+    );
+    assert_eq!(
+        ill.source(),
+        1,
+        "top-level arities are what the old check saw"
+    );
+    assert_eq!(ill.target(), 1);
+
+    let mut pres = Presentation::<TestGen>::new();
+    let result = pres.add_equation(ill, Free::<TestGen>::identity(1));
+    assert!(
+        matches!(
+            result,
+            Err(CatgraphError::CompositionSizeMismatch {
+                expected: 2,
+                actual: 1
+            })
+        ),
+        "expected the inner Identity(2) to reject a 1-letter word, got {result:?}"
+    );
 }
 
 #[test]

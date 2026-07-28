@@ -34,9 +34,10 @@ use crate::{
 ///
 /// # Errors
 ///
-/// Returns [`CatgraphError::Presentation`] if any equation construction fails
-/// (arity mismatch — should not happen with the hardcoded forms below, but
-/// surfaced in case of future maintenance bugs).
+/// Returns [`CatgraphError::CompositionSizeMismatch`] or
+/// [`CatgraphError::Composition`] if `add_equation`'s boundary-word check
+/// rejects an equation — should not happen with the hardcoded monochromatic
+/// forms below, but surfaced in case of future maintenance bugs.
 ///
 /// # Panics
 ///
@@ -208,7 +209,8 @@ pub struct FaithfulnessReport<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 
 /// # Errors
 ///
 /// Returns [`CatgraphError::Presentation`] or [`CatgraphError::SfgFunctor`] if
-/// normalization or `sfg_to_mat` fails on any enumerated expression.
+/// normalization or `sfg_to_mat` fails on any enumerated expression, and
+/// propagates [`matr_presentation`]'s errors from building the presentation.
 pub fn verify_sfg_to_mat_is_full_and_faithful<R>(
     size_bound: usize,
     rig_samples: &[R],
