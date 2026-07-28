@@ -263,7 +263,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   writing-dependent — witnessed by **CE-R1**, an SMC-equal pair inside `𝔉` that
   the imported order separated. Guard 3 correspondingly stops gating the sift and
   the tied comparator (it survives in Steps 7 and 6½): a marked component's `η`
-  now sifts, and marked-case divergences on the differential corpus fell 97%.
+  now sifts, and marked-case divergences on the differential corpus fell 888 →
+  23. In-`𝔉` divergences fell 192 → 128 and total divergences 1311 → 253 over the
+  same 100 000-pair corpus.
   CE-R1 and CE-R2 are committed as regression witnesses.
 - **Depth-2 collision pins re-baselined `+1` on every rig** — BoolRig 979 →
   **980**, UnitInterval 1432 → **1433**, Tropical 2017 → **2018**, F64Rig 2012 →

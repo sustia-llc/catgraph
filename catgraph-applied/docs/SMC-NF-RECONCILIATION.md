@@ -472,8 +472,8 @@ Its scope narrowed in the design round. It used to gate the `η` sift and Step
 6's comparator too; both of those are now coordinate-free and component-free, so
 a marked component's `η` sifts like any other and its tied adjacencies order by
 class. Only the two rewriting passes still consult the marking. Measured effect
-on the differential corpus: divergences on marked cases fell by 97%. What
-remains blocked — a marked component's block and column transpositions — is
+on the differential corpus: divergences on marked cases fell 888 → 23 (§4.6).
+What remains blocked — a marked component's block and column transpositions — is
 residual (a), witnessed by `marked_encloser_blocks_the_column_move`, whose guard
 is verified decisive by ablation.
 
@@ -1003,12 +1003,22 @@ has ever shipped, and it is withdrawn.
 
 The honest statement of what is verified: **the `smc_canonicality_probes` suite
 is the gate**, and it is a suite of named convergences, not a bound on
-divergence. For calibration on the same corpus and the same seed: the shipped
-configuration sits at 128 in-𝔉 divergences against main's 192; the
-`out_min`-clause configuration reached 17 but was rejected for intransitivity
-(≈37% of sampled diagrams admit a cyclic triple) plus the named CE-R1/CE-R2
-regressions; divergences on marked cases fell 97%. Residual (a) is improved and
-open.
+divergence.
+
+Calibration, same corpus and same seed (100 000 pairs), measured against the
+pre-#174 engine:
+
+| | pre-#174 | shipped | rejected `out_min` variant |
+|---|---:|---:|---:|
+| divergent pairs, total | 1311 | 253 | — |
+| …inside `𝔉` | 192 | 128 | 17 |
+| …on marked cases | 888 | 23 | — |
+| intransitive comparator triples | 0 | 0 | ≈37% of diagrams |
+
+The `out_min` variant reaches the lowest in-`𝔉` count and is still **rejected**:
+an intransitive comparator has no total order for §4.4 to build on, and it
+regresses the named CE-R1. Lower is not the objective — a comparator that is a
+function of the morphism is. Residual (a) is improved (888 → 23) and open.
 
 The lettered ledger:
 
