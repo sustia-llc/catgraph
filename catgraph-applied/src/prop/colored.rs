@@ -39,12 +39,12 @@
 //! Λ, so the word-level reading here inherits it) and **§4.3** (Lemma 4.2 —
 //! every pipeline rewrite preserves content, giving the *unconditional*
 //! soundness direction `nf(e) = nf(e′) ⇒ e =_SMC e′` on every diagram).
-//! The converse is **not** established: §4.4 records that the draft
-//! canonicality theorem was refuted on the fragment `𝔉` itself, and what
-//! survives is probe-verified rather than proven. (The refuting family
-//! converges since the #174 column pass, but the argument it broke has not
-//! been repaired.) So a `true` from `eq_colored` is sound; a `false` is not a
-//! proof of distinctness.
+//! The converse is established only on the fragment `𝔉′` — braid-free, every
+//! `η` placement-pinned (**§4.4** Theorem 4.5) — and open beyond it: §4.6's
+//! sweep still finds SMC-equal pairs with distinct NFs, all of them the `η`
+//! placement slack `𝔉′` excludes. So a `true` from `eq_colored` is sound
+//! everywhere; a `false` is a proof of distinctness only on `𝔉′`, and
+//! otherwise not a disproof.
 //!
 //! # Equations
 //!
@@ -448,7 +448,8 @@ impl<G: PropSignature> ColoredExpr<G> {
     /// SMC-quotient equality: equal boundary words **and** equal normal forms.
     ///
     /// Sound in the `true` direction unconditionally (§4.3 Lemma 4.2's
-    /// readback). A `false` is not a disproof — see the module docs on §4.4.
+    /// readback). A `false` is a disproof only on the fragment `𝔉′` (§4.4
+    /// Theorem 4.5); otherwise it is not — see the module docs.
     #[must_use]
     pub fn eq_colored(&self, other: &Self) -> bool {
         self.source_word == other.source_word

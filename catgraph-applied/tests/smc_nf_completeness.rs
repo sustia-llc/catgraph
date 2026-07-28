@@ -2184,3 +2184,144 @@ mod smc_canonicality_probes {
         }
     }
 }
+
+// ============================================================================
+// 5. η-placement-slack residual witnesses (issue #174 PR-B, 2026-07-28)
+// ============================================================================
+
+/// **Documented-divergence witnesses, not convergences.** These pin the one
+/// open mechanism the PR-B characterization found behind *every* differential-
+/// sweep divergence (253/253, 128 of them inside `𝔉`): an `η` whose consumer
+/// sits two or more layers below its earliest legal layer has several
+/// SMC-legal (layer, slot) positions, the point-span sift reads the *written*
+/// one, and no pass canonicalizes among them — `ι` in
+/// `docs/SMC-NF-RECONCILIATION.md` §4.4 (Lemma 4.4 / Theorem 4.5). Each test
+/// asserts the CURRENT divergent behaviour so any engine change that moves it
+/// is caught; if `ι` is ever canonicalized these flip to convergence
+/// witnesses and are renamed, per the residual-(b)/(c)/(d) precedent.
+mod eta_slack_residual {
+    use super::*;
+    use catgraph_applied::rig::BoolRig;
+    use catgraph_applied::sfg::SfgGenerator;
+
+    type Sfg = SfgGenerator<BoolRig>;
+
+    fn prim(x: Sfg) -> PropExpr<Sfg> {
+        PropExpr::Generator(x)
+    }
+    fn seq(a: PropExpr<Sfg>, b: PropExpr<Sfg>) -> PropExpr<Sfg> {
+        PropExpr::Compose(Box::new(a), Box::new(b))
+    }
+    fn par(a: PropExpr<Sfg>, b: PropExpr<Sfg>) -> PropExpr<Sfg> {
+        PropExpr::Tensor(Box::new(a), Box::new(b))
+    }
+
+    /// `(Copy ; (id₁ ⊗ !)) ⊗ η` — the η is written beside the `Copy` span and
+    /// escapes to layer 0.
+    fn free_writing() -> PropExpr<Sfg> {
+        par(
+            seq(
+                prim(SfgGenerator::Copy),
+                par(PropExpr::Identity(1), prim(SfgGenerator::Discard)),
+            ),
+            prim(SfgGenerator::Zero),
+        )
+    }
+    /// `Copy ; (id₁ ⊗ η ⊗ !)` — the same content with the η written strictly
+    /// inside `Copy`'s output span: `point_placement` blocks the sift and the
+    /// η stays one layer down.
+    fn blocked_writing() -> PropExpr<Sfg> {
+        seq(
+            prim(SfgGenerator::Copy),
+            par(
+                par(PropExpr::Identity(1), prim(SfgGenerator::Zero)),
+                prim(SfgGenerator::Discard),
+            ),
+        )
+    }
+    /// `Copy ; (id₁ ⊗ ! ⊗ η)` — one §2.5 strict commutation away from
+    /// `blocked_writing`; the η's coordinate lands on an atom boundary, the
+    /// sift fires, and it converges with `free_writing`.
+    fn mirror_writing() -> PropExpr<Sfg> {
+        seq(
+            prim(SfgGenerator::Copy),
+            par(
+                par(PropExpr::Identity(1), prim(SfgGenerator::Discard)),
+                prim(SfgGenerator::Zero),
+            ),
+        )
+    }
+
+    /// The rigidity-on-`𝔉` withdrawal witness (§4.4): three generators, same
+    /// content, both writings `nf` fixpoints — different normal forms.
+    #[test]
+    fn eta_layer_slack_separates_smc_equal_writings() {
+        let p = nf(&free_writing());
+        let q = nf(&blocked_writing());
+        assert_ne!(
+            p, q,
+            "η placement slack has been canonicalized — rename these witnesses \
+             per the residual-(b)/(c)/(d) precedent and update docs §4.4/§4.6"
+        );
+        // Both sides are genuine fixpoints (idempotence via readback).
+        assert_eq!(nf(&from_string_diagram(&p)), p);
+        assert_eq!(nf(&from_string_diagram(&q)), q);
+    }
+
+    /// The mirror writing — one strict commutation from the blocked one —
+    /// converges with the free writing, pinning the mechanism to the written
+    /// slot rather than to the tensor shape.
+    #[test]
+    fn eta_slack_mirror_writing_converges() {
+        assert_eq!(nf(&mirror_writing()), nf(&free_writing()));
+    }
+
+    /// Two writings differing by exactly one §2.5 strict commutation reach
+    /// different fixpoints: the sift runs before Step 6 and reads the written
+    /// slot, so the very relation Step 6 canonicalizes decides the layer.
+    /// This is the Step 4(c) ↔ Step 6 interaction named in §4.4 — the one
+    /// that produces divergences (unlike the both-readings order fights,
+    /// which cancel).
+    #[test]
+    fn single_strict_commutation_separates_fixpoints() {
+        assert_ne!(nf(&blocked_writing()), nf(&mirror_writing()));
+    }
+
+    /// Both sides of the slack pair sit inside `𝔉` — unmarked, no closed
+    /// component — which is what makes the divergence a canonicality gap on
+    /// `𝔉` rather than residual (a) or (c).
+    #[cfg(feature = "internal-probes")]
+    #[test]
+    fn eta_slack_pair_is_inside_the_fragment() {
+        use catgraph_applied::prop::presentation::smc_nf::fragment_status;
+        assert!(fragment_status(&nf(&free_writing())).in_fragment());
+        assert!(fragment_status(&nf(&blocked_writing())).in_fragment());
+    }
+
+    /// `(id₁ ⊗ ! ⊗ id₁) ; σ_{1,1}` is content-clear — its three content
+    /// components each own a single run on each boundary (the braid is not a
+    /// content hyperedge; BGKSZ interpret it as a discrete cospan with a
+    /// permuted anchor) — yet guard 3 marks it: `mark_interleaved` runs over
+    /// the *diagram* partition, and the braid atom joins the components of
+    /// both its wires into one, whose input coordinates straddle the
+    /// `Discard`. This pins the §4.4 narrowing "marking is content-level on
+    /// braid-free diagrams only" (Lemma 4.3's converse failure case).
+    #[cfg(feature = "internal-probes")]
+    #[test]
+    fn braid_coarsening_marks_content_clear_diagram() {
+        use catgraph_applied::prop::presentation::smc_nf::fragment_status;
+        let e = seq(
+            par(
+                par(PropExpr::Identity(1), prim(SfgGenerator::Discard)),
+                PropExpr::Identity(1),
+            ),
+            PropExpr::Braid(1, 1),
+        );
+        let status = fragment_status(&nf(&e));
+        assert!(
+            status.any_marked,
+            "the braid no longer coarsens the marking"
+        );
+        assert!(!status.any_closed);
+    }
+}

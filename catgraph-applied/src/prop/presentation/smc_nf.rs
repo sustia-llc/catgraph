@@ -6,10 +6,13 @@
 //! **Joyal-Street string-diagram normal form**: a total function
 //! [`PropExpr`] → [`StringDiagram`] aiming at "SMC-equal iff NF-equal". The
 //! ⇐ direction holds unconditionally (every rewrite is SMC-sound); the ⇒
-//! direction is **not proven, and not bounded**: the `smc_canonicality_probes`
-//! suite verifies a named set of convergences, while a differential sweep still
-//! finds SMC-equal pairs inside the fragment `𝔉` whose normal forms differ
-//! (`docs/SMC-NF-RECONCILIATION.md` §4.6's ledger and §4.4's status; residual
+//! direction is **proven on the fragment `𝔉′`** — braid-free, every `η`
+//! placement-pinned (Theorem 4.5, `docs/SMC-NF-RECONCILIATION.md` §4.4) —
+//! and open beyond it, where it is not bounded either: the
+//! `smc_canonicality_probes` suite verifies a named set of convergences,
+//! while a differential sweep still finds SMC-equal pairs inside the larger
+//! fragment `𝔉` whose normal forms differ — all of them `η` placement slack,
+//! the freedom `𝔉′` excludes (§4.6's ledger and §4.4's status; residual
 //! scope on [`nf`]). Of the four *named* residuals, three are closed: the
 //! closed↔closed equal-key case in #79 P1 with the in-situ reading key (see the
 //! private `component_reading` helper), the trapped nesting and the sink form
@@ -123,7 +126,15 @@ pub enum Atom<G: PropSignature> {
 ///   equal-key (closed↔closed) pair is declined, not decided.
 ///
 /// Both transposition clauses are conditional on those guards, so a marked or
-/// braid-carrying component ordered "wrongly" is not an invariant breach.
+/// braid-carrying component ordered "wrongly" is not an invariant breach. And
+/// both **except *both-readings adjacencies*** (restated 2026-07-28): where the
+/// contested run boundary is an adjacency of strictly-commuting atoms from the
+/// two components — so Step 6 also claims the pair — the Step 6 class order
+/// wins and the two component-order clauses do not apply. Step 6 runs last in
+/// the fixpoint loop and is idempotent, so every fixpoint is Step-6-sorted;
+/// without the exception the clause set is jointly unsatisfiable on some
+/// contents (witnesses: `tests/pass_disjointness_probes.rs`; disposition:
+/// `docs/SMC-NF-RECONCILIATION.md` §4.4 "pass disjointness").
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct StringDiagram<G: PropSignature> {
     pub layers: Vec<Layer<G>>,
@@ -142,17 +153,22 @@ pub struct StringDiagram<G: PropSignature> {
 /// and `b` are SMC-equal (equal in the free symmetric monoidal category on
 /// `G`) — holds unconditionally, since `nf` applies only SMC-sound rewrites.
 /// The *canonicality* direction — SMC-equal expressions get equal NFs — is
-/// probe-verified on the fragment 𝔉, not proven (docs §4.4).
+/// proven on the fragment 𝔉′ (braid-free, every `η` placement-pinned —
+/// Theorem 4.5, docs §4.4), probe-verified on the named families beyond it,
+/// and open in general: the remaining freedom is `η` placement slack (docs
+/// §4.4, §4.6).
 ///
 /// Known exception (issue #55): both halves of the former zero-arity gap are
-/// closed — **probe-verified, not proven** — on the fragment 𝔉
-/// (`docs/SMC-NF-RECONCILIATION.md` §4.1: every connected component clear of
-/// guard 3's marking *and* touching a boundary; the closed-component exclusion
-/// was added 2026-07-27 for the trapped-nesting residual, and the draft §4
-/// proof was refuted the same day by a residual *inside* 𝔉. Both of those are
-/// closed behaviourally as of #174 — the trapped nesting by the Step 6½ column
-/// pass, the refuting family's source form by the free-site retirement — but
-/// the proof gap the refutation opened stays open; see the §4.4 status).
+/// closed — probe-verified on the fragment 𝔉, **proven on the smaller `𝔉′`**
+/// (`docs/SMC-NF-RECONCILIATION.md` §4.1 for 𝔉 — every connected component
+/// clear of guard 3's marking *and* touching a boundary; §4.4 Theorem 4.5 for
+/// `𝔉′`. The closed-component exclusion was added 2026-07-27 for the
+/// trapped-nesting residual, and the draft §4 proof was refuted the same day
+/// by a residual *inside* 𝔉. Both of those are closed behaviourally as of
+/// #174 — the trapped nesting by the Step 6½ column pass, the refuting
+/// family's source form by the free-site retirement. The remaining open
+/// freedom is `η` placement slack — the `𝔉′` hypothesis, witnessed live by
+/// `eta_slack_residual` in `tests/smc_nf_completeness.rs`).
 /// - **Within-layer order** — Step 6 (`reorder_tied_zero_arity`, PR1) puts every
 ///   tied run in canonical order, so `nf(ε ⊗ η) == nf(η ⊗ ε)`.
 /// - **Layer assignment** — a zero-source generator (`source == 0`, e.g.
@@ -271,10 +287,15 @@ fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDi
     //   cannot change under any pass and the count is well-defined without an
     //   invariance argument. Step 6 is within-layer only — it moves no atom
     //   between layers and rewrites no atom — so every earlier component is
-    //   untouched, block_inversion_count and column_inversion_count included:
-    //   a tied swap changes the relative order of exactly the pair it swaps, and
-    //   both of those counts either exclude that pair (single∥single, marked,
-    //   braid-carrying, or equal-key) or already order it the same way.
+    //   untouched. block_inversion_count and column_inversion_count are NOT
+    //   invariant under it in general: at a both-readings adjacency (docs §4.4)
+    //   a tied swap moves a counted pair against the component order —
+    //   witnessed, tests/pass_disjointness_probes.rs — the rewriting pass moves
+    //   it back, and the loop exits on exact cancellation via the whole-pass
+    //   `sd == prev` check, landing on the Step-6-sorted layout the restated
+    //   invariant clauses ratify. The measure is the termination proof
+    //   everywhere else; completing it at these adjacencies is tracked on
+    //   issue #174 (docs §2.4).
     //
     // Three steps can *raise* a later component while strictly shrinking an
     // earlier one, so the tuple still drops lexicographically and the later
@@ -2346,12 +2367,18 @@ struct ColumnSwap {
 /// [`component_key_order`] — the same core Step 7 reads, so the two *rewriting*
 /// passes cannot disagree with each other. Step 6 is not in that statement: it
 /// orders a tied adjacency by the atoms' own class, an unrelated criterion, and
-/// nothing proves the two families never prescribe conflicting layouts. That is
-/// the pass-disjointness obligation recorded in
-/// `docs/SMC-NF-RECONCILIATION.md` §4.4. The pass declines the one tie that order admits (two
+/// the two families **do** prescribe conflicting layouts at *both-readings
+/// adjacencies* — settled 2026-07-28, witnesses in
+/// `tests/pass_disjointness_probes.rs`, including a shipped-generator conflict
+/// with this very pass at distinct keys. The ratified resolution is a carve,
+/// not a lemma: the class order wins there (Step 6 runs last and every
+/// fixpoint is Step-6-sorted), and the `StringDiagram` invariant clauses
+/// except those adjacencies — `docs/SMC-NF-RECONCILIATION.md` §4.4 "pass
+/// disjointness". The pass declines the one tie that order admits (two
 /// *closed* components): closed↔closed order is Step 7's whole-block reading key
-/// (#79 P1), and leaving the tie there keeps Step 6's class-order fallback from
-/// fighting this pass over the same adjacency.
+/// (#79 P1). Note what the decline does **not** buy: Step 7 decides by reading
+/// key exactly the tie this pass declines, so the decline is a
+/// single-ownership rule for closed↔closed order, not a Step-6 firewall.
 ///
 /// # Guards
 ///
@@ -2550,9 +2577,10 @@ fn find_column_transposition<G: PropSignature>(
             let (c1, c2) = (row[p], row[p + 1]);
             // `!= Less` also declines `Equal` — two closed components — which is
             // the tie carve: closed↔closed order belongs to Step 7's whole-block
-            // reading key, and leaving it there is what keeps Step 6's
-            // class-order fallback from undoing this pass over the same
-            // adjacency.
+            // reading key. (It is single-ownership of that tie, not a Step-6
+            // firewall — this pass can still meet Step 6 at distinct keys; the
+            // both-readings carve in the invariant list is what resolves that.
+            // See the type-level docs and docs §4.4.)
             if !column_pair_is_admissible(comps, has_braid, c1, c2)
                 || component_key_order(comps, c2, c1) != Ordering::Less
             {
