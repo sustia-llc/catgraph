@@ -942,7 +942,7 @@ where
 /// / `epsilon` is **shadowed** inside `FrobeniusOr<G>`: its printed token
 /// reparses to the Frobenius generator, not `User(g)`, breaking the trait's
 /// clause-1 round-trip for that `G`. Treat these four names the way the grammar
-/// treats `id` / `braid` (clause 2's reserved keywords): a signature intended to
+/// treats `id` / `braid` / `->` (clause 2's reserved words): a signature intended to
 /// be wrapped in `FrobeniusOr` must not use them as generator tokens. This is an
 /// impl-level restriction on top of the trait's clause-2 alphabet, not a change
 /// to clause 2 itself. Every other `G`-token round-trips unchanged (the four

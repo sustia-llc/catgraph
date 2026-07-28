@@ -21,7 +21,7 @@ later phase.
 | `arrow_seam` (haft re-exports) | — | #12 single-seam precedent (catgraph-dl `src/endofunctor.rs`); {`Arrow`,`Compose`,`Split`,`Id`,`Lift`} consumed by S5 `Traced`; {`arrow`,`ArrowBuilder`,`First`,`Second`,`Fanout`} reserved surface | live re-export (S1); {consumed, reserved} split (S5) |
 | `text::parse::parse` (parser) | Seven Sketches | Def 5.30 (concrete syntax of a `G`-generated prop expression, parsed) | live (S2) |
 | `text::presentation::{print_presentation, parse_presentation}` | Seven Sketches + Hypergraph Categories | Def 5.33 (presentation = boundary-matched equation pairs — *words* since #79 P2); the declaration line `g : A B -> C` writes the generator's Def 3.9 source/target words, checked against `G` | live (S2); declarations since #79 P3b |
-| `sfg_syntax` (`GeneratorSyntax for SfgGenerator<R>`) | Seven Sketches | Def 5.45 / Eq 5.52 (the `G_R` demo signature's token scheme) | live (S2) |
+| `sfg_syntax` (`GeneratorSyntax for SfgGenerator<R>`) | Seven Sketches | Def 5.45 / Eq 5.52 (the `G_R` demo signature's token scheme) | live (S2); scalar token `scalar_<r>` since #79 P3b |
 | `eval::ArrowModel` | Seven Sketches | Def 5.25 (a semantics = the generator action extended along the free prop) | live (S3) |
 | `eval::eval` | Seven Sketches | Def 5.25 (executable term-action); Thm 5.53 / 5.60 (agrees with the Mat(R) functor); Def 5.50 / Remark 5.49 (row-vector convention — basis row `i` = matrix row `i`) | live (S3) |
 | `eval::SfgModel` | Seven Sketches | Def 5.45 / Eq 5.52 (R-linear Σ_SFG action); Thm 5.53 (matches `S : SFG_R → Mat(R)`) | live (S3) |

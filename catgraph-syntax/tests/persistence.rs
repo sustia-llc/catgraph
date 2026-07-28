@@ -50,7 +50,7 @@ use catgraph_syntax::eval::eval;
 use catgraph_syntax::text::{parse, parse_presentation, print, print_presentation};
 use common::{Sig, g, sfg_model};
 
-/// Two arity-valid equations over the demo [`Sig`] (the `presentation.rs`
+/// Two boundary-word-valid equations over the demo [`Sig`] (the `presentation.rs`
 /// fixture shape): `copy ; add = id(1)` (both `1 → 1`) and
 /// `braid(1,1) = id(2)` (both `2 → 2`).
 ///

@@ -73,7 +73,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   the poisoned cone); associativity, commutativity and both distributive laws
   survive, so `verify_rig_axioms` passes on unpoisoned samples and fails with
   precisely `"absorbing zero"` on a poisoned one. `Display`/`FromStr` render
-  and read `⊥` as a single lexical atom, keeping `scalar:⊥` a valid
+  and read `⊥` as a single lexical atom, keeping `scalar_⊥` a valid
   catgraph-syntax token. No serde derives (rig types deliberately carry none;
   the [#81](https://github.com/sustia-llc/catgraph/issues/81) serde surface is
   the term layer only).

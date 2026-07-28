@@ -555,7 +555,7 @@ impl_checked_ops_for_primitive_int!(
 ///
 /// [`Display`](std::fmt::Display) renders `Poison` as the single character `⊥`
 /// and [`FromStr`](std::str::FromStr) reads it back, so a `Checked<i64>` can be
-/// a `SfgGenerator::Scalar` payload in catgraph-syntax's `scalar:<r>` token
+/// a `SfgGenerator::Scalar` payload in catgraph-syntax's `scalar_<r>` token
 /// (which must stay one whitespace- and paren-free lexical atom).
 ///
 /// [`is_poisoned`]: Checked::is_poisoned
@@ -671,7 +671,7 @@ impl<T: CheckedOps + One> One for Checked<T> {
 }
 
 /// The single-character lexeme for [`Checked::Poison`]. Kept paren-, space-
-/// and metacharacter-free so `scalar:⊥` stays one lexical atom under
+/// and metacharacter-free so `scalar_⊥` stays one lexical atom under
 /// catgraph-syntax's `GeneratorSyntax` token contract.
 const POISON_TOKEN: &str = "⊥";
 
