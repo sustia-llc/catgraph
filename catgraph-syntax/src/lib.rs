@@ -32,12 +32,12 @@
 //! Def 2.5's SCFM, Prop 3.8, Thm 3.14).
 //! Anchor-to-item map: [`docs/ANCHORS.md`](https://github.com/sustia-llc/catgraph/blob/main/catgraph-syntax/docs/ANCHORS.md).
 //!
-//! ## Two standing disclaimers
+//! ## The standing disclaimer
 //!
-//! These bound what this crate does — and, deliberately, does *not* — decide.
-//! They are restated at each point of use.
+//! This bounds what the crate does — and, deliberately, does *not* — decide.
+//! It is restated at each point of use.
 //!
-//! ### 1. The [#15](https://github.com/sustia-llc/catgraph/issues/15) completeness boundary
+//! ### The [#15](https://github.com/sustia-llc/catgraph/issues/15) completeness boundary
 //!
 //! Applied's congruence-closure decision
 //! ([`Presentation::eq_mod`](catgraph_applied::prop::presentation::Presentation::eq_mod))
@@ -54,21 +54,19 @@
 //! (Seven Sketches Thm 5.60). Nothing in `catgraph-syntax` promotes an
 //! incomplete `None` into a decision.
 //!
-//! ### 2. The monochromatic *textual* scope
+//! ## Λ-colored, end to end
 //!
-//! The [`frobenius`] layer's calculus is **Λ-colored** since
-//! [#79](https://github.com/sustia-llc/catgraph/issues/79) P3a: the four spider
-//! variants carry their colour, [`FrobeniusOr`](frobenius::FrobeniusOr) is
-//! colour-transparent, and both interpreters
-//! ([`to_mat_kron`](frobenius::to_mat_kron),
+//! Since [#79](https://github.com/sustia-llc/catgraph/issues/79) the crate is
+//! colored at every layer. The [`frobenius`] calculus carries a colour on each
+//! spider variant, [`FrobeniusOr`](frobenius::FrobeniusOr) is colour-transparent,
+//! and both interpreters ([`to_mat_kron`](frobenius::to_mat_kron),
 //! [`to_cospan`](cospan_functor::to_cospan)) thread an interface word top-down,
-//! realising F&S 2019 Thm 3.14's colored `Cospan_Λ`.
-//!
-//! The **textual** surface is not there yet. [`GeneratorSyntax`](text::GeneratorSyntax)
-//! for `FrobeniusOr<G>` is gated to `Color = ()` and prints bare
-//! `mu`/`eta`/`delta`/`epsilon`; the colour-annotated token grammar (`mu@A`, plus
-//! generator declarations carrying the palette) is #79's **P3b**. So colored
-//! *terms* round-trip through the engine, and colored *files* do not yet exist.
+//! realising F&S 2019 Thm 3.14's colored `Cospan_Λ` (P3a). The textual surface
+//! followed in P3b: a palette implementing
+//! [`ColorSyntax`](text::ColorSyntax) gives its letters tokens, spiders print and
+//! parse as `mu@A`, and presentation files carry generator declarations
+//! `g : A B -> C`. A monochromatic signature is the palette whose single letter
+//! is *implicit*, so its terms and files are byte-for-byte the pre-#79 ones.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

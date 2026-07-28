@@ -14,6 +14,11 @@
 //! ([`arb_expr`] plus the per-signature leaf/generator strategies) shared by
 //! the parser round-trip tests.
 //!
+//! \#79 additions: the Λ-colored [`Hue`] / [`ColoredSig`] pair (P3a), given
+//! token forms in P3b so the textual round-trip runs over a genuinely colored
+//! signature; and [`ColonSig`], the P3b clause-2 violator over the newly
+//! reserved `:`.
+//!
 //! `#![allow(dead_code)]`: each integration-test binary `mod common;`-includes
 //! this whole module but uses only the parts it needs, so the unused items are
 //! expected per compilation unit.
@@ -24,7 +29,7 @@ use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
 use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::eval::SfgModel;
 use catgraph_syntax::frobenius::FrobeniusOr;
-use catgraph_syntax::text::GeneratorSyntax;
+use catgraph_syntax::text::{ColorSyntax, GeneratorSyntax};
 use proptest::prelude::*;
 use std::borrow::Cow;
 
@@ -135,6 +140,43 @@ impl GeneratorSyntax for BadSig {
 
     fn parse_token(token: &str) -> Option<Self> {
         (token == "bad token").then_some(BadSig)
+    }
+}
+
+/// A clause-2 violator over the character [#79](https://github.com/sustia-llc/catgraph/issues/79)
+/// P3b reserved: `:`, the presentation-file declaration separator, is a lexer
+/// delimiter, so the token `pre:post` re-lexes as three atoms. The P3b analogue
+/// of [`BadSig`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ColonSig;
+
+impl PropSignature for ColonSig {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
+
+    fn source(&self) -> usize {
+        1
+    }
+
+    fn target(&self) -> usize {
+        1
+    }
+}
+
+impl GeneratorSyntax for ColonSig {
+    fn print_token(&self) -> String {
+        "pre:post".to_string()
+    }
+
+    fn parse_token(token: &str) -> Option<Self> {
+        (token == "pre:post").then_some(ColonSig)
     }
 }
 
@@ -311,7 +353,7 @@ pub fn arb_sfg_gen_with(
 }
 
 /// Strategy over bare `SfgGenerator<i64>` generators (clause-1 round-trip);
-/// `Scalar` ranges over all `i64`, exercising the `scalar:<r>` token fidelity.
+/// `Scalar` ranges over all `i64`, exercising the `scalar_<r>` token fidelity.
 pub fn arb_sfg_gen() -> impl Strategy<Value = SfgGenerator<i64>> {
     arb_sfg_gen_with(any::<i64>())
 }
@@ -385,6 +427,33 @@ pub fn hue_dim(c: &Hue) -> usize {
     }
 }
 
+/// Token forms `A` / `B`. Neither letter is implicit, so under this palette
+/// every spider prints annotated (`mu@A`) and a bare `mu` is a parse error —
+/// the P3b case a monochromatic signature cannot exercise.
+impl ColorSyntax for Hue {
+    fn print_color(&self) -> Option<String> {
+        Some(
+            match self {
+                Hue::A => "A",
+                Hue::B => "B",
+            }
+            .to_string(),
+        )
+    }
+
+    fn parse_color(token: &str) -> Option<Self> {
+        match token {
+            "A" => Some(Hue::A),
+            "B" => Some(Hue::B),
+            _ => None,
+        }
+    }
+
+    fn implicit() -> Option<Self> {
+        None
+    }
+}
+
 /// A two-colour user signature over [`Hue`]: `swap : A B → B A`, the smallest
 /// generator that is colour-sensitive (its arities are symmetric, so only the
 /// *words* distinguish a correct threading from a wrong one).
@@ -405,6 +474,35 @@ impl PropSignature for ColoredSig {
     fn target_word(&self) -> Cow<'_, [Hue]> {
         Cow::Owned(vec![Hue::B, Hue::A])
     }
+}
+
+impl GeneratorSyntax for ColoredSig {
+    fn print_token(&self) -> String {
+        "swap".to_string()
+    }
+
+    fn parse_token(token: &str) -> Option<Self> {
+        (token == "swap").then_some(ColoredSig::Swap)
+    }
+}
+
+/// Strategy over bare [`FrobeniusOr<ColoredSig>`] generators: each spider at
+/// each palette colour, plus the user `swap`. Every value prints annotated, so
+/// the whole-expression round-trip exercises the `mu@A` token form.
+pub fn arb_colored_frob_gen() -> impl Strategy<Value = FrobeniusOr<ColoredSig>> {
+    prop_oneof![
+        prop_oneof![Just(Hue::A), Just(Hue::B)].prop_map(FrobeniusOr::Mu),
+        prop_oneof![Just(Hue::A), Just(Hue::B)].prop_map(FrobeniusOr::Eta),
+        prop_oneof![Just(Hue::A), Just(Hue::B)].prop_map(FrobeniusOr::Delta),
+        prop_oneof![Just(Hue::A), Just(Hue::B)].prop_map(FrobeniusOr::Epsilon),
+        Just(FrobeniusOr::User(ColoredSig::Swap)),
+    ]
+}
+
+/// Leaf strategy over [`FrobeniusOr<ColoredSig>`], reusing the shared
+/// [`arb_leaf_from`] shape.
+pub fn arb_colored_frob_leaf() -> impl Strategy<Value = PropExpr<FrobeniusOr<ColoredSig>>> {
+    arb_leaf_from(arb_colored_frob_gen())
 }
 
 /// A length-`len` standard basis **row** vector over `i64`: `1` at index `i`,

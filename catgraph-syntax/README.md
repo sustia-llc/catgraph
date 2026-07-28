@@ -54,8 +54,13 @@ deeper (a right-fold of more than `MAX_NESTING_DEPTH` compositions prints one
 paren per level) is rejected on reparse, so print-then-parse pipelines should
 left-fold machine-built chains or treat the bound as a format limit.
 
-Presentation files (Def 5.33) are one `lhs = rhs` equation per line:
-`print_presentation` / `parse_presentation`.
+Presentation files (Def 5.33) are line-oriented: `print_presentation` /
+`parse_presentation`. A line with `=` is an equation `lhs = rhs`; a line with
+`:` and no `=` is a generator **declaration** `TOKEN : COLOR* -> COLOR*`
+(#79 P3b). Declarations *check* the file against the signature it is read at —
+the token must name a generator of `G` and the two words must equal that
+generator's own — and are emitted only when the signature has a colour to show,
+so a monochromatic file has none and stays byte-for-byte what it was.
 
 ### Interpreter (S3)
 
@@ -101,6 +106,14 @@ one family **per wire colour** (`Mu(c)` `[c,c]→[c]`, `Eta(c)` `[]→[c]`,
 presentation, `eq_mod`, parser/printer, `eval`) with no new AST. This presents
 the free hypergraph category on the palette `Λ` (F&S 2019 Def 2.12 / Lemma 3.10);
 `Color = ()` recovers the single-sorted `Λ = {•}` case.
+
+- **Colored text.** A palette implementing `ColorSyntax` gives its letters
+  tokens, and spiders print/parse annotated: `mu@A`, `eta@A`, `delta@A`,
+  `epsilon@A`. The one letter a palette may leave **implicit** carries no
+  annotation (bare `mu`) and writes as `•` where a declaration word must fill
+  the position — `()` is exactly that palette, which is why single-sorted files
+  are unchanged. `@` is reserved in the `GeneratorSyntax` token alphabet so no
+  user token can collide with a colored spider.
 
 - **Spiders.** `spider(c, m, n)` collapses `m` legs to one wire via a μ-comb then
   expands to `n` via a δ-comb, all at colour `c` (`spider(c,0,0) = η;ε`;
@@ -171,24 +184,15 @@ automatically a `Wires` bundle.
   (haft `Arrow` has no Frobenius structure). The `traced` module docs are the
   canonical statement of each rejection.
 
-## Two standing disclaimers
+## The standing disclaimer
 
-1. **The [#15](https://github.com/sustia-llc/catgraph/issues/15) completeness
-   boundary.** Applied's congruence-closure decision (`Presentation::eq_mod`)
-   is sound but syntactically incomplete by design — a non-`Some(true)` result
-   is *not* a disproof. Complete decisions come only through the functorial
-   route (`eq_mod_functorial` + a `CompleteFunctor`), which today means Mat(R)
-   (`MatrixNFFunctor`, Seven Sketches Thm 5.60). Nothing here promotes an
-   incomplete `None` into a decision.
-
-2. **Monochromatic *textual* scope.** The Frobenius layer's calculus is
-   Λ-colored (#79 P3a): spiders carry their colour, and both interpreters
-   (`to_mat_kron`, `to_cospan`) thread an interface word. The **textual** surface
-   is not: `GeneratorSyntax for FrobeniusOr<G>` is still gated to `Color = ()`
-   and prints bare `mu`/`eta`/`delta`/`epsilon`, because the colour-annotated
-   token grammar (`mu@A`, generator declarations) is #79's **P3b**. Colored
-   *terms* are fully supported; colored *files* are not yet
-   ([#79](https://github.com/sustia-llc/catgraph/issues/79)).
+**The [#15](https://github.com/sustia-llc/catgraph/issues/15) completeness
+boundary.** Applied's congruence-closure decision (`Presentation::eq_mod`)
+is sound but syntactically incomplete by design — a non-`Some(true)` result
+is *not* a disproof. Complete decisions come only through the functorial
+route (`eq_mod_functorial` + a `CompleteFunctor`), which today means Mat(R)
+(`MatrixNFFunctor`, Seven Sketches Thm 5.60). Nothing here promotes an
+incomplete `None` into a decision.
 
 ## haft seam
 

@@ -29,7 +29,7 @@ structures whose invariants it then measures — so there is deliberately no
 magnitude example here. Authoring is the syntax layer's job; measuring is
 magnitude's, and the two do not meet at the term level.
 
-## Two standing disclaimers (leaned on by `frobenius_wiring.rs`)
+## Standing caveats (leaned on by `frobenius_wiring.rs`)
 
 - **#15 — soundness, not completeness.** `Presentation::eq_mod` returning
   `Ok(Some(true))` is a *proof* of equality; `None` / `Ok(Some(false))` is **not**
@@ -37,7 +37,8 @@ magnitude's, and the two do not meet at the term level.
   Complete decisions come only via `eq_mod_functorial` + `MatrixNFFunctor`
   (Thm 5.60). Any example asserting an equality through `eq_mod` relies only on
   the `Some(true)` direction.
-- **Monochromatic S4 scope.** The Frobenius layer is single-colour (`Λ = {•}`,
-  one spider family). `to_mat_kron` is a *sound semantic checker* (Prop 3.8), not
-  a `CompleteFunctor`, and `User(g)` leaves are outside its domain
-  (`NonFrobenius`). Fully colored props are tracked as #79.
+- **`to_mat_kron` is a checker, not a decision.** It is a *sound semantic
+  checker* (Prop 3.8), not a `CompleteFunctor`, and `User(g)` leaves are outside
+  its domain (`NonFrobenius`). The examples here stay single-colour
+  (`Λ = {•}`) for readability; the layer itself is Λ-colored end to end since
+  #79, in the calculus and in the text alike.

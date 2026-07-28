@@ -20,11 +20,14 @@
 //!   signature generator has no canonical `MatKron` image, so [`to_mat_kron`]
 //!   returns [`SyntaxError::NonFrobenius`]. We demonstrate this below.
 //!
-//! This example stays **monochromatic** — one wire colour `Λ = {•}`, spelled
-//! `()` — so every spider is built at that one colour and `dims` is constant.
-//! The layer itself is Λ-colored since #79 P3a: `spider(c, m, n)` takes its
-//! colour, and `to_mat_kron` takes a source word plus a per-colour dimension
-//! function. What is still monochromatic is the *textual* surface (#79 P3b).
+//! This example stays **monochromatic** for readability — one wire colour
+//! `Λ = {•}`, spelled `()` — so every spider is built at that one colour and
+//! `dims` is constant. The layer itself is Λ-colored end to end since #79:
+//! `spider(c, m, n)` takes its colour, `to_mat_kron` takes a source word plus a
+//! per-colour dimension function, and the textual surface prints colored
+//! spiders as `mu@A` alongside `g : A B -> C` declarations (P3b). The
+//! monochromatic palette's one letter is *implicit*, so this example's tokens
+//! carry no annotation.
 //!
 //! Run: `cargo run -p catgraph-syntax --example frobenius_wiring`
 
@@ -115,7 +118,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     match mk(&decorated, 2) {
         Err(SyntaxError::NonFrobenius { generator }) => {
             println!("\nboundary: to_mat_kron(User(Signal)) → NonFrobenius {{ {generator} }}");
-            println!("  (User leaves are out of the monochromatic Frobenius domain — see #79)");
+            println!("  (User leaves are out of the Frobenius functor's domain at every colour)");
         }
         other => return Err(format!("expected NonFrobenius, got {other:?}").into()),
     }

@@ -15,13 +15,16 @@
 //! # Lexical structure
 //!
 //! An *atom* is a maximal run of characters excluding the operator/grouping
-//! set `;` `*` `⊗` `(` `)` `=` `,` and whitespace (the set is defined once, in
-//! the private `single_tok` classifier). `=` is reserved so that a generator
+//! set `;` `*` `⊗` `(` `)` `=` `,` `:` and whitespace (the set is defined once,
+//! in the private `single_tok` classifier). `=` is reserved so that a generator
 //! token can never eat
 //! the equation separator of a presentation file (`super::presentation`); `,`
-//! is reserved as the keyword-argument separator of `braid(m,n)`. The
-//! [`GeneratorSyntax`] clause-2 alphabet is narrowed accordingly (a token must
-//! additionally avoid `=` and `,`). The keywords `id` and `braid` are atoms
+//! is reserved as the keyword-argument separator of `braid(m,n)`; `:` is
+//! reserved as that file's declaration separator (`g : A B -> C`), for the same
+//! reason `=` is. The [`GeneratorSyntax`] clause-2 alphabet is narrowed
+//! accordingly (a token must additionally avoid `=`, `,` and `:`, and — for a
+//! different reason — `@`, which stays *inside* atoms so the colour-annotated
+//! spider token `mu@A` lexes as one). The keywords `id` and `braid` are atoms
 //! whose *following* parenthesised argument list is mandatory: `id(n)` and
 //! `braid(m,n)` with decimal `usize` arguments — exactly one atom per
 //! argument, each carrying its own byte offset for diagnostics (`id(1 2)` is
@@ -52,7 +55,7 @@ use std::marker::PhantomData;
 use catgraph_applied::prop::{Free, PropExpr};
 
 use crate::errors::SyntaxError;
-use crate::text::{COMMA, EQUALS, GeneratorSyntax, KW_BRAID, KW_ID, SEMI, STAR, TENSOR};
+use crate::text::{COLON, COMMA, EQUALS, GeneratorSyntax, KW_BRAID, KW_ID, SEMI, STAR, TENSOR};
 
 /// Maximum parenthesis-nesting depth [`parse`] accepts before rejecting the
 /// input with a [`SyntaxError::Parse`].
@@ -84,6 +87,9 @@ enum Tok<'a> {
     /// `,` — the keyword-argument separator (only valid inside `braid(m,n)`;
     /// reserved so a generator token cannot absorb it).
     Comma,
+    /// `:` — the presentation declaration separator (never valid inside an
+    /// expression; reserved so a generator token cannot absorb it).
+    Colon,
     /// A maximal non-operator, non-whitespace run, borrowed from the input.
     Atom(&'a str),
 }
@@ -93,7 +99,8 @@ enum Tok<'a> {
 /// token classifier and the atom-termination loop in [`lex`] consult this, so
 /// the alphabet cannot drift between them. The character set is the shared
 /// [`crate::text`] alphabet ([`SEMI`], [`STAR`]/[`TENSOR`], [`EQUALS`],
-/// [`COMMA`]) plus the grouping parentheses.
+/// [`COMMA`], [`COLON`]) plus the grouping parentheses. The colour joiner `@`
+/// is deliberately absent: it must stay inside an atom so `mu@A` lexes as one.
 fn single_tok<'a>(c: char) -> Option<Tok<'a>> {
     match c {
         SEMI => Some(Tok::Semi),
@@ -102,6 +109,7 @@ fn single_tok<'a>(c: char) -> Option<Tok<'a>> {
         ')' => Some(Tok::RParen),
         EQUALS => Some(Tok::Equals),
         COMMA => Some(Tok::Comma),
+        COLON => Some(Tok::Colon),
         _ => None,
     }
 }
@@ -383,13 +391,14 @@ mod tests {
     /// trait docs, so that contract is spelled out as prose).
     #[test]
     fn single_tok_classifies_exactly_the_grammar_delimiters() {
-        let delimiters = [SEMI, STAR, TENSOR, '(', ')', EQUALS, COMMA];
+        let delimiters = [SEMI, STAR, TENSOR, '(', ')', EQUALS, COMMA, COLON];
         for c in delimiters {
             assert!(single_tok(c).is_some(), "{c:?} should be a delimiter");
         }
         // A representative sample of characters that must stay *inside* atoms —
-        // note `:` and `-` (the `scalar:-7` token) and assorted letters/digits.
-        let atom_chars = [':', '-', '_', '.', '/', 'a', 'Z', '0', '9', '⊕', 'λ'];
+        // note `@` (the `mu@A` colour joiner), `-` and `>` (the `->` declaration
+        // arrow), `_` (the `scalar_-7` token) and assorted letters/digits.
+        let atom_chars = ['@', '-', '>', '_', '.', '/', 'a', 'Z', '0', '9', '⊕', 'λ'];
         for c in atom_chars {
             assert!(single_tok(c).is_none(), "{c:?} must stay inside an atom");
         }

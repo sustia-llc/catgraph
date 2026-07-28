@@ -13,7 +13,8 @@
 //!   is arity-sound by construction. Nesting depth is bounded
 //!   ([`parse::MAX_NESTING_DEPTH`], untrusted input).
 //! - [`presentation`] renders and reads presentation files
-//!   (one `lhs = rhs` per line, Seven Sketches Def 5.33).
+//!   (one `lhs = rhs` equation or `g : A B -> C` declaration per line, Seven
+//!   Sketches Def 5.33).
 //!
 //! The round-trip target is `parse(&print(e)) == Ok(e)` structurally (same
 //! tree; the printer never normalises). It is machine-checked by the S2
@@ -26,7 +27,8 @@
 //! treat the depth bound as a format limit.
 //!
 //! The bridge between a signature's generators and their concrete tokens is the
-//! [`GeneratorSyntax`] trait.
+//! [`GeneratorSyntax`] trait; the bridge between its colour alphabet `Λ` and
+//! *their* tokens is [`ColorSyntax`].
 
 pub mod parse;
 pub mod presentation;
@@ -58,6 +60,22 @@ pub(crate) const TENSOR: char = '⊗';
 pub(crate) const EQUALS: char = '=';
 /// Keyword-argument separator `,` (only valid inside `braid(m,n)`).
 pub(crate) const COMMA: char = ',';
+/// Presentation-file declaration separator `:` in `g : A B -> C` (reserved;
+/// never valid inside an expression, so — exactly like [`EQUALS`] — a raw scan
+/// for it finds the same positions the lexer would).
+pub(crate) const COLON: char = ':';
+/// Spider-colour joiner `@` in `mu@A`. Reserved in the [`GeneratorSyntax`]
+/// clause-2 alphabet but deliberately **not** a lexer delimiter: `mu@A` must
+/// re-lex as one atom.
+pub(crate) const AT: char = '@';
+/// Declaration-line arrow separating a generator's source and target colour
+/// words — a reserved *whitespace-delimited atom*, meaningful only inside a
+/// declaration (`-` and `>` stay ordinary atom characters everywhere else).
+pub(crate) const ARROW: &str = "->";
+/// Written form of the **implicit** sort `•` (U+2022): the one colour a
+/// [`ColorSyntax`] palette may leave unannotated on a spider token, spelled out
+/// in a declaration word where a position must be filled.
+pub(crate) const UNIT_SORT: &str = "•";
 /// Reserved keyword introducing an identity `id(n)`.
 pub(crate) const KW_ID: &str = "id";
 /// Reserved keyword introducing a braiding `braid(m,n)`.
@@ -75,12 +93,17 @@ pub(crate) const KW_BRAID: &str = "braid";
 ///
 /// 1. `Self::parse_token(&g.print_token()) == Some(g)` — printing a generator
 ///    and parsing the result recovers the original generator; and
-/// 2. **`print_token` returns a single lexical atom**: it must contain no
-///    `;`, `*`, `⊗`, `=`, `,`, parenthesis, or whitespace, and must not equal
-///    the reserved grammar keywords **`id`** or **`braid`**. (`=` is reserved
-///    as the presentation-file equation separator and `,` as the
-///    keyword-argument separator; the parser's lexer treats both as
-///    delimiters, so a token containing either cannot re-lex as one atom.)
+/// 2. **`print_token` returns a single lexical atom**: it must be non-empty,
+///    contain no `;`, `*`, `⊗`, `=`, `,`, `:`, `@`, parenthesis, or
+///    whitespace, and must equal none of the reserved words **`id`**,
+///    **`braid`**, **`->`**. (`=` is reserved as the presentation-file
+///    equation separator, `,` as the keyword-argument separator of
+///    `braid(m,n)`, and `:` as the declaration separator of `g : A B -> C`;
+///    the parser's lexer treats all three as delimiters, so a token containing
+///    one cannot re-lex as one atom. `@` is **not** a delimiter — it is the
+///    colour joiner of the spider token `mu@A`, reserved here so that no user
+///    token can collide with a colour-annotated one. `->` is a reserved
+///    whitespace-delimited atom inside declaration lines.)
 ///
 /// Both clauses are load-bearing. The printer emits tokens **verbatim, with no
 /// validation or escaping** — a token violating clause 2 produces output that
@@ -100,4 +123,81 @@ pub trait GeneratorSyntax: PropSignature {
     fn parse_token(token: &str) -> Option<Self>
     where
         Self: Sized;
+}
+
+/// A colour alphabet `Λ` whose letters have a concrete textual token.
+///
+/// This is [`GeneratorSyntax`]'s counterpart for a signature's
+/// [`Color`](PropSignature::Color): it is what lets the textual surface spell a
+/// **colored** prop — the annotated spider tokens `mu@A` / `eta@A` / `delta@A` /
+/// `epsilon@A` of [`FrobeniusOr`](crate::frobenius::FrobeniusOr), and the colour
+/// words of a presentation-file declaration `g : A B -> C`
+/// ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3b).
+///
+/// # The implicit sort
+///
+/// One letter of the palette may be **implicit**: it carries no annotation on a
+/// spider token (bare `mu`), and where a declaration word must fill the position
+/// anyway it is written `•` (U+2022). [`print_color`](ColorSyntax::print_color)
+/// returns `None` for it and [`implicit`](ColorSyntax::implicit) names it.
+///
+/// The monochromatic palette `()` is exactly this case, and that is what keeps
+/// the file format backward compatible: a fully monochromatic presentation prints
+/// no declarations and no `@` annotations, so every pre-#79 file still reads and
+/// writes byte for byte. A palette with **no** implicit letter
+/// (`implicit() == None`) makes a bare `mu` a parse error — under it there is no
+/// colour to default to, and inventing one would silently mistype a spider.
+///
+/// # Round-trip contract
+///
+/// Implementors **must** satisfy:
+///
+/// 1. `Self::parse_color(&t) == Some(c)` whenever `c.print_color() == Some(t)` —
+///    printing a colour and parsing the result recovers it;
+/// 2. **at most one** letter has `print_color() == None`; if one does, then
+///    [`implicit`](ColorSyntax::implicit) returns exactly that letter and
+///    `Self::parse_color("•")` recovers it (so the implicit sort still has a
+///    written form in a declaration word), and otherwise `implicit()` is `None`;
+/// 3. every `Some` token is a **single lexical atom** over
+///    [`GeneratorSyntax`]'s clause-2 alphabet: non-empty, free of `;` `*` `⊗`
+///    `=` `,` `:` `@` parentheses and whitespace, and equal to none of `id`,
+///    `braid`, `->`.
+///
+/// Clause 3 is load-bearing for the same reason clause 2 is there: tokens are
+/// emitted verbatim, so a violating colour makes `mu@<colour>` re-lex as several
+/// atoms (or makes a declaration word unreadable) even though clause 1 holds at
+/// the token level.
+pub trait ColorSyntax: Sized {
+    /// The concrete token for this colour, or `None` for the implicit sort.
+    fn print_color(&self) -> Option<String>;
+
+    /// Parse a token back into a colour, or `None` if it names no letter of
+    /// this palette.
+    fn parse_color(token: &str) -> Option<Self>;
+
+    /// The palette's implicit sort — the colour a bare `mu` denotes — or `None`
+    /// if the palette has none.
+    fn implicit() -> Option<Self>;
+}
+
+/// The monochromatic palette `Λ = {•}`: its single letter is the implicit sort,
+/// so colored syntax degenerates to exactly the pre-#79 surface.
+impl ColorSyntax for () {
+    fn print_color(&self) -> Option<String> {
+        None
+    }
+
+    fn parse_color(token: &str) -> Option<Self> {
+        (token == UNIT_SORT).then_some(())
+    }
+
+    fn implicit() -> Option<Self> {
+        Some(())
+    }
+}
+
+/// The token a colour takes **inside a declaration word**, where every position
+/// must be spelled: its own token, or [`UNIT_SORT`] for the implicit sort.
+pub(crate) fn word_token<C: ColorSyntax>(color: &C) -> String {
+    color.print_color().unwrap_or_else(|| UNIT_SORT.to_string())
 }

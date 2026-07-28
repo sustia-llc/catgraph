@@ -9,6 +9,24 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ### Changed
 
+- **BREAKING: the textual surface is Λ-colored**
+  ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3b — #79 is
+  complete). The token alphabet grows two reserved characters and the
+  `FrobeniusOr` syntax impl loses its monochromatic gate:
+  - `GeneratorSyntax` clause 2 additionally reserves `:` (the declaration
+    separator) and `@` (the spider colour joiner), and adds `->` to the
+    reserved words. `:` becomes an unconditional lexer delimiter exactly as `=`
+    is, so a raw scan for it agrees with the lexer; `@` deliberately stays
+    *inside* atoms so `mu@A` lexes as one. **Consequence:**
+    `GeneratorSyntax for SfgGenerator<R>`'s `Scalar` token moves from
+    `scalar:<r>` to `scalar_<r>` — `scalar:-7` would no longer be a single
+    lexical atom. Files holding the old spelling must be rewritten.
+  - `impl GeneratorSyntax for FrobeniusOr<G>` is un-gated from
+    `G: GeneratorSyntax<Color = ()>` to `G: GeneratorSyntax` with
+    `G::Color: ColorSyntax + Ord`.
+  - `print_presentation` / `parse_presentation` gain a `G::Color: ColorSyntax`
+    bound, and `print_presentation` now emits declarations ahead of the
+    equations when the signature has a colour to show.
 - **BREAKING: the Frobenius layer is Λ-colored**
   ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3a). FS19 Def 2.12
   equips *each object* with a Frobenius structure, so the spider family is
@@ -76,6 +94,19 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ### Documentation
 
+- **The monochromatic scope note retires**
+  ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3b): with the
+  textual surface colored, the crate's second standing disclaimer is gone from
+  `src/lib.rs` and the README — both now state the Λ-colored surface as
+  complete rather than pending — and the "until P3b" notes in `src/frobenius.rs`,
+  `examples/README.md` and `examples/frobenius_wiring.rs` go with it (the
+  examples stay single-colour for readability, which they now say). The #15
+  completeness boundary is the one remaining disclaimer. `docs/ANCHORS.md` gains
+  rows for `text::ColorSyntax` (Def 3.9) and — filling a pre-existing gap —
+  `cospan_functor::{to_cospan, CospanFunctor}` (Prop 3.8 / Thm 3.14). The four
+  P2-carried "arity check" sites (the `text::presentation` module and
+  `parse_presentation` docs, `hypergraph_presentation`'s error docs, and
+  `tests/persistence.rs`'s fixture comment) now say boundary-*word* equality.
 - **`SfgModel`'s overflow note now cites the policy of record**
   ([#88](https://github.com/sustia-llc/catgraph/issues/88)): the inherited-from-`R`
   explanation in `src/eval.rs` points at `catgraph_applied::rig`'s module docs
@@ -87,12 +118,40 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ### Added
 
+- **`text::ColorSyntax`, colored spider tokens, and the declaration grammar**
+  ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3b):
+  - `ColorSyntax` gives a palette's letters tokens
+    (`print_color` / `parse_color`) and names its optional **implicit** sort
+    (`implicit`) — the one letter that carries no annotation and writes as `•`
+    where a declaration word must fill the position. `impl ColorSyntax for ()`
+    makes the monochromatic palette all-implicit, so single-sorted terms and
+    files are byte-for-byte the pre-#79 ones.
+  - Spiders print and parse as `mu@A` / `eta@A` / `delta@A` / `epsilon@A` at a
+    visible colour and bare `mu` at the implicit sort; a bare spider under a
+    palette with no implicit sort is a parse error rather than a guessed colour.
+  - Presentation files accept a generator **declaration** line
+    `TOKEN : COLOR* -> COLOR*` (either colour list possibly empty). A line with
+    `=` is still an equation; a line with `:` and no `=` is a declaration.
+    Declarations **validate against `G`** — the token must name a generator, the
+    colour tokens must name letters of `Λ`, and both declared words must equal
+    the generator's own — they never construct a signature, which still travels
+    as the type parameter. Declaration-free files stay valid (`Presentation`
+    round-trips unchanged), and the printer emits one declaration per distinct
+    generator occurring in the equation list, in `Ord` order, iff some port
+    colour is visible. Errors are `SyntaxError::Parse` with whole-input byte
+    offsets; no new error variant was needed.
+  - `tests/colored_text.rs` covers the colored token forms, the S2
+    whole-expression round-trip law over a colored signature, a colored file
+    round-tripping through its declarations, every drift check, and the
+    malformed-declaration diagnostics; `tests/presentation.rs` pins that a
+    monochromatic file prints no declarations and still accepts explicit `•`
+    ones on input.
 - **`Checked<i64>` overflow regression in `tests/eval.rs`**
   ([#88](https://github.com/sustia-llc/catgraph/issues/88)): the issue's
-  reproducer `"scalar:4000000000 ; scalar:4000000000"` parsed as
+  reproducer `"scalar_4000000000 ; scalar_4000000000"` parsed as
   `PropExpr<SfgGenerator<Checked<i64>>>` and evaluated under
   `SfgModel<Checked<i64>>` yields a poisoned output (with plain `i64` this is
-  the invisible release-build wrap), plus a `scalar:⊥` print → parse round-trip
+  the invisible release-build wrap), plus a `scalar_⊥` print → parse round-trip
   proving the poison sentinel stays a single lexical atom under the
   `GeneratorSyntax` token contract.
 

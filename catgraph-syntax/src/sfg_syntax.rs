@@ -7,22 +7,28 @@
 //!
 //! The four nullary-payload generators print to distinct plain tokens
 //! (`copy`, `discard`, `add`, `zero`). `Scalar(r)` carries a rig element, so
-//! its token is `scalar:<r>` using `R`'s [`Display`]; the argument is recovered
+//! its token is `scalar_<r>` using `R`'s [`Display`]; the argument is recovered
 //! with `R`'s [`FromStr`].
+//!
+//! The separator was `:` before
+//! [#79](https://github.com/sustia-llc/catgraph/issues/79) P3b, which reserved
+//! that character as the presentation-file declaration separator (`g : A B ->
+//! C`) and made it a lexer delimiter. `scalar:<r>` would no longer be a single
+//! lexical atom, so the prefix moved to the delimiter-free `scalar_`.
 //!
 //! # Round-trip compliance is conditional on `R`
 //!
 //! [`GeneratorSyntax`]'s clause 2 requires each token to be a single lexical
-//! atom (no `;` `*` `⊗` parentheses whitespace `=` `,`, and not the reserved
-//! keywords `id` / `braid`). The plain tokens satisfy it unconditionally. The
-//! `scalar:<r>` token satisfies the contract **iff both**:
+//! atom (no `;` `*` `⊗` parentheses whitespace `=` `,` `:` `@`, and not one of
+//! the reserved words `id` / `braid` / `->`). The plain tokens satisfy it
+//! unconditionally. The `scalar_<r>` token satisfies the contract **iff both**:
 //!
 //! 1. `R`'s [`Display`] output contains no grammar metacharacter (clause 2) —
 //!    true for the integer rigs, whose `Display` is an optional `-` followed
-//!    by decimal digits (`:`/`-` are not metacharacters); and
+//!    by decimal digits (`_`/`-` are not metacharacters); and
 //! 2. `R`'s [`FromStr`] parses that `Display` output back to the same value
 //!    and the output is nonempty (clause 1) — a rig whose `Display` rendered
-//!    some value as `""` would print the bare token `scalar:`, which fails to
+//!    some value as `""` would print the bare token `scalar_`, which fails to
 //!    reparse even though it contains no metacharacter.
 //!
 //! Neither condition is checked at print time; they are **exercised for
@@ -43,7 +49,7 @@ use catgraph_applied::sfg::SfgGenerator;
 use crate::text::GeneratorSyntax;
 
 /// Prefix distinguishing the `Scalar(r)` token from the plain tokens.
-const SCALAR_PREFIX: &str = "scalar:";
+const SCALAR_PREFIX: &str = "scalar_";
 
 impl<R> GeneratorSyntax for SfgGenerator<R>
 where
