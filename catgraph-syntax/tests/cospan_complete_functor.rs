@@ -16,9 +16,10 @@ use common::Sig;
 
 use catgraph::errors::CatgraphError;
 use catgraph_applied::prop::presentation::functorial::CompleteFunctor;
-use catgraph_applied::prop::{Free, PropExpr};
+use catgraph_applied::prop::{Free, PropExpr, mono_word};
 use catgraph_applied::rig::BoolRig;
 use catgraph_syntax::cospan_functor::{CospanFunctor, to_cospan};
+use catgraph_syntax::errors::SyntaxError;
 use catgraph_syntax::frobenius::{
     FrobeniusOr, hypergraph_presentation, scfm_equations, to_mat_kron,
 };
@@ -26,16 +27,16 @@ use catgraph_syntax::frobenius::{
 type Term = PropExpr<FrobeniusOr<Sig>>;
 
 fn mu() -> Term {
-    Free::generator(FrobeniusOr::Mu)
+    Free::generator(FrobeniusOr::Mu(()))
 }
 fn eta() -> Term {
-    Free::generator(FrobeniusOr::Eta)
+    Free::generator(FrobeniusOr::Eta(()))
 }
 fn delta() -> Term {
-    Free::generator(FrobeniusOr::Delta)
+    Free::generator(FrobeniusOr::Delta(()))
 }
 fn epsilon() -> Term {
-    Free::generator(FrobeniusOr::Epsilon)
+    Free::generator(FrobeniusOr::Epsilon(()))
 }
 fn id(n: usize) -> Term {
     Free::<FrobeniusOr<Sig>>::identity(n)
@@ -43,13 +44,17 @@ fn id(n: usize) -> Term {
 fn compose(f: Term, g: Term) -> Term {
     Free::compose(f, g).expect("arity-matched by construction in these tests")
 }
+/// `to_mat_kron` over `BoolRig` at the monochromatic dimension 2.
+fn mk_bool(expr: &Term) -> Result<catgraph_applied::mat_kron::MatKron<BoolRig>, SyntaxError> {
+    to_mat_kron::<Sig, BoolRig, _>(expr, &mono_word(expr.source()), &|(): &()| 2)
+}
 
 /// Every one of the nine `E_frob` equations is decided **equal** by the functor
 /// — the completeness-soundness direction (the functor respects all SCFM laws).
 #[test]
 fn nine_scfm_equations_decide_equal() {
     let f = CospanFunctor::new();
-    for (lhs, rhs) in scfm_equations::<Sig>() {
+    for (lhs, rhs) in scfm_equations::<Sig>(()) {
         let fa = f.apply(&lhs).expect("spider fragment is User-free");
         let fb = f.apply(&rhs).expect("spider fragment is User-free");
         assert_eq!(fa, fb, "functor failed to equate an E_frob equation");
@@ -60,9 +65,9 @@ fn nine_scfm_equations_decide_equal() {
 /// `eq_mod_functorial` — a definite `Some(true)`, no depth bound, no `None`.
 #[test]
 fn registry_integration_via_eq_mod_functorial() {
-    let pres = hypergraph_presentation::<Sig>([]).expect("no user equations to lift");
+    let pres = hypergraph_presentation::<Sig>([()], []).expect("no user equations to lift");
     let f = CospanFunctor::new();
-    for (lhs, rhs) in scfm_equations::<Sig>() {
+    for (lhs, rhs) in scfm_equations::<Sig>(()) {
         assert_eq!(
             pres.eq_mod_functorial(&lhs, &rhs, &f)
                 .expect("functor applies on User-free terms"),
@@ -88,7 +93,7 @@ fn registry_integration_via_eq_mod_functorial() {
 /// better place for it — so the gap this test pins moved with it.
 #[test]
 fn complete_where_congruence_closure_is_not() {
-    let pres = hypergraph_presentation::<Sig>([]).expect("no user equations");
+    let pres = hypergraph_presentation::<Sig>([()], []).expect("no user equations");
     let f = CospanFunctor::new();
     let a = compose(compose(eta(), delta()), Free::tensor(epsilon(), epsilon()));
     let b = compose(eta(), epsilon());
@@ -143,8 +148,8 @@ fn finer_than_mat_kron_over_idempotent_rig() {
     assert_ne!(f.apply(&bubble).unwrap(), f.apply(&id0).unwrap());
 
     // to_mat_kron over BoolRig at dim 2: identified (both the trivial 1×1 scalar).
-    let mb = to_mat_kron::<Sig, BoolRig>(&bubble, 2).unwrap();
-    let mi = to_mat_kron::<Sig, BoolRig>(&id0, 2).unwrap();
+    let mb = mk_bool(&bubble).unwrap();
+    let mi = mk_bool(&id0).unwrap();
     assert_eq!(
         mb, mi,
         "sanity: BoolRig is idempotent so the bubble scalar is invisible to to_mat_kron"
@@ -156,9 +161,9 @@ fn finer_than_mat_kron_over_idempotent_rig() {
 /// functors cannot disagree on things that are actually equal.
 #[test]
 fn sound_agreement_with_to_mat_kron() {
-    for (lhs, rhs) in scfm_equations::<Sig>() {
-        let ml = to_mat_kron::<Sig, BoolRig>(&lhs, 2).unwrap();
-        let mr = to_mat_kron::<Sig, BoolRig>(&rhs, 2).unwrap();
+    for (lhs, rhs) in scfm_equations::<Sig>(()) {
+        let ml = mk_bool(&lhs).unwrap();
+        let mr = mk_bool(&rhs).unwrap();
         assert_eq!(ml, mr, "to_mat_kron disagrees with an E_frob equation");
     }
 }
@@ -189,16 +194,27 @@ fn user_generator_is_outside_the_fragment() {
 
     // Also rejected when buried inside a composite.
     let buried = Free::tensor(mu(), Free::generator(FrobeniusOr::User(Sig::Add)));
-    assert!(to_cospan::<Sig>(&buried).is_err());
+    assert!(to_cospan::<Sig>(&buried, &mono_word(buried.source())).is_err());
 }
 
-/// Arity mismatch in a `Compose` surfaces transparently as
-/// [`CatgraphError::Composition`] from the cospan pushout (mirroring
-/// `to_mat_kron`).
+/// Arity mismatch in a `Compose` surfaces as
+/// [`CatgraphError::CompositionSizeMismatch`] — the top-down word pass (#79 P3a)
+/// catches it at the receiving subterm, before the cospan pushout ever runs.
+/// Pre-P3a the functor was word-blind and the pushout reported it as
+/// `Composition`; the word pass is strictly earlier and names both lengths.
 #[test]
-fn arity_mismatch_surfaces_as_composition_error() {
+fn arity_mismatch_surfaces_as_size_mismatch() {
     // η : 0 → 1 composed with μ : 2 → 1 — interface 1 ≠ 2.
     let bad = PropExpr::Compose(Box::new(eta()), Box::new(mu()));
-    let err = to_cospan::<Sig>(&bad).expect_err("interface mismatch");
-    assert!(matches!(err, CatgraphError::Composition { .. }));
+    let err = to_cospan::<Sig>(&bad, &mono_word(bad.source())).expect_err("interface mismatch");
+    assert!(
+        matches!(
+            err,
+            CatgraphError::CompositionSizeMismatch {
+                expected: 2,
+                actual: 1
+            }
+        ),
+        "got: {err:?}"
+    );
 }

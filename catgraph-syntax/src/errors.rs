@@ -112,22 +112,32 @@ pub enum SyntaxError {
     },
 
     /// A [`to_mat_kron`](crate::frobenius::to_mat_kron) node's **dense cell
-    /// count** `dim^(src + tgt)` overflowed `usize`. Every node is guarded on the
-    /// exponent `src + tgt` before its matrix is built, so the products a naïve
-    /// per-interface check would miss — `braiding`'s `dim^m · dim^n`, `mu`/`delta`'s
-    /// `dim²`, and the `kron`/matmul results — are all covered, and the sound
-    /// checker never wraps into a wrong matrix nor attempts an overflowing
-    /// allocation. This guards the cell *count* (a `usize` overflow), **not**
-    /// memory pressure: a huge-but-representable matrix still allocates and is the
-    /// caller's concern. `exponent` is the offending `src + tgt` (or `usize::MAX`
-    /// as a "≥ this" marker in the unreachable case where the wire sum itself
-    /// overflows `usize`).
-    #[error("dense cell count dim^k overflowed usize: dim = {dim}, k = {exponent}")]
+    /// count** overflowed `usize`.
+    ///
+    /// A wire of colour `c` maps to `R^dims(c)`, so an interface *word* maps to
+    /// the product of its letters' dimensions and a node's dense matrix has
+    /// `product(source word) · product(target word)` cells. Every node is
+    /// guarded before its matrix is built, so the products a naïve per-interface
+    /// check would miss — `braiding`'s block product, `mu`/`delta`'s `dims(c)²`,
+    /// and the `kron`/matmul results — are all covered, and the sound checker
+    /// never wraps into a wrong matrix nor attempts an overflowing allocation.
+    /// This guards the cell *count* (a `usize` overflow), **not** memory
+    /// pressure: a huge-but-representable matrix still allocates and is the
+    /// caller's concern.
+    ///
+    /// The two fields locate the multiplication that overflowed rather than
+    /// summarising the whole node, because with per-colour dimensions there is
+    /// no single `dim` to report. Monochromatically they read as
+    /// `dim^k × dim` for the first `k` at which the running product exceeds
+    /// `usize`.
+    #[error("dense cell count overflowed usize: {product} × {factor} exceeds usize::MAX")]
     DimensionOverflow {
-        /// The per-wire object dimension `dim`.
-        dim: usize,
-        /// The exponent `k = src + tgt` (so the dense cell count is `dim^k`).
-        exponent: usize,
+        /// The running product accumulated before the overflowing multiplication.
+        product: usize,
+        /// The value it was multiplied by — a wire dimension when a word's own
+        /// product overflows, or the target word's dimension in the final
+        /// `rows · cols` cell-count guard.
+        factor: usize,
     },
 
     /// A term interpreter ([`eval`](crate::eval::eval),

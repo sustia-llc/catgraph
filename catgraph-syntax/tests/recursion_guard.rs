@@ -6,7 +6,7 @@ mod common;
 use common::{Sig, sfg_model};
 
 use catgraph::errors::CatgraphError;
-use catgraph_applied::prop::{Free, PropExpr, PropSignature};
+use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
 use catgraph_applied::rig::BoolRig;
 use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::cospan_functor::to_cospan;
@@ -44,14 +44,15 @@ fn eval_rejects_over_deep_term() {
 #[test]
 fn to_mat_kron_rejects_over_deep_term() {
     let over: PropExpr<FrobeniusOr<Sig>> = deep_id_chain(MAX_TERM_DEPTH + 1);
-    let err = to_mat_kron::<Sig, BoolRig>(&over, 2).expect_err("must guard, not overflow");
+    let err = to_mat_kron::<Sig, BoolRig, _>(&over, &mono_word(over.source()), &|(): &()| 2)
+        .expect_err("must guard, not overflow");
     assert!(matches!(err, SyntaxError::RecursionLimit { depth, limit }
         if depth == MAX_TERM_DEPTH + 1 && limit == MAX_TERM_DEPTH));
 
     // At the limit it recurses safely (the guard must not sit above the
     // interpreter's own stack-overflow point).
     let at: PropExpr<FrobeniusOr<Sig>> = deep_id_chain(MAX_TERM_DEPTH);
-    assert!(to_mat_kron::<Sig, BoolRig>(&at, 2).is_ok());
+    assert!(to_mat_kron::<Sig, BoolRig, _>(&at, &mono_word(at.source()), &|(): &()| 2).is_ok());
 }
 
 #[test]
@@ -61,7 +62,8 @@ fn to_cospan_rejects_over_deep_term() {
     // `CatgraphError::RecursionLimit` (the `CompleteFunctor` contract fixes the
     // error type to `CatgraphError`, but the variant matches the other
     // interpreters' `SyntaxError::RecursionLimit` shape).
-    let err = to_cospan::<Sig>(&over).expect_err("must guard, not overflow");
+    let err =
+        to_cospan::<Sig>(&over, &mono_word(over.source())).expect_err("must guard, not overflow");
     match err {
         CatgraphError::RecursionLimit { depth, limit } => {
             assert_eq!(depth, MAX_TERM_DEPTH + 1);
@@ -72,5 +74,5 @@ fn to_cospan_rejects_over_deep_term() {
 
     // At the limit it succeeds.
     let at: PropExpr<FrobeniusOr<Sig>> = deep_id_chain(MAX_TERM_DEPTH);
-    assert!(to_cospan::<Sig>(&at).is_ok());
+    assert!(to_cospan::<Sig>(&at, &mono_word(at.source())).is_ok());
 }

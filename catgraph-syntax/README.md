@@ -93,27 +93,34 @@ assert_eq!(eval(&e, &model, vec![1]), Ok(matrix.entries()[0].clone()));
 
 ### Frobenius layer (S4)
 
-`FrobeniusOr<G>` adjoins the four special-commutative-Frobenius generators
-(`Mu` `2→1`, `Eta` `0→1`, `Delta` `1→2`, `Epsilon` `1→0`) to a user signature
-`G` as a **sum type** — `FrobeniusOr<G>` is itself a `PropSignature`, so
-`PropExpr<FrobeniusOr<G>>` reuses the whole engine (NF, presentation, `eq_mod`,
-parser/printer, `eval`) with no new AST. This presents the *monochromatic* free
-hypergraph category (F&S 2019, `Λ = {•}`).
+`FrobeniusOr<G>` adjoins the four special-commutative-Frobenius generators —
+one family **per wire colour** (`Mu(c)` `[c,c]→[c]`, `Eta(c)` `[]→[c]`,
+`Delta(c)` `[c]→[c,c]`, `Epsilon(c)` `[c]→[]`) — to a user signature `G` as a
+**sum type**. `FrobeniusOr<G>` is itself a `PropSignature` (colour-transparent:
+`Color = G::Color`), so `PropExpr<FrobeniusOr<G>>` reuses the whole engine (NF,
+presentation, `eq_mod`, parser/printer, `eval`) with no new AST. This presents
+the free hypergraph category on the palette `Λ` (F&S 2019 Def 2.12 / Lemma 3.10);
+`Color = ()` recovers the single-sorted `Λ = {•}` case.
 
-- **Spiders.** `spider(m, n)` collapses `m` legs to one wire via a μ-comb then
-  expands to `n` via a δ-comb (`spider(0,0) = η;ε`; `spider(1,1) = id(1)`).
-  `cup()` (`0→2 = η;δ`) and `cap()` (`2→0 = μ;ε`) match `MatKron::cup`/`cap`.
-- **`scfm_equations()`** — the **nine** Def 2.5 equations (Ex 2.8: "the nine
-  equations in Definition 2.5"; the design note's "ten" was corrected against
-  the paper). `hypergraph_presentation(user_eqs)` seeds a `Presentation` with the
-  lifted user equations plus these nine (`E_frob`).
-- **`to_mat_kron(expr, dim)`** — a **sound** semantic checker (Prop 3.8): the
-  Hadamard SCFM on `R^dim` induces the strict SM functor from `Cospan` (the free
-  monochromatic hypergraph category, Thm 3.14) into `MatKron(R)`, so a proven
-  equality maps to equal matrices. A wire `•` maps to `R^dim`, so a `k`-wire
-  interface maps to dimension `dim^k` (use `dim ≥ 2`; `dim = 1` degenerates).
+- **Spiders.** `spider(c, m, n)` collapses `m` legs to one wire via a μ-comb then
+  expands to `n` via a δ-comb, all at colour `c` (`spider(c,0,0) = η;ε`;
+  `spider(c,1,1) = id(1)`). `cup(c)` (`η;δ`) and `cap(c)` (`μ;ε`) match
+  `MatKron::cup`/`cap` at `dims(c)`.
+- **`scfm_equations(c)`** — the **nine** Def 2.5 equations at colour `c`
+  (Ex 2.8: "the nine equations in Definition 2.5"; the design note's "ten" was
+  corrected against the paper). `hypergraph_presentation(colors, user_eqs)` seeds
+  a `Presentation` with the lifted user equations plus those nine at **every**
+  palette colour (`E_frob`) — enough by Lemma 3.10.
+- **`to_mat_kron(expr, source_word, dims)`** — a **sound** semantic checker
+  (Prop 3.8 applied objectwise): the Hadamard SCFM on `R^dims(c)` induces a
+  strict SM functor from `Cospan` at each colour, Lemma 3.10 assembles them, and
+  Thm 3.14 (`Cospan_Λ` is the free hypergraph category on `Λ`) makes the
+  extension unique — so a proven equality maps to equal matrices. A wire of
+  colour `c` maps to `R^dims(c)` and an interface *word* to the product of its
+  letters' dimensions (use `dims(c) ≥ 2`; dimension 1 degenerates). Colours flow
+  top-down from `source_word`, exactly as in applied's `prop::colored::check`.
   `User(g)` generators are out of the functor's domain
-  (`SyntaxError::NonFrobenius`); a `dim^k` overflow is
+  (`SyntaxError::NonFrobenius`); a word-product overflow is
   `SyntaxError::DimensionOverflow`. `to_mat_kron` is **not** registered as a
   `CompleteFunctor` — no completeness theorem is claimed for `E_frob` (the
   Cospan-valued complete-functor spike is
@@ -174,11 +181,14 @@ automatically a `Wires` bundle.
    (`MatrixNFFunctor`, Seven Sketches Thm 5.60). Nothing here promotes an
    incomplete `None` into a decision.
 
-2. **Monochromatic-fragment scope.** The Frobenius layer (S4, live) presents the
-   single-sort free hypergraph category — the object palette is `Λ = {•}`, one
-   wire colour, one spider family. F&S 2019 Thm 3.14's full **colored** generality
-   is out of scope here and tracked as
-   [#79](https://github.com/sustia-llc/catgraph/issues/79).
+2. **Monochromatic *textual* scope.** The Frobenius layer's calculus is
+   Λ-colored (#79 P3a): spiders carry their colour, and both interpreters
+   (`to_mat_kron`, `to_cospan`) thread an interface word. The **textual** surface
+   is not: `GeneratorSyntax for FrobeniusOr<G>` is still gated to `Color = ()`
+   and prints bare `mu`/`eta`/`delta`/`epsilon`, because the colour-annotated
+   token grammar (`mu@A`, generator declarations) is #79's **P3b**. Colored
+   *terms* are fully supported; colored *files* are not yet
+   ([#79](https://github.com/sustia-llc/catgraph/issues/79)).
 
 ## haft seam
 

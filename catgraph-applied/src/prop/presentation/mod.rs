@@ -41,7 +41,9 @@ pub mod smc_nf;
 
 use super::{PropExpr, PropSignature};
 use catgraph::errors::CatgraphError;
-use functorial::CompleteFunctor;
+use functorial::{ColoredCompleteFunctor, CompleteFunctor};
+
+use super::colored::ColoredExpr;
 
 /// Engine selector for [`Presentation::eq_mod`].
 ///
@@ -99,7 +101,7 @@ pub struct NormalizeResult<G: PropSignature> {
 /// Round-tripping a value produced by this crate is always safe; when ingesting
 /// untrusted documents, re-validate by rebuilding via [`Self::add_equation`].
 /// The same boundary applies to
-/// [`ColoredExpr`](crate::prop::colored::ColoredExpr).
+/// [`ColoredExpr`].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Presentation<G: PropSignature> {
@@ -190,7 +192,7 @@ impl<G: PropSignature> Presentation<G> {
     /// inferred constraint is **not stored**, and rewriting by user equations
     /// ([`Self::normalize`], [`Self::eq_mod`]) is word-blind — it operates on
     /// [`PropExpr`], and no in-tree API applies user equations to a
-    /// [`ColoredExpr`](crate::prop::colored::ColoredExpr) — so there is no
+    /// [`ColoredExpr`] — so there is no
     /// rewrite site that could observe the omission.
     ///
     /// # Errors
@@ -425,6 +427,47 @@ impl<G: PropSignature> Presentation<G> {
     {
         let fa = f.apply(a)?;
         let fb = f.apply(b)?;
+        Ok(Some(fa == fb))
+    }
+
+    /// Decide equality of two **colored** morphisms using a
+    /// [`ColoredCompleteFunctor`] that is complete on this presentation
+    /// ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3a) — the
+    /// worded sibling of [`Self::eq_mod_functorial`].
+    ///
+    /// # Parallel first, images second
+    ///
+    /// Two morphisms are equal only if they are **parallel**: same source word
+    /// and same target word. `a` and `b` therefore compare unequal —
+    /// `Ok(Some(false))`, definitely, without consulting the functor — whenever
+    /// their boundary words differ, even if their images coincide. That is not a
+    /// redundancy check: [`ColoredCompleteFunctor`] asks only that `Target`
+    /// equality decide equality *within* a hom-set, and nothing in the trait
+    /// makes a target separate the hom-sets from each other, so image equality
+    /// alone could identify morphisms with different interfaces. (A given
+    /// functor may of course be finer — the cospan canonical form, for one,
+    /// records each boundary index against its apex label, so it happens to
+    /// recover the words.) Only when the words agree is `F(a) == F(b)`
+    /// consulted, and then the decision is definite.
+    ///
+    /// # Errors
+    ///
+    /// Propagates [`CatgraphError`] from `f.apply_colored` if either expression
+    /// lies outside the functor's domain.
+    pub fn eq_mod_functorial_colored<F>(
+        &self,
+        a: &ColoredExpr<G>,
+        b: &ColoredExpr<G>,
+        f: &F,
+    ) -> Result<Option<bool>, CatgraphError>
+    where
+        F: ColoredCompleteFunctor<G>,
+    {
+        if a.source_word() != b.source_word() || a.target_word() != b.target_word() {
+            return Ok(Some(false));
+        }
+        let fa = f.apply_colored(a)?;
+        let fb = f.apply_colored(b)?;
         Ok(Some(fa == fb))
     }
 

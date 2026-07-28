@@ -1,5 +1,5 @@
 //! A **complete** decision functor for the pure-spider fragment, valued in
-//! cospans (F&S 2019 Prop 3.8).
+//! cospans (F&S 2019 Prop 3.8 / Thm 3.14).
 //!
 //! [`to_mat_kron`](crate::frobenius::to_mat_kron) is a *sound* semantic checker
 //! for the SCFM laws, but not a syntactic decision: unequal matrix images
@@ -19,11 +19,19 @@
 //! completeness registry after `Mat(R)`/Thm 5.60
 //! ([`MatrixNFFunctor`](catgraph_applied::prop::presentation::functorial::MatrixNFFunctor)).
 //!
+//! **Colored generality.** The same argument runs at every colour: **Ex 3.12**
+//! makes `Cospan_Λ` a hypergraph category by assigning each `l ∈ Λ` the Ex 2.8
+//! structure (legitimate by **Lemma 3.10**), and **Thm 3.14** states that
+//! `Cospan_Λ` is the *free* hypergraph category on `Λ`. The colored
+//! [`ColoredCompleteFunctor`] impl below therefore decides `E_frob` over a
+//! palette exactly as the monochromatic one does over `{•}` — the apex labels
+//! carry the colours, so cospans over different colours cannot be confused.
+//!
 //! **Fragment boundary.** [`FrobeniusOr::User`] generators are opaque — they
 //! have no cospan interpretation — so the functor is defined only on the
 //! **User-free** (spider + scalar) fragment; a `User` node makes [`apply`] fail
 //! with [`CatgraphError::Presentation`]. Mixed terms admit no completeness
-//! statement (colored/multi-sorted generality is [#79]).
+//! statement.
 //!
 //! **Scalars are kept.** Cospan is *special*, not *extra-special*: the closed
 //! bubble `η # ε` is a genuine non-identity scalar, distinguished from `id₀`.
@@ -31,7 +39,6 @@
 //! the wrong target — see the [#80] spike.
 //!
 //! [`apply`]: CospanFunctor::apply
-//! [#79]: https://github.com/sustia-llc/catgraph/issues/79
 //! [#80]: https://github.com/sustia-llc/catgraph/issues/80
 
 use catgraph::category::{Composable, HasIdentity};
@@ -40,19 +47,24 @@ use catgraph::cospan_canon::CospanCanon;
 use catgraph::errors::CatgraphError;
 use catgraph::monoidal::Monoidal;
 
-use catgraph_applied::prop::presentation::functorial::CompleteFunctor;
-use catgraph_applied::prop::{PropExpr, PropSignature};
+use catgraph_applied::prop::colored::ColoredExpr;
+use catgraph_applied::prop::presentation::functorial::{ColoredCompleteFunctor, CompleteFunctor};
+use catgraph_applied::prop::{PropExpr, PropSignature, mono_word};
 
-use crate::frobenius::FrobeniusOr;
+use crate::frobenius::{FrobeniusOr, spider_target_word};
 
 /// The complete Cospan-valued functor for the User-free spider fragment
-/// (F&S 2019 Prop 3.8). A zero-sized token, mirroring
+/// (F&S 2019 Prop 3.8 / Thm 3.14). A zero-sized token, mirroring
 /// [`MatrixNFFunctor`](catgraph_applied::prop::presentation::functorial::MatrixNFFunctor).
 ///
-/// Its [`Target`](CompleteFunctor::Target) is
-/// [`CospanCanon<()>`](catgraph::cospan_canon::CospanCanon) (one wire colour;
-/// see [module docs](self) for the completeness argument and the User-free
-/// fragment boundary).
+/// It implements both registry traits:
+///
+/// - [`CompleteFunctor<FrobeniusOr<G>>`] for a monochromatic `G`, with
+///   [`Target`](CompleteFunctor::Target) `CospanCanon<()>` — the word-blind
+///   entry point, which supplies the monochromatic source word itself;
+/// - [`ColoredCompleteFunctor<FrobeniusOr<G>>`] for any `G`, with `Target`
+///   `CospanCanon<G::Color>` — the worded entry point, taking the source word
+///   from the [`ColoredExpr`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CospanFunctor;
 
@@ -64,13 +76,20 @@ impl CospanFunctor {
     }
 }
 
-/// Map a User-free `PropExpr<FrobeniusOr<G>>` term to its image in the free
-/// monochromatic cospan category.
+/// Map a User-free `PropExpr<FrobeniusOr<G>>` term, read at the interface word
+/// `source_word`, to its image in the free cospan category `Cospan_Λ`.
 ///
-/// This is the raw functor `Free(FrobeniusOr) → Cospan`; callers that want a
+/// This is the raw functor `Free(FrobeniusOr) → Cospan_Λ`; callers that want a
 /// decision should canonicalise the result via
 /// [`Cospan::canonical_form`](catgraph::cospan_canon) (or go through
-/// [`CospanFunctor::apply`]).
+/// [`CospanFunctor::apply`] / [`CospanFunctor::apply_colored`]).
+///
+/// Colours flow **top-down**, matching
+/// [`check`](catgraph_applied::prop::colored::check): `Identity(k)` gives one
+/// apex vertex per incoming wire, labelled by that wire's colour; `Braid(m, n)`
+/// keeps the incoming labels and permutes the codomain leg; each spider demands
+/// its declared colour and contributes a single apex vertex carrying it (Ex 2.8's
+/// generators, transported to colour `c` by Ex 3.12).
 ///
 /// # Errors
 ///
@@ -81,11 +100,19 @@ impl CospanFunctor {
 ///   one's error type to `CatgraphError`).
 /// - [`CatgraphError::Presentation`] if the term contains a
 ///   [`FrobeniusOr::User`] generator (outside the fragment).
-/// - [`CatgraphError::Composition`] if a [`PropExpr::Compose`] node is
-///   arity-mismatched (surfaced transparently from the cospan pushout).
-pub fn to_cospan<G>(expr: &PropExpr<FrobeniusOr<G>>) -> Result<Cospan<()>, CatgraphError>
+/// - [`CatgraphError::CompositionSizeMismatch`] if a subterm — including the
+///   whole term — is handed a word of the wrong length. This is the top-down
+///   word pass, so an arity-mismatched [`PropExpr::Compose`] is caught here
+///   rather than by the cospan pushout.
+/// - [`CatgraphError::Composition`] if the lengths agree but a spider's declared
+///   colour does not match the incoming one.
+pub fn to_cospan<G>(
+    expr: &PropExpr<FrobeniusOr<G>>,
+    source_word: &[G::Color],
+) -> Result<Cospan<G::Color>, CatgraphError>
 where
-    G: PropSignature<Color = ()>,
+    G: PropSignature,
+    G::Color: Copy + Ord,
 {
     // Pre-flight the recursion depth so `to_cospan_inner` cannot overflow the
     // stack on an unbounded programmatically-built term (#99). `CompleteFunctor`
@@ -99,58 +126,111 @@ where
             limit: crate::depth::MAX_TERM_DEPTH,
         });
     }
-    to_cospan_inner::<G>(expr)
+    to_cospan_inner::<G>(expr, source_word).map(|(cospan, _target)| cospan)
 }
 
-/// Recursion behind [`to_cospan`]; the depth guard runs once in the public
-/// entry so this can recurse freely.
-fn to_cospan_inner<G>(expr: &PropExpr<FrobeniusOr<G>>) -> Result<Cospan<()>, CatgraphError>
+/// One [`to_cospan_inner`] step over a palette `C`: the subterm's cospan paired
+/// with the target word it derived.
+type CospanStep<C> = (Cospan<C>, Vec<C>);
+
+/// Recursion behind [`to_cospan`], returning `(cospan, target_word)`; the depth
+/// guard runs once in the public entry so this can recurse freely.
+fn to_cospan_inner<G>(
+    expr: &PropExpr<FrobeniusOr<G>>,
+    input: &[G::Color],
+) -> Result<CospanStep<G::Color>, CatgraphError>
 where
-    G: PropSignature<Color = ()>,
+    G: PropSignature,
+    G::Color: Copy + Ord,
 {
     match expr {
-        // id(k): k → k ← k, one apex vertex per wire.
-        PropExpr::Identity(k) => Ok(Cospan::identity(&vec![(); *k])),
+        // id(k): k → k ← k, one apex vertex per wire, labelled by that wire.
+        PropExpr::Identity(k) => {
+            expect_len(*k, input)?;
+            let word = input.to_vec();
+            Ok((Cospan::identity(&word), word))
+        }
         // braid(m,n): the block-swap permutation cospan on m+n wires. Domain is
-        // the identity injection; codomain outputs block B (the n wires) then
-        // block A (the m wires), so output position j<n carries input m+j and
-        // output n+i carries input i.
+        // the identity injection, so apex vertex i carries input wire i's colour;
+        // the codomain outputs block B (the n wires) then block A (the m wires),
+        // so output position j<n carries input m+j and output n+i carries input i.
         PropExpr::Braid(m, n) => {
-            let total = m + n;
+            // Checked so a directly-constructed `Braid(usize::MAX, 1)` reports a
+            // mismatch instead of wrapping; `usize::MAX` matches no slice length.
+            let total = m.checked_add(*n).unwrap_or(usize::MAX);
+            expect_len(total, input)?;
             let left: Vec<usize> = (0..total).collect();
             let right: Vec<usize> = (*m..total).chain(0..*m).collect();
-            Ok(Cospan::new(left, right, vec![(); total]))
+            let mut target = Vec::with_capacity(total);
+            target.extend_from_slice(&input[*m..]);
+            target.extend_from_slice(&input[..*m]);
+            Ok((Cospan::new(left, right, input.to_vec()), target))
         }
-        PropExpr::Generator(g) => match g {
-            // μ: 2 → 1 ← 1, both inputs and the output share one apex vertex.
-            FrobeniusOr::Mu => Ok(Cospan::new(vec![0, 0], vec![0], vec![()])),
-            // η: 0 → 1 ← 1, the unit — one apex vertex, hit only by the output.
-            FrobeniusOr::Eta => Ok(Cospan::new(vec![], vec![0], vec![()])),
-            // δ: 1 → 1 ← 2, one input fans out to two outputs through one apex.
-            FrobeniusOr::Delta => Ok(Cospan::new(vec![0], vec![0, 0], vec![()])),
-            // ε: 1 → 1 ← 0, the counit — one apex vertex, hit only by the input.
-            FrobeniusOr::Epsilon => Ok(Cospan::new(vec![0], vec![], vec![()])),
-            // User generators are opaque — outside the pure-spider fragment.
-            FrobeniusOr::User(u) => Err(CatgraphError::Presentation {
-                message: format!(
-                    "generator `{u:?}` is outside the pure-spider fragment; the Cospan \
-                     functor is complete only for User-free terms (issue #80)"
-                ),
-            }),
-        },
-        // f ; g — pushout composition. Arity mismatch surfaces as Composition.
+        PropExpr::Generator(g) => {
+            let color = match g {
+                FrobeniusOr::Mu(c)
+                | FrobeniusOr::Eta(c)
+                | FrobeniusOr::Delta(c)
+                | FrobeniusOr::Epsilon(c) => *c,
+                // User generators are opaque — outside the pure-spider fragment.
+                FrobeniusOr::User(u) => {
+                    return Err(CatgraphError::Presentation {
+                        message: format!(
+                            "generator `{u:?}` is outside the pure-spider fragment; the Cospan \
+                             functor is complete only for User-free terms (issue #80)"
+                        ),
+                    });
+                }
+            };
+            let target = spider_target_word(g, input)?;
+            // Ex 2.8's four generators, at the spider's own colour: a single apex
+            // vertex labelled `c`, hit by every leg the arity declares.
+            //   μ_c: 2 → 1 ← 1   η_c: 0 → 1 ← 1   δ_c: 1 → 1 ← 2   ε_c: 1 → 1 ← 0
+            let left = vec![0; g.source()];
+            let right = vec![0; g.target()];
+            Ok((Cospan::new(left, right, vec![color]), target))
+        }
+        // f ; g — pushout composition, over words that meet by construction.
         PropExpr::Compose(f, g) => {
-            let fc = to_cospan_inner::<G>(f)?;
-            let gc = to_cospan_inner::<G>(g)?;
-            fc.compose(&gc)
+            let (fc, mid) = to_cospan_inner::<G>(f, input)?;
+            let (gc, target) = to_cospan_inner::<G>(g, &mid)?;
+            Ok((fc.compose(&gc)?, target))
         }
         // f ⊗ g — monoidal (disjoint-union) product.
         PropExpr::Tensor(f, g) => {
-            let mut fc = to_cospan_inner::<G>(f)?;
-            let gc = to_cospan_inner::<G>(g)?;
+            let split = f.source();
+            expect_at_least(split, input)?;
+            let (left, right) = input.split_at(split);
+            let (mut fc, mut target) = to_cospan_inner::<G>(f, left)?;
+            let (gc, right_target) = to_cospan_inner::<G>(g, right)?;
             fc.monoidal(gc);
-            Ok(fc)
+            target.extend(right_target);
+            Ok((fc, target))
         }
+    }
+}
+
+/// A subterm was handed a word of the wrong length.
+fn expect_len<C>(expected: usize, input: &[C]) -> Result<(), CatgraphError> {
+    if input.len() == expected {
+        Ok(())
+    } else {
+        Err(CatgraphError::CompositionSizeMismatch {
+            expected,
+            actual: input.len(),
+        })
+    }
+}
+
+/// A tensor's left factor needs at least its own arity from the incoming word.
+fn expect_at_least<C>(expected: usize, input: &[C]) -> Result<(), CatgraphError> {
+    if input.len() >= expected {
+        Ok(())
+    } else {
+        Err(CatgraphError::CompositionSizeMismatch {
+            expected,
+            actual: input.len(),
+        })
     }
 }
 
@@ -161,6 +241,23 @@ where
     type Target = CospanCanon<()>;
 
     fn apply(&self, expr: &PropExpr<FrobeniusOr<G>>) -> Result<Self::Target, CatgraphError> {
-        Ok(to_cospan::<G>(expr)?.canonical_form())
+        // The word-blind trait supplies no source word; monochromatically there
+        // is exactly one of the right length.
+        Ok(to_cospan::<G>(expr, &mono_word(expr.source()))?.canonical_form())
+    }
+}
+
+impl<G> ColoredCompleteFunctor<FrobeniusOr<G>> for CospanFunctor
+where
+    G: PropSignature,
+    G::Color: Copy + Ord,
+{
+    type Target = CospanCanon<G::Color>;
+
+    fn apply_colored(
+        &self,
+        expr: &ColoredExpr<FrobeniusOr<G>>,
+    ) -> Result<Self::Target, CatgraphError> {
+        Ok(to_cospan::<G>(expr.expr(), expr.source_word())?.canonical_form())
     }
 }

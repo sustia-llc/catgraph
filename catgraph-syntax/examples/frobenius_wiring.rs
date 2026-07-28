@@ -19,9 +19,12 @@
 //! - `User(g)` leaves are **out of its domain**: a wire decorated by a user
 //!   signature generator has no canonical `MatKron` image, so [`to_mat_kron`]
 //!   returns [`SyntaxError::NonFrobenius`]. We demonstrate this below.
-//! - The layer is **monochromatic**: one wire colour `Λ = {•}`, one spider
-//!   family. F&S 2019 Thm 3.14's fully *colored* generality (a distinct spider
-//!   per colour) is out of scope here — colored props are tracked as #79.
+//!
+//! This example stays **monochromatic** — one wire colour `Λ = {•}`, spelled
+//! `()` — so every spider is built at that one colour and `dims` is constant.
+//! The layer itself is Λ-colored since #79 P3a: `spider(c, m, n)` takes its
+//! colour, and `to_mat_kron` takes a source word plus a per-colour dimension
+//! function. What is still monochromatic is the *textual* surface (#79 P3b).
 //!
 //! Run: `cargo run -p catgraph-syntax --example frobenius_wiring`
 
@@ -66,7 +69,7 @@ impl PropSignature for Sig {
 /// Map a Frobenius term to its `MatKron<i64>` image on `R^d` (turbofish shim,
 /// the `tests/frobenius.rs` idiom).
 fn mk(expr: &PropExpr<FrobeniusOr<Sig>>, d: usize) -> Result<MatKron<i64>, SyntaxError> {
-    to_mat_kron::<Sig, i64>(expr, d)
+    to_mat_kron::<Sig, i64, _>(expr, &mono_word(expr.source()), &|(): &()| d)
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -77,8 +80,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // cap is the plain identity wire. cup : 0 → 2, cap : 2 → 0.
     let id1 = Free::<FrobeniusOr<Sig>>::identity(1);
     let snake = Free::compose(
-        Free::tensor(cup::<Sig>(), id1.clone()), // 0+1 = 1 → 2+1 = 3
-        Free::tensor(id1, cap::<Sig>()),         // 1+2 = 3 → 1+0 = 1
+        Free::tensor(cup::<Sig>(()), id1.clone()), // 0+1 = 1 → 2+1 = 3
+        Free::tensor(id1, cap::<Sig>(())),         // 1+2 = 3 → 1+0 = 1
     )?;
     println!(
         "snake  (cup ⊗ id) ; (id ⊗ cap) : {} → {}",
@@ -97,8 +100,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // ---- (b) Spider fusion ---------------------------------------------------
     // spider(m,k) ; spider(k,n) ≡ spider(m,n) for k ≥ 1: fusing two junctions
     // along a shared wire is one wider junction (the SCFM "all legs equal" law).
-    let fused = Free::compose(spider::<Sig>(3, 1), spider::<Sig>(1, 2))?; // 3 → 1 → 2
-    let direct = spider::<Sig>(3, 2);
+    let fused = Free::compose(spider::<Sig>((), 3, 1), spider::<Sig>((), 1, 2))?; // 3 → 1 → 2
+    let direct = spider::<Sig>((), 3, 2);
     println!("\nfusion spider(3,1) ; spider(1,2) ≡ spider(3,2):");
     for d in [2_usize, 3] {
         assert_eq!(mk(&fused, d)?, mk(&direct, d)?, "spider fusion at d={d}");
