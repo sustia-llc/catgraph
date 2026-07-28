@@ -65,13 +65,14 @@ the arity carrier only in an all-identity diagram, `coalesce` (b)); every
 **every maximal run of braid layers is the canonical bubble-sort schedule of
 its underlying permutation** (§2.2, Step 3(b)); every generator in
 its earliest admissible layer (positive-source by covering span, zero-source by
-the component-anchored point span); within every layer, no adjacent
+the point span at its leftmost admissible slot); within every layer, no adjacent
 strictly-commuting pair ordered against the Step 6 order — `scalar < η < ε` at a
 single-atom tie (§2.5 — since the #174 design round the tied comparator reads
 nothing else); no adjacent *free* pair of connected components ordered against
 rule (i)'s component order (Step 7, §2.6); and no adjacent pair of
-interval-aligned *columns* whose block arities strictly commute ordered against
-that same component order (Step 6½, §4.5). Both transposition passes carry the
+interval-aligned *columns* whose block arities strictly commute **and whose
+component keys differ** ordered against that same component order (Step 6½,
+§4.5 — an equal-key pair is declined, not decided). Both transposition passes carry the
 same three guards — at least one component multi-atom, neither marked, neither
 braid-carrying — so an ordering violation involving a marked or braid-carrying
 component is not an invariant breach. (The three bolded clauses were implicit
@@ -152,8 +153,8 @@ Two independent choices fix the placement of atoms:
    the issue-#14 C2 scheduling witnesses (same morphism, independent atoms
    placed in different layers) onto one earliest-schedule form.
 
-   **Zero-source** generators (`η : 0 → 1`) sift by the **component-anchored
-   point-span rule** (issue #55 PR2): the empty consumed span reduces to a
+   **Zero-source** generators (`η : 0 → 1`) sift by the **point-span rule**
+   (issue #55 PR2; coordinate-only since #174): the empty consumed span reduces to a
    single output coordinate `q` at the source cursor, so `η` slides into the
    earliest braid-free layer `j−1` iff `q` is an atom boundary there (insert
    between the adjacent atoms, e.g. the `[F, G]` boundary in the witness) or
@@ -162,14 +163,19 @@ Two independent choices fix the placement of atoms:
    split).
 
    Where `q` admits **several** slots — a run of target-0 atoms all sits at that
-   coordinate — the choice is *not* made from the cursor. The cursor position of
-   a zero-source atom is presentation-dependent, and anchoring on it makes the
-   normal form presentation-dependent too (the counterexample recorded in the
-   2026-07-26 diagnosis note §2). The slot comes instead from the **component
-   order anchor**, rule (i) — see §2.6. Target-0 sinks (`ε : 1 → 0`) have a
-   non-empty source span and sift via the positive-source path. Only **braids**
-   are excluded from the sift entirely (their placement is §2.1's job, and
-   letting both passes move atoms would oscillate the fixpoint).
+   coordinate — every one of them denotes the same morphism, and the **leftmost**
+   is taken. The component-anchored walk that used to choose among them was
+   **retired in the #174 design round** (§2.6): which slot an `η` takes inside
+   that run is a genuinely *free* choice, so importing rule (i)'s
+   writing-dependent coordinates into it made the normal form writing-dependent —
+   witnessed by CE-R1, an SMC-equal pair inside `𝔉` that the imported order
+   separated. What the 2026-07-26 diagnosis note got right stands: the *cursor*
+   is not the anchor either. The coordinate `q` is; the slot among equals is
+   free, and free is resolved positionally, not by content the diagram does not
+   pin. Target-0 sinks (`ε : 1 → 0`) have a non-empty source span and sift via
+   the positive-source path. Only **braids** are excluded from the sift entirely
+   (their placement is §2.1's job, and letting both passes move atoms would
+   oscillate the fixpoint).
 
    Choice 1 leaves one residual freedom that wire order does not decide — the
    relative order of *strictly commuting* zero-arity atoms within a layer. §2.5
@@ -268,11 +274,17 @@ Step 6 leaves every earlier component fixed: it never moves an atom across a
 layer boundary, never rewrites an atom, and never changes a layer's membership,
 so `crossings`, `mixed_layer_count`, `wide_braid_count`, the two position sums
 (both layer-index sums) and `layer_count` are all invariant under it.
-`block_inversion_count` too: a Step-6 swap changes the relative order of exactly
-the pair it swaps, and either that pair is two *single-atom* components — which
-`block_inversion_count` excludes by the free-pair condition — or it is already
-decided by the rule-(i) component order (`tie_sorts_before`), so the swap lowers
-the block count or leaves it alone. Never raises it.
+`block_inversion_count` and `column_inversion_count` too, though the argument is
+weaker than it used to be. A Step-6 swap changes the relative order of exactly
+the pair it swaps, and that pair is either excluded from those counts outright —
+two single-atom components, a marked or braid-carrying one, or an equal-key
+(closed↔closed) pair — or it is a pair the transposition passes do count. In the
+second case Step 6 now orders it by the **class** order while the counts order it
+by rule (i), and those are unrelated criteria: nothing here proves Step 6 cannot
+move such a pair *against* the count. What holds it together in practice is that
+Step 6 runs last in the loop and the transposition passes re-run on the next
+iteration; establishing that the two families never conflict is the pass-
+disjointness obligation recorded in §4.4, not a claim made here.
 
 Four steps can raise `tied_inversion_count`, each while strictly shrinking an
 *earlier* component, so the tuple still drops lexicographically and Step 6
@@ -399,11 +411,12 @@ closed (touches neither boundary)  <  input-anchored  <  output-only
 with each anchored class ordered by its **least attached boundary coordinate**
 (least input coordinate for input-anchored, least output coordinate for
 output-only). A component that touches *both* boundaries counts as
-input-anchored. All closed components share one rule-(i) key; among
-themselves they sort by the in-situ reading key (#79 P1 — see
-"Closed↔closed order (resolved)" below), the block-level reading of §2.5's
-scalars-leftmost-then-`G::cmp`, since an atomic `0 → 0` scalar *is* a closed
-component.
+input-anchored. All closed components share one rule-(i) key; among themselves
+Step 7 sorts them by the in-situ reading key (#79 P1 — see "Closed↔closed order
+(resolved)" below), and Step 6½ declines the tie rather than deciding it. Step 6
+plays no part: since the #174 retirement its comparator never consults component
+class at all, so an atomic `0 → 0` scalar is ordered there by `G::cmp` as an
+*atom*, not as the closed component it also happens to be.
 
 **Where rule (i)'s coordinates may be read** (design round, 2026-07-28).
 `CompKey` carries a boundary *coordinate*, and a coordinate is a function of
@@ -567,11 +580,11 @@ witness accordingly.
 | 2 | `reduce_involution` | column-wise adjacent-layer compose: `id;id`, `id;X`, `X;id`, and `σ_{m,n};σ_{n,m} → id_{m+n}`; also `try_unitor_merge` 0-arity sink/source absorption; mixed layers refused at the merge site |
 | 3 | `collect_braid_prefix` | (0) `isolate_mixed_braid_layers`, (a) naturality sweep (braids → input, §2.1), (b) `canonicalize_braid_runs` (permutation → canonical bubble-sort word) |
 | 4 | `coalesce_identity_layers` | (a) fuse adjacent `Identity` atoms in a layer; (b) drop pure-identity layers when a non-identity layer remains (keep one as arity carrier otherwise) |
-| 4(c) | `topological_layer_order` | sift each generator to its earliest admissible braid-free layer — covering-identity span for positive source, component-anchored point-span rule for zero-source `η` (§2.3, §2.6) |
+| 4(c) | `topological_layer_order` | sift each generator to its earliest admissible braid-free layer — covering-identity span for positive source, point-span rule at the leftmost admissible slot for zero-source `η` (§2.3) |
 | 5 | `simplify_units` | remove `Identity(0)` atoms; drop layers emptied as a result |
 | 7 | `reorder_component_blocks` | transpose adjacent *free* component blocks (`closed ∥ anything`, `input-only ∥ output-only`) into rule-(i) order, over an identity-split refinement (§2.6) |
 | 6½ | `reorder_zero_arity_columns` | transpose two adjacent **interval-aligned columns** whose block arities strictly commute, over the same identity-split refinement — the move between Step 6 (atoms) and Step 7 (whole components) that residuals §4.6(c)/(d) needed (§4.5) |
-| 6 | `reorder_tied_zero_arity` | within-layer bubble reorder of strictly-commuting zero-arity atoms — `scalar < η < ε < solid` at single-atom ties (§2.5), component order otherwise (§2.6) |
+| 6 | `reorder_tied_zero_arity` | within-layer bubble reorder of strictly-commuting zero-arity atoms — `scalar < η < ε < solid`, then `G::cmp` (§2.5); content-only since #174 retired its component-order branch |
 
 (Steps 7 and 6½ are staged *ahead* of Step 6 in the loop — a block or column
 move can land an `η` beside an `ε`, and Step 6 repairs that on the same pass.)
@@ -625,8 +638,8 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
 - **Zero-arity scheduling** — mid-layer **zero-source** (`η : 0 → 1`) *layer
   assignment* is **probe-verified** canonical on the fragment `𝔉` (§4.1:
   components clear and boundary-attached; full proof open — §4.4 status), via
-  the component-anchored point-span sift (§2.3 + §2.6,
-  issue #55 PR2; the former issue #14 follow-up gap). Tensor- and compose-forms of the same morphism
+  the point-span sift at its leftmost admissible slot (§2.3; issue #55 PR2, with
+  the component-anchored slot walk retired in #174). Tensor- and compose-forms of the same morphism
   converge (`ε ⊗ η` = `ε ; η`, `F ⊗ η ⊗ G` = `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)`,
   `(μ;!) ; (η;Δ)` = `(μ;!) ⊗ (η;Δ)`); verified by `interchange_zero_source_eta`,
   the `zero_arity_order` tests, and the `smc_canonicality_probes` module in
@@ -642,13 +655,19 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
   interval-aligned pairs whose block arities strictly commute, so nested
   writings converge with their free ones:
   `Copy ; (id₁ ⊗ Zero ⊗ id₁) ; (id₁ ⊗ Discard ⊗ id₁) ; Add`
-  = `(Zero;Discard) ⊗ (Copy;Add)`, and the two CE-A witnesses of §4.6(d).
-  Verified by `smc_canonicality_probes::trapped_closed_block_extracts`,
+  = `(Zero;Discard) ⊗ (Copy;Add)`, and the sink form of §4.6(d).
+  **Ablation-verified** as depending on Step 6½ — the five probes that break when
+  the pass is disabled: `smc_canonicality_probes::trapped_closed_block_extracts`,
   `nested_sink_block_converges_with_free_writing`,
-  `nested_source_block_converges_with_free_writing`,
   `column_move_crosses_a_merging_wall`,
-  `column_interval_is_the_adjacency_run_not_the_block_span` and
-  `multi_nested_blocks_extract`.
+  `column_move_crosses_a_fused_wide_identity` and `multi_nested_blocks_extract`.
+  Two further probes in the same family are convergence regressions **not**
+  attributable to the pass — they converge with it ablated:
+  `nested_source_block_converges_with_free_writing` (CE-A3, closed by the
+  free-site retirement, §4.6(d)) and
+  `column_interval_is_the_adjacency_run_not_the_block_span` (scope stated on the
+  probe). `interval_alignment_check_is_exercised` covers the alignment test
+  itself.
 - **Residual ledger** — §4.6, restated 2026-07-28. **(a)** marked components:
   their blocks and columns are still not transposed (their `η`s now sift);
   witnesses `marked_encloser_blocks_the_column_move` and
@@ -973,9 +992,13 @@ residual (below) — nor
 `column_interval_is_the_adjacency_run_not_the_block_span`, which is kept as a
 nested-block convergence regression with that scope stated on it. The
 interval-alignment test is separately verified to do real work: instrumented
-over the design round's 100 000-case corpus it rejected **5 780** candidate
-intervals, and the delta-shrunk smallest such case is
-`interval_alignment_check_is_exercised`.
+over the same 100 000-case corpus it rejected **5 780** candidate intervals, and
+the delta-shrunk smallest such case is `interval_alignment_check_is_exercised`.
+That count is **not** pinned by the committed sweep tracker, which does not
+instrument the alignment branch: it was obtained by temporarily counting
+rejections inside `column_pair_is_transposable`, and re-deriving it means redoing
+that instrumentation. The probe guards the behaviour; the number is provenance
+for the claim that the check is not decorative.
 
 The `d = 2` collision pins did not move **for the column pass**: its residuals
 need expression depth ≥ 3, so the enumeration is structurally blind to them
@@ -997,7 +1020,7 @@ pairs, 128 of them inside `𝔉`**, on the shipped engine. Those are not residua
 (a): they are unmarked and boundary-attached. They include shapes with no
 interleaving, no closed component and no nesting at all (the engine reviewer's
 case 7079 is a layer-count divergence under a single sound swap), and roughly
-150 of them predate every line of #174. Earlier drafts of this section wrote
+150 of the 253 predate every line of #174. Earlier drafts of this section wrote
 "the open set is down to (a)"; that claim was wrong on every build the project
 has ever shipped, and it is withdrawn.
 
@@ -1015,6 +1038,29 @@ pre-#174 engine:
 | …on marked cases | 888 | 23 | — |
 | intransitive comparator triples | 0 | 0 | ≈37% of diagrams |
 
+**The corpus, so the numbers above are reproducible.** The shipped column is
+pinned by `published_divergence_figures_reproduce` in
+`tests/smc_nf_differential_sweep.rs` — the design round's own driver, ported into
+the tree. It is `#[ignore]`d (a 100 000-pair sweep) and run with `--ignored` when
+the normal form changes; that test and this table quote each other, so they are
+re-pinned together or not at all.
+
+The corpus is 100 000 cases, each generated purely from
+`splitmix64(seed ^ index)` with seed `0x9E37_79B9_7F4A_7C15`, so it is identical
+across builds and any case can be re-run in isolation by index. A case is a
+random SFG expression over `BoolRig` (≤ 4 layers, ≤ 7 atoms per layer, wire width
+capped at 7, generators drawn from `Copy`/`Add`/`Zero`/`Discard`/`Scalar` plus
+identities) paired with **one sound interchange rewriting of itself**, so every
+pair is SMC-equal by construction and any NF difference is a canonicality failure
+rather than a generator artifact. "Inside `𝔉`" is decided on the normal form: no
+component marked by `mark_interleaved`, every component touching a boundary.
+
+The pre-#174 column was measured the same way against that engine and is **not**
+pinned by anything in-tree — it is a historical baseline, not a regression
+target. And note what the tracker is not: `smc_canonicality_probes` stays the
+gate of record, deciding named convergences; this sweep is a tracker, and a move
+in it is a signal to diagnose rather than a failure in itself.
+
 The `out_min` variant reaches the lowest in-`𝔉` count and is still **rejected**:
 an intransitive comparator has no total order for §4.4 to build on, and it
 regresses the named CE-R1. Lower is not the objective — a comparator that is a
@@ -1026,11 +1072,18 @@ The lettered ledger:
   leaves a marked component's blocks and columns untransposed, because
   transposition is not braid-free there. Its `η`s *are* now sifted: the design
   round retired the guard from the sift and from Step 6's comparator, leaving it
-  in Steps 7 and 6½ only, and divergences on marked cases fell 97% on the
-  differential corpus. Witnesses: `marked_encloser_blocks_the_column_move` (the
+  in Steps 7 and 6½ only, and divergences on marked cases fell 888 → 23 on the
+  default corpus. Witnesses: `marked_encloser_blocks_the_column_move` (the
   guard, verified decisive by ablation) and
-  `marked_component_eta_sifts_and_converges` (the widened sift surface). Tracked
-  on issue #174.
+  `marked_component_eta_sifts_and_converges` (the widened sift surface).
+
+  Tracked quantitatively by `published_braid_mode_figures_reproduce` in
+  `tests/smc_nf_differential_sweep.rs`, which is the residual-(a) tracker: the
+  default corpus produces too few marked cases to measure this residual, so that
+  test sweeps a **braid-injecting** corpus where components own non-contiguous
+  boundary intervals and guard 3's marking actually fires. Its figures are a
+  different corpus from the calibration table above and are not comparable to
+  it. Tracked on issue #174.
 - **(b) Closed↔closed order — CLOSED (2026-07-27, #79 P1).** All closed
   components share the rule-(i) key `(closed, 0)`; distinct closed blocks
   formerly kept their presentation order for want of a content-derived

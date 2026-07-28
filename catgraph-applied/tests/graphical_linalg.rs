@@ -145,8 +145,8 @@ fn matr_presentation_builds_unit_interval() {
     matr_presentation::<UnitInterval>(&samples).unwrap();
 }
 
-// Post-#55-PR2 depth-2 collision baselines (rule-(i) component-anchored η
-// placement + Step 7 component-block reorder) — the single Rust source of
+// Post-#174 depth-2 collision baselines (Step 6½ column pass + the free-site
+// retirement of the component-anchored η slot walk) — the single Rust source of
 // truth for each number (mirrored in the module docstring table; the
 // pin-guard in `scripts/check_audit_counts.py` scans the prose sites against
 // these). All four rigs are deterministic → pinned exactly (F64Rig was a

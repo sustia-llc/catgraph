@@ -183,6 +183,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   narrower than the pre-PR2 gap); closed↔closed order is stable but `Ord`-less
   (residual). Both residuals tracked in
   [#174](https://github.com/sustia-llc/catgraph/issues/174).
+
+  > **Superseded within this release by the #174 design round (2026-07-28):**
+  > the slot derivation described here is **retired**. An `η`'s insertion slot is
+  > no longer derived from its component's boundary attachment — it is the
+  > leftmost slot its wire coordinate admits — because importing rule (i)'s
+  > coordinates into a free choice made the normal form writing-dependent
+  > (CE-R1). Guard 3 correspondingly no longer gates the sift, so the
+  > "interleaved output-only components are not sifted" clause no longer holds
+  > either; the guard survives in Steps 7 and 6½ only. What does survive from
+  > this entry: `reorder_component_blocks` (Step 7) and rule (i)'s class order
+  > as *its* comparator. The pins quoted in the sibling entries were
+  > re-baselined to 980/1433/2018/2013 by the same round.
 - **`smc_canonicality_probes` — the canonicality gate of record**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) PR2): new test
   module asserting SMC-equal pairs NF-equal **directly** (the diagnosis
@@ -243,7 +255,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   column pass. The **source** form of (d), CE-A3, turned out *not* to be a column
   residual at all: it was blocked by Step 6's tied comparator ranking components
   ahead of the class order, and it converges once that branch is retired
-  (below). Ablating Step 6½ leaves CE-A3 converging and re-breaks the other four
+  (below). Ablating Step 6½ leaves CE-A3 converging and re-breaks the other five
   column witnesses — the attribution is measured, not assumed. All three formerly
   `#[ignore]`d witnesses in `tests/smc_nf_completeness.rs` are live regressions,
   renamed to describe behaviour (`trapped_closed_block_extracts`,

@@ -85,7 +85,7 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
   crown-jewel completeness-registry test `(η;ε)⊗μ = μ⊗(η;ε)` in
   `tests/cospan_complete_functor.rs` documented a CC *gap* (plain congruence
   closure returned non-`Some(true)`; only `CospanFunctor` decided it). After
-  catgraph-applied's component-anchored NF (rule (i) + Step 7), closed
+  catgraph-applied's component-granular NF (rule (i) + Step 7), closed
   components sort leftmost and plain CC now proves the pair — an unplanned
   external confirmation that the NF change does real work. The test is
   migrated to a **counit-law witness** (a pair the NF still cannot decide, so
