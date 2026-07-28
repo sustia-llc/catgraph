@@ -78,9 +78,10 @@
 //! clear and boundary-attached) is witnessed directly by the
 //! `smc_canonicality_probes` module (see the module docstring note above);
 //! a full proof is open (§4.4 canonicality status — the draft was refuted in
-//! review). The §4.6(c)/(d) nesting residuals are structurally invisible at
-//! depth 2 (both need expression depth ≥ 3), so these pins carry no
-//! contribution from them.
+//! review). The §4.6(c)/(d) nesting residuals were structurally invisible at
+//! depth 2 (both need expression depth ≥ 3), so these pins carried no
+//! contribution from them and did not move when the #174 column pass (Step 6½)
+//! closed both.
 //! Completing the presentation to all 18 F&S/BE15 relations gives CC more
 //! equations to identify with, lowering the residual collision count.
 //!

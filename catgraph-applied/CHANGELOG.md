@@ -15,6 +15,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
+- **SMC NF Step 6½ — zero-arity column transposition
+  (`reorder_zero_arity_columns`)**
+  ([#174](https://github.com/sustia-llc/catgraph/issues/174), PR-A): the move
+  strictly between Step 6 (adjacent *atoms*) and Step 7 (whole *components*).
+  Over the identity-split refinement, two adjacent **interval-aligned columns**
+  transpose when their block arities strictly commute at the interval's own
+  boundaries — `(src X = 0 ∨ src B = 0) ∧ (tgt X = 0 ∨ tgt B = 0)`, Step 6's
+  criterion read at column granularity. Direction is the shared
+  `component_key_order`, so no two ordering passes can disagree; the guards are
+  Step 7's (no braid-carrying or marked component, at least one multi-atom),
+  plus a carve leaving the closed↔closed tie to Step 7's reading key.
+  Termination adds `column_inversion_count` to the lexicographic measure,
+  between `block_inversion_count` and `tied_inversion_count`
+  (`docs/SMC-NF-RECONCILIATION.md` §2.4, §4.5).
+
 - **Worded complete-functor surface: `ColoredCompleteFunctor` +
   `Presentation::eq_mod_functorial_colored`**
   ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3a):
@@ -211,6 +226,38 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed
 
+- **SMC NF residuals (c) and (d) closed**
+  ([#174](https://github.com/sustia-llc/catgraph/issues/174), PR-A) — the two
+  nesting residuals of `docs/SMC-NF-RECONCILIATION.md` §4.6, both closed by the
+  Step 6½ column pass. A **closed** block written strictly inside another
+  component's wire span now extracts to its free writing (residual (c), the
+  trapped nesting), and so does a nested block **solid on the side facing its
+  encloser's opening** (residual (d) — the CE-A family that refuted the draft §4
+  canonicality theorem, and the only one of the four residuals that sat *inside*
+  the fragment `𝔉`). All three formerly `#[ignore]`d witnesses in
+  `tests/smc_nf_completeness.rs` are live regressions, joined by probes for a
+  merging wall, an adjacency interval shorter than the block's span, a
+  multi-level nesting, and the marked-encloser guard that survives. §4.6's open
+  set is down to residual (a), the interleave guard. The §4.4 canonicality
+  *proof* gap is unchanged — restoring the theorem is PR-B on the same issue.
+- **Component order at a shared output boundary** (same issue).
+  `component_key_order` orders two components by their **output** coordinates
+  whenever both attach the output boundary and they do not both attach the input
+  boundary, instead of by rule (i)'s class order. Braid-free layers never cross
+  wires, so those coordinates already fix the two components' left-to-right
+  order; the class order, which puts an input-anchored component ahead of an
+  output-only one, could therefore demand a layout no pass can realize — which
+  is precisely why the §4.6(d) source-form witness never converged. The clause
+  is inert wherever the old comparator was coherent (both-input pairs compare
+  identically, and a Step 7 free pair admits at most one component per
+  boundary), and the four `d = 2` collision pins did not move.
+- **Fused-identity coarsening in the read-only component analyses** (same
+  issue) — the §4.1 hygiene item. Step 4(c)'s `η` slot walk and Step 6's tied
+  comparator now read `analyze_components_refined`: the identity-split
+  refinement taken *virtually* and projected back onto the stored positions, so
+  their keys, sizes and readings are as fine as Step 7's rewriting refinement.
+  The stored layers keep eager identity fusion, so the §1 invariants are
+  untouched.
 - **Fragment claims corrected: two new NF residuals (four total)**
   ([#55](https://github.com/sustia-llc/catgraph/issues/55) /
   [#174](https://github.com/sustia-llc/catgraph/issues/174)). Residual (c),
