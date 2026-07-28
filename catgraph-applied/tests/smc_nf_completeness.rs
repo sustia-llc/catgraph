@@ -23,7 +23,7 @@
 //! **Zero-arity atoms.** `try_unitor_merge` absorbs the 2-atom sink/source
 //! pattern (`[X, Identity(k)]` and three mirrors); mid-layer zero-source `η`
 //! deeper in a layer is scheduled by the `topological_layer_order`
-//! component-anchored point-span sift (issue #55, closed on the fragment 𝔉 —
+//! point-span sift (issue #55, closed on the fragment 𝔉 —
 //! SMC-NF-RECONCILIATION.md §4.1; probe-verified, full proof open per the
 //! §4.4 canonicality status; see `interchange_zero_source_eta` and the
 //! `smc_canonicality_probes` module). A proptest or golden-replay failure
@@ -219,7 +219,7 @@ mod axiom_closure {
         /// `smc_nf_regression.rs`.
         ///
         /// The follow-up mid-layer **zero-source** case (`η : 0 → 1`) is now also
-        /// closed by the component-anchored point-span sift (issue #55) — see
+        /// closed by the point-span sift (issue #55) — see
         /// `interchange_zero_source_eta` below. This proptest's `arb_expr` emits
         /// only `F`, `G : 1 → 1` plus braids/identities, so it exercises the
         /// positive-source scheduling directly.
@@ -296,7 +296,7 @@ fn known_edge_case_unitor_merge_two_atom_pattern() {
 }
 
 /// Closed (issue #55): a mid-layer **zero-source** generator (`η : 0 → 1`) is
-/// now scheduled canonically by the component-anchored point-span sift.
+/// now scheduled canonically by the point-span sift.
 /// `F ⊗ η ⊗ G` and `(F ⊗ G) ; (id₁ ⊗ η ⊗ id₁)` are SMC-equal (both are
 /// `[F(in0), η-fresh, G(in1)]`); `topological_layer_order` slides `η` into the
 /// earlier layer at its point coordinate (the boundary between `F`'s and `G`'s
@@ -338,7 +338,7 @@ fn interchange_zero_source_eta() {
 /// `TestSig::Eta` (`0 → 1`) is the η-class witness (SFG's `Zero`).
 ///
 /// The **layer-assignment** half of #55 (`ε ; η` compose-forms vs `ε ⊗ η`
-/// tensor-forms) is closed too, by the component-anchored point-span sift
+/// tensor-forms) is closed too, by the point-span sift
 /// (PR2) — see `interchange_zero_source_eta` above and
 /// `compose_form_converges_with_tensor_forms` below.
 mod zero_arity_order {
@@ -371,10 +371,11 @@ mod zero_arity_order {
 
     /// The full #55 witness class converges: the **compose**-form `ε ; η`
     /// (`1 → 0 → 1`) is the same morphism `1 → 1` as either tensor-form, and the
-    /// component-anchored point-span sift (PR2) lifts its `η` into the `ε`'s
-    /// layer. Both are single-atom components, so the §2.6 disjointness carve
-    /// hands the resulting tie back to Decision 1 / Step 6 (PR1) — η first. All
-    /// three share the one NF `[[η, ε]]`.
+    /// point-span sift (PR2) lifts its `η` into the `ε`'s layer. The resulting
+    /// tie is decided by Decision 1 / Step 6 (PR1) — η first — as every tie now
+    /// is: since #174 the tied comparator reads the two atoms' classes and
+    /// nothing else, so no carve is needed to route this pair. All three share
+    /// the one NF `[[η, ε]]`.
     #[test]
     fn compose_form_converges_with_tensor_forms() {
         let compose_form = PropExpr::Compose(Box::new(eps()), Box::new(eta()));
@@ -663,9 +664,10 @@ mod smc_canonicality_probes {
     }
 
     /// The PR1 atomic witnesses, re-asserted as a probe set: all three forms of
-    /// the tied `η ∥ ε` pair share one NF. Both components are single atoms, so
-    /// the §2.6 disjointness carve routes this to Decision 1 (η first) rather
-    /// than to rule (i)'s component order.
+    /// the tied `η ∥ ε` pair share one NF, in Decision 1's order (η first).
+    /// Before #174 this pair needed the §2.6 disjointness carve to keep it away
+    /// from rule (i)'s component order; the carve is retired and the tied
+    /// comparator reads only the two atoms, so Decision 1 applies unconditionally.
     #[test]
     fn atomic_eta_eps_witnesses_converge() {
         let eps: PropExpr<TestSig> = PropExpr::Generator(TestSig::Eps);
@@ -1400,32 +1402,33 @@ mod smc_canonicality_probes {
     /// retirement the sift is purely coordinate-driven and marking no longer
     /// enters it. This is the round's flagged risk, so it gets a witness.
     ///
-    /// Component `A` owns input coordinates 0 and 2 with a foreign `Discard` at
-    /// 1 — owner-word runs `A E A`, so both are marked — and `A` carries a
-    /// `Zero`. Under the old guard that `Zero` never moved; now it sifts to the
-    /// atom boundary its coordinate names, and the two writings of the same
-    /// morphism (`Zero` in the second layer, `Zero` in the first) converge.
+    /// The shape has to satisfy three conditions at once for the old guard to
+    /// have been reachable, which is narrower than it looks. The `η`'s component
+    /// must be **marked**; it must **not** be input-anchored, because the old
+    /// `eta_placement` returned the leftmost slot for `class == 1` *before* it
+    /// ever consulted `interleaved`; and its output coordinate must land on an
+    /// atom boundary of the preceding layer, or `point_placement` declines for
+    /// plain geometry and the guard is never asked.
+    ///
+    /// `Copy ; (s ⊗ s′) ; (id₁ ⊗ η ⊗ id₁)` meets all three. `Copy` joins the two
+    /// scalars into one component, so the output owner word reads `A Z A` and
+    /// `mark_interleaved` marks both; `Z = {η}` touches only the output boundary,
+    /// so it is `class == 2`; and the `η` sits at the `s | s′` atom boundary.
+    /// Under the old guard that `η` never moved and this pair diverged — verified
+    /// by ablation, restoring `interleaved` at the sift flips the assertion — and
+    /// it now sifts, so the two writings of the same morphism converge.
     #[test]
     fn marked_component_eta_sifts_and_converges() {
         let id1 = || PropExpr::Identity(1);
-        // (id₁ ⊗ ! ⊗ id₁) ; (id₁ ⊗ η ⊗ id₁) ; (μ ⊗ id₁) : 3 → 2
+        // Copy ; (s ⊗ s′) ; (id₁ ⊗ η ⊗ id₁) : 1 → 3
         let late = seq(
-            seq(
-                par(id1(), par(prim(SfgGenerator::Discard), id1())),
-                par(id1(), par(prim(SfgGenerator::Zero), id1())),
-            ),
-            par(prim(SfgGenerator::Add), id1()),
+            seq(prim(SfgGenerator::Copy), par(scalar(), scalar_other())),
+            par(id1(), par(prim(SfgGenerator::Zero), id1())),
         );
-        // (id₁ ⊗ η ⊗ ! ⊗ id₁) ; (μ ⊗ id₁) : 3 → 2 — same content, `η` written early.
+        // Copy ; (s ⊗ η ⊗ s′) : 1 → 3 — same morphism, `η` written in one layer.
         let early = seq(
-            par(
-                id1(),
-                par(
-                    prim(SfgGenerator::Zero),
-                    par(prim(SfgGenerator::Discard), id1()),
-                ),
-            ),
-            par(prim(SfgGenerator::Add), id1()),
+            prim(SfgGenerator::Copy),
+            par(scalar(), par(prim(SfgGenerator::Zero), scalar_other())),
         );
         assert_eq!(
             nf(&late),
@@ -1573,6 +1576,12 @@ mod smc_canonicality_probes {
         );
         let b = seq(l1, seq(l2, l3b));
         assert_eq!(nf(&a), nf(&b), "CE-R1 diverged");
+        let once = nf(&a);
+        assert_eq!(
+            once,
+            nf(&from_string_diagram(&once)),
+            "CE-R1 not idempotent"
+        );
     }
 
     /// **CE-R2** — the refinement rider's own regression guard (issue #174
@@ -1623,6 +1632,12 @@ mod smc_canonicality_probes {
             par(scalar_other(), PropExpr::Identity(3)),
         );
         assert_eq!(nf(&a), nf(&b), "CE-R2 diverged");
+        let once = nf(&a);
+        assert_eq!(
+            once,
+            nf(&from_string_diagram(&once)),
+            "CE-R2 not idempotent"
+        );
     }
 
     /// **Step 6½'s interleave guard is load-bearing** (§4.6(a), guard 3). The
@@ -1767,16 +1782,23 @@ mod smc_canonicality_probes {
                 ),
                 prim(SfgGenerator::Add),
             ),
-            // adjacency run shorter than the block span
+            // adjacency run shorter than the block span — nested and free
             seq(
                 seq(
                     seq(
                         prim(SfgGenerator::Copy),
                         par(id1(), par(prim(SfgGenerator::Zero), id1())),
                     ),
-                    par(prim(SfgGenerator::Discard), par(id1(), id1())),
+                    par(prim(SfgGenerator::Discard), par(scalar(), id1())),
                 ),
                 par(prim(SfgGenerator::Discard), id1()),
+            ),
+            par(
+                seq(closed_via_scalar(), prim(SfgGenerator::Discard)),
+                seq(
+                    prim(SfgGenerator::Copy),
+                    par(prim(SfgGenerator::Discard), id1()),
+                ),
             ),
             // multi-nesting, doubly nested and half free
             seq(
@@ -1920,6 +1942,245 @@ mod smc_canonicality_probes {
             let once = nf(e);
             let twice = nf(&from_string_diagram(&once));
             assert_eq!(once, twice, "nf not idempotent on {e:?}");
+        }
+    }
+
+    /// **Which witnesses Step 6½ is actually load-bearing for.**
+    ///
+    /// §4.5's "What actually depends on the pass" and the CHANGELOG's
+    /// residual-(c)/(d) entry both make a *counted* claim about the column pass,
+    /// and until this probe existed the only way to check it was to comment the
+    /// pass out by hand — which is how the two came to disagree (§4.5 said five
+    /// witnesses, the CHANGELOG said four).
+    ///
+    /// Each column-family pair runs through `nf` and through
+    /// `nf_without_column_pass` (the `internal-ablation` hook), pinning the
+    /// split: five pairs converge **only** with the pass, two converge either
+    /// way. The `assert_ne!` half is the load-bearing one — it fails the day the
+    /// column pass stops mattering for a witness that is documented as needing
+    /// it, whether because the pass regressed or because some other pass grew to
+    /// subsume it. Either way the prose in §4.5 would have gone stale silently.
+    ///
+    /// The two `needs_pass == false` rows are the attribution correction of
+    /// record: CE-A3 was filed as a column residual and is not one (it converges
+    /// by the free-site retirement), and the adjacency-interval probe is a
+    /// nested-block convergence regression rather than a column witness.
+    ///
+    /// The pairs are rebuilt here rather than shared with the named tests above,
+    /// which keeps this module append-only; folding them into shared
+    /// `*_pair()` helpers is worth doing once #174's doc-staleness edits land.
+    #[cfg(feature = "internal-probes")]
+    mod column_pass_ablation {
+        use super::*;
+        use catgraph_applied::prop::presentation::smc_nf::nf_without_column_pass;
+
+        fn id1() -> PropExpr<Sfg> {
+            PropExpr::Identity(1)
+        }
+
+        /// `(name, nested writing, free writing, does Step 6½ decide it?)`
+        fn column_family() -> Vec<(&'static str, PropExpr<Sfg>, PropExpr<Sfg>, bool)> {
+            let boxed = || {
+                seq(
+                    seq(
+                        seq(
+                            prim(SfgGenerator::Copy),
+                            par(id1(), par(prim(SfgGenerator::Zero), id1())),
+                        ),
+                        par(id1(), par(prim(SfgGenerator::Discard), id1())),
+                    ),
+                    prim(SfgGenerator::Add),
+                )
+            };
+            let copy_add_tail = || {
+                seq(
+                    seq(
+                        seq(
+                            prim(SfgGenerator::Copy),
+                            par(prim(SfgGenerator::Copy), id1()),
+                        ),
+                        par(prim(SfgGenerator::Add), id1()),
+                    ),
+                    prim(SfgGenerator::Add),
+                )
+            };
+            vec![
+                (
+                    "trapped_closed_block_extracts",
+                    boxed(),
+                    par(
+                        closed_block(),
+                        seq(prim(SfgGenerator::Copy), prim(SfgGenerator::Add)),
+                    ),
+                    true,
+                ),
+                (
+                    "nested_sink_block_converges_with_free_writing",
+                    seq(
+                        seq(
+                            par(prim(SfgGenerator::Zero), par(scalar(), id1())),
+                            par(id1(), par(prim(SfgGenerator::Discard), id1())),
+                        ),
+                        prim(SfgGenerator::Add),
+                    ),
+                    par(
+                        seq(scalar(), prim(SfgGenerator::Discard)),
+                        seq(
+                            par(prim(SfgGenerator::Zero), id1()),
+                            prim(SfgGenerator::Add),
+                        ),
+                    ),
+                    true,
+                ),
+                (
+                    "column_move_crosses_a_merging_wall",
+                    seq(
+                        seq(
+                            seq(
+                                seq(
+                                    prim(SfgGenerator::Copy),
+                                    par(id1(), par(prim(SfgGenerator::Zero), id1())),
+                                ),
+                                par(
+                                    prim(SfgGenerator::Copy),
+                                    par(prim(SfgGenerator::Discard), id1()),
+                                ),
+                            ),
+                            par(prim(SfgGenerator::Add), id1()),
+                        ),
+                        prim(SfgGenerator::Add),
+                    ),
+                    par(closed_block(), copy_add_tail()),
+                    true,
+                ),
+                (
+                    "column_move_crosses_a_fused_wide_identity",
+                    seq(
+                        seq(
+                            seq(
+                                seq(
+                                    seq(
+                                        prim(SfgGenerator::Copy),
+                                        par(prim(SfgGenerator::Copy), id1()),
+                                    ),
+                                    par(
+                                        PropExpr::Identity(2),
+                                        par(prim(SfgGenerator::Zero), id1()),
+                                    ),
+                                ),
+                                par(
+                                    PropExpr::Identity(2),
+                                    par(prim(SfgGenerator::Discard), id1()),
+                                ),
+                            ),
+                            par(prim(SfgGenerator::Add), id1()),
+                        ),
+                        prim(SfgGenerator::Add),
+                    ),
+                    par(closed_block(), copy_add_tail()),
+                    true,
+                ),
+                (
+                    "multi_nested_blocks_extract",
+                    seq(
+                        seq(
+                            par(prim(SfgGenerator::Zero), par(boxed(), id1())),
+                            par(id1(), par(prim(SfgGenerator::Discard), id1())),
+                        ),
+                        prim(SfgGenerator::Add),
+                    ),
+                    par(
+                        closed_block(),
+                        par(
+                            seq(
+                                seq(prim(SfgGenerator::Copy), prim(SfgGenerator::Add)),
+                                prim(SfgGenerator::Discard),
+                            ),
+                            seq(
+                                par(prim(SfgGenerator::Zero), id1()),
+                                prim(SfgGenerator::Add),
+                            ),
+                        ),
+                    ),
+                    true,
+                ),
+                (
+                    "nested_source_block_converges_with_free_writing",
+                    seq(
+                        seq(
+                            prim(SfgGenerator::Copy),
+                            par(id1(), par(prim(SfgGenerator::Zero), id1())),
+                        ),
+                        par(prim(SfgGenerator::Discard), par(scalar(), id1())),
+                    ),
+                    par(
+                        seq(prim(SfgGenerator::Zero), scalar()),
+                        seq(
+                            prim(SfgGenerator::Copy),
+                            par(prim(SfgGenerator::Discard), id1()),
+                        ),
+                    ),
+                    false,
+                ),
+                (
+                    "column_interval_is_the_adjacency_run_not_the_block_span",
+                    seq(
+                        seq(
+                            seq(
+                                prim(SfgGenerator::Copy),
+                                par(id1(), par(prim(SfgGenerator::Zero), id1())),
+                            ),
+                            par(prim(SfgGenerator::Discard), par(scalar(), id1())),
+                        ),
+                        par(prim(SfgGenerator::Discard), id1()),
+                    ),
+                    par(
+                        seq(closed_via_scalar(), prim(SfgGenerator::Discard)),
+                        seq(
+                            prim(SfgGenerator::Copy),
+                            par(prim(SfgGenerator::Discard), id1()),
+                        ),
+                    ),
+                    false,
+                ),
+            ]
+        }
+
+        #[test]
+        fn column_pass_decides_exactly_the_five_documented_witnesses() {
+            let mut decided_by_the_pass = Vec::new();
+            for (name, nested, free, needs_pass) in column_family() {
+                assert_eq!(
+                    nf(&nested),
+                    nf(&free),
+                    "{name}: the shipped engine must converge this pair"
+                );
+                let ablated_converges =
+                    nf_without_column_pass(&nested) == nf_without_column_pass(&free);
+                if !ablated_converges {
+                    decided_by_the_pass.push(name);
+                }
+                assert_eq!(
+                    ablated_converges,
+                    !needs_pass,
+                    "{name}: Step 6½ attribution changed — the witness is documented as \
+                     {} the column pass, but ablating the pass leaves it {}. Update \
+                     §4.5's \"What actually depends on the pass\" and the CHANGELOG \
+                     count together with this table.",
+                    if needs_pass { "needing" } else { "NOT needing" },
+                    if ablated_converges {
+                        "converging"
+                    } else {
+                        "diverging"
+                    },
+                );
+            }
+            assert_eq!(
+                decided_by_the_pass.len(),
+                5,
+                "§4.5 and the CHANGELOG both quote a count of witnesses the column \
+                 pass decides; measured {decided_by_the_pass:?}"
+            );
         }
     }
 }

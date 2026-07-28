@@ -26,6 +26,17 @@ f64-rig = ["dep:nalgebra"]
 # only. **NOT public API.** Drives the `presentation::atom_canonical_n*`
 # group in `benches/presentation_bench.rs`. Opt-in only (NOT in `default`).
 internal-bench = []
+# `internal-probes` — Test-only SMC-NF internals. **NOT public API.** Two hooks,
+# both for claims in `docs/SMC-NF-RECONCILIATION.md` that were hand-measured and
+# therefore could (and did) drift from the code:
+#   * `smc_nf::nf_without_column_pass` — the pipeline with Step 6½ skipped, for
+#     `smc_canonicality_probes::column_pass_ablation` (§4.5, "What actually
+#     depends on the pass").
+#   * `smc_nf::fragment_status` — per-diagram marking / closedness, for the
+#     `smc_nf_differential_sweep` tracker that classifies divergent pairs as
+#     in-𝔉 or marked (§4.6's calibration table).
+# Opt-in only (NOT in `default`).
+internal-probes = []
 # `serde` adds `Serialize`/`Deserialize` derives on the term surface
 # (`PropExpr`, `Presentation`, `PresentedProp`, `NormalizeEngine`,
 # `NormalizeResult`, `SfgGenerator`). Off by default — zero-dep default build
@@ -58,6 +69,10 @@ thiserror.workspace = true
 ultragraph = { workspace = true }
 
 [dev-dependencies]
+# Deterministic LCG for the `smc_nf_differential_sweep` corpus — the sweep's
+# counts are pinned, so its randomness must be byte-stable across machines and
+# runs (#33's byte-identity contract is exactly that guarantee).
+catgraph-testutil.workspace = true
 criterion.workspace = true
 proptest.workspace = true
 serde_json.workspace = true

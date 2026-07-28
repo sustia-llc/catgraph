@@ -196,6 +196,28 @@ pub struct StringDiagram<G: PropSignature> {
 /// landscape), and the `smc_canonicality_probes` module in
 /// `tests/smc_nf_completeness.rs`, which is the gate of record.
 pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
+    nf_inner(expr, true)
+}
+
+/// [`nf`] with **Step 6½ skipped** — an `internal-probes` test hook.
+///
+/// Not public API and not built by default. It exists so
+/// `smc_canonicality_probes::column_pass_ablation` can pin *which* witnesses the
+/// column pass is load-bearing for, rather than leaving that attribution to a
+/// hand-run experiment. §4.5's "What actually depends on the pass" and the
+/// CHANGELOG's residual-(c)/(d) entry both make a counted claim about this; the
+/// probe is what keeps the count honest.
+///
+/// Everything else is unchanged, so a diagram that converges under both is one
+/// the column pass does not decide.
+#[cfg(feature = "internal-probes")]
+pub fn nf_without_column_pass<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
+    nf_inner(expr, false)
+}
+
+/// The pipeline proper. `run_columns` is always `true` outside the
+/// `internal-ablation` hook above.
+fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDiagram<G> {
     let mut sd = lower(expr);
     // Fixpoint loop, terminating by the lexicographic measure
     // (crossings, mixed_layer_count, wide_braid_count, braid_position_sum,
@@ -278,7 +300,7 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
         sd = coalesce_identity_layers(sd);
         sd = topological_layer_order(sd);
         sd = simplify_units(sd);
-        sd = reorder_blocks_and_columns(sd);
+        sd = reorder_blocks_and_columns(sd, run_columns);
         sd = reorder_tied_zero_arity(sd);
         if sd == prev {
             break;
@@ -1353,7 +1375,8 @@ enum ReadingAtom<'a, G: PropSignature> {
 /// Step 7's own transpositions — which permute whole runs and rewrite nothing.
 /// A position-sensitive key would change under the swap it just licensed and
 /// the `nf` fixpoint would oscillate instead of terminating (the same failure
-/// mode `analyze_components`' emptiness guard avoids for Step 6). Equal
+/// mode `analyze_components`' emptiness guard avoids for the analysis itself —
+/// Step 6 no longer reads one). Equal
 /// readings therefore mean the two blocks are identical, and transposing them
 /// is invisible.
 ///
@@ -1485,6 +1508,59 @@ fn mark_interleaved(owners: &[usize], interleaved: &mut [bool]) {
                 }
             }
         }
+    }
+}
+
+/// Where a diagram sits relative to the fragment `𝔉` — an `internal-probes`
+/// test hook.
+///
+/// `𝔉` (`docs/SMC-NF-RECONCILIATION.md` §4.1) is the expressions whose every
+/// component is **clear** (unmarked on both boundaries) *and* **boundary-
+/// attached** (no closed components). Both conditions are content invariants,
+/// and `nf` preserves content (Lemma 4.2), so reading them off a normal form is
+/// the same as reading them off the expression.
+///
+/// Exists so the `smc_nf_differential_sweep` tracker can bucket divergent pairs
+/// the way §4.6's calibration table does — in-`𝔉` versus marked — without
+/// re-implementing the union-find and the owner-word marking outside the engine
+/// and letting the two definitions drift.
+#[cfg(feature = "internal-probes")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FragmentStatus {
+    /// Some component is marked by guard 3 (`mark_interleaved`).
+    pub any_marked: bool,
+    /// Some component touches neither boundary.
+    pub any_closed: bool,
+}
+
+#[cfg(feature = "internal-probes")]
+impl FragmentStatus {
+    /// Is the diagram inside the fragment `𝔉`?
+    #[must_use]
+    pub fn in_fragment(self) -> bool {
+        !self.any_marked && !self.any_closed
+    }
+}
+
+/// Classify `sd` against the fragment `𝔉`. See [`FragmentStatus`].
+///
+/// **Reads the stored layers, not the identity-split refinement**, and that
+/// choice is load-bearing rather than incidental. It reproduces the #174 design
+/// round's `probe::marking`, which is the classification behind §4.6's published
+/// buckets; refining here instead would split components a fused `Identity`
+/// joins, move diagrams across the `𝔉` boundary, and silently re-base every
+/// count the sweep pins. If this ever needs to change, the sweep's pins must be
+/// re-measured in the same commit.
+#[cfg(feature = "internal-probes")]
+pub fn fragment_status<G: PropSignature>(sd: &StringDiagram<G>) -> FragmentStatus {
+    let comps = analyze_components(sd);
+    FragmentStatus {
+        any_marked: comps.interleaved.iter().any(|&m| m),
+        any_closed: comps
+            .touches_input
+            .iter()
+            .zip(comps.touches_output.iter())
+            .any(|(&i, &o)| !i && !o),
     }
 }
 
@@ -1918,8 +1994,8 @@ fn simplify_units<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
 ///
 /// Two components `C1`, `C2` may be transposed when
 ///
-/// - **(a)** at least one is multi-atom — single ∥ single pairs are the §2.6
-///   disjointness carve's territory and stay with Decision 1 / Step 6;
+/// - **(a)** at least one is multi-atom — a single ∥ single pair has no block to
+///   transpose, so the move is an atom swap and belongs to Decision 1 / Step 6;
 /// - **(b)** neither is interleaved (guard 3);
 /// - **(c)** *boundary freedom*: at most one of the two occupies a wire on the
 ///   input boundary, and at most one occupies a wire on the output boundary.
@@ -2028,7 +2104,10 @@ fn reorder_component_blocks<G: PropSignature>(
 ///
 /// Ordering is Step 7 first: a block move can expose a column pair, and the
 /// column pass runs to fixpoint after it.
-fn reorder_blocks_and_columns<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
+fn reorder_blocks_and_columns<G: PropSignature>(
+    sd: StringDiagram<G>,
+    run_columns: bool,
+) -> StringDiagram<G> {
     // A transposition needs two atoms side by side somewhere.
     if sd.layers.iter().all(|l| l.atoms.len() < 2) {
         return sd;
@@ -2047,7 +2126,8 @@ fn reorder_blocks_and_columns<G: PropSignature>(sd: StringDiagram<G>) -> StringD
     let mut ids = comps.ids.clone();
 
     let blocks_moved = reorder_component_blocks(&mut refined, &mut ids, &comps, &has_braid);
-    let columns_moved = reorder_zero_arity_columns(&mut refined, &mut ids, &comps, &has_braid);
+    let columns_moved =
+        run_columns && reorder_zero_arity_columns(&mut refined, &mut ids, &comps, &has_braid);
     if !blocks_moved && !columns_moved {
         return sd;
     }
@@ -2263,8 +2343,12 @@ struct ColumnSwap {
 ///
 /// # Canonical direction
 ///
-/// [`component_key_order`] — the same core Step 7 and Step 6 read, so the three
-/// passes cannot disagree. The pass declines the one tie that order admits (two
+/// [`component_key_order`] — the same core Step 7 reads, so the two *rewriting*
+/// passes cannot disagree with each other. Step 6 is not in that statement: it
+/// orders a tied adjacency by the atoms' own class, an unrelated criterion, and
+/// nothing proves the two families never prescribe conflicting layouts. That is
+/// the pass-disjointness obligation recorded in
+/// `docs/SMC-NF-RECONCILIATION.md` §4.4. The pass declines the one tie that order admits (two
 /// *closed* components): closed↔closed order is Step 7's whole-block reading key
 /// (#79 P1), and leaving the tie there keeps Step 6's class-order fallback from
 /// fighting this pass over the same adjacency.
@@ -2277,7 +2361,10 @@ struct ColumnSwap {
 /// - a marked (interleaved) component is never transposed — rule (i)'s slot is
 ///   ill-defined there, so residual (a) is unchanged;
 /// - at least one of the two components is multi-atom: a single ∥ single pair is
-///   the §2.6 disjointness carve's territory and stays with Decision 1 / Step 6.
+///   left to Decision 1 / Step 6 — with two single-atom components there is no
+///   block to carry across an interval, so the move is an atom swap, which is
+///   Step 6's. (The §2.6 carve that used to phrase this as a hand-off between
+///   two competing orders is retired; only one order applies at each site now.)
 ///
 /// # Termination
 ///
@@ -2308,6 +2395,13 @@ fn reorder_zero_arity_columns<G: PropSignature>(
     // checks only *internal* boundaries — it would pass a swap that reordered the
     // diagram's own input or output wires, which is exactly what strict commutation
     // at the interval's ends is there to prevent. Capture them before any move.
+    //
+    // Step 7 needs no analogue: `block_pair_is_free` forbids swapping two
+    // components that share a boundary at all, so its swaps cannot reach a
+    // boundary word. Step 6½ moves column *fragments* of components that may
+    // well share one, and buys its safety from an arithmetic check at the
+    // interval's ends rather than from a structural exclusion — so it is worth
+    // asserting rather than assuming.
     let before = boundary_owner_words(refined, ids);
     let mut swapped = false;
     while let Some(swap) = find_column_transposition(refined, comps, ids, has_braid) {
