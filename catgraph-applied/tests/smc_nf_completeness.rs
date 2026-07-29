@@ -2413,3 +2413,46 @@ mod beyond_eta_slack_residuals {
         );
     }
 }
+
+/// §4.4's layer-pinned caution, pinned (delta review): a `ceil = 1`
+/// ("layer-pinned") η is NOT thereby at layer 0 — `Add`'s `(z, v)` tentacle
+/// order pins the η's coordinate strictly inside `Copy`'s target span, the
+/// sift is blocked, and the unique invariant-satisfying realization holds it
+/// at `λ = 1`. This is a fact-pin, not a divergence: it guards the false
+/// gloss ("layer-pinned ⟹ λ = 0") that the first discharge attempt of the
+/// Theorem 4.5 soft spots was built on, so it cannot silently return.
+#[test]
+fn layer_pinned_eta_sits_below_layer_zero() {
+    use catgraph_applied::rig::BoolRig;
+    use catgraph_applied::sfg::SfgGenerator;
+    type Sfg = SfgGenerator<BoolRig>;
+    let prim = |x: Sfg| PropExpr::Generator(x);
+    let e = PropExpr::Compose(
+        Box::new(PropExpr::Compose(
+            Box::new(prim(Sfg::Copy)),
+            Box::new(PropExpr::Tensor(
+                Box::new(PropExpr::Tensor(
+                    Box::new(PropExpr::Identity(1)),
+                    Box::new(prim(Sfg::Zero)),
+                )),
+                Box::new(PropExpr::Identity(1)),
+            )),
+        )),
+        Box::new(PropExpr::Tensor(
+            Box::new(PropExpr::Identity(1)),
+            Box::new(prim(Sfg::Add)),
+        )),
+    );
+    let n = nf(&e);
+    assert_eq!(
+        n.layers.len(),
+        3,
+        "expected [Copy] ; [id,Zero,id] ; [id,Add]"
+    );
+    assert_eq!(
+        n.layers[0].atoms.len(),
+        1,
+        "the layer-pinned η reached layer 0 — the §4.4 caution and the \
+         flagged-open induction steps need re-examination"
+    );
+}

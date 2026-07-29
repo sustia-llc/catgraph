@@ -27,8 +27,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   `(λ, ι)`: layer assignment and `η` insertion slots), content-intrinsic
   `ldepth`/placement-slack definitions, and **Theorem 4.5**: rigidity on
   `𝔉′` = braid-free diagrams whose every `η` is layer- and slot-pinned, by
-  top-down induction from the input foot (proof-sketch density; the two
-  flagged steps discharged in adversarial review). Canonicality-via-`nf` on
+  top-down induction from the input foot (proof-sketch density; two steps
+  stay **flagged open** — a first discharge attempt was itself refuted in
+  the delta review and is recorded in the sketch, with the
+  `layer_pinned_eta_sits_below_layer_zero` witness pinning the false
+  premise). Canonicality-via-`nf` on
   `𝔉′` is **conditional** — the review refuted the unconditional corollary
   twice, with both counterexamples committed as witnesses: fixpoints can
   violate a non-excepted §1 clause through the `adjacent_column_cuts`

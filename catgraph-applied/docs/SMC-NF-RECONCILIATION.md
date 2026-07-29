@@ -49,10 +49,11 @@ pipeline applies is SMC-sound (§4.3). The *canonicality* direction —
 SMC-equal expressions reach the same `StringDiagram` — has a proven core and
 a conditional bridge: **rigidity** is proven on the fragment `𝔉′` (braid-free,
 every `η` placement-pinned — Theorem 4.5, §4.4, at proof-sketch density with
-the review-discharged steps recorded), and **canonicality via `nf`** on `𝔉′`
+two flagged-open steps, a failed discharge attempt recorded), and
+**canonicality via `nf`** on `𝔉′`
 is *conditional* on the fixpoints being braid-free and invariant-satisfying —
-a condition with a committed counterexample witness, discharged by the filed
-`adjacent_column_cuts` fix (§4.4's conditional corollary). Beyond `𝔉′` it is
+a condition with a committed counterexample witness, *to be* discharged by
+the filed `adjacent_column_cuts` fix (§4.4's conditional corollary). Beyond `𝔉′` it is
 open and not bounded either: the `smc_canonicality_probes` suite verifies a
 named set of convergences, while a differential sweep still finds divergent
 SMC-equal pairs inside the larger fragment `𝔉` — on the default corpus all
@@ -1065,11 +1066,18 @@ see the definedness bullet below for the other shapes), define its
 `ceil(h) = ldepth(k)` if some hyperedge `k` consumes `z`, and
 `ceil(h) = depth(C)` if `z` is anchored at the output foot. Then:
 
-- `h` is **layer-pinned** iff `ceil(h) = 1` — its consumer sits exactly one
-  level below the input foot, so `λ(h) = 0` in every realization satisfying
-  the restated §1 invariants. (Not in every `nf` *fixpoint*: the conditional
-  corollary below records exactly that gap.) Otherwise `h` has
-  `ceil(h) − 1 ≥ 1` extra legal layers: that is the layer slack.
+- `h` is **layer-pinned** iff `ceil(h) = 1` — its consumer sits at content
+  level 1, so `h` has zero extra legal *levels*. **Caution (delta review,
+  machine-verified):** this does *not* force `λ(h) = 0` — a consumer's
+  tentacle order can pin the `η`'s coordinate strictly inside a producer's
+  span, and the unique invariant-satisfying realization then holds it at
+  `λ = 1` (witness `layer_pinned_eta_sits_below_layer_zero`:
+  `Copy ; (id₁ ⊗ η ⊗ id₁) ; (id₁ ⊗ Add)`, one component, sift blocked by
+  `Add`'s `(z, v)` tentacle order). Layer-pinnedness bounds the content-level
+  room (`ceil(h) − 1` extra levels; zero here); converting pinnedness into a
+  *unique* `λ` is exactly what the two flagged induction steps below still
+  owe. A non-pinned `h` has `ceil(h) − 1 ≥ 1` extra legal levels: that is
+  the layer slack.
 - `h` is **slot-pinned** iff `z`'s wire coordinate at the boundary below
   `h`'s layer is the same in every braid-free realization satisfying the
   restated §1 invariants. This is deliberately *realization-quantified*
@@ -1138,20 +1146,27 @@ atom sequence is then Lemma 4.4's; `W_{j+1}` follows. The only step that can
 fail is contiguity being *destroyed* by a source-0 occurrence inserted at a
 later layer splitting a span — which is exactly `ι`, pinned by hypothesis. ∎
 
-The draft flagged two soft spots; adversarial review (2026-07-28) attacked
-and **discharged** both, and the arguments are recorded so they are part of
-the sketch rather than debts on it. *Monotone contiguity*: under the
-hypotheses every source-0 hyperedge has `ceil = 1` — inserted at layer 0,
-consumed at level 1 — so its output node exists only in `W₁` and lies inside
-its consumer's span, splitting nothing; below `W₁` the wire word evolves
-only by positive-source atoms, whose consumed spans are disjoint from any
-surviving identity run (monogamy) and are replaced in place, so contiguity,
-once achieved, is preserved. *`S_j ≠ ∅`*: any generator atom in layer `j` of
-an invariant-satisfying diagram has all producers above and a contiguous
-ordered source span, so it lies in `S_j`; contents with *no* braid-free
-realization at all (a producer emits `(u, v)` where the consumer wants
-`(v, u)`) leave the theorem vacuously true, consistent with its scoping. On
-the induction's *direction*: the first
+Two steps remain **flagged open** — and a first discharge attempt is
+recorded here precisely because it *failed* in the delta review
+(machine-verified), so it is not re-trodden. The attempt assumed `ceil = 1`
+puts every pinned `η` at layer 0 with its output node inside its consumer's
+span in `W₁`, splitting nothing; the layer-pinned caution above refutes the
+premise — a pinned `η` can sit at `λ > 0`, so *(a) monotone contiguity* must
+be re-proven allowing pinned-`η` insertions at layers below 0's, with one
+named open sub-question: can a slot-pinned `η` of a **marked** foreign
+component (whose guards disable extraction) split a span and create
+`λ`-ambiguity? And *(b) the occupancy/non-emptiness step* is defective as
+sketched for source-0 occurrences — `S_j`'s membership conditions (all
+producers above, source nodes contiguous) are vacuous for them, so the
+induction must restrict `S_j` to positive-source occurrences and place
+pinned `η`s by a separate earliest-admissible-coordinate rule. What *does*
+stand in that step: contents with no braid-free realization at all (a
+producer emits `(u, v)` where the consumer wants `(v, u)`) leave the theorem
+vacuously true, consistent with its scoping; and the statement itself
+survived two full adversarial rounds without a counterexample — including a
+`λ`-ambiguity attack via generator races, which the §1 column clause
+blocked. At proof-sketch density these two steps are open obligations, not
+glossed lemmas. On the induction's *direction*: the first
 draft's π circularity arose from admitting braids into the induction; with
 braid-freedom as a hypothesis it dissolves, and top-down from the input foot
 is the direction that matches both `ldepth` and the sift. The bottom-up
@@ -1162,9 +1177,10 @@ induction delivers at the prefix boundary — i.e. bottom-up determines the
 prefix *last*, from data the induction supplies, instead of assuming it).
 It is deliberately not attempted here.
 
-*Corollary (canonicality on `𝔉′` — **conditional**).* For SMC-equal `e`, `e′`
-with `C(e) ∈ 𝔉′` whose normal forms are **both braid-free and both satisfy
-the restated §1 invariants**, `nf(e) = nf(e′)`: equal content by Lemma 4.1,
+*Corollary (canonicality on `𝔉′` — **conditional**).* For SMC-equal
+`e, e′ ∈ 𝔉′` — membership already gives both NFs braid-free and their shared
+content slack-free — whose normal forms **both satisfy the restated §1
+invariants**, `nf(e) = nf(e′)`: equal content by Lemma 4.1,
 then Theorem 4.5. Neither condition is automatic, and each failure mode has
 a committed witness — both supplied by this subsection's own adversarial
 review, which refuted the unconditional corollary an earlier draft stated:
