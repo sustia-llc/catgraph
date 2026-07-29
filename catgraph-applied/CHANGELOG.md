@@ -28,12 +28,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   `tests/content_equality_corpus.rs` scores it at **253/253** divergent pairs
   on the published default corpus and **1 162/1 162** in braid mode
   (`internal-probes`-gated, both 100k sweeps `#[ignore]`d, 5k smoke tier and
-  cross-corpus negative controls in CI). The decision is exact and effectively
-  search-free by construction — anchors force node images pointwise, monogamy
-  (BGKSZ Def 3.6) plus ordered tentacles propagate each forcing
-  deterministically, and only a closed component needs a seed choice — so
-  there is no comparator, no component order, and no writing-dependent
-  coordinate anywhere in it. **Word-generic from day one:** nodes carry the
+  cross-corpus negative controls in CI). The decision is exact and free of
+  search: anchors force node images pointwise, monogamy (BGKSZ Def 3.6) plus
+  ordered tentacles propagate each forcing deterministically, and the closed
+  components — which no anchor reaches, and which are coupled to nothing else —
+  are settled by comparing a complete iso invariant rather than by matching
+  them against one another. So there is no comparator, no component order, no
+  writing-dependent coordinate, and no backtracking anywhere in it; the cost is
+  linear in the content apart from the per-closed-component serialization. **Word-generic from day one:** nodes carry the
   color their generator tentacle *word* declares, and `content_of_colored`
   pins the one remaining kind (a wire no generator touches, which monogamy
   makes boundary-anchored) from a `ColoredExpr`'s source word, so the boundary

@@ -251,6 +251,98 @@ fn negative_free_prop_cocommutativity_is_a_user_equation() {
     );
 }
 
+// ---- closed components at scale ---------------------------------------------
+
+/// A closed component: `Zero ; Scalar(r) ; Discard`, `0 → 0`.
+fn bubble(r: bool) -> E {
+    seq(
+        seq(
+            prim(SfgGenerator::Zero),
+            prim(SfgGenerator::Scalar(BoolRig(r))),
+        ),
+        prim(SfgGenerator::Discard),
+    )
+}
+
+/// `k` bubbles tensored, all carrying `true` except the one at `odd`.
+fn bubbles(k: usize, odd: Option<usize>) -> E {
+    (0..k)
+        .map(|i| bubble(Some(i) != odd))
+        .reduce(par)
+        .expect("k > 0")
+}
+
+/// **Backtracking regression.** `k` pairwise-isomorphic closed components used to
+/// drive the closed-component match factorially — a near-miss at `k = 12` took
+/// ~52 s. Closed components are now compared by a complete invariant instead of
+/// being matched against each other, so both decisions are immediate.
+///
+/// The generous time bound is a floor-through-the-floor guard, not a benchmark:
+/// the work here is microseconds, and the behavior it rules out was measured in
+/// tens of seconds.
+#[test]
+fn many_isomorphic_closed_components_do_not_backtrack() {
+    const K: usize = 12;
+    let budget = std::time::Duration::from_secs(10);
+
+    // Equal: the same 12 bubbles, the odd one written first against last. Two
+    // `0 → 0` blocks always commute, so these are SMC-equal.
+    let start = std::time::Instant::now();
+    let (ca, cb) = (
+        content_of(&bubbles(K, Some(0))),
+        content_of(&bubbles(K, Some(K - 1))),
+    );
+    assert!(content_eq(&ca, &cb));
+    assert_eq!(canonical_key(&ca), canonical_key(&cb));
+    assert!(
+        start.elapsed() < budget,
+        "equal case took {:?}",
+        start.elapsed()
+    );
+
+    // Near miss: 12 identical bubbles against 11 identical plus one differing
+    // scalar. This is the shape that maximized the old search.
+    let start = std::time::Instant::now();
+    let (cc, cd) = (
+        content_of(&bubbles(K, None)),
+        content_of(&bubbles(K, Some(K - 1))),
+    );
+    assert!(!content_eq(&cc, &cd));
+    assert_ne!(canonical_key(&cc), canonical_key(&cd));
+    assert!(
+        start.elapsed() < budget,
+        "near-miss case took {:?}",
+        start.elapsed()
+    );
+}
+
+// ---- serde trust boundary ---------------------------------------------------
+
+/// `ColoredExpr`'s deserialization does not re-run `colored::check`, so a
+/// hand-crafted document can carry a source word shorter than the expression's
+/// arity. `content_of_colored` must leave the uncovered coordinates untyped
+/// rather than index past the word.
+#[cfg(feature = "serde")]
+#[test]
+fn colored_content_survives_a_short_source_word_from_serde() {
+    // `BoolRig` carries no serde derives; the payload is irrelevant here.
+    type SerdeSfg = SfgGenerator<i64>;
+
+    let good = ColoredExpr::<SerdeSfg>::new(vec![()], PropExpr::Identity(1))
+        .expect("id₁ is well-formed at one wire");
+    let mut document = serde_json::to_value(&good).expect("serialize");
+    document["source_word"] = serde_json::json!([]);
+    let short: ColoredExpr<SerdeSfg> =
+        serde_json::from_value(document).expect("deserialization skips the check");
+
+    let content = content_of_colored(&short);
+    assert_eq!(
+        content.node_colors(),
+        &[None],
+        "the uncovered coordinate stays untyped"
+    );
+}
+
 // ---- Λ-colored path ---------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

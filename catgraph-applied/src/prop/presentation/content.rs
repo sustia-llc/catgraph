@@ -24,10 +24,12 @@
 //! - **BGKSZ Prop 3.4** — `⟦·⟧` is faithful, so content separates distinct
 //!   SMC-classes.
 //! - **BGKSZ Thm 3.12** — the cospans in the image of `⟦·⟧` are exactly the
-//!   **monogamous** (Def 3.6) **directed acyclic** (Def 3.9) ones. Monogamy is
-//!   what makes [`content_eq`] search-free: every interior node has in- and
-//!   out-degree exactly 1, and a boundary node has degree 0 on its anchored
-//!   side.
+//!   **monogamous** (Def 3.6) **directed acyclic** (Def 3.9) ones: every interior
+//!   node has in- and out-degree exactly 1, and a boundary node has degree 0 on
+//!   its anchored side. That is what lets [`content_eq`] avoid search entirely —
+//!   the boundary-attached part is decided by forced propagation, and the closed
+//!   part by comparing a complete invariant rather than by matching components
+//!   against each other.
 //! - Together they give **Lemma 4.1** (§4.2): `e =_SMC e′` **iff**
 //!   `C(e) = C(e′)`. Stated color-generically there, over an arbitrary `Λ`, so
 //!   the [#79](https://github.com/sustia-llc/catgraph/issues/79) worded surface
@@ -60,9 +62,12 @@
 //! the same layering #79 used, where the diagram layer stayed positional.
 //! [`content_of_colored`] additionally pins the colors an expression alone cannot
 //! determine (see [`content_of_colored`] for which those are, and why there are
-//! no others). With `Color = ()` every node carries `Some(())` or `None` and the
-//! color comparisons degenerate to no-ops, so a monochromatic signature behaves
-//! exactly as it would with colors deleted.
+//! no others). With `Color = ()` the comparison of *letters* degenerates to a
+//! no-op — there is only one letter — but the distinction between a typed and an
+//! untyped node does not: `Some(())` and `None` still differ, so a monochromatic
+//! signature is not the same as one with colors deleted, and the like-with-like
+//! caveat on [`content_eq`] binds monochromatic callers exactly as much as
+//! colored ones.
 
 use std::collections::VecDeque;
 
@@ -104,12 +109,18 @@ pub struct ContentEdge<G: PropSignature> {
 /// # Construction invariant
 ///
 /// The fields are private, so every value comes from [`content_of`] /
-/// [`content_of_colored`] and is therefore in the image of `⟦·⟧` — monogamous
-/// and directed acyclic, BGKSZ Thm 3.12. Both algorithms below rely on monogamy,
-/// and on its consequence that every node is either incident to a hyperedge or
-/// anchored on both feet (a wire no generator touches runs from the input foot
-/// straight to the output foot). The accessors are read-only, so no caller can
-/// break either.
+/// [`content_of_colored`], and the *underlying uncolored* cospan is therefore
+/// monogamous directed acyclic — the image characterization of BGKSZ Thm 3.12.
+/// Both algorithms below rely on that, and on its consequence that every node is
+/// either incident to a hyperedge or anchored on both feet (a wire no generator
+/// touches runs from the input foot straight to the output foot). The accessors
+/// are read-only, so no caller can break either.
+///
+/// The tentacle typing is additionally *type-respecting* — putting the value in
+/// the image of the Λ-typed `⟦·⟧` — exactly when the expression was
+/// word-well-formed. Over a nontrivial `Λ` that is a real restriction, not a
+/// tautology: `content_of` accepts an ill-colored `Compose` and returns a
+/// perfectly good uncolored cospan whose typing no Λ-typed expression realizes.
 #[derive(Clone, Debug)]
 pub struct Content<G: PropSignature> {
     node_count: usize,
@@ -303,6 +314,13 @@ impl Renumber<'_> {
 /// arity to a different source arity. `PropExpr`'s variants are public, so such a
 /// tree is constructible by hand; terms built through
 /// [`Free`](crate::prop::Free) cannot hit this.
+///
+/// **This is a stricter contract than the equality API above it.**
+/// [`Presentation::eq_mod`](super::Presentation::eq_mod) is total on such a tree
+/// today — it answers rather than panics — so any future wiring of content into
+/// `eq_mod` has to decide the policy deliberately: either gate the content path
+/// behind an arity check and fall back to `nf`, or give `content_of` a fallible
+/// sibling returning [`CatgraphError`](catgraph::errors::CatgraphError).
 #[must_use]
 pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
     let mut b = Builder {
@@ -376,10 +394,11 @@ pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
 /// Compute the content of a **colored** morphism, with every node typed.
 ///
 /// The expression alone leaves exactly one kind of node untyped: one no generator
-/// tentacle touches. By monogamy (BGKSZ Def 3.6) such a node has in-degree and
-/// out-degree 0, hence is anchored on *both* feet — so its color is the source
-/// word's letter at its input coordinate, which a [`ColoredExpr`] supplies.
-/// Every other node already carries the color its incident tentacle declared.
+/// tentacle touches. Such a node has in-degree and out-degree 0 by construction,
+/// so monogamy (BGKSZ Def 3.6) forces it into `in(G) ∩ out(G)` — anchored on
+/// *both* feet — and its color is therefore the source word's letter at its input
+/// coordinate, which a [`ColoredExpr`] supplies. Every other node already carries
+/// the color its incident tentacle declared.
 ///
 /// Consequently the boundary *words* are recoverable from the returned content
 /// (read `node_colors` along `input` / `output`), so [`content_eq`] on two values
@@ -388,21 +407,32 @@ pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
 ///
 /// # Panics
 ///
-/// Never: a [`ColoredExpr`] is word-well-formed by construction, hence
-/// arity-well-formed, which is [`content_of`]'s precondition.
+/// Panics exactly when [`content_of`] does: the wrapped expression is not
+/// arity-well-formed. That is unreachable through [`ColoredExpr::new`], which
+/// runs [`colored::check`](super::super::colored::check) — but it *is* reachable
+/// through the documented serde trust boundary on [`ColoredExpr`], whose
+/// deserialization reconstructs the fields without re-running that check.
+///
+/// The other shape that boundary admits — a `source_word` shorter than the
+/// expression's source arity — does not panic here: the uncovered coordinates
+/// simply keep their `None`, and the result is as meaningful as the document that
+/// produced it.
 #[must_use]
 pub fn content_of_colored<G: PropSignature>(expr: &ColoredExpr<G>) -> Content<G> {
     let mut content = content_of(expr.expr());
     let anchors = content.input.clone();
     for (position, node) in anchors.into_iter().enumerate() {
         if content.node_colors[node].is_none() {
-            content.node_colors[node] = Some(expr.source_word()[position].clone());
+            // `.get`, not `[]`: a serde-built `ColoredExpr` can carry a source
+            // word shorter than the expression's arity.
+            content.node_colors[node] = expr.source_word().get(position).cloned();
         }
     }
     debug_assert!(
-        content.node_colors.iter().all(Option::is_some),
+        expr.source_word().len() < content.input.len()
+            || content.node_colors.iter().all(Option::is_some),
         "invariant: an untyped node has degree 0 (monogamy), so it is \
-         input-anchored and the source word types it"
+         input-anchored and a source word covering the arity types it"
     );
     content
 }
@@ -455,6 +485,199 @@ fn profile<G: PropSignature>(c: &Content<G>) -> Profile {
 /// The incidences of a node, in the fixed order both algorithms read them.
 fn incidences(p: &Profile, node: usize) -> [Option<(usize, usize)>; 2] {
     [p.consumer[node], p.producer[node]]
+}
+
+// ------------------------------------------- closed components, canonically
+
+/// One hyperedge under a canonical numbering.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct EdgeRecord<G> {
+    label: G,
+    sources: Vec<usize>,
+    targets: Vec<usize>,
+}
+
+/// A closed component's canonical serialization: the lexicographic minimum over
+/// its seed choices, and a **complete iso invariant** of the component.
+///
+/// Carries no colors, and does not need to. Every node of a closed component has
+/// a *producer*: a node with no producer has in-degree 0, so monogamy (BGKSZ
+/// Def 3.6) puts it on the input foot, and an anchored node is by definition not
+/// in a closed component. Since [`content_of`] defines a node's color to be its
+/// producer's declared letter, the records below already determine every color
+/// here. (The boundary-attached part does record colors, because a wire no
+/// generator touches has no producer and takes the boundary word's letter
+/// instead.)
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct ClosedBlock<G> {
+    node_count: usize,
+    edges: Vec<EdgeRecord<G>>,
+}
+
+/// A canonical numbering under construction: nodes and edges in discovery order.
+struct Numbering {
+    node: Vec<Option<usize>>,
+    edge: Vec<Option<usize>>,
+    next_node: usize,
+    order: Vec<usize>,
+    queue: VecDeque<usize>,
+}
+
+impl Numbering {
+    fn new(nodes: usize, edges: usize) -> Self {
+        Self {
+            node: vec![None; nodes],
+            edge: vec![None; edges],
+            next_node: 0,
+            order: Vec::new(),
+            queue: VecDeque::new(),
+        }
+    }
+
+    /// Number `node` if new, and queue it for expansion.
+    fn visit_node(&mut self, node: usize) {
+        if self.node[node].is_none() {
+            self.node[node] = Some(self.next_node);
+            self.next_node += 1;
+            self.queue.push_back(node);
+        }
+    }
+
+    /// Number `edge` if new, and its tentacle nodes in tentacle order.
+    fn visit_edge<G: PropSignature>(&mut self, c: &Content<G>, edge: usize) {
+        if self.edge[edge].is_some() {
+            return;
+        }
+        self.edge[edge] = Some(self.order.len());
+        self.order.push(edge);
+        let e = &c.edges[edge];
+        for &x in e.sources.iter().chain(e.targets.iter()) {
+            self.visit_node(x);
+        }
+    }
+
+    /// Expand the queue: every incident edge of every queued node, in the fixed
+    /// `[consumer, producer]` order.
+    fn run<G: PropSignature>(&mut self, c: &Content<G>, p: &Profile) {
+        while let Some(x) = self.queue.pop_front() {
+            for (e, _) in incidences(p, x).into_iter().flatten() {
+                self.visit_edge(c, e);
+            }
+        }
+    }
+
+    /// The canonical index of `node`.
+    fn node_id(&self, node: usize) -> usize {
+        self.node[node].expect("invariant: every reached node is numbered")
+    }
+
+    fn records<G: PropSignature>(&self, c: &Content<G>) -> Vec<EdgeRecord<G>> {
+        self.order
+            .iter()
+            .map(|&e| {
+                let edge = &c.edges[e];
+                EdgeRecord {
+                    label: edge.label.clone(),
+                    sources: edge.sources.iter().map(|&x| self.node_id(x)).collect(),
+                    targets: edge.targets.iter().map(|&x| self.node_id(x)).collect(),
+                }
+            })
+            .collect()
+    }
+}
+
+/// Group the edges `matched` does not cover into their connected components —
+/// the closed components, which no anchor reaches.
+fn closed_components<G: PropSignature>(
+    c: &Content<G>,
+    p: &Profile,
+    matched: &[Option<usize>],
+) -> Vec<Vec<usize>> {
+    let mut component = vec![usize::MAX; c.edges.len()];
+    let mut components: Vec<Vec<usize>> = Vec::new();
+    for start in 0..c.edges.len() {
+        if matched[start].is_some() || component[start] != usize::MAX {
+            continue;
+        }
+        let id = components.len();
+        component[start] = id;
+        let mut stack = vec![start];
+        let mut members = Vec::new();
+        while let Some(e) = stack.pop() {
+            members.push(e);
+            let edge = &c.edges[e];
+            for &x in edge.sources.iter().chain(edge.targets.iter()) {
+                for (f, _) in incidences(p, x).into_iter().flatten() {
+                    if component[f] == usize::MAX {
+                        component[f] = id;
+                        stack.push(f);
+                    }
+                }
+            }
+        }
+        members.sort_unstable();
+        components.push(members);
+    }
+    components
+}
+
+/// The lexicographic minimum serialization of one closed component, over its
+/// choices of seed edge.
+///
+/// Seeding fixes one edge as number 0 and the propagation numbers the rest, so
+/// each seed yields one serialization; the minimum over seeds depends only on the
+/// component's iso class. Two components are isomorphic iff their minima agree:
+/// `⇐` because the minimum is invariant, `⇒` because equal serializations exhibit
+/// the bijection.
+fn minimal_block<G: PropSignature>(
+    c: &Content<G>,
+    p: &Profile,
+    component: &[usize],
+) -> ClosedBlock<G> {
+    debug_assert!(
+        component
+            .iter()
+            .flat_map(|&e| c.edges[e].sources.iter().chain(c.edges[e].targets.iter()))
+            .all(|&x| match p.producer[x] {
+                Some((e, position)) => {
+                    let word = c.edges[e].label.target_word();
+                    c.node_colors[x].as_ref() == Some(&word[position])
+                }
+                None => false,
+            }),
+        "invariant: every closed-component node has a producer (a producerless \
+         node is input-anchored, hence not closed) and carries that producer's \
+         declared letter — which is what lets ClosedBlock drop colors"
+    );
+    component
+        .iter()
+        .map(|&seed| {
+            let mut numbering = Numbering::new(c.node_count, c.edges.len());
+            numbering.visit_edge(c, seed);
+            numbering.run(c, p);
+            ClosedBlock {
+                node_count: numbering.next_node,
+                edges: numbering.records(c),
+            }
+        })
+        .min()
+        .expect("invariant: a closed component has at least one edge")
+}
+
+/// Every closed component of `c`, canonically serialized and sorted — the
+/// complete invariant of the closed part, shared by [`content_eq`] and
+/// [`canonical_key`].
+fn closed_blocks<G: PropSignature>(
+    c: &Content<G>,
+    p: &Profile,
+    matched: &[Option<usize>],
+) -> Vec<ClosedBlock<G>> {
+    let mut blocks: Vec<ClosedBlock<G>> = closed_components(c, p, matched)
+        .iter()
+        .map(|component| minimal_block(c, p, component))
+        .collect();
+    blocks.sort_unstable();
+    blocks
 }
 
 // ---------------------------------------------------------------- equality
@@ -549,90 +772,6 @@ impl<G: PropSignature> Matcher<'_, G> {
     }
 }
 
-/// Group the edges left unmatched after anchor propagation into their connected
-/// components — the closed components, which no anchor reaches.
-fn closed_components<G: PropSignature>(
-    c: &Content<G>,
-    p: &Profile,
-    matched: &[Option<usize>],
-) -> Vec<Vec<usize>> {
-    let mut component = vec![usize::MAX; c.edges.len()];
-    let mut components: Vec<Vec<usize>> = Vec::new();
-    for start in 0..c.edges.len() {
-        if matched[start].is_some() || component[start] != usize::MAX {
-            continue;
-        }
-        let id = components.len();
-        component[start] = id;
-        let mut stack = vec![start];
-        let mut members = Vec::new();
-        while let Some(e) = stack.pop() {
-            members.push(e);
-            let edge = &c.edges[e];
-            for &x in edge.sources.iter().chain(edge.targets.iter()) {
-                for (f, _) in incidences(p, x).into_iter().flatten() {
-                    if component[f] == usize::MAX {
-                        component[f] = id;
-                        stack.push(f);
-                    }
-                }
-            }
-        }
-        members.sort_unstable();
-        components.push(members);
-    }
-    components
-}
-
-/// Match the closed components of `a` against those of `b` by seeding one edge
-/// per component and propagating.
-///
-/// Within a component a single seed forces everything else, so the only search is
-/// over which `b`-component and which of its label-equal edges the seed lands on.
-fn match_closed<G: PropSignature>(
-    m: &mut Matcher<'_, G>,
-    ca: &[Vec<usize>],
-    cb: &[Vec<usize>],
-    used: &mut [bool],
-) -> bool {
-    let Some(next) = ca
-        .iter()
-        .position(|comp| comp.iter().any(|&e| m.edge_map[e].is_none()))
-    else {
-        return true;
-    };
-    let comp_a = &ca[next];
-    let seed = comp_a[0];
-    for (j, comp_b) in cb.iter().enumerate() {
-        if used[j] || comp_b.len() != comp_a.len() {
-            continue;
-        }
-        for &candidate in comp_b {
-            if m.b.edges[candidate].label != m.a.edges[seed].label {
-                continue;
-            }
-            let snapshot = (
-                m.node_map.clone(),
-                m.node_rev.clone(),
-                m.edge_map.clone(),
-                m.edge_rev.clone(),
-            );
-            let mut queue = Vec::new();
-            used[j] = true;
-            if m.force_edge(seed, candidate, &mut queue)
-                && m.propagate(&mut queue)
-                && comp_a.iter().all(|&e| m.edge_map[e].is_some())
-                && match_closed(m, ca, cb, used)
-            {
-                return true;
-            }
-            used[j] = false;
-            (m.node_map, m.node_rev, m.edge_map, m.edge_rev) = snapshot;
-        }
-    }
-    false
-}
-
 /// Decide `C(a) = C(b)`: cospan isomorphism **under both feet**.
 ///
 /// By Lemma 4.1 (§4.2) this decides SMC-equality of the two expressions the
@@ -641,8 +780,11 @@ fn match_closed<G: PropSignature>(
 ///
 /// # Exactness
 ///
-/// The procedure is exact, and free of any decision the caller could have made
-/// differently:
+/// A cospan iso under both feet splits into two independent halves, because a
+/// closed component contains no anchored node and so is coupled to nothing else:
+/// an iso of the boundary-attached parts, and a bijection of the closed
+/// components with a component iso at each. The procedure decides each half
+/// outright, and neither half searches.
 ///
 /// 1. **Anchored forcing.** The feet are fixed, so the anchors force node images
 ///    pointwise: `a.input[i] ↦ b.input[i]`, likewise on the output. No choice.
@@ -652,15 +794,30 @@ fn match_closed<G: PropSignature>(
 ///    invariants. Iterating reaches every node and edge of every
 ///    boundary-attached component, still with no choice. A conflict at any step
 ///    (label, arity, color, anchor coordinates, or an already-taken image) refutes
-///    the iso outright, because each step was forced.
-/// 3. **Closed components.** A component no anchor reaches has no forced seed, so
-///    one is chosen: fixing one edge image forces the rest of that component by
-///    step 2. Search is therefore over seed and partner choices only, never
-///    inside a component.
+///    the iso outright, because each step was forced. If nothing conflicts, the
+///    partial map built is the unique candidate iso of the anchored halves.
+/// 3. **Closed components, by invariant rather than by search.** Serializing a
+///    connected closed component from each of its edges in turn and keeping the
+///    lexicographic minimum (the private `minimal_block`) is a *complete* iso
+///    invariant of it: equal serializations exhibit a label- and
+///    tentacle-preserving bijection, and isomorphic components minimize to the
+///    same one. So the required bijection exists iff the two sorted multisets
+///    agree, which is a comparison, not a match. Colors need no separate check
+///    here: every closed-component node has a producer, and its color is by
+///    definition that producer's declared letter.
 ///
 /// There is no comparator, no order on components, and no writing-dependent
 /// coordinate anywhere in the above — the whole decision reads labels, tentacle
 /// positions, anchor coordinates and colors, all of which are content invariants.
+///
+/// # Cost
+///
+/// Polynomial, with no backtracking anywhere. Step 1–2 are linear in the content:
+/// each node and edge is forced at most once. Step 3 serializes each closed
+/// component `K` once per choice of seed — `O(|E_K| · (|V_K| + |E_K|))` — and
+/// sorts the resulting blocks. For a content with `n` nodes and `e` hyperedges
+/// that bounds the whole call by `O(e · (n + e))` plus the block sort, and by
+/// `O(n + e)` when nothing is closed.
 ///
 /// # Comparing like with like
 ///
@@ -701,38 +858,12 @@ pub fn content_eq<G: PropSignature>(a: &Content<G>, b: &Content<G>) -> bool {
     if !m.propagate(&mut queue) {
         return false;
     }
-    let ca = closed_components(a, &pa, &m.edge_map);
-    let cb = closed_components(b, &pb, &m.edge_rev);
-    if ca.len() != cb.len() {
-        return false;
-    }
-    let mut used = vec![false; cb.len()];
-    match_closed(&mut m, &ca, &cb, &mut used)
+    // Propagation is symmetric, so on success the matched edges of each side are
+    // exactly its anchor-reachable ones; what is left over is closed.
+    closed_blocks(a, &pa, &m.edge_map) == closed_blocks(b, &pb, &m.edge_rev)
 }
 
 // ---------------------------------------------------------------- canonical key
-
-/// One hyperedge under a canonical numbering.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct EdgeRecord<G> {
-    label: G,
-    sources: Vec<usize>,
-    targets: Vec<usize>,
-}
-
-/// A closed component's canonical serialization: the lexicographic minimum over
-/// its seed choices.
-///
-/// Carries no colors, and does not need to: every node of a closed component is
-/// incident to some hyperedge, and [`content_of`] *defines* a node's color as its
-/// incident tentacle's declared letter — so the records below already determine
-/// it. (The boundary-attached part does record colors, because a wire no
-/// generator touches has none of its own and takes the boundary word's.)
-#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct ClosedBlock<G> {
-    node_count: usize,
-    edges: Vec<EdgeRecord<G>>,
-}
 
 /// A hashable canonical form of a [`Content`], with
 /// `canonical_key(a) == canonical_key(b)` **iff** `content_eq(&a, &b)`.
@@ -761,78 +892,6 @@ pub struct ContentKey<G: PropSignature> {
     closed: Vec<ClosedBlock<G>>,
 }
 
-/// A canonical numbering under construction: nodes and edges in discovery order.
-struct Numbering {
-    node: Vec<Option<usize>>,
-    edge: Vec<Option<usize>>,
-    next_node: usize,
-    order: Vec<usize>,
-    queue: VecDeque<usize>,
-}
-
-impl Numbering {
-    fn new(nodes: usize, edges: usize) -> Self {
-        Self {
-            node: vec![None; nodes],
-            edge: vec![None; edges],
-            next_node: 0,
-            order: Vec::new(),
-            queue: VecDeque::new(),
-        }
-    }
-
-    /// Number `node` if new, and queue it for expansion.
-    fn visit_node(&mut self, node: usize) {
-        if self.node[node].is_none() {
-            self.node[node] = Some(self.next_node);
-            self.next_node += 1;
-            self.queue.push_back(node);
-        }
-    }
-
-    /// Number `edge` if new, and its tentacle nodes in tentacle order.
-    fn visit_edge<G: PropSignature>(&mut self, c: &Content<G>, edge: usize) {
-        if self.edge[edge].is_some() {
-            return;
-        }
-        self.edge[edge] = Some(self.order.len());
-        self.order.push(edge);
-        let e = &c.edges[edge];
-        for &x in e.sources.iter().chain(e.targets.iter()) {
-            self.visit_node(x);
-        }
-    }
-
-    /// Expand the queue: every incident edge of every queued node, in the fixed
-    /// `[consumer, producer]` order.
-    fn run<G: PropSignature>(&mut self, c: &Content<G>, p: &Profile) {
-        while let Some(x) = self.queue.pop_front() {
-            for (e, _) in incidences(p, x).into_iter().flatten() {
-                self.visit_edge(c, e);
-            }
-        }
-    }
-
-    /// The canonical index of `node`.
-    fn node_id(&self, node: usize) -> usize {
-        self.node[node].expect("invariant: every reached node is numbered")
-    }
-
-    fn records<G: PropSignature>(&self, c: &Content<G>) -> Vec<EdgeRecord<G>> {
-        self.order
-            .iter()
-            .map(|&e| {
-                let edge = &c.edges[e];
-                EdgeRecord {
-                    label: edge.label.clone(),
-                    sources: edge.sources.iter().map(|&x| self.node_id(x)).collect(),
-                    targets: edge.targets.iter().map(|&x| self.node_id(x)).collect(),
-                }
-            })
-            .collect()
-    }
-}
-
 /// Compute the canonical key of a content.
 ///
 /// # Why it is canonical
@@ -847,16 +906,15 @@ impl Numbering {
 /// numberings *are* an iso under both feet, since the anchors are recorded
 /// coordinate-wise.
 ///
-/// A closed component has no anchored seed, so its serialization is taken as the
-/// lexicographic minimum over all of its edges as seed — a value that depends
-/// only on the component's iso class. The components' serializations are then
-/// sorted, which turns the (unordered) family of closed components into a
-/// canonical sequence.
+/// The closed part is the same complete invariant [`content_eq`] compares — each
+/// component's minimum-over-seeds serialization, sorted — which turns the
+/// unordered family of closed components into a canonical sequence.
 ///
 /// # Cost
 ///
-/// Linear in the content, except for closed components, where the
-/// minimum-over-seeds is quadratic in the component's edge count.
+/// The same bound as [`content_eq`]: linear in the content for the
+/// boundary-attached part, `O(|E_K| · (|V_K| + |E_K|))` per closed component `K`,
+/// plus the block sort.
 #[must_use]
 pub fn canonical_key<G: PropSignature>(c: &Content<G>) -> ContentKey<G> {
     let p = profile(c);
@@ -868,11 +926,7 @@ pub fn canonical_key<G: PropSignature>(c: &Content<G>) -> ContentKey<G> {
     }
     anchored.run(c, &p);
 
-    let mut closed: Vec<ClosedBlock<G>> = closed_components(c, &p, &anchored.edge)
-        .iter()
-        .map(|component| minimal_block(c, &p, component))
-        .collect();
-    closed.sort_unstable();
+    let closed = closed_blocks(c, &p, &anchored.edge);
 
     let mut colors: Vec<Option<G::Color>> = vec![None; anchored.next_node];
     for (id, color) in anchored.node.iter().zip(c.node_colors.iter()) {
@@ -889,28 +943,6 @@ pub fn canonical_key<G: PropSignature>(c: &Content<G>) -> ContentKey<G> {
         output: c.output.iter().map(|&x| anchored.node_id(x)).collect(),
         closed,
     }
-}
-
-/// The lexicographic minimum serialization of one closed component, over its
-/// choices of seed edge.
-fn minimal_block<G: PropSignature>(
-    c: &Content<G>,
-    p: &Profile,
-    component: &[usize],
-) -> ClosedBlock<G> {
-    component
-        .iter()
-        .map(|&seed| {
-            let mut numbering = Numbering::new(c.node_count, c.edges.len());
-            numbering.visit_edge(c, seed);
-            numbering.run(c, p);
-            ClosedBlock {
-                node_count: numbering.next_node,
-                edges: numbering.records(c),
-            }
-        })
-        .min()
-        .expect("invariant: a closed component has at least one edge")
 }
 
 #[cfg(test)]
