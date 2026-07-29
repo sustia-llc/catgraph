@@ -1697,9 +1697,10 @@ never needs rewriting at all — it is quotiented away by `C` itself.
 > `nf` is not a third layer, and it is also not out of the decision business.
 > What changed is narrow: it no longer decides the SMC layer on the
 > well-formed path. It remains the canonicalizer inside
-> `kb::CongruenceClosure`'s `smc_refine` fixpoint — which NF-normalizes each
-> class representative and merges the class with the result, so NF quality
-> still affects which user-equation classes close — and it remains the fallback
+> `kb::CongruenceClosure`'s `smc_refine` fixpoint — which rebuilds every term
+> with atom-canonical substitutions, normalizes it with `nf`, and merges the
+> term's class with the normal form's, so NF quality still affects which
+> user-equation classes close — and it remains the fallback
 > outside content's domain (an arity-ill-formed expression, where `content_of`
 > is undefined and `eq_mod` / `eq_colored` must still answer). Display and
 > readback are unchanged.
@@ -1712,7 +1713,7 @@ never needs rewriting at all — it is quotiented away by `C` itself.
 > **Correction of record (2026-07-29).** An earlier #57 knowledge-base report
 > claimed "Lafont proves termination for the bialgebra structure". That is
 > **refuted** against the cached anchor. Lafont's strictly-monotone-interpretation
-> technique (Appendix A, p. 300) is proved for his PROP **F** of functions only
+> technique (Appendix A, p. 300) is proved for the PROP **F** of functions only
 > — *not* this document's fragment `𝔉`, an unrelated symbol that happens to
 > collide; for the bialgebra-bearing `L(Z₂)` system he states termination as a
 > **conjecture** and documents the obstruction — `ε : 1 → 0` admits no strictly

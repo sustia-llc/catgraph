@@ -77,10 +77,11 @@
 //!
 //! It does **not** make these counts NF-independent. `nf` is still the
 //! canonicalizer inside `kb::CongruenceClosure`'s `smc_refine` fixpoint, which
-//! NF-normalizes each class representative and merges the class with the
-//! result — so an NF change can still move these pins, through the
-//! user-equation layer rather than through the SMC one. Treat a move as
-//! demanding an explanation exactly as before.
+//! rebuilds every term with atom-canonical substitutions, normalizes it with
+//! `nf`, and merges the term's class with the normal form's — so an NF change
+//! can still move these pins, through the user-equation layer rather than
+//! through the SMC one. Treat a move as demanding an explanation exactly as
+//! before.
 //! [#173](https://github.com/sustia-llc/catgraph/issues/173)'s "conflation"
 //! note is therefore **partially addressed**, not discharged; whether it closes
 //! is an owner call, not this test's to make.
@@ -123,17 +124,17 @@
 //!
 //! That does **not** by itself force the count down. The partition above is
 //! built *greedily* — each expression joins the first class whose
-//! representative it matches — over an `eq_mod` that is **not transitive**
-//! (measured: 10 490 violating triples at BoolRig d=2; e.g. `Scalar(false)` ~
-//! `Discard ; Zero` ~ `Discard ⊗ Zero` while `Scalar(false)` ≁
-//! `Discard ⊗ Zero`). Over a non-transitive relation the greedy class count is
+//! representative it matches — over an `eq_mod` that is **not transitive**:
+//! `Scalar(false)` ~ `Discard ; Zero` ~ `Discard ⊗ Zero` while `Scalar(false)`
+//! ≁ `Discard ⊗ Zero`. Over a non-transitive relation the greedy class count is
 //! not a function of the relation at all — it depends on enumeration order —
 //! so enlarging the relation has no monotonicity theorem behind it. The
-//! direction here is **empirical**: all four rigs fell, verified per bucket.
+//! direction here is **empirical**: all four rigs fell.
 //! A future tracker over union-find components would be a function of the
 //! relation and would restore monotonicity, at the cost of new baselines —
 //! filed as [#189](https://github.com/sustia-llc/catgraph/issues/189),
-//! deliberately deferred.
+//! deliberately deferred; its body carries the non-transitivity measurement
+//! and the pool it was taken on.
 //!
 //! The containment is pinned as a test on 2000 unrelated pairs in
 //! `tests/content_equality_corpus.rs` (`cross_corpus_pairs_are_separated`),

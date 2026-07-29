@@ -54,13 +54,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   only grew — the content relation contains the NF relation it replaced (`nf`
   preserves content, §4.3 Lemma 4.2), so no previously provable equality became
   unprovable. The *count* carries no such guarantee: it is a greedy-partition
-  statistic over a **non-transitive** `eq_mod` (10 490 violating triples
-  measured at BoolRig d=2), and over a non-transitive relation the greedy class
-  count is not a function of the relation, so enlargement is not provably
-  monotone. The observed direction is **empirical** — all four fell, verified
-  per bucket. A union-find-component tracker would restore monotonicity at the
-  cost of new baselines: filed as
-  [#189](https://github.com/sustia-llc/catgraph/issues/189), deferred.
+  statistic over a **non-transitive** `eq_mod` (`Scalar(false)` ~
+  `Discard ; Zero` ~ `Discard ⊗ Zero` while `Scalar(false)` ≁
+  `Discard ⊗ Zero`), and over a non-transitive relation the greedy class count
+  is not a function of the relation, so enlargement is not provably monotone.
+  The observed direction is **empirical** — all four fell. A
+  union-find-component tracker would restore monotonicity at the cost of new
+  baselines: filed as
+  [#189](https://github.com/sustia-llc/catgraph/issues/189), deferred — its
+  body carries the non-transitivity measurement and the pool it was taken on.
   **The metric also narrowed in meaning:** the short-circuit conflation is gone
   (no residual is attributable to NF incompleteness at the SMC layer, which is
   now decided exactly), but `nf` still reaches the count through

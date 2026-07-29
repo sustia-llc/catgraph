@@ -337,10 +337,11 @@ impl<G: PropSignature> Presentation<G> {
     /// **Where `nf` still decides.** It no longer decides the SMC layer on the
     /// well-formed path, but it has not been reduced to display: it is still the
     /// canonicalizer *inside* [`kb::CongruenceClosure`]'s `smc_refine` fixpoint,
-    /// which NF-normalizes each class representative and merges the class with
-    /// the result — so `nf`'s quality still affects which user-equation classes
-    /// close — and it is still the fallback below, outside content's domain. Its
-    /// other jobs, canonical display and readback, are unchanged.
+    /// which rebuilds every term with atom-canonical substitutions, normalizes it
+    /// with `nf`, and merges the term's class with the normal form's — so `nf`'s
+    /// quality still affects which user-equation classes close — and it is still
+    /// the fallback below, outside content's domain. Its other jobs, canonical
+    /// display and readback, are unchanged.
     ///
     /// So a `true` is exact at the SMC layer and sound at the user layer; a
     /// `false` is still only as complete as congruence closure is. Cocommutativity
