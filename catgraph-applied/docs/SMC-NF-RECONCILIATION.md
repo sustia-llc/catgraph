@@ -10,6 +10,21 @@
 > implements, keeping the exact numbering the citations use (§2.1–§2.4, §3) so
 > the references resolve without renumbering.
 >
+> **Recovery note (2026-07-29):** the original working note is *not* lost after
+> all — it survived in the author's private notes archive, outside this
+> repository, and was recovered while the #57 a1 arc was in flight. A fidelity
+> diff against the reconstruction above found no correction to make: the
+> §2.1–§2.4/§3 numbering the citations depend on matches, every convention
+> decision recorded in the note matches the one documented here, the 18-test
+> inventory shipped verbatim, and the note's §2.4 three-tuple termination
+> measure is an ordered subsequence of the measure this document now carries
+> (the later components were appended by the passes that needed them, none
+> reordered). The diff also settled the provenance of one known error: the
+> Selinger "Thm 3.12 p. 17" slip originated in the working note itself, so the
+> audit's correction to p. 18 below stands and was not introduced by the
+> reconstruction. The paragraph above is left as written — it is the honest
+> record of what was known when this document was built.
+>
 > **Anchor provenance:** the Joyal-Street (JS-I 1991, JS-II, JS-Braided 1993)
 > and Selinger (2011, *A survey of graphical languages for monoidal
 > categories*, [arXiv:0908.3347](https://arxiv.org/abs/0908.3347)) anchors
@@ -830,6 +845,27 @@ genuinely presentation-dependent pathology — §4.6, residual (c) — that no
 content-level condition can carve around, because the nested and un-nested
 writings of a closed block have *identical* content.
 
+> **Status (2026-07-29): `C` is implemented.** Until now this section specified
+> a function that existed only on paper. It now ships as
+> `src/prop/presentation/content.rs` (issue #57 a1, PR #188): `content_of`
+> builds the cospan above by structural recursion with union-find gluing at `;`,
+> `content_eq` decides isomorphism under both feet, and `canonical_key` gives a
+> hashable form satisfying `canonical_key(a) == canonical_key(b)` iff
+> `content_eq(a, b)`. The `Λ`-typing is not deferred: a node takes its producer
+> tentacle's declared letter (its consumer's when it has no producer), so the
+> module is word-generic exactly as this section is, and `content_of_colored`
+> pins the one remaining case — a wire no generator touches, which monogamy
+> forces onto both feet — from a `ColoredExpr`'s source word.
+>
+> Verified against the §4.6 corpora: content closes **253/253** divergent pairs
+> on the published default corpus and **1162/1162** in braid mode (including the
+> marked residual-(a) cases and the dead-braid-prefix shapes no `nf`-level fix
+> reaches), with `canonical_key` agreeing with `content_eq` on every one, and
+> zero false equalities across 2000 cross-corpus negative controls — the ten
+> genuinely-equal hits among them each cross-checked against `nf`.
+> `tests/content_equality_corpus.rs` is the tracker; `tests/content_equality.rs`
+> carries the named §4.4/§4.6 witnesses.
+
 ### §4.2 Content decides SMC-equality (color-generically)
 
 **Lemma 4.1.** For arity-well-formed `e, e′ : n → m`:
@@ -1640,3 +1676,40 @@ chooses `ι` at all, and inherits `nf`'s choice only at readback. What #57
 would add over the §2.4 pipeline is rewriting modulo *user equations* on the
 same substrate; what it inherits from this section is that SMC-coherence
 never needs rewriting at all — it is quotiented away by `C` itself.
+
+> **Status (2026-07-29): the #57 work split, and the equality half landed.**
+> The spike that sized this section separated it into two halves priced very
+> differently, and only the first was taken.
+>
+> **(a1) Content equality — shipped.** `C` and its equality are in tree (§4.1's
+> status note), and as of PR2 they are the **equality of record at the SMC
+> layer**: `Presentation::eq_mod`'s congruence-closure path settles SMC
+> coherence by content equality, and `ColoredExpr::eq_colored` does the same on
+> the worded surface. `nf` keeps its other role — canonical *display* and
+> readback — so the sentence above ("an engine that rewrites content directly
+> never chooses `ι` at all") is now literal for equality: the `η` placement
+> choice is never consulted when deciding whether two writings are equal, and
+> every pair `nf` separates for that reason is decided equal. The layering is
+> three-deep and worth stating once: content decides SMC coherence *exactly*
+> (Lemma 4.1, both directions); congruence closure decides *user* equations
+> above it, with its existing bounded-completeness caveats; `nf` decides
+> nothing and displays.
+>
+> **(a2) Convex-DPO rewriting modulo user equations — deferred**, on the
+> unchanged ground that its only consumer would be a functor-less presentation.
+> Deferring costs little now that `C` exists: a2 would start from a landed
+> substrate rather than from this specification.
+>
+> **Correction of record (2026-07-29).** An earlier #57 knowledge-base report
+> claimed "Lafont proves termination for the bialgebra structure". That is
+> **refuted** against the cached anchor. Lafont's strictly-monotone-interpretation
+> technique (Appendix A) is proved for `𝔉` only; for the bialgebra-bearing
+> `L(Z₂)` system he states termination as a **conjecture** and documents the
+> obstruction — `ε : 1 → 0` admits no strictly monotone interpretation into
+> `ℕ*⁰`. The nearest actual proof in the cached anchors is BGKSZ **Thm 6.1**:
+> termination for the *non-commutative* bimonoid, via a lexicographic
+> path-counting measure that handles `ε` by counting paths *to* `ε`-hyperedges
+> rather than by interpreting it. The commutative case an `E_18`-style system
+> would need is unproven in the anchors, which *raises* a2's estimated cost.
+> The false claim never reached this document; it is corrected here because
+> this section is where a future a2 attempt would start reading.

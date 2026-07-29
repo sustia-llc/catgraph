@@ -316,6 +316,39 @@ impl<G: PropSignature> Presentation<G> {
     ///   decide equality via bounded congruence closure. Always returns
     ///   `Ok(Some(_))` — no false negatives on overlapping equations.
     ///
+    /// # The two layers, and which decides what
+    ///
+    /// Under the default engine this is a two-layer question, and the two layers
+    /// have different decision procedures
+    /// ([#57](https://github.com/sustia-llc/catgraph/issues/57) a1):
+    ///
+    /// - **SMC coherence** — associator, unitor, interchange, braid-naturality,
+    ///   `σ² = id`. Decided by [`content`], exactly: Lemma 4.1 of
+    ///   `docs/SMC-NF-RECONCILIATION.md` §4.2 says `C(a) = C(b)` **iff** `a` and
+    ///   `b` are equal in the free symmetric monoidal category. Content equality
+    ///   is therefore the equality of record at this layer, and
+    ///   [`smc_nf::nf`] is left to its other job — canonical *display* and
+    ///   readback. That matters because `nf` is not complete here: it separates
+    ///   SMC-equal writings (§4.4's `η` placement slack, §4.6's ledger), and
+    ///   every one of those pairs is now decided `Ok(Some(true))`.
+    /// - **User equations** — the `E` of this presentation, e.g. the 18 Thm 5.60
+    ///   equations. Decided by [`kb::CongruenceClosure`] above the SMC layer,
+    ///   with the same bounded-completeness caveats as before.
+    ///
+    /// So a `true` is exact at the SMC layer and sound at the user layer; a
+    /// `false` is still only as complete as congruence closure is. Cocommutativity
+    /// is the standing illustration of the split: `Copy ; Add` and
+    /// `Copy ; σ ; Add` are *not* SMC-equal, so the content layer declines them,
+    /// and whether they come back equal is up to the presentation's equations.
+    ///
+    /// **Arity-ill-formed input.** `PropExpr`'s variants are public, so a
+    /// hand-built tree can compose mismatched arities. This method stays total on
+    /// those, as it always has: the content layer is gated on
+    /// [`content::is_arity_well_formed`] and such a tree falls through to the
+    /// pre-#57 `nf` short-circuit and then to congruence closure, reaching
+    /// exactly the verdict it reached before. No new error variant, and no panic
+    /// leaking out of [`content::content_of`].
+    ///
     /// # Errors
     ///
     /// Returns [`CatgraphError::Presentation`] if normalization fails for either
@@ -333,27 +366,46 @@ impl<G: PropSignature> Presentation<G> {
                 Ok(Some(na.expr == nb.expr))
             }
             NormalizeEngine::CongruenceClosure => {
-                // Hybrid: check Layer-1 NF structural equality FIRST,
-                // then fall back to the CC engine with the
-                // `normalize_smc_only` pre-pass.
+                // Hybrid: settle the SMC layer FIRST, then fall back to the CC
+                // engine with the `normalize_smc_only` pre-pass.
                 //
                 // Why the hybrid:
-                // - The NF is exact for SMC coherence (associator, unitor,
-                //   interchange, braid-naturality, σ²=id) and catches those
-                //   equalities without consulting user equations.
+                // - Content equality is *exact* for SMC coherence (associator,
+                //   unitor, interchange, braid-naturality, σ²=id): by Lemma 4.1
+                //   `C(a) = C(b)` iff `a` and `b` are SMC-equal, so this arm
+                //   catches every such equality without consulting user
+                //   equations. It replaced an `nf(a) == nf(b)` check in #57 a1,
+                //   which was sound but incomplete — the NF still separates
+                //   SMC-equal pairs (all 253 published divergences, and 1162 in
+                //   braid mode), and content closes every one of them.
                 // - The CC engine handles user-equation congruence (e.g., the
                 //   18 Thm 5.60 equations) but doesn't know SMC axioms.
                 // - Replacing CC's pre-pass entirely with NF was tried and
                 //   regressed the faithfulness-test collision counts at
                 //   BoolRig d2 (2574 → 3763) because NF reshapes seeded-
                 //   equation LHS/RHS into forms CC's structural hash no
-                //   longer matches the query against.
-                // - The union (NF OR CC) captures both capabilities without
+                //   longer matches the query against. That is a fact about the
+                //   *pre-pass*, which is unchanged here; this arm only adds
+                //   `Some(true)` verdicts ahead of CC.
+                // - The union (SMC OR CC) captures both capabilities without
                 //   the reshaping problem.
                 //
-                // Perf note: the NF check is cheap (no equation enumeration)
+                // Perf note: the content check is cheap (no equation
+                // enumeration, same cost order as the `nf` call it replaced)
                 // and short-circuits a large fraction of queries.
-                if smc_nf::nf(a) == smc_nf::nf(b) {
+                //
+                // `content_of` panics outside its arity-well-formed domain,
+                // where `eq_mod` is total today, so the content arm is gated and
+                // an ill-formed tree keeps the pre-#57 NF short-circuit
+                // verbatim. On the gated-in path the NF check would be dead
+                // weight: `nf` preserves content (Lemma 4.2), so
+                // `nf(a) == nf(b)` implies `C(a) = C(b)` and the content arm has
+                // already returned.
+                if content::is_arity_well_formed(a) && content::is_arity_well_formed(b) {
+                    if content::content_eq(&content::content_of(a), &content::content_of(b)) {
+                        return Ok(Some(true));
+                    }
+                } else if smc_nf::nf(a) == smc_nf::nf(b) {
                     return Ok(Some(true));
                 }
                 // Fall back to the CC engine with SMC pre-pass.

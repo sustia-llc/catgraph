@@ -28,26 +28,25 @@
 //!
 //! # Equality
 //!
-//! [`ColoredExpr::eq_colored`] is the SMC-quotient equality: layered-normal-form
-//! equality (`presentation::smc_nf::nf`) **plus** boundary-word equality. The
-//! derived `PartialEq` on [`ColoredExpr`] is the *pre-quotient*, structural one
-//! — same caveat as [`PropExpr`] itself (see the [module docs] of the parent
-//! module).
+//! [`ColoredExpr::eq_colored`] is the SMC-quotient equality: equal **content**
+//! (`presentation::content`) plus equal boundary words. The derived `PartialEq`
+//! on [`ColoredExpr`] is the *pre-quotient*, structural one — same caveat as
+//! [`PropExpr`] itself (see the [module docs] of the parent module).
 //!
-//! Cited, not re-derived: `docs/SMC-NF-RECONCILIATION.md` **§4.2** (Lemma 4.1
-//! — content decides SMC-equality, stated color-generically over an arbitrary
-//! Λ, so the word-level reading here inherits it) and **§4.3** (Lemma 4.2 —
-//! every pipeline rewrite preserves content, giving the *unconditional*
-//! soundness direction `nf(e) = nf(e′) ⇒ e =_SMC e′` on every diagram).
-//! The converse holds as **rigidity on the fragment `𝔉′`** — braid-free,
-//! every `η` placement-pinned (**§4.4** Theorem 4.5) — with the `nf`-level
-//! corollary there *conditional* (fixpoints must be braid-free and
-//! invariant-satisfying; the blocking engine asymmetry is filed, §4.4's
-//! conditional corollary), and it is open beyond `𝔉′`: §4.6's sweep still
-//! finds SMC-equal pairs with distinct NFs. So a `true` from `eq_colored` is
-//! sound everywhere; a `false` is **not a disproof** in general — on `𝔉′` it
-//! becomes one only once the conditional corollary's engine condition is
-//! discharged.
+//! Cited, not re-derived: `docs/SMC-NF-RECONCILIATION.md` **§4.2**, Lemma 4.1 —
+//! `C(e) = C(e′)` **iff** `e =_SMC e′`, stated color-generically over an
+//! arbitrary Λ, so the word-level reading here inherits it. Both directions, so
+//! `eq_colored` decides the question rather than approximating it
+//! ([#57](https://github.com/sustia-llc/catgraph/issues/57) a1).
+//!
+//! Until #57 a1 this test was normal-form equality, which is sound but *not*
+//! complete: §4.3's Lemma 4.2 gives `nf(e) = nf(e′) ⇒ e =_SMC e′` on every
+//! diagram, while the converse is proven only as rigidity on the fragment `𝔉′`
+//! (**§4.4** Theorem 4.5, with the `nf`-level corollary there still conditional)
+//! and is open beyond it — §4.6's sweep finds SMC-equal pairs with distinct
+//! normal forms. So a `false` used not to be a disproof. Those pairs are exactly
+//! what content closes, and `nf` keeps its other role: canonical display and
+//! readback.
 //!
 //! # Equations
 //!
@@ -64,6 +63,7 @@
 
 use catgraph::errors::CatgraphError;
 
+use super::presentation::content::{content_eq, content_of_colored, is_arity_well_formed};
 use super::presentation::smc_nf::nf;
 use super::{PropExpr, PropSignature};
 
@@ -375,9 +375,8 @@ pub(crate) fn check_equation<G: PropSignature>(
 ///
 /// The derived `PartialEq` is **structural** (pre-quotient): equal source word,
 /// equal target word, and syntactically identical trees.
-/// [`Self::eq_colored`] is the SMC-quotient equality — normal forms plus
-/// boundary words. Two expressions related by interchange are `eq_colored` but
-/// not `==`.
+/// [`Self::eq_colored`] is the SMC-quotient equality — content plus boundary
+/// words. Two expressions related by interchange are `eq_colored` but not `==`.
 ///
 /// # Serde (feature `serde`)
 ///
@@ -448,15 +447,41 @@ impl<G: PropSignature> ColoredExpr<G> {
         (self.source_word, self.target_word, self.expr)
     }
 
-    /// SMC-quotient equality: equal boundary words **and** equal normal forms.
+    /// SMC-quotient equality: equal boundary words **and** equal content.
     ///
-    /// Sound in the `true` direction unconditionally (§4.3 Lemma 4.2's
-    /// readback). A `false` is not a disproof — §4.4's canonicality
-    /// corollary on `𝔉′` is currently *conditional*; see the module docs.
+    /// **Exact** ([#57](https://github.com/sustia-llc/catgraph/issues/57) a1).
+    /// Lemma 4.1 (§4.2) makes content equality *equal to* SMC-equality rather
+    /// than merely sufficient for it, so on two values of this type the verdict
+    /// decides the question in both directions: `true` is sound, and — unlike the
+    /// `nf`-based test this replaced — `false` is now a disproof. The pairs that
+    /// motivated the old caveat (§4.4's `η` placement slack, §4.6's ledger) are
+    /// exactly the ones that now come back `true`.
+    ///
+    /// Both sides go through [`content_of_colored`], so the colors of wires no
+    /// generator touches are pinned from the source words and the comparison is
+    /// like-with-like. The boundary-word test in front is therefore redundant on
+    /// this path — a fully typed content records its own boundary words — and is
+    /// kept because it is cheaper than building either content, and because it
+    /// still carries the fallback below.
+    ///
+    /// # Fallback
+    ///
+    /// A [`ColoredExpr`] built through [`Self::new`] is word-well-formed, hence
+    /// arity-well-formed, hence inside [`content_of_colored`]'s domain. One
+    /// reconstructed across the serde trust boundary (see the type's docs) need
+    /// not be, and there this method falls back to the old normal-form test,
+    /// with the old semantics: `true` sound, `false` not a disproof.
+    ///
+    /// [`content_of_colored`]: super::presentation::content::content_of_colored
     #[must_use]
     pub fn eq_colored(&self, other: &Self) -> bool {
-        self.source_word == other.source_word
-            && self.target_word == other.target_word
-            && nf(&self.expr) == nf(&other.expr)
+        if self.source_word != other.source_word || self.target_word != other.target_word {
+            return false;
+        }
+        if is_arity_well_formed(&self.expr) && is_arity_well_formed(&other.expr) {
+            content_eq(&content_of_colored(self), &content_of_colored(other))
+        } else {
+            nf(&self.expr) == nf(&other.expr)
+        }
     }
 }

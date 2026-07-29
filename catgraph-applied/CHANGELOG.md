@@ -13,7 +13,42 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (behavioral): the SMC layer of `Presentation::eq_mod` is now
+  decided by content, not by the normal form**
+  ([#57](https://github.com/sustia-llc/catgraph/issues/57), a1 PR2). Under the
+  default `NormalizeEngine::CongruenceClosure`, the `nf(a) == nf(b)`
+  short-circuit is replaced by `content_eq(content_of(a), content_of(b))`.
+  Content decides SMC-equality *exactly* (Lemma 4.1, `SMC-NF-RECONCILIATION.md`
+  §4.2) where `nf` was sound but incomplete, so **`eq_mod` returns
+  `Ok(Some(true))` on strictly more pairs than before** — every SMC-equal pair
+  the normal form separates, which is all 253 divergences of the published
+  default corpus and all 1162 in braid mode. No pair that was equal becomes
+  unequal: `nf` preserves content (§4.3 Lemma 4.2), so the content relation
+  *contains* the NF relation, and the change is monotone
+  (`tests/content_equality_corpus.rs` pins that containment on 2000 unrelated
+  pairs). `ColoredExpr::eq_colored` gets the same treatment via
+  `content_of_colored`, and with it a strengthened contract: it now **decides**
+  colored SMC-equality, so a `false` is a disproof where previously it was not.
+  `NormalizeEngine::Structural` is untouched. The user-equation layer is
+  untouched: `Copy ; Add` and `Copy ; σ ; Add` are still unequal without the
+  Thm 5.60 equations, because cocommutativity is a user equation and content
+  quotients by SMC coherence alone.
+
+  **Totality is preserved.** `content_of` panics outside its arity-well-formed
+  domain, where `eq_mod` has always answered rather than panicked, so the
+  content arm is gated on the new `content::is_arity_well_formed` and an
+  ill-formed tree falls through to the pre-#57 `nf` short-circuit and then to
+  congruence closure — reaching exactly its previous verdict. No new error
+  variant.
+
 ### Added
+
+- **`prop::presentation::content::is_arity_well_formed`** — the domain
+  predicate for `content_of`, public so callers that must stay total on
+  hand-built or deserialized `PropExpr` trees can ask before building a content
+  rather than catching a panic they cannot catch.
 
 - **Abstract content and content equality —
   `prop::presentation::content`** ([#57](https://github.com/sustia-llc/catgraph/issues/57),
@@ -45,7 +80,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   coherence and nothing else, so `Copy ; Add` and `Copy ; σ ; Add` are correctly
   **unequal** — cocommutativity is a Thm 5.60 *user* equation and stays with
   `eq_mod`'s congruence closure above this layer. Nothing is wired to `eq_mod`
-  yet; `nf` is untouched.
+  yet; `nf` is untouched. (PR2, above, wires it.)
+
+### Fixed
+
+- **`SMC-NF-RECONCILIATION.md` doc corrections** (2026-07-29): §4.1 and §4.7
+  gain dated status notes — the content function is no longer a specification
+  of something unbuilt, and §4.7 records the a1/a2 split with the equality half
+  landed. §4.7 also carries a **correction of record**: an earlier #57
+  knowledge-base report's claim that "Lafont proves termination for the
+  bialgebra structure" is refuted against the cached anchor — Lafont states it
+  as a *conjecture* for the bialgebra-bearing system and documents the
+  obstruction (`ε : 1 → 0` admits no strictly monotone interpretation into
+  `ℕ*⁰`); the nearest proof in the anchors is BGKSZ Thm 6.1, for the
+  *non-commutative* bimonoid. The false claim never reached this document. The
+  provenance header gains a recovery note: the original working note, recorded
+  there as never committed and unrecoverable, was recovered 2026-07-29 in a
+  private archive, and a fidelity diff found no correction to make to the
+  reconstruction — it also established that the known Selinger "Thm 3.12 p. 17"
+  slip originated in the working note, so the audit's p. 18 correction stands.
 
 - **SMC NF rigidity/canonicality theorem v2 — Theorem 4.5 on the fragment
   `𝔉′`** ([#174](https://github.com/sustia-llc/catgraph/issues/174) PR-B):
