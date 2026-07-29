@@ -15,6 +15,38 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
+- **Abstract content and content equality —
+  `prop::presentation::content`** ([#57](https://github.com/sustia-llc/catgraph/issues/57),
+  a1 PR1): the `SMC-NF-RECONCILIATION.md` §4.1 content function `C`, in tree.
+  `content_of` computes the anchored cospan of Λ-typed directed hypergraphs
+  (BGKSZ arXiv:1602.06771v2 `⟦·⟧`) by structural recursion with union-find
+  gluing at `;`; `content_eq` decides isomorphism **under both feet**; and
+  `canonical_key` produces a hashable form with `canonical_key(a) ==
+  canonical_key(b)` iff `content_eq(a, b)`. By Lemma 4.1 (§4.2) this decides
+  SMC-equality *exactly*, on every diagram — fragment or not — which is
+  strictly more than `nf` equality: the new
+  `tests/content_equality_corpus.rs` scores it at **253/253** divergent pairs
+  on the published default corpus and **1 162/1 162** in braid mode
+  (`internal-probes`-gated, both 100k sweeps `#[ignore]`d, 5k smoke tier and
+  cross-corpus negative controls in CI). The decision is exact and free of
+  search: anchors force node images pointwise, monogamy (BGKSZ Def 3.6) plus
+  ordered tentacles propagate each forcing deterministically, and the closed
+  components — which no anchor reaches, and which are coupled to nothing else —
+  are settled by comparing a complete iso invariant rather than by matching
+  them against one another. So there is no comparator, no component order, no
+  writing-dependent coordinate, and no backtracking anywhere in it; the cost is
+  linear in the content apart from the per-closed-component serialization.
+  **Word-generic from day one:** nodes carry the color their generator tentacle
+  *word* declares, and `content_of_colored` pins the one remaining kind (a wire
+  no generator touches, which monogamy makes boundary-anchored) from a
+  `ColoredExpr`'s source word, so the boundary words are readable off the
+  content and content equality on that path decides colored SMC-equality,
+  parallelism included. Layering is deliberate and tested: `C` quotients by SMC
+  coherence and nothing else, so `Copy ; Add` and `Copy ; σ ; Add` are correctly
+  **unequal** — cocommutativity is a Thm 5.60 *user* equation and stays with
+  `eq_mod`'s congruence closure above this layer. Nothing is wired to `eq_mod`
+  yet; `nf` is untouched.
+
 - **SMC NF rigidity/canonicality theorem v2 — Theorem 4.5 on the fragment
   `𝔉′`** ([#174](https://github.com/sustia-llc/catgraph/issues/174) PR-B):
   `SMC-NF-RECONCILIATION.md` §4.4 rewritten from a refuted-status ledger into
