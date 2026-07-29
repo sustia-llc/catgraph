@@ -165,6 +165,31 @@ impl<G: PropSignature> Content<G> {
     }
 }
 
+// ---------------------------------------------------------------- domain check
+
+/// Whether every `Compose` in `expr` joins a target arity to a matching source
+/// arity — exactly [`content_of`]'s precondition, and so a test for membership in
+/// its domain.
+///
+/// Terms built through [`Free`](crate::prop::Free) always pass, since its smart
+/// constructors check on the way in. `PropExpr`'s variants are public, though, so
+/// a hand-built or deserialized tree may not, and a caller that must stay total
+/// on such input — [`Presentation::eq_mod`](super::Presentation::eq_mod) is one —
+/// can ask first instead of catching a panic it has no way to catch.
+///
+/// `O(n)` in the size of the tree: each node's own arities are `O(height)` to
+/// read, but the recursion visits each node once and the checks are local.
+#[must_use]
+pub fn is_arity_well_formed<G: PropSignature>(expr: &PropExpr<G>) -> bool {
+    match expr {
+        PropExpr::Identity(_) | PropExpr::Braid(_, _) | PropExpr::Generator(_) => true,
+        PropExpr::Compose(f, g) => {
+            f.target() == g.source() && is_arity_well_formed(f) && is_arity_well_formed(g)
+        }
+        PropExpr::Tensor(f, g) => is_arity_well_formed(f) && is_arity_well_formed(g),
+    }
+}
+
 // ---------------------------------------------------------------- construction
 
 /// Union-find over wires, accumulating hyperedges as the expression is walked.
@@ -317,10 +342,9 @@ impl Renumber<'_> {
 ///
 /// **This is a stricter contract than the equality API above it.**
 /// [`Presentation::eq_mod`](super::Presentation::eq_mod) is total on such a tree
-/// today — it answers rather than panics — so any future wiring of content into
-/// `eq_mod` has to decide the policy deliberately: either gate the content path
-/// behind an arity check and fall back to `nf`, or give `content_of` a fallible
-/// sibling returning [`CatgraphError`](catgraph::errors::CatgraphError).
+/// — it answers rather than panics — so it gates its content path on
+/// [`is_arity_well_formed`] and falls back to the normal form outside this
+/// function's domain, rather than propagating the panic to its callers.
 #[must_use]
 pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
     let mut b = Builder {

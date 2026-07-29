@@ -359,6 +359,22 @@ fn cross_corpus_pairs_are_separated() {
                 equal,
                 "case {i}: canonical_key disagrees with content_eq"
             );
+            // **Containment**, on unrelated pairs — the direction that matters
+            // for `Presentation::eq_mod`. `nf` preserves content (§4.3 Lemma
+            // 4.2), so equal normal forms force equal content, and the content
+            // relation therefore *contains* the NF relation. That is what makes
+            // swapping the one for the other in `eq_mod` monotone: every pair the
+            // NF short-circuit decided equal, content decides equal too, so the
+            // change can only add `Some(true)` verdicts and never remove one.
+            if !equal {
+                assert_ne!(
+                    nf(&a),
+                    nf(&c),
+                    "case {i}: normal forms agree but content does not — `nf` \
+                     would have decided a pair content declines, so the content \
+                     relation does not contain the NF relation"
+                );
+            }
             if equal {
                 // A content-equal hit is a claim of SMC-equality; `nf` must
                 // agree, or one of the two is unsound.

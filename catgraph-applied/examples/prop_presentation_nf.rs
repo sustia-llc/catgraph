@@ -365,7 +365,7 @@ fn main() {
     // etc. This idempotency increases collision rate under S = sfg_to_mat:
     // the matrix functor identifies many more pairs over an idempotent rig
     // than over a non-idempotent one, which is why size_bound=2 surfaces
-    // 980 CC-incompleteness witnesses below (post-#174).
+    // 952 CC-incompleteness witnesses below (post-#57-a1).
     let bool_samples = [BoolRig(false), BoolRig(true)];
 
     // Note: matr_presentation::<BoolRig>(&samples) returns N > 18. The 18

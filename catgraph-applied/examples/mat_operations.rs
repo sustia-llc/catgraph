@@ -321,8 +321,9 @@ fn main() {
     // 2574 → 1433 (smc_refine) → 1301 (post-#14 NF) → 1142 (post-E_18)
     // → 972 (post-#55-PR1 η-before-ε reorder) → 979 (post-#55-PR2
     // component-anchored sift) → 980 (post-#174 column pass + free-site
-    // retirement; the upticks are equational-reach churn — see
-    // tests/graphical_linalg.rs).
+    // retirement) → 952 (post-#57-a1, the SMC layer of eq_mod decided by
+    // content equality; the upticks are equational-reach churn and the drop
+    // is a completeness gain — see tests/graphical_linalg.rs).
     let report = verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(2, &bool_samples)
         .expect("verifier runs on BoolRig size_bound=2");
     println!("  FaithfulnessReport (BoolRig, size_bound=2):");
