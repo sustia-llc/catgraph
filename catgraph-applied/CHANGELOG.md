@@ -43,6 +43,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   congruence closure — reaching exactly its previous verdict. No new error
   variant.
 
+  **CC collision baselines re-pinned, all four down:** BoolRig 980 → **952**,
+  UnitInterval 1433 → **1397**, Tropical 2018 → **1974**, F64Rig 2013 →
+  **1969**. Explain-the-delta: the metric buckets by matrix image first, and
+  Thm 5.60 makes the matrix ground truth, so a bucket splitting into `k`
+  `eq_mod`-classes contributes `k − 1` and the count measures equalities
+  `eq_mod` *fails to prove*. The content relation contains the NF relation it
+  replaced (`nf` preserves content, §4.3 Lemma 4.2), and a containing relation
+  can only merge classes, so the direction was **forced** — a rise is
+  unreachable by construction. The containment is pinned as a test on 2000
+  unrelated pairs. **The metric also changed meaning:** its canonicality
+  component is now exactly zero (content merges every SMC-equal same-matrix
+  pair before CC is consulted), so the residual is purely depth-2 CC
+  incompleteness on the user equations — which largely addresses
+  [#173](https://github.com/sustia-llc/catgraph/issues/173)'s "conflation"
+  note. Recorded in the tracker's docstring; #173 stays open.
+
 ### Added
 
 - **`prop::presentation::content::is_arity_well_formed`** — the domain

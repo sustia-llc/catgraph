@@ -21,8 +21,8 @@
 //! not re-prove established theorems). It returns **CC-engine incompleteness
 //! witnesses** — pairs of SFG expressions that the matrix functor `S`
 //! distinguishes which the default [`CongruenceClosure`] engine does NOT
-//! identify. The witness count (980 for `size_bound=2` on `BoolRig`,
-//! post-#174) stays nonzero **by design**: the terminal Mat(R) decision path
+//! identify. The witness count (952 for `size_bound=2` on `BoolRig`,
+//! post-#57-a1) stays nonzero **by design**: the terminal Mat(R) decision path
 //! is the Functorial engine (issue #15 resolved functorial-terminal; syntactic
 //! Knuth-Bendix completion is the #57 feasibility spike). See the
 //! `tests/graphical_linalg.rs` module docstring for the authoritative semantics.
@@ -59,7 +59,7 @@
 //!   deferred).
 //!
 //! - **`cc_incompleteness_count::bool` at `size_bound = 2`** — produces
-//!   980 CC-incompleteness witnesses on `BoolRig` (post-#174) — the
+//!   952 CC-incompleteness witnesses on `BoolRig` (post-#57-a1) — the
 //!   measured empirical baseline. The witness
 //!   count is the size of the gap between
 //!   [`NormalizeEngine::CongruenceClosure`] (syntactic, incomplete) and
@@ -68,8 +68,8 @@
 //!   faithfulness check.
 //!
 //! - **Witness-count asymmetry (`BoolRig` vs `F64Rig`).** At `size_bound = 2`
-//!   `BoolRig` produces 980 witnesses (post-#174); `F64Rig` produces a
-//!   larger count (2013 exact post-#174 — the tracker baseline measured on the
+//!   `BoolRig` produces 952 witnesses (post-#57-a1); `F64Rig` produces a
+//!   larger count (1969 exact post-#57-a1 — the tracker baseline measured on the
 //!   4-sample test fixture in `tests/graphical_linalg.rs`; this bench's
 //!   2-sample fixture yields a different, untracked count) that blows up
 //!   combinatorially at `size_bound = 3`.
@@ -287,7 +287,7 @@ fn bench_sfg_to_mat_bool(c: &mut Criterion) {
 // ---------------------------------------------------------------------------
 //
 // `verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(size_bound=2)` returns
-// 980 CC-incompleteness witnesses (measured empirically, post-#174; see the
+// 952 CC-incompleteness witnesses (measured empirically, post-#57-a1; see the
 // `tests/graphical_linalg.rs` module docstring for authoritative semantics).
 // One d=2 call is ≈6.9 s in release (see "Measured wall times"), so the group
 // is configured at criterion's minimum `sample_size(10)` with a short warm-up +
@@ -316,7 +316,7 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     group.warm_up_time(std::time::Duration::from_millis(500));
     group.measurement_time(std::time::Duration::from_secs(5));
 
-    // d=2: the canonical signal (980 witnesses, post-#174).
+    // d=2: the canonical signal (952 witnesses, post-#57-a1).
     group.throughput(Throughput::Elements(1));
     group.bench_function(BenchmarkId::from_parameter(2u32), |bencher| {
         bencher.iter(|| {
