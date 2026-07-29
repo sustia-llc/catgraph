@@ -77,8 +77,10 @@
 //! redistributing NFs breaks some equation-mediated identifications while the
 //! NF itself strictly improves. Canonicality is witnessed directly by the
 //! `smc_canonicality_probes` module (see the module docstring note above), not
-//! by this count; a full proof is open (§4.4 canonicality status — the draft
-//! was refuted in review). Completing the presentation to all 18 F&S/BE15
+//! by this count; rigidity is proven on the fragment `𝔉′` only (§4.4
+//! Theorem 4.5, canonicality there conditional on the filed cut-asymmetry
+//! fix — rigidity on `𝔉` itself is withdrawn; the dominant remaining freedom
+//! is `η` placement slack). Completing the presentation to all 18 F&S/BE15
 //! relations gives CC more equations to identify with, lowering the residual
 //! collision count.
 //!

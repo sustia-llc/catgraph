@@ -15,6 +15,45 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
+- **SMC NF rigidity/canonicality theorem v2 — Theorem 4.5 on the fragment
+  `𝔉′`** ([#174](https://github.com/sustia-llc/catgraph/issues/174) PR-B):
+  `SMC-NF-RECONCILIATION.md` §4.4 rewritten from a refuted-status ledger into
+  a proven theorem with an honest scope. New content: Lemma 4.3 (*column
+  pinning* — braid-free components of the identity-split refinement are
+  exactly content components, so rule-(i) keys and the direction of every
+  Step-6½/7 move are content-invariants at any loop point; the braid guard is
+  thereby load-bearing, not hygiene), Lemma 4.4 (*layout freedom* — a
+  braid-free invariant-satisfying diagram is determined by content plus
+  `(λ, ι)`: layer assignment and `η` insertion slots), content-intrinsic
+  `ldepth`/placement-slack definitions, and **Theorem 4.5**: rigidity on
+  `𝔉′` = braid-free diagrams whose every `η` is layer- and slot-pinned, by
+  top-down induction from the input foot (proof-sketch density; two steps
+  stay **flagged open** — a first discharge attempt was itself refuted in
+  the delta review and is recorded in the sketch, with the
+  `layer_pinned_eta_sits_below_layer_zero` witness pinning the false
+  premise). Canonicality-via-`nf` on
+  `𝔉′` is **conditional** — the review refuted the unconditional corollary
+  twice, with both counterexamples committed as witnesses: fixpoints can
+  violate a non-excepted §1 clause through the `adjacent_column_cuts`
+  right-column asymmetry
+  (`cut_asymmetry_separates_smc_equal_writings_inside_f_prime`; engine
+  defect, filed — its fix is the discharge path), and NF braid-freeness is
+  per-writing, not content (`braid_prefix_is_not_content_derived`), so `𝔉′`
+  reads `nf(e)` braid-free and both corollaries condition on it. The
+  `η`-free special case is proved under the same braid-free conditioning
+  (all three ordering passes provably inert; the 16 103-pair `η`-free
+  sub-corpus diverges nowhere). **Withdrawn, with a three-generator
+  witness:** rigidity
+  on the original `𝔉` — a sweep characterization showed *all* 253 divergent
+  pairs (128 in-`𝔉`) are one mechanism, `η` placement slack, which no pass
+  canonicalizes; canonicalizing `ι` is now the single named gap, and the
+  sharpest framing yet for
+  [#57](https://github.com/sustia-llc/catgraph/issues/57) (a content-level
+  engine never chooses `ι` at all). New witnesses: the `eta_slack_residual`
+  module (documented divergences, flip-and-rename on any future fix) and
+  `tests/pass_disjointness_probes.rs` (below); both wired into the
+  `internal-probes` CI step.
+
 - **SMC NF Step 6½ — zero-arity column transposition
   (`reorder_zero_arity_columns`)**
   ([#174](https://github.com/sustia-llc/catgraph/issues/174)): the move strictly
@@ -31,6 +70,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   (`docs/SMC-NF-RECONCILIATION.md` §2.4, §4.5). Steps 7 and 6½ now share one
   identity-split refinement and one component analysis per fixpoint iteration
   rather than building the same pair twice.
+
+- **`internal-probes` feature — SMC-NF test hooks + the differential-sweep
+  tracker** ([#174](https://github.com/sustia-llc/catgraph/issues/174)):
+  opt-in, test-only, **NOT public API** (not in `default`). Two hooks guard
+  numbers in `docs/SMC-NF-RECONCILIATION.md` that were hand-measured and could
+  therefore drift silently: `smc_nf::nf_without_column_pass` — the pipeline
+  with Step 6½ skipped — pins the §4.5 ablation attribution via
+  `smc_canonicality_probes::column_pass_ablation` (exactly five witnesses are
+  pass-dependent; CE-A3 is not); and `smc_nf::fragment_status` — per-diagram
+  marking/closedness against the fragment `𝔉` — feeds
+  `tests/smc_nf_differential_sweep.rs`, the #174 design round's 100 000-pair
+  corpus driver ported in-tree (same generator, rewritings and seed
+  `0x9E37_79B9_7F4A_7C15`), whose `published_divergence_figures_reproduce`
+  pins §4.6's calibration column (253 total / 128 in-`𝔉` / 23 marked) and
+  whose `published_braid_mode_figures_reproduce` is the residual-(a) tracker
+  (braid-injecting corpus, 1162/634/237 — a different corpus, not comparable
+  to the calibration table). CI runs the 5 000-pair smoke tier plus a clippy
+  pass under the feature; both 100 000-pair sweeps stay `#[ignore]`d and are
+  re-run with `--ignored` when the normal form changes.
 
 - **Worded complete-functor surface: `ColoredCompleteFunctor` +
   `Presentation::eq_mod_functorial_colored`**
@@ -245,6 +303,33 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   `functor_bench` docs, `mat_operations` / `prop_presentation_nf` examples.
 
 ### Fixed
+
+- **Pass-disjointness obligation resolved as FALSE-as-stated; §1 invariant
+  clauses restated with the *both-readings* carve**
+  ([#174](https://github.com/sustia-llc/catgraph/issues/174) PR-B):
+  adversarial probes (`tests/pass_disjointness_probes.rs`, three shapes, two
+  with shipped generators inside `𝔉`) construct adjacencies of
+  strictly-commuting atoms whose components also pass a rewriting pass's
+  guards, with the class order and the component order opposed — at which the
+  old §1 transposition clauses were violated at real `nf` fixpoints (and
+  jointly unsatisfiable). The engine cycles inside each pass and exits on the
+  whole-pass `sd == prev` check by exact cancellation, always landing
+  Step-6-sorted; the restated clauses ratify exactly that (class order wins;
+  no engine change, no pin movement). §2.4's per-step non-increase claim is
+  corrected accordingly — the measure is the termination proof everywhere
+  except these adjacencies, where completing it (or gating the passes, the
+  engine-side alternative) is tracked on #174. No divergence or
+  non-termination is attributable to these conflicts (the 1 502 adversarial
+  writings all terminate *and converge*; the 100 000-pair sweep terminates —
+  its 253 divergences are `η` placement slack, a different mechanism). Also
+  corrected in the same sweep:
+  §4.4's "marking is content-level" narrowed to braid-free diagrams
+  (`braid_coarsening_marks_content_clear_diagram`); §4.5 Path 1's sufficiency
+  hardened from "unproven" to **refuted** (12 of the 128 satisfy it and
+  diverge); §4.6's case-7079 exemplar retracted (it converges on the shipped
+  engine — its divergence was the review-round engine's, closed by the
+  free-site retirement); `eq_colored`/`smc_nf` rustdoc canonicality claims
+  re-scoped to `𝔉′`.
 
 - **SMC NF residuals (c) and (d) closed**
   ([#174](https://github.com/sustia-llc/catgraph/issues/174)) — the two nesting

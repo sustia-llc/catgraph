@@ -2184,3 +2184,275 @@ mod smc_canonicality_probes {
         }
     }
 }
+
+// ============================================================================
+// 5. η-placement-slack residual witnesses (issue #174 PR-B, 2026-07-28)
+// ============================================================================
+
+/// **Documented-divergence witnesses, not convergences.** These pin the one
+/// open mechanism the PR-B characterization found behind *every* differential-
+/// sweep divergence (253/253, 128 of them inside `𝔉`): an `η` whose consumer
+/// sits two or more layers below its earliest legal layer has several
+/// SMC-legal (layer, slot) positions, the point-span sift reads the *written*
+/// one, and no pass canonicalizes among them — `ι` in
+/// `docs/SMC-NF-RECONCILIATION.md` §4.4 (Lemma 4.4 / Theorem 4.5). Each test
+/// asserts the CURRENT divergent behaviour so any engine change that moves it
+/// is caught; if `ι` is ever canonicalized these flip to convergence
+/// witnesses and are renamed, per the residual-(b)/(c)/(d) precedent.
+mod eta_slack_residual {
+    use super::*;
+    use catgraph_applied::rig::BoolRig;
+    use catgraph_applied::sfg::SfgGenerator;
+
+    type Sfg = SfgGenerator<BoolRig>;
+
+    fn prim(x: Sfg) -> PropExpr<Sfg> {
+        PropExpr::Generator(x)
+    }
+    fn seq(a: PropExpr<Sfg>, b: PropExpr<Sfg>) -> PropExpr<Sfg> {
+        PropExpr::Compose(Box::new(a), Box::new(b))
+    }
+    fn par(a: PropExpr<Sfg>, b: PropExpr<Sfg>) -> PropExpr<Sfg> {
+        PropExpr::Tensor(Box::new(a), Box::new(b))
+    }
+
+    /// `(Copy ; (id₁ ⊗ !)) ⊗ η` — the η is written beside the `Copy` span and
+    /// escapes to layer 0.
+    fn free_writing() -> PropExpr<Sfg> {
+        par(
+            seq(
+                prim(SfgGenerator::Copy),
+                par(PropExpr::Identity(1), prim(SfgGenerator::Discard)),
+            ),
+            prim(SfgGenerator::Zero),
+        )
+    }
+    /// `Copy ; (id₁ ⊗ η ⊗ !)` — the same content with the η written strictly
+    /// inside `Copy`'s output span: `point_placement` blocks the sift and the
+    /// η stays one layer down.
+    fn blocked_writing() -> PropExpr<Sfg> {
+        seq(
+            prim(SfgGenerator::Copy),
+            par(
+                par(PropExpr::Identity(1), prim(SfgGenerator::Zero)),
+                prim(SfgGenerator::Discard),
+            ),
+        )
+    }
+    /// `Copy ; (id₁ ⊗ ! ⊗ η)` — one §2.5 strict commutation away from
+    /// `blocked_writing`; the η's coordinate lands on an atom boundary, the
+    /// sift fires, and it converges with `free_writing`.
+    fn mirror_writing() -> PropExpr<Sfg> {
+        seq(
+            prim(SfgGenerator::Copy),
+            par(
+                par(PropExpr::Identity(1), prim(SfgGenerator::Discard)),
+                prim(SfgGenerator::Zero),
+            ),
+        )
+    }
+
+    /// The rigidity-on-`𝔉` withdrawal witness (§4.4): three generators, same
+    /// content, both writings `nf` fixpoints — different normal forms.
+    #[test]
+    fn eta_layer_slack_separates_smc_equal_writings() {
+        let p = nf(&free_writing());
+        let q = nf(&blocked_writing());
+        assert_ne!(
+            p, q,
+            "η placement slack has been canonicalized — rename these witnesses \
+             per the residual-(b)/(c)/(d) precedent and update docs §4.4/§4.6"
+        );
+        // Both sides are genuine fixpoints (idempotence via readback).
+        assert_eq!(nf(&from_string_diagram(&p)), p);
+        assert_eq!(nf(&from_string_diagram(&q)), q);
+    }
+
+    /// The mirror writing — one strict commutation from the blocked one —
+    /// converges with the free writing, pinning the mechanism to the written
+    /// slot rather than to the tensor shape.
+    #[test]
+    fn eta_slack_mirror_writing_converges() {
+        assert_eq!(nf(&mirror_writing()), nf(&free_writing()));
+    }
+
+    /// Two writings differing by exactly one §2.5 strict commutation reach
+    /// different fixpoints: the sift runs before Step 6 and reads the written
+    /// slot, so the very relation Step 6 canonicalizes decides the layer.
+    /// This is the Step 4(c) ↔ Step 6 interaction named in §4.4 — the one
+    /// that produces divergences (unlike the both-readings order fights,
+    /// which cancel).
+    #[test]
+    fn single_strict_commutation_separates_fixpoints() {
+        assert_ne!(nf(&blocked_writing()), nf(&mirror_writing()));
+    }
+
+    /// Both sides of the slack pair sit inside `𝔉` — unmarked, no closed
+    /// component — which is what makes the divergence a canonicality gap on
+    /// `𝔉` rather than residual (a) or (c).
+    #[cfg(feature = "internal-probes")]
+    #[test]
+    fn eta_slack_pair_is_inside_the_fragment() {
+        use catgraph_applied::prop::presentation::smc_nf::fragment_status;
+        assert!(fragment_status(&nf(&free_writing())).in_fragment());
+        assert!(fragment_status(&nf(&blocked_writing())).in_fragment());
+    }
+
+    /// `(id₁ ⊗ ! ⊗ id₁) ; σ_{1,1}` is content-clear — its three content
+    /// components each own a single run on each boundary (the braid is not a
+    /// content hyperedge; BGKSZ interpret it as a discrete cospan with a
+    /// permuted anchor) — yet guard 3 marks it: `mark_interleaved` runs over
+    /// the *diagram* partition, and the braid atom joins the components of
+    /// both its wires into one, whose input coordinates straddle the
+    /// `Discard`. This pins the §4.4 narrowing "marking is content-level on
+    /// braid-free diagrams only" (Lemma 4.3's converse failure case).
+    #[cfg(feature = "internal-probes")]
+    #[test]
+    fn braid_coarsening_marks_content_clear_diagram() {
+        use catgraph_applied::prop::presentation::smc_nf::fragment_status;
+        let e = seq(
+            par(
+                par(PropExpr::Identity(1), prim(SfgGenerator::Discard)),
+                PropExpr::Identity(1),
+            ),
+            PropExpr::Braid(1, 1),
+        );
+        let status = fragment_status(&nf(&e));
+        assert!(
+            status.any_marked,
+            "the braid no longer coarsens the marking"
+        );
+        assert!(!status.any_closed);
+    }
+}
+
+// ============================================================================
+// 6. Residual witnesses beyond η slack (issue #174 PR-B adversarial review)
+// ============================================================================
+
+/// **Documented-divergence witnesses from the PR-B adversarial review** — the
+/// two counterexamples that made §4.4's corollaries *conditional*. Neither is
+/// an `η`-slack case, and neither is visible in the default sweep statistics
+/// the way it bites here: the first is why the canonicality corollary on `𝔉′`
+/// conditions on fixpoints satisfying the restated §1 invariants (the shipped
+/// `adjacent_column_cuts` right-column asymmetry can leave a non-excepted
+/// §1-violating fixpoint — engine issue, filed); the second is why `𝔉′` is
+/// defined per-writing (`nf(e)` braid-free) — NF braid-freeness is not a
+/// content invariant. Each asserts CURRENT divergent behaviour; a fix flips
+/// it to a convergence witness, rename per the residual-(b)/(c)/(d) precedent.
+mod beyond_eta_slack_residuals {
+    use super::*;
+    use catgraph_applied::rig::BoolRig;
+    use catgraph_applied::sfg::SfgGenerator;
+
+    type Sfg = SfgGenerator<BoolRig>;
+
+    fn prim(x: Sfg) -> PropExpr<Sfg> {
+        PropExpr::Generator(x)
+    }
+    fn seq(a: PropExpr<Sfg>, b: PropExpr<Sfg>) -> PropExpr<Sfg> {
+        PropExpr::Compose(Box::new(a), Box::new(b))
+    }
+    fn par(a: PropExpr<Sfg>, b: PropExpr<Sfg>) -> PropExpr<Sfg> {
+        PropExpr::Tensor(Box::new(a), Box::new(b))
+    }
+    fn id1() -> PropExpr<Sfg> {
+        PropExpr::Identity(1)
+    }
+
+    /// §4.4's F1 witness: content inside `𝔉′` (its `Zero` is layer- and
+    /// slot-pinned under the *restated* §1 invariants), yet the two writings
+    /// diverge — the nested one is a fixpoint that violates the §1 Step-6½
+    /// clause at a **non-excepted** pair, because `adjacent_column_cuts`
+    /// demands the right column's whole layer presence be contiguous while
+    /// the clause (and §4.5's own column definition) requires only local
+    /// runs. The enclosing component's presence is split (`[L, B, L]`), the
+    /// pass never seeds, and the inverted pair survives.
+    #[test]
+    fn cut_asymmetry_separates_smc_equal_writings_inside_f_prime() {
+        let sfalse = || prim(Sfg::Scalar(BoolRig(false)));
+        let strue = || prim(Sfg::Scalar(BoolRig(true)));
+        let nested = seq(
+            seq(prim(Sfg::Copy), par(par(id1(), prim(Sfg::Zero)), sfalse())),
+            par(par(id1(), strue()), prim(Sfg::Discard)),
+        );
+        let free = par(
+            seq(
+                seq(prim(Sfg::Copy), par(id1(), sfalse())),
+                par(id1(), prim(Sfg::Discard)),
+            ),
+            seq(prim(Sfg::Zero), strue()),
+        );
+        assert_ne!(
+            nf(&nested),
+            nf(&free),
+            "the cut asymmetry has been fixed — flip this to a convergence \
+             witness, unconditionalize §4.4's canonicality corollary after \
+             re-verification, and update §4.6"
+        );
+    }
+
+    /// §4.4's F2 witness: NF braid-freeness is not a content invariant. The
+    /// braided writing keeps its input-side braid (the prefix is canonical
+    /// *given the writing's permutation*, and the permutation is not
+    /// content — both wires die at `Discard`s), while the SMC-equal plain
+    /// writing is braid-free. This is why `𝔉′` reads `nf(e)` braid-free
+    /// per-writing and both §4.4 corollaries condition on it.
+    #[test]
+    fn braid_prefix_is_not_content_derived() {
+        let braided = seq(
+            PropExpr::Braid(1, 1),
+            par(prim(Sfg::Discard), prim(Sfg::Discard)),
+        );
+        let plain = par(prim(Sfg::Discard), prim(Sfg::Discard));
+        assert_ne!(
+            nf(&braided),
+            nf(&plain),
+            "a pass now eliminates dead braid prefixes — re-examine §4.4's \
+             braid-freedom conditioning and the 𝔉′ definition"
+        );
+    }
+}
+
+/// §4.4's layer-pinned caution, pinned (delta review): a `ceil = 1`
+/// ("layer-pinned") η is NOT thereby at layer 0 — `Add`'s `(z, v)` tentacle
+/// order pins the η's coordinate strictly inside `Copy`'s target span, the
+/// sift is blocked, and the unique invariant-satisfying realization holds it
+/// at `λ = 1`. This is a fact-pin, not a divergence: it guards the false
+/// gloss ("layer-pinned ⟹ λ = 0") that the first discharge attempt of the
+/// Theorem 4.5 soft spots was built on, so it cannot silently return.
+#[test]
+fn layer_pinned_eta_sits_below_layer_zero() {
+    use catgraph_applied::rig::BoolRig;
+    use catgraph_applied::sfg::SfgGenerator;
+    type Sfg = SfgGenerator<BoolRig>;
+    let prim = |x: Sfg| PropExpr::Generator(x);
+    let e = PropExpr::Compose(
+        Box::new(PropExpr::Compose(
+            Box::new(prim(Sfg::Copy)),
+            Box::new(PropExpr::Tensor(
+                Box::new(PropExpr::Tensor(
+                    Box::new(PropExpr::Identity(1)),
+                    Box::new(prim(Sfg::Zero)),
+                )),
+                Box::new(PropExpr::Identity(1)),
+            )),
+        )),
+        Box::new(PropExpr::Tensor(
+            Box::new(PropExpr::Identity(1)),
+            Box::new(prim(Sfg::Add)),
+        )),
+    );
+    let n = nf(&e);
+    assert_eq!(
+        n.layers.len(),
+        3,
+        "expected [Copy] ; [id,Zero,id] ; [id,Add]"
+    );
+    assert_eq!(
+        n.layers[0].atoms.len(),
+        1,
+        "the layer-pinned η reached layer 0 — the §4.4 caution and the \
+         flagged-open induction steps need re-examination"
+    );
+}

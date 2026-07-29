@@ -66,8 +66,9 @@ jobs:
       # could drift silently — `nf_without_column_pass` for the §4.5 ablation
       # attribution, `fragment_status` for the §4.6 divergence buckets. Off by
       # default, so without its own run both claims go back to being hand-checked.
-      # The 100k sweep stays `#[ignore]`d; the 5k smoke tracker runs here.
-      - run: cargo test -p catgraph-applied --features internal-probes --test smc_nf_completeness --test smc_nf_differential_sweep
+      # Both 100k sweeps stay `#[ignore]`d; the 5k smoke tracker and the
+      # pass-disjointness probes (#174 PR-B) run here.
+      - run: cargo test -p catgraph-applied --features internal-probes --test smc_nf_completeness --test smc_nf_differential_sweep --test pass_disjointness_probes
       - run: cargo clippy -p catgraph-applied --features internal-probes --all-targets -- -D warnings
       # #34: the dl examples are self-checking (their main() asserts), but the
       # test runs above only *compile* examples — they never execute main(). Run
