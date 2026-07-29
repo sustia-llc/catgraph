@@ -34,7 +34,9 @@ internal-bench = []
 #     depends on the pass").
 #   * `smc_nf::fragment_status` — per-diagram marking / closedness, for the
 #     `smc_nf_differential_sweep` tracker that classifies divergent pairs as
-#     in-𝔉 or marked (§4.6's calibration table).
+#     in-𝔉 or marked (§4.6's calibration table), and for
+#     `content_equality_corpus`, which scores `prop::presentation::content`
+#     against the same corpora and buckets its pins the same way (#57 a1).
 # Opt-in only (NOT in `default`).
 internal-probes = []
 # `serde` adds `Serialize`/`Deserialize` derives on the term surface

@@ -35,6 +35,7 @@
 //! overlapping user equations the rewriter may yield false `eq_mod` negatives
 //! — a conservative answer. Knuth-Bendix completion is out of scope.
 
+pub mod content;
 pub mod functorial;
 pub mod kb;
 pub mod smc_nf;
