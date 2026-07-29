@@ -68,7 +68,10 @@ the arity carrier only in an all-identity diagram, `coalesce` (b)); every
 **every maximal run of braid layers is the canonical bubble-sort schedule of
 its underlying permutation** (§2.2, Step 3(b)); every generator in
 its earliest admissible layer (positive-source by covering span, zero-source by
-the point span at its leftmost admissible slot); within every layer, no adjacent
+the point span at its leftmost admissible slot — admissibility is evaluated at
+the `η`'s *written* coordinate, so this clause pins the slot only relative to
+that coordinate; the coordinate itself is the residual freedom `ι`, §4.4);
+within every layer, no adjacent
 strictly-commuting pair ordered against the Step 6 order — `scalar < η < ε` at a
 single-atom tie (§2.5 — since the #174 design round the tied comparator reads
 nothing else); no adjacent *free* pair of connected components ordered against
@@ -725,6 +728,11 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
 > `Λ` so the issue-#79 word-generalized engine inherits it), soundness of the
 > pipeline (Lemma 4.2), the fragment/marking machinery (§4.1), and the
 > DPO-substrate specification for the issue-#57 knowledge-base spike (§4.7).
+> **Superseded in part 2026-07-28 (§4.4 v2):** the candid-status posture is
+> replaced by a theorem — Lemma 4.3 (column pinning), Lemma 4.4 (layout
+> freedom) and Theorem 4.5 (rigidity/canonicality on the smaller fragment
+> `𝔉′`) — while rigidity on `𝔉` itself is withdrawn with a witness; the
+> inventory in this note predates that rewrite.
 > External anchors: Bonchi–Gadducci–Kissinger–Sobociński–Zanasi (**BGKSZ**,
 > arXiv:1602.06771v2, *Rewriting modulo symmetric monoidal structure*),
 > Milosavljević–Piedeleu–Zanasi (**MPZ**, CALCO 2023, *String Diagram
@@ -866,9 +874,27 @@ NFs differed — and the failure traced to a non-exhaustive case split in the
 draft's central geometric lemma. This is the second version, written after a
 three-track investigation round (2026-07-28: an adversarial pass-disjointness
 referee, a column-pinning/induction analysis, and a full characterization of
-the differential sweep's in-`𝔉` divergences — every load-bearing claim below
-is machine-verified by a named probe or the sweep instruments). It records a
-theorem that is true, and it withdraws the goal that was not.
+the differential sweep's in-`𝔉` divergences). It records a theorem that is
+true, and it withdraws the goal that was not. The #174 design round had left
+the restoration owing two obligations, and both are resolved below: **(i)
+pass disjointness** — the class-order family (Step 6) and the
+component-order family (Steps 6½/7) never prescribe conflicting layouts —
+resolved **false as stated**, with a ratified carve; **(ii) pinned-pair
+geometric determination at column granularity** — resolved as a **split
+verdict** at Lemma 4.3.
+
+Verification tiers for the claims below, stated once: the sweep totals
+(253/128/23), the ablation five, and every named witness are **pinned by
+in-tree tests**. The remaining figures are **dated measurements**
+(2026-07-28, scratch instruments over the same seeded corpus), re-derivable
+from their stated classifiers — the 121/5/2 sub-shape split (layer counts,
+then per-layer generator multisets, then full-atom multisets), the Path-1
+12-of-128 (the §4.5 condition on the NF's component analysis), the 66%
+retention (consumer-distance proxy for layer slack), the 42-of-128 fusion
+note (stored-layer component counts compared across a pair) — and the
+load-bearing ones (12-of-128, 121/5/2, the `η`-free zero) were independently
+re-derived during the PR's review. Classifier-sensitive figures are quoted
+coarsely for exactly that reason.
 
 **Withdrawn: rigidity on the original `𝔉`.** The restoration plan ("restore
 the theorem on `𝔉`, with the column move closing the refuted case split") is

@@ -76,6 +76,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   to the calibration table). CI runs the 5 000-pair smoke tier plus a clippy
   pass under the feature; both 100 000-pair sweeps stay `#[ignore]`d and are
   re-run with `--ignored` when the normal form changes.
+
 - **Worded complete-functor surface: `ColoredCompleteFunctor` +
   `Presentation::eq_mod_functorial_colored`**
   ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3a):
@@ -305,8 +306,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   corrected accordingly — the measure is the termination proof everywhere
   except these adjacencies, where completing it (or gating the passes, the
   engine-side alternative) is tracked on #174. No divergence or
-  non-termination is known (1 502 adversarial writings + the 100 000-pair
-  sweep all terminate and converge). Also corrected in the same sweep:
+  non-termination is attributable to these conflicts (the 1 502 adversarial
+  writings all terminate *and converge*; the 100 000-pair sweep terminates —
+  its 253 divergences are `η` placement slack, a different mechanism). Also
+  corrected in the same sweep:
   §4.4's "marking is content-level" narrowed to braid-free diagrams
   (`braid_coarsening_marks_content_clear_diagram`); §4.5 Path 1's sufficiency
   hardened from "unproven" to **refuted** (12 of the 128 satisfy it and
