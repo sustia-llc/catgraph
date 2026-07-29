@@ -1152,7 +1152,7 @@ recorded here precisely because it *failed* in the delta review
 puts every pinned `η` at layer 0 with its output node inside its consumer's
 span in `W₁`, splitting nothing; the layer-pinned caution above refutes the
 premise — a pinned `η` can sit at `λ > 0`, so *(a) monotone contiguity* must
-be re-proven allowing pinned-`η` insertions at layers below 0's, with one
+be re-proven allowing pinned-`η` insertions at layers other than 0, with one
 named open sub-question: can a slot-pinned `η` of a **marked** foreign
 component (whose guards disable extraction) split a span and create
 `λ`-ambiguity? And *(b) the occupancy/non-emptiness step* is defective as
