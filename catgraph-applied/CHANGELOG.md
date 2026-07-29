@@ -25,12 +25,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   thereby load-bearing, not hygiene), Lemma 4.4 (*layout freedom* — a
   braid-free invariant-satisfying diagram is determined by content plus
   `(λ, ι)`: layer assignment and `η` insertion slots), content-intrinsic
-  `ldepth`/placement-slack definitions, and **Theorem 4.5**: rigidity — hence
-  canonicality — on `𝔉′` = braid-free diagrams whose every `η` is layer- and
-  slot-pinned, by top-down induction from the input foot (proof-sketch
-  density; two flagged steps). The `η`-free special case is fully proved (all
-  three ordering passes provably inert; the 16 103-pair `η`-free sub-corpus
-  diverges nowhere). **Withdrawn, with a three-generator witness:** rigidity
+  `ldepth`/placement-slack definitions, and **Theorem 4.5**: rigidity on
+  `𝔉′` = braid-free diagrams whose every `η` is layer- and slot-pinned, by
+  top-down induction from the input foot (proof-sketch density; the two
+  flagged steps discharged in adversarial review). Canonicality-via-`nf` on
+  `𝔉′` is **conditional** — the review refuted the unconditional corollary
+  twice, with both counterexamples committed as witnesses: fixpoints can
+  violate a non-excepted §1 clause through the `adjacent_column_cuts`
+  right-column asymmetry
+  (`cut_asymmetry_separates_smc_equal_writings_inside_f_prime`; engine
+  defect, filed — its fix is the discharge path), and NF braid-freeness is
+  per-writing, not content (`braid_prefix_is_not_content_derived`), so `𝔉′`
+  reads `nf(e)` braid-free and both corollaries condition on it. The
+  `η`-free special case is proved under the same braid-free conditioning
+  (all three ordering passes provably inert; the 16 103-pair `η`-free
+  sub-corpus diverges nowhere). **Withdrawn, with a three-generator
+  witness:** rigidity
   on the original `𝔉` — a sweep characterization showed *all* 253 divergent
   pairs (128 in-`𝔉`) are one mechanism, `η` placement slack, which no pass
   canonicalizes; canonicalizing `ι` is now the single named gap, and the

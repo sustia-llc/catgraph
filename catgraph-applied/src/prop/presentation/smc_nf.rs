@@ -5,15 +5,18 @@
 //! This module provides, in place of the plain `apply_smc_rules` pre-pass, a
 //! **Joyal-Street string-diagram normal form**: a total function
 //! [`PropExpr`] → [`StringDiagram`] aiming at "SMC-equal iff NF-equal". The
-//! ⇐ direction holds unconditionally (every rewrite is SMC-sound); the ⇒
-//! direction is **proven on the fragment `𝔉′`** — braid-free, every `η`
-//! placement-pinned (Theorem 4.5, `docs/SMC-NF-RECONCILIATION.md` §4.4) —
-//! and open beyond it, where it is not bounded either: the
+//! ⇐ direction holds unconditionally (every rewrite is SMC-sound); for the ⇒
+//! direction, **rigidity is proven on the fragment `𝔉′`** — braid-free,
+//! every `η` placement-pinned (Theorem 4.5, `docs/SMC-NF-RECONCILIATION.md`
+//! §4.4) — with canonicality-via-`nf` there *conditional* on fixpoints being
+//! braid-free and invariant-satisfying (§4.4's conditional corollary; the
+//! blocking engine defect, the `adjacent_column_cuts` right-column
+//! asymmetry, is filed). Beyond `𝔉′` it is open and not bounded either: the
 //! `smc_canonicality_probes` suite verifies a named set of convergences,
 //! while a differential sweep still finds SMC-equal pairs inside the larger
-//! fragment `𝔉` whose normal forms differ — all of them `η` placement slack,
-//! the freedom `𝔉′` excludes (§4.6's ledger and §4.4's status; residual
-//! scope on [`nf`]). Of the four *named* residuals, three are closed: the
+//! fragment `𝔉` whose normal forms differ — on the default corpus all of
+//! them `η` placement slack, the freedom `𝔉′` excludes (§4.6's ledger and
+//! §4.4's status; residual scope on [`nf`]). Of the four *named* residuals, three are closed: the
 //! closed↔closed equal-key case in #79 P1 with the in-situ reading key (see the
 //! private `component_reading` helper), the trapped nesting and the sink form
 //! of the nested-column case in #174 with the Step 6½ column pass (see the
@@ -152,11 +155,12 @@ pub struct StringDiagram<G: PropSignature> {
 /// Canonicality: the *soundness* direction — `nf(&a) == nf(&b)` implies `a`
 /// and `b` are SMC-equal (equal in the free symmetric monoidal category on
 /// `G`) — holds unconditionally, since `nf` applies only SMC-sound rewrites.
-/// The *canonicality* direction — SMC-equal expressions get equal NFs — is
-/// proven on the fragment 𝔉′ (braid-free, every `η` placement-pinned —
-/// Theorem 4.5, docs §4.4), probe-verified on the named families beyond it,
-/// and open in general: the remaining freedom is `η` placement slack (docs
-/// §4.4, §4.6).
+/// The *canonicality* direction — SMC-equal expressions get equal NFs — has
+/// rigidity proven on the fragment 𝔉′ (braid-free, every `η`
+/// placement-pinned — Theorem 4.5, docs §4.4) with the `nf`-level corollary
+/// there conditional on the filed `adjacent_column_cuts` fix, is
+/// probe-verified on the named families beyond it, and is open in general:
+/// the dominant remaining freedom is `η` placement slack (docs §4.4, §4.6).
 ///
 /// Known exception (issue #55): both halves of the former zero-arity gap are
 /// closed — probe-verified on the fragment 𝔉, **proven on the smaller `𝔉′`**

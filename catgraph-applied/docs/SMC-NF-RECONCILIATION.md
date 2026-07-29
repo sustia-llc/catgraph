@@ -46,13 +46,18 @@ interchange, braid naturality, and the symmetry axiom `σ² = id`. The aim is
 "SMC-equal iff same `StringDiagram`". The *soundness* direction — equal NFs
 imply SMC-equal expressions — holds unconditionally, since every rewrite the
 pipeline applies is SMC-sound (§4.3). The *canonicality* direction —
-SMC-equal expressions reach the same `StringDiagram` — is proven on the
-fragment `𝔉′` (braid-free, every `η` placement-pinned — Theorem 4.5, §4.4, at
-proof-sketch density with two flagged steps) and **open beyond it**, where it
-is not bounded either: the `smc_canonicality_probes` suite verifies a named
-set of convergences, while a differential sweep still finds divergent
-SMC-equal pairs inside the larger fragment `𝔉` — all of them `η` placement
-slack, the freedom `𝔉′` excludes (§4.6's ledger, §4.4's status).
+SMC-equal expressions reach the same `StringDiagram` — has a proven core and
+a conditional bridge: **rigidity** is proven on the fragment `𝔉′` (braid-free,
+every `η` placement-pinned — Theorem 4.5, §4.4, at proof-sketch density with
+the review-discharged steps recorded), and **canonicality via `nf`** on `𝔉′`
+is *conditional* on the fixpoints being braid-free and invariant-satisfying —
+a condition with a committed counterexample witness, discharged by the filed
+`adjacent_column_cuts` fix (§4.4's conditional corollary). Beyond `𝔉′` it is
+open and not bounded either: the `smc_canonicality_probes` suite verifies a
+named set of convergences, while a differential sweep still finds divergent
+SMC-equal pairs inside the larger fragment `𝔉` — on the default corpus all
+of them `η` placement slack, the freedom `𝔉′` excludes (§4.6's ledger,
+§4.4's status).
 
 A `StringDiagram` is a sequence of `Layer`s `L_0 ; L_1 ; … ; L_{k-1}`; each
 `Layer` is a left-to-right tensor of `Atom`s (`Identity(n)`, `Braid(m,n)`,
@@ -81,7 +86,13 @@ component keys differ** ordered against that same component order (Step 6½,
 §4.5 — an equal-key pair is declined, not decided). Both transposition passes carry the
 same three guards — at least one component multi-atom, neither marked, neither
 braid-carrying — so an ordering violation involving a marked or braid-carrying
-component is not an invariant breach. **The two transposition clauses except
+component is not an invariant breach. **Known deviation (2026-07-28, filed):**
+the shipped Step 6½ seed test (`adjacent_column_cuts`) demands the *right*
+column's whole layer presence be one contiguous run where this clause requires
+only local runs, so a fixpoint can violate the column clause where a
+split-presence encloser keeps the pass from seeding — witness
+`cut_asymmetry_separates_smc_equal_writings_inside_f_prime`; §4.4's
+conditional corollary is conditioned on exactly this. **The two transposition clauses except
 *both-readings adjacencies*** (restated 2026-07-28): where the contested run
 boundary is an adjacency of strictly-commuting atoms from the two components —
 so Step 6 also claims the pair — the §2.5 class order wins and the component-
@@ -915,10 +926,13 @@ horizontally past a non-commuting neighbour. The mirror writing
 `Copy ; (id₁ ⊗ Discard ⊗ Zero)` — one §2.5 strict commutation away —
 converges with the first, pinning the mechanism to the written slot. The
 sweep characterization generalizes this: **all 128 in-`𝔉` divergent pairs
-(and all 253 divergent pairs of any bucket) reduce to this one mechanism**
-— an `η` whose consumer sits two or more layers below its earliest legal
-layer has several SMC-legal (layer, slot) positions, and the pipeline has no
-pass that canonicalizes among them. Witnesses:
+(and all 253 divergent pairs of any bucket) on the default corpus — which is
+braid-free by construction — reduce to this one mechanism** — an `η` whose
+consumer sits two or more layers below its earliest legal layer has several
+SMC-legal (layer, slot) positions, and the pipeline has no pass that
+canonicalizes among them. (Beyond that corpus two further freedoms are
+witnessed below: the braid prefix of a braid-carrying writing, and the
+cut-asymmetry shapes the conditional corollary records.) Witnesses:
 `eta_layer_slack_separates_smc_equal_writings`,
 `eta_slack_mirror_writing_converges`,
 `single_strict_commutation_separates_fixpoints`.
@@ -972,6 +986,10 @@ narrowed, one strengthened, and two non-facts are now recorded beside them):
   fixpoint.
 - *The braid prefix is a function of its permutation* — Step 3(b)'s canonical
   bubble-sort word (§2.2) is deterministic in the underlying permutation.
+  (The permutation itself is **not** a content invariant — a dead input
+  permutation survives to the NF while an SMC-equal writing has none;
+  witness `braid_prefix_is_not_content_derived`. Canonical-given-the-
+  permutation is all this fact says.)
 - *Not content-invariant* (recorded so the next draft does not lean on them):
   `sizes[c]` counts atoms of the identity-split refinement, so it depends on
   a component's vertical stretch — the multi-atom guards of Steps 6½/7 are
@@ -1015,7 +1033,9 @@ orders columns by their components' keys and declines its one tie.
 **Lemma 4.4 (layout freedom).** A braid-free layered diagram satisfying the
 §1 invariants is uniquely determined by its content together with the pair
 `(λ, ι)`, where `λ` assigns each generator occurrence its layer and `ι`
-assigns each **source-0** occurrence its insertion slot within its layer.
+assigns each **source-0** occurrence its slot **in the layer's atom
+sequence** (not a wire coordinate — so two source-0 occurrences at one
+coordinate are distinguished, and their relative order is `ι`'s to give).
 
 *Proof.* At each layer boundary the wire word is a sequence of content nodes.
 Every atom with positive source occupies the contiguous span of its source
@@ -1039,39 +1059,69 @@ directed path from the input foot, a function of `C` alone. (The sift moves
 generators toward the *input*, so the input-side level is the notion that
 matches the engine; the first draft's output-side version presupposed a
 layout and is superseded.) Let `depth(C) = 1 + max_h ldepth(h)`. For a
-source-0 hyperedge `h` with output node `z`, define its **ceiling**:
+source-0 hyperedge `h` with a single output node `z` (the `0 → 1` shape —
+see the definedness bullet below for the other shapes), define its
+**ceiling**:
 `ceil(h) = ldepth(k)` if some hyperedge `k` consumes `z`, and
 `ceil(h) = depth(C)` if `z` is anchored at the output foot. Then:
 
 - `h` is **layer-pinned** iff `ceil(h) = 1` — its consumer sits exactly one
-  level below the input foot, so `λ(h) = 0` is forced. Otherwise `h` has
+  level below the input foot, so `λ(h) = 0` in every realization satisfying
+  the restated §1 invariants. (Not in every `nf` *fixpoint*: the conditional
+  corollary below records exactly that gap.) Otherwise `h` has
   `ceil(h) − 1 ≥ 1` extra legal layers: that is the layer slack.
 - `h` is **slot-pinned** iff `z`'s wire coordinate at the boundary below
-  `h`'s layer is the same in every braid-free invariant-satisfying
-  realization (sufficient condition: `z` is consumed at level 1 by a
-  hyperedge of source arity ≥ 2, whose other source coordinates are forced
-  by the input foot).
-- `h` has **slack** iff it is not both. Slack is defined on `C` alone, so by
-  Lemma 4.2 it can be read off either of two SMC-equal writings.
+  `h`'s layer is the same in every braid-free realization satisfying the
+  restated §1 invariants. This is deliberately *realization-quantified*
+  (adversarial review, 2026-07-28): it ranges over exactly the diagrams
+  Theorem 4.5 is about, so the `ι` half of "rigidity = pinning `(λ, ι)`"
+  holds by hypothesis, and the theorem's real proof content is the `λ`
+  induction. (An earlier draft offered a "sufficient condition" whose key
+  word — *forced* — had no definition except the definiendum; it is
+  deleted rather than repaired.)
+- `h` has **slack** iff it is not both. Slack is a function of `C` and the
+  invariant list alone, so by Lemma 4.2 it can be read off either of two
+  SMC-equal writings.
+- *Definedness scope* (adversarial review): these definitions cover the
+  source-0 shape every shipped signature has, `0 → 1`. A source-0 hyperedge
+  with **no** output node (`0 → 0`) or **several** (`0 → n`, `n ≥ 2`) is
+  conservatively deemed slack-bearing — `𝔉′` excludes it — pending a
+  tuple-level treatment. (A `0 → 0` scalar's *within-class order* is already
+  content via `G::cmp`, §2.5; its layer/slot theory is what is undeveloped.
+  Only test signatures have such generators today.)
 
 **The fragment of record for the theorem:**
 
 ```
-𝔉′  =  { e : C(e) admits a braid-free normal form,
+𝔉′  =  { e : nf(e) is braid-free,
          and no source-0 hyperedge of C(e) has slack }
 ```
 
-On the sweep corpus (which is braid-free throughout), the no-slack condition
-excludes every one of the 253 divergent pairs while retaining 66% of the
-in-`𝔉` normal forms — it is exactly the observed divergence mechanism, not a
-carve fitted around it.
+The first condition is deliberately **per-writing**: NF braid-freeness is
+*not* a content invariant — a dead input permutation keeps its canonical
+braid prefix while an SMC-equal writing has none (witness
+`braid_prefix_is_not_content_derived`:
+`nf(σ_{1,1} ; (ε ⊗ ε)) = [σ] ; [ε, ε] ≠ [ε, ε] = nf(ε ⊗ ε)`) — so a
+content-level "`C` admits a braid-free NF" reading would make the corollaries
+below false, and whether any content condition can replace it is the open
+braid-freedom question at the end of this subsection. The slack condition
+*is* content-level.
+
+On the default sweep corpus (braid-free by construction), the no-slack
+condition excludes every one of the 253 divergent pairs **under §4.6's
+layout-level classifier** while retaining 66% of the in-`𝔉` normal forms —
+it is the observed divergence mechanism, not a carve fitted around it. One
+caveat keeps those figures calibration rather than hypothesis: the
+layout-level classifier and the content-level definition above can disagree
+on cut-asymmetry shapes (the conditional corollary's witness is
+content-pinned yet layout-slack), so the corpus figures do not *prove* the
+exclusion under the theorem's own definitions.
 
 **Theorem 4.5 (rigidity on `𝔉′`).** Let `C` be an anchored monogamous
 directed acyclic cospan in which every source-0 hyperedge is layer-pinned and
 slot-pinned. Let `D`, `D′` be braid-free layered diagrams satisfying the §1
 post-`nf` invariants (as restated 2026-07-28, with the both-readings carve),
-with `C(D) = C(D′) = C`. Then `D = D′`. Consequently, on `𝔉′`,
-`e =_SMC e′ ⟹ nf(e) = nf(e′)`.
+with `C(D) = C(D′) = C`. Then `D = D′`.
 
 *Proof sketch (top-down induction from the input foot).* By Lemma 4.4 it
 suffices to pin `(λ, ι)`; `ι` is pinned by hypothesis. For `λ`, maintain "the
@@ -1088,10 +1138,20 @@ atom sequence is then Lemma 4.4's; `W_{j+1}` follows. The only step that can
 fail is contiguity being *destroyed* by a source-0 occurrence inserted at a
 later layer splitting a span — which is exactly `ι`, pinned by hypothesis. ∎
 
-Two soft spots are flagged for review rather than glossed: the
-monotone-contiguity step (that a span, once contiguous, stays contiguous when
-all interleaving insertions are pinned), and the `S_j ≠ ∅` step's reliance on
-the exact §1 clause inventory. On the induction's *direction*: the first
+The draft flagged two soft spots; adversarial review (2026-07-28) attacked
+and **discharged** both, and the arguments are recorded so they are part of
+the sketch rather than debts on it. *Monotone contiguity*: under the
+hypotheses every source-0 hyperedge has `ceil = 1` — inserted at layer 0,
+consumed at level 1 — so its output node exists only in `W₁` and lies inside
+its consumer's span, splitting nothing; below `W₁` the wire word evolves
+only by positive-source atoms, whose consumed spans are disjoint from any
+surviving identity run (monogamy) and are replaced in place, so contiguity,
+once achieved, is preserved. *`S_j ≠ ∅`*: any generator atom in layer `j` of
+an invariant-satisfying diagram has all producers above and a contiguous
+ordered source span, so it lies in `S_j`; contents with *no* braid-free
+realization at all (a producer emits `(u, v)` where the consumer wants
+`(v, u)`) leave the theorem vacuously true, consistent with its scoping. On
+the induction's *direction*: the first
 draft's π circularity arose from admitting braids into the induction; with
 braid-freedom as a hypothesis it dissolves, and top-down from the input foot
 is the direction that matches both `ldepth` and the sift. The bottom-up
@@ -1102,22 +1162,44 @@ induction delivers at the prefix boundary — i.e. bottom-up determines the
 prefix *last*, from data the induction supplies, instead of assuming it).
 It is deliberately not attempted here.
 
-*Corollary (canonicality on `𝔉′`).* `nf` terminates on a whole-pass fixpoint,
-and a fixpoint satisfies the restated §1 invariants (the transposition
-clauses carve out exactly the both-readings adjacencies at which the old
-clauses were violated — see below); two SMC-equal expressions in `𝔉′` have
-equal content (Lemma 4.1), so Theorem 4.5 applies to their NFs. ∎
+*Corollary (canonicality on `𝔉′` — **conditional**).* For SMC-equal `e`, `e′`
+with `C(e) ∈ 𝔉′` whose normal forms are **both braid-free and both satisfy
+the restated §1 invariants**, `nf(e) = nf(e′)`: equal content by Lemma 4.1,
+then Theorem 4.5. Neither condition is automatic, and each failure mode has
+a committed witness — both supplied by this subsection's own adversarial
+review, which refuted the unconditional corollary an earlier draft stated:
 
-*Corollary (the `η`-free case, fully proved).* If `C` has no source-0
-hyperedge, the slack hypothesis is vacuous and all three ordering passes are
-provably inert: Step 6 needs a strictly-commuting adjacency, which needs a
-source-0 atom (`Identity(0)` is gone by `simplify_units`, which runs
-earlier); Step 6½ needs a zero source width at the interval top, impossible
-when every column has an atom with positive source in every layer; Step 7
-needs a free pair, and with no source-0 hyperedge every node traces back to
-the input foot, so every component is input-attached and no pair is free.
-Empirically: the 16 103 corpus pairs that are `η`-free on both sides show
-**zero** divergences in any bucket, marked included. ∎
+- *Fixpoints can violate a non-excepted §1 clause.* The shipped
+  `adjacent_column_cuts` demands the **right** column's whole layer presence
+  be one contiguous run where the §1 clause (and §4.5's own column
+  definition) requires only local runs, so Step 6½ never seeds when the
+  enclosing component's presence is split (`[L, B, L]`), and the inverted,
+  non-excepted, strictly-commuting-at-block-level pair survives to the
+  fixpoint. Witness `cut_asymmetry_separates_smc_equal_writings_inside_f_prime`:
+  a divergent SMC-equal pair whose content is in `𝔉′` — its `Zero` is layer-
+  and slot-pinned precisely because the nested layout is *not*
+  invariant-satisfying. The asymmetry is an engine defect, filed at landing;
+  fixing it is what would discharge this condition, and the corollary is to
+  be re-verified (and, if clean, unconditionalized) in that fix's PR.
+- *NF braid-freeness is per-writing* — the `𝔉′` definition note above
+  (`braid_prefix_is_not_content_derived`).
+
+*Corollary (the `η`-free case).* If `C` has no source-0 hyperedge and
+`e`, `e′` are SMC-equal writings whose NFs are **both braid-free**, then
+`nf(e) = nf(e′)`. The slack hypothesis is vacuous, and on a braid-free NF
+with no source-0 atom all three ordering clauses are vacuously satisfied
+because all three passes are provably inert: Step 6 needs a
+strictly-commuting adjacency, which needs a source-0 atom (`Identity(0)` is
+gone by `simplify_units`, which runs earlier); Step 6½ needs a zero source
+width at the interval top, impossible when every column has an atom with
+positive source in every layer; Step 7 needs a free pair, and with no
+source-0 hyperedge every node traces back to the input foot, so every
+component is input-attached and no pair is free. So every such fixpoint
+satisfies the restated invariants and Theorem 4.5 applies. The braid-free
+conditioning is necessary — the braid-prefix witness above is exactly an
+`η`-free SMC-equal pair separated by a dead braid prefix. Empirically: the
+16 103 corpus pairs that are `η`-free on both sides show **zero**
+divergences in any bucket, marked included. ∎
 
 **Pass disjointness (obligation (i)): FALSE as stated — resolved by a
 ratified carve, not a lemma.** The obligation read: every move is either a
@@ -1192,10 +1274,13 @@ is exactly `η` placement slack, `ι`, the hypothesis of Theorem 4.5.
   and never chooses `ι` at all — the readback would inherit whatever `nf`
   pins, and Theorem 4.5 is precisely the statement that on `𝔉′` there is
   nothing left to choose.
-- **Braid-freedom as a content condition** — whether "the NF is braid-free"
-  is decidable from `C` (plausibly: `C` admits a non-crossing layered
-  embedding compatible with both feet) is open; every empirical result above
-  sits inside the braid-free hypothesis.
+- **Braid-freedom as a content condition** — NF braid-freeness is
+  per-writing, settled by the braid-prefix witness. What stays open is
+  whether a content condition ("`C` admits a non-crossing layered embedding
+  compatible with both feet") could replace it — i.e. whether `nf` could be
+  made to land braid-free exactly when `C` admits it, which would need a
+  dead-permutation elimination pass (an engine change, not attempted here).
+  Every empirical result above sits inside the braid-free hypothesis.
 - **Completing the termination proof** (or restoring the measure by the
   engine-side gate) — above.
 - **General source-(d) closure is not claimed, here or anywhere.** In-scope
@@ -1327,7 +1412,8 @@ its divergence was the review-round engine's and was closed by the free-site
 retirement, not the column pass. The class of shapes it exemplified is real
 and present in the 128; that particular index is not.)
 
-**The 128 are one mechanism (characterized 2026-07-28).** An instrumented
+**The 128 are one mechanism (characterized 2026-07-28; default corpus,
+which is braid-free by construction).** An instrumented
 re-run of the same corpus classified every in-`𝔉` divergent pair: all 128 —
 and all 125 outside `𝔉` — are **`η` placement slack** (§4.4): a `Zero` whose
 consumer sits two or more layers below its earliest legal layer has several
@@ -1341,8 +1427,12 @@ Two of the five slot-slack cases trace to a distinct engine asymmetry —
 `adjacent_column_cuts` takes a *maximal local run* on the left column but the
 component's *whole layer presence* on the right, so a fragment-symmetric,
 interval-aligned, strictly-commuting pair can be declined — filed separately
-rather than silently widened. Excluding `η` slack retains 66% of the in-`𝔉`
-corpus, and is Theorem 4.5's fragment `𝔉′`.
+rather than silently widened — and the same asymmetry is what makes §4.4's
+canonicality corollary *conditional*
+(`cut_asymmetry_separates_smc_equal_writings_inside_f_prime`). Excluding `η`
+slack retains 66% of the in-`𝔉` corpus and calibrates Theorem 4.5's fragment
+`𝔉′` (whose own definitions are content-level — the classifier here is
+layout-level; §4.4's verification-tiers note records the gap).
 
 Two measurement caveats, recorded here because this section publishes the
 numbers: `fragment_status` reads the **stored** layers (deliberately — see its
@@ -1525,9 +1615,10 @@ would take. A #57 knowledge base would therefore: represent terms by their
 content (this section's `C`), rewrite by convex DPO on content, and use `nf`
 as the canonical *readback* from content to a layered term — and the
 well-definedness of that readback is exactly the §4.4 canonicality question:
-proven on `𝔉′` (Theorem 4.5), probe-verified on the §2.6 and §4.5 families
-beyond it, and open in general, where the remaining freedom is a single named
-function — the `η` placement choice `ι` (§4.4). That is the sharpest argument
+rigidity proven on `𝔉′` (Theorem 4.5; the `nf`-level corollary there
+conditional on the filed cut-asymmetry fix), probe-verified on the §2.6 and
+§4.5 families beyond it, and open in general, where the dominant remaining
+freedom is a single named function — the `η` placement choice `ι` (§4.4). That is the sharpest argument
 this document can offer #57: an engine that rewrites content directly never
 chooses `ι` at all, and inherits `nf`'s choice only at readback. What #57
 would add over the §2.4 pipeline is rewriting modulo *user equations* on the

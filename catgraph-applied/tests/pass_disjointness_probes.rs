@@ -9,7 +9,11 @@
 //! families prescribing *opposite* layouts, and pin the resulting behaviour:
 //! the `nf` loop cycles (Step 7/6½ swap, Step 6 swaps back), exits via the
 //! `sd == prev` exact-cancellation accident, and the fixpoint **violates the
-//! §1 post-`nf` invariant clauses** for Step 7 / Step 6½ order.
+//! pre-restatement §1 transposition clauses** for Step 7 / Step 6½ order.
+//! (The 2026-07-28 restatement ratifies these fixpoints — the both-readings
+//! carve excepts exactly these adjacencies, and the class order wins. The
+//! violation checkers below therefore replicate the *unrestated* clauses:
+//! they pin the behaviour the carve exists to ratify.)
 //!
 //! Requires `--features internal-probes` (for `fragment_status` /
 //! `nf_without_column_pass`).

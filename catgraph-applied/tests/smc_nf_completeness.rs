@@ -2325,3 +2325,91 @@ mod eta_slack_residual {
         assert!(!status.any_closed);
     }
 }
+
+// ============================================================================
+// 6. Residual witnesses beyond η slack (issue #174 PR-B adversarial review)
+// ============================================================================
+
+/// **Documented-divergence witnesses from the PR-B adversarial review** — the
+/// two counterexamples that made §4.4's corollaries *conditional*. Neither is
+/// an `η`-slack case, and neither is visible in the default sweep statistics
+/// the way it bites here: the first is why the canonicality corollary on `𝔉′`
+/// conditions on fixpoints satisfying the restated §1 invariants (the shipped
+/// `adjacent_column_cuts` right-column asymmetry can leave a non-excepted
+/// §1-violating fixpoint — engine issue, filed); the second is why `𝔉′` is
+/// defined per-writing (`nf(e)` braid-free) — NF braid-freeness is not a
+/// content invariant. Each asserts CURRENT divergent behaviour; a fix flips
+/// it to a convergence witness, rename per the residual-(b)/(c)/(d) precedent.
+mod beyond_eta_slack_residuals {
+    use super::*;
+    use catgraph_applied::rig::BoolRig;
+    use catgraph_applied::sfg::SfgGenerator;
+
+    type Sfg = SfgGenerator<BoolRig>;
+
+    fn prim(x: Sfg) -> PropExpr<Sfg> {
+        PropExpr::Generator(x)
+    }
+    fn seq(a: PropExpr<Sfg>, b: PropExpr<Sfg>) -> PropExpr<Sfg> {
+        PropExpr::Compose(Box::new(a), Box::new(b))
+    }
+    fn par(a: PropExpr<Sfg>, b: PropExpr<Sfg>) -> PropExpr<Sfg> {
+        PropExpr::Tensor(Box::new(a), Box::new(b))
+    }
+    fn id1() -> PropExpr<Sfg> {
+        PropExpr::Identity(1)
+    }
+
+    /// §4.4's F1 witness: content inside `𝔉′` (its `Zero` is layer- and
+    /// slot-pinned under the *restated* §1 invariants), yet the two writings
+    /// diverge — the nested one is a fixpoint that violates the §1 Step-6½
+    /// clause at a **non-excepted** pair, because `adjacent_column_cuts`
+    /// demands the right column's whole layer presence be contiguous while
+    /// the clause (and §4.5's own column definition) requires only local
+    /// runs. The enclosing component's presence is split (`[L, B, L]`), the
+    /// pass never seeds, and the inverted pair survives.
+    #[test]
+    fn cut_asymmetry_separates_smc_equal_writings_inside_f_prime() {
+        let sfalse = || prim(Sfg::Scalar(BoolRig(false)));
+        let strue = || prim(Sfg::Scalar(BoolRig(true)));
+        let nested = seq(
+            seq(prim(Sfg::Copy), par(par(id1(), prim(Sfg::Zero)), sfalse())),
+            par(par(id1(), strue()), prim(Sfg::Discard)),
+        );
+        let free = par(
+            seq(
+                seq(prim(Sfg::Copy), par(id1(), sfalse())),
+                par(id1(), prim(Sfg::Discard)),
+            ),
+            seq(prim(Sfg::Zero), strue()),
+        );
+        assert_ne!(
+            nf(&nested),
+            nf(&free),
+            "the cut asymmetry has been fixed — flip this to a convergence \
+             witness, unconditionalize §4.4's canonicality corollary after \
+             re-verification, and update §4.6"
+        );
+    }
+
+    /// §4.4's F2 witness: NF braid-freeness is not a content invariant. The
+    /// braided writing keeps its input-side braid (the prefix is canonical
+    /// *given the writing's permutation*, and the permutation is not
+    /// content — both wires die at `Discard`s), while the SMC-equal plain
+    /// writing is braid-free. This is why `𝔉′` reads `nf(e)` braid-free
+    /// per-writing and both §4.4 corollaries condition on it.
+    #[test]
+    fn braid_prefix_is_not_content_derived() {
+        let braided = seq(
+            PropExpr::Braid(1, 1),
+            par(prim(Sfg::Discard), prim(Sfg::Discard)),
+        );
+        let plain = par(prim(Sfg::Discard), prim(Sfg::Discard));
+        assert_ne!(
+            nf(&braided),
+            nf(&plain),
+            "a pass now eliminates dead braid prefixes — re-examine §4.4's \
+             braid-freedom conditioning and the 𝔉′ definition"
+        );
+    }
+}
