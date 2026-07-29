@@ -1685,15 +1685,24 @@ never needs rewriting at all — it is quotiented away by `C` itself.
 > status note), and as of PR2 they are the **equality of record at the SMC
 > layer**: `Presentation::eq_mod`'s congruence-closure path settles SMC
 > coherence by content equality, and `ColoredExpr::eq_colored` does the same on
-> the worded surface. `nf` keeps its other role — canonical *display* and
-> readback — so the sentence above ("an engine that rewrites content directly
-> never chooses `ι` at all") is now literal for equality: the `η` placement
-> choice is never consulted when deciding whether two writings are equal, and
-> every pair `nf` separates for that reason is decided equal. The layering is
-> three-deep and worth stating once: content decides SMC coherence *exactly*
-> (Lemma 4.1, both directions); congruence closure decides *user* equations
-> above it, with its existing bounded-completeness caveats; `nf` decides
-> nothing and displays.
+> the worded surface. So the sentence above ("an engine that rewrites content
+> directly never chooses `ι` at all") is now literal for equality *at that
+> layer*: the `η` placement choice is never consulted when deciding whether two
+> writings are SMC-equal, and every pair `nf` separates for that reason is
+> decided equal. There are **two decision layers**, worth stating once: content
+> decides SMC coherence *exactly* (Lemma 4.1, both directions), and congruence
+> closure decides *user* equations above it, with its existing
+> bounded-completeness caveats.
+>
+> `nf` is not a third layer, and it is also not out of the decision business.
+> What changed is narrow: it no longer decides the SMC layer on the
+> well-formed path. It remains the canonicalizer inside
+> `kb::CongruenceClosure`'s `smc_refine` fixpoint — which NF-normalizes each
+> class representative and merges the class with the result, so NF quality
+> still affects which user-equation classes close — and it remains the fallback
+> outside content's domain (an arity-ill-formed expression, where `content_of`
+> is undefined and `eq_mod` / `eq_colored` must still answer). Display and
+> readback are unchanged.
 >
 > **(a2) Convex-DPO rewriting modulo user equations — deferred**, on the
 > unchanged ground that its only consumer would be a functor-less presentation.
@@ -1703,10 +1712,11 @@ never needs rewriting at all — it is quotiented away by `C` itself.
 > **Correction of record (2026-07-29).** An earlier #57 knowledge-base report
 > claimed "Lafont proves termination for the bialgebra structure". That is
 > **refuted** against the cached anchor. Lafont's strictly-monotone-interpretation
-> technique (Appendix A) is proved for `𝔉` only; for the bialgebra-bearing
-> `L(Z₂)` system he states termination as a **conjecture** and documents the
-> obstruction — `ε : 1 → 0` admits no strictly monotone interpretation into
-> `ℕ*⁰`. The nearest actual proof in the cached anchors is BGKSZ **Thm 6.1**:
+> technique (Appendix A, p. 300) is proved for his PROP **F** of functions only
+> — *not* this document's fragment `𝔉`, an unrelated symbol that happens to
+> collide; for the bialgebra-bearing `L(Z₂)` system he states termination as a
+> **conjecture** and documents the obstruction — `ε : 1 → 0` admits no strictly
+> monotone interpretation into `ℕ*⁰`. The nearest actual proof in the cached anchors is BGKSZ **Thm 6.1**:
 > termination for the *non-commutative* bimonoid, via a lexicographic
 > path-counting measure that handles `ε` by counting paths *to* `ε`-hyperedges
 > rather than by interpreting it. The commutative case an `E_18`-style system

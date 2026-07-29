@@ -26,11 +26,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   the normal form separates, which is all 253 divergences of the published
   default corpus and all 1162 in braid mode. No pair that was equal becomes
   unequal: `nf` preserves content (§4.3 Lemma 4.2), so the content relation
-  *contains* the NF relation, and the change is monotone
+  *contains* the NF relation, and the decided-equal relation only grows
   (`tests/content_equality_corpus.rs` pins that containment on 2000 unrelated
-  pairs). `ColoredExpr::eq_colored` gets the same treatment via
-  `content_of_colored`, and with it a strengthened contract: it now **decides**
-  colored SMC-equality, so a `false` is a disproof where previously it was not.
+  pairs; `nf_preserves_content_across_the_corpus` is the direct Lemma 4.2
+  check). `ColoredExpr::eq_colored` gets the same treatment via
+  `content_of_colored`, and with it a strengthened contract: on
+  word-well-formed values it now **decides** colored SMC-equality, so a `false`
+  is a disproof where previously it was not.
   `NormalizeEngine::Structural` is untouched. The user-equation layer is
   untouched: `Copy ; Add` and `Copy ; σ ; Add` are still unequal without the
   Thm 5.60 equations, because cocommutativity is a user equation and content
@@ -48,16 +50,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   **1969**. Explain-the-delta: the metric buckets by matrix image first, and
   Thm 5.60 makes the matrix ground truth, so a bucket splitting into `k`
   `eq_mod`-classes contributes `k − 1` and the count measures equalities
-  `eq_mod` *fails to prove*. The content relation contains the NF relation it
-  replaced (`nf` preserves content, §4.3 Lemma 4.2), and a containing relation
-  can only merge classes, so the direction was **forced** — a rise is
-  unreachable by construction. The containment is pinned as a test on 2000
-  unrelated pairs. **The metric also changed meaning:** its canonicality
-  component is now exactly zero (content merges every SMC-equal same-matrix
-  pair before CC is consulted), so the residual is purely depth-2 CC
-  incompleteness on the user equations — which largely addresses
-  [#173](https://github.com/sustia-llc/catgraph/issues/173)'s "conflation"
-  note. Recorded in the tracker's docstring; #173 stays open.
+  `eq_mod` *fails to prove*. What is **forced** is that the underlying relation
+  only grew — the content relation contains the NF relation it replaced (`nf`
+  preserves content, §4.3 Lemma 4.2), so no previously provable equality became
+  unprovable. The *count* carries no such guarantee: it is a greedy-partition
+  statistic over a **non-transitive** `eq_mod` (10 490 violating triples
+  measured at BoolRig d=2), and over a non-transitive relation the greedy class
+  count is not a function of the relation, so enlargement is not provably
+  monotone. The observed direction is **empirical** — all four fell, verified
+  per bucket. A union-find-component tracker would restore monotonicity at the
+  cost of new baselines: filed as
+  [#189](https://github.com/sustia-llc/catgraph/issues/189), deferred.
+  **The metric also narrowed in meaning:** the short-circuit conflation is gone
+  (no residual is attributable to NF incompleteness at the SMC layer, which is
+  now decided exactly), but `nf` still reaches the count through
+  `kb::CongruenceClosure`'s `smc_refine`, so an NF change can still move these
+  pins. [#173](https://github.com/sustia-llc/catgraph/issues/173)'s
+  "conflation" note is partially addressed; #173 stays open.
 
 ### Added
 

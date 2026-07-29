@@ -45,8 +45,10 @@
 //! (**§4.4** Theorem 4.5, with the `nf`-level corollary there still conditional)
 //! and is open beyond it — §4.6's sweep finds SMC-equal pairs with distinct
 //! normal forms. So a `false` used not to be a disproof. Those pairs are exactly
-//! what content closes, and `nf` keeps its other role: canonical display and
-//! readback.
+//! what content closes. `nf` is not thereby retired: besides canonical display
+//! and readback it stays this method's fallback outside content's domain, and
+//! remains the canonicalizer inside `presentation::kb::CongruenceClosure`'s
+//! `smc_refine` fixpoint, which is a different surface entirely.
 //!
 //! # Equations
 //!
@@ -449,28 +451,38 @@ impl<G: PropSignature> ColoredExpr<G> {
 
     /// SMC-quotient equality: equal boundary words **and** equal content.
     ///
-    /// **Exact** ([#57](https://github.com/sustia-llc/catgraph/issues/57) a1).
-    /// Lemma 4.1 (§4.2) makes content equality *equal to* SMC-equality rather
-    /// than merely sufficient for it, so on two values of this type the verdict
-    /// decides the question in both directions: `true` is sound, and — unlike the
-    /// `nf`-based test this replaced — `false` is now a disproof. The pairs that
-    /// motivated the old caveat (§4.4's `η` placement slack, §4.6's ledger) are
-    /// exactly the ones that now come back `true`.
+    /// **Exact on word-well-formed values**
+    /// ([#57](https://github.com/sustia-llc/catgraph/issues/57) a1) — which is
+    /// every value [`Self::new`] can build. Lemma 4.1 (§4.2) makes content
+    /// equality *equal to* SMC-equality rather than merely sufficient for it, so
+    /// on two such values the verdict decides the question in both directions:
+    /// `true` is sound, and — unlike the `nf`-based test this replaced — `false`
+    /// is now a disproof. The pairs that motivated the old caveat (§4.4's `η`
+    /// placement slack, §4.6's ledger) are exactly the ones that now come back
+    /// `true`.
     ///
     /// Both sides go through [`content_of_colored`], so the colors of wires no
     /// generator touches are pinned from the source words and the comparison is
-    /// like-with-like. The boundary-word test in front is therefore redundant on
-    /// this path — a fully typed content records its own boundary words — and is
-    /// kept because it is cheaper than building either content, and because it
-    /// still carries the fallback below.
+    /// like-with-like. On word-well-formed values the boundary-word test in front
+    /// is then redundant — a fully typed content records its own boundary words —
+    /// and is kept because it is cheaper than building either content, and
+    /// because it is **not** redundant in the two cases below.
     ///
-    /// # Fallback
+    /// # Outside the well-formed case
     ///
-    /// A [`ColoredExpr`] built through [`Self::new`] is word-well-formed, hence
-    /// arity-well-formed, hence inside [`content_of_colored`]'s domain. One
-    /// reconstructed across the serde trust boundary (see the type's docs) need
-    /// not be, and there this method falls back to the old normal-form test,
-    /// with the old semantics: `true` sound, `false` not a disproof.
+    /// A [`ColoredExpr`] reconstructed across the serde trust boundary (see the
+    /// type's docs) has not been through [`check`], and splits into two:
+    ///
+    /// - **Arity-ill-formed.** Outside [`content_of_colored`]'s domain, so the
+    ///   gate below — which tests arity and nothing else — routes it to the old
+    ///   normal-form test, with the old semantics: `true` sound, `false` not a
+    ///   disproof.
+    /// - **Arity-well-formed but word-ill-formed**, e.g. a source word shorter
+    ///   than the expression's arity. The gate does *not* catch this, and such a
+    ///   value takes the content path with some nodes left untyped, where Lemma
+    ///   4.1 does not apply and the verdict carries no exactness claim. The
+    ///   stored-word test in front is load-bearing here rather than redundant: it
+    ///   is what still compares the forged words themselves.
     ///
     /// [`content_of_colored`]: super::presentation::content::content_of_colored
     #[must_use]

@@ -326,14 +326,21 @@ impl<G: PropSignature> Presentation<G> {
     ///   `σ² = id`. Decided by [`content`], exactly: Lemma 4.1 of
     ///   `docs/SMC-NF-RECONCILIATION.md` §4.2 says `C(a) = C(b)` **iff** `a` and
     ///   `b` are equal in the free symmetric monoidal category. Content equality
-    ///   is therefore the equality of record at this layer, and
-    ///   [`smc_nf::nf`] is left to its other job — canonical *display* and
-    ///   readback. That matters because `nf` is not complete here: it separates
-    ///   SMC-equal writings (§4.4's `η` placement slack, §4.6's ledger), and
-    ///   every one of those pairs is now decided `Ok(Some(true))`.
+    ///   is therefore the equality of record at this layer. That matters because
+    ///   [`smc_nf::nf`] is not complete here: it separates SMC-equal writings
+    ///   (§4.4's `η` placement slack, §4.6's ledger), and every one of those
+    ///   pairs is now decided `Ok(Some(true))`.
     /// - **User equations** — the `E` of this presentation, e.g. the 18 Thm 5.60
     ///   equations. Decided by [`kb::CongruenceClosure`] above the SMC layer,
     ///   with the same bounded-completeness caveats as before.
+    ///
+    /// **Where `nf` still decides.** It no longer decides the SMC layer on the
+    /// well-formed path, but it has not been reduced to display: it is still the
+    /// canonicalizer *inside* [`kb::CongruenceClosure`]'s `smc_refine` fixpoint,
+    /// which NF-normalizes each class representative and merges the class with
+    /// the result — so `nf`'s quality still affects which user-equation classes
+    /// close — and it is still the fallback below, outside content's domain. Its
+    /// other jobs, canonical display and readback, are unchanged.
     ///
     /// So a `true` is exact at the SMC layer and sound at the user layer; a
     /// `false` is still only as complete as congruence closure is. Cocommutativity

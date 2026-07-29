@@ -41,13 +41,15 @@
 //! [`Presentation::eq_mod_functorial(&a, &b, &MatrixNFFunctor::new())`]. The
 //! four depth-2 tests are **bounded regression trackers**. All four rigs are
 //! **pinned exactly** (`assert_eq!`), so any move — rise or drop — trips the
-//! test and demands an explanation. NOTE (#55 PR2 metric lesson, **superseded
-//! at #57 a1** — see "What this count measures changed" below): this count
-//! used to conflate NF canonicality with bounded-depth *equational reach*
-//! (E_18 congruence bridges are co-adapted to the exact NFs), so a pin move
-//! was evidence of change, not by itself proof of an NF regression or
-//! improvement. Since a1 the canonicality half is gone and the residual is
-//! equational reach alone. Canonicality is judged by the
+//! test and demands an explanation. NOTE (#55 PR2 metric lesson, **narrowed at
+//! #57 a1** — see "What this count measures changed" below): this count
+//! conflates NF canonicality with bounded-depth *equational reach* (E_18
+//! congruence bridges are co-adapted to the exact NFs), so a pin move is
+//! evidence of change, not by itself proof of an NF regression or improvement.
+//! Since a1 the *short-circuit* half of that is gone — the SMC layer is decided
+//! exactly by content — but NF still reaches the count through
+//! `kb::CongruenceClosure`'s `smc_refine`, so the caution stands.
+//! Canonicality is judged by the
 //! `smc_canonicality_probes` module in `smc_nf_completeness.rs` (SMC-equal
 //! pairs asserted NF-equal directly — the unconfoundable metric); these pins
 //! detect *unexplained* deltas. (F64Rig was a float-jitter band until #58 normalized
@@ -65,19 +67,23 @@
 //! | Tropical     |       1974 |       46810 |
 //! | F64Rig       |       1969 |       46810 |
 //!
-//! **What this count measures changed at #57 a1 (2026-07-29).** It used to
-//! conflate two things — the docstring below still warns about that, and the
-//! warning is now obsolete. `Presentation::eq_mod` settles SMC coherence by
-//! *content* equality, which decides it exactly (Lemma 4.1,
-//! `docs/SMC-NF-RECONCILIATION.md` §4.2), so every same-matrix pair that is
-//! SMC-equal is merged before congruence closure is consulted. The
-//! canonicality component of these counts is therefore **exactly zero**, and
-//! what remains is purely **depth-2 CC incompleteness on the user equations**:
-//! pairs with a common matrix image that are *not* SMC-equal and that the
-//! `E_18` congruence fails to identify at this depth. That is the cleaner
-//! metric [#173](https://github.com/sustia-llc/catgraph/issues/173) asks for,
-//! and it largely addresses that issue's "conflation" note — recorded here;
-//! whether #173 closes on it is an owner call, not this test's to make.
+//! **What this count measures changed at #57 a1 (2026-07-29), partly.**
+//! `Presentation::eq_mod` settles SMC coherence by *content* equality, which
+//! decides it exactly (Lemma 4.1, `docs/SMC-NF-RECONCILIATION.md` §4.2), so
+//! every same-matrix pair that is SMC-equal is merged before congruence closure
+//! is consulted. What that removes is the **short-circuit** conflation: no
+//! residual below is attributable to NF *incompleteness at the SMC layer*,
+//! because that layer is now decided exactly.
+//!
+//! It does **not** make these counts NF-independent. `nf` is still the
+//! canonicalizer inside `kb::CongruenceClosure`'s `smc_refine` fixpoint, which
+//! NF-normalizes each class representative and merges the class with the
+//! result — so an NF change can still move these pins, through the
+//! user-equation layer rather than through the SMC one. Treat a move as
+//! demanding an explanation exactly as before.
+//! [#173](https://github.com/sustia-llc/catgraph/issues/173)'s "conflation"
+//! note is therefore **partially addressed**, not discharged; whether it closes
+//! is an owner call, not this test's to make.
 //!
 //! BoolRig lineage: 2574 plain CC → 1433 atom-canonical `smc_refine` → 1301
 //! post-#14 layer-ordering NF → 1142 post-E_18 (D7/D8 scalar add/zero added)
@@ -101,23 +107,43 @@
 //! relations gives CC more equations to identify with, lowering the residual
 //! collision count.
 //!
-//! The **#57-a1 drop is not churn** and its direction was forced. This metric
-//! buckets by matrix image first, and Thm 5.60 makes the matrix ground truth,
-//! so everything inside a bucket really is equal in the presented prop: a
-//! bucket splitting into `k` `eq_mod`-classes contributes `k − 1`, and the
-//! count therefore measures equalities `eq_mod` *fails to prove*. Wiring
-//! content in replaced the `nf(a) == nf(b)` short-circuit with content
-//! equality, and the content relation **contains** the NF relation — `nf`
-//! preserves content (§4.3 Lemma 4.2), so equal normal forms force equal
-//! content. A containing relation can only merge classes, never split them, so
-//! the count could only fall; a *rise* would have been the alarming signal and
-//! is unreachable by construction. The containment itself is pinned as a test,
-//! on 2000 unrelated pairs, in `tests/content_equality_corpus.rs`
-//! (`cross_corpus_pairs_are_separated`). Note also what this metric cannot
-//! see: merges only ever happen *within* a matrix bucket, so it is structurally
-//! blind to a false equality across buckets — soundness is covered by that
-//! file's negative controls and by `thm_5_60_soundness_*` here, not by these
-//! counts.
+//! The **#57-a1 drop is not churn**, and it is worth being precise about what
+//! was guaranteed in advance and what was measured. This metric buckets by
+//! matrix image first, and Thm 5.60 makes the matrix ground truth, so
+//! everything inside a bucket really is equal in the presented prop: a bucket
+//! splitting into `k` `eq_mod`-classes contributes `k − 1`, and the count
+//! therefore measures equalities `eq_mod` *fails to prove*.
+//!
+//! What is **forced** is a statement about the underlying relation, not about
+//! the count. Wiring content in replaced the `nf(a) == nf(b)` short-circuit
+//! with content equality, and the content relation **contains** the NF relation
+//! — `nf` preserves content (§4.3 Lemma 4.2), so equal normal forms force equal
+//! content. The relation therefore only grew: no pair that `eq_mod` could
+//! previously prove equal became unprovable.
+//!
+//! That does **not** by itself force the count down. The partition above is
+//! built *greedily* — each expression joins the first class whose
+//! representative it matches — over an `eq_mod` that is **not transitive**
+//! (measured: 10 490 violating triples at BoolRig d=2; e.g. `Scalar(false)` ~
+//! `Discard ; Zero` ~ `Discard ⊗ Zero` while `Scalar(false)` ≁
+//! `Discard ⊗ Zero`). Over a non-transitive relation the greedy class count is
+//! not a function of the relation at all — it depends on enumeration order —
+//! so enlarging the relation has no monotonicity theorem behind it. The
+//! direction here is **empirical**: all four rigs fell, verified per bucket.
+//! A future tracker over union-find components would be a function of the
+//! relation and would restore monotonicity, at the cost of new baselines —
+//! filed as [#189](https://github.com/sustia-llc/catgraph/issues/189),
+//! deliberately deferred.
+//!
+//! The containment is pinned as a test on 2000 unrelated pairs in
+//! `tests/content_equality_corpus.rs` (`cross_corpus_pairs_are_separated`),
+//! though note it only bites where `nf` agrees, which is rare on unrelated
+//! pairs — the direct check of Lemma 4.2 is
+//! `nf_preserves_content_across_the_corpus` in the same file. Note also what
+//! this metric cannot see: merges only ever happen *within* a matrix bucket, so
+//! it is structurally blind to a false equality across buckets — soundness is
+//! covered by that file's negative controls and by `thm_5_60_soundness_*` here,
+//! not by these counts.
 //!
 //! The #174 delta is **+1 on every rig, one new collision pair and none lost**,
 //! and it is attributable to the *free-site retirement* (§2.6) rather than to
