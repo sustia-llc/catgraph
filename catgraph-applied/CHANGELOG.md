@@ -35,16 +35,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   are settled by comparing a complete iso invariant rather than by matching
   them against one another. So there is no comparator, no component order, no
   writing-dependent coordinate, and no backtracking anywhere in it; the cost is
-  linear in the content apart from the per-closed-component serialization. **Word-generic from day one:** nodes carry the
-  color their generator tentacle *word* declares, and `content_of_colored`
-  pins the one remaining kind (a wire no generator touches, which monogamy
-  makes boundary-anchored) from a `ColoredExpr`'s source word, so the boundary
-  words are readable off the content and content equality on that path decides
-  colored SMC-equality, parallelism included. Layering is deliberate and
-  tested: `C` quotients by SMC coherence and nothing else, so `Copy ; Add` and
-  `Copy ; σ ; Add` are correctly **unequal** — cocommutativity is a Thm 5.60
-  *user* equation and stays with `eq_mod`'s congruence closure above this
-  layer. Nothing is wired to `eq_mod` yet; `nf` is untouched.
+  linear in the content apart from the per-closed-component serialization.
+  **Word-generic from day one:** nodes carry the color their generator tentacle
+  *word* declares, and `content_of_colored` pins the one remaining kind (a wire
+  no generator touches, which monogamy makes boundary-anchored) from a
+  `ColoredExpr`'s source word, so the boundary words are readable off the
+  content and content equality on that path decides colored SMC-equality,
+  parallelism included. Layering is deliberate and tested: `C` quotients by SMC
+  coherence and nothing else, so `Copy ; Add` and `Copy ; σ ; Add` are correctly
+  **unequal** — cocommutativity is a Thm 5.60 *user* equation and stays with
+  `eq_mod`'s congruence closure above this layer. Nothing is wired to `eq_mod`
+  yet; `nf` is untouched.
 
 - **SMC NF rigidity/canonicality theorem v2 — Theorem 4.5 on the fragment
   `𝔉′`** ([#174](https://github.com/sustia-llc/catgraph/issues/174) PR-B):

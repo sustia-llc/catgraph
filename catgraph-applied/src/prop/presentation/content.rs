@@ -391,7 +391,8 @@ pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
     }
 }
 
-/// Compute the content of a **colored** morphism, with every node typed.
+/// Compute the content of a **colored** morphism, typing every node — save on the
+/// serde-built exception in `# Panics` below.
 ///
 /// The expression alone leaves exactly one kind of node untyped: one no generator
 /// tentacle touches. Such a node has in-degree and out-degree 0 by construction,
@@ -403,7 +404,10 @@ pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
 /// Consequently the boundary *words* are recoverable from the returned content
 /// (read `node_colors` along `input` / `output`), so [`content_eq`] on two values
 /// of this function decides colored SMC-equality — parallelism included — rather
-/// than only the positional part.
+/// than only the positional part. Both statements are about a value whose source
+/// word covers its arity, which is every value [`ColoredExpr::new`] can build;
+/// the serde exception below leaves the uncovered coordinates untyped, and a word
+/// read off such a content is correspondingly partial.
 ///
 /// # Panics
 ///
@@ -812,12 +816,17 @@ impl<G: PropSignature> Matcher<'_, G> {
 ///
 /// # Cost
 ///
-/// Polynomial, with no backtracking anywhere. Step 1–2 are linear in the content:
-/// each node and edge is forced at most once. Step 3 serializes each closed
-/// component `K` once per choice of seed — `O(|E_K| · (|V_K| + |E_K|))` — and
-/// sorts the resulting blocks. For a content with `n` nodes and `e` hyperedges
-/// that bounds the whole call by `O(e · (n + e))` plus the block sort, and by
-/// `O(n + e)` when nothing is closed.
+/// Polynomial, with no backtracking anywhere. Take a content with `n` nodes and
+/// `e` hyperedges. Steps 1–2 are linear in it: each node and edge is forced at
+/// most once. Step 3 serializes each closed component `K` once per choice of
+/// seed, and each of those passes allocates a numbering sized to the *whole*
+/// content rather than to `K`, so a component costs `O(|E_K| · (n + e))` — over
+/// all components, `O(e · (n + e))`, plus the block sort. With nothing closed the
+/// call is `O(n + e)`.
+///
+/// Sizing the per-seed numbering to the component would drop that to
+/// `O(|E_K| · (|V_K| + |E_K|))`. It is not worth doing at present content sizes
+/// (tens of nodes), and is left for whenever a measurement asks for it.
 ///
 /// # Comparing like with like
 ///
@@ -913,8 +922,9 @@ pub struct ContentKey<G: PropSignature> {
 /// # Cost
 ///
 /// The same bound as [`content_eq`]: linear in the content for the
-/// boundary-attached part, `O(|E_K| · (|V_K| + |E_K|))` per closed component `K`,
-/// plus the block sort.
+/// boundary-attached part, `O(|E_K| · (n + e))` per closed component `K` — see
+/// that function on why the per-seed pass is sized to the content and not to `K`
+/// — plus the block sort.
 #[must_use]
 pub fn canonical_key<G: PropSignature>(c: &Content<G>) -> ContentKey<G> {
     let p = profile(c);
