@@ -34,6 +34,11 @@
 //! composition remains Set-specialised; other monoidal categories
 //! (hyperdoctrine, vector-bundle, fibration) are still deferred.
 //!
+//! Behind the off-by-default `ad` feature, the `ad` submodule adds one more
+//! scalar for that generic stack — `deep_causality_num_dual`'s `Dual<f64>`,
+//! giving forward-mode automatic differentiation (issue #74). It is compiled
+//! away entirely in the default build, so it is not linked here.
+//!
 //! ## Closure convention
 //!
 //! Underlying maps `f : P ▶ X → Y` use the tuple-input convention
@@ -42,6 +47,8 @@
 //! actions compose without intermediate adapters.
 
 mod actegory;
+#[cfg(feature = "ad")]
+pub mod ad;
 mod comonoid;
 mod module_actegory;
 mod monoidal_category;

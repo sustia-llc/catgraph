@@ -81,6 +81,14 @@ jobs:
           for ex in para_walkthrough weight_tying free_monad_basics architecture_unrollers; do
             cargo run -q -p catgraph-dl --example "$ex"
           done
+      # #74 PR2: the opt-in `ad` feature (forward-mode AD via
+      # `deep_causality_num_dual`) is off by default, so every run above leaves
+      # `para::ad` and its `RModule<Dual<f64>>` instance uncompiled. Same shape as
+      # the #81 serde lane: a targeted test + clippy pass, plus the feature-gated
+      # example (declared `required-features = ["ad"]`, so the loop above skips it).
+      - run: cargo test -p catgraph-dl --features ad
+      - run: cargo clippy -p catgraph-dl --features ad --all-targets -- -D warnings
+      - run: cargo run -q -p catgraph-dl --features ad --example gradient_descent_para
 
   # #11: the slow BV 2025 Prop 3.14 acceptance fixture
   # (euler_char_identity::fixture_3_5point_path_t_2_5) is ignored under

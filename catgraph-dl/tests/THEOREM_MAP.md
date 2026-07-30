@@ -44,6 +44,16 @@ PR (this is the #70 discipline). Style: reference `<file>::<test_fn>`.
 | `module_actegory_laws::actegory_action_and_multiplicator` | CDL Def E.2 | Actegory action + multiplicator |
 | `common::assert_monoidal_coherence` | (helper) | **one** generic pentagon/triangle driver over `MonoidalCategory`; the `α ⊗ id` / `id ⊗ α` legs go through `MonoidalCategory::tensor_morphisms` (issue #65), so it serves both the tuple and `DirectSum` carriers |
 | `common::assert_f64_module_axioms` / `::assert_direct_sum_monoid` | (helpers) | drivers for the module-axiom / `⊕`-monoid rows |
+| `ad_module_laws::dual_module_axioms_hold` † | CDL Def E.2 / Example G.3 | the same R-module axioms at `S = Dual<f64>` (#74 PR2) |
+| `ad_module_laws::dual_direct_sum_is_a_unital_monoid` † | CDL Example E.4 / G.3 | `(FinReal, ⊕, R⁰)` monoid laws at `S = Dual<f64>` (#74 PR2) |
+
+† `--features ad` only. The remaining `ad_module_laws` tests
+(`seed_marks_exactly_one_independent_variable`,
+`gradient_matches_the_analytic_partials`,
+`gradient_vanishes_at_the_minimum_of_a_quadratic`) are deliberately **absent**
+from this registry: they check forward-mode derivative correctness against
+hand-computed analytic partials, and dual-number AD is not a CDL construction —
+it has no paper anchor to link. Registering them would fake traceability.
 
 ## Eilenberg–Moore / (co)algebra laws
 

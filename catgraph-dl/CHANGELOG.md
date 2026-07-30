@@ -13,6 +13,45 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Opt-in `ad` feature — forward-mode automatic differentiation**
+  ([#74](https://github.com/sustia-llc/catgraph/issues/74) PR2). Off by default;
+  the default build is unchanged and never compiles the new dependency.
+  - New optional dependency `deep_causality_num_dual`, pinned `=0.1.4` (the
+    num-0.4.1 alignment release). It is the **third** DC crate in the workspace
+    and the first that is opt-in. Only its `Dual<T>` type is consumed. Its own
+    `deep_causality_algebra "0.2"` dependency is already in the lockfile at
+    0.2.0 via haft, so the `ad` build adds no duplicate; catgraph code never
+    names `deep_causality_algebra` (every use site is the concrete `Dual<f64>`).
+  - New feature-gated submodule **`para::ad`** — the single import seam for
+    `deep_causality_num_dual`, mirroring `src/endofunctor.rs` for haft. It
+    re-exports `Dual`, defines `DualF64Module = RModule<Dual<f64>>`, and adds two
+    forward-mode helpers: `seed` (lift a real module to duals with one coordinate
+    marked as the independent variable) and `gradient` (`∇f` by one seeded pass
+    per coordinate). It is a submodule, deliberately **not** flattened into
+    `para`, so the optional surface stays visibly delimited.
+  - `Dual<f64>` needs **no adaptation** to be an `RModule<S>` scalar: it already
+    implements the `deep_causality_num` `Zero` / `One` this crate re-sources plus
+    `Add` / `Mul`, and derives `Clone` — exactly the per-method bound set the
+    PR1 signatures ask for. The feature therefore adds a dependency and a module,
+    not a code path; nothing behind `#[cfg(feature = "ad")]` alters existing
+    behaviour.
+  - New feature-gated tests `tests/ad_module_laws.rs`: the R-module axioms and
+    `⊕`-monoid laws re-checked at `S = Dual<f64>` (registered in
+    `tests/THEOREM_MAP.md` against CDL Def E.2 / Ex E.4 / Ex G.3), plus
+    derivative-correctness checks against hand-computed analytic partials (these
+    are deliberately *not* in the theorem map — dual-number AD has no CDL anchor).
+  - New feature-gated example `gradient_descent_para` (`required-features =
+    ["ad"]`): a least-squares fit whose gradient comes from forward-mode AD and
+    whose descent step is expressed as a `Para` 2-morphism via
+    `Reparameterization::apply` (`f'((w, x)) = f((r(w), x))` with
+    `r(w) = w ⊖ lr·∇L(w)`). Asserts AD agrees with the analytic gradient, that
+    the loss decreases strictly at every step, and that the run converges to the
+    known optimum. CDL §3.1 + Example G.3.
+  - CI gains a targeted `ad` lane (test + clippy + the example run), matching the
+    shape of the #81 serde lane.
+
 ### Changed
 
 - **Scalar genericization of the R-module actegory**

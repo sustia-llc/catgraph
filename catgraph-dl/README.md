@@ -86,6 +86,10 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
   directly.
 - **`Para`** / **`ParaMorphism`** (with `compose`, `apply`) and
   **`Reparameterization`** (with `apply`).
+- **`para::ad`** — a feature-gated *submodule* (not re-exported into `para`),
+  present only under `--features ad`: `Dual<f64>` as a scalar for `RModule<S>`,
+  the alias `DualF64Module`, and the `seed` / `gradient` forward-mode helpers.
+  See [Features](#features).
 
 ### `algebra` — F-(co)algebras and monad algebras (CDL §2)
 
@@ -224,6 +228,13 @@ still inherited transitively from `catgraph-applied`'s `Rig`.
   crate was dropped — `Either` now comes from haft.)
 - `deep_causality_num` — root `Zero` / `One` for the `RModule<S>` R-module
   actegory (#36; see [Status](#status)).
+- `deep_causality_num_dual` — **optional**, behind the off-by-default `ad`
+  feature (#74; see [Features](#features)). Supplies exactly one type,
+  `Dual<T>`, consumed only in `src/para/ad.rs` (the single import seam, mirroring
+  `src/endofunctor.rs` for haft). Its own `deep_causality_algebra "0.2"`
+  dependency is already in the lockfile at 0.2.0 via haft, so the `ad` build adds
+  no duplicate; catgraph code never names `deep_causality_algebra` (every use
+  site is the concrete `Dual<f64>`).
 - dev: `proptest`.
 
 ## Deferred surfaces
@@ -309,6 +320,24 @@ evidence trail.
 - [`docs/AUDIT-CHECKPOINT-v0.4.0.md`](docs/AUDIT-CHECKPOINT-v0.4.0.md) — a
   pre-reboot HKT `&self` audit checkpoint (kept for provenance; the filename
   retains its original pre-reboot version stamp and is not renamed).
+
+## Features
+
+| Feature | Default | What it adds |
+|---|---|---|
+| `ad` | off | Forward-mode automatic differentiation ([#74](https://github.com/sustia-llc/catgraph/issues/74)). Pulls in `deep_causality_num_dual` (pinned `=0.1.4`) and exposes `para::ad`: `Dual<f64>` as a scalar for the generic `RModule<S>` stack, the alias `DualF64Module = RModule<Dual<f64>>`, and the `seed` / `gradient` helpers. |
+
+`ad` is **additive, not a code path**: `Dual` already satisfies every
+`RModule<S>` method bound (`Zero`, `One`, `Add`, `Mul`, `Clone`), so the feature
+adds a dependency and a module without changing any existing behaviour. The
+default build never compiles `deep_causality_num_dual` — verify with
+`cargo tree -p catgraph-dl` (no `deep_causality_num_dual` line) versus
+`cargo tree -p catgraph-dl --features ad`.
+
+```sh
+cargo test -p catgraph-dl --features ad
+cargo run  -p catgraph-dl --features ad --example gradient_descent_para
+```
 
 ## Build
 

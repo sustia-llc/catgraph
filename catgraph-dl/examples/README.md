@@ -11,12 +11,16 @@ asserting its results, so `cargo run --example <name>` doubles as a smoke check.
 | [`weight_tying`](weight_tying.rs) | the diagonal `Comonoid` and `tie_weights` (shared parameters) | Thm G.10 / §3.1 |
 | [`free_monad_basics`](free_monad_basics.rs) | `Free`/`Cofree` construction, list/tree bijections, an `FAlgebra` catamorphism | App B |
 | [`architecture_unrollers`](architecture_unrollers.rs) | `FoldingRnn`/`RecursiveNn`/`UnfoldingRnn`/`MealyCell`/`MooreCell` as (co)algebra unrollers; GDL invariance | App I & J, Ex 2.6 |
+| [`gradient_descent_para`](gradient_descent_para.rs) † | forward-mode AD over `RModule<Dual<f64>>`; a descent step as a `Para` 2-morphism | §3.1, Ex G.3 |
+
+† requires `--features ad` (off by default).
 
 ```sh
 cargo run -p catgraph-dl --example para_walkthrough
 cargo run -p catgraph-dl --example weight_tying
 cargo run -p catgraph-dl --example free_monad_basics
 cargo run -p catgraph-dl --example architecture_unrollers
+cargo run -p catgraph-dl --features ad --example gradient_descent_para
 ```
 
 ## Scope
