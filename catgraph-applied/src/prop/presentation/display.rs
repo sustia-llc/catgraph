@@ -38,12 +38,15 @@
 //! order.
 //!
 //! For a positive-source hyperedge that schedule agrees with `ldepth` (§4.4)
-//! exactly on the passes where **neither** a gather pass nor a source-0
-//! insertion pass intervenes. Both push occupants down: a hyperedge whose
-//! source wires arrive late — because an `η` feeding it was itself emitted
-//! late — lands below its `ldepth`, with no non-contiguity anywhere in sight.
-//! The unit witness `a_layer_pinned_eta_can_still_take_two_layers` is exactly
-//! that shape: its `Add` has `ldepth` 1 and is placed in layer 3. So the rule
+//! exactly on the passes where **none** of a non-contiguous source span, a
+//! gather pass, or a source-0 insertion pass intervenes. Each pushes occupants
+//! down: a hyperedge whose sources are present but non-contiguous waits while
+//! its ready neighbours' pass spends a layer, and one whose source wires
+//! arrive late — because an `η` feeding it was itself emitted late — lands
+//! below its `ldepth` with no non-contiguity anywhere in sight. The unit
+//! witness `a_layer_pinned_eta_can_still_take_two_layers` is exactly the
+//! late-arrival shape: its `Add` has `ldepth` 1 and the sweep places it in
+//! layer 3. So the rule
 //! is `ldepth`-**guided**, not `λ = ldepth`, and the reason it can only be
 //! guided is Lemma 4.4's: `λ` and `ι` are chosen **together**, in one pass,
 //! because an `η`'s slot changes wire adjacency and so can change an anchored
@@ -142,10 +145,11 @@ use super::smc_nf::{StringDiagram, nf};
 ///   `O(n)` passes over `O(n)` nodes.
 ///
 /// Every bound is loose and none is tuned: at presentation sizes — the tens of
-/// nodes `content_eq`'s own cost note assumes, and the corpus's largest
-/// content, 32 hyperedges over 40 nodes — the whole call is ≈ 21 µs against
-/// `nf`'s ≈ 8.6 µs
-/// (measured, `display_cost_against_nf`). Above a few hundred hyperedges it is
+/// nodes `content_eq`'s own cost note assumes; no default-corpus content
+/// exceeds 32 hyperedges or 40 nodes (two different contents attain those
+/// maxima) — [`canonical_display`], which runs this sweep *and then* `nf`,
+/// measures ≈ 21 µs against ≈ 8.6 µs for `nf` alone (reported, not asserted;
+/// `display_cost_against_nf`). Above a few hundred hyperedges it is
 /// simply **un-benchmarked**; the per-pass rescan is the term that would bite
 /// first, and an incidence-indexed ready set is the obvious repair whenever a
 /// measurement asks for it.
@@ -963,15 +967,23 @@ mod tests {
         assert_eq!(canonical_display(&e), nf(&e));
 
         // The point of the case is the layer, so assert it: the η is *not* in
-        // layer 0 — `Copy` is — and sits in layer 1 at slot 1, strictly inside
-        // `Copy`'s output span, which is what holds it below layer 0.
+        // layer 0 — `Copy` is — and sits in layer 1 strictly inside `Copy`'s
+        // output span, which is what holds it below layer 0. The whole layer is
+        // asserted, not just the η's atom index, so the "inside the span" claim
+        // is pinned rather than implied by the identity to its left.
         let display = canonical_display(&e);
-        let eta = Atom::Generator(SfgGenerator::Zero);
         assert_eq!(
             display.layers[0].atoms,
             vec![Atom::Generator(SfgGenerator::Copy)]
         );
-        assert_eq!(display.layers[1].atoms[1], eta);
+        assert_eq!(
+            display.layers[1].atoms,
+            vec![
+                Atom::Identity(1),
+                Atom::Generator(SfgGenerator::Zero),
+                Atom::Identity(1),
+            ]
+        );
     }
 
     #[test]

@@ -89,9 +89,14 @@
 //! on the boundary below its own layer differs between the two realizations
 //! (45412: coordinate 2 of `W₁ = (3, 4, 5, 2)` under `nf` against coordinate 1
 //! of `W₂ = (3, 5, 2)` in the display; 96178: coordinate 2 of `(2, 3, 4, 5)`
-//! against coordinate 1 of `(6, 4, 5)`). Only the first content is pinned; the
-//! other two are a dated measurement, and a future engine change could move
-//! which case indices exhibit them.
+//! against coordinate 1 of `(6, 4, 5)`). One caveat rides every one of those
+//! comparisons (stated with the witness in `display.rs` and repeated here
+//! because the verdict rests on it): when the two realizations put the `η` at
+//! *different* layers the compared boundaries have different widths, and under
+//! that reading of §4.4's slot-pinnedness a λ-ambiguity yields slot-slack
+//! almost automatically. Only the first content is pinned; the other two are a
+//! dated measurement, and a future engine change could move which case indices
+//! exhibit them.
 
 #![cfg(feature = "internal-probes")]
 
