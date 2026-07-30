@@ -40,7 +40,8 @@ adoption tracked in #154. Resolve haft from crates.io — DC `main` still reads
 `catgraph-applied` + `catgraph-magnitude` depend on `deep_causality_num` (`Zero`/`One`
 only); `catgraph-dl` uses `haft`'s `HKT`/`Functor` witnesses as its endofunctor
 substrate (EndoFunctor→haft migration landed, #12) and now **uses** `num`'s
-root `Zero`/`One` in the `F64Module` R-module actegory (`src/para/module_actegory.rs`,
+root `Zero`/`One` in the `RModule<S>` R-module actegory (`F64Module = RModule<f64>`;
+`src/para/module_actegory.rs`,
 #36 first bullet landed — the direct-sum monoidal category `(FinReal, ⊕, R⁰)`;
 umbrella #36 stays open for hyperdoctrine/vector-bundle/lazy surfaces);
 `catgraph` (core) + `catgraph-physics` are DC-free.

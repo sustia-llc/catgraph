@@ -13,6 +13,27 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Scalar genericization of the R-module actegory**
+  ([#74](https://github.com/sustia-llc/catgraph/issues/74) PR1) —
+  `src/para/module_actegory.rs` is now generic in the scalar ring:
+  `F64Module(Vec<f64>)` became `RModule<S>(Vec<S>)`, and the markers /
+  monoidal / actegory types became `RObject<S>` / `RMorphism<S>` /
+  `RMonoidal<S>` / `RActegory<S>`, with `MonoidalCategory` and
+  `Actegory<RMonoidal<S>>` implemented for every `S`. Scalar bounds are stated
+  **per method**, not on the struct: `zeros` needs `S: Zero + Clone`, `basis`
+  needs `S: Zero + One + Clone`, `add` needs `S: Clone + Add<Output = S>`,
+  `scale` needs `S: Clone + Mul<Output = S>`; `new` / `zero_dim` / `dim` /
+  `as_slice` / `into_vec` / `direct_sum` stay bound-free.
+  `DirectSum::flatten` is likewise generic over `DirectSum<RModule<S>, RModule<S>>`.
+  **API-compatible**: `pub type F64Module = RModule<f64>` (and the matching
+  `F64Object` / `F64Morphism` / `F64Monoidal` / `F64Actegory` aliases) keep
+  every existing call site compiling unchanged, and the new `R*` names are
+  re-exported from `para` alongside them. No new dependency, no feature flag,
+  **no behaviour change** — this is groundwork for the forward-mode-AD `Dual`
+  scalar landing behind an `ad` feature in #74 PR2.
+
 ## [workspace-v0.4.0] - 2026-07-25
 
 ### Changed

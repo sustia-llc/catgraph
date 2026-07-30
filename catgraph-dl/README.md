@@ -59,17 +59,22 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
   ([#42](https://github.com/sustia-llc/catgraph/issues/42) decision).
 - **`Actegory<M>`** + **`SetActegory`** — the action `▶ : M × C → C` and its
   coherence witness `μ : Q ⊗ (P ▶ X) → (Q ⊗ P) ▶ X`.
-- **`F64Module` R-module actegory** — the first **non-`(Set, ×, 1)`**
-  `MonoidalCategory` / `Actegory` instance (issue #36). **`F64Monoidal`** is the
-  monoidal category `(FinReal, ⊕, R⁰)` of finite-dimensional real modules under
-  **direct sum**; **`F64Actegory`** is its self-action `▶ = ⊕`. The object-level
+- **`RModule<S>` R-module actegory** — the first **non-`(Set, ×, 1)`**
+  `MonoidalCategory` / `Actegory` instance (issue #36). The stack is generic in
+  the scalar ring `S`, with `F64Module = RModule<f64>` (and `F64Monoidal` /
+  `F64Actegory` / `F64Object` / `F64Morphism` likewise aliases of the `R*`
+  types) as the default instantiation used throughout the crate.
+  **`RMonoidal<S>`** is the monoidal category `(FinReal, ⊕, R⁰)` of
+  finite-dimensional modules under
+  **direct sum**; **`RActegory<S>`** is its self-action `▶ = ⊕`. The object-level
   tensor is the dedicated **`DirectSum<A, B>`** carrier (not the tuple), so
-  `F64Monoidal` is a genuine non-`Set` instance with a hand-written
+  `RMonoidal` is a genuine non-`Set` instance with a hand-written
   `MonoidalCategory` impl — it does *not* opt into `SetCategoryDefaults`. The
-  object carrier **`F64Module`** (`Vec<f64>`-backed `Rⁿ`) carries genuine
-  `R`-module structure (`zeros` / `basis` / `add` / `scale` / `direct_sum`),
+  object carrier **`RModule<S>`** (`Vec<S>`-backed `Sⁿ`) carries genuine
+  `R`-module structure (`zeros` / `basis` / `add` / `scale` / `direct_sum`)
+  under minimal per-method bounds,
   which is where the reserved `deep_causality_num` `Zero` / `One` finally
-  activate. Kind markers **`F64Object`** / **`F64Morphism`**. Monoidal product =
+  activate. Kind markers **`RObject<S>`** / **`RMorphism<S>`**. Monoidal product =
   **direct sum `⊕`**, not tensor `⊗_R`: CDL Example G.3 forms `Para(Smooth)`
   over the *cartesian* structure of real vector spaces, whose finite-dimensional
   biproduct is `Rᵐ × Rⁿ ≅ Rᵐ⁺ⁿ`. Anchors: CDL Definition E.2 (actegory), Example
@@ -204,7 +209,7 @@ Phase 5 (`catgraph-dl`) is merged. The endofunctor layer now runs on
 landed, [#12](https://github.com/sustia-llc/catgraph/issues/12)) — imported in
 `src/endofunctor.rs`, the single seam. `deep_causality_num` is now **in use**
 ([#36](https://github.com/sustia-llc/catgraph/issues/36)): `src/para/module_actegory.rs`
-imports num's root `Zero` / `One` for the `F64Module` R-module actegory (the
+imports num's root `Zero` / `One` for the `RModule<S>` R-module actegory (the
 ring identities filling the zero vector and marking the standard basis). Only
 `Zero` / `One` are used — the DC substrate stays thin. Rig `Zero` / `One` are
 still inherited transitively from `catgraph-applied`'s `Rig`.
@@ -217,7 +222,7 @@ still inherited transitively from `catgraph-applied`'s `Rig`.
 - `deep_causality_haft` — the `HKT` / `Functor` endofunctor witnesses (#12) and
   the `Either` sum used by `TreeEndo`. (The former dependency on the `either`
   crate was dropped — `Either` now comes from haft.)
-- `deep_causality_num` — root `Zero` / `One` for the `F64Module` R-module
+- `deep_causality_num` — root `Zero` / `One` for the `RModule<S>` R-module
   actegory (#36; see [Status](#status)).
 - dev: `proptest`.
 

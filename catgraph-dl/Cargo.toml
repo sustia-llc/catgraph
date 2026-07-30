@@ -19,10 +19,11 @@ catgraph-applied = { workspace = true }
 # `TreeEndo`) is sourced from haft too, so `catgraph-dl` no longer needs the
 # `either` crate.
 # `deep_causality_num` is IN USE (issue #36): `src/para/module_actegory.rs`
-# imports its root `Zero`/`One` for the `F64Module` R-module actegory — the
-# ring's additive identity fills the zero vector (`F64Module::zeros`) and the
+# imports its root `Zero`/`One` for the `RModule<S>` R-module actegory
+# (`F64Module = RModule<f64>`) — the
+# ring's additive identity fills the zero vector (`RModule::zeros`) and the
 # multiplicative identity marks each standard-basis generator
-# (`F64Module::basis`). `rg deep_causality_num src` now hits that module. Only
+# (`RModule::basis`). `rg deep_causality_num src` now hits that module. Only
 # `Zero`/`One` are used (workspace rule: the DC substrate stays thin). The
 # umbrella #36 stays open for the still-deferred non-Set surfaces
 # (hyperdoctrine, vector-bundle, lazy final-coalgebra). Rig `Zero`/`One` are
