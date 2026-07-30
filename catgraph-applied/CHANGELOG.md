@@ -13,6 +13,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.5.0] - 2026-07-30
+
 ### Changed
 
 - **BREAKING (behavioral): the SMC layer of `Presentation::eq_mod` is now
@@ -124,6 +126,39 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   established only that `ceil = 1` does not force `λ = 0`. It does *not* bear
   on the flagged-open induction step (a), which is discharged under
   slot-pinnedness — a hypothesis this content fails.
+
+- **Display-convergence witness siblings, and the ratified semantics written
+  down** ([#187](https://github.com/sustia-llc/catgraph/issues/187), PR2 — the
+  closing PR of the arc). `tests/smc_nf_completeness.rs`'s `eta_slack_residual`
+  module gains `display_converges_on_the_eta_slack_writings` and
+  `nf_separates_where_the_display_converges`: the three writings `nf` holds in
+  two classes share one `canonical_display`. `beyond_eta_slack_residuals` gains
+  `display_converges_on_both_beyond_eta_witnesses`, including the F2 dead braid
+  prefix no `nf`-level fix reaches.
+
+  **This is not flip-and-rename.** The `nf`-level witnesses keep their names
+  and their `assert_ne!`s, because they are now **permanent facts about `nf`**
+  rather than defects awaiting repair: "#187 fixed" was ratified to mean
+  *display convergence*, and #187 left `nf` untouched by construction. The
+  superseded instruction in `eta_layer_slack_separates_smc_equal_writings`
+  ("rename these witnesses per the residual-(b)/(c)/(d) precedent") presumed an
+  `nf`-level fix and is retired; the assert message now says so and points at
+  the sibling. The rename instructions in `beyond_eta_slack_residuals` stay
+  **live** — those guard engine facts (the filed `adjacent_column_cuts` defect,
+  the per-writing braid-freeness property), which the display converging does
+  not discharge.
+
+  Docs: `SMC-NF-RECONCILIATION.md` gains four dated 2026-07-30 notes — §4.7
+  (the readback the section anticipated is shipped; `eq_mod` adoption stays a
+  separate #173-adjacent decision), §4.4 (the layer-pinnedness caution
+  strengthened to non-uniqueness of `λ`, with the cross-width caveat on the
+  slot-slack comparison; the Theorem 4.5 probe now exists operationally, tiers
+  and scope stated; the `free_slot` far-side deviation from the design note's
+  leftmost convention, with the measured 87-vs-88 tie) and §4.6 (the 253/1162
+  figures are hereafter `nf`-display trackers: equality closed by content,
+  display closed by PR1, the counts retained as engine drift detectors).
+  `tests/smc_nf_differential_sweep.rs`'s module docs carry the same re-label.
+  **No pin moves in any of it** — doc text and new assertions only.
 
 - **`prop::presentation::content::is_arity_well_formed`** — the domain
   predicate for `content_of`, public so callers that must stay total on
@@ -1543,7 +1578,8 @@ Tier 1 gap closures (from v0.2.0 audit).
   - `e2_operad.rs` — little-disks operad (E₂).
 - Criterion bench `rayon_thresholds`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.5.0...HEAD
+[workspace-v0.5.0]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...v0.5.0
 [workspace-v0.4.0]: https://github.com/sustia-llc/catgraph/compare/v0.1.0...v0.4.0
 [workspace-v0.1.0]: https://github.com/sustia-llc/catgraph/releases/tag/v0.1.0
 [0.6.0]: https://github.com/tsondru/catgraph/compare/catgraph-applied-v0.5.6...catgraph-applied-v0.6.0

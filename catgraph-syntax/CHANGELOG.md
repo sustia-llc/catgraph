@@ -7,6 +7,8 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+## [workspace-v0.5.0] - 2026-07-30
+
 ### Changed
 
 - **BREAKING: the textual surface is Λ-colored**
@@ -300,6 +302,7 @@ presentation surface for hypergraph-category morphisms over
   combinators preserve it) and tested per combinator. Hughes 2000 cited as
   lineage.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.5.0...HEAD
+[workspace-v0.5.0]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...v0.5.0
 [workspace-v0.4.0]: https://github.com/sustia-llc/catgraph/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sustia-llc/catgraph/compare/v0.2.1...v0.3.0
