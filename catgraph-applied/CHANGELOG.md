@@ -154,8 +154,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   strengthened to non-uniqueness of `λ`, with the cross-width caveat on the
   slot-slack comparison; the Theorem 4.5 probe now exists operationally, tiers
   and scope stated; and the `free_slot` far-side divergence from the design
-  note's leftmost convention flagged ⛔ **unratified** — deferred to the #187
-  PR2 review, with the measured 87-vs-88 tie recorded as deciding nothing)
+  note's leftmost convention **owner-RATIFIED far-side at the #187 PR2 review
+  (2026-07-30)**, with the measured 87-vs-88 tie recorded as a convention
+  choice, not a quality result)
   and §4.6 (the 253/1162
   figures are hereafter `nf`-display trackers: equality closed by content,
   display closed by PR1, the counts retained as engine drift detectors).

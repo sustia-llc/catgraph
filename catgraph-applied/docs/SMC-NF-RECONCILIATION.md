@@ -1392,19 +1392,18 @@ is exactly `η` placement slack, `ι`, the hypothesis of Theorem 4.5.
   cases and found the competing writings give the `η` an *identical* content
   attachment record, so no content lookup can separate the candidates.
 
-  ⛔ **Which side that convention takes is UNRATIFIED (2026-07-30).** The
-  ratified design note specified **leftmost**-admissible; the shipped
-  `display::free_slot` takes the **far** side. That divergence is **deferred to
-  #187 PR2 review, pending owner ratification** — it is neither accepted nor
-  reversed, and nothing here should be read as settling it. The measurement in
-  hand is a **tie** — 87 crossings against 88 on the 5 000-case smoke prefix —
-  so it decides nothing on the quality axis. The implementer's reason for the
-  far side was to keep an unpinned wire out of the interior of the live word,
-  where the content pinning it further right later would force a crossing back
-  out; that is an argument offered, not a verdict reached. Whichever side is
-  ratified, leftmost still governs what the design note was actually about —
-  several `η` landing on **one** coordinate emit left to right — so the open
-  question is narrower than "leftmost or not".
+  **Which side that convention takes: far side, owner-RATIFIED (2026-07-30,
+  at #187 PR2 review).** The design note had specified **leftmost**-admissible;
+  the shipped `display::free_slot` takes the **far** side, and the owner
+  ratified the shipped side after the deviation was surfaced with its evidence.
+  The measurement in hand is a **tie** — 87 crossings against 88 on the
+  5 000-case smoke prefix — so the ratification records a convention choice,
+  not a quality result. The far side's stated rationale — keeping an unpinned
+  wire out of the interior of the live word, where the content pinning it
+  further right later would force a crossing back out — stands as the argument
+  offered with it. Leftmost still governs what the design note was actually
+  about — several `η` landing on **one** coordinate emit left to right — so
+  what was ratified is the free-coordinate side, nothing else.
 - **Braid-freedom as a content condition** — NF braid-freeness is
   per-writing, settled by the braid-prefix witness. What stays open is
   whether a content condition ("`C` admits a non-crossing layered embedding

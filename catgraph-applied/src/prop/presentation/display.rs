@@ -501,26 +501,24 @@ fn gather_target(word: &[usize], nodes: &[usize]) -> Option<Vec<usize>> {
 /// separate the candidates. That is the evidence's scope — five cases of one
 /// family — and not a statement about slot slack in general.
 ///
-/// # ⛔ Which side is UNRATIFIED
+/// # Which side: far side, owner-ratified
 ///
-/// The ratified design note says **leftmost**-admissible; this takes the far
-/// side. That divergence is **deferred to the #187 PR2 review, pending owner
-/// ratification** — neither accepted nor reversed. Do not read this doc, or the
-/// fact that the far side is what compiles, as settling it; the ⛔ record of
-/// scope lives in `docs/SMC-NF-RECONCILIATION.md` §4.4's "Canonicalizing `ι`"
-/// item and is the authority.
+/// The design note had said **leftmost**-admissible; this takes the far side,
+/// and the owner **ratified the far side** at the #187 PR2 review (2026-07-30)
+/// after the deviation was surfaced with its evidence. The record of scope
+/// lives in `docs/SMC-NF-RECONCILIATION.md` §4.4's "Canonicalizing `ι`" item.
 ///
 /// The measurement in hand is a **tie** — 87 crossings against 88 on the
-/// 5 000-case smoke prefix — so it decides nothing. The argument for the far
-/// side is that it keeps an unpinned wire out of the interior of the live word,
-/// where it would have to cross back out if the content later pinned it further
-/// right. That is an argument, not a verdict.
+/// 5 000-case smoke prefix — so the ratification records a convention choice,
+/// not a quality result. The argument offered with the far side: it keeps an
+/// unpinned wire out of the interior of the live word, where it would have to
+/// cross back out if the content later pinned it further right.
 ///
-/// Whichever side is ratified, leftmost still governs the choice the design
-/// note was actually about: several `η` landing on *one* coordinate are emitted
-/// left to right in tie order. Reversing this function is a one-line change
-/// that would re-measure every pinned display number in
-/// `tests/canonical_display_corpus.rs`.
+/// Leftmost still governs the choice the design note was actually about:
+/// several `η` landing on *one* coordinate are emitted left to right in tie
+/// order — what was ratified is the free-coordinate side, nothing else.
+/// Changing this function is a one-line change that would re-measure every
+/// pinned display number in `tests/canonical_display_corpus.rs`.
 ///
 /// # The ablation that does move the number
 ///
