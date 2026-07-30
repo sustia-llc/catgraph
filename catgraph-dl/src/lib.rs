@@ -22,7 +22,9 @@
 //!   [`para::SetCategoryDefaults`]. Concrete R-module instance
 //!   `(FinReal, ⊕, R⁰)` via [`para::F64Monoidal`] / [`para::F64Actegory`]
 //!   on the [`para::F64Module`] carrier (CDL Def E.2 / Ex E.4 / Ex G.3,
-//!   issue #36).
+//!   issue #36) — these are the `S = f64` aliases of the scalar-generic
+//!   [`para::RMonoidal`] / [`para::RActegory`] / [`para::RModule`], which
+//!   carry the base ring as a type parameter.
 //! - [`algebra`] — `FAlgebra<F>`, `FCoalgebra<F>`, `MonadAlgebra<M>` plus
 //!   homomorphism wrappers `FAlgebraHom` / `FCoalgebraHom` /
 //!   `MonadAlgebraHom` with caller-sampled `verify_commutes`, and (issue #40)

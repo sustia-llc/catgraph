@@ -18,8 +18,8 @@
 //!   (Eq. 8). This is the surface [`Actegory`] models: [`Actegory::act`] is the
 //!   underlying map of `▶`, [`Actegory::compose_action`] is `µ`.
 //! - **Example E.4** (*Monoidal action*) — "any monoidal category gives rise to
-//!   a self-action". [`F64Actegory`] is exactly this self-action of the
-//!   monoidal category [`F64Monoidal`] on itself, with `▶ = ⊗ = ⊕`.
+//!   a self-action". [`RActegory`] is exactly this self-action of the
+//!   monoidal category [`RMonoidal`] on itself, with `▶ = ⊗ = ⊕`.
 //! - **Example G.3** (*Real Vector Spaces and Smooth Maps*) — "Consider the
 //!   **cartesian** category `Smooth` whose objects are real vector spaces …
 //!   As this category is cartesian, we can form `Para(Smooth)`". This is the
@@ -34,24 +34,24 @@
 //! with monoidal unit the zero module `R⁰`. The tensor product `⊗_R` is a
 //! *different* (closed) monoidal structure with unit `R¹ = R`; it is the setting
 //! for multilinear algebra, not the parameter-concatenation used by
-//! gradient-based-learning `Para` constructions. So `[F64Monoidal]` realises
-//! `(FinReal, ⊕, R⁰)`: [`F64Monoidal::tensor_objects`] pairs blocks and
+//! gradient-based-learning `Para` constructions. So `[RMonoidal]` realises
+//! `(FinReal, ⊕, R⁰)`: [`RMonoidal::tensor_objects`] pairs blocks and
 //! [`DirectSum::flatten`] concatenates their coordinates.
 //!
 //! ## Carriers (module-appropriate, **not** the `(Set, ×, 1)` tuple)
 //!
-//! [`F64Module`] is the object carrier — a finite-dimensional real module,
-//! `Vec<f64>`-backed, an element of `Rⁿ` for `R = f64`. It carries genuine
-//! `R`-module structure ([`F64Module::zeros`], [`F64Module::basis`],
-//! [`F64Module::add`], [`F64Module::scale`], [`F64Module::direct_sum`]); this is
+//! [`RModule<S>`] is the object carrier — a finite-dimensional module over the
+//! scalar ring `S`, `Vec<S>`-backed, an element of `Sⁿ`. It carries genuine
+//! `R`-module structure ([`RModule::zeros`], [`RModule::basis`],
+//! [`RModule::add`], [`RModule::scale`], [`RModule::direct_sum`]); this is
 //! where the reserved `deep_causality_num` `Zero` / `One` finally activate
 //! (issue #36) — `Zero::zero()` is the additive identity `0 ∈ R` filling the
 //! zero vector, `One::one()` is the multiplicative identity `1 ∈ R` marking each
-//! standard-basis generator.
+//! standard-basis generator. [`F64Module`] is the `S = f64` alias.
 //!
 //! The object-level tensor is the dedicated [`DirectSum`] carrier — deliberately
 //! **not** the Rust tuple `(A, B)` that the `(Set, ×, 1)` blanket
-//! [`SetCategoryDefaults`](super::SetCategoryDefaults) uses — so [`F64Monoidal`]
+//! [`SetCategoryDefaults`](super::SetCategoryDefaults) uses — so [`RMonoidal`]
 //! is a genuine non-`Set` instance rather than an alias of
 //! [`SetMonoidal`](super::SetMonoidal). It does **not** opt into
 //! `SetCategoryDefaults`; the [`MonoidalCategory`] / [`Actegory`] impls are
@@ -73,18 +73,24 @@
 //! (the trait's GATs place no bound on `A`, `B` — `tensor_objects` accepts
 //! any types, exactly like `SetMonoidal`'s); what makes this instance the
 //! `R`-module actegory is the [`DirectSum`] carrier plus the concrete module
-//! layer ([`F64Module`], [`DirectSum::flatten`]) that realises `⊕` on actual
+//! layer ([`RModule`], [`DirectSum::flatten`]) that realises `⊕` on actual
 //! coordinates. The `R`-module axioms that exercise `Zero` / `One`, and the
 //! concrete `⊕`-monoid laws on coordinates, are law-tested in the same file.
 //!
 //! ## Base ring as a compile-time type
 //!
-//! [`F64Monoidal`] / [`F64Actegory`] are zero-sized: the base ring is the
-//! *type* `f64`, statically known, so this instance needs no runtime payload in
-//! the `&self` slot. The slot (see the "Why methods take `&self`" section on
+//! [`RMonoidal<S>`] / [`RActegory<S>`] are zero-sized: the base ring is the
+//! *type parameter* `S`, statically known at every use site, so this instance
+//! needs no runtime payload in the `&self` slot. The default instantiation is
+//! `S = f64` ([`F64Monoidal`] / [`F64Actegory`]), but any scalar type
+//! satisfying the per-method bounds works — the ring genuinely lives in the
+//! type system. The slot (see the "Why methods take `&self`" section on
 //! [`MonoidalCategory`](super::MonoidalCategory)) remains reserved for an
 //! instance whose ring is a **runtime value** — e.g. `Z/nZ` with a modulus `n`
 //! chosen at construction — which would carry `n` in the receiver.
+
+use core::marker::PhantomData;
+use core::ops::{Add, Mul};
 
 use deep_causality_num::{One, Zero};
 
@@ -93,47 +99,56 @@ use super::monoidal_category::MonoidalCategory;
 
 /// The direct-sum tensor carrier `A ⊕ B`.
 ///
-/// The object-level tensor of [`F64Monoidal`] (and the action result of
-/// [`F64Actegory`]). A dedicated newtype rather than the Rust tuple `(A, B)`:
-/// this is what makes [`F64Monoidal`] a genuine non-`Set` monoidal category
+/// The object-level tensor of [`RMonoidal`] (and the action result of
+/// [`RActegory`]). A dedicated newtype rather than the Rust tuple `(A, B)`:
+/// this is what makes [`RMonoidal`] a genuine non-`Set` monoidal category
 /// instead of an alias of the `(Set, ×, 1)` blanket. As a *set* the direct sum
 /// of two modules is their cartesian product of coordinate blocks, so the two
 /// slots `.0` / `.1` hold the summands; [`DirectSum::flatten`] realises the
-/// direct sum of two concrete [`F64Module`]s as one concatenated module.
+/// direct sum of two concrete [`RModule`]s as one concatenated module.
 ///
 /// CDL Definition E.2 / Example E.4.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DirectSum<A, B>(pub A, pub B);
 
-impl DirectSum<F64Module, F64Module> {
+impl<S> DirectSum<RModule<S>, RModule<S>> {
     /// Realise the abstract direct sum `V ⊕ W` of two concrete modules as the
     /// single concatenated module `Rᵐ⁺ⁿ` — the biproduct carrier of
     /// `Rᵐ × Rⁿ ≅ Rᵐ⁺ⁿ` (Example G.3, cartesian structure of real vector
     /// spaces). Coordinates of the left summand precede those of the right.
     #[must_use]
-    pub fn flatten(self) -> F64Module {
+    pub fn flatten(self) -> RModule<S> {
         self.0.direct_sum(self.1)
     }
 }
 
-/// A finite-dimensional real module `Rⁿ` over the scalar ring `R = f64`.
+/// A finite-dimensional free module `Sⁿ` over the scalar ring `S`.
 ///
-/// The object carrier of the `R`-module actegory. Backed by `Vec<f64>`; the
+/// The object carrier of the `R`-module actegory. Backed by `Vec<S>`; the
 /// dimension `n` is the vector length. This is the free `R`-module on `n`
 /// generators, so it carries the full `R`-module structure:
 ///
-/// - additive identity [`F64Module::zeros`] (`0 ∈ Rⁿ`, each entry
-///   `<f64 as Zero>::zero()`),
-/// - standard basis [`F64Module::basis`] (`eᵢ`, a single
-///   `<f64 as One>::one()` at position `i`),
-/// - vector addition [`F64Module::add`] (dimension-guarded),
-/// - scalar multiplication [`F64Module::scale`] (`r · v`),
-/// - direct sum [`F64Module::direct_sum`] (`⊕`, the monoidal product).
+/// - additive identity [`RModule::zeros`] (`0 ∈ Sⁿ`, each entry
+///   `<S as Zero>::zero()`),
+/// - standard basis [`RModule::basis`] (`eᵢ`, a single
+///   `<S as One>::one()` at position `i`),
+/// - vector addition [`RModule::add`] (dimension-guarded),
+/// - scalar multiplication [`RModule::scale`] (`r · v`),
+/// - direct sum [`RModule::direct_sum`] (`⊕`, the monoidal product).
+///
+/// The scalar ring is the type parameter `S`; [`F64Module`] is the `S = f64`
+/// instantiation used throughout the crate. Bounds are stated **per method**,
+/// not on the struct, so a scalar type only has to satisfy what the operations
+/// it is actually used with require.
 ///
 /// CDL Definition E.2 (the objects of the category `C` the actegory acts on);
 /// Example G.3 (real vector spaces).
 ///
-/// # Float honesty
+/// # Float honesty (`S = f64` and other IEEE float scalars)
+///
+/// This section is about IEEE-754 semantics, not about the generic structure —
+/// it applies whenever `S` is a floating-point type (in particular to the
+/// [`F64Module`] alias), and not to exact scalar rings.
 ///
 /// Equality is structural `Vec<f64>` equality via `f64` `PartialEq`, which
 /// **identifies `-0.0` and `+0.0`**. The module-axiom identities
@@ -143,17 +158,30 @@ impl DirectSum<F64Module, F64Module> {
 /// `zeros()`) and `-0.0 + 0.0 = +0.0` (so `v + 0` can flip a sign bit of `v`).
 /// Do not rely on these identities for bit-exactness (same family as the
 /// [#58](https://github.com/sustia-llc/catgraph/issues/58) `F64Rig`
-/// signed-zero note). General [`F64Module::add`] / [`F64Module::scale`] on
+/// signed-zero note). General [`RModule::add`] / [`RModule::scale`] on
 /// arbitrary reals are subject to ordinary floating-point rounding and are
 /// **not** asserted associative/distributive on the nose; tests use the
 /// NaN-free `finite_f64` strategy.
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct F64Module(Vec<f64>);
+#[derive(Debug, Clone, PartialEq)]
+pub struct RModule<S>(Vec<S>);
 
-impl F64Module {
+/// The finite-dimensional real module `Rⁿ` over `R = f64` — the default
+/// instantiation of [`RModule`], and the carrier the rest of the crate uses.
+pub type F64Module = RModule<f64>;
+
+// Hand-written so the empty module is available for every `S`, including
+// scalar types that are not themselves `Default` (the derive would add a
+// spurious `S: Default` bound).
+impl<S> Default for RModule<S> {
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
+
+impl<S> RModule<S> {
     /// Wrap a coordinate vector as a module element of dimension `coords.len()`.
     #[must_use]
-    pub fn new(coords: Vec<f64>) -> Self {
+    pub fn new(coords: Vec<S>) -> Self {
         Self(coords)
     }
 
@@ -161,34 +189,10 @@ impl F64Module {
     ///
     /// `R⁰` has exactly one element (the empty coordinate tuple), so it is the
     /// concrete realisation of the [`MonoidalCategory::Unit`] `()` for
-    /// [`F64Monoidal`]: `R⁰ ⊕ V ≅ V` and `V ⊕ R⁰ ≅ V`.
+    /// [`RMonoidal`]: `R⁰ ⊕ V ≅ V` and `V ⊕ R⁰ ≅ V`.
     #[must_use]
     pub fn zero_dim() -> Self {
         Self(Vec::new())
-    }
-
-    /// The additive identity `0 ∈ Rⁿ` — every coordinate the ring zero
-    /// `<f64 as Zero>::zero()`.
-    #[must_use]
-    pub fn zeros(dim: usize) -> Self {
-        Self(vec![<f64 as Zero>::zero(); dim])
-    }
-
-    /// The `i`-th standard basis vector `eᵢ ∈ Rⁿ`: the ring one
-    /// `<f64 as One>::one()` at position `i`, the ring zero elsewhere. Returns
-    /// `None` when `i` is out of range (`i >= dim`).
-    ///
-    /// Witnesses that `F64Module` is the *free* `R`-module on `dim` generators;
-    /// this is the canonical site where the multiplicative identity `1 ∈ R`
-    /// appears in the module structure.
-    #[must_use]
-    pub fn basis(dim: usize, i: usize) -> Option<Self> {
-        if i >= dim {
-            return None;
-        }
-        let mut coords = vec![<f64 as Zero>::zero(); dim];
-        coords[i] = <f64 as One>::one();
-        Some(Self(coords))
     }
 
     /// The dimension `n` (number of coordinates).
@@ -199,39 +203,21 @@ impl F64Module {
 
     /// Borrow the coordinates as a slice.
     #[must_use]
-    pub fn as_slice(&self) -> &[f64] {
+    pub fn as_slice(&self) -> &[S] {
         &self.0
     }
 
     /// Consume into the underlying coordinate vector.
     #[must_use]
-    pub fn into_vec(self) -> Vec<f64> {
+    pub fn into_vec(self) -> Vec<S> {
         self.0
-    }
-
-    /// Vector addition `u + v` in `Rⁿ`, coordinate-wise. Returns `None` when the
-    /// dimensions differ (addition is only defined within one module `Rⁿ`).
-    #[must_use]
-    pub fn add(&self, other: &Self) -> Option<Self> {
-        if self.dim() != other.dim() {
-            return None;
-        }
-        Some(Self(
-            self.0.iter().zip(&other.0).map(|(a, b)| a + b).collect(),
-        ))
-    }
-
-    /// Scalar multiplication `r · v` in `Rⁿ`, coordinate-wise.
-    #[must_use]
-    pub fn scale(&self, r: f64) -> Self {
-        Self(self.0.iter().map(|x| r * x).collect())
     }
 
     /// Direct sum `u ⊕ v` — the monoidal product `⊗ = ⊕` realised on
     /// coordinates as concatenation: `Rᵐ ⊕ Rⁿ = Rᵐ⁺ⁿ`, left block first.
     ///
-    /// CDL Example E.4 / G.3. The monoid `(F64Module, ⊕, R⁰)` on dimensions is
-    /// the concrete witness that [`F64Monoidal`] is monoidal.
+    /// CDL Example E.4 / G.3. The monoid `(RModule<S>, ⊕, R⁰)` on dimensions is
+    /// the concrete witness that [`RMonoidal`] is monoidal.
     #[must_use]
     pub fn direct_sum(self, other: Self) -> Self {
         let mut coords = self.0;
@@ -240,52 +226,174 @@ impl F64Module {
     }
 }
 
-/// Object-kind marker for [`F64Monoidal`] / [`F64Actegory`].
-///
-/// The type-level witness that objects are finite-dimensional real modules
-/// (values of [`F64Module`]), mirroring [`SetObject`](super::SetObject).
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct F64Object;
+impl<S: Zero + Clone> RModule<S> {
+    /// The additive identity `0 ∈ Sⁿ` — every coordinate the ring zero
+    /// `<S as Zero>::zero()`.
+    #[must_use]
+    pub fn zeros(dim: usize) -> Self {
+        Self(vec![<S as Zero>::zero(); dim])
+    }
+}
 
-/// Morphism-kind marker for [`F64Monoidal`] / [`F64Actegory`].
+impl<S: Zero + One + Clone> RModule<S> {
+    /// The `i`-th standard basis vector `eᵢ ∈ Sⁿ`: the ring one
+    /// `<S as One>::one()` at position `i`, the ring zero elsewhere. Returns
+    /// `None` when `i` is out of range (`i >= dim`).
+    ///
+    /// Witnesses that `RModule<S>` is the *free* `R`-module on `dim`
+    /// generators; this is the canonical site where the multiplicative
+    /// identity `1 ∈ R` appears in the module structure.
+    #[must_use]
+    pub fn basis(dim: usize, i: usize) -> Option<Self> {
+        if i >= dim {
+            return None;
+        }
+        let mut coords = vec![<S as Zero>::zero(); dim];
+        coords[i] = <S as One>::one();
+        Some(Self(coords))
+    }
+}
+
+impl<S: Clone + Add<Output = S>> RModule<S> {
+    /// Vector addition `u + v` in `Sⁿ`, coordinate-wise. Returns `None` when the
+    /// dimensions differ (addition is only defined within one module `Sⁿ`).
+    #[must_use]
+    pub fn add(&self, other: &Self) -> Option<Self> {
+        if self.dim() != other.dim() {
+            return None;
+        }
+        Some(Self(
+            self.0
+                .iter()
+                .zip(&other.0)
+                .map(|(a, b)| a.clone() + b.clone())
+                .collect(),
+        ))
+    }
+}
+
+impl<S: Clone + Mul<Output = S>> RModule<S> {
+    /// Scalar multiplication `r · v` in `Sⁿ`, coordinate-wise.
+    #[must_use]
+    pub fn scale(&self, r: S) -> Self {
+        Self(self.0.iter().map(|x| r.clone() * x.clone()).collect())
+    }
+}
+
+/// Object-kind marker for [`RMonoidal`] / [`RActegory`].
+///
+/// The type-level witness that objects are finite-dimensional free modules
+/// over `S` (values of [`RModule<S>`]), mirroring [`SetObject`](super::SetObject).
+///
+/// Zero-sized: the scalar parameter is carried as `PhantomData<fn() -> S>`, a
+/// function-pointer phantom so that `Copy` / `Send` / `Sync` hold for every
+/// `S` unconditionally.
+pub struct RObject<S>(PhantomData<fn() -> S>);
+
+/// The `S = f64` object-kind marker — the default instantiation of [`RObject`].
+pub type F64Object = RObject<f64>;
+
+/// Morphism-kind marker for [`RMonoidal`] / [`RActegory`].
 ///
 /// Morphisms of the module category are `R`-linear maps, carried at the value
 /// level; this is the type-level witness, mirroring
-/// [`SetMorphism`](super::SetMorphism).
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct F64Morphism;
+/// [`SetMorphism`](super::SetMorphism). Zero-sized, with the same
+/// function-pointer phantom as [`RObject`].
+pub struct RMorphism<S>(PhantomData<fn() -> S>);
 
-/// The monoidal category `(FinReal, ⊕, R⁰)` of finite-dimensional real modules
-/// under **direct sum**.
+/// The `S = f64` morphism-kind marker — the default instantiation of
+/// [`RMorphism`].
+pub type F64Morphism = RMorphism<f64>;
+
+/// The monoidal category `(FinReal, ⊕, R⁰)` of finite-dimensional modules over
+/// the scalar ring `S` under **direct sum**.
 ///
 /// The first non-`(Set, ×, 1)` [`MonoidalCategory`] instance. Objects are
-/// [`F64Module`]s; the tensor `⊗ = ⊕` is the [`DirectSum`] carrier; the unit `I`
-/// is the zero module `R⁰`, represented by `()` (its one element). The
+/// [`RModule<S>`]s; the tensor `⊗ = ⊕` is the [`DirectSum`] carrier; the unit
+/// `I` is the zero module `R⁰`, represented by `()` (its one element). The
 /// associator and unitors are exact `DirectSum` re-associations.
 ///
 /// CDL Definition E.2 / Example E.4 / Example G.3. See the module docs for the
 /// `⊕`-vs-`⊗_R` decision and the base-ring-as-type note.
 ///
-/// Zero-sized: the base ring `f64` is a compile-time type, so no runtime payload
-/// is carried. Does **not** opt into
+/// Zero-sized: the base ring is the compile-time type parameter `S` (the
+/// crate's default instantiation is [`F64Monoidal`]), so no runtime payload is
+/// carried. Does **not** opt into
 /// [`SetCategoryDefaults`](super::SetCategoryDefaults) — the impl is
 /// hand-written with `DirectSum` bodies.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct F64Monoidal;
+pub struct RMonoidal<S>(PhantomData<fn() -> S>);
 
-impl F64Monoidal {
-    /// Construct a fresh `F64Monoidal`. Zero-sized; cost-free.
+/// The `S = f64` monoidal category `(FinReal, ⊕, R⁰)` — the default
+/// instantiation of [`RMonoidal`].
+pub type F64Monoidal = RMonoidal<f64>;
+
+/// The self-action `▶ = ⊕` of [`RMonoidal`] on itself — the `R`-module
+/// actegory.
+///
+/// CDL Example E.4 (a monoidal category acts on itself). The action of a
+/// parameter module `P` on a carrier module `X` is the direct sum `P ⊕ X`; the
+/// multiplicator `µ : Q ▶ (P ▶ X) → (Q ⊗ P) ▶ X` is the exact `DirectSum`
+/// re-association matching [`RMonoidal`]'s tensor. This is the actegory the
+/// gradient-based-learning `Para(RMonoidal<S>, RActegory<S>)` construction runs
+/// over (Example G.3), where parameter concatenation `⊕` composes learnable
+/// weights.
+///
+/// Zero-sized (see [`RMonoidal`]); does not opt into any blanket.
+pub struct RActegory<S>(PhantomData<fn() -> S>);
+
+/// The `S = f64` self-action — the default instantiation of [`RActegory`].
+pub type F64Actegory = RActegory<f64>;
+
+/// Hand-written `Debug` / `Default` / `Clone` / `Copy` / `PartialEq` / `Eq` for
+/// the zero-sized phantom markers. Derives would add a spurious `S: …` bound to
+/// types that carry no `S` value at all.
+macro_rules! zst_phantom_impls {
+    ($($ty:ident),+ $(,)?) => {$(
+        impl<S> core::fmt::Debug for $ty<S> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                f.write_str(stringify!($ty))
+            }
+        }
+
+        impl<S> Default for $ty<S> {
+            fn default() -> Self {
+                Self(PhantomData)
+            }
+        }
+
+        impl<S> Clone for $ty<S> {
+            fn clone(&self) -> Self {
+                *self
+            }
+        }
+
+        impl<S> Copy for $ty<S> {}
+
+        impl<S> PartialEq for $ty<S> {
+            fn eq(&self, _other: &Self) -> bool {
+                true
+            }
+        }
+
+        impl<S> Eq for $ty<S> {}
+    )+};
+}
+
+zst_phantom_impls!(RObject, RMorphism, RMonoidal, RActegory);
+
+impl<S> RMonoidal<S> {
+    /// Construct a fresh `RMonoidal<S>`. Zero-sized; cost-free.
     #[must_use]
     pub const fn new() -> Self {
-        Self
+        Self(PhantomData)
     }
 }
 
-impl MonoidalCategory for F64Monoidal {
-    type Object = F64Object;
-    type Morphism = F64Morphism;
+impl<S> MonoidalCategory for RMonoidal<S> {
+    type Object = RObject<S>;
+    type Morphism = RMorphism<S>;
     /// The monoidal unit `I = R⁰`. `R⁰` is a one-element module, so `()` is its
-    /// faithful carrier (concretely [`F64Module::zero_dim`]).
+    /// faithful carrier (concretely [`RModule::zero_dim`]).
     type Unit = ();
     /// The object-level tensor `A ⊗ B = A ⊕ B`.
     type Tensor<A, B> = DirectSum<A, B>;
@@ -329,32 +437,17 @@ impl MonoidalCategory for F64Monoidal {
     }
 }
 
-/// The self-action `▶ = ⊕` of [`F64Monoidal`] on itself — the `R`-module
-/// actegory.
-///
-/// CDL Example E.4 (a monoidal category acts on itself). The action of a
-/// parameter module `P` on a carrier module `X` is the direct sum `P ⊕ X`; the
-/// multiplicator `µ : Q ▶ (P ▶ X) → (Q ⊗ P) ▶ X` is the exact `DirectSum`
-/// re-association matching [`F64Monoidal`]'s tensor. This is the actegory the
-/// gradient-based-learning `Para(F64Monoidal, F64Actegory)` construction runs
-/// over (Example G.3), where parameter concatenation `⊕` composes learnable
-/// weights.
-///
-/// Zero-sized (see [`F64Monoidal`]); does not opt into any blanket.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct F64Actegory;
-
-impl F64Actegory {
-    /// Construct a fresh `F64Actegory`. Zero-sized; cost-free.
+impl<S> RActegory<S> {
+    /// Construct a fresh `RActegory<S>`. Zero-sized; cost-free.
     #[must_use]
     pub const fn new() -> Self {
-        Self
+        Self(PhantomData)
     }
 }
 
-impl Actegory<F64Monoidal> for F64Actegory {
-    type Object = F64Object;
-    type Morphism = F64Morphism;
+impl<S> Actegory<RMonoidal<S>> for RActegory<S> {
+    type Object = RObject<S>;
+    type Morphism = RMorphism<S>;
     /// `P ▶ X = P ⊕ X`.
     type ActionResult<P, X> = DirectSum<P, X>;
 
@@ -367,7 +460,7 @@ impl Actegory<F64Monoidal> for F64Actegory {
         q: Q,
         p: P,
         x: X,
-    ) -> Self::ActionResult<<F64Monoidal as MonoidalCategory>::Tensor<Q, P>, X> {
+    ) -> Self::ActionResult<<RMonoidal<S> as MonoidalCategory>::Tensor<Q, P>, X> {
         // µ : Q ▶ (P ▶ X) = Q ⊕ (P ⊕ X)  →  (Q ⊗ P) ▶ X = (Q ⊕ P) ⊕ X.
         DirectSum(DirectSum(q, p), x)
     }
