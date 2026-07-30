@@ -153,8 +153,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   separate #173-adjacent decision), §4.4 (the layer-pinnedness caution
   strengthened to non-uniqueness of `λ`, with the cross-width caveat on the
   slot-slack comparison; the Theorem 4.5 probe now exists operationally, tiers
-  and scope stated; the `free_slot` far-side deviation from the design note's
-  leftmost convention, with the measured 87-vs-88 tie) and §4.6 (the 253/1162
+  and scope stated; and the `free_slot` far-side divergence from the design
+  note's leftmost convention flagged ⛔ **unratified** — deferred to the #187
+  PR2 review, with the measured 87-vs-88 tie recorded as deciding nothing)
+  and §4.6 (the 253/1162
   figures are hereafter `nf`-display trackers: equality closed by content,
   display closed by PR1, the counts retained as engine drift detectors).
   `tests/smc_nf_differential_sweep.rs`'s module docs carry the same re-label.
