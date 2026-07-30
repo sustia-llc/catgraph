@@ -42,6 +42,26 @@
 //!   The shipped engine terminates (§2.4's measure), and a sweep that silently
 //!   skipped cases could not pin an exact count. If this test hangs, that is a
 //!   termination regression and hanging is the correct signal.
+//!
+//! # These are `nf`-display trackers (re-labelled 2026-07-30, [#187](https://github.com/sustia-llc/catgraph/issues/187))
+//!
+//! The 253 and 1 162 figures below count SMC-equal pairs that **the normal form
+//! separates**. They no longer measure anything unresolved, and it is worth
+//! being exact about what closed them:
+//!
+//! * **Equality** — closed by content ([#57](https://github.com/sustia-llc/catgraph/issues/57)
+//!   a1). `content_eq` decides all 253 and all 1 162 (`tests/content_equality_corpus.rs`),
+//!   and `Presentation::eq_mod` has taken the content path since a1 PR2.
+//! * **Display** — closed by canonical display (#187 PR1).
+//!   `canonical_display` converges on all 100 000 pairs of both modes
+//!   (`tests/canonical_display_corpus.rs`, expected 0 and measured 0). That lane
+//!   is the "expected 0" counterpart to these counts' "expected exactly N".
+//!
+//! What is left is a fact about `nf` itself, which #187 deliberately did not
+//! change: these are the pairs whose *normal forms* differ. The pins therefore
+//! stay, at exactly these numbers, as **drift detectors on the engine** — a
+//! movement means `nf` changed, which is news whichever direction it moves.
+//! §4.6's ledger entries keep their meaning for the same reason.
 
 #![cfg(feature = "internal-probes")]
 

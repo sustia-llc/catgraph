@@ -501,16 +501,24 @@ fn gather_target(word: &[usize], nodes: &[usize]) -> Option<Vec<usize>> {
 /// separate the candidates. That is the evidence's scope — five cases of one
 /// family — and not a statement about slot slack in general.
 ///
-/// # Deviation from the design note
+/// # Which side: far side, owner-ratified
 ///
-/// The ratified design note says **leftmost**-admissible; this takes the far
-/// side. Recorded as a deviation, not an oversight: the two sides measure the
-/// same — 87 crossings against 88 on the 5 000-case smoke prefix, a tie rather
-/// than a result — and the far side is taken because it keeps an unpinned wire
-/// out of the interior of the live word, where it would have to cross back out
-/// if the content later pinned it further right. Leftmost still governs the
-/// choice the design note was actually about: several `η` landing on *one*
-/// coordinate are emitted left to right in tie order.
+/// The design note had said **leftmost**-admissible; this takes the far side,
+/// and the owner **ratified the far side** at the #187 PR2 review (2026-07-30)
+/// after the deviation was surfaced with its evidence. The record of scope
+/// lives in `docs/SMC-NF-RECONCILIATION.md` §4.4's "Canonicalizing `ι`" item.
+///
+/// The measurement in hand is a **tie** — 87 crossings against 88 on the
+/// 5 000-case smoke prefix — so the ratification records a convention choice,
+/// not a quality result. The argument offered with the far side: it keeps an
+/// unpinned wire out of the interior of the live word, where it would have to
+/// cross back out if the content later pinned it further right.
+///
+/// Leftmost still governs the choice the design note was actually about:
+/// several `η` landing on *one* coordinate are emitted left to right in tie
+/// order — what was ratified is the free-coordinate side, nothing else.
+/// Changing this function is a one-line change that would re-measure every
+/// pinned display number in `tests/canonical_display_corpus.rs`.
 ///
 /// # The ablation that does move the number
 ///

@@ -48,6 +48,7 @@
 //! `nested_sink_block_converges_with_free_writing`,
 //! `nested_source_block_converges_with_free_writing` — are live regressions below.
 
+use catgraph_applied::prop::presentation::display::canonical_display;
 use catgraph_applied::prop::presentation::smc_nf::{from_string_diagram, nf};
 use catgraph_applied::prop::{PropExpr, PropSignature, mono_word};
 use proptest::prelude::*;
@@ -2195,10 +2196,27 @@ mod smc_canonicality_probes {
 /// sits two or more layers below its earliest legal layer has several
 /// SMC-legal (layer, slot) positions, the point-span sift reads the *written*
 /// one, and no pass canonicalizes among them — `ι` in
-/// `docs/SMC-NF-RECONCILIATION.md` §4.4 (Lemma 4.4 / Theorem 4.5). Each test
-/// asserts the CURRENT divergent behaviour so any engine change that moves it
-/// is caught; if `ι` is ever canonicalized these flip to convergence
-/// witnesses and are renamed, per the residual-(b)/(c)/(d) precedent.
+/// `docs/SMC-NF-RECONCILIATION.md` §4.4 (Lemma 4.4 / Theorem 4.5).
+///
+/// # These do not flip (ratified 2026-07-30, [#187](https://github.com/sustia-llc/catgraph/issues/187))
+///
+/// An earlier note here said these would flip to convergence witnesses and be
+/// renamed once `ι` was canonicalized, per the residual-(b)/(c)/(d) precedent.
+/// That instruction presumed an **`nf`-level** fix. The owner decision on #187
+/// took a different route — canonical display by content readback,
+/// `canonical_display(e) = nf(expr_of_content(content_of(e)))` — which leaves
+/// `nf` untouched by construction. So the semantics of "#187 fixed" is
+/// **display convergence**, and these `nf`-level divergences are **permanent
+/// facts about `nf`**, not a defect awaiting repair.
+///
+/// Each `nf` witness therefore keeps its name and its assertion, and gains a
+/// **sibling** below asserting that
+/// [`canonical_display`](catgraph_applied::prop::presentation::display::canonical_display)
+/// *converges* on the very same writings. The pair is the point: same three
+/// expressions, held apart by `nf` and brought together by the display. An
+/// `nf`-level canonicalization of `ι` would still be a real change worth
+/// catching — that is what the `assert_ne!`s are for — but it is no longer the
+/// thing #187 asks for.
 mod eta_slack_residual {
     use super::*;
     use catgraph_applied::rig::BoolRig;
@@ -2260,8 +2278,15 @@ mod eta_slack_residual {
         let q = nf(&blocked_writing());
         assert_ne!(
             p, q,
-            "η placement slack has been canonicalized — rename these witnesses \
-             per the residual-(b)/(c)/(d) precedent and update docs §4.4/§4.6"
+            "η placement slack has been canonicalized at the `nf` level. This \
+             witness is a PERMANENT nf-display fact, not a defect awaiting \
+             repair — #187 was resolved by canonical display, which leaves `nf` \
+             untouched (see this module's header and the sibling \
+             `display_converges_on_the_eta_slack_writings`). So do NOT rename it \
+             to a convergence witness on the residual-(b)/(c)/(d) precedent; \
+             that instruction presumed an nf-level fix and was retired 2026-07-30. \
+             An engine change reaching this really is news: record it in §4.4 and \
+             re-measure §4.6's trackers."
         );
         // Both sides are genuine fixpoints (idempotence via readback).
         assert_eq!(nf(&from_string_diagram(&p)), p);
@@ -2324,6 +2349,49 @@ mod eta_slack_residual {
         );
         assert!(!status.any_closed);
     }
+
+    // ------------------------------------------------------------------
+    // Display-convergence siblings (#187 PR2, 2026-07-30)
+    // ------------------------------------------------------------------
+
+    /// The sibling of `eta_layer_slack_separates_smc_equal_writings`, and the
+    /// operational content of "#187 fixed": all three writings above are the
+    /// same morphism, `nf` puts them in two classes, and `canonical_display`
+    /// puts them in one.
+    ///
+    /// Convergence here is **by construction**, not by luck: the three
+    /// expressions have equal content (Lemma 4.1, §4.2), `expr_of_content` is a
+    /// function of the content's iso class, so all three reach a literally
+    /// identical expression before `nf` runs. The assertion still earns its
+    /// place — it is what would catch a readback that stopped being
+    /// iso-invariant.
+    #[test]
+    fn display_converges_on_the_eta_slack_writings() {
+        let free = canonical_display(&free_writing());
+        let blocked = canonical_display(&blocked_writing());
+        let mirror = canonical_display(&mirror_writing());
+        assert_eq!(
+            free, blocked,
+            "the writings `nf` separates must share one display"
+        );
+        assert_eq!(free, mirror);
+        assert_eq!(blocked, mirror);
+    }
+
+    /// The two halves side by side, so the ratified semantics is legible in one
+    /// test: `nf` separates `blocked` from the other two — the sweep-tracker
+    /// fact §4.6 counts — while the display does not.
+    #[test]
+    fn nf_separates_where_the_display_converges() {
+        assert_ne!(nf(&free_writing()), nf(&blocked_writing()));
+        assert_ne!(nf(&mirror_writing()), nf(&blocked_writing()));
+        assert_eq!(nf(&mirror_writing()), nf(&free_writing()));
+
+        let display = canonical_display(&free_writing());
+        for writing in [free_writing(), blocked_writing(), mirror_writing()] {
+            assert_eq!(canonical_display(&writing), display);
+        }
+    }
 }
 
 // ============================================================================
@@ -2338,8 +2406,22 @@ mod eta_slack_residual {
 /// `adjacent_column_cuts` right-column asymmetry can leave a non-excepted
 /// §1-violating fixpoint — engine issue, filed); the second is why `𝔉′` is
 /// defined per-writing (`nf(e)` braid-free) — NF braid-freeness is not a
-/// content invariant. Each asserts CURRENT divergent behaviour; a fix flips
-/// it to a convergence witness, rename per the residual-(b)/(c)/(d) precedent.
+/// content invariant. Each asserts CURRENT divergent behaviour; an **engine**
+/// fix flips it to a convergence witness, rename per the residual-(b)/(c)/(d)
+/// precedent.
+///
+/// # Not the `eta_slack_residual` case (2026-07-30)
+///
+/// The sibling module above had its rename instruction **retired** by #187's
+/// ratified display semantics. These two do **not**, and the difference is
+/// what each witness guards. `eta_slack_residual` pinned a canonicality gap —
+/// the thing #187 was asked to close, and it closed it at the display layer
+/// rather than in `nf`. These pin **engine facts**: a filed defect
+/// (`adjacent_column_cuts`) and a structural property of the normal form (a
+/// dead braid prefix survives `nf`). Neither is a display question, so
+/// canonical display converging on both — which it does, pinned below —
+/// discharges neither, and both instructions stay live against the engine fix
+/// that would.
 mod beyond_eta_slack_residuals {
     use super::*;
     use catgraph_applied::rig::BoolRig;
@@ -2411,6 +2493,41 @@ mod beyond_eta_slack_residuals {
             "a pass now eliminates dead braid prefixes — re-examine §4.4's \
              braid-freedom conditioning and the 𝔉′ definition"
         );
+    }
+
+    /// The display converges on **both** witnesses above — including the F2
+    /// dead-braid prefix, which no `nf`-level fix reaches at all (`nf` cannot
+    /// delete a dead braid, and the permutation is not content).
+    ///
+    /// This is a scope marker, not a discharge. Neither engine fact above is
+    /// *repaired* by the display converging: the `adjacent_column_cuts`
+    /// asymmetry is still a filed engine defect, and NF braid-freeness is still
+    /// per-writing. Both rename instructions above therefore stay **live** —
+    /// they are triggered by an engine fix, which is exactly what has not
+    /// happened here.
+    #[test]
+    fn display_converges_on_both_beyond_eta_witnesses() {
+        let sfalse = || prim(Sfg::Scalar(BoolRig(false)));
+        let strue = || prim(Sfg::Scalar(BoolRig(true)));
+        let nested = seq(
+            seq(prim(Sfg::Copy), par(par(id1(), prim(Sfg::Zero)), sfalse())),
+            par(par(id1(), strue()), prim(Sfg::Discard)),
+        );
+        let free = par(
+            seq(
+                seq(prim(Sfg::Copy), par(id1(), sfalse())),
+                par(id1(), prim(Sfg::Discard)),
+            ),
+            seq(prim(Sfg::Zero), strue()),
+        );
+        assert_eq!(canonical_display(&nested), canonical_display(&free));
+
+        let braided = seq(
+            PropExpr::Braid(1, 1),
+            par(prim(Sfg::Discard), prim(Sfg::Discard)),
+        );
+        let plain = par(prim(Sfg::Discard), prim(Sfg::Discard));
+        assert_eq!(canonical_display(&braided), canonical_display(&plain));
     }
 }
 

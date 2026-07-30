@@ -9,13 +9,14 @@ Anchored to:
 - [Leinster, *The Euler characteristic of a category* (2008)](https://arxiv.org/abs/math/0610260) — Cor 1.5 integer-exact Möbius for finite circuit-free categories.
 - [Bradley, Terilla & Vlassopoulos, *An enriched category theory of language* (2021)](https://arxiv.org/abs/2106.07890) — representable copresheaf semantics (Yoneda embedding) + asymmetric semantic internal hom (Lemma 2 Eq 11 / §5 metric).
 
-**Status:** workspace version `0.4.0`. Released as workspace tags `v0.1.0`
+**Status:** workspace version `0.5.0`. Released as workspace tags `v0.1.0`
 (2026-07-01: semantic + determinism + coalition layer, #19–#23), `v0.1.1`
 (ULP-tolerant triangle-inequality checks, #29/#30), `v0.2.0` (2026-07-02:
 incremental coalition magnitude for the decision hot path, #31/PR #32), and
 `v0.4.0` (2026-07-25: SNF numerics + evaluator scratch + the BTV21/BV25 audit
-docs). The intervening `v0.2.1` and `v0.3.0` tags carried no magnitude-facing
-change.
+docs), and `v0.5.0` (2026-07-30: the BTV21 Def 8 semantic-category example and
+the checked `mobius_chains` ζ-count conversions). The intervening `v0.2.1` and
+`v0.3.0` tags carried no magnitude-facing change.
 Workspace-wide versioning supersedes the pre-reboot per-crate lineage; the full
 BV 2025 / Leinster 2013 / LS 2017 / Leinster 2008 math stack was migrated intact
 onto the DeepCausality substrate in reboot Phase 3 (#8).
@@ -178,6 +179,11 @@ Phase 3** (#8). Workspace-wide releases since:
   `LmCategory::from_traces` corpus MLE constructor; and `docs/BTV21-AUDIT.md`
   plus the BV25-AUDIT recount. (`v0.2.1` and `v0.3.0` carried no magnitude
   change.)
+- ✅ **`v0.5.0`** (2026-07-30, #53/#88): `examples/semantic_category.rs` — BTV
+  2021 **Def 8** demonstrated end-to-end, with the enriched composition
+  inequality asserted over all triples — and the `mobius_chains` ζ-count
+  `u64 → i64` casts made checked (`zeta_entry_to_q`, erroring instead of
+  wrapping).
 
 ## License
 
