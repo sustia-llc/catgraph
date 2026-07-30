@@ -39,10 +39,17 @@ catgraph-testutil  = { path = "catgraph-testutil" }
 #     comonad & EqFunctor/DebugFunctor); 0.4.2 adds CloneFunctor + opt-in Clone for Free/Cofree,
 #     Cofree::duplicate, and Functor/CoMonad trait impls on CofreeWitness (purely additive). Carrier
 #     Clone stays UNADOPTED here — #93 owner decision; adoption tracked as #154.
-#     haft is live (catgraph-dl endofunctor layer, #12); num deps-only until a member opts in (#36).
+#     haft is live (catgraph-dl endofunctor layer, #12); num is IN USE (dl's RModule
+#     actegory Zero/One, #36; applied+magnitude source Zero/One too).
 #     num has no 0.4.2 — it stays at 0.4.1.
+#     num_dual is OPT-IN ONLY — catgraph-dl's off-by-default `ad` feature (#74 PR2);
+#     the default build stays dual-free. 0.1.4 is the num-0.4.1 alignment release
+#     (0.1.3 -> 0.1.4 is Lean/miri infra only). It deps num "0.4" (satisfied by our
+#     =0.4.1) and deep_causality_algebra "0.2" (already in the lock at 0.2.0 via haft,
+#     so no duplicate). Only the `Dual` type is consumed.
 deep_causality_num  = "=0.4.1"
 deep_causality_haft = "=0.4.2"
+deep_causality_num_dual = "=0.1.4"
 
 # --- math / graph — numeric-only, NOT an algebraic substrate ---
 # (members opt in with `{ workspace = true, optional = true }`; `optional` is illegal here.)

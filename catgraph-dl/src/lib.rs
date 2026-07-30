@@ -24,7 +24,10 @@
 //!   on the [`para::F64Module`] carrier (CDL Def E.2 / Ex E.4 / Ex G.3,
 //!   issue #36) — these are the `S = f64` aliases of the scalar-generic
 //!   [`para::RMonoidal`] / [`para::RActegory`] / [`para::RModule`], which
-//!   carry the base ring as a type parameter.
+//!   carry the base ring as a type parameter. Under the off-by-default `ad`
+//!   feature, the `para::ad` submodule adds `Dual<f64>` as a second scalar,
+//!   giving forward-mode automatic differentiation over the same stack
+//!   (issue #74).
 //! - [`algebra`] — `FAlgebra<F>`, `FCoalgebra<F>`, `MonadAlgebra<M>` plus
 //!   homomorphism wrappers `FAlgebraHom` / `FCoalgebraHom` /
 //!   `MonadAlgebraHom` with caller-sampled `verify_commutes`, and (issue #40)

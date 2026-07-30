@@ -9,6 +9,16 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[features]
+# `ad` adds forward-mode automatic differentiation: `deep_causality_num_dual`'s
+# `Dual<T>` becomes a usable scalar `S` for the (#74 PR1) scalar-generic
+# `RModule<S>` stack, via `para::ad` (`DualF64Module = RModule<Dual<f64>>`).
+# Off by default — the default build stays dual-free (precedent: applied's
+# opt-in `serde`, #81). `Dual` satisfies every `RModule<S>` bound with zero
+# adaptation, so the feature adds a dependency and a module, not a code path:
+# nothing behind `#[cfg(feature = "ad")]` changes default-build behavior.
+ad = ["dep:deep_causality_num_dual"]
+
 [dependencies]
 catgraph = { workspace = true }
 catgraph-applied = { workspace = true }
@@ -28,8 +38,29 @@ catgraph-applied = { workspace = true }
 # umbrella #36 stays open for the still-deferred non-Set surfaces
 # (hyperdoctrine, vector-bundle, lazy final-coalgebra). Rig `Zero`/`One` are
 # still inherited transitively from `catgraph-applied`'s `Rig`.
+# `deep_causality_num_dual` is OPT-IN (issue #74 PR2), behind the `ad` feature —
+# NOT in the default build. It supplies exactly one type, `Dual<T: Real>`
+# (forward-mode AD: value + derivative carried together), consumed in
+# `src/para/ad.rs`. `Dual` already impls num's own `Zero`/`One` plus
+# `Add`/`AddAssign`/`Mul`/`MulAssign` (and the `Mul<T>` scalar form) and derives
+# `Copy`/`Clone`/`PartialEq`/`PartialOrd`/`Debug`, which is exactly the bound set
+# PR1's per-method `RModule<S>` signatures ask for — so it drops in as a scalar
+# with no adapter, no newtype, and no trait of ours.
+# Substrate accounting: num_dual deps `deep_causality_algebra "0.2"` (its `Real`
+# bound lives at ITS impl site), which the lock already carries at 0.2.0 via haft
+# — no duplicate, no new leaf beyond num_dual itself. Rule 2's Zero/One-only
+# sourcing is intact: our code never names `deep_causality_algebra`
+# (`rg deep_causality_algebra */src` must stay empty) because every catgraph
+# use site is the concrete `Dual<f64>`.
 deep_causality_num = { workspace = true }
 deep_causality_haft = { workspace = true }
+deep_causality_num_dual = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true
+
+# `ad`-gated: the forward-mode walkthrough (#74 PR2). CI runs its `main()` with
+# `--features ad` alongside the four default-feature examples (#34).
+[[example]]
+name = "gradient_descent_para"
+required-features = ["ad"]
