@@ -98,21 +98,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   crossing on 1 628 of the 100 000 default-corpus cases (1.6 %; braid-free by
   construction, so those crossings are the sweep's own), and the display
   differs from `nf` on 5 334 (5.3 %; 19.1 % in braid mode, where `nf` keeps the
-  dead braid prefixes the display drops). A `canonical_display` call costs
-  roughly 2.4× an `nf` call (≈ 21 µs against ≈ 8.6 µs on the corpus's shape
-  distribution, release build).
+  dead braid prefixes the display drops). Cost is **reported, not asserted** —
+  a wall-clock ratio is not a pin, and the test says so in its own docstring: a
+  `canonical_display` call measured roughly 2.4× an `nf` call (≈ 21 µs against
+  ≈ 8.6 µs on the corpus's shape distribution, release build, one machine).
 
   **Theorem 4.5 probe** (`SMC-NF-RECONCILIATION.md` §4.4): where the theorem's
   hypotheses are fully checked — §4.4's `η`-free corollary, 16 103 default-corpus
   cases and 11 756 braid-mode cases — `nf` and the display agree **exactly**,
   on every case, in both modes. Where slot-pinnedness has to be *assumed*
   because it is realization-quantified (the layer-pinned tier), 324 of 40 315
-  disagree; the three of those in the connected sub-tier are one shape,
-  `Copy ; (id₁ ⊗ Discard ⊗ Zero) ; Add`, whose content admits
-  invariant-satisfying braid-free realizations at both `λ = 0` and `λ = 1` at
-  different wire coordinates — slot-slack, hence outside `𝔉′`, hence not a
-  counterexample. It is pinned as a witness because it bears on §4.4's
-  flagged-open induction step (a): layer-pinnedness alone cannot discharge it.
+  disagree on the default corpus and 54 of 32 324 in braid mode. Narrowing to
+  connected contents leaves **three distinct contents** (measured 2026-07-30):
+  default cases 2996 and 22872 are one content, `Copy ; (id₁ ⊗ Discard ⊗ Zero) ; Add`,
+  four hyperedges, pinned as the unit witness
+  `display::tests::a_layer_pinned_eta_can_still_take_two_layers`; default case
+  45412 is a second, six hyperedges; braid-mode case 96178 is a third, seven.
+  Each was checked individually and each is **slot-slack** — the `η`'s wire
+  coordinate below its own layer differs between the two realizations — hence
+  outside `𝔉′`, hence not a counterexample. The multi-component remainder of
+  the tier is *unexamined*; that it is the slot-pinnedness assumption failing
+  there is an expectation, not a finding. What the pinned witness adds to §4.4
+  is **non-uniqueness of `λ` under layer-pinnedness** (one content, two
+  realizable layers), strengthening the layer-pinnedness caution, which
+  established only that `ceil = 1` does not force `λ = 0`. It does *not* bear
+  on the flagged-open induction step (a), which is discharged under
+  slot-pinnedness — a hypothesis this content fails.
 
 - **`prop::presentation::content::is_arity_well_formed`** — the domain
   predicate for `content_of`, public so callers that must stay total on

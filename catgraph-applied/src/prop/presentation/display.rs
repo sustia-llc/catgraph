@@ -35,23 +35,38 @@
 //! rather than as a proof: layers are built top-down from the input foot,
 //! maintaining the wire word, and each hyperedge is placed at the earliest
 //! layer where its source nodes are all present and contiguous in tentacle
-//! order. For a positive-source hyperedge that schedule *is* `ldepth` (§4.4)
-//! wherever contiguity does not intervene — which is what "`ldepth`-guided but
-//! realizable" means, and why the rule is stated as a realization and not as
-//! `λ = ldepth`: Lemma 4.4's `λ` and `ι` are chosen **together**, in one pass,
+//! order.
+//!
+//! For a positive-source hyperedge that schedule agrees with `ldepth` (§4.4)
+//! exactly on the passes where **neither** a gather pass nor a source-0
+//! insertion pass intervenes. Both push occupants down: a hyperedge whose
+//! source wires arrive late — because an `η` feeding it was itself emitted
+//! late — lands below its `ldepth`, with no non-contiguity anywhere in sight.
+//! The unit witness `a_layer_pinned_eta_can_still_take_two_layers` is exactly
+//! that shape: its `Add` has `ldepth` 1 and is placed in layer 3. So the rule
+//! is `ldepth`-**guided**, not `λ = ldepth`, and the reason it can only be
+//! guided is Lemma 4.4's: `λ` and `ι` are chosen **together**, in one pass,
 //! because an `η`'s slot changes wire adjacency and so can change an anchored
 //! consumer's earliest admissible layer.
 //!
-//! Source-0 hyperedges (`η`) are placed at the layer above the consumer that
-//! demands them, at the coordinate that consumer's tentacle order requires,
-//! falling back to the output coordinates the wire reaches downstream. Where
-//! neither pins a coordinate the choice is a positional **convention** —
-//! the far side of the wire word — because it has to be: on the measured slot-slack families
-//! the competing writings give the `η` an *identical* content attachment
-//! record, so no content lookup can separate them. Ties among coordinate-equal
-//! `η`s break by reachable output coordinate, then tentacle position, then the
-//! canonical numbering: global data, never a per-pair comparator (the #174
-//! intransitivity result).
+//! Source-0 hyperedges (`η`) are placed by the private `demand` helper. Where
+//! a coordinate is **pinned** — by the consumer's tentacle order, or by the
+//! output coordinates the wire reaches downstream — the `η` goes in the layer
+//! immediately above that consumer. Where neither pins one the coordinate is a
+//! positional **convention** (`free_slot`) and such `η` are emitted one per
+//! pass, so a consumer waiting on two unpinned `η`s sits two or more layers
+//! below the first of them. Ties among coordinate-equal `η`s break by reachable
+//! output coordinate, then tentacle position, then the canonical numbering:
+//! global data, never a per-pair comparator (the #174 intransitivity result).
+//!
+//! Both the pinning rules and the `λ`/`ι` coupling above are stated for the
+//! `0 → 1` source-0 shape — the only one any shipped signature has, and the
+//! only one §4.4's `ldepth`/`ceil` definitions cover, its definedness bullet
+//! deferring `0 → 0` and `0 → n (n ≥ 2)` to a tuple-level treatment that does
+//! not exist yet. `demand` correspondingly reads only the *first* target of a
+//! `0 → n` hyperedge and lets the remaining wires be routed by braids. What the
+//! exotic-shape tests establish for those shapes is **totality and content
+//! preservation**, not placement quality.
 //!
 //! Closed components — the part of the content no anchor reaches — are emitted
 //! as `0 → 0` blocks to the left of the anchored part, in the canonical key's
@@ -87,10 +102,21 @@ use super::smc_nf::{StringDiagram, nf};
 /// relabeling rather than the raw node indices, which are presentation-
 /// dependent by design (see [`content_of`]).
 ///
-/// The result is arity-well-formed — [`nf`]'s precondition
-/// — and has the content it was built from, up to the typing a `PropExpr`
-/// can carry: `content_of(expr_of_content(c))` is `c` for every `c` in the
-/// image of [`content_of`]. For a content from
+/// The result is arity-well-formed — [`nf`]'s precondition.
+///
+/// # The round trip
+///
+/// The intended property is
+/// `content_eq(&content_of(&expr_of_content(c)), c)` — recovery of the content
+/// up to cospan iso under both feet, which is the only sense available, since
+/// node indices are presentation-dependent and the readback renumbers them.
+/// It is **not** proven here. It is the **corpus-verified proof obligation**:
+/// `tests/canonical_display_corpus.rs` checks it on every content of both
+/// frozen 100 000-pair corpora, 200 000 contents per mode, and it is the
+/// premise everything downstream rests on — without it `canonical_display(e)`
+/// would not be a diagram of `e` at all.
+///
+/// For a content from
 /// [`content_of_colored`](super::content::content_of_colored) the round trip
 /// returns the *uncolored* reading of the same cospan, since the color of a
 /// wire no generator touches is data the boundary word carries and the
@@ -102,6 +128,27 @@ use super::smc_nf::{StringDiagram, nf};
 /// the shapes §4.4 leaves outside `𝔉′`: `0 → 0` scalars, `0 → n` sources with
 /// `n ≥ 2`, closed components, contents with no hyperedges at all, and
 /// contents with **no** braid-free realization. It allocates and never panics.
+///
+/// # Cost
+///
+/// Take a content with `n` nodes, `e` hyperedges and a wire word of width `w`.
+/// Worst case `O(e² · w + e · w²)`, plus `O(n²)` for the `reach` relaxation:
+///
+/// - the sweep runs at most `2e + 4` passes, and each rescans every unplaced
+///   hyperedge against the word by linear search (`O(e · w)` per pass);
+/// - a gather emits up to `O(w²)` adjacent transpositions, and at most `e` of
+///   them plus one final permutation occur;
+/// - `reach` relaxes over the DAG without a topological pre-order, so it costs
+///   `O(n)` passes over `O(n)` nodes.
+///
+/// Every bound is loose and none is tuned: at presentation sizes — the tens of
+/// nodes `content_eq`'s own cost note assumes, and the corpus's largest
+/// content, 32 hyperedges over 40 nodes — the whole call is ≈ 21 µs against
+/// `nf`'s ≈ 8.6 µs
+/// (measured, `display_cost_against_nf`). Above a few hundred hyperedges it is
+/// simply **un-benchmarked**; the per-pass rescan is the term that would bite
+/// first, and an incidence-indexed ready set is the obvious repair whenever a
+/// measurement asks for it.
 #[must_use]
 pub fn expr_of_content<G: PropSignature>(c: &Content<G>) -> PropExpr<G> {
     let canonical = canonical_content(c);
@@ -138,10 +185,19 @@ pub fn expr_of_content<G: PropSignature>(c: &Content<G>) -> PropExpr<G> {
 /// so the two calls to `nf` see literally the same expression.
 ///
 /// `canonical_display(e)` and `nf(e)` **may differ**, and where they do neither
-/// is wrong — they are the normal forms of two SMC-equal writings. On `𝔉′`
-/// (§4.4: braid-free normal form, no source-0 hyperedge with slack) Theorem 4.5
-/// says they must agree, and the `internal-probes` corpus lane audits exactly
-/// that.
+/// is wrong — they are the normal forms of two SMC-equal writings.
+///
+/// On `𝔉′` (§4.4: braid-free normal form, no source-0 hyperedge with slack)
+/// they are expected to agree, but by §4.4's **conditional** corollary, not by
+/// Theorem 4.5 unconditionally: the corollary additionally requires *both*
+/// normal forms to satisfy the restated §1 invariants, and that is not
+/// automatic. §4.4 commits a counterexample —
+/// `cut_asymmetry_separates_smc_equal_writings_inside_f_prime`, where the
+/// shipped `adjacent_column_cuts` asymmetry lets an inverted pair survive to a
+/// fixpoint — so a disagreement inside `𝔉′` is *either* an invariant violation
+/// *or* a theorem counterexample, and either one is a find. The
+/// `internal-probes` corpus lane audits that, and its module docs state which
+/// hypotheses each tier checks and which it assumes.
 ///
 /// # Panics
 ///
@@ -173,10 +229,17 @@ struct Incidence {
     ///
     /// This is the readback's planarity handle. Braid-free layers never cross
     /// wires (§4.4's positional monotonicity), so in a braid-free realization
-    /// the wires of any boundary are ordered consistently with the output
-    /// coordinates they reach: `w` left of `w′` puts every output of `w` left
-    /// of every output of `w′`. Inserting an `η`'s wire in that order is
-    /// therefore the choice that keeps a planar content planar.
+    /// the wires of a boundary are ordered *weakly* consistently with the
+    /// output coordinates they reach: `w` left of `w′` puts no output of `w′`
+    /// strictly left of every output of `w`, i.e. `reach(w) ≤ reach(w′)`.
+    ///
+    /// **Weakly** is the whole caveat, and the strict form is false: two source
+    /// tentacles of one hyperedge reach the identical set of outputs, so their
+    /// `reach` values tie and nothing here orders them. The code's comparison
+    /// is `>=` for exactly that reason — it inserts before the first wire that
+    /// does *not* strictly precede, which is the correct weak reading — and
+    /// where the tie is real the placement falls through to the tie key or to
+    /// [`free_slot`]'s convention.
     reach: Vec<usize>,
 }
 
@@ -316,6 +379,18 @@ fn split<G: PropSignature>(c: &Content<G>, inc: &Incidence) -> (Vec<usize>, Vec<
 // ---------------------------------------------------------------- the sweep
 
 /// Where in `word` the node sits, if it is there at all.
+///
+/// Returns the *first* occurrence, and the sweep relies on there being only
+/// one: a node occupying two coordinates of one anchor would put two wires in
+/// the word for one content node, and the layout would silently drop one of
+/// them rather than fail. That cannot happen for any [`Content`] reachable
+/// today — the legs of the cospan are mono (BGKSZ Def 3.6, and Thm 3.12 puts
+/// every `content_of` value in that image), which an induction over
+/// `content.rs`'s `build` confirms directly: no constructor identifies two
+/// coordinates of the same foot. A future *direct* `Content` constructor — the
+/// #57 DPO engine is the one on the horizon — could break it, and the failure
+/// mode would be a wrong diagram, not a panic. The corpus lane's readback
+/// obligation is what would catch it.
 fn position(word: &[usize], node: usize) -> Option<usize> {
     word.iter().position(|&x| x == node)
 }
@@ -416,15 +491,33 @@ fn gather_target(word: &[usize], nodes: &[usize]) -> Option<Vec<usize>> {
 /// the far side of the wire word, out of the way of every wire already placed.
 ///
 /// This is the positional convention §2.3's slot rule is, and it has to be one:
-/// on the measured slot-slack families the competing writings give the `η` an
-/// *identical* content attachment record, so no content lookup can separate the
-/// candidates. Which side is convention too, and the two sides measure the
-/// same — 87 crossings against 88 on the 5 000-case smoke prefix, which is a
-/// tie, not a result. The far side is taken because it keeps an unpinned wire
+/// in **all five** in-`𝔉` slot-family cases the #187 design round measured
+/// (2026-07-30, on the frozen default corpus), the two competing writings give
+/// the `η` an *identical* content attachment record, so no content lookup can
+/// separate the candidates. That is the evidence's scope — five cases of one
+/// family — and not a statement about slot slack in general.
+///
+/// # Deviation from the design note
+///
+/// The ratified design note says **leftmost**-admissible; this takes the far
+/// side. Recorded as a deviation, not an oversight: the two sides measure the
+/// same — 87 crossings against 88 on the 5 000-case smoke prefix, a tie rather
+/// than a result — and the far side is taken because it keeps an unpinned wire
 /// out of the interior of the live word, where it would have to cross back out
-/// if the content later pinned it further right. What *did* move the crossing
-/// rate is the caller's discipline of emitting one unpinned `η` per pass rather
-/// than the whole batch (588 → 87), not the side.
+/// if the content later pinned it further right. Leftmost still governs the
+/// choice the design note was actually about: several `η` landing on *one*
+/// coordinate are emitted left to right in tie order.
+///
+/// # The ablation that does move the number
+///
+/// Emitting one unpinned `η` per pass, as the caller does, against emitting
+/// every unpinned `η` of the pass in one layer: **87 against 89** crossings on
+/// the same 5 000-case prefix (re-derivable by making the `inserts.is_empty()`
+/// fallback in `layout` push every source-0 hyperedge of `remaining` instead of
+/// the canonically first one). An earlier much larger figure quoted here
+/// attributed the whole crossing reduction to this discipline; that was wrong —
+/// most of it came from `Incidence::reach` existing at all — and it has been
+/// withdrawn rather than restated.
 const fn free_slot(width: usize) -> usize {
     width
 }
@@ -454,6 +547,17 @@ const fn free_slot(width: usize) -> usize {
 /// tentacle position. Both are content data under the canonical numbering, so
 /// the order is global, never a per-pair comparison (the #174 intransitivity
 /// result).
+///
+/// # Scope: the `0 → 1` shape
+///
+/// This reads `targets.first()` and nothing else, so for a `0 → n (n ≥ 2)`
+/// hyperedge it places the whole output block by where the *first* wire is
+/// wanted and leaves the rest to the gather pass's braids. That is deliberate
+/// and matches §4.4, whose `ldepth`/`ceil` definitions cover the `0 → 1` shape
+/// and whose definedness bullet conservatively defers `0 → 0` and `0 → n`
+/// pending a tuple-level treatment — there is no rule here to implement yet. No
+/// shipped signature has such a generator; what the exotic-shape tests pin for
+/// them is totality and content preservation, not placement quality.
 fn demand<G: PropSignature>(
     c: &Content<G>,
     inc: &Incidence,
@@ -513,9 +617,19 @@ fn layout<G: PropSignature>(
 
     // Every pass either places at least one edge or gathers one edge's sources
     // — and a gather makes that edge ready, so it is followed by a placing
-    // pass. Twice the edge count plus slack therefore bounds the loop; the
-    // budget is a guard against a future refactor breaking that argument, not a
-    // reachable exit.
+    // pass. Twice the edge count plus slack therefore bounds the loop.
+    //
+    // The budget is a guard against a future refactor breaking that argument,
+    // not a reachable exit — and it is deliberately a `break`, not a panic,
+    // because this function is on the display path and must stay total. Note
+    // what that trades away: if it *were* ever hit, the unplaced hyperedges
+    // would simply be missing from the emitted expression, and the failure mode
+    // is a silently wrong diagram rather than a crash. The same holds for the
+    // `inserts.is_empty()` break below, which acyclicity rules out (a minimal
+    // unplaced hyperedge has all its producers placed, so it is either ready,
+    // gatherable, or source-0). The corpus lane's readback obligation —
+    // `content_eq(content_of(expr_of_content(C)), C)` on 200 000 contents per
+    // mode — is what would actually catch either.
     let mut budget = 2 * remaining.len() + 4;
 
     while !remaining.is_empty() && budget > 0 {
@@ -611,6 +725,15 @@ fn layout<G: PropSignature>(
 /// One layer placing every ready positive-source hyperedge, with identities
 /// filling the gaps. `ready` is sorted by span start and the spans are
 /// disjoint, since a node has one consumer.
+///
+/// The `at < cursor` skip below is that disjointness stated defensively.
+/// Overlapping spans would mean two hyperedges consuming one node, which
+/// monogamy (BGKSZ Def 3.6) forbids and `content.rs`'s own `profile` asserts
+/// against; every [`Content`] is in the image of `⟦·⟧` (Thm 3.12), so it cannot
+/// arise from any constructor that exists. If it ever did, the skip would drop
+/// a hyperedge from the layer and yield a **silently wrong diagram**, not a
+/// panic — the deliberate trade for keeping the display path total, with the
+/// corpus lane's readback obligation as the net.
 fn place_generators<G: PropSignature>(
     c: &Content<G>,
     word: &mut Vec<usize>,
@@ -752,6 +875,19 @@ mod tests {
         round_trips(&e);
         assert!(!has_braid(&nf(&back)), "no crossing is needed here");
         assert_eq!(canonical_display(&e), nf(&e));
+
+        // The claim is about *where* the η goes, so assert the layout, not just
+        // the agreement: layer 0 carries the η at slot 1, to the right of the
+        // through-wire, which is the coordinate `Add`'s tentacle order forces.
+        let display = canonical_display(&e);
+        assert_eq!(
+            display.layers[0].atoms,
+            vec![Atom::Identity(1), Atom::Generator(SfgGenerator::Zero),]
+        );
+        assert_eq!(
+            display.layers[1].atoms,
+            vec![Atom::Generator(SfgGenerator::Add)]
+        );
     }
 
     #[test]
@@ -809,7 +945,8 @@ mod tests {
 
     #[test]
     fn a_layer_pinned_eta_below_layer_zero_round_trips() {
-        // §4.4's C4 caution: `Add`'s tentacle order holds the η at λ ≥ 1.
+        // §4.4's layer-pinnedness caution: `Add`'s tentacle order holds the η
+        // at λ ≥ 1 even though `ceil = 1`.
         let e = Free::compose(
             Free::compose(
                 prim(SfgGenerator::Copy),
@@ -824,17 +961,42 @@ mod tests {
         .expect("(…) : 1 → 3 ; (id₁ ⊗ Add) : 3 → 2");
         round_trips(&e);
         assert_eq!(canonical_display(&e), nf(&e));
+
+        // The point of the case is the layer, so assert it: the η is *not* in
+        // layer 0 — `Copy` is — and sits in layer 1 at slot 1, strictly inside
+        // `Copy`'s output span, which is what holds it below layer 0.
+        let display = canonical_display(&e);
+        let eta = Atom::Generator(SfgGenerator::Zero);
+        assert_eq!(
+            display.layers[0].atoms,
+            vec![Atom::Generator(SfgGenerator::Copy)]
+        );
+        assert_eq!(display.layers[1].atoms[1], eta);
     }
 
     #[test]
     fn an_output_anchored_eta_lands_at_its_boundary_coordinate() {
+        // No consumer pins the η: its coordinate comes from the output anchor,
+        // so the two writings must place it on opposite sides of the wire.
+        let eta = Atom::Generator(SfgGenerator::Zero);
+
         let e = Free::tensor(prim(SfgGenerator::Zero), PropExpr::Identity(1));
         round_trips(&e);
         assert_eq!(canonical_display(&e), nf(&e));
+        assert_eq!(
+            canonical_display(&e).layers[0].atoms,
+            vec![eta.clone(), Atom::Identity(1)],
+            "output coordinate 0 puts the η left of the wire"
+        );
 
         let e = Free::tensor(PropExpr::Identity(1), prim(SfgGenerator::Zero));
         round_trips(&e);
         assert_eq!(canonical_display(&e), nf(&e));
+        assert_eq!(
+            canonical_display(&e).layers[0].atoms,
+            vec![Atom::Identity(1), eta],
+            "output coordinate 1 puts it right of the wire"
+        );
     }
 
     #[test]
@@ -863,23 +1025,43 @@ mod tests {
         assert!(!has_braid(&canonical_display(&braided)));
     }
 
-    /// Corpus find (cases 2996 / 22872 / 45412 of the default sweep): a
-    /// **layer-pinned** `η` whose content still admits two invariant-satisfying
-    /// braid-free realizations, at `λ = 0` and `λ = 1`.
+    /// Corpus find: a **layer-pinned** `η` whose content still admits two
+    /// invariant-satisfying braid-free realizations, at `λ = 0` and `λ = 1`.
     ///
-    /// This bears on §4.4's flagged-open induction step (a), which owes a proof
-    /// of monotone contiguity "allowing pinned-`η` insertions at layers other
-    /// than 0". The machine-verified `layer_pinned_eta_sits_below_layer_zero`
-    /// witness already showed a pinned `η` *can* sit at `λ = 1`; this one
-    /// exhibits both layers for one content, so layer-pinnedness alone cannot
-    /// be what the step is repaired with.
+    /// The content pinned here is cases 2996 and 22872 of the default sweep —
+    /// the same content twice, `content_eq`-verified. It is **not** the only
+    /// connected-sub-tier disagreement: default case 45412 and braid-mode case
+    /// 96178 are two further, distinct contents (six and seven hyperedges
+    /// against this one's four). Those two are measured, not pinned; see the
+    /// corpus lane's module docs for the measurement and its date.
     ///
-    /// It is **not** a counterexample to Theorem 4.5, which also hypothesizes
-    /// slot-pinnedness: the two realizations put the `η`'s wire at different
-    /// coordinates below its own layer, so the content is slot-slack and sits
-    /// outside `𝔉′`. It is exactly the case the corpus lane's tier-2
-    /// classifier cannot see, because slot-pinnedness is
-    /// realization-quantified.
+    /// # What it shows, and what it does not
+    ///
+    /// It shows **non-uniqueness of `λ` under layer-pinnedness**: one content,
+    /// two realizable layers for its `η`. §4.4's layer-pinnedness caution
+    /// (witness `layer_pinned_eta_sits_below_layer_zero`) established only that
+    /// `ceil = 1` does not *force* `λ = 0`; this strengthens that from "the
+    /// forced layer need not be 0" to "there need not be a forced layer".
+    ///
+    /// It does **not** bear on §4.4's flagged-open induction step (a). That
+    /// step is to be discharged *under* the slot-pinnedness hypothesis, and
+    /// this content fails that hypothesis, so it is outside the step's scope
+    /// and cannot constrain its repair.
+    ///
+    /// It is likewise **not** a counterexample to Theorem 4.5, which
+    /// hypothesizes slot-pinnedness too. The `η`'s wire sits at a different
+    /// coordinate of the boundary below its own layer in the two realizations
+    /// — coordinate 2 of `W₁` under `nf`, coordinate 1 of `W₂` in the display —
+    /// so the content is slot-slack and outside `𝔉′`. Note that this comparison
+    /// is *across boundaries of different width* (`W₁` has one wire more, the
+    /// one the `η` has not yet produced there), and under that reading
+    /// `λ`-ambiguity yields slot-slack almost automatically: two realizable
+    /// layers put the wire on two different boundaries, which agree on a
+    /// coordinate only by coincidence. So the two clauses of "no slack" are far
+    /// less independent than they look, which is itself worth knowing.
+    ///
+    /// This is exactly the case the corpus lane's tier-2 classifier cannot see,
+    /// because slot-pinnedness is realization-quantified.
     #[test]
     fn a_layer_pinned_eta_can_still_take_two_layers() {
         let e = Free::compose(

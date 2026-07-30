@@ -56,15 +56,42 @@
 //! Cases outside both tiers are counted but not scored: the theorem says
 //! nothing about them, and `nf` is known to separate SMC-equal writings there.
 //!
-//! Tier 1 is exact on both corpora. Tier 2 is not, and the disagreements are
-//! **not** counterexamples — they are the tier's assumption failing. The three
-//! in the narrowed sub-tier on the default corpus (cases 2996, 22872, 45412)
-//! are one shape, `Copy ; (id₁ ⊗ Discard ⊗ Zero) ; Add`: a layer-pinned `η`
-//! whose content admits invariant-satisfying braid-free realizations at both
-//! `λ = 0` and `λ = 1`, at *different* wire coordinates, hence slot-slack and
-//! outside `𝔉′`. It is pinned as a unit witness,
-//! `display::tests::a_layer_pinned_eta_can_still_take_two_layers`, because it
-//! bears on §4.4's flagged-open induction step (a).
+//! # What the tier-2 disagreements are
+//!
+//! Tier 1 is exact on both corpora. Tier 2 is not, and the two remainders carry
+//! **different evidential weight** — a distinction worth keeping, because the
+//! multi-component bulk is unexamined and the connected few are not:
+//!
+//! - For the **connected sub-tier** — three cases on the default corpus, one in
+//!   braid mode — the verdict is *established*: each was individually checked
+//!   and each is slot-slack, hence outside `𝔉′`, hence no counterexample.
+//! - For the **multi-component remainder** — the other 321 of tier 2's 324
+//!   default disagreements, and 53 of its 54 in braid mode — the verdict is an
+//!   *expectation*, not a finding: a
+//!   multi-component content has block and column freedom, which is `ι` by
+//!   Lemma 4.4, so the tier's slot-pinnedness assumption is the thing most
+//!   likely failing. No one has checked them case by case, and this lane does
+//!   not claim otherwise.
+//!
+//! The connected-sub-tier cases, **measured 2026-07-30** (adversarial review of
+//! PR1, both 100 000-pair sweeps) — three distinct contents, not one:
+//!
+//! - Default 2996 and 22872 are the *same* content (`content_eq`-verified),
+//!   four hyperedges: `Copy ; (id₁ ⊗ Discard ⊗ Zero) ; Add`. Pinned as a unit
+//!   witness, `display::tests::a_layer_pinned_eta_can_still_take_two_layers`.
+//! - Default 45412 is a **different** content — six hyperedges,
+//!   `(id₁ ⊗ Scalar(false)) ; (Copy ⊗ Zero ⊗ id₁) ; (id₁ ⊗ Discard ⊗ Add) ; Add`
+//!   — with `nf` at three layers against the display's four.
+//! - Braid-mode 96178 is a **third** — seven hyperedges, two `Scalar`s and two
+//!   `Add`s.
+//!
+//! All three are slot-slack by the same comparison: the `η`'s wire coordinate
+//! on the boundary below its own layer differs between the two realizations
+//! (45412: coordinate 2 of `W₁ = (3, 4, 5, 2)` under `nf` against coordinate 1
+//! of `W₂ = (3, 5, 2)` in the display; 96178: coordinate 2 of `(2, 3, 4, 5)`
+//! against coordinate 1 of `(6, 4, 5)`). Only the first content is pinned; the
+//! other two are a dated measurement, and a future engine change could move
+//! which case indices exhibit them.
 
 #![cfg(feature = "internal-probes")]
 
