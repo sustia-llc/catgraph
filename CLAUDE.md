@@ -50,8 +50,9 @@ pinned `=0.1.4`, behind catgraph-dl's off-by-default `ad` feature (#74 PR2) —
 the default build stays dual-free. It supplies exactly one type, `Dual<T>`
 (forward-mode AD), consumed in the single seam `src/para/ad.rs` as another
 scalar `S` for the generic `RModule<S>`; `deep_causality_algebra` (already in
-the lock at 0.2.0 via haft) becomes transitive through it too, and Rule 2 holds
-— `rg deep_causality_algebra */src` stays empty, since every use site is the
+the lock at 0.2.0 via haft) becomes transitive through it too, and Rule 2's
+Zero/One-only sourcing holds — our source never names `deep_causality_algebra`
+(`rg deep_causality_algebra */src` stays empty), since every use site is the
 concrete `Dual<f64>`.
 
 ## Paper anchors

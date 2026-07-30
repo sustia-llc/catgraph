@@ -48,9 +48,10 @@ catgraph-applied = { workspace = true }
 # with no adapter, no newtype, and no trait of ours.
 # Substrate accounting: num_dual deps `deep_causality_algebra "0.2"` (its `Real`
 # bound lives at ITS impl site), which the lock already carries at 0.2.0 via haft
-# — no duplicate, no new leaf beyond num_dual itself. Rule 2 is intact: our code
-# never names `deep_causality_algebra` (`rg deep_causality_algebra */src` must
-# stay empty) because every catgraph use site is the concrete `Dual<f64>`.
+# — no duplicate, no new leaf beyond num_dual itself. Rule 2's Zero/One-only
+# sourcing is intact: our code never names `deep_causality_algebra`
+# (`rg deep_causality_algebra */src` must stay empty) because every catgraph
+# use site is the concrete `Dual<f64>`.
 deep_causality_num = { workspace = true }
 deep_causality_haft = { workspace = true }
 deep_causality_num_dual = { workspace = true, optional = true }

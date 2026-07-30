@@ -77,8 +77,9 @@ All notable changes to this crate are documented here. Format follows
   and their `Debug` output now prints the generic names
   (`"RObject"`/`"RMorphism"`/`"RMonoidal"`/`"RActegory"`) instead of the
   former struct names. No new dependency, no feature flag, no other
-  behavior change — this is groundwork for the forward-mode-AD `Dual`
-  scalar landing behind an `ad` feature in #74 PR2.
+  behavior change — this was the groundwork for the forward-mode-AD `Dual`
+  scalar, which landed behind the `ad` feature in #74 PR2 (the Added entry
+  above).
 
 ## [workspace-v0.4.0] - 2026-07-25
 

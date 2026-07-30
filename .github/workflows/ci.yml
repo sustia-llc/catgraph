@@ -83,9 +83,10 @@ jobs:
           done
       # #74 PR2: the opt-in `ad` feature (forward-mode AD via
       # `deep_causality_num_dual`) is off by default, so every run above leaves
-      # `para::ad` and its `RModule<Dual<f64>>` instance uncompiled. Same shape as
-      # the #81 serde lane: a targeted test + clippy pass, plus the feature-gated
-      # example (declared `required-features = ["ad"]`, so the loop above skips it).
+      # `para::ad` and its `RModule<Dual<f64>>` instance uncompiled. Targeted
+      # test + clippy pass (the #81 serde-lane shape), plus the feature-gated
+      # example run (the #34 self-checking-example convention; declared
+      # `required-features = ["ad"]`, so the loop above skips it).
       - run: cargo test -p catgraph-dl --features ad
       - run: cargo clippy -p catgraph-dl --features ad --all-targets -- -D warnings
       - run: cargo run -q -p catgraph-dl --features ad --example gradient_descent_para
