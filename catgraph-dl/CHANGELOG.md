@@ -30,12 +30,15 @@ All notable changes to this crate are documented here. Format follows
   **API-compatible**: `pub type F64Module = RModule<f64>` (and the matching
   `F64Object` / `F64Morphism` / `F64Monoidal` / `F64Actegory` aliases) keep
   every existing call site compiling unchanged, and the new `R*` names are
-  re-exported from `para` alongside them. One breaking edge: `F64Object` /
-  `F64Morphism` were unit structs, so bare-value construction
-  (`let x = F64Object;`) no longer compiles — use
-  `F64Object::default()`; nothing in-tree constructed either (they appear
-  only as associated types). No new dependency, no feature flag,
-  **no behaviour change** — this is groundwork for the forward-mode-AD `Dual`
+  re-exported from `para` alongside them. Two breaking edges: all four
+  former unit structs (`F64Object` / `F64Morphism` / `F64Monoidal` /
+  `F64Actegory`) lose bare-value construction (`let x = F64Object;` no
+  longer compiles — use `::default()`, or `::new()` on
+  `F64Monoidal`/`F64Actegory`; nothing in-tree constructed the markers),
+  and their `Debug` output now prints the generic names
+  (`"RObject"`/`"RMorphism"`/`"RMonoidal"`/`"RActegory"`) instead of the
+  former struct names. No new dependency, no feature flag, no other
+  behavior change — this is groundwork for the forward-mode-AD `Dual`
   scalar landing behind an `ad` feature in #74 PR2.
 
 ## [workspace-v0.4.0] - 2026-07-25

@@ -39,7 +39,8 @@ unobservable in the crate:
 kind of instance — the first non-`(Set, ×, 1)` `MonoidalCategory`, exercising the
 trait's *object/tensor generality* (direct sum, not product) — but it is still a
 ZST whose method bodies ignore the receiver (the runtime data lives in the
-**objects** it manipulates, `F64Module(Vec<f64>)`, not in `self`). So the trait's
+**objects** it manipulates, `RModule<S>(Vec<S>)` (`F64Module = RModule<f64>`,
+#74 PR1), not in `self`). So the trait's
 `&self` slot remains forward-only after #36.
 
 The rationale's designated validators — a `QuantaleActegory` /

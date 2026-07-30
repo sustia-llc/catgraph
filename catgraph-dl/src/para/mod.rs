@@ -28,7 +28,7 @@
 //! the scalar ring as a type parameter and [`F64Monoidal`] / [`F64Actegory`] /
 //! [`F64Module`] the `S = f64` aliases (issue #36). It is the direct-sum
 //! monoidal category of finite-dimensional
-//! real modules acting on itself; its object-level tensor is the dedicated
+//! modules acting on itself; its object-level tensor is the dedicated
 //! [`DirectSum`] carrier rather than the `(Set, ×, 1)` tuple, so it does not
 //! opt into [`SetCategoryDefaults`]. `ParaMorphism` / `Reparameterization`
 //! composition remains Set-specialised; other monoidal categories
