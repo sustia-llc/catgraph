@@ -109,7 +109,8 @@ pub struct ContentEdge<G: PropSignature> {
 /// # Construction invariant
 ///
 /// The fields are private, so every value comes from [`content_of`] /
-/// [`content_of_colored`], and the *underlying uncolored* cospan is therefore
+/// [`content_of_colored`] — or from the private `canonical_content`, which only
+/// relabels one of those — and the *underlying uncolored* cospan is therefore
 /// monogamous directed acyclic — the image characterization of BGKSZ Thm 3.12.
 /// Both algorithms below rely on that, and on its consequence that every node is
 /// either incident to a hyperedge or anchored on both feet (a wire no generator
@@ -977,6 +978,84 @@ pub fn canonical_key<G: PropSignature>(c: &Content<G>) -> ContentKey<G> {
         output: c.output.iter().map(|&x| anchored.node_id(x)).collect(),
         closed,
     }
+}
+
+// ------------------------------------------------- canonical representative
+
+/// Rebuild a content from its canonical key: the anchored part under the
+/// key's numbering, then one closed component per block, node-disjointly
+/// offset in the key's sorted block order.
+///
+/// Closed nodes take their producer's declared letter — the derivation
+/// [`ClosedBlock`] documents, and the reason dropping colors there loses
+/// nothing.
+fn content_of_key<G: PropSignature>(key: &ContentKey<G>) -> Content<G> {
+    let mut node_count = key.node_count;
+    let mut node_colors = key.colors.clone();
+    let mut edges: Vec<ContentEdge<G>> = key
+        .edges
+        .iter()
+        .map(|record| ContentEdge {
+            label: record.label.clone(),
+            sources: record.sources.clone(),
+            targets: record.targets.clone(),
+        })
+        .collect();
+
+    for block in &key.closed {
+        let base = node_count;
+        node_count += block.node_count;
+        node_colors.resize(node_count, None);
+        for record in &block.edges {
+            let edge = ContentEdge {
+                label: record.label.clone(),
+                sources: record.sources.iter().map(|&x| x + base).collect(),
+                targets: record.targets.iter().map(|&x| x + base).collect(),
+            };
+            for (position, &x) in edge.targets.iter().enumerate() {
+                node_colors[x] = Some(edge.label.target_word()[position].clone());
+            }
+            edges.push(edge);
+        }
+    }
+
+    Content {
+        node_count,
+        node_colors,
+        edges,
+        input: key.input.clone(),
+        output: key.output.clone(),
+    }
+}
+
+/// The canonical representative of `c`'s iso class: the same cospan, relabeled
+/// onto [`canonical_key`]'s numbering.
+///
+/// # Why the readback may build on this
+///
+/// It factors through [`canonical_key`] — literally, `content_of_key ∘
+/// canonical_key` — and that key is a *complete* invariant
+/// (`canonical_key(a) == canonical_key(b)` **iff** [`content_eq`]). So
+/// `content_eq(a, b)` implies the two representatives are equal field for
+/// field, which is what lets
+/// [`expr_of_content`](super::display::expr_of_content) be a function of the
+/// iso class rather than of the writing that produced the content. The raw
+/// indices of a [`Content`] are presentation-dependent by design (see
+/// [`content_of`]), so reading a diagram back off them directly would not be.
+///
+/// The result is isomorphic to `c` under both feet, so every invariant of the
+/// construction — monogamy, acyclicity, the boundary conditions of BGKSZ
+/// Thm 3.12 — transports across unchanged. Two things it does *not* preserve:
+/// the node *indices* (that is the point), and the colors
+/// [`content_of_colored`] pins on a wire no generator touches, which the key
+/// does record for the anchored part and which therefore survive there.
+pub(super) fn canonical_content<G: PropSignature>(c: &Content<G>) -> Content<G> {
+    let canonical = content_of_key(&canonical_key(c));
+    debug_assert!(
+        content_eq(&canonical, c),
+        "invariant: relabeling by the canonical key is a cospan iso under both feet"
+    );
+    canonical
 }
 
 #[cfg(test)]

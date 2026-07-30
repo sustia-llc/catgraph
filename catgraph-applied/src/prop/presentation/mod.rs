@@ -36,6 +36,7 @@
 //! — a conservative answer. Knuth-Bendix completion is out of scope.
 
 pub mod content;
+pub mod display;
 pub mod functorial;
 pub mod kb;
 pub mod smc_nf;

@@ -72,6 +72,48 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
+- **Canonical string-diagram display — `prop::presentation::display`**
+  ([#187](https://github.com/sustia-llc/catgraph/issues/187), PR1).
+  `canonical_display(e) = nf(expr_of_content(content_of(e)))`, plus the
+  readback `expr_of_content` it is built from. Two SMC-equal expressions get
+  the **same display on every diagram**, including the families the normal form
+  separates — §4.6's ledger, the marked residual-(a) cases, and the dead
+  braid-prefix shapes no NF-level fix can reach. Canonicality is by
+  construction rather than by a uniqueness theorem: the readback reads only the
+  canonical relabeling of the content, which factors through the complete
+  invariant `canonical_key`, so SMC-equal inputs reach *identical* expressions
+  before `nf` is called at all.
+
+  **Display only, and nothing else moves.** `nf` is untouched — same code, same
+  fixpoints, same separations — and so are `content_of`, `content_eq`,
+  `canonical_key`, `kb::smc_refine`, `Presentation::eq_mod`, every CC collision
+  baseline (952 / 1397 / 1974 / 1969) and both differential-sweep trackers
+  (253 / 1162). Equality was already decided exactly by content (#57 a1); what
+  was missing was a canonical *picture*.
+
+  Measured on the frozen 100 000-pair corpora (`tests/canonical_display_corpus.rs`,
+  `internal-probes`). Correctness: the readback preserves content on all
+  200 000 contents of each mode, and all 100 000 pairs of each mode converge —
+  zero failures on both counts, both modes. Quality: the readback inserts a
+  crossing on 1 628 of the 100 000 default-corpus cases (1.6 %; braid-free by
+  construction, so those crossings are the sweep's own), and the display
+  differs from `nf` on 5 334 (5.3 %; 19.1 % in braid mode, where `nf` keeps the
+  dead braid prefixes the display drops). A `canonical_display` call costs
+  roughly 2.4× an `nf` call (≈ 21 µs against ≈ 8.6 µs on the corpus's shape
+  distribution, release build).
+
+  **Theorem 4.5 probe** (`SMC-NF-RECONCILIATION.md` §4.4): where the theorem's
+  hypotheses are fully checked — §4.4's `η`-free corollary, 16 103 default-corpus
+  cases and 11 756 braid-mode cases — `nf` and the display agree **exactly**,
+  on every case, in both modes. Where slot-pinnedness has to be *assumed*
+  because it is realization-quantified (the layer-pinned tier), 324 of 40 315
+  disagree; the three of those in the connected sub-tier are one shape,
+  `Copy ; (id₁ ⊗ Discard ⊗ Zero) ; Add`, whose content admits
+  invariant-satisfying braid-free realizations at both `λ = 0` and `λ = 1` at
+  different wire coordinates — slot-slack, hence outside `𝔉′`, hence not a
+  counterexample. It is pinned as a witness because it bears on §4.4's
+  flagged-open induction step (a): layer-pinnedness alone cannot discharge it.
+
 - **`prop::presentation::content::is_arity_well_formed`** — the domain
   predicate for `content_of`, public so callers that must stay total on
   hand-built or deserialized `PropExpr` trees can ask before building a content
