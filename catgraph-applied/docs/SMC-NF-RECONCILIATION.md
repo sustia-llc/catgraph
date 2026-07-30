@@ -1114,6 +1114,30 @@ see the definedness bullet below for the other shapes), define its
   *unique* `λ` is exactly what the two flagged induction steps below still
   owe. A non-pinned `h` has `ceil(h) − 1 ≥ 1` extra legal levels: that is
   the layer slack.
+
+  **Strengthened (2026-07-30, #187 PR1).** The caution says a pinned `η` need
+  not sit at layer 0. The stronger fact is that it need not sit at any
+  *determined* layer: there is a content whose pinned `η` has **two**
+  realizable layers, both realizations braid-free and invariant-satisfying.
+  Witness `display::tests::a_layer_pinned_eta_can_still_take_two_layers`,
+  `Copy ; (id₁ ⊗ ! ⊗ η) ; Add` — `nf` of that writing puts the `η` at `λ = 0`
+  beside `Copy`, while `nf` of its canonical readback puts it at `λ = 1` beside
+  the `!`. So layer-pinnedness does not pin `λ` at all, and no repair of the
+  induction below can rest on it alone. Found by the Theorem 4.5 probe; two
+  further distinct contents exhibit the same thing, recorded as a dated
+  measurement in `tests/canonical_display_corpus.rs`.
+
+  *How that case is excluded, and a caveat on the reasoning.* It is also
+  **slot**-slack, so it lies outside `𝔉′` and is no counterexample to
+  Theorem 4.5 — but note how that is reached. Slot-pinnedness compares the
+  `η`'s wire coordinate on the boundary below *its own* layer, so when two
+  realizations put the `η` on different layers, the compared boundaries have
+  different widths (one carries a wire the other has not produced yet). Under
+  that reading `λ`-ambiguity yields slot-slack almost automatically: two
+  realizable layers mean two different boundaries, which agree on a coordinate
+  only by coincidence. The two clauses of "no slack" are therefore far less
+  independent than the definitions make them look — worth knowing before
+  either is leaned on separately.
 - `h` is **slot-pinned** iff `z`'s wire coordinate at the boundary below
   `h`'s layer is the same in every braid-free realization satisfying the
   restated §1 invariants. This is deliberately *realization-quantified*
@@ -1253,6 +1277,38 @@ conditioning is necessary — the braid-prefix witness above is exactly an
 16 103 corpus pairs that are `η`-free on both sides show **zero**
 divergences in any bucket, marked included. ∎
 
+**Status (2026-07-30, #187 PR1): the corollaries above are now probed
+operationally.** Theorem 4.5 and its two corollaries were, until PR1, checked
+only against named witnesses. `canonical_display` supplies a *second*
+invariant-satisfying writing of any expression's own content — by construction,
+since the readback is a function of the content's iso class — so
+`nf(e) == canonical_display(e)` is a direct test of the uniqueness the theorem
+asserts, runnable at corpus scale. `tests/canonical_display_corpus.rs` is that
+probe, on the same frozen 100 000-pair corpora §4.6 uses. This is a status
+pointer; nothing in the theorem text above is amended by it.
+
+Two tiers, differing in what is *checked* against what is *assumed* (the
+classifier and its scope are stated in the test's own module docs, and the
+distinction matters because slot-pinnedness is realization-quantified and so
+not computable):
+
+- **The `η`-free corollary, hypotheses all checked** — no source-0 hyperedge,
+  both diagrams braid-free. Agreement is **exact**: 16 103 of 16 103 cases on
+  the default corpus, 11 756 of 11 756 in braid mode. (The 16 103 is the same
+  count this corollary already quoted, re-derived independently by the probe's
+  classifier — a check on the classifier as much as on the engine.)
+- **Layer-pinned, slot-pinnedness assumed** — every source-0 hyperedge `0 → 1`
+  with `ceil = 1`, both diagrams braid-free. 324 of 40 315 disagree on the
+  default corpus, 54 of 32 324 in braid mode. Narrowing to connected contents
+  leaves three distinct contents, each checked individually and each found
+  slot-slack, hence outside `𝔉′`. The multi-component remainder is
+  **unexamined**: that the assumption is what fails there is an expectation,
+  not a finding.
+
+So the probe has produced no counterexample and one strengthening (the
+layer-pinnedness note above). It cannot discharge the two flagged-open
+induction steps — those are proof obligations, and a corpus is not a proof.
+
 **Pass disjointness (obligation (i)): FALSE as stated — resolved by a
 ratified carve, not a lemma.** The obligation read: every move is either a
 free zero-width permutation (content-decided, Step 6) or a pinned
@@ -1326,6 +1382,21 @@ is exactly `η` placement slack, `ι`, the hypothesis of Theorem 4.5.
   and never chooses `ι` at all — the readback would inherit whatever `nf`
   pins, and Theorem 4.5 is precisely the statement that on `𝔉′` there is
   nothing left to choose.
+
+  *Still open at the `nf` level (2026-07-30).* #187 did **not** close this. It
+  shipped a canonical *display* (§4.7's status note), which chooses `ι` once
+  from content at readback time and leaves `nf` untouched; `nf`'s own `ι`
+  freedom is exactly as it was, and §4.6's trackers still count it. Where the
+  content pins nothing, the readback's choice is necessarily a **positional
+  convention** — the #187 design round measured all five in-`𝔉` slot-family
+  cases and found the competing writings give the `η` an *identical* content
+  attachment record, so no content lookup can separate the candidates. The
+  ratified design note specified **leftmost**-admissible; the shipped
+  `display::free_slot` takes the **far** side. Recorded here as a deviation of
+  record: the two sides measured a tie (87 crossings against 88 on the
+  5 000-case smoke prefix), and the far side was taken to keep an unpinned wire
+  out of the interior of the live word. Leftmost still governs what the design
+  note was about — several `η` landing on one coordinate emit left to right.
 - **Braid-freedom as a content condition** — NF braid-freeness is
   per-writing, settled by the braid-prefix witness. What stays open is
   whether a content condition ("`C` admits a non-crossing layered embedding
@@ -1445,6 +1516,28 @@ the `tests/graphical_linalg.rs` module docstring for the witness diff.
 
 Every diagram still normalizes soundly and terminates; what is limited is
 uniqueness.
+
+> **The 253 / 1 162 figures are `nf`-display trackers (2026-07-30).** They count
+> SMC-equal pairs **the normal form separates**, and that is now all they count
+> — both things they used to stand proxy for have been closed elsewhere, by two
+> different mechanisms worth keeping distinct:
+>
+> - **Equality** — closed by content (#57 a1). `content_eq` decides all 253 and
+>   all 1 162, `Presentation::eq_mod` has taken the content path since a1 PR2,
+>   and `tests/content_equality_corpus.rs` pins it.
+> - **Display** — closed by canonical display (#187 PR1, §4.7's status note).
+>   `canonical_display` converges on all 100 000 pairs of *both* corpus modes,
+>   expected 0 and measured 0 (`tests/canonical_display_corpus.rs`), which
+>   includes the marked residual-(a) cases and the dead braid prefixes no
+>   `nf`-level fix reaches.
+>
+> Nothing below is retracted, and no number moves. Every ledger entry keeps its
+> meaning as a statement about `nf`, which #187 deliberately did not change —
+> its divergences persist by design, and "#187 fixed" was ratified to mean
+> display convergence rather than an `nf`-level canonicalization of `ι`. What
+> the counts are *for* has narrowed: they are drift detectors on the engine. A
+> movement in either figure means `nf` changed, which is news in either
+> direction.
 
 **Read this section as a ledger of *named* residuals, not as a bound.** The
 four lettered entries below are the freedoms that were identified, reproduced
@@ -1724,3 +1817,40 @@ never needs rewriting at all — it is quotiented away by `C` itself.
 > would need is unproven in the anchors, which *raises* a2's estimated cost.
 > The false claim never reached this document; it is corrected here because
 > this section is where a future a2 attempt would start reading.
+
+> **Status (2026-07-30): the readback this section anticipated is shipped.**
+> The paragraph above describes a #57 engine that would "use `nf` as the
+> canonical *readback* from content to a layered term". That readback now
+> exists, as [#187](https://github.com/sustia-llc/catgraph/issues/187) PR1
+> (PR #193): `prop::presentation::display`, with
+>
+> ```
+> canonical_display(e)  =  nf(expr_of_content(content_of(e)))
+> ```
+>
+> `expr_of_content` writes a content cospan back out as a layered expression in
+> one deterministic sweep, reading the canonical relabeling — so it is a
+> function of the content's **iso class**, and SMC-equal expressions reach an
+> identical expression before `nf` is called. The unchanged `nf` then runs.
+>
+> Three consequences for this section's argument. First, "an engine that
+> rewrites content directly never chooses `ι` at all, and inherits `nf`'s choice
+> only at readback" is now literal for *display* as well as for equality: the
+> readback makes the choice once, from content, and the same content always
+> gets the same picture. Second, the readback carries a **proof obligation**
+> this section did not name — `content_eq(content_of(expr_of_content(C)), C)`,
+> i.e. that the readback is a section of `C` — verified on 200 000 contents per
+> corpus mode rather than proven. Third, what "#187 fixed" *means* was ratified
+> at the same time: **display convergence**, not an `nf`-level canonicalization
+> of `ι`. `nf` is untouched, its divergences persist by design (§4.6), and the
+> `eta_slack_residual` witnesses stay true as `nf` facts with
+> display-convergence siblings beside them.
+>
+> **Out of scope, deliberately.** Whether `kb::smc_refine` or
+> `Presentation::eq_mod` should ever consult `canonical_display` is a separate
+> behavioral decision, adjacent to
+> [#173](https://github.com/sustia-llc/catgraph/issues/173) and not taken here.
+> It would not change which pairs `eq_mod` decides equal at the SMC layer —
+> content already decides that exactly — but it could move which *user-equation*
+> classes `smc_refine` closes, and with them the CC collision baselines. Nothing
+> in #187 moved a pin.
