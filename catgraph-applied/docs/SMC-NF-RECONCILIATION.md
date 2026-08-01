@@ -1593,8 +1593,10 @@ pair's two writings (it does in 42 of the 128), so the in-`𝔉` bucketing of a
 *divergent* pair is itself mildly presentation-sensitive; and in the
 braid-injecting mode the "marked" bucket is conservative relative to content —
 a braid can merge components and mark a content-clear diagram (§4.4,
-`braid_coarsening_marks_content_clear_diagram`) — so the residual-(a) tracker
-should be read as an upper bound on content-level marking.
+`braid_coarsening_marks_content_clear_diagram`) — so the **braid-mode**
+residual-(a) tracker (`published_braid_mode_figures_reproduce`) should be read
+as an upper bound on content-level marking; the interleave tier's marking is
+content-exact by construction (§4.6(a)).
 
 The honest statement of what is verified: **the `smc_canonicality_probes` suite
 is the gate**, and it is a suite of named convergences, not a bound on
@@ -1649,13 +1651,29 @@ The lettered ledger:
   guard, verified decisive by ablation) and
   `marked_component_eta_sifts_and_converges` (the widened sift surface).
 
-  Tracked quantitatively by `published_braid_mode_figures_reproduce` in
-  `tests/smc_nf_differential_sweep.rs`, which is the residual-(a) tracker: the
-  default corpus produces too few marked cases to measure this residual, so that
-  test sweeps a **braid-injecting** corpus where components own non-contiguous
-  boundary intervals and guard 3's marking actually fires. Its figures are a
-  different corpus from the calibration table above and are not comparable to
-  it. Tracked on issue #174.
+  Tracked quantitatively by **two** trackers in
+  `tests/smc_nf_differential_sweep.rs`, both `#[ignore]`d 100 000-pair sweeps on
+  corpora that are *different from the calibration table above* and not
+  comparable to it. Tracked on issue #174.
+
+  - `published_braid_mode_figures_reproduce` (1 162 / 634 / 237) sweeps a
+    **braid-injecting** corpus, where components own non-contiguous boundary
+    intervals and guard 3's marking fires. Its marking is conservative relative
+    to content — a braid merges the components it spans and can mark a
+    content-clear diagram (§4.4,
+    `braid_coarsening_marks_content_clear_diagram`) — so read it as an upper
+    bound.
+  - `published_interleave_mode_figures_reproduce` (745 / 0 / 745, over 100 000
+    marked cases; added 2026-08-01,
+    [#183](https://github.com/sustia-llc/catgraph/issues/183)) sweeps a corpus
+    whose generator forces an `A…B…A` input owner word **by construction** and
+    **braid-free**: one component's two `1 → 1` arms flank terminal `Discard`
+    splitters and are rejoined by a `μ` in the next layer, so union-find puts
+    the arms in one component and each splitter in its own. Every case is
+    therefore genuinely marked at the content level rather than by coarsening,
+    which is what makes it 745 marked divergences against the default corpus's
+    23 and the braid corpus's 237. `in_fragment` is 0 by construction — `𝔉`
+    excludes marked diagrams — the axis this tier trades away.
 - **(b) Closed↔closed order — CLOSED (2026-07-27, #79 P1).** All closed
   components share the rule-(i) key `(closed, 0)`; distinct closed blocks
   formerly kept their presentation order for want of a content-derived
