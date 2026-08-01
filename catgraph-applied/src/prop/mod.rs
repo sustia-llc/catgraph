@@ -129,7 +129,11 @@ pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::De
 /// subterm rooted at it via [`PropExpr::source`] and [`PropExpr::target`]
 /// in O(height). Smart constructors on [`Free`] produce only well-formed
 /// expressions; raw variant construction is available but callers must
-/// uphold the composition-arity invariant themselves.
+/// uphold the composition-arity invariant themselves. Arity sums that would
+/// overflow `usize` saturate to `usize::MAX` — a sentinel no real wire bundle
+/// can have, so downstream length checks report
+/// [`CatgraphError::CompositionSizeMismatch`] instead of wrapping
+/// (reject-don't-wrap, #180).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PropExpr<G: PropSignature> {
@@ -147,26 +151,33 @@ pub enum PropExpr<G: PropSignature> {
 
 impl<G: PropSignature> PropExpr<G> {
     /// Source arity of this morphism.
+    ///
+    /// A `Braid` or `Tensor` whose halves sum past `usize::MAX` saturates
+    /// there rather than overflowing; `usize::MAX` matches no real wire
+    /// bundle, so the composition checks report
+    /// [`CatgraphError::CompositionSizeMismatch`] instead of wrapping.
     #[must_use]
     pub fn source(&self) -> usize {
         match self {
             PropExpr::Identity(n) => *n,
-            PropExpr::Braid(m, n) => m + n,
+            PropExpr::Braid(m, n) => m.saturating_add(*n),
             PropExpr::Generator(g) => g.source(),
             PropExpr::Compose(f, _) => f.source(),
-            PropExpr::Tensor(f, g) => f.source() + g.source(),
+            PropExpr::Tensor(f, g) => f.source().saturating_add(g.source()),
         }
     }
 
     /// Target arity of this morphism.
+    ///
+    /// Saturates at `usize::MAX` on overflow, exactly as [`PropExpr::source`].
     #[must_use]
     pub fn target(&self) -> usize {
         match self {
             PropExpr::Identity(n) => *n,
-            PropExpr::Braid(m, n) => m + n,
+            PropExpr::Braid(m, n) => m.saturating_add(*n),
             PropExpr::Generator(g) => g.target(),
             PropExpr::Compose(_, g) => g.target(),
-            PropExpr::Tensor(f, g) => f.target() + g.target(),
+            PropExpr::Tensor(f, g) => f.target().saturating_add(g.target()),
         }
     }
 }

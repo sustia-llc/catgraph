@@ -13,6 +13,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Fixed
+
+- **Wire-count sums saturate instead of overflowing**
+  ([#180](https://github.com/sustia-llc/catgraph/issues/180)):
+  `prop::colored::check` / `infer` and the `PropExpr::source` /
+  `PropExpr::target` arity fold now saturate `Braid` and `Tensor` sums at
+  `usize::MAX` instead of overflowing. Raw variant construction is
+  documented-legal, so a `Braid(usize::MAX, 1)` was reachable and used to
+  panic in debug builds and wrap onto a small, spuriously valid arity in
+  release. `usize::MAX` matches no real wire bundle, so the saturated value is
+  reported as `CompositionSizeMismatch` — reject-don't-wrap, matching the
+  policy of the catgraph-syntax interpreters.
+
 ## [workspace-v0.5.0] - 2026-07-30
 
 ### Changed

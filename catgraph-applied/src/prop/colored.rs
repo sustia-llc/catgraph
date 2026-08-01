@@ -118,7 +118,9 @@ pub fn check<G: PropSignature>(
             Ok(input.to_vec())
         }
         PropExpr::Braid(m, n) => {
-            expect_len(m + n, input)?;
+            // Checked so a directly-constructed `Braid(usize::MAX, 1)` reports a
+            // mismatch instead of wrapping; `usize::MAX` matches no slice length.
+            expect_len(m.checked_add(*n).unwrap_or(usize::MAX), input)?;
             // σ_{m,n} : u ⊗ v → v ⊗ u — a block swap of the two halves.
             let mut out = Vec::with_capacity(input.len());
             out.extend_from_slice(&input[*m..]);
@@ -286,7 +288,9 @@ fn infer<G: PropSignature>(
             Ok(input.to_vec())
         }
         PropExpr::Braid(m, n) => {
-            expect_len(m + n, input)?;
+            // Saturating, as in [`check`]: an overflowing braid is rejected as a
+            // size mismatch rather than wrapping into a spuriously valid arity.
+            expect_len(m.checked_add(*n).unwrap_or(usize::MAX), input)?;
             let mut out = Vec::with_capacity(input.len());
             out.extend_from_slice(&input[*m..]);
             out.extend_from_slice(&input[..*m]);
