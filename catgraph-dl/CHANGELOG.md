@@ -466,7 +466,8 @@ All notable changes to this crate are documented here. Format follows
 > `v0.1.0` through `v0.3.0` (2026-07-01 → 2026-07-11, including `v0.1.1`) were
 > cut without any sections here, although the crate was a workspace member from
 > `v0.1.0`. Changes across them are recorded only in git history
-> (`git log v0.1.0..v0.3.0 -- catgraph-dl/`) and the workspace-level release
+> (`git log v0.3.0 -- catgraph-dl/` — no `v0.1.0..` lower bound, since
+> `v0.1.0`'s own slice is unrecorded here too) and the workspace-level release
 > record; backfill was deferred out of the v0.4.0 release (owner, 2026-07-25)
 > and resolved as this note (#158, option 2). The `[0.4.1]` / `[0.4.0]`
 > headings below are **pre-reboot crate-local versions** (2026-05), not
