@@ -271,3 +271,44 @@ fn poisoned_scalar_token_round_trips() {
         "a poisoned scalar must reparse to the same generator"
     );
 }
+
+// ---- Overflowing braid widths (#196) -----------------------------------------
+
+/// `Braid(usize::MAX, 1)` is documented-legal to construct raw, and `eval`'s
+/// `σ` arm was the one interpreter #79 P3a (PR #179) left unhardened — it
+/// hardened only `to_cospan` and `to_mat_kron`. The width is *consumed* here:
+/// `take_exact` reserves from it and `rotate_left(m)` then requires `m <= len`,
+/// so a release-build wrap onto a small width was a wrong rotation and a
+/// debug-build `m + n` an overflow panic.
+///
+/// The braid has to sit under a `Compose` for the arm to be reached at all —
+/// `eval`'s entry compares `expr.source()` against the input length first, and
+/// a top-level overflowing braid is rejected there.
+#[test]
+fn overflowing_braid_width_is_a_wire_count_error_not_a_panic() {
+    let nested: PropExpr<SfgGenerator<i64>> = PropExpr::Compose(
+        Box::new(Free::<SfgGenerator<i64>>::identity(2)),
+        Box::new(PropExpr::Braid(usize::MAX, 1)),
+    );
+    // The outer arity is `id₂`'s, so the entry check passes and the braid arm runs.
+    assert_eq!(nested.source(), 2);
+    match eval(&nested, &model(), vec![10, 20]) {
+        Err(SyntaxError::WireCount {
+            expected,
+            actual,
+            context,
+        }) => {
+            assert_eq!((expected, actual, context), (usize::MAX, 2, "braid"));
+        }
+        other => panic!("expected WireCount, got {other:?}"),
+    }
+
+    // A top-level one is still rejected, at the entry check rather than the arm.
+    let bare: PropExpr<SfgGenerator<i64>> = PropExpr::Braid(usize::MAX, 1);
+    match eval(&bare, &model(), vec![10, 20]) {
+        Err(SyntaxError::WireCount {
+            expected, actual, ..
+        }) => assert_eq!((expected, actual), (usize::MAX, 2)),
+        other => panic!("expected WireCount, got {other:?}"),
+    }
+}

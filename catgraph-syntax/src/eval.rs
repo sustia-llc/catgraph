@@ -115,26 +115,28 @@ fn node_kind<G: PropSignature>(expr: &PropExpr<G>) -> &'static str {
 }
 
 /// Draw exactly `n` values off the cursor, or report a [`SyntaxError::WireCount`]
-/// (with `context` naming the node) if it runs dry first.
+/// (with `context` naming the node) if the cursor cannot supply that many.
+///
+/// The shortfall is detected *before* anything is reserved. `n` reaches here as
+/// a saturated `usize::MAX` on a directly-constructed `Braid(usize::MAX, 1)`
+/// (#196), and `Vec::with_capacity(usize::MAX)` panics on the reservation rather
+/// than returning the error the caller is entitled to. The cursor is an
+/// [`ExactSizeIterator`], so the check is `O(1)` and reports the same `actual`
+/// the drain-until-dry version did.
 fn take_exact<V>(
     cursor: &mut vec::IntoIter<V>,
     n: usize,
     context: &'static str,
 ) -> Result<Vec<V>, SyntaxError> {
-    let mut out = Vec::with_capacity(n);
-    for _ in 0..n {
-        match cursor.next() {
-            Some(v) => out.push(v),
-            None => {
-                return Err(SyntaxError::WireCount {
-                    expected: n,
-                    actual: out.len(),
-                    context,
-                });
-            }
-        }
+    let available = cursor.len();
+    if n > available {
+        return Err(SyntaxError::WireCount {
+            expected: n,
+            actual: available,
+            context,
+        });
     }
-    Ok(out)
+    Ok(cursor.by_ref().take(n).collect())
 }
 
 /// Evaluate `expr` on an `input` wire bundle under `model`.
@@ -202,7 +204,14 @@ where
         PropExpr::Identity(n) => take_exact(cursor, *n, "id"),
         // `σ_{m,n}`: block-rotate `[a | b]` (|a| = m, |b| = n) to `[b | a]`.
         PropExpr::Braid(m, n) => {
-            let mut wires = take_exact(cursor, m + n, "braid")?;
+            // Checked, like the sibling interpreters `to_cospan` and
+            // `to_mat_kron` (#180/#196): a directly-constructed
+            // `Braid(usize::MAX, 1)` would otherwise wrap onto a small width in
+            // release and let `rotate_left(usize::MAX)` past its `mid <= len`
+            // precondition. `usize::MAX` exceeds any real bundle, so
+            // `take_exact` reports the wire-count mismatch and the rotate never
+            // runs.
+            let mut wires = take_exact(cursor, m.checked_add(*n).unwrap_or(usize::MAX), "braid")?;
             wires.rotate_left(*m);
             Ok(wires)
         }

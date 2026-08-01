@@ -202,7 +202,10 @@ impl<G: PropSignature> Presentation<G> {
     /// - [`CatgraphError::CompositionSizeMismatch`] on any length
     ///   disagreement: a subterm handed a word of the wrong length, `rhs`'s
     ///   source arity differing from `lhs`'s, or target words of different
-    ///   lengths.
+    ///   lengths. Also when `lhs`'s source arity reads `usize::MAX` — the check
+    ///   *sizes* a fresh source word from it, so that one is screened up front
+    ///   rather than compared, since the sizing would abort before any
+    ///   comparison could reject it (#196).
     /// - [`CatgraphError::Composition`] when the lengths agree but the colors
     ///   conflict — the message names the generator and position, or the target
     ///   position, and both colors.
@@ -358,11 +361,29 @@ impl<G: PropSignature> Presentation<G> {
     /// exactly the verdict it reached before. No new error variant, and no panic
     /// leaking out of [`content::content_of`].
     ///
+    /// **Overflowing arities (#196).** A hand-built tree can also carry a `Braid`
+    /// or `Tensor` width that sums past `usize::MAX`. That is not the same class:
+    /// a mismatched `Compose` still has real arities on both sides, whereas an
+    /// overflowed width is a magnitude *neither* layer below can size from —
+    /// [`content::content_of`] would allocate from it and [`smc_nf::nf`] would
+    /// decompose a `σ` of `usize::MAX + 1` wires — so both reject it outright.
+    /// This method screens it first, before either engine runs, and answers
+    /// `Ok(Some(true))` when the two trees are structurally identical (the one
+    /// verdict still soundly available) and `Ok(None)` — undecided — otherwise.
+    /// `Ok(Some(false))` is never returned there: it would claim a disproof no
+    /// layer established.
+    ///
     /// # Errors
     ///
     /// Returns [`CatgraphError::Presentation`] if normalization fails for either
     /// side (currently unreachable; future-proofing).
     pub fn eq_mod(&self, a: &PropExpr<G>, b: &PropExpr<G>) -> Result<Option<bool>, CatgraphError> {
+        // #196: neither engine is defined on an overflowing width — `nf` rejects,
+        // `content_of` rejects, and `apply_smc_rules` declines to fuse. Screen
+        // once here rather than leaving each of them to fail differently.
+        if !a.arities_fit() || !b.arities_fit() {
+            return Ok((a == b).then_some(true));
+        }
         match self.engine {
             NormalizeEngine::Structural => {
                 // Structural behavior: normalize both sides + compare; None if
@@ -635,8 +656,14 @@ fn apply_smc_rules<G: PropSignature>(expr: &PropExpr<G>) -> PropExpr<G> {
             if matches!(f.as_ref(), PropExpr::Identity(_))
                 && matches!(g.as_ref(), PropExpr::Identity(_)) =>
         {
-            if let (PropExpr::Identity(m), PropExpr::Identity(n)) = (f.as_ref(), g.as_ref()) {
-                return PropExpr::Identity(m + n);
+            if let (PropExpr::Identity(m), PropExpr::Identity(n)) = (f.as_ref(), g.as_ref())
+                // #196: the fused width is a magnitude — every consumer of an
+                // `Identity(k)` sizes from `k` — so on overflow the rule simply
+                // does not fire and the `Tensor` stands. Declining a rewrite is
+                // always sound; wrapping onto `m + n - usize::MAX` is not.
+                && let Some(fused) = m.checked_add(*n)
+            {
+                return PropExpr::Identity(fused);
             }
             PropExpr::Tensor(f.clone(), g.clone())
         }
