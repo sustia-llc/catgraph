@@ -74,6 +74,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   physics claims are substantive and tracked as a GitHub issue (crate-local
   ANCHORS provenance note).
 
+> **Reconciliation note
+> ([#158](https://github.com/sustia-llc/catgraph/issues/158)).** Workspace tags
+> `v0.1.1`, `v0.2.0`, `v0.2.1`, and `v0.3.0` (2026-07-02 → 2026-07-11) were cut
+> without per-crate sections here; this crate's changes across them are recorded
+> only in git history (`git log v0.1.0..v0.3.0 -- catgraph-physics/`) and the
+> workspace-level release record. Backfill was deferred out of the v0.4.0
+> release (owner, 2026-07-25) and resolved as this note (#158, option 2).
+> Separately, `v0.5.0` deliberately rolled no section here — the crate had no
+> changes at that tag.
+
 ## [workspace-v0.1.0] - 2026-07-01
 
 First monorepo release: workspace-wide tag `v0.1.0` (supersedes the pre-reboot
