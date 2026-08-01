@@ -197,6 +197,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Prop 3.10 acceptance gate). Summary `[20,0,0,4,3] of 27 →
   [22,0,0,7,3] of 32` (22 implementable, 100% DONE); count-guard green.
 
+> **Reconciliation note
+> ([#158](https://github.com/sustia-llc/catgraph/issues/158)).** Workspace tags
+> `v0.2.1` and `v0.3.0` (2026-07-09 / 2026-07-11) — and `v0.1.1` (2026-07-02,
+> between the two sections below) — were cut without per-crate sections here;
+> this crate's changes across them are recorded only in git history
+> (`git log v0.1.0..v0.3.0 -- catgraph-magnitude/`) and the workspace-level
+> release record. Backfill declined (owner, 2026-07-25).
+
 ## [workspace-v0.2.0] - 2026-07-02
 
 Incremental coalition magnitude for the decision hot path (#31, PR #32).

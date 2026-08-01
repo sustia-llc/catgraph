@@ -460,6 +460,17 @@ All notable changes to this crate are documented here. Format follows
   surfaces need `Zero` / `One`); it remains deps-only. `deep_causality_haft` is
   now in use, not deps-only.
 
+> **Reconciliation note
+> ([#158](https://github.com/sustia-llc/catgraph/issues/158)).** This crate's
+> first workspace-era section is `[workspace-v0.4.0]` above: workspace tags
+> `v0.1.0` through `v0.3.0` (2026-07-01 → 2026-07-11, including `v0.1.1`) were
+> cut without any sections here, although the crate was a workspace member from
+> `v0.1.0`. Changes across them are recorded only in git history
+> (`git log v0.1.0..v0.3.0 -- catgraph-dl/`) and the workspace-level release
+> record; backfill declined (owner, 2026-07-25). The `[0.4.1]` / `[0.4.0]`
+> headings below are **pre-reboot crate-local versions** (2026-05), not
+> workspace tags — do not read them as workspace releases.
+
 ## [0.4.1] - 2026-05-10
 
 Patch release applying review findings on top of v0.4.0. Strictly additive; no API break; no behaviour change.

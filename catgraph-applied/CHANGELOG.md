@@ -891,6 +891,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   references swept accordingly; the `functor_bench` wall-time budgets were found
   unrealistic (measured, not estimated) and are tracked in #59.
 
+> **Reconciliation note
+> ([#158](https://github.com/sustia-llc/catgraph/issues/158)).** Workspace tags
+> `v0.1.1`, `v0.2.0`, `v0.2.1`, and `v0.3.0` (2026-07-02 → 2026-07-11) were cut
+> without per-crate sections here; this crate's changes across them are recorded
+> only in git history (`git log v0.1.0..v0.3.0 -- catgraph-applied/`) and the
+> workspace-level release record. Backfill declined (owner, 2026-07-25).
+
 ## [workspace-v0.1.0] - 2026-07-01
 
 First monorepo release: workspace-wide tag `v0.1.0` (supersedes the pre-reboot
