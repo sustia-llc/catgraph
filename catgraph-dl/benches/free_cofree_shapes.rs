@@ -35,7 +35,8 @@
 //! leaves = internal + 1        and        Box allocations = 2 · (leaves − 1)
 //! ```
 //!
-//! The `Left(A)` ratio is therefore pinned at just under ½ for every tree, and
+//! The `Left(A)` ratio is therefore pinned at just over ½ for every tree
+//! (`L / (2L − 1)`, approaching ½ from above), and
 //! two `TreeEndo` trees with the same leaf count allocate identically **no
 //! matter how they are shaped**. (`Free`'s other leaf former, `Pure(z)`, is
 //! unboxed too, so mixing terminators in does not move the count either.)
@@ -73,10 +74,22 @@
 //! plus the *new* size of every `realloc` — it is bytes-requested, not
 //! peak-resident.
 //!
+//! ## Timing-window discipline
+//!
+//! All three carrier groups use `Bencher::iter_batched`, which places both
+//! fixture setup **and** result teardown outside the measured window. That
+//! matters here: every one of these operations either produces or consumes a
+//! structure holding thousands of boxes, and recursive teardown of such a
+//! structure costs the same order as the operation itself. A plain
+//! `Bencher::iter` on `unfold` inflated its rows by ~27–40 % before review.
+//! One caveat survives by design: the bijection helpers *consume* their input,
+//! so the `carrier::construct` window legitimately includes freeing the source
+//! `Vec` / `BinaryTree` — see the `Measured baseline` note below.
+//!
 //! This bench file is the only place in `catgraph-dl` containing `unsafe`; the
 //! library crate keeps its `#![forbid(unsafe_code)]`. The unsafe surface is the
-//! three-method `GlobalAlloc` forward to `System`, each with a `// SAFETY:`
-//! note.
+//! four-method `GlobalAlloc` forward to `System` (`alloc` / `alloc_zeroed` /
+//! `realloc` / `dealloc`), each with a `// SAFETY:` note.
 //!
 //! ## What is measured
 //!
@@ -104,28 +117,46 @@
 //! ## Measured baseline
 //!
 //! Recorded 2026-08-01 (`--sample-size 10 --warm-up-time 1
-//! --measurement-time 3`, `bench` profile, maintainer's dev workstation). The
-//! full shape × op table lives in
+//! --measurement-time 3`, `bench` profile, maintainer's dev workstation); the
+//! `carrier::unfold` rows re-recorded the same day after review, with result
+//! teardown moved out of the timed window (see `bench_unfold`). The full
+//! shape × op table lives in
 //! `.claude/docs/2026-08-01-156-dl-bench-baseline.md`; latencies there are
 //! machine-relative, the allocation counts are exact. Headlines:
 //!
 //! - **Allocation count is exactly the hole count.** `1·n` boxes for a list of
-//!   `n` cons cells (24 B each); `2·(L − 1)` for a tree of `L` leaves (16 B
-//!   each on `Free`, 24 B on `Cofree` — the extra 8 B is the `head: A` label).
-//!   Zero `realloc`s anywhere.
+//!   `n` cons cells; `2·(L − 1)` for a tree of `L` leaves. Zero `realloc`s
+//!   anywhere. Per-node sizes on **this target and toolchain**
+//!   (x86-64, 64-bit pointers, current niche layout) are 24 B per list node,
+//!   16 B per `Free` tree node and 24 B per `Cofree` tree node — the extra 8 B
+//!   being the `head: A` label. Those byte figures depend on pointer width and
+//!   on the compiler's enum-niche packing of `Option<(A, Box<…>)>` /
+//!   `Either<A, (Box<…>, Box<…>)>`; the *counts* do not.
 //! - **`Free::fold` allocates nothing** — 0 allocations in every row; its whole
 //!   cost is the fmap-and-recurse walk plus tearing down the program it eats.
-//!   It is also the cheapest carrier op (~51 Melem/s on lists vs ~30 for
-//!   construction). `Cofree::unfold` is the most expensive (~10–11 Melem/s on
-//!   trees) — it allocates *and* calls the coalgebra at every node.
+//!   It is also the cheapest carrier op at every size (~51 Melem/s on lists vs
+//!   ~30 for construction, ~20–23 vs ~17–19 on trees). Note the construct rows
+//!   are **not** a clean like-for-like against the other two: the bijection
+//!   helpers *consume* their input, so the construct window also pays to free
+//!   the source — one `Vec` buffer on lists, but the source `BinaryTree`'s own
+//!   `2·(L − 1)` boxes on trees, a teardown of the same order as the
+//!   construction itself.
+//! - **`Cofree::unfold` is the dearest carrier op on trees** (~16.5–17.0
+//!   Melem/s) — it allocates *and* calls the coalgebra at every node. On lists
+//!   it now runs *faster* than construction (~35.6 vs ~30.1 Melem/s), which is
+//!   consistent with the construct-window caveat above.
 //! - **Shape costs latency, not memory.** `tree_spine` and `tree_balanced`
 //!   allocate identically at equal leaf count (as the identity above forces)
-//!   while the spine runs 2.4–18 % slower, the gap broadly widening with size.
+//!   while the spine runs 1.3–18 % slower, the gap widening monotonically with
+//!   size in all three carrier operations at the sizes measured.
 //! - **All three lazy surfaces are allocation-free** at every size; the eager
 //!   `unroll_to_vec` sibling takes exactly one `Vec::with_capacity` (8 B/step,
 //!   no regrowth), so the lazy saving is one allocation and 2–14 % of wall
 //!   time — not an asymptotic difference. `unroll_iter` earns its keep through
-//!   unboundedness (#36's motivation), not allocation pressure.
+//!   unboundedness (#36's motivation), not allocation pressure. The
+//!   `unroll_to_vec` row keeps a plain `Bencher::iter`, so it does carry its
+//!   one `Vec` deallocation inside the timed window — a single `dealloc`,
+//!   negligible next to `n` coalgebra steps.
 //!
 //! [`ListEndo<A>`]: catgraph_dl::free_monad::list_endo::ListEndo
 //! [`TreeEndo<A>`]: catgraph_dl::free_monad::tree_endo::TreeEndo
@@ -156,6 +187,16 @@ const LIST_SIZES: [usize; 3] = [64, 1024, 4096];
 /// powers of two; `tree_spine` uses the same values so the two shapes are
 /// directly comparable at equal leaf count (and therefore at equal allocation
 /// count — see the module docs).
+///
+/// **The 4 096 cap is deliberate, not arbitrary.** `tree_spine` builds a
+/// caterpillar of depth `L − 1`, and every walker that touches it is
+/// depth-recursive — this file's `spine_tree`, the crate's `tree_to_free_mnd` /
+/// `free_mnd_to_tree`, haft's `Free::fold` and `Cofree::unfold`, and the
+/// compiler's own drop glue. At `L = 4096` that is ~4 095 nested frames, well
+/// inside the 8 MiB main-thread stack criterion runs on; a much larger spine
+/// (64 k, say) would overflow it. There is **no runtime guard** — raising this
+/// constant means re-checking the stack budget by hand, or moving the spine
+/// cases onto a thread with an explicit larger stack.
 const TREE_LEAVES: [usize; 3] = [64, 1024, 4096];
 
 /// Step counts for the lazy / eager `architectures` surfaces.
@@ -655,10 +696,26 @@ fn bench_fold(c: &mut Criterion) {
 
 fn bench_unfold(c: &mut Criterion) {
     let mut group = c.benchmark_group("carrier::unfold");
+    // `unfold` *returns* the grown carrier, so a plain `Bencher::iter` would
+    // drop `2·(L − 1)` boxes inside the timed window — recursive teardown of an
+    // order comparable to a whole `fold`, wrongly attributed to the
+    // anamorphism. `iter_batched` moves output drop outside the measured window
+    // (criterion 0.8.2 `bencher.rs`: the `measurement.end` call precedes the
+    // `drop(black_box(output))` / `black_box(outputs)` in both branches), so
+    // these rows are like-for-like with `carrier::construct` and
+    // `carrier::fold`. `BatchSize::LargeInput` rather than
+    // `iter_with_large_drop` (which is `iter_batched` at `SmallInput`, i.e.
+    // `iters/10` carriers held live at once — hundreds of megabytes at
+    // `leaves = 4096`); `LargeInput` batches `iters/1000` and bounds the
+    // deferred-drop backlog to a few megabytes.
     for n in LIST_SIZES {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::new("list", n), &n, |b, &n| {
-            b.iter(|| black_box(Cofree::<ListEndo<f64>, f64>::unfold(n, &list_coalgebra)));
+            b.iter_batched(
+                || (),
+                |()| black_box(Cofree::<ListEndo<f64>, f64>::unfold(n, &list_coalgebra)),
+                BatchSize::LargeInput,
+            );
         });
     }
     for leaves in TREE_LEAVES {
@@ -668,12 +725,20 @@ fn bench_unfold(c: &mut Criterion) {
             BenchmarkId::new("tree_balanced", leaves),
             &depth,
             |b, &d| {
-                b.iter(|| black_box(Cofree::<TreeEndo<f64>, f64>::unfold(d, &balanced_coalgebra)));
+                b.iter_batched(
+                    || (),
+                    |()| black_box(Cofree::<TreeEndo<f64>, f64>::unfold(d, &balanced_coalgebra)),
+                    BatchSize::LargeInput,
+                );
             },
         );
         let spine = leaves - 1;
         group.bench_with_input(BenchmarkId::new("tree_spine", leaves), &spine, |b, &n| {
-            b.iter(|| black_box(Cofree::<TreeEndo<f64>, f64>::unfold(n, &spine_coalgebra)));
+            b.iter_batched(
+                || (),
+                |()| black_box(Cofree::<TreeEndo<f64>, f64>::unfold(n, &spine_coalgebra)),
+                BatchSize::LargeInput,
+            );
         });
     }
     group.finish();
