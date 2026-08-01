@@ -13,6 +13,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **An interleave-biased third tier in the SMC-NF differential sweep**
+  ([#183](https://github.com/sustia-llc/catgraph/issues/183)), so residual (a)
+  — marked (interleaved) components, the one lettered residual of
+  `docs/SMC-NF-RECONCILIATION.md` §4.6 still open, tracked on
+  [#174](https://github.com/sustia-llc/catgraph/issues/174) — has a tracker
+  that stresses it rather than reaching it incidentally.
+  `published_interleave_mode_figures_reproduce` in
+  `tests/smc_nf_differential_sweep.rs` (`internal-probes`, `#[ignore]`d,
+  100 000 pairs, seed `0x94D0_49BB_1331_11EB`) sweeps a corpus whose generator
+  forces an `A…B…A` input owner word **by construction** and **braid-free**:
+  one component's two `1 → 1` arms flank terminal `Discard` splitters and are
+  rejoined by a `μ` in the next layer, so `analyze_components`' union-find puts
+  the two arms in one component and each splitter — target-empty, hence joined
+  to nothing below — in its own, and `mark_interleaved` fires on 100% of cases.
+  New two-sided pins **745 divergent / 0 in-`𝔉` / 745 marked**, over
+  **100 000** marked cases. Against §4.6's motivating deficit that is 32× the
+  default corpus's 23 marked divergences and 3.1× the braid corpus's 237, and
+  unlike the braid tier — whose marking a coarsening `Braid` makes an upper
+  bound on content-level marking (§4.4) — every case here is marked at the
+  content level. The two existing tiers' pins (253/128/23 and 1162/634/237) are
+  unchanged; §4.6(a) now names both trackers.
+
 ### Fixed
 
 - **Wire-count sums saturate instead of overflowing**

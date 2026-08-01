@@ -62,6 +62,57 @@
 //! stay, at exactly these numbers, as **drift detectors on the engine** — a
 //! movement means `nf` changed, which is news whichever direction it moves.
 //! §4.6's ledger entries keep their meaning for the same reason.
+//!
+//! # The interleave tier ([#183](https://github.com/sustia-llc/catgraph/issues/183))
+//!
+//! Residual (a) — marked (interleaved) components, the one lettered residual of
+//! §4.6 still open, tracked on
+//! [#174](https://github.com/sustia-llc/catgraph/issues/174) — is the weakest
+//! axis of both corpora above. The default corpus produces **23** marked
+//! divergences per 100 000, and it produces them incidentally: nothing in
+//! `gen_layer` aims at interleaving. The braid tier reaches 237, but by a
+//! mechanism §4.6 itself flags as conservative — a `Braid` *merges* the
+//! components it spans, so braid-mode marking is an upper bound on content-level
+//! marking (§4.4, `braid_coarsening_marks_content_clear_diagram`).
+//!
+//! The third tier fixes both. Its generator emits the interleaving **by
+//! construction**, braid-free, so every case is a genuine content-level marked
+//! case rather than a coarsening artifact.
+//!
+//! ## What is being forced
+//!
+//! `mark_interleaved` (`smc_nf.rs`) reads the owner word of a boundary — the
+//! component owning each wire, left to right — collapses it to runs, and marks
+//! every component in the span whenever one owner appears in **two
+//! non-adjacent runs**. That is exactly an `A…B…A` owner word, and it is what
+//! the generator builds.
+//!
+//! ## The gadget
+//!
+//! Two layers, over the input boundary (`pre` and `post` are random flanks,
+//! `mid ∈ {1, 2}`):
+//!
+//! ```text
+//!  layer 0:  id^pre ⊗ armL ⊗ (!)^mid ⊗ armR ⊗ id^post      arm ∈ {id, scalar}
+//!  layer 1:  id^pre ⊗    μ (Add)     ⊗ id^post
+//! ```
+//!
+//! Each `!` (`Discard`, `1 → 0`) has an **empty target**, so
+//! `analyze_components`' emptiness guard joins it to nothing below: every `!` is
+//! its own component, terminal, and can never be absorbed by a later layer. The
+//! `μ` spans exactly `armL`'s and `armR`'s targets — which are adjacent, the
+//! `!`s having consumed their wires — so union-find joins the two arms into one
+//! component `A` across the splitters. The input owner word is therefore
+//! `[…, A, B₁, …, B_mid, A, …]`: an `A…B…A` run pattern, forced, on 100% of
+//! cases. Because the `B`s are terminal and `A` is boundary-attached, no tail
+//! layer can undo it — the tail (0–2 layers of the round's own `gen_layer`) is
+//! free to supply the `η`/`ε` shapes that make pairs actually diverge.
+//!
+//! The `marked_cases` pin below is the assertion that the construction holds:
+//! it counts cases whose `nf(A)` carries a marked component at all, divergent or
+//! not, and it is the full corpus size. `in_fragment` is 0 by the same
+//! construction — `𝔉` excludes marked diagrams — so this tier trades the
+//! in-fragment axis for the marked one deliberately.
 
 #![cfg(feature = "internal-probes")]
 
@@ -73,8 +124,33 @@ use catgraph_applied::sfg::SfgGenerator;
 type Sfg = SfgGenerator<BoolRig>;
 type E = PropExpr<Sfg>;
 
-/// The design round's seed. Every pin below is relative to it.
+/// The design round's seed. The default- and braid-tier pins are relative to it.
 const SEED: u64 = 0x9E37_79B9_7F4A_7C15;
+
+/// The interleave tier's seed (#183). A distinct odd constant — the second
+/// splitmix64 finalizer multiplier — so this corpus is independent of the two
+/// above rather than a re-reading of the same stream.
+const INTERLEAVE_SEED: u64 = 0x94D0_49BB_1331_11EB;
+
+/// Which corpus a case is drawn from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Mode {
+    /// The design round's corpus, exactly.
+    Default,
+    /// The design round's corpus with `Braid(1, 1)` atoms injected.
+    Braid,
+    /// The #183 corpus: a forced `A…B…A` owner word on every case.
+    Interleave,
+}
+
+impl Mode {
+    fn seed(self) -> u64 {
+        match self {
+            Mode::Default | Mode::Braid => SEED,
+            Mode::Interleave => INTERLEAVE_SEED,
+        }
+    }
+}
 
 /// The published corpus size.
 const FULL_PAIRS: usize = 100_000;
@@ -101,8 +177,8 @@ fn splitmix64(x: &mut u64) -> u64 {
 }
 
 impl Rng {
-    fn new(index: usize) -> Self {
-        let mut s = SEED ^ (index as u64).wrapping_mul(0xD6E8_FEB8_6659_FD93);
+    fn new(seed: u64, index: usize) -> Self {
+        let mut s = seed ^ (index as u64).wrapping_mul(0xD6E8_FEB8_6659_FD93);
         splitmix64(&mut s);
         Rng(s)
     }
@@ -170,6 +246,20 @@ fn gen_layer(rng: &mut Rng, w: usize, braid: bool) -> (E, usize) {
     (layer, out)
 }
 
+fn stack_layers(layers: Vec<E>) -> E {
+    layers
+        .into_iter()
+        .reduce(|x, y| PropExpr::Compose(Box::new(x), Box::new(y)))
+        .expect("nonempty")
+}
+
+fn tensor_atoms(atoms: Vec<E>) -> E {
+    atoms
+        .into_iter()
+        .reduce(|x, y| PropExpr::Tensor(Box::new(x), Box::new(y)))
+        .expect("nonempty")
+}
+
 fn gen_expr(rng: &mut Rng, braid: bool) -> E {
     let mut w = rng.below(MAX_INIT_WIDTH) as usize;
     let n = 1 + rng.below(MAX_LAYERS) as usize;
@@ -179,10 +269,65 @@ fn gen_expr(rng: &mut Rng, braid: bool) -> E {
         w = out;
         layers.push(l);
     }
-    layers
-        .into_iter()
-        .reduce(|x, y| PropExpr::Compose(Box::new(x), Box::new(y)))
-        .expect("nonempty")
+    stack_layers(layers)
+}
+
+// ------------------------------------------------- the interleave gadget (#183)
+
+/// Wires flanking the gadget on either side, exclusive bound.
+const MAX_FLANK: u64 = 3;
+/// Splitter (`Discard`) wires between the shared component's two arms, so
+/// `mid ∈ {1, 2}`.
+const MAX_SPLITTERS: u64 = 2;
+/// Random layers appended below the gadget, exclusive bound — so a case is 2–4
+/// layers deep, the same budget as [`MAX_LAYERS`] rather than a tuned one.
+const MAX_TAIL: u64 = 3;
+
+fn push_ids(atoms: &mut Vec<E>, n: usize) {
+    for _ in 0..n {
+        atoms.push(PropExpr::Identity(1));
+    }
+}
+
+/// One arm of the shared component: a `1 → 1` atom, so the joining `μ` below
+/// still spans exactly two wires.
+fn arm(rng: &mut Rng) -> E {
+    match rng.below(4) {
+        0 => g(SfgGenerator::Scalar(BoolRig(true))),
+        1 => g(SfgGenerator::Scalar(BoolRig(false))),
+        _ => PropExpr::Identity(1),
+    }
+}
+
+/// An expression whose input owner word is `A…B…A` **by construction** — see the
+/// module docs for why the two layers force it and why no tail can undo it.
+fn gen_interleaved_expr(rng: &mut Rng) -> E {
+    let pre = rng.below(MAX_FLANK) as usize;
+    let post = rng.below(MAX_FLANK) as usize;
+    let mid = 1 + rng.below(MAX_SPLITTERS) as usize;
+
+    let mut top: Vec<E> = Vec::new();
+    push_ids(&mut top, pre);
+    top.push(arm(rng));
+    for _ in 0..mid {
+        top.push(g(SfgGenerator::Discard));
+    }
+    top.push(arm(rng));
+    push_ids(&mut top, post);
+
+    let mut join: Vec<E> = Vec::new();
+    push_ids(&mut join, pre);
+    join.push(g(SfgGenerator::Add));
+    push_ids(&mut join, post);
+
+    let mut layers = vec![tensor_atoms(top), tensor_atoms(join)];
+    let mut w = pre + 1 + post;
+    for _ in 0..rng.below(MAX_TAIL) {
+        let (l, out) = gen_layer(rng, w, false);
+        w = out;
+        layers.push(l);
+    }
+    stack_layers(layers)
 }
 
 // ------------------------------------------------------- sound rewritings
@@ -255,9 +400,13 @@ fn rewrite_nth(e: &E, n: &mut isize, kind: u8) -> E {
 }
 
 /// Case `i`: the pair `(A, B)` with `B` one sound rewriting of `A`.
-fn case(i: usize, braid: bool) -> (E, E) {
-    let mut rng = Rng::new(i);
-    let a = gen_expr(&mut rng, braid);
+fn case(i: usize, mode: Mode) -> (E, E) {
+    let mut rng = Rng::new(mode.seed(), i);
+    let a = match mode {
+        Mode::Default => gen_expr(&mut rng, false),
+        Mode::Braid => gen_expr(&mut rng, true),
+        Mode::Interleave => gen_interleaved_expr(&mut rng),
+    };
     let kind = match rng.below(10) {
         0 | 1 => 2u8,
         x if x % 2 == 0 => 0,
@@ -283,23 +432,55 @@ struct Counts {
     marked: usize,
 }
 
-fn sweep(pairs: usize, braid: bool) -> Counts {
-    let mut counts = Counts::default();
+/// [`Counts`] plus the coverage figure the interleave tier needs (#183).
+///
+/// The extra field is a property of the *corpus*, not of a divergence, so it is
+/// kept off [`Counts`]: the two published tiers pin exactly the scratch driver's
+/// three buckets and nothing else.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Tally {
+    divergent: usize,
+    in_fragment: usize,
+    marked: usize,
+    /// Cases whose `nf(A)` carries a marked component, **divergent or not**.
+    marked_cases: usize,
+}
+
+impl Tally {
+    fn counts(&self) -> Counts {
+        Counts {
+            divergent: self.divergent,
+            in_fragment: self.in_fragment,
+            marked: self.marked,
+        }
+    }
+}
+
+fn tally(pairs: usize, mode: Mode) -> Tally {
+    let mut t = Tally::default();
     for i in 0..pairs {
-        let (a, b) = case(i, braid);
+        let (a, b) = case(i, mode);
         let (na, nb) = (nf(&a), nf(&b));
+        let sa = fragment_status(&na);
+        if sa.any_marked {
+            t.marked_cases += 1;
+        }
         if na == nb {
             continue;
         }
-        counts.divergent += 1;
-        if fragment_status(&na).in_fragment() && fragment_status(&nb).in_fragment() {
-            counts.in_fragment += 1;
+        t.divergent += 1;
+        if sa.in_fragment() && fragment_status(&nb).in_fragment() {
+            t.in_fragment += 1;
         }
-        if fragment_status(&na).any_marked {
-            counts.marked += 1;
+        if sa.any_marked {
+            t.marked += 1;
         }
     }
-    counts
+    t
+}
+
+fn sweep(pairs: usize, mode: Mode) -> Counts {
+    tally(pairs, mode).counts()
 }
 
 /// Run `f` on a thread with a stack deep enough for `nf`'s recursion.
@@ -322,7 +503,7 @@ fn on_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T 
 #[test]
 #[ignore = "100k-pair sweep. Run with --ignored when the NF changes."]
 fn published_divergence_figures_reproduce() {
-    let counts = on_big_stack(|| sweep(FULL_PAIRS, false));
+    let counts = on_big_stack(|| sweep(FULL_PAIRS, Mode::Default));
     assert_eq!(
         counts,
         Counts {
@@ -342,7 +523,7 @@ fn published_divergence_figures_reproduce() {
 #[test]
 #[ignore = "100k-pair braid-mode sweep. Run with --ignored when the NF changes."]
 fn published_braid_mode_figures_reproduce() {
-    let counts = on_big_stack(|| sweep(FULL_PAIRS, true));
+    let counts = on_big_stack(|| sweep(FULL_PAIRS, Mode::Braid));
     assert_eq!(
         counts,
         Counts {
@@ -354,11 +535,49 @@ fn published_braid_mode_figures_reproduce() {
     );
 }
 
+/// **Residual-(a) tracker, interleave-biased corpus
+/// ([#183](https://github.com/sustia-llc/catgraph/issues/183); residual (a) is
+/// tracked on [#174](https://github.com/sustia-llc/catgraph/issues/174)).**
+///
+/// Where the braid tier reaches marked cases incidentally and conservatively —
+/// a `Braid` merges the components it spans, so its marking is an upper bound on
+/// content-level marking (§4.4) — this corpus forces an `A…B…A` input owner word
+/// on every case, braid-free, with terminal `Discard` splitters between the two
+/// arms of one component. See the module docs for the gadget.
+///
+/// `marked_cases` is the construction's own assertion: every one of the 100 000
+/// cases normalizes to a diagram guard 3 marks. `in_fragment` is 0 for the same
+/// reason — `𝔉` excludes marked diagrams — which is the axis this tier trades
+/// away.
+///
+/// Marked-case yield against §4.6's motivating deficit: the default corpus gives
+/// **23** marked divergences per 100 000 and the braid corpus **237**; this one
+/// gives **745** — 32× the default and 3.1× the braid tier, and unlike either it
+/// draws them from a corpus that is 100% marked rather than incidentally so.
+#[test]
+#[ignore = "100k-pair interleave-mode sweep. Run with --ignored when the NF changes."]
+fn published_interleave_mode_figures_reproduce() {
+    let t = on_big_stack(|| tally(FULL_PAIRS, Mode::Interleave));
+    assert_eq!(
+        t,
+        Tally {
+            divergent: 745,
+            in_fragment: 0,
+            marked: 745,
+            marked_cases: 100_000,
+        },
+        "interleave-mode sweep moved; this is the #183 residual-(a) tracker \
+         (§4.6(a)). A `marked_cases` below {FULL_PAIRS} means the A…B…A \
+         construction stopped forcing the marking, which is a generator bug \
+         rather than an engine one."
+    );
+}
+
 /// Fast tier over the same frozen corpus — a 5 000-case prefix, so CI notices a
 /// gross change without the full run and a failure names a real case index.
 #[test]
 fn smoke_prefix_of_the_published_corpus() {
-    let counts = on_big_stack(|| sweep(SMOKE_PAIRS, false));
+    let counts = on_big_stack(|| sweep(SMOKE_PAIRS, Mode::Default));
     assert_eq!(
         counts,
         Counts {
