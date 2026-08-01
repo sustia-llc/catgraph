@@ -24,7 +24,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   panic in debug builds and wrap onto a small, spuriously valid arity in
   release. `usize::MAX` matches no real wire bundle, so the saturated value is
   reported as `CompositionSizeMismatch` — reject-don't-wrap, matching the
-  hardened syntax-crate interpreters (`to_cospan` / `to_mat_kron`).
+  hardened syntax-crate interpreters (`to_cospan` / `to_mat_kron`; `eval` joins
+  them in the #196 entry below).
 
 - **The deeper passes reject an overflowing arity instead of consuming it**
   ([#196](https://github.com/sustia-llc/catgraph/issues/196)) — the residue
@@ -40,9 +41,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
     exact companions to the saturating `source` / `target`, and the domain test
     the passes below screen with.
   - `content::is_arity_well_formed` now answers `false` on an overflowing
-    `Braid` or `Tensor` width as well as on a mismatched `Compose`, so
-    `content_of`'s documented domain is what it always claimed to be; the
+    `Braid` or `Tensor` width as well as on a mismatched `Compose`; the
     `expect` inside `content_of` makes a release build reject rather than wrap.
+    (The screen covers overflowing *sums*; an infeasibly huge arity written
+    literally — `Identity(usize::MAX)` — involves no sum, passes it, and stays
+    the caller's obligation, with the derived layer-width class:
+    [#197](https://github.com/sustia-llc/catgraph/issues/197).)
   - `smc_nf::nf` gains a documented `# Panics`: it rejects an overflowing width
     at its entry point, in both build profiles. A *mismatched* `Compose` is
     unaffected and still normalizes — `eq_mod`'s fallback depends on it.

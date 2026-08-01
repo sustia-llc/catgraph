@@ -52,8 +52,9 @@ where
     let middle: Vec<Lambda> = x.iter().chain(y.iter()).chain(z.iter()).copied().collect();
 
     // Left map: domain = X ⊕ Y ⊕ Y ⊕ Z → middle. Capacity is `m + 2n + k`, i.e.
-    // `middle.len() + n` — a hint, so saturating is exact where it matters and
-    // harmless where it does not.
+    // `middle.len() + n` — a hint, so saturating is exact where it matters; in
+    // the (memory-infeasible) saturated case `with_capacity` fails loud rather
+    // than handing back a wrapped hint.
     let mut left = Vec::with_capacity(middle.len().saturating_add(n));
     // X part: i → i
     left.extend(0..m);

@@ -161,7 +161,7 @@ pub struct StringDiagram<G: PropSignature> {
 /// widths this pipeline *derives* are no longer bounded by the tree's own
 /// arities, so an `Identity` of `usize::MAX`-scale arity beside another atom can
 /// still overflow a within-layer sum. That needs an arity no real wire bundle
-/// has, and it is not what the screen below is about.)
+/// has, and it is not what the screen below is about — tracked in #197.)
 ///
 /// # Panics
 ///
@@ -272,8 +272,8 @@ pub fn nf_without_column_pass<G: PropSignature>(expr: &PropExpr<G>) -> StringDia
 /// than at each of the interior `m + n` sites (#196 lists six): past it every
 /// arity *written in the tree* is known to fit, and [`atom_source`] records why
 /// that covers every braid width the pipeline goes on to read or build. It does
-/// not cover the widths the pipeline *derives* by adding across a layer — see
-/// [`nf`]'s caveat, and `merge_adjacent_identities`, which saturates.
+/// not cover the widths the pipeline *derives* by adding across a layer (#197)
+/// — see [`nf`]'s caveat, and `merge_adjacent_identities`, which saturates.
 fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDiagram<G> {
     assert!(
         expr.arities_fit(),

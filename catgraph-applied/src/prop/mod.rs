@@ -139,8 +139,10 @@ pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::De
 ///
 /// Saturation is the right answer only where the sum is *compared* against a
 /// real length. The deeper passes size collections from it instead, so they
-/// screen it out rather than saturate (#196): [`PropExpr::arities_fit`] is the
-/// exact test, `content_of` and `nf` reject outside it in both build profiles,
+/// screen it out rather than saturate (#196): [`PropExpr::arities_fit`] tests
+/// exactly the overflowing-sum class — an infeasibly huge arity written
+/// *literally* (`Identity(usize::MAX)`) involves no sum and passes it (#197) —
+/// `content_of` and `nf` reject outside it in both build profiles,
 /// and the equality APIs above them ([`Presentation::eq_mod`], [`ColoredExpr::eq_colored`])
 /// stay total by gating on it.
 ///
@@ -242,6 +244,11 @@ impl<G: PropSignature> PropExpr<G> {
     /// This is the domain of the passes that consume an arity as a magnitude:
     /// [`content_of`] and [`nf`] reject outside it, and the equality APIs above
     /// them gate on it to stay total (#196).
+    ///
+    /// It screens overflow, not magnitude: a huge arity written *literally*
+    /// (e.g. `Identity(usize::MAX)`) involves no sum and passes, yet is just as
+    /// infeasible for those consumers — bounding it stays the caller's
+    /// obligation (#197).
     ///
     /// [`content_of`]: crate::prop::presentation::content::content_of
     /// [`nf`]: crate::prop::presentation::smc_nf::nf

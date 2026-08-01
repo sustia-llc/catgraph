@@ -23,6 +23,8 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
   would have swallowed the error the caller is entitled to. The cursor is an
   `ExactSizeIterator`, so the check is `O(1)` and reports the same `actual`.
 
+## [workspace-v0.5.0] - 2026-07-30
+
 ### Changed
 
 - **BREAKING: the textual surface is Λ-colored**

@@ -499,9 +499,9 @@ impl<G: PropSignature> ColoredExpr<G> {
     /// # Outside the well-formed case
     ///
     /// A [`ColoredExpr`] reconstructed across the serde trust boundary (see the
-    /// type's docs) has not been through [`check`], and splits into two:
+    /// type's docs) has not been through [`check`], and splits into three:
     ///
-    /// - **Arity-ill-formed.** Outside [`content_of_colored`]'s domain, so the
+    /// - **Arity-mismatched.** Outside [`content_of_colored`]'s domain, so the
     ///   gate below — which tests arity and nothing else — routes it to the old
     ///   normal-form test, with the old semantics: `true` sound, `false` not a
     ///   disproof.
