@@ -27,6 +27,18 @@ use crate::{
 ///
 /// The left leg maps both Y copies to the same middle nodes; X and Z pass through.
 /// The right leg maps X and Z through, skipping Y.
+///
+/// # Arity arithmetic (#196)
+///
+/// Every index sum below is bounded by `middle`, which is built first: a `Vec`
+/// holds at most `usize::MAX` elements, so reaching the next line at all proves
+/// `m + n + k` fits — and with it `m + n`, `m + k`, and the `m + n .. m + n + k`
+/// range bound. The one sum that is *not* covered by that argument is the left
+/// leg's own length, `m + 2n + k`, which adds a second copy of `Y`; it is
+/// spelled against `middle.len()` so the bound is visible rather than assumed.
+/// No saturating sentinel is used or wanted here: unlike a `PropExpr` arity,
+/// these are lengths of slices the caller already holds, not values a caller can
+/// name.
 #[allow(clippy::many_single_char_names)]
 pub fn comp_cospan<Lambda>(x: &[Lambda], y: &[Lambda], z: &[Lambda]) -> Cospan<Lambda>
 where
@@ -39,8 +51,11 @@ where
     // Middle = X ++ Y ++ Z
     let middle: Vec<Lambda> = x.iter().chain(y.iter()).chain(z.iter()).copied().collect();
 
-    // Left map: domain = X ⊕ Y ⊕ Y ⊕ Z → middle
-    let mut left = Vec::with_capacity(m + 2 * n + k);
+    // Left map: domain = X ⊕ Y ⊕ Y ⊕ Z → middle. Capacity is `m + 2n + k`, i.e.
+    // `middle.len() + n` — a hint, so saturating is exact where it matters; in
+    // the (memory-infeasible) saturated case `with_capacity` fails loud rather
+    // than handing back a wrapped hint.
+    let mut left = Vec::with_capacity(middle.len().saturating_add(n));
     // X part: i → i
     left.extend(0..m);
     // First Y copy: m+j → m+j

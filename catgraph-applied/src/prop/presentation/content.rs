@@ -169,8 +169,8 @@ impl<G: PropSignature> Content<G> {
 // ---------------------------------------------------------------- domain check
 
 /// Whether every `Compose` in `expr` joins a target arity to a matching source
-/// arity — exactly [`content_of`]'s precondition, and so a test for membership in
-/// its domain.
+/// arity **and** no `Braid` or `Tensor` width overflows `usize` — exactly
+/// [`content_of`]'s precondition, and so a test for membership in its domain.
 ///
 /// Terms built through [`Free`](crate::prop::Free) always pass, since its smart
 /// constructors check on the way in. `PropExpr`'s variants are public, though, so
@@ -178,16 +178,37 @@ impl<G: PropSignature> Content<G> {
 /// on such input — [`Presentation::eq_mod`](super::Presentation::eq_mod) is one —
 /// can ask first instead of catching a panic it has no way to catch.
 ///
-/// `O(n)` in the size of the tree: each node's own arities are `O(height)` to
-/// read, but the recursion visits each node once and the checks are local.
+/// The overflow clause is [#196]. `PropExpr::Braid(usize::MAX, 1)` is
+/// documented-legal to construct, and here its width is a *magnitude* — it sizes
+/// the braid's node vector — not a length to compare, so the saturating
+/// `usize::MAX` that [`PropExpr::source`] reports is not a usable answer and the
+/// tree is reported ill-formed instead. [`PropExpr::arities_fit`] is that clause
+/// on its own, for callers that need to separate the two failure modes; `nf`'s
+/// domain is the wider one.
+///
+/// `O(n)` for the overflow clause; the composability clause re-reads each node's
+/// own arities, which are `O(height)` for a `Compose` spine and proportional to
+/// the subterm for a `Tensor`.
+///
+/// [#196]: https://github.com/sustia-llc/catgraph/issues/196
 #[must_use]
 pub fn is_arity_well_formed<G: PropSignature>(expr: &PropExpr<G>) -> bool {
+    // Order matters: once every width fits, `source`/`target` are exact and the
+    // composability test below compares real arities rather than sentinels.
+    expr.arities_fit() && composes(expr)
+}
+
+/// The composability half of [`is_arity_well_formed`]: every `Compose` joins a
+/// target arity to a matching source arity.
+///
+/// Only meaningful once [`PropExpr::arities_fit`] holds — two independently
+/// saturated arities compare equal, so on an overflowing tree this can report a
+/// match that is not one.
+fn composes<G: PropSignature>(expr: &PropExpr<G>) -> bool {
     match expr {
         PropExpr::Identity(_) | PropExpr::Braid(_, _) | PropExpr::Generator(_) => true,
-        PropExpr::Compose(f, g) => {
-            f.target() == g.source() && is_arity_well_formed(f) && is_arity_well_formed(g)
-        }
-        PropExpr::Tensor(f, g) => is_arity_well_formed(f) && is_arity_well_formed(g),
+        PropExpr::Compose(f, g) => f.target() == g.source() && composes(f) && composes(g),
+        PropExpr::Tensor(f, g) => composes(f) && composes(g),
     }
 }
 
@@ -242,9 +263,17 @@ fn build<G: PropSignature>(e: &PropExpr<G>, b: &mut Builder<G>) -> Piece {
             }
         }
         PropExpr::Braid(m, n) => {
-            let nodes: Vec<usize> = (0..m + n).map(|_| b.fresh()).collect();
+            // #196: the width is a magnitude here — it sizes two vectors — so a
+            // saturating `usize::MAX` would be a `usize::MAX`-element `collect`,
+            // not a rejectable sentinel. `is_arity_well_formed` screens this,
+            // and `content_of`'s documented domain excludes it; the `expect`
+            // makes the release build reject rather than wrap.
+            let width = m
+                .checked_add(*n)
+                .expect("invariant: content_of's domain excludes a braid width that overflows usize (is_arity_well_formed)");
+            let nodes: Vec<usize> = (0..width).map(|_| b.fresh()).collect();
             // σ_{m,n} : u ⊗ v → v ⊗ u — the anchor is the block swap.
-            let mut output = Vec::with_capacity(m + n);
+            let mut output = Vec::with_capacity(width);
             output.extend_from_slice(&nodes[*m..]);
             output.extend_from_slice(&nodes[..*m]);
             Piece {
@@ -337,9 +366,11 @@ impl Renumber<'_> {
 /// # Panics
 ///
 /// Panics if `expr` is not arity-well-formed, i.e. some `Compose` joins a target
-/// arity to a different source arity. `PropExpr`'s variants are public, so such a
-/// tree is constructible by hand; terms built through
-/// [`Free`](crate::prop::Free) cannot hit this.
+/// arity to a different source arity, **or** some `Braid` / `Tensor` width sums
+/// past `usize::MAX` (#196 — an overflowing width counts as ill-formed here,
+/// because it is a magnitude this function would size a node vector from).
+/// `PropExpr`'s variants are public, so such a tree is constructible by hand;
+/// terms built through [`Free`](crate::prop::Free) cannot hit this.
 ///
 /// **This is a stricter contract than the equality API above it.**
 /// [`Presentation::eq_mod`](super::Presentation::eq_mod) is total on such a tree

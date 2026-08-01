@@ -6,6 +6,19 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **`equivalence::comp_cospan`'s index arithmetic is documented as bounded, and
+  its one unbounded sum is spelled against that bound**
+  ([#196](https://github.com/sustia-llc/catgraph/issues/196)). The four index
+  sums the issue's inventory names (`m + n`, `m + n + k`) cannot overflow:
+  `middle` is built first, and a `Vec` holding `m + n + k` elements is proof
+  that the sum fits. The one sum *not* covered by that argument — the left leg's
+  own length `m + 2n + k`, which the inventory does not list — is now written as
+  `middle.len().saturating_add(n)`, a capacity hint whose bound is visible
+  rather than assumed. No saturating sentinel is introduced: unlike a `PropExpr`
+  arity, these are lengths of slices the caller already holds.
+
 ## [workspace-v0.4.0] - 2026-07-25
 
 ### Changed

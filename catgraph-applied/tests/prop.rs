@@ -82,6 +82,41 @@ fn tensor_sums_arities() {
     assert_eq!(r.target(), 2);
 }
 
+/// #180: the arity fold saturates instead of overflowing. Raw variant
+/// construction is documented-legal, so `Braid(usize::MAX, 1)` and a `Tensor`
+/// of two huge-arity halves are both reachable; in a debug build an unchecked
+/// `+` would panic here, in release it would wrap to a small, spuriously valid
+/// arity. `usize::MAX` matches no real wire bundle, so the saturated value can
+/// only be reported as a mismatch downstream.
+#[test]
+fn arity_fold_saturates_instead_of_overflowing() {
+    // Braid arm, both sides.
+    let b: PropExpr<Sig> = PropExpr::Braid(usize::MAX, 1);
+    assert_eq!(b.source(), usize::MAX);
+    assert_eq!(b.target(), usize::MAX);
+
+    // Tensor arm: the fold over two saturating halves stays saturated.
+    let wide = Free::tensor(PropExpr::<Sig>::Braid(usize::MAX, 0), PropExpr::Braid(1, 0));
+    assert_eq!(wide.source(), usize::MAX);
+    assert_eq!(wide.target(), usize::MAX);
+
+    // Identity-based equivalent, and nesting one level deeper.
+    let nested = Free::tensor(
+        Free::tensor(
+            PropExpr::<Sig>::Identity(usize::MAX),
+            PropExpr::Identity(usize::MAX),
+        ),
+        PropExpr::Identity(1),
+    );
+    assert_eq!(nested.source(), usize::MAX);
+    assert_eq!(nested.target(), usize::MAX);
+
+    // The saturated arity is still just an arity: composition against a real
+    // term reports a mismatch rather than being accepted.
+    let id: PropExpr<Sig> = Free::identity(2);
+    assert!(Free::compose(b, id).is_err());
+}
+
 #[test]
 fn has_identity_trait_matches_raw_constructor() {
     let obj: Vec<()> = vec![(); 3];

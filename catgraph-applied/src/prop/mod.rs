@@ -127,9 +127,27 @@ pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::De
 ///
 /// Every node carries enough information to recover the arity of the
 /// subterm rooted at it via [`PropExpr::source`] and [`PropExpr::target`]
-/// in O(height). Smart constructors on [`Free`] produce only well-formed
-/// expressions; raw variant construction is available but callers must
-/// uphold the composition-arity invariant themselves.
+/// — `Compose` chains resolve in O(height), while `Tensor` visits both
+/// halves, so the worst case is proportional to the subterm's size. Smart
+/// constructors on [`Free`] produce only well-formed expressions; raw
+/// variant construction is available but callers must uphold the
+/// composition-arity invariant themselves. In this fold and the colored
+/// `check`/`infer` interpreters, arity sums that would overflow `usize`
+/// saturate to `usize::MAX` — a sentinel no real wire bundle can have, so
+/// length checks report [`CatgraphError::CompositionSizeMismatch`] instead
+/// of wrapping (reject-don't-wrap, #180).
+///
+/// Saturation is the right answer only where the sum is *compared* against a
+/// real length. The deeper passes size collections from it instead, so they
+/// screen it out rather than saturate (#196): [`PropExpr::arities_fit`] tests
+/// exactly the overflowing-sum class — an infeasibly huge arity written
+/// *literally* (`Identity(usize::MAX)`) involves no sum and passes it (#197) —
+/// `content_of` and `nf` reject outside it in both build profiles,
+/// and the equality APIs above them ([`Presentation::eq_mod`], [`ColoredExpr::eq_colored`])
+/// stay total by gating on it.
+///
+/// [`Presentation::eq_mod`]: crate::prop::presentation::Presentation::eq_mod
+/// [`ColoredExpr::eq_colored`]: crate::prop::colored::ColoredExpr::eq_colored
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PropExpr<G: PropSignature> {
@@ -147,27 +165,96 @@ pub enum PropExpr<G: PropSignature> {
 
 impl<G: PropSignature> PropExpr<G> {
     /// Source arity of this morphism.
+    ///
+    /// A `Braid` or `Tensor` whose halves sum past `usize::MAX` saturates
+    /// there rather than overflowing; `usize::MAX` matches no real wire
+    /// bundle, so the composition checks report
+    /// [`CatgraphError::CompositionSizeMismatch`] instead of wrapping.
+    /// Saturation is not injective: two independently overflowing arities
+    /// both read `usize::MAX` and compare equal (e.g. in `compose`'s arity
+    /// check) — the composition-arity invariant on [`PropExpr`] covers this.
     #[must_use]
     pub fn source(&self) -> usize {
         match self {
             PropExpr::Identity(n) => *n,
-            PropExpr::Braid(m, n) => m + n,
+            PropExpr::Braid(m, n) => m.saturating_add(*n),
             PropExpr::Generator(g) => g.source(),
             PropExpr::Compose(f, _) => f.source(),
-            PropExpr::Tensor(f, g) => f.source() + g.source(),
+            PropExpr::Tensor(f, g) => f.source().saturating_add(g.source()),
         }
     }
 
     /// Target arity of this morphism.
+    ///
+    /// Saturates at `usize::MAX` on overflow, exactly as [`PropExpr::source`].
     #[must_use]
     pub fn target(&self) -> usize {
         match self {
             PropExpr::Identity(n) => *n,
-            PropExpr::Braid(m, n) => m + n,
+            PropExpr::Braid(m, n) => m.saturating_add(*n),
             PropExpr::Generator(g) => g.target(),
             PropExpr::Compose(_, g) => g.target(),
-            PropExpr::Tensor(f, g) => f.target() + g.target(),
+            PropExpr::Tensor(f, g) => f.target().saturating_add(g.target()),
         }
+    }
+
+    /// The exact `(source, target)` arity pair of this subterm, or `None` if
+    /// **any** `Braid` or `Tensor` width anywhere in it sums past `usize::MAX`.
+    ///
+    /// The checked companion to [`source`](PropExpr::source) /
+    /// [`target`](PropExpr::target), which saturate and so cannot tell an
+    /// overflowed width from a genuine `usize::MAX` one. Where the arity is
+    /// compared against a real slice length that distinction does not matter —
+    /// `usize::MAX` matches nothing either way. Where it is used as a
+    /// **magnitude** — sizing a `Vec`, a range bound, a matrix dimension — it
+    /// does, and the consumer screens with this instead (#196).
+    ///
+    /// Unlike `source`/`target`, this inspects the whole subterm on every
+    /// variant, including the half of a `Compose` that does not contribute to
+    /// the requested boundary: an overflow buried there is still an overflow.
+    #[must_use]
+    pub fn checked_arities(&self) -> Option<(usize, usize)> {
+        match self {
+            PropExpr::Identity(n) => Some((*n, *n)),
+            PropExpr::Braid(m, n) => {
+                let width = m.checked_add(*n)?;
+                Some((width, width))
+            }
+            PropExpr::Generator(g) => Some((g.source(), g.target())),
+            PropExpr::Compose(f, g) => {
+                let (f_source, _) = f.checked_arities()?;
+                let (_, g_target) = g.checked_arities()?;
+                Some((f_source, g_target))
+            }
+            PropExpr::Tensor(f, g) => {
+                let (f_source, f_target) = f.checked_arities()?;
+                let (g_source, g_target) = g.checked_arities()?;
+                Some((
+                    f_source.checked_add(g_source)?,
+                    f_target.checked_add(g_target)?,
+                ))
+            }
+        }
+    }
+
+    /// Whether every arity sum in this subterm fits in `usize` — i.e. whether
+    /// [`source`](PropExpr::source) and [`target`](PropExpr::target) report
+    /// exact values rather than the saturated sentinel.
+    ///
+    /// This is the domain of the passes that consume an arity as a magnitude:
+    /// [`content_of`] and [`nf`] reject outside it, and the equality APIs above
+    /// them gate on it to stay total (#196).
+    ///
+    /// It screens overflow, not magnitude: a huge arity written *literally*
+    /// (e.g. `Identity(usize::MAX)`) involves no sum and passes, yet is just as
+    /// infeasible for those consumers — bounding it stays the caller's
+    /// obligation (#197).
+    ///
+    /// [`content_of`]: crate::prop::presentation::content::content_of
+    /// [`nf`]: crate::prop::presentation::smc_nf::nf
+    #[must_use]
+    pub fn arities_fit(&self) -> bool {
+        self.checked_arities().is_some()
     }
 }
 

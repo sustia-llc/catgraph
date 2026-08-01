@@ -13,6 +13,56 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Fixed
+
+- **Wire-count sums saturate instead of overflowing**
+  ([#180](https://github.com/sustia-llc/catgraph/issues/180)):
+  `prop::colored::check` / `infer` and the `PropExpr::source` /
+  `PropExpr::target` arity fold now saturate `Braid` and `Tensor` sums at
+  `usize::MAX` instead of overflowing. Raw variant construction is
+  documented-legal, so a `Braid(usize::MAX, 1)` was reachable and used to
+  panic in debug builds and wrap onto a small, spuriously valid arity in
+  release. `usize::MAX` matches no real wire bundle, so the saturated value is
+  reported as `CompositionSizeMismatch` — reject-don't-wrap, matching the
+  hardened syntax-crate interpreters (`to_cospan` / `to_mat_kron`; `eval` joins
+  them in the #196 entry below).
+
+- **The deeper passes reject an overflowing arity instead of consuming it**
+  ([#196](https://github.com/sustia-llc/catgraph/issues/196)) — the residue
+  #180 left, and with it the policy is uniform across the workspace.
+  Saturating is the right answer only where a sum is *compared* against a real
+  slice length. `content_of` sizes a node vector from a braid's `m + n`,
+  `check_equation` sizes its fresh source word from `lhs.source()`, `smc_nf::nf`
+  decomposes a `σ` of that many wires, `sfg_to_mat` allocates a `dim × dim`
+  matrix, and the `Identity(m) ⊗ Identity(n) → Identity(m + n)` rewrite stores
+  it — at each, `usize::MAX` is an allocation abort or a non-terminating loop,
+  not a rejectable sentinel. Concretely:
+  - `PropExpr::checked_arities` / `PropExpr::arities_fit` (**new**) are the
+    exact companions to the saturating `source` / `target`, and the domain test
+    the passes below screen with.
+  - `content::is_arity_well_formed` now answers `false` on an overflowing
+    `Braid` or `Tensor` width as well as on a mismatched `Compose`; the
+    `expect` inside `content_of` makes a release build reject rather than wrap.
+    (The screen covers overflowing *sums*; an infeasibly huge arity written
+    literally — `Identity(usize::MAX)` — involves no sum, passes it, and stays
+    the caller's obligation, with the derived layer-width class:
+    [#197](https://github.com/sustia-llc/catgraph/issues/197).)
+  - `smc_nf::nf` gains a documented `# Panics`: it rejects an overflowing width
+    at its entry point, in both build profiles. A *mismatched* `Compose` is
+    unaffected and still normalizes — `eq_mod`'s fallback depends on it.
+  - `Presentation::add_equation` reports `CompositionSizeMismatch` when the LHS
+    arity is `usize::MAX`, before it sizes anything from it. (PR #195's
+    regression test put its overflowing braid on the RHS to avoid exactly this;
+    the RHS verdict is unchanged.)
+  - `sfg_to_mat` reports `SfgFunctor` on an overflowing braid width, through the
+    error arm it already had for direct-`PropExpr` misuse.
+  - **Behavioral, on input no constructor can produce:**
+    `Presentation::eq_mod` screens the overflow class ahead of either engine and
+    answers `Ok(Some(true))` on structurally identical trees, `Ok(None)` —
+    undecided — otherwise; `ColoredExpr::eq_colored` (reachable only across the
+    serde trust boundary) falls back to structural equality. Neither returns a
+    disproof no layer established. Both previously panicked.
+
 ## [workspace-v0.5.0] - 2026-07-30
 
 ### Changed

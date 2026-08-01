@@ -7,6 +7,22 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`eval`'s braid arm rejects an overflowing wire count**
+  ([#196](https://github.com/sustia-llc/catgraph/issues/196)). #79 P3a
+  (PR [#179](https://github.com/sustia-llc/catgraph/pull/179)) hardened
+  `to_cospan` and `to_mat_kron`, leaving the streaming interpreter the one
+  unchecked `m + n` in the crate — a debug-build overflow panic and, in release,
+  a wrap onto a small width followed by `rotate_left(mid > len)`. The sum is now
+  checked and saturated exactly as its two siblings spell it, and reported as
+  `SyntaxError::WireCount`.
+
+  `take_exact` also detects a shortfall *before* reserving, rather than draining
+  until dry: `Vec::with_capacity(usize::MAX)` panics on the reservation, which
+  would have swallowed the error the caller is entitled to. The cursor is an
+  `ExactSizeIterator`, so the check is `O(1)` and reports the same `actual`.
+
 ## [workspace-v0.5.0] - 2026-07-30
 
 ### Changed

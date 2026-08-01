@@ -10,6 +10,7 @@ use std::borrow::Cow;
 
 use catgraph::errors::CatgraphError;
 use catgraph_applied::prop::colored::{ColoredExpr, check};
+use catgraph_applied::prop::presentation::Presentation;
 use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
 
 // ---- Two-color test signature over Λ = {A, B} -------------------------------
@@ -305,6 +306,94 @@ fn mono_words_are_zst_backed_and_never_allocate() {
     assert_eq!(Mono::Copy.target_word().len(), Mono::Copy.target());
     assert_eq!(Two::H.source(), 2);
     assert_eq!(Two::H.target(), 2);
+}
+
+// ---- Overflowing wire counts (#180) -----------------------------------------
+
+/// A directly-constructed `Braid(usize::MAX, 1)` is documented-legal, and its
+/// `m + n` used to overflow — a debug-build panic, a release-build wrap onto a
+/// small arity that a short input could spuriously satisfy. Saturating to
+/// `usize::MAX` matches no slice length, so `check` reports the mismatch.
+#[test]
+fn check_rejects_an_overflowing_braid_instead_of_panicking() {
+    let over: PropExpr<Two> = PropExpr::Braid(usize::MAX, 1);
+    assert_eq!(over.source(), usize::MAX);
+    for input in [&[][..], W_A, W_AB] {
+        assert!(matches!(
+            check(&over, input),
+            Err(CatgraphError::CompositionSizeMismatch {
+                expected: usize::MAX,
+                ..
+            })
+        ));
+    }
+
+    // Tensor arm: the split point comes from `f.source()`, so hardening the
+    // fold covers it — the left factor's saturated arity is never reached by a
+    // real input, and `expect_at_least` reports that rather than wrapping.
+    let wide = Free::tensor(PropExpr::<Two>::Braid(usize::MAX, 0), PropExpr::Braid(1, 0));
+    assert_eq!(wide.source(), usize::MAX);
+    assert!(matches!(
+        check(&wide, W_AB),
+        Err(CatgraphError::CompositionSizeMismatch {
+            expected: usize::MAX,
+            actual: 2
+        })
+    ));
+}
+
+/// The `infer` sibling, reached through its only public entry point. The
+/// overflowing braid sits on the RHS: `check_equation` sizes the fresh source
+/// word from `lhs.source()`, so a small LHS keeps the test cheap while the
+/// RHS still drives `infer`'s `Braid` arm.
+#[test]
+fn add_equation_rejects_an_overflowing_braid_on_the_rhs() {
+    let mut p: Presentation<Two> = Presentation::new();
+    let lhs: PropExpr<Two> = Free::identity(2);
+    let rhs: PropExpr<Two> = PropExpr::Braid(usize::MAX, 1);
+    assert!(matches!(
+        p.add_equation(lhs, rhs),
+        Err(CatgraphError::CompositionSizeMismatch {
+            expected: usize::MAX,
+            actual: 2
+        })
+    ));
+    assert!(p.equations().is_empty());
+}
+
+/// The sibling case the test above deliberately avoided (#196). With the braid
+/// on the **LHS**, `check_equation` never reaches `infer`: it sizes the fresh
+/// source word from `lhs.source()` first, and the post-#180 saturating
+/// `usize::MAX` makes that a `usize::MAX`-element `collect` — an allocation
+/// abort, not an error any caller can catch. So the LHS arity is screened before
+/// the sizing, and reported against the RHS arity the equation would have to
+/// agree with.
+#[test]
+fn add_equation_rejects_an_overflowing_braid_on_the_lhs() {
+    let mut p: Presentation<Two> = Presentation::new();
+    let lhs: PropExpr<Two> = PropExpr::Braid(usize::MAX, 1);
+    let rhs: PropExpr<Two> = Free::identity(2);
+    assert_eq!(lhs.source(), usize::MAX);
+    assert!(matches!(
+        p.add_equation(lhs, rhs),
+        Err(CatgraphError::CompositionSizeMismatch {
+            expected: usize::MAX,
+            actual: 2
+        })
+    ));
+    assert!(p.equations().is_empty());
+
+    // Buried on the LHS, under a `Tensor` whose own arity saturates the same way.
+    let mut p2: Presentation<Two> = Presentation::new();
+    let buried = Free::tensor(PropExpr::<Two>::Braid(usize::MAX, 0), PropExpr::Braid(1, 0));
+    assert!(matches!(
+        p2.add_equation(buried, Free::identity(3)),
+        Err(CatgraphError::CompositionSizeMismatch {
+            expected: usize::MAX,
+            actual: 3
+        })
+    ));
+    assert!(p2.equations().is_empty());
 }
 
 // ---- serde ------------------------------------------------------------------

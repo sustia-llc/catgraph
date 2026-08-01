@@ -33,9 +33,10 @@ use crate::{
 ///
 /// Returns [`CatgraphError::SfgFunctor`] (wrapping an inner
 /// [`CatgraphError::CompositionSizeMismatch`]) if the underlying
-/// [`PropExpr`] is ill-formed. For values built through the safe
-/// [`SignalFlowGraph`] constructors this cannot occur; the error arm exists
-/// to surface misuse via direct `PropExpr` construction.
+/// [`PropExpr`] is ill-formed, or plainly if a `Braid` width overflows `usize`
+/// (#196). For values built through the safe [`SignalFlowGraph`] constructors
+/// neither can occur; the error arm exists to surface misuse via direct
+/// `PropExpr` construction.
 pub fn sfg_to_mat<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     sfg: &SignalFlowGraph<R>,
 ) -> Result<MatR<R>, CatgraphError> {
@@ -48,7 +49,7 @@ fn sfg_to_mat_inner<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'sta
     match expr {
         PropExpr::Identity(n) => Ok(MatR::<R>::identity(*n)),
 
-        PropExpr::Braid(m, n) => Ok(braid_matrix::<R>(*m, *n)),
+        PropExpr::Braid(m, n) => braid_matrix::<R>(*m, *n),
 
         PropExpr::Generator(g) => Ok(generator_matrix::<R>(g)),
 
@@ -100,8 +101,19 @@ fn generator_matrix<R: Rig + Eq + std::hash::Hash>(g: &SfgGenerator<R>) -> MatR<
 ///
 /// - input at row `i` with `i < m` → output column `n + i`
 /// - input at row `m + j` with `j < n` → output column `j`
-fn braid_matrix<R: Rig>(m: usize, n: usize) -> MatR<R> {
-    let dim = m + n;
+///
+/// # Errors
+///
+/// [`CatgraphError::SfgFunctor`] if `m + n` overflows `usize` (#196). The width
+/// is a *matrix dimension* here, not a length to compare, so the saturating
+/// `usize::MAX` of [`PropExpr::source`](crate::prop::PropExpr::source) would be
+/// a `usize::MAX × usize::MAX` allocation rather than a rejectable sentinel;
+/// this returns through the caller's existing error arm instead, which exists
+/// for exactly this — misuse via direct `PropExpr` construction.
+fn braid_matrix<R: Rig>(m: usize, n: usize) -> Result<MatR<R>, CatgraphError> {
+    let dim = m.checked_add(n).ok_or_else(|| CatgraphError::SfgFunctor {
+        message: format!("braid width {m} + {n} overflows usize in S(σ_{{m,n}})"),
+    })?;
     let mut entries = vec![vec![R::zero(); dim]; dim];
     for i in 0..m {
         entries[i][n + i] = R::one();
@@ -109,5 +121,5 @@ fn braid_matrix<R: Rig>(m: usize, n: usize) -> MatR<R> {
     for j in 0..n {
         entries[m + j][j] = R::one();
     }
-    MatR::<R>::new(dim, dim, entries).expect("braid matrix has (m+n)×(m+n) shape")
+    Ok(MatR::<R>::new(dim, dim, entries).expect("braid matrix has (m+n)×(m+n) shape"))
 }

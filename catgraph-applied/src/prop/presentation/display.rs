@@ -205,11 +205,12 @@ pub fn expr_of_content<G: PropSignature>(c: &Content<G>) -> PropExpr<G> {
 ///
 /// # Panics
 ///
-/// Panics where [`content_of`] does — `e` is not
-/// arity-well-formed, i.e. some `Compose` joins a target arity to a different
-/// source arity. Ask
+/// Panics where [`content_of`] does — `e` is not arity-well-formed, i.e. some
+/// `Compose` joins a target arity to a different source arity, or some `Braid` /
+/// `Tensor` width sums past `usize::MAX` (#196). Ask
 /// [`is_arity_well_formed`](super::content::is_arity_well_formed) first if the
-/// tree is hand-built or deserialized.
+/// tree is hand-built or deserialized. The [`nf`] call behind this one rejects
+/// the second class in its own right, on the same test.
 #[must_use]
 pub fn canonical_display<G: PropSignature>(e: &PropExpr<G>) -> StringDiagram<G> {
     nf(&expr_of_content(&content_of(e)))

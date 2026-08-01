@@ -3,8 +3,10 @@
 //! # Role
 //!
 //! This module provides, in place of the plain `apply_smc_rules` pre-pass, a
-//! **Joyal-Street string-diagram normal form**: a total function
-//! [`PropExpr`] → [`StringDiagram`] aiming at "SMC-equal iff NF-equal". The
+//! **Joyal-Street string-diagram normal form**: a function
+//! [`PropExpr`] → [`StringDiagram`], total on the arities a real wire bundle can
+//! have and rejecting an overflowing width outright (see [`nf`]'s `# Panics`),
+//! aiming at "SMC-equal iff NF-equal". The
 //! ⇐ direction holds unconditionally (every rewrite is SMC-sound); for the ⇒
 //! direction, **rigidity is proven on the fragment `𝔉′`** — braid-free,
 //! every `η` placement-pinned (Theorem 4.5, `docs/SMC-NF-RECONCILIATION.md`
@@ -151,6 +153,28 @@ pub struct StringDiagram<G: PropSignature> {
 ///
 /// Totality: `nf` is defined on every arity-well-formed `PropExpr<G>` and
 /// always terminates (see the termination measure in `docs/SMC-NF-RECONCILIATION.md` §2.4).
+/// A `Compose` joining *mismatched* arities is not excluded — it normalizes
+/// rather than failing, and [`Presentation::eq_mod`](super::Presentation::eq_mod)
+/// relies on that as its fallback outside
+/// [`content_of`](super::content::content_of)'s (stricter) domain. (The one
+/// caveat is arithmetic rather than structural: on a mismatched tree the layer
+/// widths this pipeline *derives* are no longer bounded by the tree's own
+/// arities, so an `Identity` of `usize::MAX`-scale arity beside another atom can
+/// still overflow a within-layer sum. That needs an arity no real wire bundle
+/// has, and it is not what the screen below is about — tracked in #197.)
+///
+/// # Panics
+///
+/// Panics if some `Braid` or `Tensor` width in `expr` sums past `usize::MAX`
+/// ([`PropExpr::arities_fit`] is the test). Unlike a mismatched `Compose`, that
+/// is an input the pipeline cannot answer *for* rather than merely answer badly:
+/// Step 1 would decompose a `σ` of `usize::MAX + 1` wires, and the layer
+/// arithmetic below sizes padding identities from the same sums. `PropExpr`'s
+/// variants are public so such a tree is constructible by hand; terms built
+/// through [`Free`](crate::prop::Free) cannot hit this, and the equality APIs
+/// above `nf` gate on `arities_fit` and stay total (#196). Rejecting is uniform
+/// across build profiles — the previous behavior was a debug-build overflow
+/// panic and a release-build wrap onto a small, spuriously valid width.
 ///
 /// Canonicality: the *soundness* direction — `nf(&a) == nf(&b)` implies `a`
 /// and `b` are SMC-equal (equal in the free symmetric monoidal category on
@@ -230,6 +254,10 @@ pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
 ///
 /// Everything else is unchanged, so a diagram that converges under both is one
 /// the column pass does not decide.
+///
+/// # Panics
+///
+/// As [`nf`]: on a `Braid` or `Tensor` width that sums past `usize::MAX`.
 #[cfg(feature = "internal-probes")]
 pub fn nf_without_column_pass<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     nf_inner(expr, false)
@@ -237,7 +265,21 @@ pub fn nf_without_column_pass<G: PropSignature>(expr: &PropExpr<G>) -> StringDia
 
 /// The pipeline proper. `run_columns` is always `true` outside the
 /// `internal-probes` hook above.
+///
+/// # Panics
+///
+/// See [`nf`]. The domain screen is here, at the single entry point, rather
+/// than at each of the interior `m + n` sites (#196 lists six): past it every
+/// arity *written in the tree* is known to fit, and [`atom_source`] records why
+/// that covers every braid width the pipeline goes on to read or build. It does
+/// not cover the widths the pipeline *derives* by adding across a layer (#197)
+/// — see [`nf`]'s caveat, and `merge_adjacent_identities`, which saturates.
 fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDiagram<G> {
+    assert!(
+        expr.arities_fit(),
+        "nf is undefined on a Braid/Tensor width that overflows usize; gate on \
+         PropExpr::arities_fit (#196)"
+    );
     let mut sd = lower(expr);
     // Fixpoint loop, terminating by the lexicographic measure
     // (crossings, mixed_layer_count, wide_braid_count, braid_position_sum,
@@ -467,6 +509,14 @@ fn trailing_arity<G: PropSignature>(sd: &StringDiagram<G>) -> usize {
         .map_or(0, |layer| layer.atoms.iter().map(atom_target).sum())
 }
 
+/// Input arity of an atom.
+///
+/// The `Braid` sum is unchecked on purpose (#196). Every `Braid` atom's two
+/// halves come from one of three places, and none of them can overflow: `lower`
+/// copies them off a `PropExpr::Braid`, which [`nf_inner`]'s entry screen has
+/// already checked; Step 1 emits `Braid(1, 1)` bricks; and the naturality sweep
+/// builds `Braid(s_a, s_b)` from two atoms *of one layer*, so its sum is at most
+/// that layer's width.
 fn atom_source<G: PropSignature>(a: &Atom<G>) -> usize {
     match a {
         Atom::Identity(n) => *n,
@@ -475,6 +525,8 @@ fn atom_source<G: PropSignature>(a: &Atom<G>) -> usize {
     }
 }
 
+/// Output arity of an atom. `σ_{m,n}` is its own width, so this agrees with
+/// [`atom_source`] on a `Braid` — including on the screened sum.
 fn atom_target<G: PropSignature>(a: &Atom<G>) -> usize {
     match a {
         Atom::Identity(n) => *n,
@@ -1313,7 +1365,12 @@ fn merge_adjacent_identities<G: PropSignature>(atoms: Vec<Atom<G>>) -> Vec<Atom<
         if let Atom::Identity(n) = atom
             && let Some(Atom::Identity(prev_n)) = out.last_mut()
         {
-            *prev_n += n;
+            // Not one of the arities [`nf_inner`]'s screen covers: this width is
+            // *derived*, and on an arity-mismatched tree `pad_and_zip` can put
+            // an `Identity(usize::MAX)` beside a padding identity from a
+            // shorter branch. Saturate rather than wrap (#88, #196) — identical
+            // on every width a real wire bundle can have.
+            *prev_n = prev_n.saturating_add(n);
             continue;
         }
         out.push(atom);

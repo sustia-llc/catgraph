@@ -118,7 +118,9 @@ pub fn check<G: PropSignature>(
             Ok(input.to_vec())
         }
         PropExpr::Braid(m, n) => {
-            expect_len(m + n, input)?;
+            // Checked so a directly-constructed `Braid(usize::MAX, 1)` reports a
+            // mismatch instead of wrapping; `usize::MAX` matches no slice length.
+            expect_len(m.checked_add(*n).unwrap_or(usize::MAX), input)?;
             // σ_{m,n} : u ⊗ v → v ⊗ u — a block swap of the two halves.
             let mut out = Vec::with_capacity(input.len());
             out.extend_from_slice(&input[*m..]);
@@ -286,7 +288,9 @@ fn infer<G: PropSignature>(
             Ok(input.to_vec())
         }
         PropExpr::Braid(m, n) => {
-            expect_len(m + n, input)?;
+            // Saturating, as in [`check`]: an overflowing braid is rejected as a
+            // size mismatch rather than wrapping into a spuriously valid arity.
+            expect_len(m.checked_add(*n).unwrap_or(usize::MAX), input)?;
             let mut out = Vec::with_capacity(input.len());
             out.extend_from_slice(&input[*m..]);
             out.extend_from_slice(&input[..*m]);
@@ -334,16 +338,40 @@ fn infer<G: PropSignature>(
 ///
 /// - [`CatgraphError::CompositionSizeMismatch`] on any length disagreement: a
 ///   subterm handed a word of the wrong length, `rhs`'s source arity differing
-///   from `lhs`'s, or target words of different lengths.
+///   from `lhs`'s, or target words of different lengths. Also when `lhs`'s
+///   source arity reads `usize::MAX` — see below.
 /// - [`CatgraphError::Composition`] when the lengths agree but the colors
 ///   conflict — the message names the generator and position, or the target
 ///   position, and both colors.
+///
+/// # `usize::MAX` on the left (#196)
+///
+/// `lhs.source()` is the one arity here that is not *compared* but *consumed*:
+/// it sizes the fresh variable vector. The saturating `usize::MAX` that
+/// [`PropExpr::source`] reports for an overflowing width is therefore not a
+/// rejectable sentinel at this site — the sizing runs first, and a
+/// `usize::MAX`-element `collect` aborts the process rather than returning an
+/// error anyone can catch. So it is screened *before* the sizing and reported as
+/// `CompositionSizeMismatch { expected: usize::MAX, actual: rhs.source() }`:
+/// the LHS demands a source word no real bundle can have, against the RHS arity
+/// the equation would have to agree with.
+///
+/// The RHS needs no such screen — it is never sized from, only threaded through
+/// [`infer`], whose `Braid` arm rejects the saturated width against the real
+/// word length (#180). That asymmetry is why PR #195's regression test put its
+/// overflowing braid on the RHS, and why its verdict is unchanged here.
 ///
 /// [`Presentation::add_equation`]: super::presentation::Presentation::add_equation
 pub(crate) fn check_equation<G: PropSignature>(
     lhs: &PropExpr<G>,
     rhs: &PropExpr<G>,
 ) -> Result<(), CatgraphError> {
+    if lhs.source() == usize::MAX {
+        return Err(CatgraphError::CompositionSizeMismatch {
+            expected: usize::MAX,
+            actual: rhs.source(),
+        });
+    }
     let mut u = Unifier::new();
     let source: Vec<Term<G::Color>> = (0..lhs.source()).map(|_| Term::Var(u.fresh())).collect();
     let lhs_target = infer(lhs, &source, &mut u)?;
@@ -471,12 +499,18 @@ impl<G: PropSignature> ColoredExpr<G> {
     /// # Outside the well-formed case
     ///
     /// A [`ColoredExpr`] reconstructed across the serde trust boundary (see the
-    /// type's docs) has not been through [`check`], and splits into two:
+    /// type's docs) has not been through [`check`], and splits into three:
     ///
-    /// - **Arity-ill-formed.** Outside [`content_of_colored`]'s domain, so the
+    /// - **Arity-mismatched.** Outside [`content_of_colored`]'s domain, so the
     ///   gate below — which tests arity and nothing else — routes it to the old
     ///   normal-form test, with the old semantics: `true` sound, `false` not a
     ///   disproof.
+    /// - **Arity-overflowing** (#196). A `Braid` or `Tensor` width summing past
+    ///   `usize::MAX` is outside [`nf`]'s domain as well as
+    ///   [`content_of_colored`]'s — both would size a collection from it — so
+    ///   neither branch below can run and the answer falls back to structural
+    ///   equality of the two expressions. Sound in the same sense as the branch
+    ///   above (`true` sound, `false` not a disproof), and reflexive.
     /// - **Arity-well-formed but word-ill-formed**, e.g. a source word shorter
     ///   than the expression's arity. The gate does *not* catch this, and such a
     ///   value takes the content path with some nodes left untyped, where Lemma
@@ -489,6 +523,10 @@ impl<G: PropSignature> ColoredExpr<G> {
     pub fn eq_colored(&self, other: &Self) -> bool {
         if self.source_word != other.source_word || self.target_word != other.target_word {
             return false;
+        }
+        if !self.expr.arities_fit() || !other.expr.arities_fit() {
+            // #196: below `nf`'s domain as well as content's — see the rustdoc.
+            return self.expr == other.expr;
         }
         if is_arity_well_formed(&self.expr) && is_arity_well_formed(&other.expr) {
             content_eq(&content_of_colored(self), &content_of_colored(other))
