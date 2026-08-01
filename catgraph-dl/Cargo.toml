@@ -57,7 +57,21 @@ deep_causality_haft = { workspace = true }
 deep_causality_num_dual = { workspace = true, optional = true }
 
 [dev-dependencies]
+# Deterministic LCG for the #156 shape-axis bench fixtures — the payload stream
+# must be byte-stable so the recorded allocation counts and latencies are
+# reproducible (#33's byte-identity contract). Dev-only / `publish = false`:
+# never a `[dependencies]` entry.
+catgraph-testutil.workspace = true
+criterion.workspace = true
 proptest.workspace = true
+
+# #156 Phase 1: the crate's first bench target. Shape-axis baseline for the haft
+# `Free`/`Cofree` carriers (construction / `fold` / `unfold` / the #36 lazy
+# surfaces), with a counting global allocator. No native-vs-haft comparison —
+# Phase 2 did not run.
+[[bench]]
+name = "free_cofree_shapes"
+harness = false
 
 # `ad`-gated: the forward-mode walkthrough (#74 PR2). CI runs its `main()` with
 # `--features ad` alongside the four default-feature examples (#34).

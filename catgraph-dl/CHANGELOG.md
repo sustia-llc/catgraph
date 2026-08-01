@@ -13,6 +13,25 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **First benchmarks in the crate — shape-axis baseline for the `Free` /
+  `Cofree` carriers** ([#156](https://github.com/sustia-llc/catgraph/issues/156)
+  Phase 1). New `benches/free_cofree_shapes.rs` (`harness = false`, criterion +
+  `catgraph-testutil`'s seeded LCG), measuring construction via the bijection
+  helpers, `Free::fold` (CDL Remark 2.13), `Cofree::unfold` (the #64
+  anamorphism) and the #36 / PR #151 lazy `unroll_iter` / `run_iter` surfaces
+  across three shapes: `ListEndo` (single hole), and `TreeEndo` (two holes)
+  balanced vs left-caterpillar. Because haft boxes *inside* the functor hole,
+  allocation count is the shape-determined hole count, so the harness installs a
+  counting `#[global_allocator]` and reports exact allocation tallies from an
+  explicit pass that runs before criterion is constructed; criterion measures
+  latency only. Recorded numbers and the finding that `TreeEndo`'s `Left(A)`
+  leaf ratio is *not* a tunable parameter (a strict binary tree always has
+  `leaves = internal + 1`, so allocation count is shape-independent at equal
+  leaf count) are in `.claude/docs/2026-08-01-156-dl-bench-baseline.md`. Phase 2
+  of #156 did not run — nothing here is a native-vs-haft comparison.
+
 ## [workspace-v0.5.0] - 2026-07-30
 
 ### Added
