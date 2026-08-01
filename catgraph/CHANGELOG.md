@@ -78,7 +78,8 @@ All notable changes to `catgraph` are documented here. The format follows
 > `v0.1.1`, `v0.2.0`, `v0.2.1`, and `v0.3.0` (2026-07-02 → 2026-07-11) were cut
 > without per-crate sections here; this crate's changes across them are recorded
 > only in git history (`git log v0.1.0..v0.3.0 -- catgraph/`) and the
-> workspace-level release record. Backfill declined (owner, 2026-07-25).
+> workspace-level release record. Backfill was deferred out of the v0.4.0
+> release (owner, 2026-07-25) and resolved as this note (#158, option 2).
 > Separately, `v0.5.0` deliberately rolled no section here — the crate had no
 > changes at that tag.
 

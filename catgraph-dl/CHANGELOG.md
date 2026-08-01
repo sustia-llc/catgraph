@@ -467,7 +467,8 @@ All notable changes to this crate are documented here. Format follows
 > cut without any sections here, although the crate was a workspace member from
 > `v0.1.0`. Changes across them are recorded only in git history
 > (`git log v0.1.0..v0.3.0 -- catgraph-dl/`) and the workspace-level release
-> record; backfill declined (owner, 2026-07-25). The `[0.4.1]` / `[0.4.0]`
+> record; backfill was deferred out of the v0.4.0 release (owner, 2026-07-25)
+> and resolved as this note (#158, option 2). The `[0.4.1]` / `[0.4.0]`
 > headings below are **pre-reboot crate-local versions** (2026-05), not
 > workspace tags — do not read them as workspace releases.
 

@@ -203,7 +203,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > between the two sections below) — were cut without per-crate sections here;
 > this crate's changes across them are recorded only in git history
 > (`git log v0.1.0..v0.3.0 -- catgraph-magnitude/`) and the workspace-level
-> release record. Backfill declined (owner, 2026-07-25).
+> release record. Backfill was deferred out of the v0.4.0 release (owner,
+> 2026-07-25) and resolved as this note (#158, option 2).
 
 ## [workspace-v0.2.0] - 2026-07-02
 
