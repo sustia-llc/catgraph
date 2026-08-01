@@ -14,7 +14,8 @@
 //!
 //! # The experiment
 //!
-//! Case `i` is generated purely from `splitmix64(SEED ^ i)`, so the corpus is
+//! Case `i` is generated purely from `splitmix64(seed ^ i)` (each tier's own
+//! seed constant), so the corpus is
 //! identical across builds and any case can be re-run in isolation. Each case is
 //! a random layered SFG expression `A` over `BoolRig` paired with `B`, one sound
 //! rewriting of `A` — either an interchange split of a `⊗` node
@@ -531,7 +532,7 @@ fn published_braid_mode_figures_reproduce() {
             in_fragment: 634,
             marked: 237,
         },
-        "braid-mode sweep moved; this is the residual-(a) tracker (§4.6(a))."
+        "braid-mode sweep moved; this is the braid-mode residual-(a) tracker (§4.6(a))."
     );
 }
 

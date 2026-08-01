@@ -1593,8 +1593,10 @@ pair's two writings (it does in 42 of the 128), so the in-`𝔉` bucketing of a
 *divergent* pair is itself mildly presentation-sensitive; and in the
 braid-injecting mode the "marked" bucket is conservative relative to content —
 a braid can merge components and mark a content-clear diagram (§4.4,
-`braid_coarsening_marks_content_clear_diagram`) — so the residual-(a) tracker
-should be read as an upper bound on content-level marking.
+`braid_coarsening_marks_content_clear_diagram`) — so the **braid-mode**
+residual-(a) tracker (`published_braid_mode_figures_reproduce`) should be read
+as an upper bound on content-level marking; the interleave tier's marking is
+content-exact by construction (§4.6(a)).
 
 The honest statement of what is verified: **the `smc_canonicality_probes` suite
 is the gate**, and it is a suite of named convergences, not a bound on
