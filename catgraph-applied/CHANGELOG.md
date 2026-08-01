@@ -24,7 +24,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   panic in debug builds and wrap onto a small, spuriously valid arity in
   release. `usize::MAX` matches no real wire bundle, so the saturated value is
   reported as `CompositionSizeMismatch` — reject-don't-wrap, matching the
-  policy of the catgraph-syntax interpreters.
+  hardened syntax-crate interpreters (`to_cospan` / `to_mat_kron`; the syntax
+  `eval` interpreter and the deeper applied passes — `content_of`, `nf` — are
+  not yet uniform, tracked in
+  [#196](https://github.com/sustia-llc/catgraph/issues/196)).
 
 ## [workspace-v0.5.0] - 2026-07-30
 

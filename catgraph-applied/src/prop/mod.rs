@@ -127,13 +127,16 @@ pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::De
 ///
 /// Every node carries enough information to recover the arity of the
 /// subterm rooted at it via [`PropExpr::source`] and [`PropExpr::target`]
-/// in O(height). Smart constructors on [`Free`] produce only well-formed
-/// expressions; raw variant construction is available but callers must
-/// uphold the composition-arity invariant themselves. Arity sums that would
-/// overflow `usize` saturate to `usize::MAX` — a sentinel no real wire bundle
-/// can have, so downstream length checks report
-/// [`CatgraphError::CompositionSizeMismatch`] instead of wrapping
-/// (reject-don't-wrap, #180).
+/// — `Compose` chains resolve in O(height), while `Tensor` visits both
+/// halves, so the worst case is proportional to the subterm's size. Smart
+/// constructors on [`Free`] produce only well-formed expressions; raw
+/// variant construction is available but callers must uphold the
+/// composition-arity invariant themselves. In this fold and the colored
+/// `check`/`infer` interpreters, arity sums that would overflow `usize`
+/// saturate to `usize::MAX` — a sentinel no real wire bundle can have, so
+/// length checks report [`CatgraphError::CompositionSizeMismatch`] instead
+/// of wrapping (reject-don't-wrap, #180). Deeper passes (`content_of`,
+/// `nf`) still assume arity-well-formed input (#196).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PropExpr<G: PropSignature> {
@@ -156,6 +159,9 @@ impl<G: PropSignature> PropExpr<G> {
     /// there rather than overflowing; `usize::MAX` matches no real wire
     /// bundle, so the composition checks report
     /// [`CatgraphError::CompositionSizeMismatch`] instead of wrapping.
+    /// Saturation is not injective: two independently overflowing arities
+    /// both read `usize::MAX` and compare equal (e.g. in `compose`'s arity
+    /// check) — the composition-arity invariant on [`PropExpr`] covers this.
     #[must_use]
     pub fn source(&self) -> usize {
         match self {
