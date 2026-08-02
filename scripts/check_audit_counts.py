@@ -265,35 +265,14 @@ def check_cc_pins() -> None:
         [b],
         "example comment",
     )
+    # the cc_incompleteness_count bench groups were removed (#189, owner
+    # 2026-08-02); the surviving prose site is the removal record's pin
+    # quadruple in the module doc
     site(
         "catgraph-applied/benches/functor_bench.rs",
-        r"witness count \((\d+) for",
-        [b],
-        "bench module doc",
-    )
-    site(
-        "catgraph-applied/benches/functor_bench.rs",
-        r"(\d+) CC-incompleteness witnesses on `BoolRig`",
-        [b],
-        "bench d=2 group doc",
-    )
-    site(
-        "catgraph-applied/benches/functor_bench.rs",
-        r"larger count \((\d+) exact",
-        [f],
-        "bench F64 asymmetry note",
-    )
-    site(
-        "catgraph-applied/benches/functor_bench.rs",
-        r"(\d+) CC-incompleteness witnesses \(measured empirically",
-        [b],
-        "bench section comment",
-    )
-    site(
-        "catgraph-applied/benches/functor_bench.rs",
-        r"\((\d+) witnesses, post-",
-        [b],
-        "bench d=2 inline comment",
+        r"(\d+)/(\d+)/(\d+)/(\d+) \(post-#189\)",
+        [b, u, t, f],
+        "bench removal record",
     )
     if not any(e.startswith("cc-pins:") for e in ERRORS):
         print(f"cc-pin guard: all prose sites match consts {b}/{u}/{t}/{f}")
