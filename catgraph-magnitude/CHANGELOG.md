@@ -16,6 +16,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`JoinReport` / `ZeroDiversityProof` — exact zero-diversity reporting on
+  `CoalitionEvaluator`**
+  ([#153](https://github.com/sustia-llc/catgraph/issues/153)): `value_with`
+  returned a bare `f64`, so a caller could not tell "this candidate provably adds
+  zero diversity" from "adds something too small to measure" and had to re-derive
+  the distinction from a float margin (koalisi's `KNIFE_EDGE_REL_BAND = 1e-6`
+  guard, which refunds ~22% of the fast path's win). `value_with_report(candidate)`
+  and `value_with_report_scratch(candidate, &mut EvalScratch)` return a
+  `JoinReport` carrying `value()` / `base()` / `increment()` / `path()` /
+  `schur_complement()` / `zero_proof()` / `is_provably_zero()`. **Purely
+  additive** — `value_with` / `value_with_scratch` are unchanged and, because the
+  proof scans sit behind a `const REPORT: bool` parameter on the shared
+  evaluation body, are compiled without them; the reported `value()` is
+  **bit-identical** to `value_with`, and the report-scratch variant is
+  bit-identical to the allocating one. Fields are private with accessors (the
+  `ConditionReport` house style of #165), so later diagnostics are additive.
+  `EvalPath` (`Fast` / `Slow`) is now public. Three **exactly decidable**
+  proof classes, all from already-computed data with no tolerance anywhere:
+  `SkeletalMerge { member }` (`(∃i: c[i]==1 ∧ r[i]==1) ∧ ¬interior_improvement`),
+  `IncomingProfileDuplicate { member }` (`∃a: c[a]==1 ∧ ∀i: c[i]==closed[i][a]`
+  ⇒ `u = ζ_S·e_a` ⇒ `p = 1`), and `OutgoingProfileDuplicate { member }` (the
+  transpose ⇒ `q = 1`). Exactness rests on the design memo's H1 lemma —
+  `fl(a·b) == 1.0 ⟺ a == 1.0 ∧ b == 1.0` on `[0,1]`, and the closure/border
+  passes are products-and-maxima seeded at `1.0` with no additions — so the
+  `== 1.0` comparisons admit neither false positives nor false negatives.
+  **The `¬interior_improvement` conjunct corrects issue #153's own premise:**
+  a mutual-`1.0` clone can simultaneously open a better `j → x → k` shortcut and
+  move the magnitude by up to **50% relative**, so skeletal merge *alone* does
+  not imply zero diversity and no proof is issued there. The duplicate proofs are
+  **fast-path-scoped** (under interior improvement `ζ_S` is stale and the
+  derivation fails — measured deviation up to 0.568 relative; a near-singular
+  `SCHUR_SLOW_FALLBACK_TOL` diversion likewise reports nothing). Contract, in the
+  rustdoc and worth repeating: a proof means the **real** increment is exactly
+  `0` while the *returned* value may differ from the base by roundoff (measured
+  max 1.38e-14 absolute / 1.32e-14 relative), so **callers branch on the proof,
+  never on `increment() == 0.0`**; and `None` means **not proven**, never
+  "nonzero". **Honest scope: the knife-edge tax is reduced, not removed** —
+  exact detection covers **55.9%** of the knife-edge population in the memo's
+  seeded model (merge-only 19.4% + profile duplicates 36.5%); 39.5% slow/interior
+  and 4.6% affine-combination zeros are intrinsically tolerance-only. Cost is
+  negligible (6.4 ns at m=8 / 9.7 ns at m=16 for the prefiltered duplicate scan,
+  <1% of a `value_with_scratch` call) and paid only by the reporting entry
+  points. Full evidence, method, and reproduction are recorded on
+  [#153](https://github.com/sustia-llc/catgraph/issues/153) (closing record).
 - **`magnitude_f64` — off-by-default `f64-fast` feature**
   ([#165](https://github.com/sustia-llc/catgraph/issues/165)): **one** symmetric
   factorization of the zeta matrix replaces the three independent hand-rolled
