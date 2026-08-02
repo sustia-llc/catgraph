@@ -192,16 +192,18 @@ pub fn expr_of_content<G: PropSignature>(c: &Content<G>) -> PropExpr<G> {
 /// is wrong — they are the normal forms of two SMC-equal writings.
 ///
 /// On `𝔉′` (§4.4: braid-free normal form, no source-0 hyperedge with slack)
-/// they are expected to agree, but by §4.4's **conditional** corollary, not by
-/// Theorem 4.5 unconditionally: the corollary additionally requires *both*
-/// normal forms to satisfy the restated §1 invariants, and that is not
-/// automatic. §4.4 commits a counterexample —
-/// `cut_asymmetry_separates_smc_equal_writings_inside_f_prime`, where the
-/// shipped `adjacent_column_cuts` asymmetry lets an inverted pair survive to a
-/// fixpoint — so a disagreement inside `𝔉′` is *either* an invariant violation
-/// *or* a theorem counterexample, and either one is a find. The
-/// `internal-probes` corpus lane audits that, and its module docs state which
-/// hypotheses each tier checks and which it assumes.
+/// they are expected to agree, by §4.4's canonicality corollary — whose
+/// invariant-satisfaction condition is **discharged** as of #185 (2026-08-02):
+/// the Step-6½ seed test is symmetric, so a fixpoint holds no non-excepted
+/// violation of the §1 column clause and the committed counterexample
+/// (`cut_asymmetry_separates_smc_equal_writings_inside_f_prime`, now the
+/// convergence regression `split_presence_nesting_converges_with_free_writing`)
+/// is gone. What the corollary still inherits is Theorem 4.5's proof-sketch
+/// density and its two flagged-open induction steps, so a disagreement inside
+/// `𝔉′` is a find either way: an invariant violation, or a counterexample to a
+/// theorem whose proof is not complete. The `internal-probes` corpus lane
+/// audits that, and its module docs state which hypotheses each tier checks and
+/// which it assumes.
 ///
 /// # Panics
 ///

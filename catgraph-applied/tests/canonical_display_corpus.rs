@@ -4,8 +4,8 @@
 //! # What this is
 //!
 //! Four claims about `prop::presentation::display`, all measured on the same
-//! frozen corpora `tests/smc_nf_differential_sweep.rs` publishes (253
-//! divergences on the default corpus, 1 162 with braids injected) and
+//! frozen corpora `tests/smc_nf_differential_sweep.rs` publishes (183
+//! divergences on the default corpus, 1 153 with braids injected) and
 //! `tests/content_equality_corpus.rs` scores content against. The corpus is
 //! copied rather than re-derived, exactly as those files document: same seed,
 //! same generator, same rewritings, so case indices line up with their pins.
@@ -65,8 +65,11 @@
 //! - For the **connected sub-tier** — three cases on the default corpus, one in
 //!   braid mode — the verdict is *established*: each was individually checked
 //!   and each is slot-slack, hence outside `𝔉′`, hence no counterexample.
-//! - For the **multi-component remainder** — the other 321 of tier 2's 324
-//!   default disagreements, and 53 of its 54 in braid mode — the verdict is an
+//! - For the **multi-component remainder** — the other 237 of tier 2's 240
+//!   default disagreements, and 36 of its 37 in braid mode (324/54 before
+//!   [#185](https://github.com/sustia-llc/catgraph/issues/185); the connected
+//!   sub-tier's 3 and 1 are unmoved, so the whole reduction landed in this
+//!   remainder) — the verdict is an
 //!   *expectation*, not a finding: a
 //!   multi-component content has block and column freedom, which is `ι` by
 //!   Lemma 4.4, so the tier's slot-pinnedness assumption is the thing most
@@ -97,6 +100,38 @@
 //! almost automatically. Only the first content is pinned; the other two are a
 //! dated measurement, and a future engine change could move which case indices
 //! exhibit them.
+//!
+//! **Re-measured 2026-08-02 after
+//! [#185](https://github.com/sustia-llc/catgraph/issues/185)** (symmetric Step
+//! 6½ cuts, an engine change of exactly the kind that caveat anticipated): the
+//! four indices are **unmoved** — 2996, 22872 and 45412 on the default corpus,
+//! 96178 in braid mode. The dated measurement above therefore still reads on
+//! this engine.
+//!
+//! # What #185 moved here, and in which direction
+//!
+//! Making Step 6½'s column cuts symmetric moved **both** sides of gates 3 and 4,
+//! which is worth stating plainly because the convenient story would be that
+//! only `nf` moved. `canonical_display` is `nf(expr_of_content(content_of(e)))`
+//! — it runs `nf` too, on the canonical readback instead of on the user's
+//! writing — so a change to `nf` reaches it as well. Measured on the default
+//! corpus, A-side: `nf` alone moved on 596 cases, the display alone on 206, and
+//! both on 297.
+//!
+//! What makes the lane's numbers move in one direction anyway is that the two
+//! moved *toward each other*. The per-case transitions are **strictly
+//! monotone**: 749 default and 121 braid cases turned gate-4 churn off, **zero**
+//! turned it on; the same counts gained `nf == display` agreement and **zero**
+//! lost it. No case changed tier, so every denominator (`eta_free`,
+//! `layer_pinned`, `layer_pinned_connected`, `nf_braid_free`) and
+//! `crossing_inserted` are unmoved. Tier 1 was already exact and stays exact.
+//!
+//! Both correctness columns stayed 0, and `convergence_failures` is the one to
+//! notice: the display moved on 503 default and 143 braid cases yet
+//! `canonical_display(A) == canonical_display(B)` still holds on all 100 000
+//! pairs of both modes. That is claim 2 behaving as its by-construction argument
+//! says it must — the readback is a function of the content's iso class, so when
+//! the display moves it moves on both sides of a pair together.
 
 #![cfg(feature = "internal-probes")]
 
@@ -532,6 +567,11 @@ fn on_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T 
 // ---------------------------------------------------------------- pins
 
 /// Fast tier, default corpus: the 5 000-case prefix of the published corpus.
+///
+/// Lineage: **churn 264 → 219, `layer_pinned_agree` 1 975 → 1 982**
+/// ([#185](https://github.com/sustia-llc/catgraph/issues/185) symmetric Step 6½
+/// cuts, 2026-08-02); every other field verified unmoved. 45 prefix cases turned
+/// churn off and none turned it on, 7 of them inside tier 2.
 #[test]
 fn smoke_prefix_default_corpus() {
     let gate = on_big_stack(|| sweep(SMOKE_PAIRS, false));
@@ -543,11 +583,11 @@ fn smoke_prefix_default_corpus() {
             convergence_failures: 0,
             nf_braid_free: 5_000,
             crossing_inserted: 87,
-            churn: 264,
+            churn: 219,
             eta_free: 785,
             eta_free_agree: 785,
             layer_pinned: 1_995,
-            layer_pinned_agree: 1_975,
+            layer_pinned_agree: 1_982,
             layer_pinned_connected: 632,
             layer_pinned_connected_agree: 631,
         },
@@ -558,6 +598,11 @@ fn smoke_prefix_default_corpus() {
 }
 
 /// Fast tier, braid-injecting corpus.
+///
+/// Lineage: **churn 1 030 → 1 027**
+/// ([#185](https://github.com/sustia-llc/catgraph/issues/185) symmetric Step 6½
+/// cuts, 2026-08-02); every other field verified unmoved, `layer_pinned_agree`
+/// included — all three prefix cases that turned churn off sit outside tier 2.
 #[test]
 fn smoke_prefix_braid_corpus() {
     let gate = on_big_stack(|| sweep(SMOKE_PAIRS, true));
@@ -569,7 +614,7 @@ fn smoke_prefix_braid_corpus() {
             convergence_failures: 0,
             nf_braid_free: 3_439,
             crossing_inserted: 22,
-            churn: 1_030,
+            churn: 1_027,
             eta_free: 562,
             eta_free_agree: 562,
             layer_pinned: 1_552,
@@ -582,6 +627,14 @@ fn smoke_prefix_braid_corpus() {
 }
 
 /// **The PR1 proof obligation, at full corpus size, default mode.**
+///
+/// Lineage: **churn 5 334 → 4 585, `layer_pinned_agree` 39 991 → 40 075**
+/// ([#185](https://github.com/sustia-llc/catgraph/issues/185) symmetric Step 6½
+/// cuts, 2026-08-02); every other field verified unmoved. 749 cases turned churn
+/// off and none turned it on — 84 of them inside tier 2, the rest unscored (tier
+/// 1 gained none, being exact already). Both `nf` and the display moved here
+/// (the display runs `nf` on the canonical readback — see the module docs); what
+/// the two figures record is that they moved *toward each other*, never apart.
 #[test]
 #[ignore = "100k-pair sweep. Run with --ignored alongside the NF sweep."]
 fn published_corpus_gates() {
@@ -594,11 +647,11 @@ fn published_corpus_gates() {
             convergence_failures: 0,
             nf_braid_free: 100_000,
             crossing_inserted: 1_628,
-            churn: 5_334,
+            churn: 4_585,
             eta_free: 16_103,
             eta_free_agree: 16_103,
             layer_pinned: 40_315,
-            layer_pinned_agree: 39_991,
+            layer_pinned_agree: 40_075,
             layer_pinned_connected: 12_616,
             layer_pinned_connected_agree: 12_613,
         },
@@ -608,6 +661,11 @@ fn published_corpus_gates() {
 
 /// The same, with braids injected — the mode whose divergences no NF-level fix
 /// reaches (dead braid prefixes, marked residual-(a)).
+///
+/// Lineage: **churn 19 098 → 18 977, `layer_pinned_agree` 32 270 → 32 287**
+/// ([#185](https://github.com/sustia-llc/catgraph/issues/185) symmetric Step 6½
+/// cuts, 2026-08-02); every other field verified unmoved. 121 cases turned churn
+/// off and none turned it on, 17 of them inside tier 2.
 #[test]
 #[ignore = "100k-pair braid-mode sweep. Run with --ignored alongside the NF sweep."]
 fn braid_mode_corpus_gates() {
@@ -620,11 +678,11 @@ fn braid_mode_corpus_gates() {
             convergence_failures: 0,
             nf_braid_free: 70_449,
             crossing_inserted: 351,
-            churn: 19_098,
+            churn: 18_977,
             eta_free: 11_756,
             eta_free_agree: 11_756,
             layer_pinned: 32_324,
-            layer_pinned_agree: 32_270,
+            layer_pinned_agree: 32_287,
             layer_pinned_connected: 12_257,
             layer_pinned_connected_agree: 12_256,
         },

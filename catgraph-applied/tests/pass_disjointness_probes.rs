@@ -515,6 +515,18 @@ mod check {
     /// under-approximation: `find_column_transposition` always tries the
     /// length-1 sub-interval containing the seed, so anything flagged here is
     /// a pair the shipped pass would transpose). Returns `(layer, c1, c2)`.
+    ///
+    /// **Column reading (symmetric since 2026-08-02, #185).** The two columns
+    /// are the two maximal **local** runs meeting at the adjacency — `c1`'s run
+    /// ending at `p`, `c2`'s run starting at `p + 1` — which is
+    /// `adjacent_column_cuts_at`'s predicate verbatim. It used to read `c2`'s
+    /// *whole* layer presence via `contiguous_run`, mirroring the pre-#185 seed
+    /// test, and so was blind to exactly the split-presence violations #185
+    /// fixed (`[L, B, L]` rows): a checker that could not see the bug it is
+    /// meant to guard against. Extending it moved no existing probe's verdict
+    /// (whole suite re-run 2026-08-02, 7/7 green); the newly visible case is
+    /// `split_presence_both_readings_pair_is_newly_seeded`, which the
+    /// whole-presence form could not flag.
     pub fn column_violations_len1<G: PropSignature>(
         sd: &StringDiagram<G>,
     ) -> Vec<(usize, usize, usize)> {
@@ -535,17 +547,16 @@ mod check {
                 if !admissible || an.key[c2].cmp(&an.key[c1]) != Ordering::Less {
                     continue;
                 }
-                // c2's whole presence in this layer must be one contiguous run
-                // with c1's atoms immediately left of it, seeded at (p, p+1).
-                let Some((mid, right)) = contiguous_run(row, c2) else {
-                    continue;
-                };
-                if mid == 0 || mid != p + 1 || row[mid - 1] != c1 {
-                    continue;
-                }
-                let mut left = mid - 1;
+                // The two maximal *local* runs meeting at (p, p+1): neither
+                // component's whole presence in the row is consulted (#185).
+                let mid = p + 1;
+                let mut left = p;
                 while left > 0 && row[left - 1] == c1 {
                     left -= 1;
+                }
+                let mut right = mid;
+                while right < row.len() && row[right] == c2 {
+                    right += 1;
                 }
                 let width = |r: std::ops::Range<usize>, tgt: bool| -> usize {
                     layer.atoms[r]
@@ -802,6 +813,108 @@ fn shipped_transient_tie_dissolves_via_sift_and_column_move() {
         check::step7_violations(&refined).is_empty()
             && check::column_violations_len1(&refined).is_empty(),
         "the dissolved-tie fixpoint should satisfy both §1 order clauses, got {out:?}"
+    );
+}
+
+/// **P1 — the #185 newly-seeded both-readings witness** (added 2026-08-02).
+///
+/// `Copy ; (id₁ ⊗ Zero ⊗ Discard) ; (id₁ ⊗ Scalar)` over `BoolRig`. The middle
+/// layer's exploded row is `[Id_L, Zero_B, Discard_L]`: the input-anchored
+/// component `L = {Copy, Id, Discard, Id}` (key `(1, 0)`) has **split** layer
+/// presence around the output-only `B = {Zero, Scalar}` (key `(2, 1)`). The
+/// contested adjacency is the `(B, L)` one at position 1 — `Zero | Discard`,
+/// which strictly commutes (`src Zero = 0`, `tgt Discard = 0`) — so it admits
+/// **both readings**: Step 6's class order wants η before ε (`Zero` left),
+/// Step 6½'s key order wants `L`'s column left of `B`'s.
+///
+/// Why this probe exists: the pre-#185 seed test demanded the *right*
+/// component's whole layer presence be one contiguous run, and `L`'s is
+/// `{0, 2}`, so it declined this adjacency outright. Symmetric local runs seed
+/// it. #185's seeding is therefore strictly **wider**, and the both-readings
+/// carve and the `sd == prev` exact-cancellation exit
+/// ([#186](https://github.com/sustia-llc/catgraph/issues/186)) are exercised at
+/// sites the old engine never reached — this is one. What the carve promises is
+/// that this costs nothing at the fixpoint, and that is what is pinned here:
+/// `nf` terminates, the two SMC-equal writings (the second slides `Zero` across
+/// `Discard`, `σ_{0,1} = id`) converge, the fixpoint is idempotent, and it is
+/// the **Step-6-sorted** layout — `Zero` left of `Discard`, the class order
+/// winning exactly as §4.4 ratifies.
+///
+/// The layout below is pinned as measured on this tree. The #185 adversarial
+/// review (2026-08-02) additionally measured it **equal to the pre-#185
+/// fixpoint** — recorded here as that review's measurement, not as a live
+/// assertion: the old engine is not in-tree, so nothing here can re-check it.
+///
+/// *Scope (measured 2026-08-02, deliberately not asserted).* The `σ_{0,1}`-slid
+/// writing `Copy ; (id₁ ⊗ Discard ⊗ Zero) ; (id₁ ⊗ Scalar)` is the same morphism
+/// but **diverges** — it reaches the 2-layer `[Copy, Zero] ; [Id, Discard,
+/// Scalar]`, having sifted the `η` up a layer. That is `η`-placement slack
+/// (§4.6's residual `ι`, the hypothesis Theorem 4.5 excludes), not this
+/// adjacency's doing: `nf_without_column_pass` reproduces **both** normal forms
+/// verbatim, so the column pass is not a party to the split, and P1 claims
+/// nothing about it.
+#[test]
+fn split_presence_both_readings_pair_is_newly_seeded() {
+    let c = || prim::<Sfg>(SfgGenerator::Copy);
+    let d = || prim::<Sfg>(SfgGenerator::Discard);
+    let z = || prim::<Sfg>(SfgGenerator::Zero);
+    let s = || prim::<Sfg>(SfgGenerator::Scalar(BoolRig(true)));
+    let id1 = || PropExpr::Identity(1);
+    let writing = seq(seq(c(), par(id1(), par(z(), d()))), par(id1(), s()));
+    let out = nf_timed(&writing, "p1-split-presence");
+
+    // Step-6-sorted: `Zero` (η) left of `Discard` (ε) in the contested layer,
+    // the class order winning over Step 6½'s key order (1, 0) < (2, 1).
+    let expected = StringDiagram {
+        layers: vec![
+            Layer {
+                atoms: vec![Atom::Generator(SfgGenerator::Copy)],
+            },
+            Layer {
+                atoms: vec![
+                    Atom::Identity(1),
+                    Atom::Generator(SfgGenerator::Zero),
+                    Atom::Generator(SfgGenerator::Discard),
+                ],
+            },
+            Layer {
+                atoms: vec![
+                    Atom::Identity(1),
+                    Atom::Generator(SfgGenerator::Scalar(BoolRig(true))),
+                ],
+            },
+        ],
+    };
+    assert_eq!(out, expected, "unexpected P1 fixpoint layout");
+    assert!(
+        fragment_status(&out).in_fragment(),
+        "P1 should live inside 𝔉"
+    );
+    assert_eq!(out, nf_timed(&from_string_diagram(&out), "p1-idem"));
+
+    // The fight is externally cancellation-exact: ablating the column pass
+    // reaches the identical NF, so #185's wider seeding costs nothing here.
+    assert_eq!(
+        out,
+        nf_without_column_pass(&writing),
+        "the newly-seeded both-readings pair should cancel exactly"
+    );
+
+    let refined = check::explode(&out);
+    // Step 7 is structurally blocked (both components touch the output
+    // boundary, so no free pair)…
+    assert!(
+        check::step7_violations(&refined).is_empty(),
+        "step 7 should be structurally blocked here"
+    );
+    // …and the fixpoint violates the *unrestated* §1 Step-6½ clause, which the
+    // both-readings carve excepts. Seeing it at all needs the symmetric column
+    // reading: the pre-#185 whole-presence checker declined this row, because
+    // `L`'s presence `{0, 2}` is not one contiguous run.
+    assert_eq!(
+        check::column_violations_len1(&refined),
+        vec![(1, 1, 0)],
+        "expected the split-presence Step-6½ order violation in the middle layer"
     );
 }
 

@@ -4,11 +4,24 @@
 //! # What this is
 //!
 //! `tests/smc_nf_differential_sweep.rs` pins how many SMC-equal pairs the normal
-//! form *separates*: 253 on the default corpus, 1 162 with braids injected. By
+//! form *separates*: 183 on the default corpus, 1 153 with braids injected. By
 //! Lemma 4.1 (`docs/SMC-NF-RECONCILIATION.md` §4.2) content decides SMC-equality
 //! on every one of them, so the pins here are the complementary claim —
 //! `content_eq` closes **all** of them, including the marked residual-(a) cases
 //! and the dead-braid-prefix shapes no NF-level fix reaches.
+//!
+//! # The #185 re-pin (2026-08-02)
+//!
+//! [#185](https://github.com/sustia-llc/catgraph/issues/185)'s symmetric Step 6½
+//! cuts converged 70 default and 9 braid pairs (and newly diverged none), so the
+//! `divergent` and `in_fragment` figures below move in lockstep with the sweep's
+//! — this file's corpus is a copy of that one's, and its pins are that file's
+//! pins plus the content verdict. **Nothing about content moved**: `content_of`
+//! and `content_eq` never consult `nf`, every one of the 79 converged pairs was
+//! already `content_eq`- *and* `canonical_key`-equal before the change, and the
+//! remaining divergences are closed exactly as before. The claim this file
+//! exists to make — content closes *all* of them — is therefore re-verified at
+//! the new totals rather than weakened by them.
 //!
 //! The corpus is the sweep's, copied rather than re-derived, exactly as that file
 //! documents: same seed, same generator, same rewritings, so case indices line up
@@ -285,16 +298,22 @@ fn on_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T 
 /// Fast tier: the 5 000-case prefix of the published corpus. Its divergence
 /// count is `smoke_prefix_of_the_published_corpus`'s, and content closes all of
 /// them.
+///
+/// Lineage: **16 / 6 / 16 / 16 → 14 / 6 / 14 / 14**
+/// ([#185](https://github.com/sustia-llc/catgraph/issues/185) symmetric Step 6½
+/// cuts, 2026-08-02) — cases 3061 and 4722 converged, both already
+/// content-closed, so `divergent` and both content columns drop by the same 2
+/// and the claim is unweakened.
 #[test]
 fn smoke_prefix_is_closed_by_content() {
     let score = on_big_stack(|| sweep(SMOKE_PAIRS, false));
     assert_eq!(
         score,
         Score {
-            divergent: 16,
+            divergent: 14,
             in_fragment: 6,
-            content_equal: 16,
-            key_equal: 16,
+            content_equal: 14,
+            key_equal: 14,
         },
         "the 5k prefix moved. If `divergent` is what changed, compare against \
          `smc_nf_differential_sweep::smoke_prefix_of_the_published_corpus` — the \
@@ -302,8 +321,13 @@ fn smoke_prefix_is_closed_by_content() {
     );
 }
 
-/// **The a1 claim, at full corpus size.** All 253 divergent pairs of §4.6's
+/// **The a1 claim, at full corpus size.** All 183 divergent pairs of §4.6's
 /// published table are content-equal.
+///
+/// Lineage: **253 / 128 / 253 / 253 → 183 / 93 / 183 / 183**
+/// ([#185](https://github.com/sustia-llc/catgraph/issues/185) symmetric Step 6½
+/// cuts, 2026-08-02) — 70 pairs converged, all 70 already content-closed, none
+/// newly divergent.
 #[test]
 #[ignore = "100k-pair sweep. Run with --ignored alongside the NF sweep."]
 fn published_corpus_is_closed_by_content() {
@@ -311,18 +335,24 @@ fn published_corpus_is_closed_by_content() {
     assert_eq!(
         score,
         Score {
-            divergent: 253,
-            in_fragment: 128,
-            content_equal: 253,
-            key_equal: 253,
+            divergent: 183,
+            in_fragment: 93,
+            content_equal: 183,
+            key_equal: 183,
         },
         "content no longer closes every published divergence"
     );
 }
 
-/// The braid-injecting corpus: 1 162 divergences, including the marked
+/// The braid-injecting corpus: 1 153 divergences, including the marked
 /// residual-(a) cases and the dead-braid-prefix shapes. Content closes those
 /// too, which is the part no NF-level fix reaches.
+///
+/// Lineage: **1162 / 634 / 1162 / 1162 → 1153 / 630 / 1153 / 1153**
+/// ([#185](https://github.com/sustia-llc/catgraph/issues/185) symmetric Step 6½
+/// cuts, 2026-08-02) — 9 pairs converged, all 9 already content-closed, none
+/// newly divergent. The marked and dead-braid-prefix shapes this tier is here
+/// for are untouched: none of the 9 was marked.
 #[test]
 #[ignore = "100k-pair braid-mode sweep. Run with --ignored alongside the NF sweep."]
 fn braid_mode_corpus_is_closed_by_content() {
@@ -330,10 +360,10 @@ fn braid_mode_corpus_is_closed_by_content() {
     assert_eq!(
         score,
         Score {
-            divergent: 1_162,
-            in_fragment: 634,
-            content_equal: 1_162,
-            key_equal: 1_162,
+            divergent: 1_153,
+            in_fragment: 630,
+            content_equal: 1_153,
+            key_equal: 1_153,
         },
         "content no longer closes every braid-mode divergence"
     );

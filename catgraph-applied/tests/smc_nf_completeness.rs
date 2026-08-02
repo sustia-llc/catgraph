@@ -1524,6 +1524,247 @@ mod smc_canonicality_probes {
     }
 
     // ------------------------------------------------------------------
+    // Step 6½ symmetric cuts (issue #185)
+    // ------------------------------------------------------------------
+
+    /// **The split-presence encloser now seeds** (issue #185). The shipped seed
+    /// test took the *left* column as a maximal local run but demanded the
+    /// *right* component's whole layer presence be one contiguous run, so a
+    /// fragment-symmetric, interval-aligned, strictly-commuting pair whose right
+    /// column belongs to a component that also owns an atom elsewhere in the
+    /// layer (`[L, B, L]`) was declined and the inverted pair survived to the
+    /// fixpoint. Both runs are now local, which is what §1's column clause and
+    /// §4.5's own column definition always said.
+    ///
+    /// The pair is §4.4's F1 witness — content inside `𝔉′`, divergent from the
+    /// column pass's landing (2026-07-28) until #185, when
+    /// `cut_asymmetry_separates_smc_equal_writings_inside_f_prime` flipped and
+    /// was renamed `split_presence_nesting_converges_with_free_writing`. It
+    /// converges here, and the expected layout is asserted so the *direction* of
+    /// the new move is pinned too, not only that some move happens. This is the
+    /// name that carries the pass attribution: it is the `column_pass_ablation`
+    /// row for the pair, and the flipped witness is deliberately not a second
+    /// row.
+    #[test]
+    fn split_presence_encloser_seeds_the_column_move() {
+        let id1 = || PropExpr::Identity(1);
+        // Copy ; (id₁ ⊗ η ⊗ s′) ; (id₁ ⊗ s ⊗ !) : 1 → 2
+        let nested = seq(
+            seq(
+                prim(SfgGenerator::Copy),
+                tens(vec![id1(), prim(SfgGenerator::Zero), scalar_other()]),
+            ),
+            tens(vec![id1(), scalar(), prim(SfgGenerator::Discard)]),
+        );
+        // (Copy ; (id₁ ⊗ s′) ; (id₁ ⊗ !)) ⊗ (η ; s) : 1 → 2
+        let free = par(
+            seq(
+                seq(prim(SfgGenerator::Copy), par(id1(), scalar_other())),
+                par(id1(), prim(SfgGenerator::Discard)),
+            ),
+            seq(prim(SfgGenerator::Zero), scalar()),
+        );
+        let expected = StringDiagram {
+            layers: vec![
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Copy),
+                        Atom::Generator(SfgGenerator::Zero),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Identity(1),
+                        Atom::Generator(SfgGenerator::Scalar(BoolRig(false))),
+                        Atom::Generator(SfgGenerator::Scalar(BoolRig(true))),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Identity(1),
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Identity(1),
+                    ],
+                },
+            ],
+        };
+        assert_eq!(
+            nf(&nested),
+            nf(&free),
+            "a split-presence encloser still blocks the column move — the \
+             right column's runs must be local, not its whole layer presence"
+        );
+        assert_eq!(nf(&nested), expected, "…on the layout rule (i) pins");
+        let once = nf(&nested);
+        assert_eq!(once, nf(&from_string_diagram(&once)), "not idempotent");
+    }
+
+    /// **Widening is alignment-guided, and it has to be** (issue #185). With
+    /// local runs a layer can hold *several* `(c1, c2)` adjacencies, so extending
+    /// the interval to a neighbouring layer is a choice, not a lookup. The pass
+    /// takes the neighbour's adjacency whose three cuts meet the current edge
+    /// layer's across the boundary between them — the same internal-boundary test
+    /// `column_pair_is_transposable` applies — scanning positions left-to-right.
+    ///
+    /// This four-layer diagram is the delta-shrunk smallest case in which the
+    /// choice changes the answer, found by sweeping 300 000 expressions of the
+    /// §4.6 corpus generator against a leftmost-regardless-of-alignment variant
+    /// of the widening (18 of them reach a widening step that must skip a
+    /// misaligned leftmost candidate; **one** — this — ends on a different
+    /// normal form). One widening step here sees two adjacencies, the leftmost
+    /// is *not* aligned, and taking it instead of the aligned one leaves the
+    /// diagram at a four-layer fixpoint rather than the three-layer one below.
+    /// The exact-layout assertion is what pins the choice; a naive
+    /// "first adjacency in the row" widening fails it.
+    ///
+    /// *Provenance and units of the `18`* (added 2026-08-02). The instrument was
+    /// Phase A's temporary widening instrumentation, since removed — re-deriving
+    /// any of its figures means re-running it. The denominator above counts
+    /// **expressions** off the §4.6 corpus generator; `docs/SMC-NF-RECONCILIATION.md`
+    /// §4.4 and §4.5 quote an `18` as a **per-widening-step** count over the
+    /// three sweep corpora (3 × 100 000 pairs = 600 000 normalizations),
+    /// alongside the 145 steps that saw more than one candidate at all. Both
+    /// readings come from that one instrumentation run and were never
+    /// cross-checked against each other, so the two `18`s are recorded with
+    /// their own units rather than silently identified. Neither is a Phase B
+    /// number-of-record: what is pinned here is the layout below.
+    ///
+    /// The sibling writing splits the last layer's `μ ⊗ !` by interchange
+    /// (`μ ⊗ ! = (μ ⊗ id₁) ; (id₁ ⊗ !)`), so the two are SMC-equal by
+    /// bifunctoriality alone and must reach the same normal form.
+    ///
+    /// **Honest scope.** Ablating Step 6½ leaves this *pair* converging — the
+    /// witness is the pinned layout, not a pass-attribution claim, so it is
+    /// deliberately not added to `column_pass_ablation`'s table. Re-verified by
+    /// ablation 2026-08-02: with the pass disabled the convergence assertion
+    /// still passes and only the layout assertion fails, which is the difference
+    /// the table's count is about.
+    #[test]
+    fn column_widening_picks_the_interval_aligned_adjacency() {
+        let id1 = || PropExpr::Identity(1);
+        let l0 = tens(vec![
+            id1(),
+            prim(SfgGenerator::Copy),
+            prim(SfgGenerator::Zero),
+        ]);
+        let l1 = tens(vec![
+            prim(SfgGenerator::Add),
+            id1(),
+            prim(SfgGenerator::Discard),
+        ]);
+        let l2 = tens(vec![
+            prim(SfgGenerator::Zero),
+            prim(SfgGenerator::Discard),
+            prim(SfgGenerator::Zero),
+            scalar(),
+        ]);
+        let l3 = tens(vec![prim(SfgGenerator::Add), prim(SfgGenerator::Discard)]);
+        let a = seq(seq(seq(l0.clone(), l1.clone()), l2.clone()), l3);
+        // Same morphism, last layer split by interchange.
+        let l3_split = seq(
+            par(prim(SfgGenerator::Add), id1()),
+            par(id1(), prim(SfgGenerator::Discard)),
+        );
+        let b = seq(seq(seq(l0, l1), l2), l3_split);
+        let expected = StringDiagram {
+            layers: vec![
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Zero),
+                        Atom::Identity(1),
+                        Atom::Generator(SfgGenerator::Copy),
+                        Atom::Generator(SfgGenerator::Zero),
+                        Atom::Generator(SfgGenerator::Zero),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Generator(SfgGenerator::Add),
+                        Atom::Generator(SfgGenerator::Scalar(BoolRig(true))),
+                        Atom::Generator(SfgGenerator::Add),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Identity(1),
+                    ],
+                },
+            ],
+        };
+        assert_eq!(nf(&a), nf(&b), "interchange-split sibling diverged");
+        assert_eq!(
+            nf(&a),
+            expected,
+            "widening no longer picks the interval-aligned adjacency"
+        );
+        let once = nf(&a);
+        assert_eq!(once, nf(&from_string_diagram(&once)), "not idempotent");
+    }
+
+    /// **No regression on whole-presence shapes** (issue #185). When the right
+    /// column's component *does* have contiguous layer presence there is exactly
+    /// one `(c1, c2)` adjacency in the row and its local runs are the whole
+    /// presence, so the symmetric cuts are the asymmetric ones and the pass makes
+    /// the identical move. This three-layer nesting — a `η ; s ; !` closed block
+    /// written between a `Copy`'s two output wires, so the interval is three
+    /// layers deep and widening runs in both directions from every seed — is
+    /// pinned on the exact layout the pre-#185 engine produced for it.
+    #[test]
+    fn whole_presence_column_move_is_unchanged() {
+        let id1 = || PropExpr::Identity(1);
+        // Copy ; (id₁ ⊗ η ⊗ id₁) ; (id₁ ⊗ s ⊗ id₁) ; (id₁ ⊗ ! ⊗ id₁) ; μ : 1 → 1
+        let nested = seq(
+            seq(
+                seq(
+                    seq(
+                        prim(SfgGenerator::Copy),
+                        tens(vec![id1(), prim(SfgGenerator::Zero), id1()]),
+                    ),
+                    tens(vec![id1(), scalar(), id1()]),
+                ),
+                tens(vec![id1(), prim(SfgGenerator::Discard), id1()]),
+            ),
+            prim(SfgGenerator::Add),
+        );
+        let free = par(
+            long_closed_block(),
+            seq(prim(SfgGenerator::Copy), prim(SfgGenerator::Add)),
+        );
+        let expected = StringDiagram {
+            layers: vec![
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Zero),
+                        Atom::Generator(SfgGenerator::Copy),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Scalar(BoolRig(true))),
+                        Atom::Generator(SfgGenerator::Add),
+                    ],
+                },
+                Layer {
+                    atoms: vec![Atom::Generator(SfgGenerator::Discard), Atom::Identity(1)],
+                },
+            ],
+        };
+        assert_eq!(
+            nf(&nested),
+            nf(&free),
+            "a whole-presence nesting stopped extracting"
+        );
+        assert_eq!(
+            nf(&nested),
+            expected,
+            "…on the same layout the asymmetric cuts produced"
+        );
+    }
+
+    // ------------------------------------------------------------------
     // CE-R1 / CE-R2 — the design round's refutation witnesses
     // ------------------------------------------------------------------
 
@@ -2106,6 +2347,53 @@ mod smc_canonicality_probes {
                     true,
                 ),
                 (
+                    // Issue #185's split-presence seeding, and §4.4's F1 pair —
+                    // the same pair as `beyond_eta_slack_residuals::
+                    // split_presence_nesting_converges_with_free_writing`, which
+                    // is deliberately *not* a second row here: the count below
+                    // counts distinct pairs the pass decides, not names.
+                    "split_presence_encloser_seeds_the_column_move",
+                    seq(
+                        seq(
+                            prim(SfgGenerator::Copy),
+                            tens(vec![id1(), prim(SfgGenerator::Zero), scalar_other()]),
+                        ),
+                        tens(vec![id1(), scalar(), prim(SfgGenerator::Discard)]),
+                    ),
+                    par(
+                        seq(
+                            seq(prim(SfgGenerator::Copy), par(id1(), scalar_other())),
+                            par(id1(), prim(SfgGenerator::Discard)),
+                        ),
+                        seq(prim(SfgGenerator::Zero), scalar()),
+                    ),
+                    true,
+                ),
+                (
+                    // #185's no-regression shape: contiguous right-column
+                    // presence, where the symmetric cuts coincide with the old
+                    // asymmetric ones. Pass-dependent before and after.
+                    "whole_presence_column_move_is_unchanged",
+                    seq(
+                        seq(
+                            seq(
+                                seq(
+                                    prim(SfgGenerator::Copy),
+                                    tens(vec![id1(), prim(SfgGenerator::Zero), id1()]),
+                                ),
+                                tens(vec![id1(), scalar(), id1()]),
+                            ),
+                            tens(vec![id1(), prim(SfgGenerator::Discard), id1()]),
+                        ),
+                        prim(SfgGenerator::Add),
+                    ),
+                    par(
+                        long_closed_block(),
+                        seq(prim(SfgGenerator::Copy), prim(SfgGenerator::Add)),
+                    ),
+                    true,
+                ),
+                (
                     "nested_source_block_converges_with_free_writing",
                     seq(
                         seq(
@@ -2148,7 +2436,7 @@ mod smc_canonicality_probes {
         }
 
         #[test]
-        fn column_pass_decides_exactly_the_five_documented_witnesses() {
+        fn column_pass_decides_exactly_the_seven_documented_witnesses() {
             let mut decided_by_the_pass = Vec::new();
             for (name, nested, free, needs_pass) in column_family() {
                 assert_eq!(
@@ -2178,9 +2466,10 @@ mod smc_canonicality_probes {
             }
             assert_eq!(
                 decided_by_the_pass.len(),
-                5,
-                "§4.5 and the CHANGELOG both quote a count of witnesses the column \
-                 pass decides; measured {decided_by_the_pass:?}"
+                7,
+                "§4.5, §3's step table and the CHANGELOG all quote a count of \
+                 witnesses the column pass decides (seven since #185, 2026-08-02); \
+                 measured {decided_by_the_pass:?}"
             );
         }
     }
@@ -2192,7 +2481,9 @@ mod smc_canonicality_probes {
 
 /// **Documented-divergence witnesses, not convergences.** These pin the one
 /// open mechanism the PR-B characterization found behind *every* differential-
-/// sweep divergence (253/253, 128 of them inside `𝔉`): an `η` whose consumer
+/// sweep divergence (253/253, 128 of them inside `𝔉` — the 2026-07-28
+/// denominator; #185 has since converged 70 and 35 of those, and the survivors
+/// were not re-classified): an `η` whose consumer
 /// sits two or more layers below its earliest legal layer has several
 /// SMC-legal (layer, slot) positions, the point-span sift reads the *written*
 /// one, and no pass canonicalizes among them — `ι` in
@@ -2398,30 +2689,35 @@ mod eta_slack_residual {
 // 6. Residual witnesses beyond η slack (issue #174 PR-B adversarial review)
 // ============================================================================
 
-/// **Documented-divergence witnesses from the PR-B adversarial review** — the
-/// two counterexamples that made §4.4's corollaries *conditional*. Neither is
-/// an `η`-slack case, and neither is visible in the default sweep statistics
-/// the way it bites here: the first is why the canonicality corollary on `𝔉′`
-/// conditions on fixpoints satisfying the restated §1 invariants (the shipped
-/// `adjacent_column_cuts` right-column asymmetry can leave a non-excepted
-/// §1-violating fixpoint — engine issue, filed); the second is why `𝔉′` is
-/// defined per-writing (`nf(e)` braid-free) — NF braid-freeness is not a
-/// content invariant. Each asserts CURRENT divergent behaviour; an **engine**
-/// fix flips it to a convergence witness, rename per the residual-(b)/(c)/(d)
-/// precedent.
+/// **The two witnesses from the PR-B adversarial review that made §4.4's
+/// corollaries *conditional*** — one now discharged, one still live. Neither is
+/// an `η`-slack case, and neither is visible in the default sweep statistics the
+/// way it bites here.
+///
+/// - **F1 — discharged 2026-08-02
+///   ([#185](https://github.com/sustia-llc/catgraph/issues/185)).** It witnessed
+///   the first condition of the canonicality corollary on `𝔉′`: that a fixpoint
+///   can violate a non-excepted §1 clause, through the `adjacent_column_cuts`
+///   right-column asymmetry. #185 made the cuts symmetric, the pair converges,
+///   and the test below is a **convergence regression** named per the
+///   residual-(b)/(c)/(d) precedent
+///   (`split_presence_nesting_converges_with_free_writing`).
+/// - **F2 — live.** `braid_prefix_is_not_content_derived` asserts CURRENT
+///   divergent behaviour: NF braid-freeness is not a content invariant, which is
+///   why `𝔉′`'s first condition is per-writing. An **engine** fix flips it to a
+///   convergence witness — rename per the same precedent.
 ///
 /// # Not the `eta_slack_residual` case (2026-07-30)
 ///
 /// The sibling module above had its rename instruction **retired** by #187's
-/// ratified display semantics. These two do **not**, and the difference is
-/// what each witness guards. `eta_slack_residual` pinned a canonicality gap —
-/// the thing #187 was asked to close, and it closed it at the display layer
-/// rather than in `nf`. These pin **engine facts**: a filed defect
-/// (`adjacent_column_cuts`) and a structural property of the normal form (a
-/// dead braid prefix survives `nf`). Neither is a display question, so
-/// canonical display converging on both — which it does, pinned below —
-/// discharges neither, and both instructions stay live against the engine fix
-/// that would.
+/// ratified display semantics. F2's was **not**, and the difference is what each
+/// witness guards. `eta_slack_residual` pinned a canonicality gap — the thing
+/// #187 was asked to close, and it closed it at the display layer rather than in
+/// `nf`. F1 and F2 pin **engine facts**: a filed defect (the cut asymmetry) and
+/// a structural property of the normal form (a dead braid prefix survives `nf`).
+/// Neither is a display question, so canonical display converging on both —
+/// which it does, pinned below — discharged neither; what discharged F1 was the
+/// engine fix its instruction called for, exactly as written.
 mod beyond_eta_slack_residuals {
     use super::*;
     use catgraph_applied::rig::BoolRig;
@@ -2442,16 +2738,35 @@ mod beyond_eta_slack_residuals {
         PropExpr::Identity(1)
     }
 
-    /// §4.4's F1 witness: content inside `𝔉′` (its `Zero` is layer- and
-    /// slot-pinned under the *restated* §1 invariants), yet the two writings
-    /// diverge — the nested one is a fixpoint that violates the §1 Step-6½
-    /// clause at a **non-excepted** pair, because `adjacent_column_cuts`
-    /// demands the right column's whole layer presence be contiguous while
-    /// the clause (and §4.5's own column definition) requires only local
-    /// runs. The enclosing component's presence is split (`[L, B, L]`), the
-    /// pass never seeds, and the inverted pair survives.
+    /// §4.4's F1 witness, **flipped to a convergence regression 2026-08-02**
+    /// ([#185](https://github.com/sustia-llc/catgraph/issues/185)).
+    ///
+    /// What it used to witness, from landing (2026-07-28) until #185: content
+    /// inside `𝔉′` (its `Zero` is layer- and slot-pinned under the *restated* §1
+    /// invariants) whose two writings nonetheless diverged — the nested one was a
+    /// fixpoint violating the §1 Step-6½ clause at a **non-excepted** pair,
+    /// because the shipped seed test `adjacent_column_cuts` demanded the right
+    /// column's whole layer presence be contiguous where the clause (and §4.5's
+    /// own column definition) requires only local runs. The enclosing
+    /// component's presence is split (`[L, B, L]`), so the pass never seeded and
+    /// the inverted pair survived. It was named
+    /// `cut_asymmetry_separates_smc_equal_writings_inside_f_prime` and carried a
+    /// rename instruction for the engine fix; #185 is that fix.
+    ///
+    /// What it pins now: the pair converges, so §4.4's canonicality corollary on
+    /// `𝔉′` no longer conditions on this failure mode. A regression here would
+    /// re-condition the corollary — that, and not merely "a test broke", is what
+    /// the failure message says.
+    ///
+    /// The same pair is also probed in `smc_canonicality_probes` as
+    /// `split_presence_encloser_seeds_the_column_move`, which additionally pins
+    /// the resulting layout and is the entry in `column_pass_ablation`'s table.
+    /// The two are deliberately one pair under two names: this one carries the
+    /// §4.4 corollary history, that one carries the pass attribution. Only one of
+    /// them is in the ablation table, so the table's count stays a count of
+    /// distinct pairs.
     #[test]
-    fn cut_asymmetry_separates_smc_equal_writings_inside_f_prime() {
+    fn split_presence_nesting_converges_with_free_writing() {
         let sfalse = || prim(Sfg::Scalar(BoolRig(false)));
         let strue = || prim(Sfg::Scalar(BoolRig(true)));
         let nested = seq(
@@ -2465,12 +2780,13 @@ mod beyond_eta_slack_residuals {
             ),
             seq(prim(Sfg::Zero), strue()),
         );
-        assert_ne!(
+        assert_eq!(
             nf(&nested),
             nf(&free),
-            "the cut asymmetry has been fixed — flip this to a convergence \
-             witness, unconditionalize §4.4's canonicality corollary after \
-             re-verification, and update §4.6"
+            "the #185 cut symmetrization has regressed — §4.4's canonicality \
+             corollary on 𝔉′ becomes conditional again (a fixpoint can violate \
+             the non-excepted §1 Step-6½ clause), and §1/§4.4/§4.6 all have to \
+             be re-conditioned with it"
         );
     }
 
@@ -2495,16 +2811,21 @@ mod beyond_eta_slack_residuals {
         );
     }
 
-    /// The display converges on **both** witnesses above — including the F2
+    /// The display converges on **both** pairs above — including the F2
     /// dead-braid prefix, which no `nf`-level fix reaches at all (`nf` cannot
     /// delete a dead braid, and the permutation is not content).
     ///
-    /// This is a scope marker, not a discharge. Neither engine fact above is
-    /// *repaired* by the display converging: the `adjacent_column_cuts`
-    /// asymmetry is still a filed engine defect, and NF braid-freeness is still
-    /// per-writing. Both rename instructions above therefore stay **live** —
-    /// they are triggered by an engine fix, which is exactly what has not
-    /// happened here.
+    /// This is a scope marker, not a discharge, and #185 is the demonstration.
+    /// The display converged on the F1 pair from #187 onward while `nf` still
+    /// separated it; what closed the `nf` side was the engine fix its rename
+    /// instruction called for, three days later. F2's instruction therefore
+    /// stays **live** on the same terms: NF braid-freeness is still per-writing,
+    /// and the display converging here says nothing about it.
+    ///
+    /// The F1 half is now redundant with
+    /// `split_presence_nesting_converges_with_free_writing` at the `nf` level and
+    /// is kept anyway — it pins that the display and `nf` agree on that pair
+    /// rather than merely that each is self-consistent.
     #[test]
     fn display_converges_on_both_beyond_eta_witnesses() {
         let sfalse = || prim(Sfg::Scalar(BoolRig(false)));

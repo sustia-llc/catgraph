@@ -10,10 +10,11 @@
 //! ⇐ direction holds unconditionally (every rewrite is SMC-sound); for the ⇒
 //! direction, **rigidity is proven on the fragment `𝔉′`** — braid-free,
 //! every `η` placement-pinned (Theorem 4.5, `docs/SMC-NF-RECONCILIATION.md`
-//! §4.4) — with canonicality-via-`nf` there *conditional* on fixpoints being
-//! braid-free and invariant-satisfying (§4.4's conditional corollary; the
-//! blocking engine defect, the `adjacent_column_cuts` right-column
-//! asymmetry, is filed). Beyond `𝔉′` it is open and not bounded either: the
+//! §4.4) — with canonicality-via-`nf` there resting on that theorem, whose proof
+//! is at sketch density with two flagged-open induction steps. Its corollary's
+//! own side conditions are discharged: invariant satisfaction at fixpoints since
+//! #185 made the Step-6½ cuts symmetric (2026-08-02), braid-freeness by `𝔉′`'s
+//! per-writing definition. Beyond `𝔉′` it is open and not bounded either: the
 //! `smc_canonicality_probes` suite verifies a named set of convergences,
 //! while a differential sweep still finds SMC-equal pairs inside the larger
 //! fragment `𝔉` whose normal forms differ — on the default corpus all of
@@ -181,8 +182,9 @@ pub struct StringDiagram<G: PropSignature> {
 /// `G`) — holds unconditionally, since `nf` applies only SMC-sound rewrites.
 /// The *canonicality* direction — SMC-equal expressions get equal NFs — has
 /// rigidity proven on the fragment 𝔉′ (braid-free, every `η`
-/// placement-pinned — Theorem 4.5, docs §4.4) with the `nf`-level corollary
-/// there conditional on the filed `adjacent_column_cuts` fix, is
+/// placement-pinned — Theorem 4.5, docs §4.4, at proof-sketch density with two
+/// flagged-open induction steps) with the `nf`-level corollary's side
+/// conditions discharged there (#185, 2026-08-02), is
 /// probe-verified on the named families beyond it, and is open in general:
 /// the dominant remaining freedom is `η` placement slack (docs §4.4, §4.6).
 ///
@@ -232,7 +234,8 @@ pub struct StringDiagram<G: PropSignature> {
 ///
 /// That is a named residual, **not a bound**. A differential sweep over 100 000
 /// random SFG expressions, each paired with a sound interchange rewriting of
-/// itself, still finds 128 divergent pairs *inside* the fragment 𝔉 — unmarked,
+/// itself, still finds 93 divergent pairs *inside* the fragment 𝔉 (128 before
+/// #185) — unmarked,
 /// boundary-attached, and mostly predating this machinery. `nf` remains sound on
 /// every one of them; what is open is uniqueness. See
 /// `docs/SMC-NF-RECONCILIATION.md` §2.6 (where rule (i)'s coordinates may be
@@ -2397,11 +2400,14 @@ struct ColumnSwap {
 /// `Identity(a+b) = Identity(a) ⊗ Identity(b)`), re-fusing on the way out.
 ///
 /// A **column pair** is a layer interval `[j0, j1)` together with, in every one
-/// of its layers, a contiguous run of `c1`'s atoms sitting immediately left of a
-/// contiguous run of `c2`'s — `c1`'s run taken maximal, `c2`'s required to be
-/// its whole presence in the layer. The pair is **interval-aligned** when all
-/// three cuts (left of `X`, between `X` and `B`, right of `B`) sit at the same
-/// wire coordinate read from above and from below at every internal boundary.
+/// of its layers, a maximal run of `c1`'s atoms sitting immediately left of a
+/// maximal run of `c2`'s. Both runs are *local* (issue #185): neither
+/// component's whole presence in the layer need be contiguous, so a column pair
+/// may sit inside a component whose layer presence is split (`[L, B, L]`) —
+/// the shape the pass used to decline on the right-hand side alone. The pair is
+/// **interval-aligned** when all three cuts (left of `X`, between `X` and `B`,
+/// right of `B`) sit at the same wire coordinate read from above and from below
+/// at every internal boundary.
 /// Alignment is what makes the interval's morphism factor as `A ⊗ X ⊗ B ⊗ C`,
 /// so the move is a two-column tensor transposition rather than a conjugation.
 ///
@@ -2462,7 +2468,13 @@ struct ColumnSwap {
 /// transposition flips every such pair between the two runs (at least one, since
 /// they are adjacent in every layer of the interval) and leaves every other
 /// pair's relative order alone; the comparator itself is invariant under the
-/// swap by the boundary argument above. The pass changes no layer's membership
+/// swap by the boundary argument above. Local runs (#185) do not weaken this:
+/// the swap is a rotation *inside* `[left, right)`, so an atom of either
+/// component sitting elsewhere in the row does not move and keeps its order
+/// against everything outside the interval, while a pair of atoms from the same
+/// component is not counted at all (the count reads distinct keys). The
+/// boundary/comparator-invariance argument is likewise per-interval and never
+/// appealed to whole-layer presence. The pass changes no layer's membership
 /// and rewrites no atom, so every earlier measure component — including
 /// `block_inversion_count`, whose free pairs are ordered by the same core — is
 /// invariant or lowered. It may *raise* `tied_inversion_count`, the later
@@ -2537,16 +2549,80 @@ fn run_ending_at(row: &[usize], p: usize, c: usize) -> (usize, usize) {
     (start, p + 1)
 }
 
-/// The one layer's cuts for the pair `(c1, c2)`: `c2`'s whole presence in the
-/// layer must be one contiguous run with `c1`'s atoms immediately left of it.
-/// `None` when the layer does not hold that shape.
-fn adjacent_column_cuts(row: &[usize], c1: usize, c2: usize) -> Option<ColumnCuts> {
-    let (mid, right) = contiguous_run(row, c2)?;
-    if mid == 0 || row[mid - 1] != c1 {
+/// The maximal run of `c` in `row` starting at position `p` (inclusive), as the
+/// half-open range `(p, end)` — the mirror of [`run_ending_at`]. Callers have
+/// already checked `row[p] == c`.
+fn run_starting_at(row: &[usize], p: usize, c: usize) -> (usize, usize) {
+    let mut end = p + 1;
+    while end < row.len() && row[end] == c {
+        end += 1;
+    }
+    (p, end)
+}
+
+/// The one layer's cuts for the `(c1, c2)` adjacency **at position `p`**:
+/// `c1`'s maximal run ending at `p`, immediately left of `c2`'s maximal run
+/// starting at `p + 1`. `None` when `row` does not hold that shape at `p`.
+///
+/// Both runs are *local* (issue #185): neither component's whole presence in the
+/// layer need be contiguous. The old form took the left run maximal but demanded
+/// the right component's whole layer presence be one contiguous run, so the pass
+/// never seeded on a split-presence encloser (`[L, B, L]` rows) — an asymmetry
+/// the §1 invariant clause and §4.5's own column definition never had. The
+/// factorization the move relies on (`A ⊗ X ⊗ B ⊗ C` over the interval) is a
+/// property of the three *cuts* alone, so atoms of either component sitting in
+/// `A` or `C` are irrelevant to it.
+fn adjacent_column_cuts_at(row: &[usize], p: usize, c1: usize, c2: usize) -> Option<ColumnCuts> {
+    if row.get(p) != Some(&c1) || row.get(p + 1) != Some(&c2) {
         return None;
     }
-    let (left, _) = run_ending_at(row, mid - 1, c1);
-    Some((left, mid, right))
+    let (left, _) = run_ending_at(row, p, c1);
+    let (_, right) = run_starting_at(row, p + 1, c2);
+    Some((left, p + 1, right))
+}
+
+/// Do two vertically adjacent layers' cuts meet — the same wire coordinate read
+/// from below (`up.tgt`) and from above (`down.src`) at all three? This is
+/// exactly [`column_pair_is_transposable`]'s internal-boundary test, factored
+/// out so the widening in [`find_column_transposition`] can apply it one
+/// boundary at a time.
+fn cuts_meet(up: &LayerPrefixes, down: &LayerPrefixes, u: ColumnCuts, d: ColumnCuts) -> bool {
+    let ((au, mu, bu), (ad, md, bd)) = (u, d);
+    up.tgt[au] == down.src[ad] && up.tgt[mu] == down.src[md] && up.tgt[bu] == down.src[bd]
+}
+
+/// The `(c1, c2)` adjacency in `row` whose cuts satisfy `meets` — the widening
+/// step's candidate choice, `meets` being [`cuts_meet`] against the cuts already
+/// fixed on the other side of the boundary being crossed.
+///
+/// With local runs a row may hold several `(c1, c2)` adjacencies, so unlike the
+/// whole-presence form this is a *search*, and the search order is part of the
+/// pass's determinism: positions left-to-right, first match wins. Alignment
+/// normally admits at most one candidate — the cut coordinates of distinct
+/// adjacencies in a row differ as soon as some atom between them has positive
+/// width on the side being read — but it does not do so *unconditionally*, so
+/// leftmost-first is the tie-break rather than an appeal to uniqueness.
+///
+/// **What a tie actually needs.** [`cuts_meet`] reads **one side per row**:
+/// `up.tgt` for the layer above the boundary, `down.src` for the layer below.
+/// So two adjacencies tie exactly when every atom in the span between them —
+/// the two candidates' own runs included — has zero width **on the side being
+/// read at that boundary**, not on both sides. One-sided-zero atoms therefore
+/// qualify: a run of `η`s ties the `src` reading, a run of `ε`s ties the `tgt`
+/// reading. A `0 → 0` atom is merely the case that ties both readings — the
+/// example, not the condition. (Stated the other way round until 2026-08-02.)
+///
+/// The tie-break is free of completeness cost: see the truncation lemma in
+/// [`find_column_transposition`]'s **Completeness** note.
+fn aligned_column_cuts(
+    row: &[usize],
+    c1: usize,
+    c2: usize,
+    mut meets: impl FnMut(ColumnCuts) -> bool,
+) -> Option<ColumnCuts> {
+    (0..row.len().saturating_sub(1))
+        .filter_map(|p| adjacent_column_cuts_at(row, p, c1, c2))
+        .find(|&cuts| meets(cuts))
 }
 
 /// One layer's cumulative wire coordinates: `src[k]` / `tgt[k]` are the total
@@ -2598,13 +2674,18 @@ fn column_pair_is_transposable(prefixes: &[LayerPrefixes], j0: usize, cuts: &[Co
         return false;
     }
     // Interval alignment: every cut is the same wire coordinate read from above
-    // and from below at every internal boundary.
+    // and from below at every internal boundary. Since #185 the widening in
+    // [`find_column_transposition`] is itself alignment-guided, so every interval
+    // reaching here already passes this — it is kept as the definition of record
+    // (and the check any future seeding path is measured against), not as dead
+    // weight.
     (1..cuts.len()).all(|t| {
-        let up = &prefixes[j0 + t - 1];
-        let down = &prefixes[j0 + t];
-        let (au, mu, bu) = cuts[t - 1];
-        let (ad, md, bd) = cuts[t];
-        up.tgt[au] == down.src[ad] && up.tgt[mu] == down.src[md] && up.tgt[bu] == down.src[bd]
+        cuts_meet(
+            &prefixes[j0 + t - 1],
+            &prefixes[j0 + t],
+            cuts[t - 1],
+            cuts[t],
+        )
     })
 }
 
@@ -2621,11 +2702,41 @@ fn column_pair_is_admissible(comps: &Components, has_braid: &[bool], c1: usize, 
 /// The first column transposition ordered against [`component_key_order`],
 /// scanning layers top-to-bottom and positions left-to-right.
 ///
-/// For each seeding adjacency the pass takes the **maximal** run of layers over
-/// which the two components keep the same adjacent-run shape, then tries the
-/// sub-intervals containing the seed longest-first, leftmost-first — a longer
-/// interval carries more of the block across, and fixing the search order is
-/// what keeps the pass deterministic.
+/// A seed is a `(c1, c2)` adjacency **at a position**, and its two columns are
+/// the two maximal *local* runs meeting there (#185). From it the pass takes the
+/// maximal run of layers whose own `(c1, c2)` adjacencies meet the seed's cuts
+/// across every boundary crossed — widening is alignment-guided, since with
+/// local runs a layer can hold several adjacencies and only the aligned one
+/// continues this column pair. It then tries the sub-intervals containing the
+/// seed longest-first, leftmost-first — a longer interval carries more of the
+/// block across, and fixing the search order is what keeps the pass
+/// deterministic.
+///
+/// **Completeness.** Every column pair violating the §1 Step-6½ clause has, in
+/// each of its layers, a `c1`-run immediately left of a `c2`-run, hence a
+/// position adjacency; the outer scan tries every `(j, p)`, so the pair is
+/// seeded from each of its own layers, and alignment-guided widening from any
+/// one of them reconstructs cuts that meet at every boundary the pair spans.
+/// The sub-interval search then finds the pair itself.
+///
+/// *Ties do not weaken this* (truncation lemma; #185 adversarial review,
+/// 2026-08-02 — this note used to hold only "wherever the tie does not fire").
+/// [`aligned_column_cuts`] takes the leftmost meeting candidate, so at a
+/// boundary where two candidates meet the same anchor, widening may divert off
+/// the pair. But such a boundary has all six cut coordinates equal — both
+/// candidates' cuts agree on the read side, and the span forcing that covers
+/// their own runs, so the pair's two columns are zero-width there, and by
+/// [`cuts_meet`] the anchor layer's are too. That is
+/// [`column_pair_is_transposable`]'s strict-commutation condition at that
+/// boundary, in its strongest form. Inside the pair's extent widening cannot
+/// stop, and at a boundary with a unique meeting candidate that candidate is
+/// the pair's; so the maximal range around the seed over which the widened cuts
+/// *are* the pair's is bounded at each end either by the pair's own extent
+/// (strictly commuting by hypothesis) or by such a tie boundary (strictly
+/// commuting by the above). That truncated segment is aligned, admissible and
+/// inverted, hence transposable — and the sub-interval search tries every
+/// sub-interval containing the seed layer, so it is reached. No clause-violating
+/// pair survives a fixpoint, ties included.
 fn find_column_transposition<G: PropSignature>(
     sd: &StringDiagram<G>,
     comps: &Components,
@@ -2647,23 +2758,43 @@ fn find_column_transposition<G: PropSignature>(
             {
                 continue;
             }
-            // Widen to the maximal layer run holding the same adjacent shape.
-            // The seed adjacency alone does not guarantee it: `c2` may also sit
-            // elsewhere in this very layer, and then it has no single run here.
-            let Some(seed) = adjacent_column_cuts(row, c1, c2) else {
+            // The seed is the adjacency *at this position* — its two maximal
+            // local runs (#185). Widening then walks outward one layer at a
+            // time, taking the neighbour's `(c1, c2)` adjacency whose cuts meet
+            // the current edge layer's across the boundary between them. It has
+            // to be alignment-guided: with local runs a layer may hold several
+            // such adjacencies, and only the aligned one continues *this*
+            // column pair. Alignment is also monotone in the wrong direction to
+            // widen past — an interval containing the seed and a layer beyond a
+            // misaligned boundary must contain that boundary, so
+            // `column_pair_is_transposable` would reject it anyway. The run
+            // reached here is therefore the whole of what the sub-interval
+            // search below can accept.
+            let Some(seed) = adjacent_column_cuts_at(row, p, c1, c2) else {
                 continue;
             };
             let mut all = vec![seed];
             let mut lo = j;
-            while lo > 0
-                && let Some(cuts) = adjacent_column_cuts(&ids[lo - 1], c1, c2)
-            {
+            while lo > 0 {
+                let anchor = all[0];
+                let (up, down) = (&prefixes[lo - 1], &prefixes[lo]);
+                let Some(cuts) =
+                    aligned_column_cuts(&ids[lo - 1], c1, c2, |c| cuts_meet(up, down, c, anchor))
+                else {
+                    break;
+                };
                 all.insert(0, cuts);
                 lo -= 1;
             }
-            while lo + all.len() < ids.len()
-                && let Some(cuts) = adjacent_column_cuts(&ids[lo + all.len()], c1, c2)
-            {
+            while lo + all.len() < ids.len() {
+                let j1 = lo + all.len();
+                let anchor = *all.last().expect("`all` was seeded and only grows");
+                let (up, down) = (&prefixes[j1 - 1], &prefixes[j1]);
+                let Some(cuts) =
+                    aligned_column_cuts(&ids[j1], c1, c2, |c| cuts_meet(up, down, anchor, c))
+                else {
+                    break;
+                };
                 all.push(cuts);
             }
             for len in (1..=all.len()).rev() {

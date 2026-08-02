@@ -46,12 +46,12 @@
 //!
 //! # These are `nf`-display trackers (re-labelled 2026-07-30, [#187](https://github.com/sustia-llc/catgraph/issues/187))
 //!
-//! The 253 and 1 162 figures below count SMC-equal pairs that **the normal form
+//! The 183 and 1 153 figures below count SMC-equal pairs that **the normal form
 //! separates**. They no longer measure anything unresolved, and it is worth
 //! being exact about what closed them:
 //!
 //! * **Equality** — closed by content ([#57](https://github.com/sustia-llc/catgraph/issues/57)
-//!   a1). `content_eq` decides all 253 and all 1 162 (`tests/content_equality_corpus.rs`),
+//!   a1). `content_eq` decides all 183 and all 1 153 (`tests/content_equality_corpus.rs`),
 //!   and `Presentation::eq_mod` has taken the content path since a1 PR2.
 //! * **Display** — closed by canonical display (#187 PR1).
 //!   `canonical_display` converges on all 100 000 pairs of both modes
@@ -63,6 +63,28 @@
 //! stay, at exactly these numbers, as **drift detectors on the engine** — a
 //! movement means `nf` changed, which is news whichever direction it moves.
 //! §4.6's ledger entries keep their meaning for the same reason.
+//!
+//! # The #185 re-pin (2026-08-02): the detector fired, downward
+//!
+//! [#185](https://github.com/sustia-llc/catgraph/issues/185) made Step 6½'s
+//! column cuts symmetric — both runs local, so a column pair whose *right*
+//! component has split layer presence (`[L, B, L]`) now seeds the move instead
+//! of being declined. The three tiers moved as follows, each verified against a
+//! witness-level old-vs-new diff of the divergent index sets:
+//!
+//! | tier       | old            | new            |
+//! |------------|----------------|----------------|
+//! | default    | 253 / 128 / 23 | 183 /  93 / 23 |
+//! | braid      | 1162 / 634 / 237 | 1153 / 630 / 237 |
+//! | interleave | 745 / 0 / 745  | *unmoved*      |
+//!
+//! Every move is a **convergence**: 70 default and 9 braid pairs stopped
+//! diverging, and **no pair became divergent** in any of the three modes. No
+//! surviving divergence changed bucket, which is why `marked` is unmoved on both
+//! corpora and `in_fragment` fell by exactly the converged pairs that were in
+//! `𝔉` (35 of 70, 4 of 9). The interleave tier's index set is bit-identical,
+//! though 36 of its cases *did* move normal form — both sides together, so the
+//! pair verdict is unchanged; see that test's own note.
 //!
 //! # The interleave tier ([#183](https://github.com/sustia-llc/catgraph/issues/183))
 //!
@@ -501,6 +523,17 @@ fn on_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T 
 /// frozen. Diagnose through `smc_canonicality_probes` (still the gate of record;
 /// this is a tracker), then re-pin here and in §4.6's table together, because
 /// the table quotes this test.
+///
+/// Lineage: **253 / 128 / 23 → 183 / 93 / 23**
+/// ([#185](https://github.com/sustia-llc/catgraph/issues/185) symmetric Step 6½
+/// cuts, 2026-08-02). 70 pairs converged and **none** newly diverged; 35 of the
+/// 70 were in `𝔉` (128 − 35 = 93) and none were marked (23 unmoved). No
+/// surviving divergence changed bucket. The converged set includes the issue's
+/// own two named cases, **5417** and **51534**: in both, `nf(A)` had left an
+/// `η`-column to the right of a block whose component's layer presence is split,
+/// the old whole-presence cut test declined to seed there, and the inverted pair
+/// survived to the fixpoint — `nf(B)` already had the sorted layout, so the new
+/// `nf(A)` is the old `nf(B)` verbatim (and is `canonical_display(A)`).
 #[test]
 #[ignore = "100k-pair sweep. Run with --ignored when the NF changes."]
 fn published_divergence_figures_reproduce() {
@@ -508,19 +541,30 @@ fn published_divergence_figures_reproduce() {
     assert_eq!(
         counts,
         Counts {
-            divergent: 253,
-            in_fragment: 128,
+            divergent: 183,
+            in_fragment: 93,
             marked: 23,
         },
         "the sweep no longer reproduces SMC-NF-RECONCILIATION.md §4.6's published \
-         figures (253 / 128 / 23). Either the normal form changed, or the corpus \
-         or the fragment classification drifted from the design round's."
+         figures (183 / 93 / 23, post-#185). Either the normal form changed, or \
+         the corpus or the fragment classification drifted from the design round's."
     );
 }
 
 /// **Residual-(a) tracker.** The braid-injecting corpus makes components own
 /// non-contiguous boundary intervals, so guard 3's marking actually fires — the
 /// default corpus produces too few marked cases to track residual (a) at all.
+///
+/// Lineage: **1162 / 634 / 237 → 1153 / 630 / 237**
+/// ([#185](https://github.com/sustia-llc/catgraph/issues/185) symmetric Step 6½
+/// cuts, 2026-08-02). Nine pairs converged — 7289, 21440, 26044, 40465, 44230,
+/// 58374, 61962, 67561, 83281 — and none newly diverged; 4 of the 9 were in `𝔉`
+/// (634 − 4 = 630) and **none was marked**, which is why the residual-(a) figure
+/// this tier exists to track is unmoved at 237. The mechanism is the default
+/// tier's, and it has to be: `column_pair_is_admissible` declines any pair
+/// either of whose components carries a braid, so every braid-mode convergence
+/// is a move among braid-free components with the injected crossings left where
+/// they were.
 #[test]
 #[ignore = "100k-pair braid-mode sweep. Run with --ignored when the NF changes."]
 fn published_braid_mode_figures_reproduce() {
@@ -528,8 +572,8 @@ fn published_braid_mode_figures_reproduce() {
     assert_eq!(
         counts,
         Counts {
-            divergent: 1_162,
-            in_fragment: 634,
+            divergent: 1_153,
+            in_fragment: 630,
             marked: 237,
         },
         "braid-mode sweep moved; this is the braid-mode residual-(a) tracker (§4.6(a))."
@@ -555,6 +599,20 @@ fn published_braid_mode_figures_reproduce() {
 /// **23** marked divergences per 100 000 and the braid corpus **237**; this one
 /// gives **745** — 32× the default and 3.1× the braid tier, and unlike either it
 /// draws them from a corpus that is 100% marked rather than incidentally so.
+///
+/// Lineage: **unmoved, verified** across
+/// [#185](https://github.com/sustia-llc/catgraph/issues/185)'s symmetric Step 6½
+/// cuts (2026-08-02) — the divergent index set is bit-identical, not merely the
+/// same size. That is worth one sentence of explanation rather than silence,
+/// because the engine did move here: **36** of the 100 000 cases changed normal
+/// form, every one of them a pure within-layer column reordering (per-layer atom
+/// multiset preserved, layer count preserved). All 36 moved *both* sides of the
+/// pair — 72 changed sides over 36 cases — and the divergent index set came out
+/// bit-identical, so no pair's verdict flipped in either direction. This is
+/// the expected shape for a marked corpus: `column_pair_is_admissible` declines
+/// any pair either of whose components is `interleaved`, but the *unmarked*
+/// components sharing the diagram are still eligible, so their columns can sort
+/// while the marked verdict — which is what this tier counts — stays put.
 #[test]
 #[ignore = "100k-pair interleave-mode sweep. Run with --ignored when the NF changes."]
 fn published_interleave_mode_figures_reproduce() {
@@ -576,13 +634,19 @@ fn published_interleave_mode_figures_reproduce() {
 
 /// Fast tier over the same frozen corpus — a 5 000-case prefix, so CI notices a
 /// gross change without the full run and a failure names a real case index.
+///
+/// Lineage: **16 / 6 / 2 → 14 / 6 / 2**
+/// ([#185](https://github.com/sustia-llc/catgraph/issues/185) symmetric Step 6½
+/// cuts, 2026-08-02). Exactly two of the full tier's 70 convergences fall in the
+/// prefix — cases **3061** and **4722**, both outside `𝔉` and both unmarked,
+/// which is why only `divergent` moves here.
 #[test]
 fn smoke_prefix_of_the_published_corpus() {
     let counts = on_big_stack(|| sweep(SMOKE_PAIRS, Mode::Default));
     assert_eq!(
         counts,
         Counts {
-            divergent: 16,
+            divergent: 14,
             in_fragment: 6,
             marked: 2,
         },

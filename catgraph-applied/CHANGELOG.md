@@ -34,8 +34,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   default corpus's 23 marked divergences and 3.1× the braid corpus's 237, and
   unlike the braid tier — whose marking a coarsening `Braid` makes an upper
   bound on content-level marking (§4.4) — every case here is marked at the
-  content level. The two existing tiers' pins (253/128/23 and 1162/634/237) are
-  unchanged; §4.6(a) now names both trackers.
+  content level. The two existing tiers' pins were unchanged by *this* tier
+  (253/128/23 and 1162/634/237 at the time); §4.6(a) now names both trackers.
+  Both were re-pinned later in this same unreleased cycle by
+  [#185](https://github.com/sustia-llc/catgraph/issues/185) — see the Fixed
+  entry below — while this tier's own 745 / 0 / 745 stayed put.
 
 ### Changed
 
@@ -101,6 +104,107 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   groups and records the removal in its module doc.
 
 ### Fixed
+
+- **Step 6½'s column cuts are symmetric — both runs local**
+  ([#185](https://github.com/sustia-llc/catgraph/issues/185)). The shipped seed
+  test took the *left* column as a maximal **local** run but demanded the
+  *right* component's **whole layer presence** be one contiguous run. Neither
+  `docs/SMC-NF-RECONCILIATION.md` §1's Step-6½ invariant clause nor §4.5's own
+  column definition ever said that, so a fragment-symmetric, interval-aligned,
+  strictly-commuting column pair whose right column belonged to a component
+  that also owned an atom elsewhere in the row (`[L, B, L]`) was **declined**,
+  and the inverted, non-excepted pair survived to the fixpoint.
+
+  `adjacent_column_cuts` is replaced by `adjacent_column_cuts_at`: the seed is
+  an adjacency **at a position**, and its two columns are the two maximal local
+  runs meeting there. Because a row can now hold several `(c1, c2)`
+  adjacencies, widening the interval became a search — it takes the
+  neighbouring row's adjacency whose three cuts *meet* the current edge layer's
+  (`cuts_meet`, the same internal-boundary test `column_pair_is_transposable`
+  applies), scanning positions leftmost-first. Cut coordinates are
+  non-decreasing across a row and `cuts_meet` reads one side per row (`tgt`
+  above a boundary, `src` below), so two adjacencies align identically exactly
+  when every atom in the span between them — their own runs included — has zero
+  width **on the side being read** there; one-sided-zero atoms (`η`, `ε`)
+  qualify, and a `0 → 0` atom is only the example that ties both readings.
+  Leftmost-first decides that case deterministically, and it costs completeness
+  nothing: a tie boundary has all six cut coordinates equal, which *is* strict
+  commutation at that boundary, so any violating pair's tie-free segment is
+  still aligned, admissible, inverted and transposable, and the sub-interval
+  search still returns it (the **truncation lemma**, §4.4). Empirically the tie
+  also never fired: Phase A's temporary widening instrumentation (since removed)
+  over the 600 000 normalizations of the three sweep corpora (3 × 100 000 pairs,
+  two writings each) counted **0** two-aligned-candidate ties, with 145 widening
+  steps seeing more than one candidate at all and 18 widening steps having to
+  skip a *misaligned* leftmost one — per-widening-step event counts kept as
+  provenance, not numbers-of-record; the skip is pinned by the new
+  `column_widening_picks_the_interval_aligned_adjacency`. No guard, no
+  direction and no equal-key decline changed;
+  `tests/pass_disjointness_probes.rs` is green with no pin moved.
+
+  **Pass-disjointness probes, post-review (2026-08-02).** Seeding is strictly
+  *wider*; among the newly-seeded split-presence sites, the both-readings ones
+  are where the carve and the #186 exact-cancellation exit are newly exercised
+  (the rest fire ordinary productive moves). `pass_disjointness_probes.rs` gains
+  `split_presence_both_readings_pair_is_newly_seeded` (**P1**): shipped
+  generators, inside `𝔉`, a `[Id_L, Zero_B, Discard_L]` row whose contested
+  `Zero | Discard` boundary admits both readings and which the pre-#185 seed
+  test declined outright. Its fixpoint is Step-6-sorted, idempotent, and equal
+  to the column-pass-ablated normal form — the newly-seeded fight cancels
+  exactly. The file's `column_violations_len1` checker is extended to the same
+  symmetric local-run reading: it had kept the pre-#185 whole-presence
+  `contiguous_run`, so it could not see split-presence violations at all — P1's
+  is the first it flags. No existing probe's verdict moved.
+
+  **Measured outcome — every move is a convergence.** Across the three
+  100 000-pair sweep corpora, **79** SMC-equal pairs stopped diverging (70
+  default, 9 braid) and **none** became divergent in any mode. No surviving
+  divergence changed bucket, the interleave tier's divergent index set is
+  bit-identical, and the four congruence-closure collision pins are unmoved
+  (748 / 1114 / 1594 / 1590). Health over the same 600 000 normalizations:
+  0 idempotence failures, 0 content losses. Content never moved either — all 79
+  pairs were already `content_eq`- and `canonical_key`-equal, and already
+  convergent under `canonical_display`.
+
+  **Pins re-pinned, in lockstep with the docs that quote them:**
+  `smc_nf_differential_sweep` **253 / 128 / 23 → 183 / 93 / 23** (default),
+  **1162 / 634 / 237 → 1153 / 630 / 237** (braid), 745 / 0 / 745 unmoved
+  (interleave), smoke prefix 16 → 14; `content_equality_corpus`
+  253/253 → 183/183 and 1162/1162 → 1153/1153; `canonical_display_corpus`
+  churn 5 334 → 4 585 and `layer_pinned_agree` 39 991 → 40 075 (default),
+  churn 19 098 → 18 977 and `layer_pinned_agree` 32 270 → 32 287 (braid), with
+  every other gate field, both correctness columns and every tier denominator
+  verified unmoved.
+
+  **Docs and witnesses.** §4.4's canonicality corollary on `𝔉′` is no longer
+  *conditional*: its invariant-satisfaction condition is discharged by an
+  argument written out there in three steps — the seed predicate now coincides
+  with the §1 clause's column pair, `find_column_transposition` scans every
+  `(layer, position)` so every clause-violating pair is reachable, and Step 6½
+  runs to its own fixpoint inside a loop that exits only on a whole-pass
+  no-change, so a fixpoint holds no *non-excepted* violation. Step two carries
+  the **truncation lemma** (#185 adversarial review, 2026-08-02), which replaced
+  the first draft's empirical-only qualification: the leftmost tie-break can no
+  longer leave a violating pair standing even in principle, so the discharge is
+  unconditional rather than "exact wherever the tie does not fire". That is a
+  statement about the corollary's **side conditions only** — it still inherits
+  Theorem 4.5's proof-sketch density and its **two flagged-open induction
+  steps**, which #185 does not touch. §1's "Known deviation" note is deleted,
+  §4.4's pass-disjointness note records that seeding is strictly wider (the
+  carve and #186's exit newly exercised at the both-readings subset of the new
+  sites, P1 among them),
+  §4.5 gains a dated symmetrization entry (and withdraws its "complements, not
+  overlaps" gloss — the new pair is in `𝔉′` and the pass fires on it), §4.6
+  records the tracker movement and the two motivating indices (5417, 51534),
+  and §2.4 records that local runs do not weaken `column_inversion_count`.
+  The F1 witness `cut_asymmetry_separates_smc_equal_writings_inside_f_prime`
+  is flipped to `assert_eq!` and renamed
+  `split_presence_nesting_converges_with_free_writing` per the
+  residual-(b)/(c)/(d) precedent; F2 (`braid_prefix_is_not_content_derived`)
+  stays divergent with its rename instruction live. The ablation table grows
+  5 → 7 (`column_pass_decides_exactly_the_seven_documented_witnesses`), and
+  the 5 780-rejection alignment figure in §4.5 is relabelled a pre-fix
+  (2026-07-28) measurement.
 
 - **Wire-count sums saturate instead of overflowing**
   ([#180](https://github.com/sustia-llc/catgraph/issues/180)):

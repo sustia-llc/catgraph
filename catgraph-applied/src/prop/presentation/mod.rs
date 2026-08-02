@@ -424,8 +424,9 @@ impl<G: PropSignature> Presentation<G> {
                 //   catches every such equality without consulting user
                 //   equations. It replaced an `nf(a) == nf(b)` check in #57 a1,
                 //   which was sound but incomplete — the NF still separates
-                //   SMC-equal pairs (all 253 published divergences, and 1162 in
-                //   braid mode), and content closes every one of them.
+                //   SMC-equal pairs (all 183 published divergences, and 1153 in
+                //   braid mode; 253 / 1162 before #185), and content closes
+                //   every one of them.
                 // - The CC engine handles user-equation congruence (e.g., the
                 //   18 Thm 5.60 equations) but doesn't know SMC axioms.
                 // - Replacing CC's pre-pass entirely with NF was tried and
