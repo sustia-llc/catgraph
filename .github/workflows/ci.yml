@@ -96,6 +96,13 @@ jobs:
       - run: cargo test -p catgraph-dl --features ad
       - run: cargo clippy -p catgraph-dl --features ad --all-targets -- -D warnings
       - run: cargo run -q -p catgraph-dl --features ad --example gradient_descent_para
+      # #165: the opt-in `f64-fast` feature (ONE symmetric ζ factorization —
+      # Cholesky → LBLT → the untouched rig-generic Gauss–Jordan — replacing the
+      # three hand-rolled eliminations, plus cond₁ reporting) is off by default,
+      # so every run above leaves `magnitude_f64` and `tests/magnitude_f64.rs`
+      # uncompiled. Targeted test + clippy pass (the #81 serde-lane shape).
+      - run: cargo test -p catgraph-magnitude --features f64-fast
+      - run: cargo clippy -p catgraph-magnitude --features f64-fast --all-targets -- -D warnings
 
   # #11: the slow BV 2025 Prop 3.14 acceptance fixture
   # (euler_char_identity::fixture_3_5point_path_t_2_5) is ignored under

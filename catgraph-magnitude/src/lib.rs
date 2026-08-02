@@ -40,6 +40,11 @@
 //! - [`is_scattered`](magnitude::is_scattered) — Leinster 2013 Def 2.1.2
 //!   convergence predicate.
 //! - [`magnitude`](magnitude::magnitude) — magnitude via Möbius sum.
+//! - `magnitude_f64` (**feature `f64-fast`**, off by default) — ONE symmetric ζ
+//!   factorization (Cholesky → Bunch–Kaufman `LBLT` → the untouched rig-generic
+//!   Gauss–Jordan) serving weighting / coweighting / magnitude / Möbius, plus
+//!   `cond₁(ζ)` reporting. Numerical, not paper-anchored; default-build results
+//!   are unchanged (#165).
 //! - [`LmCategory`](lm_category::LmCategory) — materialized language-model
 //!   transition table with `Mag(tM)` per BV 2025 Prop 3.10.
 //! - [`coalition`] — enriched-coalition magnitude surface (gemini-spec §IV.5,
@@ -105,6 +110,12 @@ pub mod ring;
 
 pub mod lm_category;
 pub mod magnitude;
+// #165 — `f64` fast path: ONE symmetric factorization of ζ (Cholesky → LBLT,
+// asymmetric/singular → the untouched rig-generic Gauss–Jordan) serving
+// weighting / coweighting / magnitude / Möbius, plus `cond₁` reporting.
+// Off by default; default-build results are unchanged.
+#[cfg(feature = "f64-fast")]
+pub mod magnitude_f64;
 pub mod weighted_cospan;
 
 // D2 — BTV 2021 Yoneda embedding `x ↦ L(x, −)`: representable copresheaves

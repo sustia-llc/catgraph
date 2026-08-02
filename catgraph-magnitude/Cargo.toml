@@ -17,11 +17,22 @@ default = []
 # Dev-only cross-validation against `events555/modularsnf` (marker feature;
 # gates compilation of tests/snf_modularsnf_integer_oracle.rs).
 modularsnf-oracle = []
+# `f64-fast` exposes the magnitude_f64 module: ONE symmetric factorization of ζ
+# (Cholesky → LBLT, asymmetric/singular → the untouched rig-generic Gauss–Jordan)
+# serving weighting / coweighting / magnitude / Möbius, plus cond₁ reporting.
+# Opt-in; off by default so the nalgebra compile cost stays out of the way for
+# Tropical / Bool / UnitInterval rigs, which cannot use field-specific
+# operations anyway (the workspace's "field-bounded paths only" nalgebra rule).
+# Default-build results are unchanged — no existing function is touched (#165).
+f64-fast = ["dep:nalgebra"]
 
 [dependencies]
 catgraph = { workspace = true }
 catgraph-applied = { workspace = true }
 deep_causality_num = { workspace = true }
+# Field-bounded paths only (workspace rule) — the `f64-fast` symmetric
+# factorization is the sole consumer, and it is off by default (#165).
+nalgebra = { workspace = true, optional = true }
 # `num` is kept for `BigInt` + `ToPrimitive` only (integer-exact SNF / CRT lift
 # and BigInt→i64 rank recovery). DC has no arbitrary-precision BigInt, so the
 # custom integer SNF (Storjohann + Newman) and `Z(BigInt)` stay on `num`.
