@@ -6,6 +6,8 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+## [workspace-v0.6.0] - 2026-08-02
+
 ### Changed
 
 - **`equivalence::comp_cospan`'s index arithmetic is documented as bounded, and
@@ -135,6 +137,7 @@ substrate (numeric backends kept optional).
   §3.3 io/ff factorization, the global Grothendieck form, LinRel examples) are
   catalogued in [`docs/FS19-AUDIT.md`](docs/FS19-AUDIT.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.6.0...HEAD
+[workspace-v0.6.0]: https://github.com/sustia-llc/catgraph/compare/v0.5.0...v0.6.0
 [workspace-v0.4.0]: https://github.com/sustia-llc/catgraph/compare/v0.1.0...v0.4.0
 [workspace-v0.1.0]: https://github.com/sustia-llc/catgraph/releases/tag/v0.1.0
