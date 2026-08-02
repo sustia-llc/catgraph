@@ -78,8 +78,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   F64Rig), an all-pairs ceiling of 1.6M–4.5M `eq_mod` calls per rig; with the
   intra-component skip the BoolRig depth-2 tracker runs ≈2 min against the
   greedy scan's ≈11 s. The trackers stay `#[ignore]`'d, so CI time is
-  unchanged; the `cc_incompleteness_count` bench group's profiled wall times
-  were re-measured and are noted in `benches/functor_bench.rs`.
+  unchanged; the `cc_incompleteness_count` bench groups' profiled wall times
+  were re-measured (≈120 s / ≈129 s per call) — a cost step that then led to
+  the groups' removal, recorded in the Removed entry below.
 
   `Presentation::eq_mod`'s rustdoc now records the non-transitivity directly:
   sound and definite per query, but not an equivalence relation as a decision
