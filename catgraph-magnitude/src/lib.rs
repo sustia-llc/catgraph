@@ -148,9 +148,15 @@ pub use coalition::{
 // `Mag(S ∪ {x})` queries in O(m² + k²) (bordered Schur update) instead of two
 // O(m³ + k³) fresh evaluations. [`coalition_value_delta`] is the paired-
 // evaluation entry point at the pinned `t = 1` arm.
+//
+// #153 adds an additive reporting surface on top: `value_with_report(_scratch)`
+// returns a [`JoinReport`] carrying the update [`EvalPath`], the Schur
+// complement, and an exact [`ZeroDiversityProof`] when one of the three
+// structurally-decidable zero-diversity classes fires.
 pub mod coalition_eval;
 pub use coalition_eval::{
-    CoalitionEvaluator, EvalScratch, INCREMENTAL_REL_TOL, coalition_value_delta,
+    CoalitionEvaluator, EvalPath, EvalScratch, INCREMENTAL_REL_TOL, JoinReport, ZeroDiversityProof,
+    coalition_value_delta,
 };
 
 // Chain-sum Möbius via Leinster 2013 Prop 2.1.3.

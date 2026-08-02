@@ -115,15 +115,212 @@ pub const SCHUR_SLOW_FALLBACK_TOL: f64 = 1e-12;
 
 /// Which update path [`CoalitionEvaluator::value_with`] took for a candidate.
 ///
-/// Exposed to the module tests (via the private `value_with_impl`) so they can
-/// assert that a given fixture deliberately exercises the intended branch;
-/// [`CoalitionEvaluator::value_with`] discards it and returns only the scalar.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum EvalPath {
+/// [`CoalitionEvaluator::value_with`] discards it and returns only the scalar;
+/// [`JoinReport::path`] surfaces it (#153), and the module tests read it through
+/// the private `value_with_impl` to assert that a fixture deliberately exercises
+/// the intended branch.
+///
+/// The two variants are the module's two update routes (see the module docs):
+/// `Fast` is the closed-form bordered-Schur update against the cached skeletal
+/// `μ`, taken when `x` neither improves an interior member-to-member closure nor
+/// merges into an existing skeletal class **and** the Schur complement `s` is
+/// well-conditioned; `Slow` is the border-then-re-skeletalize-and-re-invert
+/// route, taken otherwise (including the near-singular
+/// [`SCHUR_SLOW_FALLBACK_TOL`] diversion out of the fast branch).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum EvalPath {
     /// Bordered Schur update against the cached `μ` (no fresh inversion).
     Fast,
     /// Re-skeletalize + re-invert the bordered `(m+1)`-point table.
     Slow,
+}
+
+/// A **structural** certificate that a candidate's real diversity increment is
+/// exactly `0` (#153).
+///
+/// Each variant names a predicate over already-computed data — the bordered
+/// closure vectors `c` / `r` and the cached closed table — that is decided by
+/// **exact** `f64` comparison, with no tolerance anywhere. Exactness rests on
+/// the H1 lemma of the #153 design memo
+/// (`.claude/docs/2026-08-02-153-zero-diversity-exactness.md`, §2): for
+/// `a, b ∈ [0, 1]`, `fl(a·b) == 1.0 ⟺ a == 1.0 ∧ b == 1.0`, and
+/// `bellman_ford_closure` / the border pass perform *only* products and
+/// comparisons seeded at `1.0` — no additions — so `c[i] == 1.0` holds iff a
+/// genuine all-exactly-`1.0` coupling path exists. Rounding produces neither
+/// false positives nor false negatives (0 violations over ~7.0M checks).
+///
+/// A proof means the increment is zero **as a real number**. The *returned*
+/// [`JoinReport::value`] may still differ from [`JoinReport::base`] by
+/// floating-point roundoff — see [`JoinReport`]'s contract, and branch on the
+/// proof rather than on [`JoinReport::increment`].
+///
+/// # Precedence
+///
+/// At most one proof is reported. [`SkeletalMerge`](Self::SkeletalMerge) routes
+/// through [`EvalPath::Slow`] by construction while the two duplicate proofs are
+/// [`EvalPath::Fast`]-only, so those are mutually exclusive; when an **incoming**
+/// and an **outgoing** duplicate both hold, the incoming one is reported (an
+/// arbitrary but fixed choice — both certify the same exactly-zero increment).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ZeroDiversityProof {
+    /// `x` is a perfect (mutual-`1.0`) clone of `member` **and** opens no new
+    /// interior shortcut: `(∃i: c[i] == 1.0 && r[i] == 1.0) && !interior_improvement`.
+    ///
+    /// `member` is the first such `i` in local `0..m` order.
+    ///
+    /// The `¬interior_improvement` conjunct is **load-bearing** and corrects the
+    /// premise of issue #153 (memo §3): a mutual-`1.0` clone can *simultaneously*
+    /// open a better `j → x → k` shortcut, which changes the closure and the
+    /// magnitude — measured up to **50% relative**, with 224 of 540
+    /// merge∧interior candidates entirely outside a `1e-6` band. Claiming zero
+    /// there would be wrong, so no proof is issued. Under the refinement all 268
+    /// merge-only candidates in the memo's corpus are exactly zero on the
+    /// incremental route *and* bit-identical to a fresh evaluation (max relative
+    /// deviation `0.0`).
+    SkeletalMerge {
+        /// Local index (into [`CoalitionEvaluator::members`]) of the merged member.
+        member: usize,
+    },
+    /// The candidate's incoming border replicates a member's closed column:
+    /// `∃a: c[a] == 1.0 && ∀i: c[i] == closed[i][a]` (bitwise `f64` equality).
+    ///
+    /// Then the bordered similarity vector is `u = ζ_S·e_a`, so
+    /// `p = 1ᵀζ_S⁻¹u = 1` **as a real number** and the fast path's increment
+    /// `(1−p)(1−q)/s` is exactly `0` for any `q` and any `s ≠ 0`.
+    ///
+    /// The `c[a] == 1.0` prefilter is a *necessary* condition of the `∀` clause
+    /// (`closed[a][a] == 1.0` by the identity axiom), so it prunes candidates
+    /// without weakening the predicate — measured lossless across the memo's
+    /// full 3996-evaluation sweep, and it is what keeps the test at
+    /// 6.4 ns (m=8) / 9.7 ns (m=16), the same order as the skeletal-merge scan
+    /// that already runs (memo §5).
+    ///
+    /// **Fast-path-scoped.** See [`JoinReport`]'s contract.
+    IncomingProfileDuplicate {
+        /// Local index of the member whose closed column `c` replicates.
+        member: usize,
+    },
+    /// The transpose: the candidate's outgoing border replicates a member's
+    /// closed **row**, `∃a: r[a] == 1.0 && ∀j: r[j] == closed[a][j]`.
+    ///
+    /// Then `v = e_aᵀζ_S`, so `q = vᵀζ_S⁻¹1 = 1` as a real number and the
+    /// increment `(1−p)(1−q)/s` is again exactly `0`.
+    ///
+    /// **Fast-path-scoped.** See [`JoinReport`]'s contract.
+    OutgoingProfileDuplicate {
+        /// Local index of the member whose closed row `r` replicates.
+        member: usize,
+    },
+}
+
+/// The outcome of one [`CoalitionEvaluator::value_with_report`] query: the same
+/// scalar [`value_with`](CoalitionEvaluator::value_with) returns, plus the
+/// structural facts the scalar throws away (#153).
+///
+/// Fields are private with accessors so later diagnostics can be added without a
+/// breaking change (the `magnitude_f64::ConditionReport` house style of #165 —
+/// not linked, since that module lives behind the off-by-default `f64-fast`
+/// feature).
+///
+/// # Contract (#153 design memo §6)
+///
+/// - [`zero_proof`](Self::zero_proof) `== Some(_)` (equivalently
+///   [`is_provably_zero`](Self::is_provably_zero) `== true`) ⇒ the **real**
+///   increment is exactly `0`. The *returned* [`value`](Self::value) may still
+///   differ from [`base`](Self::base) by floating-point roundoff — measured max
+///   **1.38e-14 absolute / 1.32e-14 relative** over the memo's sweep. **Callers
+///   branch on the proof, never on `increment() == 0.0`.**
+/// - [`zero_proof`](Self::zero_proof) `== None` means **not proven**, never
+///   "nonzero". Exact detection covers 55.9% of the knife-edge population in the
+///   memo's seeded model; the residual is genuinely tolerance-only (4.6% of
+///   knife-edge zeros are affine-combination coincidences that carry no proof,
+///   39.5% are slow/interior). The knife-edge tax is **reduced, not removed**.
+/// - The two duplicate proofs are **fast-path-scoped**: they are attached only
+///   when the value actually came out of the closed-form Schur branch
+///   ([`schur_complement`](Self::schur_complement) `== Some(s)`). Under interior
+///   improvement the cached `ζ_S` is stale and the `u = ζ_S·e_a` derivation's
+///   premise fails — measured deviation up to **0.568 relative** on that path —
+///   so no duplicate proof is issued there. A near-singular border that the
+///   [`SCHUR_SLOW_FALLBACK_TOL`] guard diverts to the slow route likewise
+///   reports no proof (conservative; that guard fired **0 times** in the memo's
+///   3996 evaluations).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct JoinReport {
+    value: f64,
+    base: f64,
+    zero_proof: Option<ZeroDiversityProof>,
+    path: EvalPath,
+    schur_complement: Option<f64>,
+}
+
+impl JoinReport {
+    /// `Mag(S ∪ {x})` — bit-identical to
+    /// [`value_with`](CoalitionEvaluator::value_with) on the same candidate.
+    #[must_use]
+    pub fn value(&self) -> f64 {
+        self.value
+    }
+
+    /// `Mag(S)` — the evaluator's cached
+    /// [`base_value`](CoalitionEvaluator::base_value).
+    #[must_use]
+    pub fn base(&self) -> f64 {
+        self.base
+    }
+
+    /// `value() − base()`, the **computed** increment.
+    ///
+    /// This is a float difference, not a decision procedure: a proven-zero
+    /// candidate can return a nonzero increment of order `1e-14` (see the
+    /// contract above). Use [`zero_proof`](Self::zero_proof) /
+    /// [`is_provably_zero`](Self::is_provably_zero) to decide "adds nothing".
+    #[must_use]
+    pub fn increment(&self) -> f64 {
+        self.value - self.base
+    }
+
+    /// The structural certificate, if one of the three exact classes fired.
+    ///
+    /// `None` means **not proven**, never "nonzero" — see the contract above.
+    #[must_use]
+    pub fn zero_proof(&self) -> Option<ZeroDiversityProof> {
+        self.zero_proof
+    }
+
+    /// `true` iff a [`ZeroDiversityProof`] was found, i.e. the **real** increment
+    /// is exactly `0`. `false` means *not proven*, not "nonzero".
+    #[must_use]
+    pub fn is_provably_zero(&self) -> bool {
+        self.zero_proof.is_some()
+    }
+
+    /// Which update route produced [`value`](Self::value).
+    #[must_use]
+    pub fn path(&self) -> EvalPath {
+        self.path
+    }
+
+    /// The Schur complement `s = 1 − vᵀμu`, `Some(s)` **iff** the closed-form
+    /// fast branch produced the value (so it is `Some` exactly when
+    /// [`path`](Self::path) is [`EvalPath::Fast`], and `None` on every slow
+    /// route including the near-singular diversion).
+    ///
+    /// Exposed as conditioning telemetry: `det ζ′ = det(ζ_S)·s`, so a small `|s|`
+    /// is a near-singular bordered `ζ′`.
+    #[must_use]
+    pub fn schur_complement(&self) -> Option<f64> {
+        self.schur_complement
+    }
+}
+
+/// Everything one `value_with_*` evaluation produces. The public entry points
+/// project out what they expose; `REPORT`-gated fields are left at their inert
+/// defaults on the non-reporting monomorphization (see `value_with_core`).
+struct EvalOutcome {
+    value: f64,
+    path: EvalPath,
+    zero_proof: Option<ZeroDiversityProof>,
+    schur_complement: Option<f64>,
 }
 
 /// Caches a base coalition `S` so per-candidate `Mag(S ∪ {x})` queries skip the
@@ -441,15 +638,89 @@ impl CoalitionEvaluator {
         self.value_with_impl(candidate, scratch).map(|(v, _)| v)
     }
 
+    /// `Mag(S ∪ {candidate})` **plus** the structural facts the scalar entry
+    /// points discard — the update path, the Schur complement, and an exact
+    /// [`ZeroDiversityProof`] when one of the three decidable classes fires
+    /// (#153).
+    ///
+    /// Purely **additive**: the returned [`JoinReport::value`] is bit-identical
+    /// to [`value_with`](Self::value_with) on the same candidate (same
+    /// arithmetic, same accumulation order, same branch selection), and
+    /// [`value_with`](Self::value_with) itself is untouched — the proof scan is
+    /// compiled out of it.
+    ///
+    /// Read [`JoinReport`]'s contract before branching on the result: a proof
+    /// certifies the **real** increment is exactly `0` while the returned value
+    /// may differ from the base by roundoff, and `None` means *not proven*, not
+    /// "nonzero".
+    ///
+    /// # Errors
+    ///
+    /// Identical to [`value_with`](Self::value_with) — same validation, same
+    /// order, same messages: [`CatgraphError::Composition`] if `candidate` is out
+    /// of range for `agents`, is already a member, or the bordered `ζ′` is
+    /// singular (surfaced by the slow-path re-inversion).
+    pub fn value_with_report(&self, candidate: usize) -> Result<JoinReport, CatgraphError> {
+        let mut scratch = EvalScratch::new();
+        self.value_with_report_scratch(candidate, &mut scratch)
+    }
+
+    /// [`value_with_report`](Self::value_with_report), reusing caller-owned
+    /// [`EvalScratch`] buffers instead of allocating the seven per-call `Vec`s
+    /// (#153 × #33).
+    ///
+    /// Stands to [`value_with_report`](Self::value_with_report) exactly as
+    /// [`value_with_scratch`](Self::value_with_scratch) stands to
+    /// [`value_with`](Self::value_with): **bit-identical** results, no
+    /// cross-call state in `scratch` (see [`EvalScratch`]'s reuse contract), and
+    /// the same buffers may be threaded through both the reporting and the
+    /// scalar entry points.
+    ///
+    /// # Errors
+    ///
+    /// Identical to [`value_with_report`](Self::value_with_report).
+    pub fn value_with_report_scratch(
+        &self,
+        candidate: usize,
+        scratch: &mut EvalScratch,
+    ) -> Result<JoinReport, CatgraphError> {
+        let outcome = self.value_with_core::<true>(candidate, scratch)?;
+        Ok(JoinReport {
+            value: outcome.value,
+            base: self.base_mag,
+            zero_proof: outcome.zero_proof,
+            path: outcome.path,
+            schur_complement: outcome.schur_complement,
+        })
+    }
+
     /// Core of [`value_with`](Self::value_with), also returning which
     /// [`EvalPath`] was taken (for test assertions). Writes its border/Schur
     /// working vectors into the caller-owned `scratch` (#33).
-    #[allow(clippy::similar_names)] // `c`/`r`, `u`/`v`, `p`/`q` are the paper's border names.
     fn value_with_impl(
         &self,
         candidate: usize,
         scratch: &mut EvalScratch,
     ) -> Result<(f64, EvalPath), CatgraphError> {
+        self.value_with_core::<false>(candidate, scratch)
+            .map(|o| (o.value, o.path))
+    }
+
+    /// The single evaluation body behind every entry point.
+    ///
+    /// `REPORT` is a **const** parameter, so the `#153` proof scans exist only in
+    /// the reporting monomorphization: [`value_with`](Self::value_with) /
+    /// [`value_with_scratch`](Self::value_with_scratch) compile to exactly the
+    /// pre-#153 code — same float operations in the same order, same allocation
+    /// pattern — and pay nothing for the reporting surface. The proof scans
+    /// themselves perform no arithmetic that feeds the value: they are `==`
+    /// comparisons against already-computed data (see [`ZeroDiversityProof`]).
+    #[allow(clippy::similar_names)] // `c`/`r`, `u`/`v`, `p`/`q` are the paper's border names.
+    fn value_with_core<const REPORT: bool>(
+        &self,
+        candidate: usize,
+        scratch: &mut EvalScratch,
+    ) -> Result<EvalOutcome, CatgraphError> {
         if candidate >= self.n_agents {
             return Err(CatgraphError::Composition {
                 message: format!(
@@ -522,15 +793,59 @@ impl CoalitionEvaluator {
             "coalition border must be constant within each skeletal ~-class"
         );
 
-        // Branch tests (O(m²), short-circuiting).
+        // Branch tests (O(m²), short-circuiting). The merge test uses `position`
+        // rather than `any` — identical work and identical short-circuit, but it
+        // also names the merged member for `ZeroDiversityProof::SkeletalMerge`.
         let interior_improvement = (0..m)
             .any(|i| (0..m).any(|j| i != j && scratch.c[i] * scratch.r[j] > self.closed[i][j]));
-        let skeletal_merge = (0..m).any(|i| scratch.c[i] == 1.0 && scratch.r[i] == 1.0);
+        let merge_member = skeletal_merge_member(scratch, m);
 
-        if interior_improvement || skeletal_merge {
-            return self.value_with_slow(scratch, m);
+        if interior_improvement || merge_member.is_some() {
+            let mut outcome = self.value_with_slow(scratch, m)?;
+            // Merge-only (`merge ∧ ¬interior`) is the exact zero-diversity
+            // predicate; merge ∧ interior is NOT (memo §3 — up to 50% relative
+            // movement), so it deliberately carries no proof.
+            if REPORT
+                && !interior_improvement
+                && let Some(member) = merge_member
+            {
+                outcome.zero_proof = Some(ZeroDiversityProof::SkeletalMerge { member });
+            }
+            return Ok(outcome);
         }
-        self.value_with_fast(scratch, m)
+        self.value_with_fast::<REPORT>(scratch, m)
+    }
+
+    /// The two fast-path-only exact tie classes (#153, memo §2 H3): an incoming
+    /// or outgoing **profile duplicate**.
+    ///
+    /// Incoming (`∃a: c[a] == 1.0 && ∀i: c[i] == closed[i][a]`) gives
+    /// `u = ζ_S·e_a`, hence `p = 1` exactly as a real number; outgoing is the
+    /// transpose and gives `q = 1`. Either makes the fast path's increment
+    /// `(1−p)(1−q)/s` exactly zero. Incoming is tested first, so it wins when
+    /// both hold (see [`ZeroDiversityProof`]'s precedence note).
+    ///
+    /// Bitwise `==` throughout, and the `c[a] == 1.0` / `r[a] == 1.0` prefilters
+    /// are necessary conditions of their `∀` clauses (`closed[a][a] == 1.0`), so
+    /// they prune without weakening — same H1-lemma justification as
+    /// `skeletal_merge_member` (a private free fn below).
+    #[allow(clippy::float_cmp)]
+    fn profile_duplicate_proof(
+        &self,
+        scratch: &EvalScratch,
+        m: usize,
+    ) -> Option<ZeroDiversityProof> {
+        for a in 0..m {
+            if scratch.c[a] == 1.0 && (0..m).all(|i| scratch.c[i] == self.closed[i][a]) {
+                return Some(ZeroDiversityProof::IncomingProfileDuplicate { member: a });
+            }
+        }
+        for a in 0..m {
+            if scratch.r[a] == 1.0 && (0..m).all(|j| scratch.r[j] == self.closed[a][j]) {
+                return Some(ZeroDiversityProof::OutgoingProfileDuplicate { member: a });
+            }
+        }
+        None
     }
 
     /// Fast path: bordered Schur update against the cached skeletal `μ`.
@@ -543,11 +858,11 @@ impl CoalitionEvaluator {
     /// `Err` exactly when the re-inversion is singular) instead of dividing by a
     /// catastrophic-cancellation residue.
     #[allow(clippy::similar_names)]
-    fn value_with_fast(
+    fn value_with_fast<const REPORT: bool>(
         &self,
         scratch: &mut EvalScratch,
         m: usize,
-    ) -> Result<(f64, EvalPath), CatgraphError> {
+    ) -> Result<EvalOutcome, CatgraphError> {
         let k = self.mu.len();
 
         // Border similarities via the exact exp route (not powf) — `u`/`v` over
@@ -595,7 +910,20 @@ impl CoalitionEvaluator {
         }
 
         let mag = self.base_mag + (1.0 - p) * (1.0 - q) / s;
-        Ok((mag, EvalPath::Fast))
+        // Duplicate proofs are attached only here — after the near-singular
+        // guard above has been cleared, i.e. only when this branch actually
+        // produced the value (JoinReport's fast-path-scoped contract).
+        let zero_proof = if REPORT {
+            self.profile_duplicate_proof(scratch, m)
+        } else {
+            None
+        };
+        Ok(EvalOutcome {
+            value: mag,
+            path: EvalPath::Fast,
+            zero_proof,
+            schur_complement: Some(s),
+        })
     }
 
     /// Slow path: border the closed table, then re-skeletalize + re-invert on
@@ -604,7 +932,7 @@ impl CoalitionEvaluator {
         &self,
         scratch: &EvalScratch,
         m: usize,
-    ) -> Result<(f64, EvalPath), CatgraphError> {
+    ) -> Result<EvalOutcome, CatgraphError> {
         let c = &scratch.c;
         let r = &scratch.r;
         let mut closed_p = vec![vec![0.0_f64; m + 1]; m + 1];
@@ -628,8 +956,32 @@ impl CoalitionEvaluator {
              (within TRIANGLE_FLOAT_TOL)"
         );
         let mag: F64Rig = magnitude(&space, self.t)?;
-        Ok((mag.0, EvalPath::Slow))
+        Ok(EvalOutcome {
+            value: mag.0,
+            path: EvalPath::Slow,
+            // The caller (`value_with_core`) attaches the merge-only proof; the
+            // slow route itself certifies nothing, and `s` was never formed (or,
+            // on the near-singular diversion, was not trusted).
+            zero_proof: None,
+            schur_complement: None,
+        })
     }
+}
+
+/// First member `i` (local order) with `c[i] == 1.0 && r[i] == 1.0` — the
+/// skeletal-merge branch test, returning the witness instead of a bare bool so
+/// [`ZeroDiversityProof::SkeletalMerge`] can name it. `position`/`find` does the
+/// same work and short-circuits at the same place `any` did.
+///
+/// The exact `== 1.0` comparisons are deliberate, not sloppy: by the #153 memo's
+/// H1 lemma the closure and border passes are products-and-maxima seeded at
+/// `1.0`, so `c[i] == 1.0` holds iff a genuine all-exactly-`1.0` coupling path
+/// exists. An epsilon compare would admit *near*-clones, which are a different
+/// (genuinely ill-conditioned) class already handled by
+/// [`SCHUR_SLOW_FALLBACK_TOL`].
+#[allow(clippy::float_cmp)]
+fn skeletal_merge_member(scratch: &EvalScratch, m: usize) -> Option<usize> {
+    (0..m).find(|&i| scratch.c[i] == 1.0 && scratch.r[i] == 1.0)
 }
 
 /// `ζ`-similarity for a coupling `π` at scale `t`, through the crate's single
@@ -1199,6 +1551,460 @@ mod tests {
         );
         // A well-formed call after the error calls still succeeds (no poisoning).
         assert!(ev.value_with_scratch(2, &mut scratch).is_ok());
+    }
+
+    // -----------------------------------------------------------------------
+    // #153 additive reporting API: `value_with_report(_scratch)` → `JoinReport`
+    // with an exact `ZeroDiversityProof`. Numbers cited below are from the
+    // design memo `.claude/docs/2026-08-02-153-zero-diversity-exactness.md`.
+    // -----------------------------------------------------------------------
+
+    /// The 12-agent pool the seeded corpora are drawn over.
+    const REPORT_NAMES: [&str; 12] = [
+        "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11",
+    ];
+
+    /// One iteration's coupling table for the seeded grid, drawing from `lcg` in
+    /// exactly the order `seeded_grid_fresh_vs_incremental` /
+    /// `value_with_scratch_bit_identical_to_value_with` draw it (60% density,
+    /// value in `(0, 1]`, `snap` of them snapped to `1.0` to provoke skeletal
+    /// merges). At `snap = 0.08` this reproduces the crate's own grid; the #153
+    /// memo also swept `snap ∈ {0.25, 0.45}` tables at independent seeds, which
+    /// is where the merge-heavy population lives.
+    fn seeded_couplings(lcg: &mut Lcg, n: usize, snap: f64) -> Vec<(usize, usize, f64)> {
+        let mut couplings: Vec<(usize, usize, f64)> = Vec::new();
+        for i in 0..n {
+            for j in 0..n {
+                if i == j {
+                    continue;
+                }
+                if lcg.next_f64() < 0.6 {
+                    let mut p = lcg.next_f64();
+                    if p == 0.0 {
+                        p = 0.01;
+                    }
+                    if lcg.next_f64() < snap {
+                        p = 1.0;
+                    }
+                    couplings.push((i, j, p));
+                }
+            }
+        }
+        couplings
+    }
+
+    /// The report entry points are purely additive: `value()` is **bit-identical**
+    /// to `value_with`, the scratch variant is bit-identical to the allocating
+    /// one (report fields included), `base()` is the evaluator's cached base, and
+    /// `schur_complement()` is `Some` exactly on the fast path.
+    #[test]
+    fn value_with_report_parity() {
+        // `| 1` (seed prep) stays at the call site — see catgraph-testutil (#33).
+        let mut lcg = Lcg::new(0xC0FFEE | 1);
+        let n = REPORT_NAMES.len();
+        // One scratch reused across the whole sweep — the koalisi call pattern.
+        let mut scratch = EvalScratch::new();
+
+        for m in 2..=10usize {
+            let couplings = seeded_couplings(&mut lcg, n, 0.08);
+            let members: Vec<usize> = (0..m).collect();
+            for t in [1.0_f64, 2.0] {
+                let ev = match CoalitionEvaluator::new(&REPORT_NAMES, &couplings, &members, t) {
+                    Ok(ev) => ev,
+                    Err(_) => continue, // singular base — skip this (S, t)
+                };
+                for candidate in m..n {
+                    let plain = ev.value_with(candidate);
+                    let rep = ev.value_with_report(candidate);
+                    let rep_scr = ev.value_with_report_scratch(candidate, &mut scratch);
+                    assert_eq!(
+                        plain.is_ok(),
+                        rep.is_ok(),
+                        "m={m} t={t} cand={candidate}: error-parity report/value_with"
+                    );
+                    assert_eq!(
+                        plain.is_ok(),
+                        rep_scr.is_ok(),
+                        "m={m} t={t} cand={candidate}: error-parity report-scratch/value_with"
+                    );
+                    if let (Ok(plain), Ok(rep), Ok(rep_scr)) = (plain, rep, rep_scr) {
+                        assert_eq!(
+                            plain,
+                            rep.value(),
+                            "m={m} t={t} cand={candidate}: report value must be bit-identical"
+                        );
+                        assert_eq!(
+                            rep.value(),
+                            rep_scr.value(),
+                            "m={m} t={t} cand={candidate}: scratch report must be bit-identical"
+                        );
+                        assert_eq!(rep.zero_proof(), rep_scr.zero_proof(), "proof parity");
+                        assert_eq!(rep.path(), rep_scr.path(), "path parity");
+                        assert_eq!(
+                            rep.schur_complement(),
+                            rep_scr.schur_complement(),
+                            "schur parity"
+                        );
+                        assert_eq!(
+                            rep.base(),
+                            ev.base_value(),
+                            "report base is the cached base"
+                        );
+                        assert_eq!(
+                            rep.increment(),
+                            rep.value() - rep.base(),
+                            "increment is value − base"
+                        );
+                        assert_eq!(
+                            rep.schur_complement().is_some(),
+                            rep.path() == EvalPath::Fast,
+                            "m={m} t={t} cand={candidate}: schur_complement is Some iff fast"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Error parity of the report entry points with `value_with` — same cases,
+    /// and a well-formed call after the failures still succeeds (no poisoning).
+    #[test]
+    fn value_with_report_error_parity() {
+        let agents = ["a", "b", "c"];
+        let couplings = [(0usize, 1usize, 0.7f64), (1, 2, 0.5)];
+        let members = [0usize, 1];
+        let ev = CoalitionEvaluator::new(&agents, &couplings, &members, 1.0).unwrap();
+        let mut scratch = EvalScratch::new();
+
+        for bad in [0usize, 1, 3] {
+            assert_eq!(
+                ev.value_with(bad).is_err(),
+                ev.value_with_report(bad).is_err(),
+                "candidate {bad}: report must error exactly when value_with does"
+            );
+            assert!(
+                ev.value_with_report_scratch(bad, &mut scratch).is_err(),
+                "candidate {bad}: report-scratch must error"
+            );
+        }
+        assert!(ev.value_with_report(2).is_ok());
+        assert!(ev.value_with_report_scratch(2, &mut scratch).is_ok());
+    }
+
+    /// Merge-only (`skeletal_merge ∧ ¬interior_improvement`) — the exact
+    /// zero-diversity predicate of memo §3. Same fixture as
+    /// `slow_path_skeletal_merge`: `a→b` at `0.5`, `x ⇄ b` at `1.0`.
+    #[test]
+    fn report_merge_only_proof() {
+        let agents = ["a", "b", "x"];
+        let couplings = [(0usize, 1usize, 0.5f64), (1, 2, 1.0), (2, 1, 1.0)];
+        let members = [0usize, 1];
+        let t = 1.0;
+        let ev = CoalitionEvaluator::new(&agents, &couplings, &members, t).unwrap();
+        let rep = ev.value_with_report(2).unwrap();
+
+        assert_eq!(
+            rep.path(),
+            EvalPath::Slow,
+            "mutual-1.0 clone takes the slow path"
+        );
+        assert_eq!(
+            rep.schur_complement(),
+            None,
+            "no Schur complement on the slow route"
+        );
+        assert_eq!(
+            rep.zero_proof(),
+            Some(ZeroDiversityProof::SkeletalMerge { member: 1 }),
+            "x is a perfect clone of member 1 and opens no shortcut"
+        );
+        assert!(rep.is_provably_zero());
+        // Memo §4: all 268 merge-only candidates are exactly zero on the
+        // incremental route AND bit-identical to fresh (max rel. deviation 0.0).
+        assert_eq!(rep.increment(), 0.0, "merge-only increment is exactly 0.0");
+        assert_eq!(rep.value(), rep.base(), "merge-only value == base, bitwise");
+        let fresh = fresh_with(&agents, &couplings, &members, 2, t).unwrap();
+        assert_eq!(rep.value(), fresh, "merge-only is fresh-bitwise-equal");
+    }
+
+    /// Merge **∧** interior improvement — the correction to issue #153's premise
+    /// (memo §3). `x` is a mutual-`1.0` clone of member `b` but *also* bridges
+    /// the weakly-coupled `a → c`, so the closure changes and the magnitude
+    /// genuinely moves. No proof may be claimed here.
+    #[test]
+    fn report_merge_and_interior_carries_no_proof() {
+        let agents = ["a", "b", "c", "x"];
+        let couplings = [
+            (0usize, 1usize, 0.3f64), // weak chain a→b
+            (1, 2, 0.3),              // weak chain b→c  (so closed(a→c) = 0.09)
+            (1, 3, 1.0),              // x ⇄ b at 1.0 — perfect clone of b
+            (3, 1, 1.0),
+            (0, 3, 0.95), // …but a→x→c is 0.9025 ≫ 0.09: a genuine shortcut
+            (3, 2, 0.95),
+        ];
+        let members = [0usize, 1, 2];
+        let t = 1.0;
+        let ev = CoalitionEvaluator::new(&agents, &couplings, &members, t).unwrap();
+        let (_, path) = ev.value_with_impl(3, &mut EvalScratch::new()).unwrap();
+        assert_eq!(path, EvalPath::Slow, "merge ∧ interior takes the slow path");
+
+        let rep = ev.value_with_report(3).unwrap();
+        assert_eq!(
+            rep.zero_proof(),
+            None,
+            "merge ∧ interior must NOT claim zero diversity (memo §3)"
+        );
+        assert!(!rep.is_provably_zero());
+        assert!(
+            rep.increment().abs() > 1e-6,
+            "the shortcut genuinely moves the magnitude: increment {}",
+            rep.increment()
+        );
+        let fresh = fresh_with(&agents, &couplings, &members, 3, t).unwrap();
+        assert!(
+            rel_close(rep.value(), fresh),
+            "merge ∧ interior: inc {} vs fresh {fresh}",
+            rep.value()
+        );
+    }
+
+    /// Incoming profile duplicate (memo §2 H3 / §4). A single `1.0` coupling
+    /// `a → x` with `x` otherwise silent makes the border `c` replicate member
+    /// `a`'s closed **column** bitwise, so `u = ζ_S·e_a` and `p = 1` exactly.
+    /// Second sub-case: `x` also carries a *dominated* outgoing coupling, so
+    /// `q ≠ 1` and `s ≠ 1` — the proof must still fire and still certify zero.
+    #[test]
+    fn report_incoming_profile_duplicate() {
+        let agents = ["a", "b", "c", "x"];
+        let base_couplings = [(0usize, 1usize, 0.7f64), (1, 2, 0.5), (0, 3, 1.0)];
+        let dominated = [
+            (0usize, 1usize, 0.7f64),
+            (1, 2, 0.5),
+            (0, 3, 1.0),
+            (3, 2, 0.1), // x→c is dominated by the existing a→b→c path
+        ];
+        let members = [0usize, 1, 2];
+        let t = 1.0;
+
+        for (label, couplings) in [
+            ("silent-x", &base_couplings[..]),
+            ("dominated-outgoing", &dominated[..]),
+        ] {
+            let ev = CoalitionEvaluator::new(&agents, couplings, &members, t).unwrap();
+            let rep = ev.value_with_report(3).unwrap();
+
+            assert_eq!(
+                rep.path(),
+                EvalPath::Fast,
+                "{label}: must take the fast path"
+            );
+            assert!(
+                rep.schur_complement().is_some(),
+                "{label}: fast path reports s"
+            );
+            assert_eq!(
+                rep.zero_proof(),
+                Some(ZeroDiversityProof::IncomingProfileDuplicate { member: 0 }),
+                "{label}: c replicates member 0's closed column"
+            );
+            assert!(rep.is_provably_zero());
+            assert!(
+                rep.increment().abs() <= 1e-12,
+                "{label}: computed increment {} must be roundoff-small \
+                 (measured on both fixtures: exactly 0.0)",
+                rep.increment()
+            );
+            // The certified fact, checked against a genuinely fresh evaluation
+            // of S ∪ {x}: the real increment is exactly 0. Asserted at 1e-12
+            // *relative*, not bitwise — measured here, `silent-x` is in fact
+            // fresh-bitwise-equal to the base but `dominated-outgoing` is
+            // 2.22e-16 absolute (1.23e-16 relative) away, since the fresh route
+            // inverts the full (m+1)×(m+1) ζ′ rather than bordering.
+            let fresh = fresh_with(&agents, couplings, &members, 3, t).unwrap();
+            let base = ev.base_value();
+            assert!(
+                (fresh - base).abs() <= 1e-12 * base.abs().max(1.0),
+                "{label}: fresh Mag(S ∪ {{x}}) {fresh} must equal base {base}"
+            );
+        }
+    }
+
+    /// Outgoing profile duplicate — the transpose fixture: a single `1.0`
+    /// coupling `x → a` with `x` otherwise silent makes `r` replicate member
+    /// `a`'s closed **row**, so `v = e_aᵀζ_S` and `q = 1` exactly.
+    #[test]
+    fn report_outgoing_profile_duplicate() {
+        let agents = ["a", "b", "c", "x"];
+        let couplings = [(0usize, 1usize, 0.7f64), (1, 2, 0.5), (3, 0, 1.0)];
+        let members = [0usize, 1, 2];
+        let t = 1.0;
+        let ev = CoalitionEvaluator::new(&agents, &couplings, &members, t).unwrap();
+        let rep = ev.value_with_report(3).unwrap();
+
+        assert_eq!(rep.path(), EvalPath::Fast);
+        assert_eq!(
+            rep.zero_proof(),
+            Some(ZeroDiversityProof::OutgoingProfileDuplicate { member: 0 }),
+            "r replicates member 0's closed row"
+        );
+        assert!(rep.is_provably_zero());
+        assert!(
+            rep.increment().abs() <= 1e-12,
+            "computed increment {} must be roundoff-small",
+            rep.increment()
+        );
+        let fresh = fresh_with(&agents, &couplings, &members, 3, t).unwrap();
+        let base = ev.base_value();
+        assert!(
+            (fresh - base).abs() <= 1e-12 * base.abs().max(1.0),
+            "fresh Mag(S ∪ {{x}}) {fresh} must equal base {base} (within 1e-12 relative)"
+        );
+    }
+
+    /// Soundness sweep over the seeded corpus (the memo's xtab shape): every
+    /// proof-carrying candidate really is a zero — a genuinely fresh
+    /// `Mag(S ∪ {x})` sits within `1e-12` relative of `Mag(S)` — and no proof is
+    /// ever attached to a route that cannot carry it (duplicates are fast-path
+    /// only; the slow path carries at most a merge proof).
+    #[test]
+    fn report_proof_soundness_sweep() {
+        let n = REPORT_NAMES.len();
+        let mut merge_proofs = 0usize;
+        let mut incoming_proofs = 0usize;
+        let mut outgoing_proofs = 0usize;
+
+        // The memo's corpus union: the crate's own grid plus the three
+        // independent snap-to-1.0 tables (§1). The higher snap rates are what
+        // populate the merge-only class — the crate's own 8% grid contains
+        // none at these coalition sizes.
+        // `| 1` (seed prep) stays at the call site — see catgraph-testutil (#33).
+        for (seed, snap) in [
+            (0x00C0_FFEE_u64, 0.08_f64),
+            (0x0153_BEEF, 0.08),
+            (0x0153_CAFE, 0.25),
+            (0x0153_D00D, 0.45),
+        ] {
+            let mut lcg = Lcg::new(seed | 1);
+            for m in 2..=10usize {
+                let couplings = seeded_couplings(&mut lcg, n, snap);
+                let members: Vec<usize> = (0..m).collect();
+                for t in [1.0_f64, 2.0] {
+                    let ev = match CoalitionEvaluator::new(&REPORT_NAMES, &couplings, &members, t) {
+                        Ok(ev) => ev,
+                        Err(_) => continue,
+                    };
+                    let base = ev.base_value();
+                    for candidate in m..n {
+                        let Ok(rep) = ev.value_with_report(candidate) else {
+                            continue;
+                        };
+                        let Some(proof) = rep.zero_proof() else {
+                            continue;
+                        };
+                        match proof {
+                            ZeroDiversityProof::SkeletalMerge { member } => {
+                                merge_proofs += 1;
+                                assert!(member < m, "merge witness must be a member index");
+                                assert_eq!(
+                                    rep.path(),
+                                    EvalPath::Slow,
+                                    "seed={seed:#x} m={m} t={t} cand={candidate}: \
+                                     merge proof is slow-route only"
+                                );
+                                // Memo §4: merge-only candidates are exactly
+                                // zero on the incremental route (268/268 there;
+                                // 14/14 across these corpora).
+                                assert_eq!(
+                                    rep.value(),
+                                    base,
+                                    "seed={seed:#x} m={m} t={t} cand={candidate}: \
+                                     merge-only must be value == base, bitwise"
+                                );
+                            }
+                            ZeroDiversityProof::IncomingProfileDuplicate { member }
+                            | ZeroDiversityProof::OutgoingProfileDuplicate { member } => {
+                                if matches!(
+                                    proof,
+                                    ZeroDiversityProof::IncomingProfileDuplicate { .. }
+                                ) {
+                                    incoming_proofs += 1;
+                                } else {
+                                    outgoing_proofs += 1;
+                                }
+                                assert!(member < m, "duplicate witness must be a member index");
+                                assert_eq!(
+                                    rep.path(),
+                                    EvalPath::Fast,
+                                    "seed={seed:#x} m={m} t={t} cand={candidate}: \
+                                     duplicate proofs are fast-path scoped"
+                                );
+                                assert!(
+                                    rep.schur_complement().is_some(),
+                                    "seed={seed:#x} m={m} t={t} cand={candidate}: \
+                                     fast route must report s"
+                                );
+                            }
+                        }
+                        // The certified claim: the REAL increment is exactly
+                        // zero, so an independent fresh evaluation of S ∪ {x}
+                        // must land on the base, and the *returned* increment
+                        // may only be roundoff (measured worst over these
+                        // corpora: |increment| 5.33e-15, fresh-vs-base 3.25e-15
+                        // relative — the memo's wider sweep reports 1.38e-14 /
+                        // 1.32e-14).
+                        assert!(
+                            rep.increment().abs() <= 1e-12,
+                            "seed={seed:#x} m={m} t={t} cand={candidate} proof={proof:?}: \
+                             computed increment {} exceeds roundoff",
+                            rep.increment()
+                        );
+                        let fresh = fresh_with(&REPORT_NAMES, &couplings, &members, candidate, t)
+                            .expect("a proof-carrying candidate must evaluate fresh");
+                        assert!(
+                            (fresh - base).abs() <= 1e-12 * base.abs().max(1.0),
+                            "seed={seed:#x} m={m} t={t} cand={candidate} proof={proof:?}: \
+                             fresh {fresh} vs base {base}"
+                        );
+                    }
+                }
+            }
+        }
+
+        // The corpora must actually exercise all three classes, or the sweep
+        // above proves nothing.
+        assert!(
+            merge_proofs > 0,
+            "corpora must contain merge-only candidates"
+        );
+        assert!(
+            incoming_proofs > 0,
+            "corpora must contain incoming profile duplicates"
+        );
+        assert!(
+            outgoing_proofs > 0,
+            "corpora must contain outgoing profile duplicates"
+        );
+    }
+
+    /// An isolated candidate adds exactly `1` — the opposite of zero diversity.
+    /// Sanity guard that the proof scans do not fire on the `c = r = 0` corner.
+    #[test]
+    fn report_isolated_candidate_has_no_proof() {
+        let agents = ["a", "b", "x"];
+        let couplings = [(0usize, 1usize, 0.5f64), (1, 0, 0.5)];
+        let members = [0usize, 1];
+        let ev = CoalitionEvaluator::new(&agents, &couplings, &members, 1.0).unwrap();
+        let rep = ev.value_with_report(2).unwrap();
+
+        assert_eq!(rep.path(), EvalPath::Fast);
+        assert_eq!(rep.zero_proof(), None, "an isolated point adds diversity");
+        assert!(!rep.is_provably_zero());
+        assert!(
+            rel_close(rep.increment(), 1.0),
+            "isolated point adds exactly 1, got {}",
+            rep.increment()
+        );
+        assert_eq!(rep.schur_complement(), Some(1.0), "p = q = 0 ⇒ s = 1");
     }
 
     /// Mirror of the bench's `build_fast_path_fixture` (`benches/magnitude_bench.rs`):
