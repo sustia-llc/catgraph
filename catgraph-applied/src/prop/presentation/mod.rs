@@ -353,6 +353,24 @@ impl<G: PropSignature> Presentation<G> {
     /// `Copy ; σ ; Add` are *not* SMC-equal, so the content layer declines them,
     /// and whether they come back equal is up to the presentation's equations.
     ///
+    /// **Sound per query, but not an equivalence relation as a decision
+    /// procedure** ([#189](https://github.com/sustia-llc/catgraph/issues/189)).
+    /// Every verdict is sound and definite for the pair it was asked about, but
+    /// verdicts do not compose: the relation is reflexive and symmetric and
+    /// **not transitive**. Under `matr_presentation(&[false, true])`,
+    /// `Scalar(false)` ~ `Discard ; Zero` (the D8 user equation) and
+    /// `Discard ; Zero` ~ `Discard ⊗ Zero` (the SMC layer), yet
+    /// `Scalar(false)` ≁ `Discard ⊗ Zero` — and that last one is `Some(false)`,
+    /// not `None`. Measured in #189 on a 120-expression pool of parallel
+    /// `1 → 1` arrows (the pool is recorded there):
+    /// 10 490 ordered violating triples with zero `None` verdicts, so this is
+    /// congruence closure's incompleteness showing through rather than a
+    /// depth-bound artifact. A caller that wants a *partition* out of this must
+    /// therefore take the connected components of the `Some(true)` graph — a
+    /// scan against class representatives computes a statistic of the
+    /// enumeration order, not a function of the relation. That is what
+    /// [`crate::graphical_linalg::verify_sfg_to_mat_is_full_and_faithful`] does.
+    ///
     /// **Arity-ill-formed input.** `PropExpr`'s variants are public, so a
     /// hand-built tree can compose mismatched arities. This method stays total on
     /// those, as it always has: the content layer is gated on
@@ -412,7 +430,8 @@ impl<G: PropSignature> Presentation<G> {
                 //   18 Thm 5.60 equations) but doesn't know SMC axioms.
                 // - Replacing CC's pre-pass entirely with NF was tried and
                 //   regressed the faithfulness-test collision counts at
-                //   BoolRig d2 (2574 → 3763) because NF reshapes seeded-
+                //   BoolRig d2 (2574 → 3763, both measured under the pre-#189
+                //   greedy partition) because NF reshapes seeded-
                 //   equation LHS/RHS into forms CC's structural hash no
                 //   longer matches the query against. That is a fact about the
                 //   *pre-pass*, which is unchanged here; this arm only adds

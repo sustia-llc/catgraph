@@ -8,8 +8,8 @@
 //! - [`matr_presentation`] — builds the 18-equation presentation.
 //! - [`FaithfulnessReport`] — result of a bounded-enumeration faithfulness check.
 //! - [`verify_sfg_to_mat_is_full_and_faithful`] — enumerates bounded SFG
-//!   expressions, groups by presentation-equivalence, and verifies that
-//!   distinct equivalence classes map to distinct matrices under S.
+//!   expressions, buckets them by matrix image under S, and counts the
+//!   `eq_mod`-connected components each bucket splits into.
 
 use catgraph::errors::CatgraphError;
 
@@ -177,22 +177,102 @@ where
     Ok(p)
 }
 
+/// Disjoint-set forest over `0..n`, with path halving and union by size.
+///
+/// Used by [`verify_sfg_to_mat_is_full_and_faithful`] to take the connected
+/// components of the `eq_mod`-equality graph inside one matrix bucket (#189).
+struct UnionFind {
+    parent: Vec<usize>,
+    size: Vec<usize>,
+}
+
+impl UnionFind {
+    fn new(n: usize) -> Self {
+        Self {
+            parent: (0..n).collect(),
+            size: vec![1; n],
+        }
+    }
+
+    fn find(&mut self, mut x: usize) -> usize {
+        while self.parent[x] != x {
+            // Path halving: point x at its grandparent, then step.
+            self.parent[x] = self.parent[self.parent[x]];
+            x = self.parent[x];
+        }
+        x
+    }
+
+    fn same(&mut self, a: usize, b: usize) -> bool {
+        self.find(a) == self.find(b)
+    }
+
+    fn union(&mut self, a: usize, b: usize) {
+        let (mut ra, mut rb) = (self.find(a), self.find(b));
+        if ra == rb {
+            return;
+        }
+        if self.size[ra] < self.size[rb] {
+            std::mem::swap(&mut ra, &mut rb);
+        }
+        self.parent[rb] = ra;
+        self.size[ra] += self.size[rb];
+    }
+}
+
 /// Faithfulness-check report for `S: SFG_R → Mat(R)` on a size-bounded sample.
 #[derive(Debug, Clone)]
 pub struct FaithfulnessReport<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> {
     pub size_bound: usize,
     pub expressions_checked: usize,
+    /// Summed over matrix buckets: the bucket's number of `eq_mod`-connected
+    /// components, minus one. Zero iff every bucket is a single component, i.e.
+    /// iff the default engine proves every equality the matrix functor asserts.
     pub collisions_under_s: usize,
-    /// Pairs `(a, b)` where `a` and `b` normalize to **distinct** expressions
-    /// under `matr_presentation` but `sfg_to_mat(a) == sfg_to_mat(b)`. Empty
-    /// iff `S` is faithful on the enumerated fragment.
+    /// Pairs `(a, b)` where `a` and `b` lie in **distinct** `eq_mod`-connected
+    /// components under `matr_presentation` but `sfg_to_mat(a) ==
+    /// sfg_to_mat(b)`. Empty iff `S` is faithful on the enumerated fragment.
     pub witnesses: Vec<(SignalFlowGraph<R>, SignalFlowGraph<R>)>,
 }
 
 /// Enumerate SFG expressions whose `PropExpr` depth is at most `size_bound`,
-/// normalize each under `matr_presentation(rig_samples)`, and verify that
-/// distinct presentation-equivalence classes map to distinct matrices under
-/// `S`.
+/// bucket them by matrix image under `S`, and count how far each bucket falls
+/// short of being a single `matr_presentation(rig_samples)`-equivalence class.
+///
+/// # How a bucket is partitioned (#189)
+///
+/// Inside a bucket, build the graph whose vertices are the bucket's expressions
+/// and whose edges are the pairs [`Presentation::eq_mod`] decides `Some(true)`,
+/// and take its **connected components**. A bucket with `k` components
+/// contributes `k − 1` to `collisions_under_s`, and adjacent-pair witnesses
+/// between the component representatives (least bucket index per component).
+///
+/// This used to be a greedy scan — each expression joined the first class whose
+/// *representative* it matched. That agrees with components only when the
+/// relation is transitive, and `eq_mod` is not: `Scalar(false)` ~
+/// `Discard ; Zero` ~ `Discard ⊗ Zero` while `Scalar(false)` ≁
+/// `Discard ⊗ Zero` (#189 measured 10 490 ordered violating triples on a
+/// 120-expression pool of parallel `1 → 1` arrows, zero `None` verdicts — see
+/// [`Presentation::eq_mod`]'s own note). Over a non-transitive relation a greedy
+/// class count is a statistic of enumeration order, not a function of the
+/// relation. Components are the transitive closure of the same edge set, so the
+/// count *is* a function of the relation, and growing the relation can only add
+/// edges and therefore only merge components — the counts move monotonically,
+/// which is the property the baselines in `tests/graphical_linalg.rs` are read
+/// under.
+///
+/// Components are coarser than the greedy partition, or equal to it — every
+/// greedy class sits inside one component — so the switch could only lower and
+/// in fact lowered every pinned baseline: BoolRig 952 → **748**, UnitInterval
+/// 1397 → **1114**, Tropical 1974 → **1594**, F64Rig 1969 → **1590** (depth 2,
+/// release).
+///
+/// Cost: all-pairs per bucket is `O(k²)` `eq_mod` calls in the worst case, but a
+/// pair already inside one component is skipped — exactly, since an intra-component
+/// edge cannot change the partition — which is what keeps it affordable. Depth-2
+/// bucket sizes top out at 682 (BoolRig) / 1602 (Tropical, F64Rig), for an
+/// all-pairs ceiling of 1.6M–4.5M calls per rig; the skip brings the BoolRig
+/// depth-2 run to ~2 min against the greedy scan's ~11 s.
 ///
 /// # Enumeration strategy
 ///
@@ -244,38 +324,60 @@ where
             continue;
         }
 
-        // Partition the bucket into presentation-equivalence classes via
-        // pairwise eq_mod. `classes[i]` is a representative of the i-th
-        // class; each expression is added to the first class whose
-        // representative it is eq_mod-equal to, or opens a new class.
+        // Partition the bucket into the CONNECTED COMPONENTS of the graph whose
+        // vertices are the bucket's expressions and whose edges are the pairs
+        // `eq_mod` decides `Some(true)` (#189). This is all-pairs by
+        // construction, not a scan against class representatives: `eq_mod` is
+        // *not* transitive (measured witness triple — `Scalar(false)` ~
+        // `Discard ; Zero` ~ `Discard ⊗ Zero` while `Scalar(false)` ≁
+        // `Discard ⊗ Zero`), so a representative scan returns a statistic of
+        // enumeration order rather than a function of the relation. Components
+        // are the transitive closure of exactly the same edge set, so the count
+        // *is* a function of the relation, and enlarging the relation can only
+        // merge components — the monotonicity the pins are read under.
         //
         // eq_mod returns Option<bool>:
-        //   Some(true)  → equal in presentation (same class)
-        //   Some(false) → decisively distinct (different class)
-        //   None        → CC depth bound hit without decision (treated as
-        //                 distinct; this is the conservative choice —
-        //                 reporting a possible witness rather than silently
-        //                 collapsing).
-        let mut classes: Vec<&SignalFlowGraph<R>> = Vec::new();
-        for expr in bucket {
-            let mut matched = false;
-            for rep in &classes {
-                if let Some(true) = presentation.eq_mod(expr.as_prop_expr(), rep.as_prop_expr())? {
-                    matched = true;
-                    break;
+        //   Some(true)  → equal in presentation (edge — union the endpoints)
+        //   Some(false) → decisively distinct (no edge)
+        //   None        → CC depth bound hit without decision (no edge; this is
+        //                 the conservative choice — reporting a possible
+        //                 witness rather than silently collapsing).
+        let mut uf = UnionFind::new(bucket.len());
+        for i in 0..bucket.len() {
+            for j in (i + 1)..bucket.len() {
+                // Skipping a pair already in one component is exact, not an
+                // approximation: an edge inside a component cannot change the
+                // component partition. It is also what keeps the pass
+                // affordable — the O(k²) pair space collapses to roughly the
+                // edges that actually merge something.
+                if uf.same(i, j) {
+                    continue;
                 }
-            }
-            if !matched {
-                classes.push(expr);
+                if let Some(true) =
+                    presentation.eq_mod(bucket[i].as_prop_expr(), bucket[j].as_prop_expr())?
+                {
+                    uf.union(i, j);
+                }
             }
         }
 
-        if classes.len() > 1 {
+        // One representative per component — the least bucket index in it, so
+        // the witness list is deterministic given the enumeration and does not
+        // depend on which endpoint union-by-size happened to keep as root.
+        let mut seen_roots = std::collections::HashSet::new();
+        let mut reps: Vec<&SignalFlowGraph<R>> = Vec::new();
+        for (i, expr) in bucket.iter().enumerate() {
+            if seen_roots.insert(uf.find(i)) {
+                reps.push(expr);
+            }
+        }
+
+        if reps.len() > 1 {
             // Faithfulness violation: multiple presentation-equivalence
-            // classes share a matrix image. Record adjacent-pair witnesses
-            // between the class representatives to keep the report size
+            // components share a matrix image. Record adjacent-pair witnesses
+            // between the component representatives to keep the report size
             // bounded.
-            for w in classes.windows(2) {
+            for w in reps.windows(2) {
                 collisions += 1;
                 witnesses.push((w[0].clone(), w[1].clone()));
             }
