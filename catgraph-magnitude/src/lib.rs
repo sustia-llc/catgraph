@@ -60,6 +60,15 @@
 //!   meanings), [`k_nearest_from`] / [`k_nearest_to`] (bidirectional
 //!   nearest-meaning ranking, asymmetric per BTV §5), and
 //!   [`cluster_semantic_sym`] (symmetric single-linkage convenience) (#21).
+//! - [`coalition_typed`] — typed-magnitude valuation surface (#211, EQ4), three
+//!   additive layers beside the untouched engine:
+//!   [`role_shares`](coalition_eval::CoalitionEvaluator::role_shares) (role
+//!   decomposition of `Mag = Σ w`, role-mixed skeletal classes flagged not
+//!   split), [`modulate`] + [`role_grid`] (role-interaction table `ρ` applied to
+//!   couplings; a product coalition whose magnitude factorizes exactly, carried
+//!   as a [`RoleFibrationProof`]), and [`ChannelCouplings`] (per-pair vectors in
+//!   `[0,1]^C` collapsed by a declared `|v|_θ = Π v_c^{θ_c}`). An **extension** —
+//!   no typed/colored magnitude exists in the anchor literature.
 //!
 //! ## Substrate
 //!
@@ -157,6 +166,24 @@ pub mod coalition_eval;
 pub use coalition_eval::{
     CoalitionEvaluator, EvalPath, EvalScratch, INCREMENTAL_REL_TOL, JoinReport, ZeroDiversityProof,
     coalition_value_delta,
+};
+
+// #211 — typed-magnitude valuation surface (EQ4): three additive layers beside
+// the untouched engine. T1 `CoalitionEvaluator::role_shares` decomposes
+// `Mag = Σ w` (Leinster 2013 Lemma 1.1.4) across a member role partition,
+// flagging role-mixed skeletal classes instead of splitting them; T2
+// [`modulate`] applies a role-interaction table `ρ` multiplicatively
+// (`π′ = ρ(r_i, r_j)·π`) and [`role_grid`] builds a product coalition whose
+// magnitude factorizes exactly (Leinster 2013 Prop 1.4.3 / Prop 2.3.6;
+// Leinster 2008 Prop 2.8), certified by construction via `RoleFibrationProof`;
+// T3 [`ChannelCouplings`] carries per-pair vectors in `[0,1]^C` collapsed by a
+// declared monoid homomorphism `|v|_θ = Π v_c^{θ_c}` (Leinster 2013 §1.3).
+// **Extension, not an anchor concept** — no typed/colored magnitude exists in
+// the anchor literature (marked in the `MatKron` style).
+pub mod coalition_typed;
+pub use coalition_typed::{
+    ChannelCouplings, MixedClass, ModulatedCouplings, RoleFibrationProof, RoleGrid, RoleId,
+    RoleModulation, RoleShares, modulate, role_grid,
 };
 
 // Chain-sum Möbius via Leinster 2013 Prop 2.1.3.

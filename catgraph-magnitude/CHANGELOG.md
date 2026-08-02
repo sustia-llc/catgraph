@@ -14,6 +14,97 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`coalition_typed` — typed-magnitude valuation surface (EQ4)**
+  ([#211](https://github.com/sustia-llc/catgraph/issues/211)): the coalition
+  surface was deliberately index/`f64`-typed — `CoalitionEvaluator` has no type
+  parameters, and per-agent metadata passed through `EnrichedCategory` is
+  collapsed to bare `f64` couplings at construction — so a consumer with
+  role-typed agents had to pre-collapse by hand, off the record. The new module
+  adds three **additive** layers beside the untouched engine: no existing
+  signature changes, no new `CatgraphError` variant, `UnitInterval` stays the
+  enrichment of record, and the BTV21 lift `d = −ln π` / `ζ_t = exp(−t·d)`
+  kernel is not touched.
+  - **T1 — role-share diagnostics.** `CoalitionEvaluator::role_shares(&[RoleId])`
+    (roles indexed by **member-local** position) returns a `RoleShares`
+    decomposing `Mag(S) = Σ_c w_c` — the cached weighting, Leinster 2013
+    Lemma 1.1.4 — across the role partition: `share(role)` / `is_exact()` /
+    `mixed_classes()` / `n_roles()`. Types enter *reporting only*; no number
+    moves. The honest part is the **skeletal subtlety**: the engine quotients
+    perfectly-coupled members regardless of role, so a class spanning two roles
+    carries a weight attributable to neither (the unquotiented ζ is singular
+    there and per-member weightings are non-unique). Such a class is
+    **reported** as a `MixedClass { rep(), roles() }`, never silently split —
+    the proof-or-flagged house style of #153. "Exact" is an **attribution**
+    claim (nothing split or estimated), not a bit-identity claim:
+    `Σ_r share(r)` equals `base_value()` only up to float re-association, since
+    per-role bucketed sums re-associate the row-major accumulation.
+    `share(r)` distinguishes `Some(0.0)` (role supplied, pure nowhere) from
+    `None` (role id never supplied).
+  - **T2 — role-modulated couplings + a role-grid certificate.**
+    `RoleModulation::new(rho)` is a validated square `[0,1]` table (entries
+    checked through the crate's own `UnitInterval::new`); **asymmetric ρ is
+    explicitly allowed** — with the documented downstream seam that asymmetric
+    tables limit `f64-fast` engagement for consumers calling `magnitude_f64`
+    directly (the coalition path never calls that route), strengthening the
+    case for #210.
+    `modulate(couplings, roles, &rho)` (roles indexed by **agent** index) is a
+    pure input transformation, `π′ = ρ(r_from, r_to)·π` — additively in the
+    metric, `d′ = d_ρ + d` — returning `ModulatedCouplings` whose
+    `couplings()` feeds every existing entry point unchanged.
+    `role_grid(&role_space, &fiber)` builds the product coalition — agents
+    `(r, x)` at the flat index `r·n + x`, `π((r,x),(r′,x′)) = ρ(r,r′)·σ(x,x′)` —
+    and `RoleGrid::proof(t)` returns a `RoleFibrationProof` with
+    `role_magnitude()` / `fiber_magnitude()` / `expected_magnitude()` / `t()`,
+    each factor evaluated through the **existing public**
+    `coalition_magnitude_from_couplings` (no private re-implementation).
+    Both factors must have an **exact `1.0` diagonal**, validated and rejected
+    otherwise: the engine forces a unit diagonal on the grid, and
+    `(ρ ⊗ σ) with forced diag = (ρ) ⊗ (σ)` only holds when the factor diagonals
+    are already `1`. The certificate is **mathematical and
+    construction-carried** — it holds because `role_grid` *built* the
+    product-form couplings; there is deliberately **no detection path** on
+    arbitrary floats (#153's lesson: prove from structure, don't detect from
+    floats). The module rustdoc carries the argument in full: product couplings
+    survive the max-product Bellman–Ford closure (any path's weight factors into
+    its role- and fiber-projection weights, each bounded by the corresponding
+    factor closure — diagonal-`1` makes idle steps free — and the two-phase path
+    achieves the bound, so `closure(ρ⊗σ) = closure(ρ)⊗closure(σ)`), the
+    `ℓ¹`-additive metric makes `ζ_t` a Kronecker product so
+    `Mag = |ρ|_t·|σ|_t` (Leinster 2013 [arXiv:1012.5857] Prop 1.4.3 /
+    Prop 2.3.6; weighted categorical case Leinster 2008 [arXiv:math/0610260]
+    Prop 2.8), and skeletalization commutes with the product (the #153 H1
+    lemma). Float evaluation only *approximates* both sides — the two routes
+    re-associate the same real products differently — so tests compare within a
+    **relative tolerance**; bit-identity is claimed nowhere.
+  - **T3 — channel-valued couplings + a declared collapse.**
+    `ChannelCouplings::new(n_channels)` / `set(from, to, v)` records a per-pair
+    vector `v ∈ [0,1]^C` (one component per interaction facet), last-write-wins
+    on duplicates and deterministic ascending `(from, to)` iteration;
+    `collapse(theta)` contracts it to ordinary coupling triples through
+    `|v|_θ = Π_c v_c^{θ_c}`. Each θ is a monoid homomorphism
+    `([0,1]^C, ·, 1) → ([0,1], ·, 1)` — precisely the "size" datum Leinster 2013
+    §1.3 requires for magnitude of a `V`-enriched category to be defined, so the
+    magnitude is well-defined **per choice of θ** and the anchor literature
+    supplies **no canonical θ** (it is an experiment parameter, not a theorem).
+    `θ.len() == n_channels` and each `θ_c` finite and `≥ 0` are enforced;
+    **`Σ θ = 1` is a documented convention, not enforced** — an exact float-sum
+    test is a knife-edge that would reject reasonable weight vectors over
+    rounding. `θ = e_c` recovers channel `c` exactly; Rust's
+    `0.0_f64.powf(0.0) == 1.0`, so a zero channel with zero weight drops out
+    of the product, and `θ = 0` collapses every coupling to `1.0` (degenerate,
+    the caller's responsibility).
+  - **Anchor honesty:** no "typed" or "colored" magnitude exists in this crate's
+    anchor literature. The composite is an **extension**, marked in the
+    `MatKron` style; the mechanisms it rests on (Lemma 1.1.4 weightings,
+    `|A ⊗ B| = |A||B|`, §1.3 size homomorphisms) are anchored, their assembly
+    into a role/channel vocabulary for coalitions is not.
+  - Reports follow the private-fields + accessors pattern of #153 / #165, and
+    typed proofs are **new structs**, not new variants of `ZeroDiversityProof` /
+    `EvalPath` — nothing downstream that matches those enums exhaustively is
+    affected.
+
 ## [workspace-v0.6.0] - 2026-08-02
 
 ### Added
