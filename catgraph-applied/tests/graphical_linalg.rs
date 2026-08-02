@@ -11,13 +11,17 @@
 //! originally mis-named.
 //!
 //! What the harness actually does: it enumerates SFG expressions up to
-//! bounded depth, buckets them by `Presentation::eq_mod` under the 18 Thm
-//! 5.60 equations, then checks that every bucket maps to a single matrix
-//! under `sfg_to_mat`. A "collision" is a pair of expressions CC decides
-//! are `eq_mod`-distinct that the matrix functor identifies — i.e., a
-//! witness of the default [`CongruenceClosure`] engine's syntactic
-//! incompleteness relative to the complete semantic engine
-//! `NormalizeEngine::Functorial(MatrixNFFunctor)`.
+//! bounded depth, buckets them by matrix image under `sfg_to_mat`, and inside
+//! each bucket takes the **connected components** of the graph whose edges are
+//! the pairs `Presentation::eq_mod` proves equal under the 18 Thm 5.60
+//! equations. A bucket of `k` components contributes `k − 1` "collisions" —
+//! pairs of expressions CC leaves `eq_mod`-separated that the matrix functor
+//! identifies, i.e. witnesses of the default [`CongruenceClosure`] engine's
+//! syntactic incompleteness relative to the complete semantic engine
+//! `NormalizeEngine::Functorial(MatrixNFFunctor)`. Components, not a greedy
+//! scan against class representatives: `eq_mod` is not transitive, so only the
+//! component count is a function of the relation
+//! ([#189](https://github.com/sustia-llc/catgraph/issues/189); see below).
 //!
 //! # Resolved: the Functorial engine is the terminal Mat(R) decision path
 //!
@@ -55,17 +59,18 @@
 //! detect *unexplained* deltas. (F64Rig was a float-jitter band until #58 normalized
 //! signed zero in the rig Hash impls; see below.) Depth-3/4 stay
 //! `assert_eq!(.., 0)`: they are unmeasured (depth 3 is
-//! over 10 min/rig in release, depth 4 larger still), so on a manual `--ignored`
+//! over 10 min/rig in release, depth 4 larger still — and both grew further
+//! when #189 made the within-bucket pass all-pairs), so on a manual `--ignored`
 //! run the assert's LEFT value IS the true depth-N count (not an expectation).
 //!
-//! Fresh collision/expression counts (post-#57-a1, release, depth 2):
+//! Fresh collision/expression counts (post-#189, release, depth 2):
 //!
 //! | rig          | collisions | expressions |
 //! |--------------|-----------:|------------:|
-//! | BoolRig      |        952 |       20324 |
-//! | UnitInterval |       1397 |       31337 |
-//! | Tropical     |       1974 |       46810 |
-//! | F64Rig       |       1969 |       46810 |
+//! | BoolRig      |        748 |       20324 |
+//! | UnitInterval |       1114 |       31337 |
+//! | Tropical     |       1594 |       46810 |
+//! | F64Rig       |       1590 |       46810 |
 //!
 //! **What this count measures changed at #57 a1 (2026-07-29), partly.**
 //! `Presentation::eq_mod` settles SMC coherence by *content* equality, which
@@ -95,7 +100,12 @@
 //! component-block reorder; UnitInterval → 1432, Tropical → 2017,
 //! F64Rig → 2012)
 //! → 980 post-#174 (UnitInterval → 1433, Tropical → 2018, F64Rig → 2013)
-//! → 952 post-#57-a1 (UnitInterval → 1397, Tropical → 1974, F64Rig → 1969).
+//! → 952 post-#57-a1 (UnitInterval → 1397, Tropical → 1974, F64Rig → 1969)
+//! → 748 post-#189 (UnitInterval → 1114, Tropical → 1594, F64Rig → 1590).
+//! Only the last arrow is a change of *metric* rather than of NF or
+//! presentation: #189 replaced the greedy class partition with connected
+//! components, which is coarser or equal, so every rig fell without anything
+//! about `eq_mod` moving.
 //! Both rises are **equational-reach churn**, not NF regressions: the depth-2
 //! E_18 congruence bridges are co-adapted to whatever the exact NFs were, and
 //! redistributing NFs breaks some equation-mediated identifications while the
@@ -112,7 +122,7 @@
 //! was guaranteed in advance and what was measured. This metric buckets by
 //! matrix image first, and Thm 5.60 makes the matrix ground truth, so
 //! everything inside a bucket really is equal in the presented prop: a bucket
-//! splitting into `k` `eq_mod`-classes contributes `k − 1`, and the count
+//! splitting into `k` `eq_mod`-components contributes `k − 1`, and the count
 //! therefore measures equalities `eq_mod` *fails to prove*.
 //!
 //! What is **forced** is a statement about the underlying relation, not about
@@ -122,19 +132,29 @@
 //! content. The relation therefore only grew: no pair that `eq_mod` could
 //! previously prove equal became unprovable.
 //!
-//! That does **not** by itself force the count down. The partition above is
-//! built *greedily* — each expression joins the first class whose
-//! representative it matches — over an `eq_mod` that is **not transitive**:
+//! At the time that did **not** force the count down. The partition was then
+//! built *greedily* — each expression joined the first class whose
+//! representative it matched — over an `eq_mod` that is **not transitive**:
 //! `Scalar(false)` ~ `Discard ; Zero` ~ `Discard ⊗ Zero` while `Scalar(false)`
-//! ≁ `Discard ⊗ Zero`. Over a non-transitive relation the greedy class count is
-//! not a function of the relation at all — it depends on enumeration order —
-//! so enlarging the relation has no monotonicity theorem behind it. The
-//! direction here is **empirical**: all four rigs fell.
-//! A future tracker over union-find components would be a function of the
-//! relation and would restore monotonicity, at the cost of new baselines —
-//! filed as [#189](https://github.com/sustia-llc/catgraph/issues/189),
-//! deliberately deferred; its body carries the non-transitivity measurement
-//! and the pool it was taken on.
+//! ≁ `Discard ⊗ Zero` (#189 measured 10 490 ordered violating triples on a
+//! 120-expression pool of parallel `1 → 1` arrows, zero `None` verdicts). Over a
+//! non-transitive relation the greedy class count is not a function of the
+//! relation at all — it depends on enumeration order — so enlarging the
+//! relation had no monotonicity theorem behind it, and the #57-a1 direction was
+//! **empirical**: all four rigs fell.
+//!
+//! **[#189](https://github.com/sustia-llc/catgraph/issues/189) closed that
+//! hole.** The partition is now the connected components of the same
+//! `Some(true)` edge set. Components are the transitive closure of that set, so
+//! the count *is* a function of the relation, and a relation that only grows
+//! can only gain edges and therefore only merge components: the counts move
+//! **monotonically down** under relation growth, which is the argument this
+//! file's re-pins are now read under. The switch itself was a one-off
+//! re-baseline — every greedy class sits inside one component, so components
+//! are coarser-or-equal and all four rigs necessarily fell (952 → 748,
+//! 1397 → 1114, 1974 → 1594, 1969 → 1590), with no change to `eq_mod`, `nf`, or
+//! the presentation. What the count still cannot do is certify canonicality;
+//! that remains the `smc_canonicality_probes`' job.
 //!
 //! The containment is pinned as a test on 2000 unrelated pairs in
 //! `tests/content_equality_corpus.rs` (`cross_corpus_pairs_are_separated`),
@@ -165,7 +185,8 @@
 //! from `0.0` while the derived `PartialEq` treated them equal, splitting a
 //! congruence class. #58 normalized `-0.0` to `0.0` in those `Hash` impls,
 //! restoring the `Eq`/`Hash` contract and making F64Rig an exact pin (2229
-//! then; 1925 post-#55-PR1; 2012 post-#55-PR2; 2013 post-#174; 1969 post-#57-a1). All baselines
+//! then; 1925 post-#55-PR1; 2012 post-#55-PR2; 2013 post-#174; 1969 post-#57-a1;
+//! 1590 post-#189). All baselines
 //! live in the `BASELINE_*_D2` module consts.
 //!
 //! [`CongruenceClosure`]: catgraph_applied::prop::presentation::NormalizeEngine::CongruenceClosure
@@ -209,20 +230,24 @@ fn matr_presentation_builds_unit_interval() {
     matr_presentation::<UnitInterval>(&samples).unwrap();
 }
 
-// Post-#174 depth-2 collision baselines (Step 6½ column pass + the free-site
-// retirement of the component-anchored η slot walk) — the single Rust source of
-// truth for each number (mirrored in the module docstring table; the
-// pin-guard in `scripts/check_audit_counts.py` scans the prose sites against
-// these). All four rigs are deterministic → pinned exactly (F64Rig was a
+// Post-#189 depth-2 collision baselines (the partition switched from a greedy
+// scan against class representatives to the connected components of the
+// `eq_mod`-equality graph) — the single Rust source of truth for each number
+// (mirrored in the module docstring table; the pin-guard in
+// `scripts/check_audit_counts.py` scans the prose sites against these). All
+// four rigs are deterministic → pinned exactly (F64Rig was a
 // float-nondeterministic jitter band until #58 normalized signed zero in the
-// rig Hash impls). Prior pins: 979/1432/2017/2012 (post-#55-PR2);
+// rig Hash impls). Prior pins: 952/1397/1974/1969 (post-#57-a1);
+// 980/1433/2018/2013 (post-#174); 979/1432/2017/2012 (post-#55-PR2);
 // 972/1400/1930/1925 (post-#55-PR1); 1142/1634/2234/2229 (post-E_18/#58).
-// Both rises are equational-reach churn — see the module docstring and
-// `smc_canonicality_probes`.
-const BASELINE_BOOL_D2: usize = 952;
-const BASELINE_UNIT_INTERVAL_D2: usize = 1397;
-const BASELINE_TROPICAL_D2: usize = 1974;
-const BASELINE_F64_D2: usize = 1969;
+// The #189 drop is a metric change, not an NF or presentation change:
+// components are coarser-or-equal than any greedy partition of the same edge
+// set, so all four had to fall. The earlier rises are equational-reach churn —
+// see the module docstring and `smc_canonicality_probes`.
+const BASELINE_BOOL_D2: usize = 748;
+const BASELINE_UNIT_INTERVAL_D2: usize = 1114;
+const BASELINE_TROPICAL_D2: usize = 1594;
+const BASELINE_F64_D2: usize = 1590;
 
 const IGNORE_REASON: &str = "\
     CC completeness tracking (NOT a Thm 5.60 faithfulness test): F&S Thm 5.60 \
@@ -295,7 +320,7 @@ fn assert_exact_baseline<R>(
 #[test]
 #[ignore = "CC completeness tracking; see module docstring and IGNORE_REASON"]
 fn cc_completeness_tracking_bool_depth_2() {
-    // Post-#57-a1 baseline: 952 collisions / 20324 expressions (deterministic;
+    // Post-#189 baseline: 748 collisions / 20324 expressions (deterministic;
     // pinned exactly via `assert_exact_baseline`).
     let samples = vec![BoolRig(false), BoolRig(true)];
     let report = verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(2, &samples).unwrap();
@@ -328,7 +353,7 @@ fn cc_completeness_tracking_unit_interval_depth_2() {
         UnitInterval::new(0.5).unwrap(),
         UnitInterval::new(1.0).unwrap(),
     ];
-    // Post-#57-a1 baseline: 1397 collisions / 31337 expressions (deterministic;
+    // Post-#189 baseline: 1114 collisions / 31337 expressions (deterministic;
     // pinned exactly).
     let report = verify_sfg_to_mat_is_full_and_faithful::<UnitInterval>(2, &samples).unwrap();
     assert_exact_baseline("UnitInterval", &report, BASELINE_UNIT_INTERVAL_D2);
@@ -369,7 +394,7 @@ fn cc_completeness_tracking_tropical_depth_2() {
         Tropical(1.0),
         Tropical(2.0),
     ];
-    // Post-#57-a1 baseline: 1974 collisions / 46810 expressions (deterministic;
+    // Post-#189 baseline: 1594 collisions / 46810 expressions (deterministic;
     // pinned exactly).
     let report = verify_sfg_to_mat_is_full_and_faithful::<Tropical>(2, &samples).unwrap();
     assert_exact_baseline("Tropical", &report, BASELINE_TROPICAL_D2);
@@ -406,7 +431,7 @@ fn cc_completeness_tracking_tropical_depth_4() {
 #[test]
 #[ignore = "CC completeness tracking; see module docstring and IGNORE_REASON"]
 fn cc_completeness_tracking_f64_depth_2() {
-    // Post-#57-a1 baseline: 1969 collisions / 46810 expressions (deterministic;
+    // Post-#189 baseline: 1590 collisions / 46810 expressions (deterministic;
     // pinned exactly). Before #58, F64Rig's count was float-nondeterministic
     // (signed-zero Hash/Eq interacted with HashMap ordering); normalizing `-0.0`
     // to `0.0` in the rig Hash impls restored the Eq/Hash contract, merging the

@@ -37,6 +37,54 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   content level. The two existing tiers' pins (253/128/23 and 1162/634/237) are
   unchanged; §4.6(a) now names both trackers.
 
+### Changed
+
+- **The faithfulness tracker counts connected components, not greedy classes**
+  ([#189](https://github.com/sustia-llc/catgraph/issues/189)).
+  `graphical_linalg::verify_sfg_to_mat_is_full_and_faithful` partitioned each
+  matrix bucket by scanning every expression against the current class
+  *representatives*. That is the component partition only when the relation is
+  transitive, and `Presentation::eq_mod` is not: `Scalar(false)` ~
+  `Discard ; Zero` (the D8 user equation) ~ `Discard ⊗ Zero` (the SMC layer)
+  while `Scalar(false)` ≁ `Discard ⊗ Zero` — a `Some(false)`, not a `None`.
+  Measured in #189 on a 120-expression pool of parallel `1 → 1` arrows (the
+  pool is recorded there): 10 490 ordered violating triples, zero `None`
+  verdicts, so this is congruence closure's incompleteness, not a depth-bound
+  artefact. Non-transitivity is pre-existing and was found by the #57-a1
+  adversarial review. The bucket partition is now the **connected components**
+  of the graph whose edges are exactly the
+  `Some(true)` pairs, taken by a plain union-find; a pair already inside one
+  component is skipped, which is exact (an intra-component edge cannot change
+  the partition) and is what keeps the all-pairs pass affordable.
+
+  **CC collision baselines re-pinned, all four down:** BoolRig 952 → **748**,
+  UnitInterval 1397 → **1114**, Tropical 1974 → **1594**, F64Rig 1969 →
+  **1590**. Explain-the-delta: the greedy partition **over-counted relative to
+  connected components** — every greedy class sits inside one component, so
+  components are coarser-or-equal and all four rigs had to fall. Nothing about
+  the relation moved: the only executable change in this release entry is the
+  tracker's partition loop, so `eq_mod`, `nf`, the presentation and every corpus
+  behave exactly as before. This is a change of *metric* alone, and its
+  direction was forced rather than measured. What the switch buys is that the
+  count is now a **function of the relation** — components are the transitive
+  closure of the same edge set, whereas a greedy class count depends on
+  enumeration order — which restores the monotonicity argument the pins are
+  read under: a relation that only grows can only gain edges, hence only merge
+  components, hence only lower the count. The #57-a1 re-pin had to appeal to the empirical direction
+  for want of exactly this. Canonicality is unaffected and still judged by
+  `smc_canonicality_probes`, not by these counts.
+
+  Cost: depth-2 bucket sizes top out at 682 (BoolRig) and 1602 (Tropical,
+  F64Rig), an all-pairs ceiling of 1.6M–4.5M `eq_mod` calls per rig; with the
+  intra-component skip the BoolRig depth-2 tracker runs ≈2 min against the
+  greedy scan's ≈11 s. The trackers stay `#[ignore]`'d, so CI time is
+  unchanged; the `cc_incompleteness_count` bench group's profiled wall times
+  were re-measured and are noted in `benches/functor_bench.rs`.
+
+  `Presentation::eq_mod`'s rustdoc now records the non-transitivity directly:
+  sound and definite per query, but not an equivalence relation as a decision
+  procedure, so a caller wanting a partition must take components.
+
 ### Fixed
 
 - **Wire-count sums saturate instead of overflowing**

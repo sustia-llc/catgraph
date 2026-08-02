@@ -21,8 +21,8 @@
 //! not re-prove established theorems). It returns **CC-engine incompleteness
 //! witnesses** — pairs of SFG expressions that the matrix functor `S`
 //! distinguishes which the default [`CongruenceClosure`] engine does NOT
-//! identify. The witness count (952 for `size_bound=2` on `BoolRig`,
-//! post-#57-a1) stays nonzero **by design**: the terminal Mat(R) decision path
+//! identify. The witness count (748 for `size_bound=2` on `BoolRig`,
+//! post-#189) stays nonzero **by design**: the terminal Mat(R) decision path
 //! is the Functorial engine (issue #15 resolved functorial-terminal; syntactic
 //! Knuth-Bendix completion is the #57 feasibility spike). See the
 //! `tests/graphical_linalg.rs` module docstring for the authoritative semantics.
@@ -59,7 +59,7 @@
 //!   deferred).
 //!
 //! - **`cc_incompleteness_count::bool` at `size_bound = 2`** — produces
-//!   952 CC-incompleteness witnesses on `BoolRig` (post-#57-a1) — the
+//!   748 CC-incompleteness witnesses on `BoolRig` (post-#189) — the
 //!   measured empirical baseline. The witness
 //!   count is the size of the gap between
 //!   [`NormalizeEngine::CongruenceClosure`] (syntactic, incomplete) and
@@ -68,8 +68,8 @@
 //!   faithfulness check.
 //!
 //! - **Witness-count asymmetry (`BoolRig` vs `F64Rig`).** At `size_bound = 2`
-//!   `BoolRig` produces 952 witnesses (post-#57-a1); `F64Rig` produces a
-//!   larger count (1969 exact post-#57-a1 — the tracker baseline measured on the
+//!   `BoolRig` produces 748 witnesses (post-#189); `F64Rig` produces a
+//!   larger count (1590 exact post-#189 — the tracker baseline measured on the
 //!   4-sample test fixture in `tests/graphical_linalg.rs`; this bench's
 //!   2-sample fixture yields a different, untracked count) that blows up
 //!   combinatorially at `size_bound = 3`.
@@ -102,26 +102,35 @@
 //!
 //! ## Measured wall times
 //!
-//! Measured 2026-07-21, release build, on the maintainer's dev workstation
-//! (single-threaded criterion, `sample_size(10)` / 500 ms warm-up / 5 s
-//! measurement budget). Treat these as machine-relative order-of-magnitude
-//! figures, not portable constants — they replace the earlier un-profiled
-//! design-doc estimates (#59).
+//! Re-measured 2026-08-01 after [#189](https://github.com/sustia-llc/catgraph/issues/189)
+//! made the within-bucket partition all-pairs (connected components instead of
+//! a greedy representative scan); release build, same workstation and same
+//! criterion configuration (single-threaded, `sample_size(10)` / 500 ms warm-up
+//! / 5 s measurement budget). Treat these as machine-relative
+//! order-of-magnitude figures, not portable constants — they replace the
+//! earlier un-profiled design-doc estimates (#59).
 //!
 //! - **`cc_incompleteness_count::bool/2`** — criterion per-call estimate
-//!   **≈ 6.92 s** (median; `[6.90, 6.92, 6.93]` s). Group wall time ≈ 76 s
-//!   measured.
+//!   **≈ 120.3 s** (mean; `[119.19, 120.26, 121.83]` s). Group wall time
+//!   ≈ 21 min 46 s measured (criterion's "estimated 1200.7 s" 10-iteration
+//!   collection plus warm-up and analysis).
 //! - **`cc_incompleteness_count::f64rig/2`** — criterion per-call estimate
-//!   **≈ 6.73 s** (median; `[6.71, 6.73, 6.74]` s). Group wall time ≈ 75 s
-//!   measured (criterion's "estimated 66.9 s" 10-iteration collection plus
-//!   warm-up).
-//! - **Both cc groups together** — ≈ 2 min 31 s wall (`cargo bench …
-//!   -- cc_incompleteness`, excluding compilation; 76 + 75 ≈ 151 s).
+//!   **≈ 128.9 s** (mean; `[127.52, 128.90, 130.44]` s). Group wall time
+//!   ≈ 23 min 35 s measured (criterion's "estimated 1259.0 s" collection).
+//! - **Both cc groups together** — ≈ 45 min 21 s wall (`cargo bench …
+//!   -- cc_incompleteness`, excluding compilation).
+//!
+//! **The #189 cost step is the headline.** Criterion reports
+//! **+1638.9 %** on `bool/2` (6.92 s → 120.3 s, 17.4×) and **+1815.6 %** on
+//! `f64rig/2` (6.73 s → 128.9 s, 19.2×), both `p = 0.00`. That is the
+//! greedy-scan → all-pairs change, not a `sfg_to_mat` or `eq_mod` regression:
+//! neither is touched. `sample_size(10)` is already criterion's minimum, so
+//! there is no configuration that brings these groups back under a minute —
+//! budget ~45 min for the pair, or filter to one group.
 //!
 //! Group wall time exceeds `10 × per-call + 500 ms` because criterion's
 //! warm-up loop only checks elapsed time *between* iterations — it always
-//! completes at least one full ~7 s call — and per-group analysis adds
-//! overhead.
+//! completes at least one full call — and per-group analysis adds overhead.
 //!
 //! ## Trait-bound dispatch tier
 //!
@@ -287,11 +296,12 @@ fn bench_sfg_to_mat_bool(c: &mut Criterion) {
 // ---------------------------------------------------------------------------
 //
 // `verify_sfg_to_mat_is_full_and_faithful::<BoolRig>(size_bound=2)` returns
-// 952 CC-incompleteness witnesses (measured empirically, post-#57-a1; see the
+// 748 CC-incompleteness witnesses (measured empirically, post-#189; see the
 // `tests/graphical_linalg.rs` module docstring for authoritative semantics).
-// One d=2 call is ≈6.9 s in release (see "Measured wall times"), so the group
-// is configured at criterion's minimum `sample_size(10)` with a short warm-up +
-// measurement budget — a full 100-sample run would take ~12 min. The
+// One d=2 call is ≈120 s in release post-#189 (see "Measured wall times"), so
+// the group is configured at criterion's minimum `sample_size(10)` with a short
+// warm-up + measurement budget — even so the group takes ~22 min, and a full
+// 100-sample run would be hours. The
 // `size_bound=3` variant was dropped
 // (#59): one d=3 call exceeds 590 s (>10 min), un-runnable under any criterion
 // config. Depth-3/4 ground truth stays reachable via the `#[ignore]`'d
@@ -307,16 +317,17 @@ fn bench_cc_incompleteness_count_bool(c: &mut Criterion) {
     // a tight presentation.
     let rig_samples = vec![BoolRig(true), BoolRig(false)];
 
-    // One d=2 verifier call is ≈6.9 s (see "Measured wall times" in the
-    // module doc); a criterion-default 100-sample run would take ~12 min.
+    // One d=2 verifier call is ≈120 s post-#189 (see "Measured wall times" in
+    // the module doc); a criterion-default 100-sample run would take hours.
     // Cap the sampling at criterion's `sample_size(10)` minimum with a short
-    // warm-up + measurement budget. Config MUST precede the `bench_function`
-    // registration below to take effect.
+    // warm-up + measurement budget — that still leaves ~22 min for the group.
+    // Config MUST precede the `bench_function` registration below to take
+    // effect.
     group.sample_size(10);
     group.warm_up_time(std::time::Duration::from_millis(500));
     group.measurement_time(std::time::Duration::from_secs(5));
 
-    // d=2: the canonical signal (952 witnesses, post-#57-a1).
+    // d=2: the canonical signal (748 witnesses, post-#189).
     group.throughput(Throughput::Elements(1));
     group.bench_function(BenchmarkId::from_parameter(2u32), |bencher| {
         bencher.iter(|| {
@@ -358,10 +369,10 @@ fn bench_cc_incompleteness_count_f64rig(c: &mut Criterion) {
     // (via `to_bits()`, `-0.0`-normalized); no NaN risk for these literals.
     let rig_samples = vec![F64Rig(0.0), F64Rig(1.0)];
 
-    // Same budget as the bool group: one d=2 call is ≈6.7 s here (see
-    // "Measured wall times"), so cap sampling at criterion's `sample_size(10)`
-    // minimum. Config MUST precede the `bench_function` registration below to
-    // take effect.
+    // Same budget as the bool group: one d=2 call is ≈129 s here post-#189
+    // (see "Measured wall times"), so cap sampling at criterion's
+    // `sample_size(10)` minimum — the group still takes ~24 min. Config MUST
+    // precede the `bench_function` registration below to take effect.
     group.sample_size(10);
     group.warm_up_time(std::time::Duration::from_millis(500));
     group.measurement_time(std::time::Duration::from_secs(5));
