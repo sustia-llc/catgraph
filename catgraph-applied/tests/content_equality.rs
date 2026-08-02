@@ -80,7 +80,8 @@ fn witness(name: &str, a: &E, b: &E, smc_equal: bool) {
 // ---- §4.4 / §4.6 witnesses --------------------------------------------------
 
 /// The withdrawal witness of §4.4: `η` placement slack, the single mechanism
-/// behind all 253 divergences and the reason rigidity on `𝔉` was withdrawn.
+/// behind all of the then-253 divergences (2026-07-28 classification; 183 since
+/// #185) and the reason rigidity on `𝔉` was withdrawn.
 #[test]
 fn eta_layer_slack() {
     witness(
@@ -119,7 +120,9 @@ fn dead_braid_prefix() {
 }
 
 /// §4.4 F1 / [#185](https://github.com/sustia-llc/catgraph/issues/185): the
-/// `adjacent_column_cuts` right-column asymmetry, inside `𝔉′`.
+/// split-presence column nesting, inside `𝔉′`. `nf` separated this pair until
+/// #185's symmetric Step-6½ cuts (2026-08-02); content decided it equal
+/// throughout, which is the point of the witness and is unchanged by the fix.
 #[test]
 fn cut_asymmetry() {
     witness(

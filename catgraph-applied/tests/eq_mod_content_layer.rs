@@ -46,8 +46,9 @@ fn smc_only() -> Presentation<Sfg> {
 
 // ---- the named divergence witnesses, previously Some(false) -----------------
 
-/// §4.4's withdrawal witness — `η` placement slack, the mechanism behind all 253
-/// published divergences. `eq_mod` returned `Ok(Some(false))` before the wiring.
+/// §4.4's withdrawal witness — `η` placement slack, the mechanism behind all of
+/// the then-253 published divergences (2026-07-28 classification; the tracker
+/// reads 183 since #185). `eq_mod` returned `Ok(Some(false))` before the wiring.
 #[test]
 fn eta_slack_pair_is_now_decided_equal() {
     let a = par(
@@ -81,9 +82,11 @@ fn dead_braid_prefix_pair_is_now_decided_equal() {
 }
 
 /// §4.4 F1 / [#185](https://github.com/sustia-llc/catgraph/issues/185) — the
-/// `adjacent_column_cuts` right-column asymmetry, inside `𝔉′`. Returned
-/// `Ok(Some(false))` before; the engine defect it witnesses is untouched here,
-/// but it no longer costs an equality.
+/// split-presence column nesting, inside `𝔉′`. Returned `Ok(Some(false))` under
+/// the old `nf`-equality path; the content path decided it equal while `nf` was
+/// still separating it, and #185's symmetric Step-6½ cuts (2026-08-02) have
+/// since closed the `nf` side too — so this now pins agreement between the two
+/// layers rather than the content layer rescuing an engine defect.
 #[test]
 fn cut_asymmetry_pair_is_now_decided_equal() {
     let a = seq(
