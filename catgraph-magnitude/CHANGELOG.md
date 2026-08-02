@@ -45,8 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **T2 — role-modulated couplings + a role-grid certificate.**
     `RoleModulation::new(rho)` is a validated square `[0,1]` table (entries
     checked through the crate's own `UnitInterval::new`); **asymmetric ρ is
-    explicitly allowed** — with the documented seam that it reduces `f64-fast`
-    engagement, strengthening the case for #210.
+    explicitly allowed** — with the documented downstream seam that asymmetric
+    tables limit `f64-fast` engagement for consumers calling `magnitude_f64`
+    directly (the coalition path never calls that route), strengthening the
+    case for #210.
     `modulate(couplings, roles, &rho)` (roles indexed by **agent** index) is a
     pure input transformation, `π′ = ρ(r_from, r_to)·π` — additively in the
     metric, `d′ = d_ρ + d` — returning `ModulatedCouplings` whose

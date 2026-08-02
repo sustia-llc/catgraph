@@ -75,8 +75,9 @@
 //!   the corresponding factor closure.
 //! - **`π̄ ≥ ρ̄ ⊗ σ̄` (achieved).** Take an optimal role path
 //!   `r₀ → … → r_p` realizing `ρ̄(r₀, r_p)` and an optimal fiber path
-//!   `x₀ → … → x_q` realizing `σ̄(x₀, x_q)` (max-product optima with weights
-//!   `≤ 1` never revisit a node, so consecutive nodes differ). Concatenate them
+//!   `x₀ → … → x_q` realizing `σ̄(x₀, x_q)` (an optimal **simple** path always
+//!   exists: stripping a cycle removes factors `≤ 1` from the product, which
+//!   never decreases it). Concatenate them
 //!   as a **two-phase** path in the product: first move the role while holding
 //!   the position at `x₀` (each step costs `ρ(r_{i−1}, r_i) · σ(x₀, x₀) =
 //!   ρ(r_{i−1}, r_i) · 1`), then move the position while holding the role at
@@ -97,11 +98,17 @@
 //! Mag = 1ᵀ ζ_t⁻¹ 1 = (1ᵀ (ζ_t^ρ)⁻¹ 1) · (1ᵀ (ζ_t^σ)⁻¹ 1) = |ρ|_t · |σ|_t.
 //! ```
 //!
-//! This is Leinster 2013 Prop 1.4.3 / Prop 2.3.6 (`|A ⊗ B| = |A||B|`); the
-//! weighted categorical form of the same statement — magnitude of a fibration as
-//! base times fiber — is Leinster 2008 Prop 2.8. Invertibility likewise
-//! factorizes: `ζ_t` is invertible iff both factor zetas are, so [`RoleGrid::proof`]
-//! errors on exactly the singular factors the grid evaluation would.
+//! This is Leinster 2013 Prop 1.4.3 / Prop 2.3.6 (`|A ⊗ B| = |A||B|`);
+//! magnitude of a metric fibration as base times fiber is Leinster 2013
+//! Thm 2.3.11, whose Ex 2.3.12(i) notes the product-projection case reduces to
+//! Prop 2.3.6 (the weighted categorical analogue is Leinster 2008 Prop 2.8,
+//! `χ(E(X)) = Σ_a k^a χ(X_a)`). Invertibility likewise factorizes: `ζ_t` is
+//! invertible iff both factor zetas are (`det(A ⊗ B) = det(A)ⁿ det(B)ᴿ`), so in
+//! exact arithmetic [`RoleGrid::proof`] errors precisely when the grid
+//! evaluation would. Two float-level caveats: the two routes compute
+//! ULP-different entries, so error parity on a numerical knife-edge is not a
+//! bitwise guarantee; and `proof` checks the role factor first, so when *both*
+//! factors are singular only the role factor's error surfaces.
 //!
 //! ## Step 3 — skeletalization commutes with the product
 //!
@@ -127,7 +134,12 @@
 //! `fl(ρ·σ)` entries along paths while the factor closures multiply `ρ` and `σ`
 //! entries separately, so the two routes re-associate the same real products
 //! differently. Tests compare within a **relative tolerance**; bit-identity is
-//! not claimed anywhere in this module.
+//! not claimed anywhere in this module. The deviation **grows with the
+//! conditioning of `ζ_t`**: adversarial fuzzing with couplings at `1 − O(1e-12)`
+//! (just below the merge knife-edge, where `ζ` is nearly singular) produced
+//! relative deviations up to `~1e-2` between grid evaluation and certificate.
+//! Tight tolerances (the doctest's `1e-9`) are safe only away from near-1
+//! non-merged couplings.
 //!
 //! # The θ-collapse (T3)
 //!
@@ -142,6 +154,14 @@
 //! `θ` is an **experiment parameter, not a theorem**: every `θ` yields a
 //! legitimate size homomorphism and the anchor literature picks no canonical
 //! one. Recording which `θ` produced a number is the caller's discipline.
+//!
+//! One float trap worth naming: `powf` can round **up to exactly `1.0`** from a
+//! strictly-sub-1 base (e.g. `0.9999999999999999_f64.powf(1e-18) == 1.0`), so a
+//! θ-collapsed table can contain exact-`1.0` couplings — and hence trigger
+//! skeletal merges — between agents that **no channel** perfectly couples. The
+//! `== 1.0 ⟺ every generator is exactly 1.0` reasoning of Step 3 above holds
+//! for plain products, **not** through `powf`; do not chain T3 output into
+//! exact-1.0 arguments.
 
 use std::collections::BTreeMap;
 
@@ -206,11 +226,15 @@ impl MixedClass {
 ///   [`mixed_classes`](Self::mixed_classes).
 /// - [`is_exact`](Self::is_exact) is `true` iff no class is mixed. "Exact" is
 ///   about **attribution**: every class weight is attributed wholly to one role,
-///   nothing is split or estimated. It is *not* a bit-identity claim —
-///   `Σ_r share(r)` equals [`CoalitionEvaluator::base_value`] only up to
-///   floating-point re-association, since the per-role bucketed sums
-///   re-associate the row-major accumulation `base_value` uses. Compare with a
-///   **relative tolerance**.
+///   nothing is split or estimated.
+/// - **When `is_exact()`**, `Σ_r share(r)` equals
+///   [`CoalitionEvaluator::base_value`] — mathematically exactly, in floats
+///   only up to re-association (the per-role bucketed sums re-associate the
+///   row-major accumulation `base_value` uses; compare with a **relative
+///   tolerance**, bit-identity is not claimed).
+/// - **When `!is_exact()`**, the sum falls short of `base_value` by exactly
+///   the total weight of the mixed classes — a **structural** shortfall that
+///   can be arbitrarily large, not a rounding effect.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RoleShares {
     /// Role → attributed weight. Every role appearing in the caller's partition
@@ -313,14 +337,19 @@ impl CoalitionEvaluator {
         let (member_classes, recomputed_reps) = skeletal_classes(self.closed_table(), m);
         let reps = self.class_reps();
         let weighting = self.weighting_vec();
-        debug_assert_eq!(
+        // Always-on (release included): the recompute is already paid above, the
+        // comparison is O(k), and a silent mismatch would attribute cached
+        // weights to the wrong roles. Structurally guaranteed today (same
+        // deterministic helper over the same cached table), so a failure means a
+        // future refactor broke the cache invariant.
+        assert_eq!(
             recomputed_reps, reps,
-            "role_shares must recover the same skeleton the evaluator cached"
+            "invariant: role_shares must recover the same skeleton the evaluator cached"
         );
-        debug_assert_eq!(
+        assert_eq!(
             reps.len(),
             weighting.len(),
-            "the cached weighting is indexed by skeletal class"
+            "invariant: the cached weighting is indexed by skeletal class"
         );
 
         // Distinct roles per class, in first-seen order (`k` is small — the
@@ -371,9 +400,12 @@ impl CoalitionEvaluator {
 /// "how much a planner's output matters to a worker" is genuinely not "how much
 /// a worker's output matters to a planner". The coalition engine handles
 /// asymmetric couplings natively (Lawvere `[0, ∞]`-enrichment is one-directional
-/// by construction). The one downstream consequence worth knowing: an asymmetric
-/// `ρ` makes the modulated coupling table asymmetric, which reduces engagement
-/// of the symmetric `f64-fast` factorization path.
+/// by construction). One consequence worth knowing — for **downstream
+/// consumers that feed couplings to `magnitude_f64` directly** (the coalition
+/// path itself never calls the `f64-fast` route): an asymmetric `ρ` makes the
+/// modulated coupling table asymmetric, and the symmetric `f64-fast`
+/// factorization only engages on exactly-symmetric ζ (measured downstream in
+/// #210).
 ///
 /// Validation mirrors [`UnitInterval::new`] — every entry must be non-NaN and in
 /// `[0, 1]` — by calling it, so range errors are reported identically to every
@@ -705,8 +737,9 @@ impl RoleGrid {
     /// # Errors
     ///
     /// Returns [`CatgraphError::Composition`] if either factor's `t`-scaled zeta
-    /// is singular — which by the module's Step 2 is exactly when the grid's own
-    /// zeta is singular.
+    /// is singular — which by the module's Step 2 is (in exact arithmetic)
+    /// exactly when the grid's own zeta is singular. The role factor is checked
+    /// first, so if both factors are singular only its error surfaces.
     pub fn proof(&self, t: f64) -> Result<RoleFibrationProof, CatgraphError> {
         Ok(RoleFibrationProof {
             role_magnitude: self.role_space.magnitude_at(t)?,
@@ -905,8 +938,11 @@ impl ChannelCouplings {
     ///   **every** coupling to `1.0` — a fully-coupled, fully-degenerate table.
     ///   That is the caller's responsibility, not an error.
     ///
-    /// Because every `v_c ∈ [0,1]` and every `θ_c ≥ 0`, the result is in
-    /// `[0, 1]` by construction and is never NaN.
+    /// Because every `v_c ∈ [0,1]` and every `θ_c ≥ 0`, the result is never
+    /// NaN, and it is in `[0, 1]` on any libm whose `pow` error stays under one
+    /// ulp (IEEE 754 does not require correctly-rounded `pow`, and Rust
+    /// documents `powf` precision as platform-dependent — a lower-quality libm
+    /// could in principle overshoot `1.0` by one ulp near a `1 − ε` base).
     ///
     /// Anchor: each `θ` is a monoid homomorphism
     /// `([0,1]^C, ·, 1) → ([0,1], ·, 1)`, the "size" datum Leinster 2013 §1.3

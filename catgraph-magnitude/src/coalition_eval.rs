@@ -559,7 +559,9 @@ impl CoalitionEvaluator {
 
     /// The cached weighting `w = μ · 1` over skeletal classes (Leinster 2013
     /// Lemma 1.1.4), indexed identically to [`class_reps`](Self::class_reps);
-    /// `Σ w = base_value()`.
+    /// `Σ w = base_value()` mathematically — in floats only up to
+    /// re-association (`base_mag` accumulates row-major over `μ`, the
+    /// weighting sums each row separately).
     ///
     /// `pub(crate)` for [`crate::coalition_typed`] (#211 T1): the role
     /// decomposition buckets exactly these entries by role.
