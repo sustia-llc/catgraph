@@ -538,6 +538,35 @@ impl CoalitionEvaluator {
         self.t
     }
 
+    /// The cached closed `m × m` member coupling table (diagonal `1.0`, `0.0`
+    /// for absent pairs), member-local order.
+    ///
+    /// `pub(crate)` for [`crate::coalition_typed`] (#211 T1): `role_shares`
+    /// recomputes the member → skeletal-class map from this exact table with the
+    /// same [`skeletal_classes`] helper the slow path uses, rather than caching a
+    /// second copy of the partition.
+    pub(crate) fn closed_table(&self) -> &[Vec<f64>] {
+        &self.closed
+    }
+
+    /// The cached skeletal class representatives — `reps[c]` is the first member
+    /// (local index) of class `c`, in `0..k`.
+    ///
+    /// `pub(crate)` for [`crate::coalition_typed`] (#211 T1).
+    pub(crate) fn class_reps(&self) -> &[usize] {
+        &self.reps
+    }
+
+    /// The cached weighting `w = μ · 1` over skeletal classes (Leinster 2013
+    /// Lemma 1.1.4), indexed identically to [`class_reps`](Self::class_reps);
+    /// `Σ w = base_value()`.
+    ///
+    /// `pub(crate)` for [`crate::coalition_typed`] (#211 T1): the role
+    /// decomposition buckets exactly these entries by role.
+    pub(crate) fn weighting_vec(&self) -> &[f64] {
+        &self.weighting
+    }
+
     /// `Mag(S ∪ {candidate})` at the evaluator's `t`, incrementally (#31).
     ///
     /// `candidate` is an agent index; only its **direct** couplings to/from
