@@ -78,12 +78,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   F64Rig), an all-pairs ceiling of 1.6M–4.5M `eq_mod` calls per rig; with the
   intra-component skip the BoolRig depth-2 tracker runs ≈2 min against the
   greedy scan's ≈11 s. The trackers stay `#[ignore]`'d, so CI time is
-  unchanged; the `cc_incompleteness_count` bench group's profiled wall times
-  were re-measured and are noted in `benches/functor_bench.rs`.
+  unchanged; the `cc_incompleteness_count` bench groups' profiled wall times
+  were re-measured (≈120 s / ≈129 s per call) — a cost step that then led to
+  the groups' removal, recorded in the Removed entry below.
 
   `Presentation::eq_mod`'s rustdoc now records the non-transitivity directly:
   sound and definite per query, but not an equivalence relation as a decision
   procedure, so a caller wanting a partition must take components.
+
+### Removed
+
+- **Both `functor::cc_incompleteness_count::{bool, f64rig}/2` bench groups**
+  ([#189](https://github.com/sustia-llc/catgraph/issues/189), owner decision
+  2026-08-02). The #189 all-pairs component partition moved one `d=2`
+  `verify_sfg_to_mat_is_full_and_faithful` call from ≈7 s to ≈120 s (`bool`) /
+  ≈129 s (`f64rig`), putting `cargo bench -- cc_incompleteness` at ≈45 min
+  wall with `sample_size(10)` already at criterion's floor — no configuration
+  brings the pair back under a minute. The witness-count signal of record was
+  never the bench: the `#[ignore]`'d `cc_completeness_tracking_*` trackers in
+  `tests/graphical_linalg.rs` carry the pinned counts (748/1114/1594/1590,
+  post-#189) and stay. `benches/functor_bench.rs` keeps the two `sfg_to_mat`
+  groups and records the removal in its module doc.
 
 ### Fixed
 
