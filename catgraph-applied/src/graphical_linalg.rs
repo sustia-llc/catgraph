@@ -362,8 +362,10 @@ where
         }
 
         // One representative per component — the least bucket index in it, so
-        // the witness list is deterministic given the enumeration and does not
-        // depend on which endpoint union-by-size happened to keep as root.
+        // the witness *pairs* are deterministic given the enumeration and do not
+        // depend on which endpoint union-by-size happened to keep as root. (The
+        // cross-bucket order of the assembled list still follows HashMap
+        // iteration; the counts are order-independent either way.)
         let mut seen_roots = std::collections::HashSet::new();
         let mut reps: Vec<&SignalFlowGraph<R>> = Vec::new();
         for (i, expr) in bucket.iter().enumerate() {

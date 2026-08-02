@@ -185,7 +185,8 @@
 //! from `0.0` while the derived `PartialEq` treated them equal, splitting a
 //! congruence class. #58 normalized `-0.0` to `0.0` in those `Hash` impls,
 //! restoring the `Eq`/`Hash` contract and making F64Rig an exact pin (2229
-//! then; 1925 post-#55-PR1; 2012 post-#55-PR2; 2013 post-#174; 1969 post-#57-a1). All baselines
+//! then; 1925 post-#55-PR1; 2012 post-#55-PR2; 2013 post-#174; 1969 post-#57-a1;
+//! 1590 post-#189). All baselines
 //! live in the `BASELINE_*_D2` module consts.
 //!
 //! [`CongruenceClosure`]: catgraph_applied::prop::presentation::NormalizeEngine::CongruenceClosure

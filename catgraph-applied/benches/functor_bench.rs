@@ -121,7 +121,7 @@
 //!   -- cc_incompleteness`, excluding compilation).
 //!
 //! **The #189 cost step is the headline.** Criterion reports
-//! **+1638.9 %** on `bool/2` (6.88 s → 120.3 s, 17.4×) and **+1815.6 %** on
+//! **+1638.9 %** on `bool/2` (6.92 s → 120.3 s, 17.4×) and **+1815.6 %** on
 //! `f64rig/2` (6.73 s → 128.9 s, 19.2×), both `p = 0.00`. That is the
 //! greedy-scan → all-pairs change, not a `sfg_to_mat` or `eq_mod` regression:
 //! neither is touched. `sample_size(10)` is already criterion's minimum, so
