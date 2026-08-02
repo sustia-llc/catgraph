@@ -14,6 +14,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`magnitude_f64` — off-by-default `f64-fast` feature**
+  ([#165](https://github.com/sustia-llc/catgraph/issues/165)): **one** symmetric
+  factorization of the zeta matrix replaces the three independent hand-rolled
+  Gauss–Jordan eliminations (`mobius_function`, `weighting`, `coweighting` each
+  carried their own copy of the elimination loop). `ZetaFactorization::new`
+  builds ζ through the crate-shared `zeta_from_scaled_distance` /
+  `materialize_objects` kernels, records `‖ζ‖₁`, checks **exact** symmetry, then
+  routes: `Cholesky` for symmetric positive-definite ζ → Bunch–Kaufman `LBLT`
+  (new in nalgebra 0.35) for symmetric **indefinite** ζ → the untouched
+  rig-generic Gauss–Jordan at `Q = F64Rig` for asymmetric ζ (legal under Lawvere
+  `[0, ∞]`-enrichment) or a structurally-zero pivot. The route is exposed as
+  `FactorizationPath`. `weighting` / `coweighting` / `magnitude` are one solve
+  each (`Mag = Σⱼ w(j) = 1ᵀζ⁻¹1`, no μ materialized — BV 2025 §3.5 Eq (7) via
+  Leinster 2013 §1.1 Lemma 1.1.4); `mobius_function` returns `ζ⁻¹` in the same
+  `MatR<F64Rig>` shape as the generic path; `magnitude_f64(space, t)` is the
+  `t`-scaled parallel of `magnitude::<F64Rig>(space, t)`. **Singular ζ errors
+  with `CatgraphError::Composition` on every route**, matching the generic path.
+  Feature is **off by default** and no existing function was touched, so
+  **default-build results are unchanged**; `nalgebra` enters only as an optional
+  dependency, per the workspace's field-bounded-paths-only rule.
+- **`ConditionReport` — `cond₁(ζ)` diagnostics**
+  ([#165](https://github.com/sustia-llc/catgraph/issues/165)):
+  `ZetaFactorization::condition_report()` materializes μ and reports the exact
+  induced-1-norm condition number `‖ζ‖₁·‖μ‖₁`;
+  `condition_lower_bound()` is the solve-only variant, reporting the documented
+  **lower** bound `‖ζ‖₁·‖w‖₁/n` (from `w = ζ⁻¹u_I`) with `cond_1() == None`.
+  Fields are private with accessors so later diagnostics are additive.
+- **`tests/magnitude_f64.rs`**
+  ([#165](https://github.com/sustia-llc/catgraph/issues/165)) — route selection
+  per fixture, three-witness Möbius agreement (Gauss–Jordan vs von-Neumann chain
+  sum vs factorization) at `1e-9` per entry, magnitude / weighting / coweighting
+  parity across all three routes, singular-ζ and empty-space error parity, the
+  conditioning sanity + `t → 0` growth checks, and a Bunch–Kaufman structural
+  guard (a 5×5 symmetric-indefinite star exercises `LBLT`'s rank-2
+  trailing-submatrix update, which a 3×3 cannot reach, plus a
+  `‖L·D·Lᵀ − ζ‖₁ / (‖ζ‖₁·n) < 1e-14` backward-error check). Two feature-gated
+  criterion groups: `magnitude_f64/mag_lm/{10,100,1000}` on the existing
+  `build_chain_lm` fixtures — the chain LM is forward-only, so **ζ is
+  asymmetric and that group measures the Gauss–Jordan fallback**, an honest
+  baseline, pinned by a test — and
+  `magnitude_f64_symmetric` / `magnitude_generic_symmetric` on a
+  uniform-distance space, which is where the **Cholesky** route is actually
+  timed. Plus a targeted CI lane (`--features f64-fast` test + clippy).
+
 ## [workspace-v0.5.0] - 2026-07-30
 
 ### Added

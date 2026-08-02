@@ -14,6 +14,19 @@
 //! Gaussian elimination on the n×n zeta matrix — O(n³) with small constants
 //! because the matrix is dense (all prefix-pair distances are finite for a
 //! connected chain).  Expect ~8× increase per 2× n at sizes above 100.
+//!
+//! Two feature-gated (`f64-fast`) #165 groups sit alongside:
+//!
+//! - `magnitude_f64/mag_lm_{10,100,1000}` — the same chain-LM fixtures at the
+//!   same `t = 2.0`, entered through `magnitude_f64`. The chain LM is
+//!   **forward-only, hence ζ is asymmetric**, so this group measures the
+//!   **Gauss–Jordan fallback** — the honest cost of the fast path when it
+//!   cannot help.
+//! - `magnitude_f64_symmetric/mag_uniform_{10,100,1000}` and its
+//!   `magnitude_generic_symmetric` twin — a uniform-distance space where ζ is
+//!   symmetric positive-definite, so the **Cholesky** route is what gets timed.
+//!
+//! No performance claim is recorded here — numbers come from a real run.
 
 use std::hint::black_box;
 
@@ -21,6 +34,8 @@ use catgraph_magnitude::coalition::coalition_magnitude_from_couplings;
 use catgraph_magnitude::coalition_eval::{CoalitionEvaluator, EvalScratch};
 use catgraph_magnitude::coalition_value;
 use catgraph_magnitude::lm_category::LmCategory;
+#[cfg(feature = "f64-fast")]
+use catgraph_magnitude::magnitude_f64::magnitude_f64;
 use catgraph_testutil::Lcg;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 
@@ -78,6 +93,97 @@ fn bench_magnitude(c: &mut Criterion) {
 
     group.finish();
 }
+
+/// #165 — the `f64-fast` counterpart of [`bench_magnitude`]: the **same**
+/// [`build_chain_lm`] fixtures at the same sizes and the same `t = 2.0`,
+/// entered through `magnitude_f64` instead of `LmCategory::magnitude`.
+///
+/// **Route: `GaussJordan`.** The chain LM is *forward-only* — state `i` reaches
+/// only `j > i`, so `d(j, i) = +∞` while `d(i, j)` is finite, and ζ is
+/// **asymmetric**. `ZetaFactorization` therefore refuses the symmetric routes
+/// (nalgebra's `Cholesky`/`LBLT` read the lower triangle alone) and this group
+/// measures the Gauss–Jordan **fallback**, not Cholesky or Bunch–Kaufman. That
+/// is deliberately kept: it is the honest baseline for the cost the fast path
+/// adds when it cannot help (ζ build + symmetry scan + the generic solve).
+/// [`bench_magnitude_f64_symmetric`] is the group that actually times Cholesky.
+///
+/// The timed region mirrors `LmCategory::magnitude(2.0)` exactly — `enriched_space()`
+/// plus the magnitude call — so `magnitude/mag_lm/{n}` and
+/// `magnitude_f64/mag_lm/{n}` are apples-to-apples; only the inner path differs.
+///
+/// Feature-gated: with `f64-fast` off this compiles to an empty function so the
+/// default `cargo bench` build stays green.
+#[cfg(feature = "f64-fast")]
+fn bench_magnitude_f64(c: &mut Criterion) {
+    let mut group = c.benchmark_group("magnitude_f64");
+
+    for &n in &[10usize, 100, 1000] {
+        let lm = build_chain_lm(n, 42);
+        group.bench_with_input(BenchmarkId::new("mag_lm", n), &lm, |b, m| {
+            b.iter(|| {
+                let space = m.enriched_space().expect("enriched space builds");
+                magnitude_f64(&space, 2.0).expect("zeta_t should be invertible at t=2")
+            });
+        });
+    }
+
+    group.finish();
+}
+
+/// #165 — the group that actually times the **`Cholesky`** route.
+///
+/// Uniform-distance space on `n` points: `ζ = (1 − c)I + cJ` with
+/// `c = exp(−t·d) ∈ (0, 1)`, whose eigenvalues `1 − c` (multiplicity `n − 1`)
+/// and `1 + (n − 1)c` are all positive — symmetric and positive-definite, so
+/// `ZetaFactorization` takes the Cholesky route (the same fixture shape
+/// `tests/magnitude_f64.rs::scattered_uniform_space` asserts the route on).
+/// `d = log(n − 1) + 0.5` keeps the space scattered at the benched sizes.
+///
+/// `magnitude/mag_lm` and `magnitude_f64/mag_lm` above are asymmetric and both
+/// run Gauss–Jordan; this group is the only one on a symmetric ζ, so
+/// `magnitude_f64_symmetric/mag_uniform/{n}` and
+/// `magnitude_generic_symmetric/mag_uniform/{n}` are the pair to compare when
+/// asking what the factorization buys. No timing claim is recorded here.
+#[cfg(feature = "f64-fast")]
+fn bench_magnitude_f64_symmetric(c: &mut Criterion) {
+    use catgraph_applied::lawvere_metric::LawvereMetricSpace;
+    use catgraph_applied::rig::F64Rig;
+    use catgraph_magnitude::magnitude::magnitude;
+
+    /// Uniform space just above the Leinster Def 2.1.2 scatteredness threshold.
+    fn uniform_space(n: usize) -> LawvereMetricSpace<usize> {
+        #[allow(clippy::cast_precision_loss)]
+        let d = ((n - 1) as f64).ln() + 0.5;
+        LawvereMetricSpace::from_distance_fn(n, |a, b| if a == b { 0.0 } else { d })
+    }
+
+    let mut fast = c.benchmark_group("magnitude_f64_symmetric");
+    for &n in &[10usize, 100, 1000] {
+        let space = uniform_space(n);
+        fast.bench_with_input(BenchmarkId::new("mag_uniform", n), &space, |b, s| {
+            b.iter(|| magnitude_f64(s, 2.0).expect("positive-definite at t=2"));
+        });
+    }
+    fast.finish();
+
+    let mut generic = c.benchmark_group("magnitude_generic_symmetric");
+    for &n in &[10usize, 100, 1000] {
+        let space = uniform_space(n);
+        generic.bench_with_input(BenchmarkId::new("mag_uniform", n), &space, |b, s| {
+            b.iter(|| magnitude::<F64Rig>(s, 2.0).expect("positive-definite at t=2"));
+        });
+    }
+    generic.finish();
+}
+
+/// No-op stand-ins when the `f64-fast` feature is off (see the gated variants
+/// above) — keeps `criterion_group!` free of `cfg` gymnastics.
+#[cfg(not(feature = "f64-fast"))]
+fn bench_magnitude_f64(_c: &mut Criterion) {}
+
+/// See [`bench_magnitude_f64_symmetric`]; no-op without the feature.
+#[cfg(not(feature = "f64-fast"))]
+fn bench_magnitude_f64_symmetric(_c: &mut Criterion) {}
 
 /// Number of candidates swept against the fixed coalition in the incremental
 /// benchmark (per the #31 brief: ~8 candidates per sweep).
@@ -280,6 +386,8 @@ fn bench_value_with(c: &mut Criterion) {
 criterion_group!(
     benches,
     bench_magnitude,
+    bench_magnitude_f64,
+    bench_magnitude_f64_symmetric,
     bench_incremental,
     bench_evaluator_new,
     bench_value_with

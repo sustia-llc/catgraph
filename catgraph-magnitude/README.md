@@ -101,6 +101,13 @@ The workspace `v0.1.0` (2026-07-01) semantic + determinism + coalition layer ove
 | `PosetCategory<N>` | Leinster 2008 | Finite-category `LawvereMetricSpace`-compatible input type |
 | `weighting<Q>(space)` | Leinster 2013 §1.1 Def 1.1.1 | Solve `ζ · w = u_I` |
 | `coweighting<Q>(space)` | Leinster 2013 §1.1 Def 1.1.1 | Solve `v · ζ = u_J^T` |
+| `magnitude_f64::ZetaFactorization<'a>` + `::new(space)` | numerical | **Feature `f64-fast`** (off by default) — ONE symmetric ζ factorization of the space *as given*, serving `weighting` / `coweighting` / `magnitude` / `mobius_function` (#165) |
+| `ZetaFactorization::{weighting, coweighting}()` → `Vec<f64>` | Leinster 2013 §1.1 Def 1.1.1 | **Feature `f64-fast`** — one solve each; symmetric ζ ⇒ coweighting *is* the weighting (#165) |
+| `ZetaFactorization::magnitude()` → `f64` | BV 2025 §3.5 Eq (7) + Leinster 2013 §1.1 Lemma 1.1.4 | **Feature `f64-fast`** — `Σⱼ w(j) = 1ᵀζ⁻¹1`, no μ materialized (#165) |
+| `ZetaFactorization::mobius_function()` → `MatR<F64Rig>` | Leinster 2013 §1.1 Lemma 1.1.4 | **Feature `f64-fast`** — `ζ⁻¹` in the same `MatR` shape as the generic path (#165) |
+| `magnitude_f64::magnitude_f64(space, t)` → `f64` | BV 2025 §3.5 Eq (7) | **Feature `f64-fast`** — the `t`-scaled parallel of `magnitude::<F64Rig>(space, t)` (#165) |
+| `magnitude_f64::FactorizationPath` | numerical | **Feature `f64-fast`** — which route answered: `Cholesky` / `Lblt` / `GaussJordan` (#165) |
+| `magnitude_f64::ConditionReport` + `ZetaFactorization::{condition_report, condition_lower_bound}()` | numerical | **Feature `f64-fast`** — `cond₁(ζ) = ‖ζ‖₁·‖μ‖₁` when μ is materialized, else a documented lower bound `‖ζ‖₁·‖w‖₁/n` (#165) |
 | `is_scattered(space)` | Leinster 2013 Def 2.1.2 | `d(a,b) > log(#A−1)` predicate |
 | `tsallis_entropy(p, t)` | BV 2025 Prop 3.10 / Tsallis 1988 | Shannon special case at `\|t−1\| < 1e-6` |
 | `WeightedCospan<Λ, Q>` | F&S 2019 §1 + BV 2025 §3 | Cospan with per-edge rig weights |
@@ -130,6 +137,16 @@ Public constant `TSALLIS_SHANNON_EPS = 1e-6` is the threshold below which `tsall
 regime. The Rem 3.11 finite-difference step `h` MUST satisfy `h > TSALLIS_SHANNON_EPS`; the
 recommended `h = 1e-4` gives ~2 decimal margin above the threshold while staying near `f64`'s
 `ε^(1/3) ≈ 6e-6` truncation+roundoff optimum.
+
+## Cargo features
+
+The default feature set is empty — everything above except the rows marked
+**Feature `f64-fast`** is in the default build.
+
+| Feature | Default | What it does |
+|---|---|---|
+| `f64-fast` | off | Exposes the `magnitude_f64` module (#165): **one** symmetric ζ factorization — Cholesky, falling back to Bunch–Kaufman `LBLT` for symmetric-indefinite ζ, and to the untouched rig-generic Gauss–Jordan for asymmetric or singular ζ — replacing the three independent hand-rolled eliminations, plus `cond₁` reporting. Pulls in `nalgebra` (the workspace's "field-bounded paths only" rule: the rig-generic path is unchanged, so `Tropical` / `BoolRig` / `UnitInterval` never pay the compile cost). **Default-build results are bit-identical with and without this feature** — no existing function is touched. |
+| `modularsnf-oracle` | off | Dev-only marker feature gating `tests/snf_modularsnf_integer_oracle.rs`, the cross-validation against [`events555/modularsnf`](https://github.com/events555/modularsnf). Not a runtime dependency. |
 
 ## Examples
 
