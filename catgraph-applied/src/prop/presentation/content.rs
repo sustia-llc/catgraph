@@ -71,6 +71,8 @@
 
 use std::collections::VecDeque;
 
+use catgraph::errors::CatgraphError;
+
 use super::super::colored::ColoredExpr;
 use super::super::{PropExpr, PropSignature};
 
@@ -495,6 +497,166 @@ pub fn content_of_colored<G: PropSignature>(expr: &ColoredExpr<G>) -> Content<G>
          input-anchored and a source word covering the arity types it"
     );
     content
+}
+
+// ------------------------------------------------------- construction by parts
+
+/// Rebuild a [`Content`] from raw parts, **validating** the image
+/// characterization of BGKSZ Thm 3.12 before handing one back.
+///
+/// # Why this exists, and why it is not public
+///
+/// [`Content`]'s fields are private exactly so that every value comes from
+/// [`content_of`] / [`content_of_colored`] and therefore satisfies the
+/// construction invariant the two algorithms below rely on. One operation
+/// cannot be phrased as "walk an expression": the DPO step of
+/// [`rewrite`](super::rewrite), which excises a matched sub-hypergraph and glues
+/// a replacement in along the boundary. Its parts arrive raw, so this
+/// constructor re-establishes the invariant by *checking* it rather than by
+/// inheriting it — which is why it returns a `Result` and why it stays
+/// `pub(super)`.
+///
+/// # What is checked
+///
+/// 1. `node_colors` has one entry per node, and every index in `edges`, `input`
+///    and `output` is in range.
+/// 2. Each edge's tentacle counts agree with its label's declared words —
+///    the [`PropSignature`] invariant, restated locally.
+/// 3. **Monogamy** (BGKSZ Def 3.6): no node has two producers or two consumers,
+///    and — the boundary half of the same definition — a node is producerless
+///    *iff* it is input-anchored, consumerless *iff* it is output-anchored.
+/// 4. **Acyclicity** (BGKSZ Def 3.9), by a Kahn sweep over the hyperedges.
+///
+/// (3) and (4) together are Thm 3.12's image characterization, so a value that
+/// passes is one `⟦·⟧` could have produced. Colors are carried through as given:
+/// they are data the caller is responsible for transporting, not a structural
+/// invariant, and the DPO step gets them from a color-preserving match.
+///
+/// # Errors
+///
+/// [`CatgraphError::Presentation`], naming the first violated clause and the
+/// node or edge that violates it.
+pub(super) fn from_parts<G: PropSignature>(
+    node_count: usize,
+    node_colors: Vec<Option<G::Color>>,
+    edges: Vec<ContentEdge<G>>,
+    input: Vec<usize>,
+    output: Vec<usize>,
+) -> Result<Content<G>, CatgraphError> {
+    fn reject<T>(message: String) -> Result<T, CatgraphError> {
+        Err(CatgraphError::Presentation { message })
+    }
+
+    if node_colors.len() != node_count {
+        return reject(format!(
+            "content parts: {} colors for {node_count} nodes",
+            node_colors.len()
+        ));
+    }
+
+    let mut producer: Vec<Option<usize>> = vec![None; node_count];
+    let mut consumer: Vec<Option<usize>> = vec![None; node_count];
+    for (index, edge) in edges.iter().enumerate() {
+        if edge.sources.len() != edge.label.source_word().len()
+            || edge.targets.len() != edge.label.target_word().len()
+        {
+            return reject(format!(
+                "content parts: edge {index} carries {}/{} tentacles but its label declares {}/{}",
+                edge.sources.len(),
+                edge.targets.len(),
+                edge.label.source_word().len(),
+                edge.label.target_word().len()
+            ));
+        }
+        for &x in &edge.sources {
+            if x >= node_count {
+                return reject(format!("content parts: edge {index} sources node {x}"));
+            }
+            if consumer[x].is_some() {
+                return reject(format!(
+                    "content parts: monogamy — node {x} has two consumers"
+                ));
+            }
+            consumer[x] = Some(index);
+        }
+        for &x in &edge.targets {
+            if x >= node_count {
+                return reject(format!("content parts: edge {index} targets node {x}"));
+            }
+            if producer[x].is_some() {
+                return reject(format!(
+                    "content parts: monogamy — node {x} has two producers"
+                ));
+            }
+            producer[x] = Some(index);
+        }
+    }
+
+    let mut in_anchored = vec![false; node_count];
+    for &x in &input {
+        if x >= node_count {
+            return reject(format!("content parts: input anchors node {x}"));
+        }
+        in_anchored[x] = true;
+    }
+    let mut out_anchored = vec![false; node_count];
+    for &x in &output {
+        if x >= node_count {
+            return reject(format!("content parts: output anchors node {x}"));
+        }
+        out_anchored[x] = true;
+    }
+
+    for x in 0..node_count {
+        if producer[x].is_none() != in_anchored[x] {
+            return reject(format!(
+                "content parts: monogamy — node {x} is producerless={} but input-anchored={}",
+                producer[x].is_none(),
+                in_anchored[x]
+            ));
+        }
+        if consumer[x].is_none() != out_anchored[x] {
+            return reject(format!(
+                "content parts: monogamy — node {x} is consumerless={} but output-anchored={}",
+                consumer[x].is_none(),
+                out_anchored[x]
+            ));
+        }
+    }
+
+    // Kahn over hyperedges: `e → f` when a target of `e` is a source of `f`.
+    let mut waiting: Vec<usize> = edges
+        .iter()
+        .map(|e| e.sources.iter().filter(|&&x| producer[x].is_some()).count())
+        .collect();
+    let mut queue: VecDeque<usize> = (0..edges.len()).filter(|&e| waiting[e] == 0).collect();
+    let mut settled = 0usize;
+    while let Some(e) = queue.pop_front() {
+        settled += 1;
+        for &x in &edges[e].targets {
+            if let Some(f) = consumer[x] {
+                waiting[f] -= 1;
+                if waiting[f] == 0 {
+                    queue.push_back(f);
+                }
+            }
+        }
+    }
+    if settled != edges.len() {
+        return reject(format!(
+            "content parts: acyclicity — {} of {} hyperedges lie on a directed cycle",
+            edges.len() - settled,
+            edges.len()
+        ));
+    }
+
+    Ok(Content {
+        node_count,
+        node_colors,
+        edges,
+        input,
+        output,
+    })
 }
 
 // ---------------------------------------------------------------- incidence
