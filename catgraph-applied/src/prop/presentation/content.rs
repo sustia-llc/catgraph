@@ -71,6 +71,8 @@
 
 use std::collections::VecDeque;
 
+use catgraph::errors::CatgraphError;
+
 use super::super::colored::ColoredExpr;
 use super::super::{PropExpr, PropSignature};
 
@@ -108,11 +110,14 @@ pub struct ContentEdge<G: PropSignature> {
 ///
 /// # Construction invariant
 ///
-/// The fields are private, so every value comes from [`content_of`] /
-/// [`content_of_colored`] — or from the private `canonical_content`, which only
-/// relabels one of those — and the *underlying uncolored* cospan is therefore
-/// monogamous directed acyclic — the image characterization of BGKSZ Thm 3.12.
-/// Both algorithms below rely on that, and on its consequence that every node is
+/// The fields are private, so every value comes from one of four places:
+/// [`content_of`] / [`content_of_colored`], which build it by walking an
+/// expression; the private `canonical_content`, which only relabels one of
+/// those; and the crate-internal `from_parts`, which takes raw parts and
+/// *validates* the invariant instead of inheriting it. Either way the
+/// *underlying uncolored* cospan is monogamous directed acyclic — the image
+/// characterization of BGKSZ Thm 3.12. Both algorithms below rely on that, and
+/// on its consequence that every node is
 /// either incident to a hyperedge or anchored on both feet (a wire no generator
 /// touches runs from the input foot straight to the output foot). The accessors
 /// are read-only, so no caller can break either.
@@ -495,6 +500,208 @@ pub fn content_of_colored<G: PropSignature>(expr: &ColoredExpr<G>) -> Content<G>
          input-anchored and a source word covering the arity types it"
     );
     content
+}
+
+// ------------------------------------------------------- construction by parts
+
+/// Rebuild a [`Content`] from raw parts, **validating** the image
+/// characterization of BGKSZ Thm 3.12 before handing one back.
+///
+/// # Why this exists, and why it is not public
+///
+/// [`Content`]'s fields are private exactly so that every value comes from
+/// [`content_of`] / [`content_of_colored`] and therefore satisfies the
+/// construction invariant the two algorithms below rely on. One operation
+/// cannot be phrased as "walk an expression": the DPO step of
+/// [`rewrite`](super::rewrite), which excises a matched sub-hypergraph and glues
+/// a replacement in along the boundary. Its parts arrive raw, so this
+/// constructor re-establishes the invariant by *checking* it rather than by
+/// inheriting it — which is why it returns a `Result` and why it stays
+/// `pub(super)`.
+///
+/// # What is checked
+///
+/// 1. `node_colors` has one entry per node, and every index in `edges`, `input`
+///    and `output` is in range.
+/// 2. Each edge's tentacle counts agree with its label's declared words, **and
+///    each tentacle's node carries the color that word declares at that
+///    position** — the [`PropSignature`] invariant restated locally, plus
+///    [`content_of`]'s typing discipline, which reads a node's color off the
+///    tentacle incident to it. A node no tentacle touches is unconstrained
+///    here: its color is boundary data, not a derived quantity.
+/// 3. **Monogamy** (BGKSZ Def 3.6), in full: no node has two
+///    producers or two consumers; the **anchor legs are mono** — no node
+///    occupies two `input` coordinates, and none two `output` coordinates
+///    (occupying one of each is legal and is exactly `id₁`); and — the boundary
+///    half of the same definition — a node is producerless *iff* it is
+///    input-anchored, consumerless *iff* it is output-anchored.
+/// 4. **Acyclicity** (BGKSZ Def 3.9), by a Kahn sweep over the hyperedges.
+///
+/// (3) and (4) together are Thm 3.12's image characterization, so a value that
+/// passes is one `⟦·⟧` could have produced. Colors beyond the tentacle-declared
+/// ones are carried through as given: the color of a node no tentacle touches is
+/// data the caller is responsible for transporting, not a structural invariant,
+/// and the DPO step gets it from a color-preserving match.
+///
+/// # Errors
+///
+/// [`CatgraphError::Presentation`], naming the first violated clause and the
+/// node or edge that violates it.
+pub(super) fn from_parts<G: PropSignature>(
+    node_count: usize,
+    node_colors: Vec<Option<G::Color>>,
+    edges: Vec<ContentEdge<G>>,
+    input: Vec<usize>,
+    output: Vec<usize>,
+) -> Result<Content<G>, CatgraphError> {
+    fn reject<T>(message: String) -> Result<T, CatgraphError> {
+        Err(CatgraphError::Presentation { message })
+    }
+
+    if node_colors.len() != node_count {
+        return reject(format!(
+            "content parts: {} colors for {node_count} nodes",
+            node_colors.len()
+        ));
+    }
+
+    let mut producer: Vec<Option<usize>> = vec![None; node_count];
+    let mut consumer: Vec<Option<usize>> = vec![None; node_count];
+    for (index, edge) in edges.iter().enumerate() {
+        if edge.sources.len() != edge.label.source_word().len()
+            || edge.targets.len() != edge.label.target_word().len()
+        {
+            return reject(format!(
+                "content parts: edge {index} carries {}/{} tentacles but its label declares {}/{}",
+                edge.sources.len(),
+                edge.targets.len(),
+                edge.label.source_word().len(),
+                edge.label.target_word().len()
+            ));
+        }
+        let (source_word, target_word) = (edge.label.source_word(), edge.label.target_word());
+        for (position, &x) in edge.sources.iter().enumerate() {
+            if x >= node_count {
+                return reject(format!("content parts: edge {index} sources node {x}"));
+            }
+            if consumer[x].is_some() {
+                return reject(format!(
+                    "content parts: monogamy — node {x} has two consumers"
+                ));
+            }
+            // `content_of` types a node from the tentacle incident to it, so a
+            // caller-supplied color that disagrees with the label's word is a
+            // content no `⟦·⟧` could have produced.
+            if node_colors[x].as_ref() != Some(&source_word[position]) {
+                return reject(format!(
+                    "content parts: node {x} carries color {:?} but edge {index} declares {:?} at \
+                     source position {position}",
+                    node_colors[x], source_word[position]
+                ));
+            }
+            consumer[x] = Some(index);
+        }
+        for (position, &x) in edge.targets.iter().enumerate() {
+            if x >= node_count {
+                return reject(format!("content parts: edge {index} targets node {x}"));
+            }
+            if producer[x].is_some() {
+                return reject(format!(
+                    "content parts: monogamy — node {x} has two producers"
+                ));
+            }
+            if node_colors[x].as_ref() != Some(&target_word[position]) {
+                return reject(format!(
+                    "content parts: node {x} carries color {:?} but edge {index} declares {:?} at \
+                     target position {position}",
+                    node_colors[x], target_word[position]
+                ));
+            }
+            producer[x] = Some(index);
+        }
+    }
+
+    // The two anchor legs are each **mono** (BGKSZ Def 3.6: "f and g are mono"),
+    // so neither may repeat a node. Occupying one input *and* one output
+    // coordinate is a different thing and stays legal — that is `id₁`, a wire no
+    // generator touches — so the two sweeps are separate.
+    let mut in_anchored = vec![false; node_count];
+    for &x in &input {
+        if x >= node_count {
+            return reject(format!("content parts: input anchors node {x}"));
+        }
+        if in_anchored[x] {
+            return reject(format!(
+                "content parts: monogamy — node {x} occupies two input coordinates, so the input \
+                 anchor is not mono"
+            ));
+        }
+        in_anchored[x] = true;
+    }
+    let mut out_anchored = vec![false; node_count];
+    for &x in &output {
+        if x >= node_count {
+            return reject(format!("content parts: output anchors node {x}"));
+        }
+        if out_anchored[x] {
+            return reject(format!(
+                "content parts: monogamy — node {x} occupies two output coordinates, so the \
+                 output anchor is not mono"
+            ));
+        }
+        out_anchored[x] = true;
+    }
+
+    for x in 0..node_count {
+        if producer[x].is_none() != in_anchored[x] {
+            return reject(format!(
+                "content parts: monogamy — node {x} is producerless={} but input-anchored={}",
+                producer[x].is_none(),
+                in_anchored[x]
+            ));
+        }
+        if consumer[x].is_none() != out_anchored[x] {
+            return reject(format!(
+                "content parts: monogamy — node {x} is consumerless={} but output-anchored={}",
+                consumer[x].is_none(),
+                out_anchored[x]
+            ));
+        }
+    }
+
+    // Kahn over hyperedges: `e → f` when a target of `e` is a source of `f`.
+    let mut waiting: Vec<usize> = edges
+        .iter()
+        .map(|e| e.sources.iter().filter(|&&x| producer[x].is_some()).count())
+        .collect();
+    let mut queue: VecDeque<usize> = (0..edges.len()).filter(|&e| waiting[e] == 0).collect();
+    let mut settled = 0usize;
+    while let Some(e) = queue.pop_front() {
+        settled += 1;
+        for &x in &edges[e].targets {
+            if let Some(f) = consumer[x] {
+                waiting[f] -= 1;
+                if waiting[f] == 0 {
+                    queue.push_back(f);
+                }
+            }
+        }
+    }
+    if settled != edges.len() {
+        return reject(format!(
+            "content parts: acyclicity — {} of {} hyperedges lie on a directed cycle",
+            edges.len() - settled,
+            edges.len()
+        ));
+    }
+
+    Ok(Content {
+        node_count,
+        node_colors,
+        edges,
+        input,
+        output,
+    })
 }
 
 // ---------------------------------------------------------------- incidence
@@ -933,8 +1140,11 @@ pub fn content_eq<G: PropSignature>(a: &Content<G>, b: &Content<G>) -> bool {
 /// A hashable canonical form of a [`Content`], with
 /// `canonical_key(a) == canonical_key(b)` **iff** `content_eq(&a, &b)`.
 ///
-/// Use it to key contents in a `HashMap` / `HashSet` — the intended consumer is
-/// the congruence-closure engine's structural buckets.
+/// Use it to key contents in a `HashMap` / `HashSet`. Two consumers are
+/// intended: the congruence-closure engine's structural buckets, and
+/// [`rewrite::optimize`](super::rewrite::optimize)'s visited-state dedup, which
+/// is what makes a cyclic rule set terminate against the visited set rather
+/// than loop.
 ///
 /// # Not `Ord`
 ///
@@ -1156,6 +1366,144 @@ mod tests {
             Box::new(PropExpr::Identity(2)),
         );
         let _ = content_of(&bad);
+    }
+
+    /// `from_parts` is the one constructor whose parts arrive raw, so every
+    /// clause of the BGKSZ Thm 3.12 image characterization it re-establishes has
+    /// to be exercised from a hand-built violation — module-private access is
+    /// exactly why these live here rather than in `tests/`.
+    #[test]
+    fn from_parts_rejects_every_way_the_image_characterization_can_fail() {
+        fn edge(label: Sfg, sources: Vec<usize>, targets: Vec<usize>) -> ContentEdge<Sfg> {
+            ContentEdge {
+                label,
+                sources,
+                targets,
+            }
+        }
+        fn rejects(
+            needle: &str,
+            node_count: usize,
+            node_colors: Vec<Option<()>>,
+            edges: Vec<ContentEdge<Sfg>>,
+            input: Vec<usize>,
+            output: Vec<usize>,
+        ) {
+            match from_parts(node_count, node_colors, edges, input, output) {
+                Err(CatgraphError::Presentation { message }) => {
+                    assert!(message.contains(needle), "want {needle:?}, got: {message}");
+                }
+                other => panic!("expected a rejection mentioning {needle:?}, got {other:?}"),
+            }
+        }
+
+        // Clause 1 — one color per node, and every index in range.
+        rejects("colors for", 1, vec![], vec![], vec![0], vec![0]);
+        rejects(
+            "sources node 5",
+            1,
+            vec![Some(())],
+            vec![edge(SfgGenerator::Discard, vec![5], vec![])],
+            vec![],
+            vec![],
+        );
+
+        // Clause 2 — tentacle counts against the label's declared words.
+        rejects(
+            "tentacles",
+            2,
+            vec![Some(()); 2],
+            vec![edge(SfgGenerator::Copy, vec![0], vec![1])], // Copy is 1 → 2
+            vec![0],
+            vec![1],
+        );
+        // …and the colors those words declare. `Discard : 1 → 0` types its
+        // source node `Some(())`, so an untyped one is a content `⟦·⟧` never
+        // produces.
+        rejects(
+            "declares",
+            1,
+            vec![None],
+            vec![edge(SfgGenerator::Discard, vec![0], vec![])],
+            vec![0],
+            vec![],
+        );
+
+        // Clause 3 — monogamy, Def 3.6 in full.
+        rejects(
+            "two producers",
+            1,
+            vec![Some(())],
+            vec![
+                edge(SfgGenerator::Zero, vec![], vec![0]),
+                edge(SfgGenerator::Zero, vec![], vec![0]),
+            ],
+            vec![],
+            vec![0],
+        );
+        rejects(
+            "two consumers",
+            1,
+            vec![Some(())],
+            vec![
+                edge(SfgGenerator::Discard, vec![0], vec![]),
+                edge(SfgGenerator::Discard, vec![0], vec![]),
+            ],
+            vec![0],
+            vec![],
+        );
+        // The anchor legs are mono: neither may repeat a node. This is the
+        // shape a repeated boundary coordinate would smuggle in.
+        rejects(
+            "two input coordinates",
+            1,
+            vec![None],
+            vec![],
+            vec![0, 0],
+            vec![0],
+        );
+        rejects(
+            "two output coordinates",
+            1,
+            vec![None],
+            vec![],
+            vec![0],
+            vec![0, 0],
+        );
+        // The boundary biconditional: producerless *iff* input-anchored.
+        rejects(
+            "producerless",
+            1,
+            vec![Some(())],
+            vec![edge(SfgGenerator::Discard, vec![0], vec![])],
+            vec![],
+            vec![],
+        );
+
+        // Clause 4 — acyclicity. `Copy ; Add` wired back on itself: the Kahn
+        // sweep settles neither hyperedge.
+        rejects(
+            "acyclicity",
+            3,
+            vec![Some(()); 3],
+            vec![
+                edge(SfgGenerator::Copy, vec![0], vec![1, 2]),
+                edge(SfgGenerator::Add, vec![1, 2], vec![0]),
+            ],
+            vec![],
+            vec![],
+        );
+
+        // The accepting shape: `id₁`, one node in an input *and* an output
+        // coordinate. Legal — that is precisely a wire no generator touches.
+        let identity = from_parts::<Sfg>(1, vec![Some(())], vec![], vec![0], vec![0])
+            .expect("id₁ is monogamous, acyclic, and mono on each anchor leg");
+        assert!(content_eq(
+            &identity,
+            &content_of_colored(
+                &ColoredExpr::<Sfg>::new(vec![()], PropExpr::Identity(1)).expect("id₁ at •")
+            )
+        ));
     }
 
     #[test]

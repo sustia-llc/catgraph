@@ -39,6 +39,7 @@ pub mod content;
 pub mod display;
 pub mod functorial;
 pub mod kb;
+pub mod rewrite;
 pub mod smc_nf;
 
 use super::{PropExpr, PropSignature};

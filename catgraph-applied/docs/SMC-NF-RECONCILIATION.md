@@ -2212,3 +2212,34 @@ never needs rewriting at all — it is quotiented away by `C` itself.
 > content already decides that exactly — but it could move which *user-equation*
 > classes `smc_refine` closes, and with them the CC collision baselines. Nothing
 > in #187 moved a pin.
+
+> **Status (2026-08-03): (a2) shipped, reframed as an optimizer rather than a
+> decider.** The deferral recorded above is discharged, but not on the terms it
+> was written in. What landed is
+> [#214](https://github.com/sustia-llc/catgraph/issues/214) W2 + W3 (PR
+> [#215](https://github.com/sustia-llc/catgraph/pull/215)):
+> `prop::presentation::rewrite`, a **bounded convex-DPO rewriting engine over
+> content** together with a cost functional on content, sitting *beside* the
+> deciders rather than inside them.
+>
+> The reframing is the point. a2 was priced here as "rewriting modulo user
+> equations", i.e. as a *decision procedure*, and the correction of record above
+> is exactly why no such procedure is claimed: Lafont's termination proof covers
+> the PROP **F** only, the commutative bialgebra case is a conjecture with a
+> documented obstruction, and BGKSZ Thm 6.1 reaches only the non-commutative
+> bimonoid. So the engine claims **per-step soundness and nothing else** —
+> BGKSZ **Thm 5.6**, convex-DPO adequacy for plain SMC: each applied step is a
+> rewriting step modulo SMC structure with the given rules. Its search is
+> bounded by caller-supplied *fuel*, which is the honest bound in the absence of
+> a termination theorem, and it makes **no confluence, normal-form or
+> canonicality claim** — `RewriteOutcome::best` is best-found-under-fuel, and a
+> larger budget may return a cheaper representative.
+>
+> Consequently `Presentation::eq_mod` and `ColoredExpr::eq_colored` remain the
+> deciders, untouched and unconsulted by the engine;
+> [#15](https://github.com/sustia-llc/catgraph/issues/15) stays **(B)
+> functorial-terminal**. This section's argument is unchanged and is what the
+> engine rests on: it rewrites content directly, so it never chooses `ι`, and
+> inherits `nf`'s choice only at readback — which is now `display`'s readback
+> (the 2026-07-30 note), re-checked at every use against the state it came from.
+> No pin moved.

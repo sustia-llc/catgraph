@@ -13,6 +13,88 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **`prop::presentation::rewrite` — a process cost functional and bounded
+  convex-DPO rewriting** ([#214](https://github.com/sustia-llc/catgraph/issues/214)
+  W2 + W3; [#57](https://github.com/sustia-llc/catgraph/issues/57) a2, in its
+  reframed optimizer form). A new module beside `content` / `display`; the
+  engine (`smc_nf`, `kb`, `eq_mod`, `normalize`, `eq_colored`) is untouched, and
+  no pin moved.
+
+  - `cost_of(&Content<G>, per_gen: impl Fn(&G) -> u64) -> u64` sums a
+    caller-supplied per-generator price over the content's hyperedges (default
+    `|_| 1` = generator count). Defined on **content**, so it is a function of
+    the morphism's SMC-iso class (Lemma 4.1, `docs/SMC-NF-RECONCILIATION.md`
+    §4.2) rather than of the writing — which is what §4.6's recorded rejection
+    of the `out_min` comparator asked for ("lower is not the objective; a
+    comparator that is a function of the morphism is"). Deliberately **not**
+    invariant under user equations: that difference is the optimization signal.
+    No paper anchor exists for a cost functional on string diagrams; marked an
+    **extension**.
+  - `RewriteRule::new(lhs: ColoredExpr<G>, rhs: ColoredExpr<G>)` compiles an
+    oriented equation to a content-level span, rejecting — never panicking —
+    non-parallel sides, an ill-formed side, an edge-free left-hand side, and a
+    **non-mono left interface** (a repeated boundary node, where the pushout
+    complement stops being unique).
+  - **The serde trust boundary is re-validated at every entry point.** Each of
+    `RewriteRule::new`, `optimize` and `replay` re-checks its `ColoredExpr`
+    inputs once, on both clauses: arity (including the
+    [#196](https://github.com/sustia-llc/catgraph/issues/196) overflow screen)
+    *and* words — `colored::check` is re-run against the declared source word
+    and the target word it derives must equal the stored one, which is the
+    re-validation `colored`'s documented trust boundary prescribes. An arity
+    screen alone admits a forged document whose `Compose` joins matching widths
+    with mismatched colors, and the colored matcher would then read node colors
+    no `⟦·⟧` ever assigned.
+  - `optimize(start, rules, fuel, per_gen) -> Result<RewriteOutcome<G>,
+    CatgraphError>` searches best-first over states keyed by `canonical_key` —
+    the sanctioned dedup use — applying convex matches (BGKSZ
+    [arXiv:1602.06771] Def 3.10 / 5.4–5.5) and spending at most `fuel` rewrite
+    applications. `RewriteOutcome` reports the best expression, the initial and
+    best cost, a replayable trace, whether fuel was exhausted, and how many
+    states were seen. `replay` re-derives the state a trace describes,
+    re-validating each step as a convex match — relative to `rules` as given,
+    since a trace binds rule *indices*, not rule identities.
+  - **Output validation is two checks, not one.** The best state is read back
+    via `display::expr_of_content`, re-checked through `ColoredExpr::new`, and
+    then compared back against the state it came from with `content_eq`. The
+    second check is what discharges `expr_of_content`'s round-trip property at
+    runtime — that property is corpus-verified, not proven — so a readback that
+    lost the content is an error rather than a silently wrong answer.
+  - **Claims discipline.** Per-step soundness is anchored to BGKSZ **Thm 5.6**
+    (convex-DPO adequacy for plain SMC): each applied step is a rewriting step
+    modulo SMC structure with the given rules. There is **no termination claim**
+    (§4.7's Lafont correction of record stands — his proof covers PROP `F` only,
+    and the commutative case is unproven in the cached anchors; fuel is the
+    honest bound) and **no confluence / normal-form / canonicality claim** —
+    best found under fuel. `eq_mod` and `eq_colored` remain the deciders. The
+    Λ-colored lift of BGKSZ's single-sorted setting is marked an **extension**;
+    the colored conclusion leans on the color-generic lifts of Lemma 3.11 /
+    Thm 3.12 recorded in `docs/SMC-NF-RECONCILIATION.md` §4.2's Lemma 4.1 proof,
+    which realize Thm 5.6's factorization contexts as colored terms, and color
+    matching strictly refines matches, so soundness is inherited. Spiders
+    participate as opaque generators only: the Frobenius unrestricted-DPO substrate
+    (Thm 4.6) and MPZ23's commutative-(co)monoid middle case are out of scope.
+
+  [arXiv:1602.06771]: https://arxiv.org/abs/1602.06771
+
+### Changed
+
+- **Internal:** `prop::presentation::content` gains a `pub(super)`
+  `from_parts` constructor — the DPO step above cannot be phrased as "walk an
+  expression", so its parts arrive raw and the constructor re-establishes the
+  BGKSZ Thm 3.12 image characterization by *checking* it, in four clauses:
+  index/length ranges; tentacle counts against the label's declared words
+  **and the colors those words declare at each tentacle position** (mirroring
+  `content_of`'s typing discipline, so a mis-transported color cannot reach the
+  engine — and so `minimal_block`'s color-consistency assertion is upheld in
+  release builds too); **monogamy** in all three of Def 3.6's clauses — no node
+  with two producers or two consumers, each **anchor leg mono** (no node in two
+  `input` coordinates, none in two `output` coordinates; one of each is legal
+  and is exactly `id₁`), and the boundary biconditional; and **acyclicity**.
+  Not public API; `Content`'s fields and public surface are unchanged.
+
 ## [workspace-v0.6.0] - 2026-08-02
 
 ### Added
