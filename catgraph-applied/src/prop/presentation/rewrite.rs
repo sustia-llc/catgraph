@@ -43,9 +43,11 @@
 //! It is a *restricting* extension: the convexity condition is unchanged and
 //! matching additionally requires node-color equality, so every colored match is
 //! an uncolored match and per-step soundness is inherited rather than re-proved.
-//! The precedent for stating the underlying lemma color-generically is
-//! `docs/SMC-NF-RECONCILIATION.md`, whose Lemma 4.1 is written over an arbitrary
-//! `Λ`.
+//! The colored conclusion leans on the color-generic lifts of Lemma 3.11 /
+//! Thm 3.12 recorded in the Lemma 4.1 proof
+//! (`docs/SMC-NF-RECONCILIATION.md` §4.2), which realize Thm 5.6's
+//! factorization contexts as colored terms; color matching strictly refining
+//! matches supplies the rest.
 //!
 //! # What is deliberately **not** claimed
 //!
@@ -63,15 +65,14 @@
 //!   [`RewriteOutcome::best`] is *best found under fuel*, not a representative of
 //!   anything. Two starting points in the same class may return different
 //!   representatives, and a larger fuel budget may return a cheaper one.
-//! - **No spider transparency.** [`FrobeniusOr`]-style spiders participate as
-//!   **opaque generators**; their SCFM equations may be supplied as ordinary
-//!   rules, which is sound but weaker than treating them as structure. BGKSZ
-//!   **Thm 4.6** — rewriting modulo a chosen special Frobenius structure as
-//!   *unrestricted* DPO over Frobenius termgraphs, where spiders become vertex
-//!   identifications — is a **different substrate** and is explicitly out of
-//!   scope here, as is MPZ23's commutative-(co)monoid middle case.
-//!
-//! [`FrobeniusOr`]: https://docs.rs/catgraph-syntax
+//! - **No spider transparency.** `catgraph-syntax`'s `FrobeniusOr`-style
+//!   spiders participate as **opaque generators**; their SCFM equations may be
+//!   supplied as ordinary rules, which is sound but weaker than treating them as
+//!   structure. BGKSZ **Thm 4.6** — rewriting modulo a chosen special Frobenius
+//!   structure as *unrestricted* DPO over Frobenius termgraphs, where spiders
+//!   become vertex identifications — is a **different substrate** and is
+//!   explicitly out of scope here, as is MPZ23's commutative-(co)monoid middle
+//!   case.
 //!
 //! # Layering
 //!
@@ -86,11 +87,56 @@ use std::collections::{BinaryHeap, HashMap, VecDeque};
 use catgraph::errors::CatgraphError;
 
 use super::super::PropSignature;
-use super::super::colored::ColoredExpr;
+use super::super::colored::{ColoredExpr, check};
 use super::content::{
-    Content, ContentEdge, canonical_key, content_of_colored, from_parts, is_arity_well_formed,
+    Content, ContentEdge, canonical_key, content_eq, content_of_colored, from_parts,
+    is_arity_well_formed,
 };
 use super::display::expr_of_content;
+
+// -------------------------------------------------------- the trust boundary
+
+/// Re-validate a caller-supplied [`ColoredExpr`] from scratch — arity first,
+/// then the *words* — naming it `what` in any rejection.
+///
+/// Every value [`ColoredExpr::new`] builds is word-well-formed by construction,
+/// because that constructor runs [`check`]. Its **serde path does not**:
+/// deserialization reconstructs the three fields directly, and the trust
+/// boundary documented there prescribes exactly this remedy — "when ingesting
+/// untrusted documents, re-validate by rebuilding". So each public entry point
+/// of this module re-derives the target word from the expression and the
+/// declared source word, and requires it to be the one stored.
+///
+/// An arity screen alone would not do. It admits a forged document whose
+/// `Compose` joins matching *widths* with mismatched *colors* — a term no
+/// [`ColoredExpr::new`] can produce — and the whole colored engine then reads
+/// node colors that no `⟦·⟧` ever assigned, including through the
+/// `content::from_parts` rebuild. The arity clause stays in front of the word
+/// clause anyway, because an arity-ill-formed tree is the one that would make
+/// [`content_of_colored`] *panic*, and it earns the sharper message.
+///
+/// Once per input, at entry — never per search state.
+fn revalidate<G: PropSignature>(what: &str, expr: &ColoredExpr<G>) -> Result<(), CatgraphError> {
+    if !is_arity_well_formed(expr.expr()) {
+        return Err(CatgraphError::Presentation {
+            message: format!("{what} is not arity-well-formed (#196 screen included)"),
+        });
+    }
+    let derived =
+        check(expr.expr(), expr.source_word()).map_err(|error| CatgraphError::Presentation {
+            message: format!("{what} is not word-well-formed: {error}"),
+        })?;
+    if derived != expr.target_word() {
+        return Err(CatgraphError::Presentation {
+            message: format!(
+                "{what} declares a target word its expression does not produce: stored \
+                 {:?}, derived {derived:?}",
+                expr.target_word()
+            ),
+        });
+    }
+    Ok(())
+}
 
 // ---------------------------------------------------------------- W2: cost
 
@@ -180,14 +226,17 @@ impl<G: PropSignature> RewriteRule<G> {
     /// 1. **Parallel.** Equal source words and equal target words. A step
     ///    replaces one side by the other in place, so the interfaces have to
     ///    agree letter for letter, not merely in width.
-    /// 2. **Arity-well-formed** on both sides
-    ///    ([`is_arity_well_formed`], which subsumes the
+    /// 2. **Well-formed on both sides, re-derived rather than trusted.** Arity
+    ///    first ([`is_arity_well_formed`], which subsumes the
     ///    [#196](https://github.com/sustia-llc/catgraph/issues/196) overflow
-    ///    screen). Unreachable through
-    ///    [`ColoredExpr::new`](crate::prop::colored::ColoredExpr::new), reachable
-    ///    across its serde trust boundary — and outside that domain
-    ///    [`content_of_colored`] would panic
-    ///    rather than answer.
+    ///    screen), then the words: [`check`] is re-run against the declared
+    ///    source word and the target word it derives must equal the stored one
+    ///    (the private `revalidate`). Both clauses are unreachable through
+    ///    [`ColoredExpr::new`](crate::prop::colored::ColoredExpr::new) and both
+    ///    are reachable across its serde trust boundary. Outside the arity
+    ///    domain [`content_of_colored`] would panic rather than answer; inside
+    ///    it, an un-rechecked *word* would let a rule whose two sides are not
+    ///    the colored morphisms they claim to be match on label equality alone.
     /// 3. **A non-empty left-hand side.** An edge-free `lhs` matches everywhere
     ///    and would make the search meaningless.
     /// 4. **A mono left interface.** No node may occur twice in
@@ -220,11 +269,7 @@ impl<G: PropSignature> RewriteRule<G> {
             ));
         }
         for (side, expr) in [("lhs", &lhs), ("rhs", &rhs)] {
-            if !is_arity_well_formed(expr.expr()) {
-                return Err(reject(format!(
-                    "rewrite rule: the {side} is not arity-well-formed (#196 screen included)"
-                )));
-            }
+            revalidate(&format!("rewrite rule: the {side}"), expr)?;
         }
 
         let lhs = content_of_colored(&lhs);
@@ -450,6 +495,14 @@ impl<'a, G: PropSignature> Matcher<'a, G> {
         }
         // A deleted node must be interior to the *target* as well: an anchored
         // one is boundary data no step may consume.
+        //
+        // Provably unreachable, and kept as defense. An interior lhs node is
+        // neither input- nor output-anchored there, so by the lhs's own
+        // boundary biconditional it has a producer *and* a consumer inside the
+        // lhs; both are matched, so its image has a producer and a consumer
+        // among the matched target hyperedges, and the target's biconditional
+        // then says it is anchored on neither foot. One sweep, against a
+        // failure mode — a deleted boundary node — that is worth not having.
         for (v, &w) in nodes.iter().enumerate() {
             if self.interior[v] && self.anchored[w] {
                 return None;
@@ -530,20 +583,43 @@ fn union(parent: &mut [usize], a: usize, b: usize) {
 /// span, then glue `rule.rhs` in along the interface (BGKSZ Def 5.5).
 ///
 /// The result is rebuilt through the validating `content::from_parts`, which
-/// re-checks monogamy and acyclicity — so a step that would leave the image
-/// characterization of Thm 3.12 surfaces as an error here rather than as a
-/// corrupt content downstream. That check is *unreachable* on a convex match:
-/// convexity forbids a context path from the match's outputs back to its
-/// inputs, which is the only way gluing the replacement in could close a cycle,
-/// and the interface conditions keep every degree at most one. It runs anyway,
-/// in both build profiles, because a corrupt content is not something to
-/// discover later.
+/// re-checks the whole image characterization of Thm 3.12 — so a step that
+/// would leave it surfaces as an error here rather than as a corrupt content
+/// downstream. The rebuild runs in both build profiles, because a corrupt
+/// content is not something to discover later.
+///
+/// # Why the rebuild cannot fail on a convex match
+///
+/// **Acyclicity.** Suppose the rebuilt content had a directed cycle. The cycle
+/// alternates between hyperedges that came from the rhs and hyperedges of the
+/// surviving context, so take any maximal *context* segment of it. That segment
+/// starts at a class containing the image of an lhs **output** node — its
+/// producer inside the target was matched, since the mono interface forces
+/// every lhs output node to have an lhs producer, so what the segment leaves by
+/// is a context consumer — and it ends, dually, at a class containing the image
+/// of an lhs **input** node, whose consumer was matched. That is a directed
+/// context path leaving the image at one matched hyperedge and re-entering at
+/// another: exactly the BGKSZ Def 3.10 convexity violation `is_convex` rejects,
+/// so no such match reaches this function.
+///
+/// **Monogamy.** A glued class holds at most three nodes — one rhs node, one
+/// lhs-input image, one lhs-output image — because the rhs anchors are mono,
+/// the lhs interface is mono ([`RewriteRule::new`] clause 4) and the match is
+/// injective, so two nodes of the same kind could only be glued through a
+/// coordinate collision that mono-ness rules out. Of those three, the rhs node
+/// is anchored on both rhs feet (that is how it got glued twice) and so has
+/// neither producer nor consumer inside the rhs; the lhs-input image has no
+/// surviving consumer, its lhs consumer having been deleted; the lhs-output
+/// image has no surviving producer. So the class's producer is the lhs-input
+/// image's — a context hyperedge, or none, in which case the class is
+/// input-anchored — and its consumer is the lhs-output image's. One each, which
+/// is the condition. Every node outside a glued class keeps the degrees it had.
 ///
 /// # Errors
 ///
-/// [`CatgraphError::Presentation`] from the rebuild. [`optimize`] treats it as
-/// "this match is not applicable" and moves on; [`replay`] propagates it, since
-/// there the step came from a caller-supplied trace.
+/// [`CatgraphError::Presentation`] from the rebuild. [`replay`] propagates it,
+/// since there the step came from a caller-supplied trace. [`optimize`]'s
+/// handling is **profile-dependent** — see its `# Errors`.
 fn apply_match<G: PropSignature>(
     target: &Content<G>,
     rule: &RewriteRule<G>,
@@ -682,9 +758,10 @@ pub struct RewriteOutcome<G: PropSignature> {
 }
 
 impl<G: PropSignature> RewriteOutcome<G> {
-    /// The cheapest representative found — read back from its content and
+    /// The cheapest representative found — read back from its content, then
     /// re-checked through
-    /// [`ColoredExpr::new`](crate::prop::colored::ColoredExpr::new).
+    /// [`ColoredExpr::new`](crate::prop::colored::ColoredExpr::new) *and*
+    /// against that state's own content (see the private `readback`).
     ///
     /// Best **found under fuel**: not a normal form, not canonical, and not
     /// stable under a change of budget.
@@ -762,31 +839,33 @@ struct SearchState<G: PropSignature> {
 /// from a [`Presentation`](super::Presentation)'s equations, this composes to
 /// "`start` and [`RewriteOutcome::best`] are equal modulo that presentation" —
 /// which [`Presentation::eq_mod`](super::Presentation::eq_mod), the decider,
-/// confirms independently.
+/// can confirm independently (soundly, in the `Some(true)` direction —
+/// [#15](https://github.com/sustia-llc/catgraph/issues/15)).
 ///
 /// # Errors
 ///
-/// - [`CatgraphError::Presentation`] if `start` is not arity-well-formed —
-///   reachable only across [`ColoredExpr`]'s serde trust boundary, and screened
-///   here because
-///   [`content_of_colored`] would panic
-///   instead of answering.
+/// - [`CatgraphError::Presentation`] if `start` is not well-formed — arity or
+///   words, the private `revalidate` — reachable only across [`ColoredExpr`]'s
+///   serde trust boundary, and screened here because [`content_of_colored`]
+///   would panic instead of answering, and because an unchecked word would put
+///   node colors no `⟦·⟧` assigned in front of the colored matcher.
 /// - [`CatgraphError::Presentation`] if the readback of the best state does not
-///   re-check as a colored morphism — an engine-invariant failure rather than a
-///   user error. A step whose rebuild fails is *rejected* instead: the match is
-///   skipped and the search continues (see `apply_match` on why that is
-///   unreachable on a convex match).
+///   re-check as a colored morphism, or does not carry that state's content —
+///   an engine-invariant failure rather than a user error.
+///
+/// A step whose rebuild fails is not an error of this function, and what
+/// becomes of it **depends on the build profile**: with `debug_assertions` on
+/// — the test profile, deliberately — the failure trips an assertion and the
+/// search dies loudly; with them off the match is *skipped* and the search
+/// continues with the states it already has. Both are unreachable on a convex
+/// match, for the reasons `apply_match` argues.
 pub fn optimize<G: PropSignature>(
     start: &ColoredExpr<G>,
     rules: &[RewriteRule<G>],
     fuel: usize,
     per_gen: impl Fn(&G) -> u64,
 ) -> Result<RewriteOutcome<G>, CatgraphError> {
-    if !is_arity_well_formed(start.expr()) {
-        return Err(CatgraphError::Presentation {
-            message: "rewrite search: the starting morphism is not arity-well-formed".to_string(),
-        });
-    }
+    revalidate("rewrite search: the starting morphism", start)?;
 
     let root = content_of_colored(start);
     let initial_cost = cost_of(&root, &per_gen);
@@ -875,23 +954,23 @@ pub fn optimize<G: PropSignature>(
 ///
 /// This is what makes [`RewriteOutcome::steps`] a witness. Each step is
 /// re-validated as a convex match before it is applied, so a trace that does not
-/// describe a legal derivation is rejected rather than trusted.
+/// describe a legal derivation is rejected rather than trusted. The validation
+/// is relative to `rules` **as given** — the trace binds rule *indices*, not
+/// rule identities; a different rules slice may replay to a different, still
+/// legal endpoint.
 ///
 /// # Errors
 ///
-/// [`CatgraphError::Presentation`] if `start` is not arity-well-formed, if a
-/// step names a rule outside `rules`, if its recorded hyperedges do not form a
-/// convex match of that rule, or if the readback does not re-check.
+/// [`CatgraphError::Presentation`] if `start` is not well-formed (arity or
+/// words — the private `revalidate`), if a step names a rule outside `rules`,
+/// if its recorded hyperedges do not form a convex match of that rule, or if
+/// the readback does not re-check.
 pub fn replay<G: PropSignature>(
     start: &ColoredExpr<G>,
     rules: &[RewriteRule<G>],
     steps: &[RewriteStep],
 ) -> Result<ColoredExpr<G>, CatgraphError> {
-    if !is_arity_well_formed(start.expr()) {
-        return Err(CatgraphError::Presentation {
-            message: "rewrite replay: the starting morphism is not arity-well-formed".to_string(),
-        });
-    }
+    revalidate("rewrite replay: the starting morphism", start)?;
     let mut content = content_of_colored(start);
     for (position, step) in steps.iter().enumerate() {
         let rule = rules
@@ -944,15 +1023,41 @@ fn match_at<G: PropSignature>(
     matcher.finish()
 }
 
-/// Read a content back out as a colored morphism.
+/// Read a content back out as a colored morphism, and check that it is one.
 ///
-/// [`expr_of_content`] is total on everything the content constructors produce,
-/// and the [`ColoredExpr::new`] re-check in front of the result **is** the
-/// engine's output validation: a readback that did not realize the boundary
-/// words would be rejected here rather than returned.
+/// # The output validation
+///
+/// Two checks, and together they are the engine's output validation:
+///
+/// 1. [`ColoredExpr::new`] re-runs [`check`], so a readback that did not
+///    realize the boundary words is rejected rather than returned;
+/// 2. the content of that colored morphism is compared against the state the
+///    readback came from, with [`content_eq`] — cospan iso under both feet, the
+///    only sense available, since node indices are presentation-dependent.
+///
+/// (2) is what discharges a dependency at runtime. [`expr_of_content`] is total
+/// on everything the content constructors produce, but its round-trip property
+/// — `content_eq(content_of(expr_of_content(c)), c)` — is **corpus-verified,
+/// not proven** (see [`expr_of_content`]'s own docs: 200 000 contents per mode
+/// in `tests/canonical_display_corpus.rs`). Without (2) the engine would be
+/// resting a per-step soundness claim on an unproven premise; with it, a
+/// readback that lost the content is an error at the call site instead.
+///
+/// # Errors
+///
+/// [`CatgraphError::Presentation`] if either check fails. Both are
+/// engine-invariant failures, not user errors.
 fn readback<G: PropSignature>(
     source_word: &[G::Color],
     content: &Content<G>,
 ) -> Result<ColoredExpr<G>, CatgraphError> {
-    ColoredExpr::new(source_word.to_vec(), expr_of_content(content))
+    let read = ColoredExpr::new(source_word.to_vec(), expr_of_content(content))?;
+    if !content_eq(&content_of_colored(&read), content) {
+        return Err(CatgraphError::Presentation {
+            message: "rewrite readback: the expression read off the best state does not carry \
+                      that state's content"
+                .to_string(),
+        });
+    }
+    Ok(read)
 }

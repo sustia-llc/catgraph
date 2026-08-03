@@ -9,6 +9,10 @@
 //! - **rules are validated once, at construction** — non-parallel sides, an
 //!   edge-free left-hand side, and a non-mono left interface are rejected there
 //!   rather than at a match site;
+//! - **the serde trust boundary is re-validated at every entry point**, on both
+//!   arity (including the #196 overflow class) and *words*, since a
+//!   `ColoredExpr` that skipped `colored::check` can be ill-typed with
+//!   perfectly good arities;
 //! - **matching is convex and injective** (BGKSZ Def 3.10 / 5.4) — the negative
 //!   cases are the two a naive subgraph matcher would take: a path that leaves
 //!   the image and returns, and an interface node used twice;
@@ -21,6 +25,8 @@ use std::borrow::Cow;
 use catgraph::errors::CatgraphError;
 use catgraph_applied::prop::colored::ColoredExpr;
 use catgraph_applied::prop::presentation::Presentation;
+#[cfg(feature = "serde")]
+use catgraph_applied::prop::presentation::content::is_arity_well_formed;
 use catgraph_applied::prop::presentation::content::{
     canonical_key, content_eq, content_of, content_of_colored,
 };
@@ -85,6 +91,7 @@ fn wired(width: usize, expr: PropExpr<Tool>) -> ColoredExpr<Tool> {
 // ---- A role-typed workflow (Λ = {Author, Reviewer}) --------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum Role {
     Author,
     Reviewer,
@@ -96,6 +103,7 @@ const REVIEWER: &[Role] = &[Role::Reviewer];
 /// `Write : [Author] → [Reviewer]`, `Check : [Reviewer] → [Reviewer]`,
 /// `Fast : [Author] → [Reviewer]`, `Assign : [Author] → [Author]`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 enum Task {
     Write,
     Check,
@@ -270,6 +278,53 @@ fn rule_construction_screens_the_serde_trust_boundary() {
     }
 }
 
+/// The **word** screen is the other half of that boundary, and the half an
+/// arity screen cannot see: `Write ; Assign` joins `[Author] → [Reviewer]` to
+/// `[Author] → [Author]`, so the wire *counts* line up and the colors do not.
+/// A document may also simply lie about its target word. Every public entry
+/// point re-runs `colored::check` against the declared source word and requires
+/// the target word it derives to be the one stored — without which the colored
+/// matcher would read node colors no `⟦·⟧` ever assigned.
+#[cfg(feature = "serde")]
+#[test]
+fn every_entry_point_screens_a_color_forged_document() {
+    // Colors disagree across a `Compose` whose arities agree.
+    let ill_typed: ColoredExpr<Task> = serde_json::from_str(
+        r#"{"source_word":["Author"],"target_word":["Author"],
+            "expr":{"Compose":[{"Generator":"Write"},{"Generator":"Assign"}]}}"#,
+    )
+    .expect("the serde path does not re-run `check`");
+    // Well-typed expression, forged target word.
+    let mislabelled: ColoredExpr<Task> = serde_json::from_str(
+        r#"{"source_word":["Author"],"target_word":["Author"],
+            "expr":{"Generator":"Write"}}"#,
+    )
+    .expect("the serde path does not re-run `check`");
+
+    // Both pass the arity screen, so only the word screen can catch them.
+    assert!(is_arity_well_formed(ill_typed.expr()));
+    assert!(is_arity_well_formed(mislabelled.expr()));
+
+    let screened = |where_: &str, result: Result<(), CatgraphError>| match result {
+        Err(CatgraphError::Presentation { message }) => {
+            assert!(
+                message.contains("word-well-formed") || message.contains("target word"),
+                "{where_}: got {message}"
+            );
+        }
+        other => panic!("{where_}: expected the word screen, got {other:?}"),
+    };
+
+    for forged in [ill_typed, mislabelled] {
+        screened(
+            "RewriteRule::new",
+            RewriteRule::new(forged.clone(), forged.clone()).map(|_| ()),
+        );
+        screened("optimize", optimize(&forged, &[], 8, |_| 1).map(|_| ()));
+        screened("replay", replay(&forged, &[], &[]).map(|_| ()));
+    }
+}
+
 // ---- W3: matching ------------------------------------------------------------
 
 #[test]
@@ -403,9 +458,11 @@ fn the_readback_re_checks_and_preserves_the_rewritten_content() {
     let outcome = optimize(&start, &rules, 64, |_| 1).expect("well-formed start");
     assert_eq!(outcome.best_cost(), 2);
 
-    // The readback re-checks as a colored morphism — that re-check *is* the
-    // engine's output validation — and it is the content the step produced,
-    // up to cospan iso under both feet.
+    // The readback re-checks as a colored morphism *and* against the state's
+    // own content — the two together are the engine's output validation, the
+    // second of them discharging `expr_of_content`'s corpus-verified round
+    // trip at runtime. So the result is the content the step produced, up to
+    // cospan iso under both feet.
     let expected = wired(
         1,
         Free::compose(tool(Tool::D), tool(Tool::C)).expect("1 → 1"),
