@@ -529,7 +529,7 @@ pub fn content_of_colored<G: PropSignature>(expr: &ColoredExpr<G>) -> Content<G>
 ///    [`content_of`]'s typing discipline, which reads a node's color off the
 ///    tentacle incident to it. A node no tentacle touches is unconstrained
 ///    here: its color is boundary data, not a derived quantity.
-/// 3. **Monogamy** (BGKSZ Def 3.6), all three of its clauses: no node has two
+/// 3. **Monogamy** (BGKSZ Def 3.6), in full: no node has two
 ///    producers or two consumers; the **anchor legs are mono** — no node
 ///    occupies two `input` coordinates, and none two `output` coordinates
 ///    (occupying one of each is legal and is exactly `id₁`); and — the boundary
@@ -1429,7 +1429,7 @@ mod tests {
             vec![],
         );
 
-        // Clause 3 — monogamy, all three of its clauses.
+        // Clause 3 — monogamy, Def 3.6 in full.
         rejects(
             "two producers",
             1,
