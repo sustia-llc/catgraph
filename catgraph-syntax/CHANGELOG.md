@@ -7,6 +7,8 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+## [workspace-v0.8.0] - 2026-08-03
+
 ### Added
 
 - **`examples/workflow_dedup.rs` — the first colored example**
@@ -347,7 +349,8 @@ presentation surface for hypergraph-category morphisms over
   combinators preserve it) and tested per combinator. Hughes 2000 cited as
   lineage.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.8.0...HEAD
+[workspace-v0.8.0]: https://github.com/sustia-llc/catgraph/compare/v0.7.0...v0.8.0
 [workspace-v0.6.0]: https://github.com/sustia-llc/catgraph/compare/v0.5.0...v0.6.0
 [workspace-v0.5.0]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...v0.5.0
 [workspace-v0.4.0]: https://github.com/sustia-llc/catgraph/compare/v0.3.0...v0.4.0
