@@ -7,6 +7,33 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Added
+
+- **`examples/workflow_dedup.rs` — the first colored example**
+  ([#214](https://github.com/sustia-llc/catgraph/issues/214) W1). All three
+  shipped examples were monochromatic by choice, so the Λ-colored surface #79
+  completed had no runnable consumer story. This one is a role-typed workflow
+  over `Λ = {Author, Reviewer, Editor}`: a fieldless `enum Role` satisfying the
+  full bound stack (`Clone + Copy + Debug + Eq + Hash + Ord + ColorSyntax`),
+  typed steps including the two-input `merge : R E -> E` shape, assembly through
+  `Free::compose` / `Free::tensor` with colors pinned by `ColoredExpr::new`,
+  per-role `FrobeniusOr` spider wiring (`δ_R` fans out, `μ_E` merges),
+  a presentation-file round trip carrying `TOKEN : COLOR* -> COLOR*`
+  declarations and `mu@R` spider tokens, `hypergraph_presentation` seeding nine
+  SCFM equations per role, a `canonical_key` dedup table that collapses two
+  writings of the same process, `eq_colored` verdicts agreeing with it, and the
+  applied `rewrite` surface (`cost_of` + `optimize`) reporting initial versus
+  best cost with its trace.
+
+  `examples/README.md` gains the row, corrects the "the examples here stay
+  single-colour" note to name the three that do, and states the seams the
+  example carries: the `RoleId(usize) ↔ Color` mapping is caller-side and there
+  is **no diagram→magnitude seam** by design; dedup tables compare like with
+  like (one content entry point); `ContentKey` is deliberately not `Ord`, so
+  buckets are unordered; serde does not re-run `check`; `eq_mod` is not
+  transitive ([#189](https://github.com/sustia-llc/catgraph/issues/189)), so
+  class use needs connected components; and the optimizer is not a decider.
+
 ## [workspace-v0.6.0] - 2026-08-02
 
 ### Fixed
