@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.7.0] - 2026-08-02
+
 ### Added
 
 - **`coalition_typed` — typed-magnitude valuation surface (EQ4)**
@@ -1449,7 +1451,8 @@ Both BV 2025 verifications pass at v0.1.0:
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.7.0...HEAD
+[workspace-v0.7.0]: https://github.com/sustia-llc/catgraph/compare/v0.6.0...v0.7.0
 [workspace-v0.6.0]: https://github.com/sustia-llc/catgraph/compare/v0.5.0...v0.6.0
 [workspace-v0.5.0]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...v0.5.0
 [workspace-v0.4.0]: https://github.com/sustia-llc/catgraph/compare/v0.2.0...v0.4.0
