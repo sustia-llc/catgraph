@@ -6,6 +6,37 @@
 use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 use catgraph_applied::rig::{F64Rig, Tropical};
 use catgraph_magnitude::magnitude::{coweighting, magnitude, mobius_function, weighting};
+use catgraph_testutil::assert_approx_rel;
+
+/// Relative agreement demanded of the Leinster (co)weighting identities (#169).
+///
+/// These are identities between two arithmetic routes to the same real number
+/// (a weighting sum versus a magnitude, a weighting entry versus a Möbius row
+/// sum), so the meaningful bound is on significant digits rather than absolute
+/// units, and it stays meaningful if a fixture's magnitude grows.
+///
+/// Relative to the pre-#169 absolute `1e-9`, this bound is **not uniform** —
+/// which is the point, and is worth stating exactly rather than glossing:
+///
+/// - Sum identities on `build_uniform_space(4, 2.0)` compare against the
+///   magnitude `2.8449`, so the bound is `2.84e-9` — **2.84× looser** than
+///   before. Measured residuals there are `0.0` and `4.44e-16`, i.e. six-plus
+///   orders of headroom, so the loosening is nominal.
+/// - Entry-wise identities compare sub-unit values (`w_j = 0.7112`), so the
+///   bound is `7.11e-10` — slightly **tighter** than before.
+const WEIGHTING_REL_TOL: f64 = 1e-9;
+
+/// Absolute floor for the same identities — a weighting entry may legitimately
+/// sit at zero, where a relative bound would demand bit-exact equality.
+const WEIGHTING_ABS_TOL: f64 = 1e-12;
+
+/// Bound for values that are **exactly** `1.0` by construction (the one-point
+/// space's weighting).
+///
+/// Pure-absolute (`rel = 0.0`): the measured residual is bit-exactly `0.0`, so
+/// the `1e-12` the pre-#169 assertion used is earned. A relative bound against
+/// a value of `1.0` would have silently widened it to `1e-9`.
+const EXACT_ABS_TOL: f64 = 1e-12;
 
 /// Build a 4-state symmetric Lawvere metric space with all-equal pairwise
 /// distance `d`. ζ entries are `e^(-d)`. Diagonal is set to 0 by convention
@@ -35,16 +66,19 @@ fn weighting_sum_equals_coweighting_sum_equals_magnitude() {
     let sum_w: f64 = w.iter().map(|q| q.0).sum();
     let sum_v: f64 = v.iter().map(|q| q.0).sum();
 
-    assert!(
-        (sum_w - sum_v).abs() < 1e-9,
-        "Σw = {sum_w}, Σv = {sum_v}, residual = {:.2e}",
-        (sum_w - sum_v).abs()
+    assert_approx_rel!(
+        sum_w,
+        sum_v,
+        WEIGHTING_REL_TOL,
+        WEIGHTING_ABS_TOL,
+        "Lemma 1.1.2: Σw vs Σv"
     );
-    assert!(
-        (sum_w - mag.0).abs() < 1e-9,
-        "Σw = {sum_w}, magnitude = {}, residual = {:.2e}",
+    assert_approx_rel!(
+        sum_w,
         mag.0,
-        (sum_w - mag.0).abs()
+        WEIGHTING_REL_TOL,
+        WEIGHTING_ABS_TOL,
+        "Lemma 1.1.2: Σw vs magnitude"
     );
 }
 
@@ -59,12 +93,12 @@ fn weighting_equals_mobius_row_sum_when_invertible() {
     for (j, w_j) in w.iter().enumerate() {
         // w(j) should equal Σᵢ μ(j, i).
         let mu_row_sum: f64 = (0..n).map(|i| mu.entries()[j][i].0).sum();
-        assert!(
-            (w_j.0 - mu_row_sum).abs() < 1e-9,
-            "w[{j}] = {}, μ row-sum[{j}] = {}, residual = {:.2e}",
+        assert_approx_rel!(
             w_j.0,
             mu_row_sum,
-            (w_j.0 - mu_row_sum).abs()
+            WEIGHTING_REL_TOL,
+            WEIGHTING_ABS_TOL,
+            "Lemma 1.1.4: w[{j}] vs μ row-sum[{j}]"
         );
     }
 }
@@ -77,11 +111,12 @@ fn symmetric_space_weighting_equals_coweighting() {
     let v = coweighting::<F64Rig>(&space).expect("coweighting succeeds");
 
     for i in 0..w.len() {
-        assert!(
-            (w[i].0 - v[i].0).abs() < 1e-9,
-            "symmetric ζ: w[{i}] = {} != v[{i}] = {}",
+        assert_approx_rel!(
             w[i].0,
-            v[i].0
+            v[i].0,
+            WEIGHTING_REL_TOL,
+            WEIGHTING_ABS_TOL,
+            "symmetric ζ: w[{i}] vs v[{i}]"
         );
     }
 }
@@ -120,5 +155,5 @@ fn one_point_space_weighting_is_one() {
     space.set_distance(0, 0, Tropical(0.0));
     let w = weighting::<F64Rig>(&space).expect("singleton ok");
     assert_eq!(w.len(), 1);
-    assert!((w[0].0 - 1.0).abs() < 1e-12);
+    assert_approx_rel!(w[0].0, 1.0, 0.0, EXACT_ABS_TOL);
 }

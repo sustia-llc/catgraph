@@ -11,7 +11,57 @@ use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 use catgraph_applied::rig::{F64Rig, Tropical};
 use catgraph_magnitude::magnitude::{is_scattered, mobius_function};
 use catgraph_magnitude::mobius_chains::mobius_function_via_chains;
+use catgraph_testutil::{approx_rel, assert_approx_rel};
 use proptest::prelude::*;
+
+/// Relative agreement demanded of the two Möbius routes in the **converged**
+/// regime (#169).
+///
+/// Both paths compute the same real matrix by different arithmetic — Gaussian
+/// elimination versus a truncated chain sum — so the meaningful question is how
+/// many significant digits survive, not how many absolute units. An absolute
+/// epsilon conflates the two. At the sites this constant governs, μ entries run
+/// from **0.0120** (the proptest corner `n = 5, slack = 3.0`) to **1.1565** (the
+/// 2-point diagonal), so the previous absolute `1e-9` ranged from ~83× *looser*
+/// than this bound at the small end to ~16% *tighter* at the large end — which
+/// is exactly the magnitude-dependence that made it unreadable.
+///
+/// Headroom is ample: sweeping the whole proptest domain (`n ∈ 2..=5`, `slack`
+/// across `[0.5, 3.0]`) the worst relative disagreement measured is **9.99e-14**,
+/// four orders under this bound.
+const MOBIUS_REL_TOL: f64 = 1e-9;
+
+/// Relative agreement at the **scatteredness boundary** (`slack = 0.1`).
+///
+/// The chain-sum path is a truncated DFS whose convergence rate is governed by
+/// `r = (n − 1)·e^(−d)`; the boundary fixture deliberately sits at `d` just
+/// above `log(n − 1)`, so `r → 1⁻` and the truncation tail is far heavier than
+/// in the well-separated fixtures. Measured residual on the shipped 4-state
+/// boundary fixture is **1.08e-9 relative** (`2.448e-10` on an entry of
+/// `0.2267`), so [`MOBIUS_REL_TOL`] does not apply there — this is a property of
+/// the method at `r ≈ 1`, not rounding noise, and it was invisible under the old
+/// absolute epsilon. One order of headroom above the measurement.
+///
+/// Applied per-entry, this also relaxes the **diagonal** entries of the same
+/// fixture (`μ_ii = 1.2051`, so a bound of `1.205e-8` against a measured
+/// relative residual of only `2.03e-10`) — they would have passed at
+/// [`MOBIUS_REL_TOL`]. Recorded rather than split into a third constant: the
+/// off-diagonals are what the fixture exists to exercise, and a per-entry
+/// tolerance switch would obscure that.
+const MOBIUS_BOUNDARY_REL_TOL: f64 = 1e-8;
+
+/// Bound for entries that are **exactly** `1.0` by construction (the singleton
+/// space's `μ[0][0]`).
+///
+/// Pure-absolute (`rel = 0.0`): there is no accumulated error to scale here —
+/// the measured residual is bit-exactly `0.0` — so the `1e-12` the pre-#169
+/// assertion used is earned and must not be silently widened to `1e-9` by a
+/// relative bound against a value of `1.0`.
+const EXACT_ABS_TOL: f64 = 1e-12;
+
+/// Absolute floor for the same comparisons: entries that are structurally zero
+/// have no scale for a relative bound to multiply.
+const MOBIUS_ABS_TOL: f64 = 1e-12;
 
 /// Hand-built 4-state scattered space at the boundary `d > log(3)`.
 fn scattered_uniform_space(n: usize, slack: f64) -> LawvereMetricSpace<usize> {
@@ -42,10 +92,12 @@ fn chain_sum_equals_matrix_inversion_on_4_state_scattered() {
         for j in 0..4 {
             let inv_val = mu_inv.entries()[i][j].0;
             let chains_val = mu_chains.entries()[i][j].0;
-            assert!(
-                (inv_val - chains_val).abs() < 1e-9,
-                "μ[{i}][{j}]: inversion={inv_val:.12}, chains={chains_val:.12}, residual={:.2e}",
-                (inv_val - chains_val).abs()
+            assert_approx_rel!(
+                inv_val,
+                chains_val,
+                MOBIUS_BOUNDARY_REL_TOL,
+                MOBIUS_ABS_TOL,
+                "μ[{i}][{j}]: inversion vs chains"
             );
         }
     }
@@ -114,7 +166,7 @@ fn chain_sum_one_point_space() {
     space.set_distance(0, 0, Tropical(0.0));
     let mu = mobius_function_via_chains::<F64Rig>(&space).expect("singleton ok");
     assert_eq!(mu.rows(), 1);
-    assert!((mu.entries()[0][0].0 - 1.0).abs() < 1e-12);
+    assert_approx_rel!(mu.entries()[0][0].0, 1.0, 0.0, EXACT_ABS_TOL);
 }
 
 #[test]
@@ -130,9 +182,12 @@ fn chain_sum_two_point_space_matches_inversion() {
         for j in 0..2 {
             let inv_val = mu_inv.entries()[i][j].0;
             let chains_val = mu_chains.entries()[i][j].0;
-            assert!(
-                (inv_val - chains_val).abs() < 1e-9,
-                "μ[{i}][{j}]: inv={inv_val}, chains={chains_val}"
+            assert_approx_rel!(
+                inv_val,
+                chains_val,
+                MOBIUS_REL_TOL,
+                MOBIUS_ABS_TOL,
+                "μ[{i}][{j}]: inv vs chains"
             );
         }
     }
@@ -160,8 +215,10 @@ proptest! {
                 let inv_val = mu_inv.entries()[i][j].0;
                 let chains_val = mu_chains.entries()[i][j].0;
                 prop_assert!(
-                    (inv_val - chains_val).abs() < 1e-9,
-                    "n={n} slack={slack} μ[{i}][{j}]: inv={inv_val}, chains={chains_val}"
+                    approx_rel(inv_val, chains_val, MOBIUS_REL_TOL, MOBIUS_ABS_TOL),
+                    "n={n} slack={slack} μ[{i}][{j}]: inv={inv_val}, chains={chains_val}, \
+                     residual={:.3e}",
+                    (inv_val - chains_val).abs()
                 );
             }
         }

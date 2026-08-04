@@ -11,3 +11,8 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+# Dev-only crate, so a proptest dependency here costs nothing: every workspace
+# member that dev-deps `catgraph-testutil` already dev-deps `proptest`, and this
+# crate never appears in a published crate's `[dependencies]` (#33). Needed for
+# the shared float strategies in `strategy` (#169).
+proptest.workspace = true
