@@ -6,6 +6,8 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+## [workspace-v0.9.0] - 2026-08-04
+
 ### Changed
 
 - **`MorphismSystem`'s topological sort is now the crate's own, and the

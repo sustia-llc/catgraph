@@ -225,7 +225,7 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "catgraph"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "criterion",
  "either",
@@ -242,7 +242,7 @@ dependencies = [
 
 [[package]]
 name = "catgraph-applied"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "catgraph",
  "catgraph-testutil",
@@ -265,7 +265,7 @@ dependencies = [
 
 [[package]]
 name = "catgraph-dl"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "catgraph",
  "catgraph-applied",
@@ -277,7 +277,7 @@ dependencies = [
 
 [[package]]
 name = "catgraph-magnitude"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "catgraph",
  "catgraph-applied",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "catgraph-physics"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "catgraph",
  "catgraph-testutil",
@@ -305,7 +305,7 @@ dependencies = [
 
 [[package]]
 name = "catgraph-syntax"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "catgraph",
  "catgraph-applied",
@@ -318,7 +318,7 @@ dependencies = [
 
 [[package]]
 name = "catgraph-testutil"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "proptest",
 ]
