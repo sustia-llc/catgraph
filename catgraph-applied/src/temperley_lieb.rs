@@ -258,11 +258,9 @@ impl Mul for ExtendedPerfectMatching {
 
     fn mul(self, rhs: Self) -> Self::Output {
         // Diagram composition resolves the glued endpoint matching + closed-loop
-        // (δ-power) count via an `ultragraph` connected-components pass; see
-        // [`connectivity::resolve`]. The graph is well-formed by construction, so
-        // the `ultragraph` operations cannot fail.
+        // (δ-power) count via a union-find connected-components pass; see
+        // [`connectivity::resolve`], which is total.
         connectivity::resolve(&self, &rhs)
-            .expect("invariant: ultragraph composition on a well-formed Brauer diagram cannot fail")
     }
 }
 
@@ -872,105 +870,65 @@ mod test {
     }
 }
 
-/// `ultragraph`-backed resolution of the connectivity core of
+/// Union-find resolution of the connectivity core of
 /// `<ExtendedPerfectMatching as Mul>::mul`. Composition glues two Brauer diagrams
 /// and reads off (a) the endpoint matching of the result and (b) the number of
 /// closed loops (the δ-power increment) — both from the connected components of
 /// the glued diagram graph.
 ///
-/// `ultragraph` is a directed graph, so each undirected diagram arc is added in
-/// both directions; under that construction `strongly_connected_components()`
-/// equals the undirected component count, and same-component endpoints are the
-/// matched pairs. Components are labelled once (O(V+E)) and the matching resolved
-/// by O(1) component-id comparison.
+/// Diagram arcs are undirected, which is exactly what a disjoint-set structure
+/// models, so each arc is one `union` and connectivity needs no graph object at
+/// all. The point set is the flat range `0 .. self_dom + self_cod + rhs_cod`:
+/// `lhs`'s points keep their own ids, and `rhs`'s point `p` is `p + self_dom`,
+/// which lands rhs's domain exactly on lhs's codomain — that offset *is* the
+/// gluing. Components are labelled once (near-linear), then the matching falls
+/// out of O(1) root comparison: two endpoints are matched iff they share a root.
 mod connectivity {
     use super::{ExtendedPerfectMatching, Pair, PerfectMatching};
     use std::collections::HashSet;
-    use ultragraph::*;
+    use union_find::{QuickUnionUf, UnionBySize, UnionFind};
 
-    /// The frozen composite graph + the scalar bookkeeping [`resolve`] needs.
-    struct Composite {
-        g: UltraGraph<()>,
-        node_idcs: Vec<Option<usize>>,
-        self_dom: usize,
-        self_cod: usize,
-        rhs_cod: usize,
-        self_delta_pow: usize,
-        rhs_delta_pow: usize,
-    }
-
-    /// Build + freeze the composite graph of `lhs ∘ rhs`, each undirected diagram
-    /// arc added bidirectionally so SCC count == undirected component count.
-    fn build_frozen(
-        lhs: &ExtendedPerfectMatching,
-        rhs: &ExtendedPerfectMatching,
-    ) -> Result<Composite, GraphError> {
-        let (self_dom, self_cod, self_delta_pow) = (lhs.0.0, lhs.0.1, lhs.0.2);
-        let self_pairs = &lhs.0.3.pairs;
-        let (rhs_dom, rhs_cod, rhs_delta_pow) = (rhs.0.0, rhs.0.1, rhs.0.2);
-        let rhs_pairs = &rhs.0.3.pairs;
-        assert_eq!(rhs_dom, self_cod, "composition dom/cod mismatch");
-
-        let mut g: UltraGraph<()> = UltraGraph::with_capacity(self_dom + self_cod + rhs_cod, None);
-        let mut node_idcs: Vec<Option<usize>> = vec![None; self_dom + self_cod + rhs_cod];
-
-        // self diagram: a fresh node per endpoint, one bidirectional edge per pair.
-        for &Pair(p, q) in self_pairs {
-            let p_loc = g.add_node(())?;
-            node_idcs[p] = Some(p_loc);
-            let q_loc = g.add_node(())?;
-            node_idcs[q] = Some(q_loc);
-            add_undirected(&mut g, p_loc, q_loc)?;
-        }
-        // rhs diagram: reuse the glued domain nodes (p < rhs_dom), fresh codomain.
-        for &Pair(p, q) in rhs_pairs {
-            let p_loc = resolve_rhs_node(&mut g, &mut node_idcs, p, rhs_dom, self_dom)?;
-            let q_loc = resolve_rhs_node(&mut g, &mut node_idcs, q, rhs_dom, self_dom)?;
-            add_undirected(&mut g, p_loc, q_loc)?;
-        }
-
-        // "freeze = compile": algorithms run only on the frozen CSR graph.
-        g.freeze();
-        Ok(Composite {
-            g,
-            node_idcs,
-            self_dom,
-            self_cod,
-            rhs_cod,
-            self_delta_pow,
-            rhs_delta_pow,
-        })
-    }
-
-    /// Resolve `lhs ∘ rhs`: label components with one SCC pass, then match
-    /// endpoints by O(1) component-id comparison. The δ-power increment is the
-    /// component count less the matched-pair count.
+    /// Resolve `lhs ∘ rhs`.
+    ///
+    /// Total: a perfect matching cannot fail to have components, so there is no
+    /// error path to report.
     pub(super) fn resolve(
         lhs: &ExtendedPerfectMatching,
         rhs: &ExtendedPerfectMatching,
-    ) -> Result<ExtendedPerfectMatching, GraphError> {
-        let c = build_frozen(lhs, rhs)?;
+    ) -> ExtendedPerfectMatching {
+        let (self_dom, self_cod, self_delta_pow) = (lhs.0.0, lhs.0.1, lhs.0.2);
+        let (rhs_dom, rhs_cod, rhs_delta_pow) = (rhs.0.0, rhs.0.1, rhs.0.2);
+        assert_eq!(rhs_dom, self_cod, "composition dom/cod mismatch");
 
-        let sccs = c.g.strongly_connected_components()?;
-        let mut component_of: Vec<usize> = vec![usize::MAX; c.g.number_nodes()];
-        for (cid, comp) in sccs.iter().enumerate() {
-            for &node in comp {
-                component_of[node] = cid;
-            }
+        // Both diagrams are perfect matchings, so every point in the flat range is
+        // covered by exactly one arc and no point is left unvisited.
+        let points = self_dom + self_cod + rhs_cod;
+        let mut uf: QuickUnionUf<UnionBySize> = QuickUnionUf::new(points);
+        for &Pair(p, q) in &lhs.0.3.pairs {
+            uf.union(p, q);
+        }
+        for &Pair(p, q) in &rhs.0.3.pairs {
+            uf.union(p + self_dom, q + self_dom);
         }
 
-        let endpoints = c.self_dom + c.rhs_cod;
+        // One pass to label, so the matching search below is pure comparison.
+        let root_of: Vec<usize> = (0..points).map(|i| uf.find(i)).collect();
+        let components = root_of.iter().collect::<HashSet<_>>().len();
+
+        // The composite's own boundary: lhs's domain, then rhs's codomain. The
+        // glued interior (lhs's codomain) is skipped, which is the `+ self_cod`.
+        let endpoints = self_dom + rhs_cod;
+        let node_of = |i: usize| if i < self_dom { i } else { i + self_cod };
+
         let mut endpoints_done: HashSet<usize> = HashSet::with_capacity(endpoints);
         let mut final_matching: Vec<Pair> = Vec::with_capacity(endpoints / 2);
-        #[allow(clippy::needless_range_loop)]
         for i in 0..endpoints {
             if endpoints_done.contains(&i) {
                 continue;
             }
-            let i_cid = component_of[endpoint_node(&c.node_idcs, i, c.self_dom, c.self_cod)];
+            let i_root = root_of[node_of(i)];
             for j in (i + 1)..endpoints {
-                let j_cid = component_of[endpoint_node(&c.node_idcs, j, c.self_dom, c.self_cod)];
-                if i_cid == j_cid {
+                if root_of[node_of(j)] == i_root {
                     final_matching.push(Pair(i, j));
                     endpoints_done.insert(i);
                     endpoints_done.insert(j);
@@ -979,51 +937,15 @@ mod connectivity {
             }
         }
 
-        let new_delta_power = sccs.len() + c.self_delta_pow + c.rhs_delta_pow - (endpoints / 2);
-        Ok(ExtendedPerfectMatching((
-            c.self_dom,
-            c.rhs_cod,
+        // Components that did not consume a boundary pair are the closed loops.
+        let new_delta_power = components + self_delta_pow + rhs_delta_pow - (endpoints / 2);
+        ExtendedPerfectMatching((
+            self_dom,
+            rhs_cod,
             new_delta_power,
             PerfectMatching {
                 pairs: final_matching,
             },
-        )))
-    }
-
-    /// Add an undirected edge as a directed pair (both orientations).
-    fn add_undirected(g: &mut UltraGraph<()>, a: usize, b: usize) -> Result<(), GraphError> {
-        g.add_edge(a, b, ())?;
-        g.add_edge(b, a, ())?;
-        Ok(())
-    }
-
-    /// Resolve (or lazily create) the node index for an rhs endpoint, reusing the
-    /// glued self-codomain node when the rhs point is a domain point.
-    fn resolve_rhs_node(
-        g: &mut UltraGraph<()>,
-        node_idcs: &mut [Option<usize>],
-        p: usize,
-        rhs_dom: usize,
-        self_dom: usize,
-    ) -> Result<usize, GraphError> {
-        if p >= rhs_dom {
-            let loc = g.add_node(())?;
-            node_idcs[p + self_dom] = Some(loc);
-            Ok(loc)
-        } else {
-            Ok(node_idcs[p + self_dom]
-                .expect("invariant: glued rhs-domain node was populated by the self diagram"))
-        }
-    }
-
-    /// Map a composite-diagram endpoint id to its graph node index.
-    fn endpoint_node(
-        node_idcs: &[Option<usize>],
-        i: usize,
-        self_dom: usize,
-        self_cod: usize,
-    ) -> usize {
-        node_idcs[if i < self_dom { i } else { i + self_cod }]
-            .expect("invariant: endpoint node index populated during graph construction")
+        ))
     }
 }

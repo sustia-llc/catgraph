@@ -10,9 +10,9 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-# magnitude no longer needs a `rustworkx` feature: both `catgraph` and
-# `catgraph-applied` are on the zero-dep `ultragraph` substrate (Track A), so
-# there is no petgraph-backed flag left to forward.
+# magnitude no longer needs a `rustworkx` feature: neither `catgraph` nor
+# `catgraph-applied` depends on a graph crate at all — their toposort and
+# connectivity are local passes (#220) — so there is no flag left to forward.
 default = []
 # Dev-only cross-validation against `events555/modularsnf` (marker feature;
 # gates compilation of tests/snf_modularsnf_integer_oracle.rs).

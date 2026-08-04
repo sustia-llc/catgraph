@@ -10,7 +10,7 @@
 //! - [`wiring_diagram`] — operadic substitution on named cospans
 //! - [`petri_net`] — place/transition nets with cospan bridge
 //! - [`temperley_lieb`] — Temperley-Lieb / Brauer algebra via perfect matchings
-//!   (composition connectivity via the zero-dep `ultragraph` substrate)
+//!   (composition connectivity via a union-find components pass)
 //! - [`linear_combination`] — formal linear combinations over a coefficient ring
 //!   (used internally by `temperley_lieb`)
 //! - [`e1_operad`] — little-intervals operad (E₁)

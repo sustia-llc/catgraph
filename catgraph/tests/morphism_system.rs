@@ -1,7 +1,7 @@
 //! Integration tests for `MorphismSystem` DAG-based resolution.
 //!
 //! These tests exercise `add_definition_composite` and `fill_black_boxes`,
-//! backed by the zero-dependency `ultragraph` topological sort.
+//! backed by the crate's own Kahn topological sort.
 
 use catgraph::errors::CatgraphError;
 use catgraph::frobenius::{Contains, InterpretableMorphism, MorphismSystem};

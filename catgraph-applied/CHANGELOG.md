@@ -42,6 +42,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
     and extended: the primitive impls, the `-0.0`-is-zero float behaviour, and
     `Checked<T>`'s poison-rejecting `is_zero`/`is_one` are now covered directly.
 
+- **`temperley_lieb`'s composition connectivity is a union-find pass, and the
+  `ultragraph` dependency is gone**
+  ([#220](https://github.com/sustia-llc/catgraph/issues/220), D2 of the
+  [#218](https://github.com/sustia-llc/catgraph/issues/218) dependency
+  streamlining). Brauer diagram composition reads the glued endpoint matching
+  and the closed-loop (δ-power) count off the connected components of the glued
+  diagram; that is now `union-find`'s `QuickUnionUf<UnionBySize>` — the same
+  substrate `catgraph` uses for its cospan/corel pushouts — instead of a
+  strongly-connected-components pass over a directed graph. Results are
+  unchanged; the Temperley-Lieb, symmetric-algebra, and tangle relation suites
+  all still hold.
+  - The rewrite is a simplification, not a transliteration. Diagram arcs are
+    undirected, so the old code had to add each one in *both* directions for
+    SCC-count to equal the undirected component count; that workaround is gone.
+    So is the lazily-populated `Vec<Option<usize>>` node-index map — points now
+    use their diagram ids directly, with `rhs`'s offset by `self_dom`, which is
+    the gluing written down rather than constructed.
+  - `connectivity::resolve` is total, so `<ExtendedPerfectMatching as Mul>::mul`
+    no longer carries an `.expect()` for an error path that could not occur.
+
 ## [workspace-v0.8.0] - 2026-08-03
 
 ### Added

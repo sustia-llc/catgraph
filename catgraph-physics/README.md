@@ -25,7 +25,10 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
 - `petgraph` + `rustworkx-core` — graph algorithms, gated behind the default-on
   `rustworkx` feature (gates `multiway::branchial_analysis`; opt out with
   `--no-default-features` to drop the `rustworkx-core` → `petgraph` chain).
-  Retained until an `ultragraph` equivalent for greedy coloring / k-core lands.
+  Retained deliberately, and not tracked for replacement: greedy coloring and
+  k-core are not the kind of short, self-contained pass the toposort and
+  connectivity sites turned out to be (#220). The feature gate that makes the
+  slim build possible landed in #10.
 
 ## Build
 
