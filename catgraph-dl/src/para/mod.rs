@@ -35,9 +35,10 @@
 //! (hyperdoctrine, vector-bundle, fibration) are still deferred.
 //!
 //! Behind the off-by-default `ad` feature, the `ad` submodule adds one more
-//! scalar for that generic stack — `deep_causality_num_dual`'s `Dual<f64>`,
-//! giving forward-mode automatic differentiation (issue #74). It is compiled
-//! away entirely in the default build, so it is not linked here.
+//! scalar for that generic stack — the crate's own `Dual<f64>`, giving
+//! forward-mode automatic differentiation (issue #74; the type became
+//! catgraph-owned in #221). It is compiled away entirely in the default build,
+//! so it is not linked here.
 //!
 //! ## Closure convention
 //!
@@ -50,6 +51,8 @@ mod actegory;
 #[cfg(feature = "ad")]
 pub mod ad;
 mod comonoid;
+#[cfg(feature = "ad")]
+mod dual;
 mod module_actegory;
 mod monoidal_category;
 mod morphism;

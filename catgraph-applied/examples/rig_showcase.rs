@@ -9,8 +9,7 @@
 // Single-char variable names are natural for a semiring-element showcase.
 #![allow(clippy::many_single_char_names)]
 
-use catgraph_applied::rig::{BoolRig, F64Rig, Tropical, UnitInterval};
-use deep_causality_num::{One, Zero};
+use catgraph_applied::rig::{BoolRig, F64Rig, One, Tropical, UnitInterval, Zero};
 
 fn main() {
     println!("=== Rig showcase ===\n");

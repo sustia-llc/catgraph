@@ -28,8 +28,8 @@
 //! comparison mathematically faithful.
 
 use catgraph_applied::ZAlgebra;
+use catgraph_applied::rig::{One, Zero};
 use catgraph_applied::z::Z;
-use deep_causality_num::{One, Zero};
 use proptest::prelude::*;
 
 #[test]

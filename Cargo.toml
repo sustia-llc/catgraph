@@ -39,17 +39,18 @@ catgraph-testutil  = { path = "catgraph-testutil" }
 #     comonad & EqFunctor/DebugFunctor); 0.4.2 adds CloneFunctor + opt-in Clone for Free/Cofree,
 #     Cofree::duplicate, and Functor/CoMonad trait impls on CofreeWitness (purely additive). Carrier
 #     Clone stays UNADOPTED here — #93 owner decision; adoption tracked as #154.
-#     haft is live (catgraph-dl endofunctor layer, #12); num is IN USE (dl's RModule
-#     actegory Zero/One, #36; applied+magnitude source Zero/One too).
-#     num has no 0.4.2 — it stays at 0.4.1.
-#     num_dual is OPT-IN ONLY — catgraph-dl's off-by-default `ad` feature (#74 PR2);
-#     the default build stays dual-free. 0.1.4 is the num-0.4.1 alignment release
-#     (0.1.3 -> 0.1.4 is Lean/miri infra only). It deps num "0.4" (satisfied by our
-#     =0.4.1) and deep_causality_algebra "0.2" (already in the lock at 0.2.0 via haft,
-#     so no duplicate). Only the `Dual` type is consumed.
-deep_causality_num  = "=0.4.1"
+#     haft is live (catgraph-dl endofunctor layer, #12) and is now the only entry here.
+#     `deep_causality_num` was retired in #219 (D1 of the #218 streamlining): the
+#     `Zero`/`One` it supplied to applied/magnitude/dl are catgraph's own, in
+#     `catgraph-applied/src/rig.rs` next to the native `Rig`.
+#     `deep_causality_num_dual` was retired in #221 (D3), in the same change: the
+#     forward-mode `Dual` behind catgraph-dl's opt-in `ad` feature is now
+#     `catgraph-dl/src/para/dual.rs`. It had to move with the traits — the orphan
+#     rule forbids implementing a catgraph-owned `Zero`/`One` for a foreign `Dual`.
+#     `ad` now adds no dependency whatsoever (`ad = []`). Note what does NOT change:
+#     deep_causality_algebra and deep_causality_num remain in the lock beneath haft
+#     either way — catgraph source just never names them.
 deep_causality_haft = "=0.4.2"
-deep_causality_num_dual = "=0.1.4"
 
 # --- math / graph — numeric-only, NOT an algebraic substrate ---
 # (members opt in with `{ workspace = true, optional = true }`; `optional` is illegal here.)
@@ -66,7 +67,7 @@ ultragraph     = "0.9"
 # --- general ---
 either       = "1.6.1"
 itertools    = "0.15"
-num          = "0.4"   # narrowed to BigInt / Complex / ToPrimitive / pow (NOT Zero/One — those come from DC)
+num          = "0.4"   # narrowed to BigInt / Complex / ToPrimitive / pow (NOT Zero/One — those are catgraph's own, in catgraph-applied's `rig`)
 rand         = "0.10"
 rayon        = "1.12"
 rust_decimal = "1"

@@ -10,14 +10,14 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-# `ad` adds forward-mode automatic differentiation: `deep_causality_num_dual`'s
-# `Dual<T>` becomes a usable scalar `S` for the (#74 PR1) scalar-generic
-# `RModule<S>` stack, via `para::ad` (`DualF64Module = RModule<Dual<f64>>`).
-# Off by default — the default build stays dual-free (precedent: applied's
-# opt-in `serde`, #81). `Dual` satisfies every `RModule<S>` bound with zero
-# adaptation, so the feature adds a dependency and a module, not a code path:
-# nothing behind `#[cfg(feature = "ad")]` changes default-build behavior.
-ad = ["dep:deep_causality_num_dual"]
+# `ad` adds forward-mode automatic differentiation: the crate's own `Dual<T>`
+# (`src/para/dual.rs`) becomes a usable scalar `S` for the (#74 PR1)
+# scalar-generic `RModule<S>` stack, via `para::ad`
+# (`DualF64Module = RModule<Dual<f64>>`). Off by default — the default build
+# stays dual-free (precedent: applied's opt-in `serde`, #81). Since #221 the
+# feature adds **no dependency at all**, only two modules: nothing behind
+# `#[cfg(feature = "ad")]` changes default-build behavior.
+ad = []
 
 [dependencies]
 catgraph = { workspace = true }
@@ -28,33 +28,19 @@ catgraph-applied = { workspace = true }
 # import seam) and consumed across `algebra::` and `free_monad::`. `Either` (for
 # `TreeEndo`) is sourced from haft too, so `catgraph-dl` no longer needs the
 # `either` crate.
-# `deep_causality_num` is IN USE (issue #36): `src/para/module_actegory.rs`
-# imports its root `Zero`/`One` for the `RModule<S>` R-module actegory
-# (`F64Module = RModule<f64>`) — the
-# ring's additive identity fills the zero vector (`RModule::zeros`) and the
-# multiplicative identity marks each standard-basis generator
-# (`RModule::basis`). `rg deep_causality_num src` now hits that module. Only
-# `Zero`/`One` are used (workspace rule: the DC substrate stays thin). The
-# umbrella #36 stays open for the still-deferred non-Set surfaces
-# (hyperdoctrine, vector-bundle, lazy final-coalgebra). Rig `Zero`/`One` are
-# still inherited transitively from `catgraph-applied`'s `Rig`.
-# `deep_causality_num_dual` is OPT-IN (issue #74 PR2), behind the `ad` feature —
-# NOT in the default build. It supplies exactly one type, `Dual<T: Real>`
-# (forward-mode AD: value + derivative carried together), consumed in
-# `src/para/ad.rs`. `Dual` already impls num's own `Zero`/`One` plus
-# `Add`/`AddAssign`/`Mul`/`MulAssign` (and the `Mul<T>` scalar form) and derives
-# `Copy`/`Clone`/`PartialEq`/`PartialOrd`/`Debug`, which is exactly the bound set
-# PR1's per-method `RModule<S>` signatures ask for — so it drops in as a scalar
-# with no adapter, no newtype, and no trait of ours.
-# Substrate accounting: num_dual deps `deep_causality_algebra "0.2"` (its `Real`
-# bound lives at ITS impl site), which the lock already carries at 0.2.0 via haft
-# — no duplicate, no new leaf beyond num_dual itself. Rule 2's Zero/One-only
-# sourcing is intact: our code never names `deep_causality_algebra`
-# (`rg deep_causality_algebra */src` must stay empty) because every catgraph
-# use site is the concrete `Dual<f64>`.
-deep_causality_num = { workspace = true }
+# The `Zero`/`One` behind the `RModule<S>` R-module actegory (issue #36;
+# `F64Module = RModule<f64>` — the additive identity fills the zero vector in
+# `RModule::zeros`, the multiplicative identity marks each standard-basis
+# generator in `RModule::basis`) are catgraph's own, from `catgraph-applied`'s
+# `rig` module, since #219. The umbrella #36 stays open for the still-deferred
+# non-Set surfaces (hyperdoctrine, vector-bundle, lazy final-coalgebra).
+# `deep_causality_num_dual` was retired in #221 — `Dual` is now
+# `src/para/dual.rs`, which is what lets it implement the catgraph-owned
+# `Zero`/`One` at all (the orphan rule forbids a foreign trait on a foreign
+# type). `ad` therefore declares no dependency now. `deep_causality_algebra` and
+# `deep_causality_num` still sit in the lock beneath haft; our source names
+# neither (`rg deep_causality_algebra */src` stays empty).
 deep_causality_haft = { workspace = true }
-deep_causality_num_dual = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Deterministic LCG for the #156 shape-axis bench fixtures — the payload stream

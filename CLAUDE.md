@@ -26,8 +26,10 @@ catgraph (F&S core) ─▶ catgraph-applied ─▶ catgraph-magnitude
 LCG), pulled in only via `[dev-dependencies]` — never a published crate's
 `[dependencies]` (#33).
 
-`deep_causality_num` pinned `=0.4.1`, `deep_causality_haft` pinned `=0.4.2`
-(num has no 0.4.2). haft 0.4.1 shipped the post-0.4.0 categorical machinery —
+`deep_causality_haft` pinned `=0.4.2` — the workspace's only external algebraic
+dependency, held by catgraph-dl (`src/endofunctor.rs`) and catgraph-syntax
+(`src/arrow_seam.rs`), one seam file each.
+haft 0.4.1 shipped the post-0.4.0 categorical machinery —
 PROP `SymMonoidal`, `ArrowTerm`, native `NaturalTransformation`, `Cofree` —
 re-evaluation #93 resolved 2026-07-19: `Free`/`Cofree` adopted as catgraph-dl's
 carriers; `ArrowTerm` vs `PropExpr` and `Category`/`Kleisli` vs `eval` assessed
@@ -37,23 +39,24 @@ haft 0.4.2 (purely additive) adds `CloneFunctor`, opt-in `Clone` for
 `CofreeWitness`; **carrier `Clone` stays unadopted** (#93 owner decision),
 adoption tracked in #154. Resolve haft from crates.io — DC `main` still reads
 0.4.1 in its own manifest (deepcausality-rs/deep_causality#720).
-`catgraph-applied` + `catgraph-magnitude` depend on `deep_causality_num` (`Zero`/`One`
-only); `catgraph-dl` uses `haft`'s `HKT`/`Functor` witnesses as its endofunctor
-substrate (EndoFunctor→haft migration landed, #12) and now **uses** `num`'s
-root `Zero`/`One` in the `RModule<S>` R-module actegory (`F64Module = RModule<f64>`;
-`src/para/module_actegory.rs`,
-#36 first bullet landed — the direct-sum monoidal category `(FinReal, ⊕, R⁰)`;
-umbrella #36 stays open for hyperdoctrine/vector-bundle/lazy surfaces);
-`catgraph` (core) + `catgraph-physics` are DC-free.
-A **third** DC crate is wired but **opt-in only**: `deep_causality_num_dual`
-pinned `=0.1.4`, behind catgraph-dl's off-by-default `ad` feature (#74 PR2) —
-the default build stays dual-free. It supplies exactly one type, `Dual<T>`
-(forward-mode AD), consumed in the single seam `src/para/ad.rs` as another
-scalar `S` for the generic `RModule<S>`; `deep_causality_algebra` (already in
-the lock at 0.2.0 via haft) becomes transitive through it too, and Rule 2's
-Zero/One-only sourcing holds — our source never names `deep_causality_algebra`
-(`rg deep_causality_algebra */src` stays empty), since every use site is the
-concrete `Dual<f64>`.
+`catgraph-dl` uses `haft`'s `HKT`/`Functor` witnesses as its endofunctor
+substrate (EndoFunctor→haft migration landed, #12). `deep_causality_algebra`
+remains transitive under haft; our source never names it
+(`rg deep_causality_algebra */src` stays empty). `catgraph` (core),
+`catgraph-applied`, `catgraph-magnitude`, and `catgraph-physics` carry no DC
+dependency at all.
+
+**Streamlining landed (#218):** `deep_causality_num` retired in **#219** (D1) —
+`Zero`/`One` are catgraph's own, defined in `catgraph-applied/src/rig.rs` next
+to the native `Rig` and re-exported by magnitude and dl. They back the
+`RModule<S>` R-module actegory too (`F64Module = RModule<f64>`;
+`src/para/module_actegory.rs`, #36 first bullet — the direct-sum monoidal
+category `(FinReal, ⊕, R⁰)`; umbrella #36 stays open for
+hyperdoctrine/vector-bundle/lazy surfaces). `deep_causality_num_dual` retired in
+**#221** (D3), forced by the same change: the orphan rule forbids implementing a
+catgraph-owned `Zero`/`One` for a foreign `Dual`, so forward-mode `Dual<T>` moved
+to `catgraph-dl/src/para/dual.rs`. catgraph-dl's off-by-default `ad` feature
+(#74 PR2) now adds **no dependency at all**.
 
 ## Paper anchors
 
@@ -75,10 +78,12 @@ crate's `docs/`.
 ## Rules (the only ones)
 
 1. **The paper is the spec.** Theorems move/stay intact — no re-derivation.
-2. **`Rig` is a semiring** (catgraph-native). Never swap it for a `deep_causality_num`
-   `Ring` — DC's lowest ring requires `Sub`; `BoolRig` / `Tropical` have none.
-   Re-source only `Zero` / `One` from `deep_causality_num`.
-3. **Integer SNF / `Z(BigInt)` / Storjohann / Newman stay custom** (DC has no integer-ring SNF).
+2. **`Rig` is a semiring, and the whole rig substrate is ours.** `Rig`, `Zero`,
+   and `One` are all catgraph-native, in `catgraph-applied/src/rig.rs` (#219).
+   Never swap `Rig` for an external `Ring` — the lowest ring in the numeric
+   crates requires `Sub`; `BoolRig` / `Tropical` have none.
+3. **Integer SNF / `Z(BigInt)` / Storjohann / Newman stay custom** (`num` supplies
+   the BigInt, not the algorithm).
 4. **Every change is green** `cargo test --workspace` + clippy before merge.
 
 Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBUTING.md).

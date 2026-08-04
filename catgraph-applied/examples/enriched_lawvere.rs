@@ -39,9 +39,8 @@
 use catgraph_applied::{
     enriched::{EnrichedCategory, HomMap},
     lawvere_metric::LawvereMetricSpace,
-    rig::{Tropical, UnitInterval},
+    rig::{One, Tropical, UnitInterval},
 };
-use deep_causality_num::One;
 
 fn main() {
     println!("=== V-enriched categories + Lawvere metric spaces ===\n");

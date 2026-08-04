@@ -13,8 +13,7 @@
 
 use catgraph::cospan::Cospan;
 use catgraph_magnitude::weighted_cospan::{NodeId, WeightedCospan};
-use catgraph_magnitude::{F64Rig, Tropical, UnitInterval};
-use deep_causality_num::{One, Zero};
+use catgraph_magnitude::{F64Rig, One, Tropical, UnitInterval, Zero};
 use proptest::prelude::*;
 
 /// Strategy: a small cospan over `Lambda = char`.

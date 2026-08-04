@@ -13,6 +13,41 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`para::dual` — the forward-mode `Dual<T>` is now catgraph's own**
+  ([#221](https://github.com/sustia-llc/catgraph/issues/221), D3 of the
+  [#218](https://github.com/sustia-llc/catgraph/issues/218) dependency
+  streamlining). Same `a + b·ε`, `ε² = 0` semantics as the type it replaces:
+  `new` / `constant` / `variable` / `value` / `derivative`, `Add` / `Sub` /
+  `Mul` (the chain rule) / `Neg` / `Div` (the quotient rule, no `DivAssign` —
+  `ε` is a zero divisor) / `AddAssign` / `MulAssign` / the `Mul<T>` scalar
+  action, and `Zero` / `One`. Bounds are per-impl rather than on the struct,
+  matching `RModule<S>`. Re-exported through `para::ad`, so the public path
+  `catgraph_dl::para::ad::Dual` is unchanged.
+  - This was **forced by #219**, not merely convenient: with `Zero`/`One`
+    catgraph-owned and `Dual` upstream, the orphan rule left nowhere to write
+    the impl — a foreign trait cannot be implemented for a foreign type.
+  - **Surface reduction.** `Sum`, `Product`, `FromPrimitive`, `Display`,
+    `Default`, and the upstream analytic-scalar marker traits are not carried
+    over; nothing in the workspace used them. `Dual` also no longer nests, so
+    `Dual<Dual<T>>` second derivatives are not available. File an issue if you
+    want any of these back.
+
+### Changed
+
+- **Both DeepCausality numeric dependencies are gone**
+  (#219 + #221). `deep_causality_num` is no longer a dependency — the
+  `RModule<S>` scalar bounds resolve to `catgraph_applied::rig::{Zero, One}`,
+  re-exported at this crate's root — and `deep_causality_num_dual` is no longer
+  a dependency either. **The `ad` feature now declares no dependency at all**
+  (`ad = []`): `cargo tree -p catgraph-dl` and
+  `cargo tree -p catgraph-dl --features ad` print the same tree, where they
+  previously differed by `deep_causality_num_dual`. `deep_causality_haft` (#12,
+  `src/endofunctor.rs`) is untouched and is now the crate's only external
+  algebraic dependency — `deep_causality_algebra` and `deep_causality_num` stay
+  in the lockfile beneath it, unnamed anywhere in catgraph source.
+
 ## [workspace-v0.6.0] - 2026-08-02
 
 ### Added

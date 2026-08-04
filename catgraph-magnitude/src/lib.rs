@@ -204,7 +204,7 @@ pub use catgraph::errors::CatgraphError;
 pub use catgraph_applied::enriched::{EnrichedCategory, HomMap};
 pub use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 pub use catgraph_applied::mat::MatR;
-pub use catgraph_applied::rig::{BoolRig, F64Rig, Rig, Tropical, UnitInterval};
+pub use catgraph_applied::rig::{BoolRig, F64Rig, One, Rig, Tropical, UnitInterval, Zero};
 
 // Substrate re-exports for integer-exact Möbius
 // (renamed from `Integer` → `ZAlgebra`; the trait names a Z-algebra

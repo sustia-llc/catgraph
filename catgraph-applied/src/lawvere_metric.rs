@@ -17,11 +17,9 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use deep_causality_num::{One, Zero};
-
 use crate::{
     enriched::EnrichedCategory,
-    rig::{BaseChange, Tropical, UnitInterval},
+    rig::{BaseChange, One, Tropical, UnitInterval, Zero},
 };
 
 /// A Lawvere metric space enriched over [`Tropical`].

@@ -80,11 +80,9 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use deep_causality_num::{One, Zero};
-
 use crate::magnitude::magnitude;
 use crate::weighted_cospan::{NodeId, WeightedCospan};
-use crate::{CatgraphError, EnrichedCategory, F64Rig, LawvereMetricSpace, UnitInterval};
+use crate::{CatgraphError, EnrichedCategory, F64Rig, LawvereMetricSpace, One, UnitInterval, Zero};
 
 use catgraph::cospan::Cospan;
 

@@ -335,7 +335,7 @@ where
 
 /// Assert the `R`-module axioms for [`F64Module`] on one sample coordinate
 /// vector `coords` and one scalar `r` — the identities that make
-/// `deep_causality_num`'s `Zero` / `One` load-bearing (issue #36).
+/// `catgraph_applied::rig`'s `Zero` / `One` load-bearing (issue #36).
 ///
 /// - **Additive identity** (`Zero`): `v + 0 = v` and `0 + v = v`.
 /// - **Scalar unit** (`One`): `1 · v = v`.

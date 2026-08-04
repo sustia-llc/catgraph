@@ -180,4 +180,4 @@ pub use natural::{IsoBackward, IsoForward, NaturalTransformation, Pointed};
 // 2-category construction.
 pub use catgraph_applied::enriched::{EnrichedCategory, HomMap};
 pub use catgraph_applied::lawvere_metric::LawvereMetricSpace;
-pub use catgraph_applied::rig::{BoolRig, F64Rig, Rig, Tropical, UnitInterval};
+pub use catgraph_applied::rig::{BoolRig, F64Rig, One, Rig, Tropical, UnitInterval, Zero};

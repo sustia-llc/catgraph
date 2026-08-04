@@ -29,14 +29,14 @@ f64-fast = ["dep:nalgebra"]
 [dependencies]
 catgraph = { workspace = true }
 catgraph-applied = { workspace = true }
-deep_causality_num = { workspace = true }
 # Field-bounded paths only (workspace rule) — the `f64-fast` symmetric
 # factorization is the sole consumer, and it is off by default (#165).
 nalgebra = { workspace = true, optional = true }
 # `num` is kept for `BigInt` + `ToPrimitive` only (integer-exact SNF / CRT lift
-# and BigInt→i64 rank recovery). DC has no arbitrary-precision BigInt, so the
-# custom integer SNF (Storjohann + Newman) and `Z(BigInt)` stay on `num`.
-# Rig `Zero`/`One` come from `deep_causality_num` (inherited via the `Rig` bound).
+# and BigInt→i64 rank recovery): the custom integer SNF (Storjohann + Newman)
+# and `Z(BigInt)` need arbitrary precision, which nothing else here supplies.
+# Rig `Zero`/`One` are catgraph's own, re-exported from `catgraph-applied`'s
+# `rig` module (#219) and inherited via the `Rig` bound.
 num.workspace = true
 
 [dev-dependencies]

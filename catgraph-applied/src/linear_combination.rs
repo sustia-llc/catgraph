@@ -21,10 +21,12 @@
 
 use {
     // `num::{One, Zero}` is intentional here: `LinearCombination` is the private
-    // coefficient substrate for `temperley_lieb`, whose `num::Complex<i32>`
-    // coefficients cannot implement `deep_causality_num::{One, Zero}` (DC's
-    // `Complex` requires a `RealField`, which `i32` is not). Kept on the `num`
-    // side of the Phase-2 re-substrate; on the P2 grep-guard exception list.
+    // coefficient substrate for `temperley_lieb`, whose coefficients are
+    // `num::Complex<i32>` — a foreign type that already carries num's identities.
+    // Since #219 catgraph owns `rig::{Zero, One}`, so an impl for `Complex<i32>`
+    // would now be legal (the trait is local); staying on the `num` side is a
+    // deliberate choice to keep this private substrate off the `Rig` surface,
+    // not a rule the orphan check forces. On the grep-guard exception list.
     num::{One, Zero},
     std::{
         collections::HashMap,
