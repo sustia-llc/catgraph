@@ -22,6 +22,45 @@ pub trait InterpretableMorphism<GeneralVersion, Lambda, BlackBoxLabel>: Sized {
         F: Fn(&BlackBoxLabel, &[Lambda], &[Lambda]) -> Result<Self, CatgraphError>;
 }
 
+/// Topologically sort the nodes `0..n` under `edges`, or return `None` if the
+/// graph has a cycle.
+///
+/// Kahn's algorithm: repeatedly emit a node whose remaining in-degree is zero and
+/// decrement its successors. For an edge `u -> v` this emits `u` before `v`; a
+/// cycle is exactly the case where the queue empties before all `n` nodes are
+/// emitted, since every node on a cycle keeps an in-degree of at least one.
+///
+/// `edges` may contain duplicates and they are counted with multiplicity, which is
+/// consistent: each occurrence contributes one increment and one decrement. A
+/// self-loop `u -> u` is a cycle and is reported as one.
+///
+/// Nodes are emitted in whatever order the ready-stack yields, which is
+/// deterministic for a given `edges` but is not sorted by id — it is one valid
+/// topological order, not a canonical one.
+fn toposort(n: usize, edges: &[(usize, usize)]) -> Option<Vec<usize>> {
+    let mut successors: Vec<Vec<usize>> = vec![Vec::new(); n];
+    let mut in_degree: Vec<usize> = vec![0; n];
+    for &(u, v) in edges {
+        successors[u].push(v);
+        in_degree[v] += 1;
+    }
+
+    let mut ready: Vec<usize> = (0..n).filter(|&i| in_degree[i] == 0).collect();
+    let mut order: Vec<usize> = Vec::with_capacity(n);
+    while let Some(u) = ready.pop() {
+        order.push(u);
+        for &v in &successors[u] {
+            in_degree[v] -= 1;
+            if in_degree[v] == 0 {
+                ready.push(v);
+            }
+        }
+    }
+
+    // Short of `n` means some node never reached in-degree zero, i.e. a cycle.
+    (order.len() == n).then_some(order)
+}
+
 /// DAG of named morphisms resolved via topological sort.
 ///
 /// Composite definitions may reference other labels; `fill_black_boxes` resolves them
@@ -31,7 +70,7 @@ pub trait InterpretableMorphism<GeneralVersion, Lambda, BlackBoxLabel>: Sized {
 /// `composite_pieces` (each `(label, def)` contributes edges `label -> child` for
 /// every `child` in `def.contained_labels()`) plus the leaf labels in
 /// `simple_pieces` and `main`. Acyclicity and resolution order are computed with
-/// the zero-dependency `ultragraph` crate's `topological_sort`.
+/// a local Kahn's-algorithm pass.
 pub struct MorphismSystem<BlackBoxLabel, Lambda, GeneralBlackBoxed, T>
 where
     BlackBoxLabel: std::hash::Hash + Eq,
@@ -65,23 +104,25 @@ where
     /// Build the dependency graph over the current state — assigning each distinct
     /// `BlackBoxLabel` a `usize` id, adding an edge `parent -> child` for every
     /// composite `(parent, def)` and each `child` in `def.contained_labels()`, plus
-    /// isolated nodes for the `simple_pieces` leaves and `main` — freeze it, and run
-    /// `topological_sort`.
+    /// isolated nodes for the `simple_pieces` leaves and `main` — and run
+    /// [`toposort`] over it.
     ///
     /// An optional `prospective` `(parent, children)` group adds a not-yet-committed
     /// composite's edges (used by `add_definition_composite` to test a candidate
     /// before insertion).
     ///
-    /// Returns `Ok(None)` when the graph is cyclic, otherwise `Ok(Some(order))` with
-    /// the labels in topological order. By the `parent -> child` convention,
-    /// `topological_sort` yields each parent before its children (u-before-v for
-    /// edge u->v), matching the resolution order `fill_black_boxes` expects.
+    /// Returns `None` when the graph is cyclic, otherwise `Some(order)` with the
+    /// labels in topological order. By the `parent -> child` convention, the sort
+    /// yields each parent before its children (u-before-v for edge u->v), matching
+    /// the resolution order `fill_black_boxes` expects.
+    ///
+    /// Note that the label ids depend on `HashMap` iteration order, so the specific
+    /// topological order this returns may differ between runs. Every order it can
+    /// return is a valid one, which is all either caller needs.
     fn resolve_order(
         &self,
         prospective: Option<(&BlackBoxLabel, &[BlackBoxLabel])>,
-    ) -> Result<Option<Vec<BlackBoxLabel>>, ultragraph::GraphError> {
-        use ultragraph::*;
-
+    ) -> Option<Vec<BlackBoxLabel>> {
         let mut id_of: HashMap<BlackBoxLabel, usize> = HashMap::new();
         let mut labels: Vec<BlackBoxLabel> = Vec::new();
         let mut edges: Vec<(usize, usize)> = Vec::new();
@@ -121,19 +162,8 @@ where
             intern(&self.main);
         }
 
-        let n = labels.len();
-        let mut g: UltraGraph<()> = UltraGraph::with_capacity(n, None);
-        for _ in 0..n {
-            g.add_node(())?;
-        }
-        for (u, v) in edges {
-            g.add_edge(u, v, ())?;
-        }
-        // "freeze = compile": algorithms run only on the frozen CSR graph.
-        g.freeze();
-
-        Ok(g.topological_sort()?
-            .map(|order| order.into_iter().map(|id| labels[id].clone()).collect()))
+        let order = toposort(labels.len(), &edges)?;
+        Some(order.into_iter().map(|id| labels[id].clone()).collect())
     }
 
     /// Register a composite definition that depends on other labels.
@@ -152,12 +182,7 @@ where
         new_def: GeneralBlackBoxed,
     ) -> Result<(), CatgraphError> {
         let contained = new_def.contained_labels();
-        let order = self
-            .resolve_order(Some((&new_name, &contained)))
-            .map_err(|e| CatgraphError::Interpret {
-                context: format!("Dependency graph construction failed: {e:?}"),
-            })?;
-        if order.is_none() {
+        if self.resolve_order(Some((&new_name, &contained))).is_none() {
             return Err(CatgraphError::Interpret {
                 context: format!(
                     "Adding composite {new_name:?} would create a cycle in the dependency DAG"
@@ -240,13 +265,7 @@ where
             return Ok(simple_answer.clone());
         }
 
-        let resolution_order = self
-            .resolve_order(None)
-            .map_err(|e| CatgraphError::Interpret {
-                context: format!("Dependency graph construction failed: {e:?}"),
-            })?;
-
-        let Some(ordered) = resolution_order else {
+        let Some(ordered) = self.resolve_order(None) else {
             return Err(CatgraphError::Interpret {
                 context: "Not acyclic dependencies".to_string(),
             });
@@ -389,9 +408,82 @@ mod test {
         assert_eq!(interpreted.name, "a,b".to_string());
     }
 
+    // ── `toposort` unit tests ──
+    // Direct coverage of the Kahn pass underneath `resolve_order`, including the
+    // cycle detection both `add_definition_composite` and `fill_black_boxes`
+    // depend on for their error paths.
+
+    /// Every edge `u -> v` puts `u` strictly before `v` in the returned order,
+    /// and every node appears exactly once.
+    fn assert_valid_topological_order(n: usize, edges: &[(usize, usize)], order: &[usize]) {
+        assert_eq!(order.len(), n, "order covers every node");
+        let mut position = vec![usize::MAX; n];
+        for (pos, &node) in order.iter().enumerate() {
+            assert_eq!(position[node], usize::MAX, "node {node} emitted twice");
+            position[node] = pos;
+        }
+        for &(u, v) in edges {
+            assert!(
+                position[u] < position[v],
+                "edge {u} -> {v} is inverted in the order"
+            );
+        }
+    }
+
+    #[test]
+    fn toposort_empty_graph_is_the_empty_order() {
+        assert_eq!(super::toposort(0, &[]), Some(Vec::new()));
+    }
+
+    #[test]
+    fn toposort_isolated_nodes_all_appear() {
+        let order = super::toposort(3, &[]).expect("no edges, so acyclic");
+        assert_valid_topological_order(3, &[], &order);
+    }
+
+    #[test]
+    fn toposort_chain_orders_parent_before_child() {
+        // 0 -> 1 -> 2, the shape `fill_black_boxes` resolves along.
+        let edges = [(0, 1), (1, 2)];
+        let order = super::toposort(3, &edges).expect("a chain is acyclic");
+        assert_eq!(order, vec![0, 1, 2], "a chain has exactly one valid order");
+    }
+
+    #[test]
+    fn toposort_diamond_respects_every_edge() {
+        // 0 -> {1, 2} -> 3: two valid orders, so check the property not a literal.
+        let edges = [(0, 1), (0, 2), (1, 3), (2, 3)];
+        let order = super::toposort(4, &edges).expect("a diamond is acyclic");
+        assert_valid_topological_order(4, &edges, &order);
+    }
+
+    #[test]
+    fn toposort_duplicate_edges_are_counted_with_multiplicity() {
+        // The same `parent -> child` twice must not leave a residual in-degree.
+        let edges = [(0, 1), (0, 1), (1, 2)];
+        let order = super::toposort(3, &edges).expect("duplicated edges are still acyclic");
+        assert_valid_topological_order(3, &edges, &order);
+    }
+
+    #[test]
+    fn toposort_detects_a_two_node_cycle() {
+        assert_eq!(super::toposort(2, &[(0, 1), (1, 0)]), None);
+    }
+
+    #[test]
+    fn toposort_detects_a_self_loop() {
+        assert_eq!(super::toposort(1, &[(0, 0)]), None);
+    }
+
+    #[test]
+    fn toposort_detects_a_cycle_disjoint_from_an_acyclic_part() {
+        // 0 -> 1 is fine; 2 <-> 3 is not. The whole sort must fail.
+        assert_eq!(super::toposort(4, &[(0, 1), (2, 3), (3, 2)]), None);
+    }
+
     // ── MorphismSystem DAG registration tests ──
     // These tests exercise composite definitions and topological resolution
-    // over the ultragraph-backed dependency graph.
+    // over the derived dependency graph.
 
     /// Shared test scaffolding: a container whose `contained_labels` returns
     /// an arbitrary set of `String` labels, and a morphism that records

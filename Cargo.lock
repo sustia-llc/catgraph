@@ -237,7 +237,6 @@ dependencies = [
  "rand 0.10.2",
  "rayon",
  "thiserror",
- "ultragraph",
  "union-find",
 ]
 
@@ -261,7 +260,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "ultragraph",
+ "union-find",
 ]
 
 [[package]]
@@ -1725,12 +1724,6 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
-
-[[package]]
-name = "ultragraph"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c54d6b35015353c86b2de86ca0eb6466debf83a00208621db70f2b6f6e0720c7"
 
 [[package]]
 name = "unarray"

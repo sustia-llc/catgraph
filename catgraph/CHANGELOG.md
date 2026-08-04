@@ -6,6 +6,32 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **`MorphismSystem`'s topological sort is now the crate's own, and the
+  `ultragraph` dependency is gone**
+  ([#220](https://github.com/sustia-llc/catgraph/issues/220), D2 of the
+  [#218](https://github.com/sustia-llc/catgraph/issues/218) dependency
+  streamlining). Exactly one thing was consumed from that crate —
+  `topological_sort` — behind the acyclicity check in
+  `add_definition_composite` and the resolution order in `fill_black_boxes`.
+  It is replaced by a private Kahn's-algorithm pass in
+  `frobenius/morphism_system.rs`, so the crate now depends on no graph crate at
+  all. `union-find` (already present for the cospan/corel pushouts) is unchanged
+  and moves to a workspace dependency, now that `catgraph-applied` uses it too.
+  - Behaviour is unchanged at both call sites: a cycle still yields
+    `CatgraphError::Interpret`, and a valid topological order still places each
+    parent before its children. The specific order among equally-valid ones may
+    differ from the previous implementation's — it always could, since the label
+    ids come from `HashMap` iteration.
+  - The private `resolve_order` drops its `Result` wrapper: Kahn's only failure
+    mode is a cycle, which the `Option` already reports, so the dead
+    "graph construction failed" error path is gone. No public signature changes
+    — `ultragraph::GraphError` never appeared in one.
+  - `toposort` is covered directly for chains, diamonds, isolated nodes,
+    duplicate edges, two-node cycles, self-loops, and a cycle sitting beside an
+    acyclic component.
+
 ## [workspace-v0.6.0] - 2026-08-02
 
 ### Changed

@@ -68,9 +68,10 @@ serde = { workspace = true, optional = true }
 # Workspace error-derive pattern (already in the tree via catgraph core's
 # CatgraphError; adopted for HypergraphError per #28 — no new lockfile entry).
 thiserror.workspace = true
-# `temperley_lieb` composition connectivity (zero-dep DC graph substrate;
-# replaced rustworkx-core/petgraph 2026-06-27, Track A).
-ultragraph = { workspace = true }
+# Disjoint sets backing `temperley_lieb`'s composition connectivity — Brauer
+# diagram arcs are undirected, so components need a union-find and not a graph
+# crate (#220; same substrate `catgraph` uses for its cospan/corel pushouts).
+union-find.workspace = true
 
 [dev-dependencies]
 # Deterministic LCG for the `smc_nf_differential_sweep` corpus — the sweep's

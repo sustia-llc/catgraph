@@ -21,13 +21,12 @@ either.workspace = true
 itertools.workspace = true
 permutations.workspace = true
 rayon = { workspace = true, optional = true }
-# `ultragraph` backs `MorphismSystem`'s dependency-graph toposort (acyclicity
-# check in `add_definition_composite` + resolution order in `fill_black_boxes`),
-# replacing the former petgraph/rustworkx-core path with a zero-dep substrate.
-ultragraph = { workspace = true }
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 thiserror.workspace = true
-union-find = "0.4"
+# Disjoint sets for the cospan/corel pushouts. `MorphismSystem`'s dependency-graph
+# toposort (acyclicity in `add_definition_composite`, resolution order in
+# `fill_black_boxes`) is a local Kahn pass and needs no graph crate at all (#220).
+union-find.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
