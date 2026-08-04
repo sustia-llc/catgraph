@@ -31,11 +31,11 @@
 //! the `num::BigInt` dependency into downstream APIs.
 
 use crate::integer::{ZAlgebra, private::Sealed};
-// `Z` is a `Rig`, so it implements `deep_causality_num::{Zero, One}` (the
-// Phase-2 re-substrate). The underlying `num::BigInt` only implements `num`'s
-// `Zero`/`One`, so those are kept in scope under aliases to drive the inner
-// arithmetic (`BigInt::zero()`/`one()`, `self.0.is_zero()`/`is_one()`).
-use deep_causality_num::{One, Zero};
+// `Z` is a `Rig`, so it implements catgraph's own `rig::{Zero, One}`. The
+// underlying `num::BigInt` implements `num`'s `Zero`/`One` instead, so those are
+// kept in scope under aliases to drive the inner arithmetic
+// (`BigInt::zero()`/`one()`, `self.0.is_zero()`/`is_one()`).
+use crate::rig::{One, Zero};
 use num::{BigInt, One as NumOne, Zero as NumZero};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul, Neg, Sub};

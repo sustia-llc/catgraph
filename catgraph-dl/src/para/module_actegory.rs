@@ -44,7 +44,7 @@
 //! scalar ring `S`, `Vec<S>`-backed, an element of `Sⁿ`. It carries genuine
 //! `R`-module structure ([`RModule::zeros`], [`RModule::basis`],
 //! [`RModule::add`], [`RModule::scale`], [`RModule::direct_sum`]); this is
-//! where the reserved `deep_causality_num` `Zero` / `One` finally activate
+//! where catgraph-applied's `rig::Zero` / `rig::One` carry the ring identities
 //! (issue #36) — `Zero::zero()` is the additive identity `0 ∈ R` filling the
 //! zero vector, `One::one()` is the multiplicative identity `1 ∈ R` marking each
 //! standard-basis generator. [`F64Module`] is the `S = f64` alias.
@@ -92,7 +92,7 @@
 use core::marker::PhantomData;
 use core::ops::{Add, Mul};
 
-use deep_causality_num::{One, Zero};
+use catgraph_applied::rig::{One, Zero};
 
 use super::actegory::Actegory;
 use super::monoidal_category::MonoidalCategory;

@@ -9,18 +9,22 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
-      # Phase-2 re-substrate guard: `Zero`/`One` resolve through
-      # `deep_causality_num`. This catches num's `One`/`Zero` being brought into
-      # scope as usable identities — unaliased braced/single imports (incl.
-      # multi-line, via `-U`) AND qualified call sites (`num::Zero::zero()`,
-      # `<T as num::Zero>`). `\bnum::` is anchored so `deep_causality_num::` is
-      # not matched, and the `(?!\s+as)` lookahead skips deliberately *aliased*
-      # forms (z.rs's `One as NumOne` for inner BigInt arithmetic), so z.rs
-      # needs no exclusion and a future *unaliased* stray there is still caught.
+      # Identity-substrate guard: `Zero`/`One` resolve through catgraph's own
+      # `rig::{Zero, One}` (#219), never the `num` crate's — `num` stays in the
+      # dep list for BigInt/Complex, so its identities remain importable by
+      # accident. This catches them being brought into scope as usable
+      # identities — unaliased braced/single imports (incl. multi-line, via
+      # `-U`) AND qualified call sites (`num::Zero::zero()`, `<T as num::Zero>`).
+      # `\bnum::` is anchored (it predates the `deep_causality_num` retirement
+      # and still correctly avoids matching any `*_num::` path), and the
+      # `(?!\s+as)` lookahead skips deliberately *aliased* forms (z.rs's
+      # `One as NumOne` for inner BigInt arithmetic), so z.rs needs no exclusion
+      # and a future *unaliased* stray there is still caught.
       # Only temperley_lieb.rs + linear_combination.rs legitimately import num's
       # unaliased One/Zero (the num::Complex<i32> coefficient substrate); the
       # real invariant is enforced at compile time by
-      # catgraph-applied/tests/rig_dc_substrate.rs — this guard is a supplement.
+      # catgraph-applied/tests/rig_identity_substrate.rs — this guard is a
+      # supplement.
       - name: grep-guard num::{One,Zero}
         run: |
           matches=$(rg -n -U -P \
@@ -87,9 +91,10 @@ jobs:
           for ex in para_walkthrough weight_tying free_monad_basics architecture_unrollers; do
             cargo run -q -p catgraph-dl --example "$ex"
           done
-      # #74 PR2: the opt-in `ad` feature (forward-mode AD via
-      # `deep_causality_num_dual`) is off by default, so every run above leaves
-      # `para::ad` and its `RModule<Dual<f64>>` instance uncompiled. Targeted
+      # #74 PR2: the opt-in `ad` feature (forward-mode AD over the crate's own
+      # `Dual<T>`, catgraph-owned since #221) is off by default, so every run
+      # above leaves `para::ad`, `para::dual`, and the `RModule<Dual<f64>>`
+      # instance uncompiled. Targeted
       # test + clippy pass (the #81 serde-lane shape), plus the feature-gated
       # example run (the #34 self-checking-example convention; declared
       # `required-features = ["ad"]`, so the loop above skips it).

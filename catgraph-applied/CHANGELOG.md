@@ -13,6 +13,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **`rig::Zero` and `rig::One` — the identity traits are now catgraph's own**
+  ([#219](https://github.com/sustia-llc/catgraph/issues/219), D1 of the
+  [#218](https://github.com/sustia-llc/catgraph/issues/218) dependency
+  streamlining). Defined in `src/rig.rs` beside the `Rig` they pair with, with
+  the same shape they replace (`zero`/`is_zero`, `one`/`is_one`, each with the
+  corresponding `Add`/`Mul` supertrait), and implemented for every primitive
+  integer and float — so the blanket `Rig` lift over primitives is unchanged.
+  The whole rig substrate is now owned end to end.
+
+### Changed
+
+- **`deep_causality_num` is no longer a dependency of this crate**
+  (#219). `Rig`'s `Zero`/`One` bounds resolve to the traits above; every impl
+  (`BoolRig`, `UnitInterval`, `Tropical`, `F64Rig`, `Checked<T>`, `Z`) moved
+  across unchanged, and no rig's arithmetic, identities, or axiom results
+  differ. `num` stays, still narrowed to BigInt / Complex / ToPrimitive / pow.
+  Note that the crate is not gone from the lockfile: it remains transitively
+  reachable under `deep_causality_haft`, which catgraph-dl still uses.
+  - **BREAKING for downstream scalars.** A crate implementing `Rig` for its own
+    type by implementing `deep_causality_num::{Zero, One}` must now implement
+    `catgraph_applied::rig::{Zero, One}` instead. The method signatures are
+    identical, so the change is the import path. Types reaching `Rig` only
+    through the shipped instances or primitives need no change.
+  - `tests/rig_dc_substrate.rs` renamed to `tests/rig_identity_substrate.rs`,
+    and extended: the primitive impls, the `-0.0`-is-zero float behaviour, and
+    `Checked<T>`'s poison-rejecting `is_zero`/`is_one` are now covered directly.
+
 ## [workspace-v0.8.0] - 2026-08-03
 
 ### Added

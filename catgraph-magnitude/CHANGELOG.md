@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`deep_causality_num` is no longer a dependency of this crate**
+  ([#219](https://github.com/sustia-llc/catgraph/issues/219), D1 of the
+  [#218](https://github.com/sustia-llc/catgraph/issues/218) dependency
+  streamlining). The rig identities now come from `catgraph-applied`'s own
+  `rig::{Zero, One}`, which this crate re-exports at its root alongside `Rig`,
+  `BoolRig`, `F64Rig`, `Tropical`, and `UnitInterval` — so
+  `use catgraph_magnitude::{One, Zero};` replaces the upstream import with no
+  new dependency for consumers. No numeric behaviour changes; `num` stays for
+  BigInt / ToPrimitive in the integer-exact SNF and CRT lift.
+
 - **Möbius and (co)weighting test tolerances migrated to `approx_rel`**
   ([#169](https://github.com/sustia-llc/catgraph/issues/169), tests only — no
   library change). `tests/mobius_chains.rs` and `tests/weighting_coweighting.rs`

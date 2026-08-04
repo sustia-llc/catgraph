@@ -24,11 +24,9 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
+use crate::{LawvereMetricSpace, Rig, Tropical, UnitInterval, Zero};
 use catgraph::cospan::Cospan;
 use catgraph::errors::CatgraphError;
-use deep_causality_num::Zero;
-
-use crate::{LawvereMetricSpace, Rig, Tropical, UnitInterval};
 
 /// Node identifier inside a [`WeightedCospan`].
 ///

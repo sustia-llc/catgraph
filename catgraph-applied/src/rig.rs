@@ -6,12 +6,12 @@
 //! - `*` distributes over `+` from both sides,
 //! - `0` is absorbing: `a * 0 = 0 = 0 * a`.
 //!
-//! This is a ring without negatives. The [`Rig`] trait packages
-//! `deep_causality_num::{Zero, One}` + `Add` + `Mul` with a marker. A blanket
-//! impl lifts any concrete type satisfying those bounds. `Zero`/`One` are
-//! sourced from `deep_causality_num` (Phase 2 re-substrate); `Rig` itself stays
-//! a catgraph-native semiring — it is **never** a `deep_causality_num::Ring`,
-//! whose lowest ring requires `Sub` (which `BoolRig`/`Tropical` lack).
+//! This is a ring without negatives. The [`Rig`] trait packages [`Zero`] +
+//! [`One`] + `Add` + `Mul` with a marker. A blanket impl lifts any concrete
+//! type satisfying those bounds. All three traits are **catgraph-native** and
+//! defined in this module (#219): the rig substrate is owned end to end, and
+//! `Rig` is in particular never anyone else's `Ring` — the lowest ring in the
+//! numeric crates we surveyed requires `Sub`, which `BoolRig`/`Tropical` lack.
 //!
 //! ## Concrete instances
 //!
@@ -28,12 +28,13 @@
 //! - [`Checked<T>`] — a poison-on-overflow wrapper over a primitive integer
 //!   rig; see the overflow policy below.
 //!
-//! Primitive integer and float types are rigs via the blanket impl, since
-//! `deep_causality_num` provides their `Zero`/`One`. Note that
+//! Primitive integer and float types are rigs via the blanket impl, since this
+//! module implements [`Zero`]/[`One`] for all of them. Note that
 //! `rust_decimal::Decimal` (used by [`petri_net`](crate::petri_net) for token
-//! multiplicities) is **not** automatically a rig under the DC re-substrate —
-//! it does not implement `deep_causality_num::{Zero, One}`; a downstream impl
-//! would be required to use it as a `Rig` coefficient.
+//! multiplicities) is **not** currently a rig — nothing implements [`Zero`] or
+//! [`One`] for it. Now that both traits are catgraph-native the impl would be
+//! legal here (no orphan-rule barrier), but adding it is a surface decision,
+//! not a consequence of owning the traits.
 //!
 //! # `Eq + Hash + Ord` on `f64`-wrapping rigs
 //!
@@ -91,8 +92,104 @@
 //! would not be a rig at all, while also destroying the evidence that anything
 //! went wrong. [`Checked<T>`] loses strictly less (one axiom, visibly).
 
-use deep_causality_num::{One, Zero};
 use std::ops::{Add, Div, Mul, Neg, Sub};
+
+/// The additive identity `0` of a [`Rig`].
+///
+/// Catgraph-native: the trait is defined here, next to the [`Rig`] it pairs
+/// with, so the whole rig substrate is owned by this crate (#219). The
+/// supertrait bound is deliberate — an additive identity for a type with no
+/// addition is not an identity for anything.
+///
+/// Implemented here for every primitive integer and float, and for each
+/// concrete rig in this module; a downstream scalar that wants to be a [`Rig`]
+/// implements this and [`One`].
+pub trait Zero: Sized + Add<Self, Output = Self> {
+    /// The additive identity element of `Self`, `0`.
+    ///
+    /// Pure: the same value on every call, independent of external state.
+    // Not an associated constant, so that bignum-backed rigs (`Z`) can impl it.
+    fn zero() -> Self;
+
+    /// `true` exactly when `self` is the additive identity.
+    fn is_zero(&self) -> bool;
+}
+
+/// The multiplicative identity `1` of a [`Rig`].
+///
+/// The multiplicative counterpart of [`Zero`]; see that trait's docs for why
+/// both live in this crate and why the supertrait bound is there.
+pub trait One: Sized + Mul<Self, Output = Self> {
+    /// The multiplicative identity element of `Self`, `1`.
+    ///
+    /// Pure: the same value on every call, independent of external state.
+    fn one() -> Self;
+
+    /// `true` exactly when `self` is the multiplicative identity.
+    fn is_one(&self) -> bool;
+}
+
+macro_rules! impl_identities_for_primitive_int {
+    ($($t:ty),+ $(,)?) => {
+        $(
+            impl Zero for $t {
+                #[inline]
+                fn zero() -> Self {
+                    0
+                }
+                #[inline]
+                fn is_zero(&self) -> bool {
+                    *self == 0
+                }
+            }
+
+            impl One for $t {
+                #[inline]
+                fn one() -> Self {
+                    1
+                }
+                #[inline]
+                fn is_one(&self) -> bool {
+                    *self == 1
+                }
+            }
+        )+
+    };
+}
+
+macro_rules! impl_identities_for_primitive_float {
+    ($($t:ty),+ $(,)?) => {
+        $(
+            impl Zero for $t {
+                #[inline]
+                fn zero() -> Self {
+                    0.0
+                }
+                /// `-0.0` counts as zero, matching IEEE `-0.0 == 0.0`.
+                #[inline]
+                fn is_zero(&self) -> bool {
+                    *self == 0.0
+                }
+            }
+
+            impl One for $t {
+                #[inline]
+                fn one() -> Self {
+                    1.0
+                }
+                #[inline]
+                fn is_one(&self) -> bool {
+                    *self == 1.0
+                }
+            }
+        )+
+    };
+}
+
+impl_identities_for_primitive_int!(
+    i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize
+);
+impl_identities_for_primitive_float!(f32, f64);
 
 /// Normalize `-0.0` to `0.0`, so that the `Ord` impls on the `f64`-wrapping
 /// rigs agree with their `Eq`/`Hash` impls (under which `-0.0 == 0.0`).
@@ -469,9 +566,9 @@ impl PartialOrd for F64Rig {
 ///
 /// Implemented for every primitive integer type by delegating to the std
 /// inherent `checked_add` / `checked_mul`; a `None` return **is** the overflow
-/// signal. The trait is catgraph-local rather than a `num-traits` import
-/// because the workspace sources only `Zero` / `One` from an external numeric
-/// crate (`deep_causality_num`) — see the crate-root substrate rules.
+/// signal. The trait is catgraph-local rather than a `num-traits` import, for
+/// the same reason [`Zero`] and [`One`] are — the rig substrate is owned by
+/// this crate; see the crate-root substrate rules.
 ///
 /// Downstream types may implement it to make themselves wrappable in
 /// [`Checked`]; the contract is that `None` means "the exact result is not
@@ -563,8 +660,7 @@ impl_checked_ops_for_primitive_int!(
 /// # Examples
 ///
 /// ```
-/// use catgraph_applied::rig::Checked;
-/// use deep_causality_num::Zero;
+/// use catgraph_applied::rig::{Checked, Zero};
 ///
 /// let big = Checked::new(4_000_000_000_i64);
 /// let overflowed = big * big;

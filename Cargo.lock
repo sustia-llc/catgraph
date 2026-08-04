@@ -248,7 +248,6 @@ dependencies = [
  "catgraph",
  "catgraph-testutil",
  "criterion",
- "deep_causality_num",
  "either",
  "itertools 0.15.0",
  "nalgebra",
@@ -274,8 +273,6 @@ dependencies = [
  "catgraph-testutil",
  "criterion",
  "deep_causality_haft",
- "deep_causality_num",
- "deep_causality_num_dual",
  "proptest",
 ]
 
@@ -287,7 +284,6 @@ dependencies = [
  "catgraph-applied",
  "catgraph-testutil",
  "criterion",
- "deep_causality_num",
  "modularsnf",
  "nalgebra",
  "ndarray 0.16.1",
@@ -517,16 +513,6 @@ name = "deep_causality_num"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3dda52acfad1544f374160f04ef0b589df7b3fb8720aab4a95105e3d747160a"
-
-[[package]]
-name = "deep_causality_num_dual"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24418c1f66f91443475f472d582bcd375d48f8e3204e57003bfd878dce1da7af"
-dependencies = [
- "deep_causality_algebra",
- "deep_causality_num",
-]
 
 [[package]]
 name = "defmt"

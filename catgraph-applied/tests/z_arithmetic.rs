@@ -6,9 +6,8 @@
 //! (`ZAlgebra` was renamed from `Integer` and sealed.)
 
 use catgraph_applied::ZAlgebra;
-use catgraph_applied::rig::Rig;
+use catgraph_applied::rig::{One, Rig, Zero};
 use catgraph_applied::z::Z;
-use deep_causality_num::{One, Zero};
 use std::collections::HashSet;
 
 #[test]

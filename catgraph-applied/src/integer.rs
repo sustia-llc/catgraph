@@ -149,7 +149,7 @@ pub(crate) mod private {
 /// // rule is satisfied — the *only* remaining barrier is the unnameable
 /// // `private::Sealed` supertrait bound on `ZAlgebra`.
 /// use catgraph_applied::ZAlgebra;
-/// use deep_causality_num::{One, Zero};
+/// use catgraph_applied::rig::{One, Zero};
 /// use std::ops::{Add, Mul, Neg, Sub};
 ///
 /// #[derive(Clone, PartialEq)]

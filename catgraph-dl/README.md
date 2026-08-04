@@ -73,8 +73,8 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
   object carrier **`RModule<S>`** (`Vec<S>`-backed `Sⁿ`) carries genuine
   `R`-module structure (`zeros` / `basis` / `add` / `scale` / `direct_sum`)
   under minimal per-method bounds,
-  which is where the reserved `deep_causality_num` `Zero` / `One` finally
-  activate. Kind markers **`RObject<S>`** / **`RMorphism<S>`**. Monoidal product =
+  which is where catgraph-applied's `rig::Zero` / `rig::One` carry the ring
+  identities. Kind markers **`RObject<S>`** / **`RMorphism<S>`**. Monoidal product =
   **direct sum `⊕`**, not tensor `⊗_R`: CDL Example G.3 forms `Para(Smooth)`
   over the *cartesian* structure of real vector spaces, whose finite-dimensional
   biproduct is `Rᵐ × Rⁿ ≅ Rᵐ⁺ⁿ`. Anchors: CDL Definition E.2 (actegory), Example
@@ -211,12 +211,12 @@ For a single import path, the Tier-3 enrichment substrate is re-exported from
 Phase 5 (`catgraph-dl`) is merged. The endofunctor layer now runs on
 `deep_causality_haft`'s `HKT` / `Functor` witnesses (EndoFunctor→haft migration
 landed, [#12](https://github.com/sustia-llc/catgraph/issues/12)) — imported in
-`src/endofunctor.rs`, the single seam. `deep_causality_num` is now **in use**
-([#36](https://github.com/sustia-llc/catgraph/issues/36)): `src/para/module_actegory.rs`
-imports num's root `Zero` / `One` for the `RModule<S>` R-module actegory (the
-ring identities filling the zero vector and marking the standard basis). Only
-`Zero` / `One` are used — the DC substrate stays thin. Rig `Zero` / `One` are
-still inherited transitively from `catgraph-applied`'s `Rig`.
+`src/endofunctor.rs`, the single seam. The `RModule<S>` R-module actegory
+([#36](https://github.com/sustia-llc/catgraph/issues/36)) takes its ring
+identities — filling the zero vector and marking the standard basis — from
+`catgraph_applied::rig::{Zero, One}`, the same pair the `Rig` bound is written
+against ([#219](https://github.com/sustia-llc/catgraph/issues/219)); they used
+to come from `deep_causality_num`.
 
 ## Dependencies
 
@@ -226,16 +226,15 @@ still inherited transitively from `catgraph-applied`'s `Rig`.
 - `deep_causality_haft` — the `HKT` / `Functor` endofunctor witnesses (#12) and
   the `Either` sum used by `TreeEndo`. (The former dependency on the `either`
   crate was dropped — `Either` now comes from haft.)
-- `deep_causality_num` — root `Zero` / `One` for the `RModule<S>` R-module
-  actegory (#36; see [Status](#status)).
-- `deep_causality_num_dual` — **optional**, behind the off-by-default `ad`
-  feature (#74; see [Features](#features)). Supplies exactly one type,
-  `Dual<T>`, consumed only in `src/para/ad.rs` (the single import seam, mirroring
-  `src/endofunctor.rs` for haft). Its own `deep_causality_algebra "0.2"`
-  dependency is already in the lockfile at 0.2.0 via haft, so the `ad` build adds
-  no duplicate; catgraph code never names `deep_causality_algebra` (every use
-  site is the concrete `Dual<f64>`).
 - dev: `proptest`.
+
+That is the whole list — `deep_causality_haft` is the crate's only non-catgraph
+dependency, and the `ad` feature adds nothing to it. The `Zero` / `One` behind
+`RModule<S>` came from `deep_causality_num` until #219, and the `Dual<T>` behind
+`ad` came from `deep_causality_num_dual` until #221; both are catgraph's own now
+(`catgraph-applied/src/rig.rs` and `src/para/dual.rs` respectively). haft brings
+`deep_causality_algebra` and `deep_causality_num` along transitively — catgraph
+source names neither.
 
 ## Deferred surfaces
 
@@ -325,14 +324,13 @@ evidence trail.
 
 | Feature | Default | What it adds |
 |---|---|---|
-| `ad` | off | Forward-mode automatic differentiation ([#74](https://github.com/sustia-llc/catgraph/issues/74)). Pulls in `deep_causality_num_dual` (pinned `=0.1.4`) and exposes `para::ad`: `Dual<f64>` as a scalar for the generic `RModule<S>` stack, the alias `DualF64Module = RModule<Dual<f64>>`, and the `seed` / `gradient` helpers. |
+| `ad` | off | Forward-mode automatic differentiation ([#74](https://github.com/sustia-llc/catgraph/issues/74)). Exposes `para::ad`: the crate's own `Dual<f64>` as a scalar for the generic `RModule<S>` stack, the alias `DualF64Module = RModule<Dual<f64>>`, and the `seed` / `gradient` helpers. Adds **no dependency** ([#221](https://github.com/sustia-llc/catgraph/issues/221)). |
 
-`ad` is **additive, not a code path**: `Dual` already satisfies every
-`RModule<S>` method bound (`Zero`, `One`, `Add`, `Mul`, `Clone`), so the feature
-adds a dependency and a module without changing any existing behaviour. The
-default build never compiles `deep_causality_num_dual` — verify with
-`cargo tree -p catgraph-dl` (no `deep_causality_num_dual` line) versus
-`cargo tree -p catgraph-dl --features ad`.
+`ad` is **additive, not a code path**: `Dual` satisfies every `RModule<S>` method
+bound (`Zero`, `One`, `Add`, `Mul`, `Clone`), so the feature adds two modules
+without changing any existing behaviour. Since #221 it pulls in no crate at all,
+so `cargo tree -p catgraph-dl` and `cargo tree -p catgraph-dl --features ad`
+now print the same tree.
 
 ```sh
 cargo test -p catgraph-dl --features ad

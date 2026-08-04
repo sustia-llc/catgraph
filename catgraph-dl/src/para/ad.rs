@@ -5,17 +5,17 @@
 //! ## What this module is, and what it is not
 //!
 //! [`RModule<S>`](super::RModule) became generic in its scalar ring in #74 PR1.
-//! This module supplies one more `S`: `deep_causality_num_dual`'s [`Dual<T>`],
-//! the forward-mode dual number `a + b·ε` with `ε² = 0`. Evaluating a function
-//! at `Dual::variable(x₀) = x₀ + 1·ε` returns `f(x₀)` in the real part and
-//! `f'(x₀)` in the `ε` part, exact to machine precision — the chain rule falls
-//! out of `Dual`'s arithmetic impls.
+//! This module supplies one more `S`: [`Dual<T>`], the forward-mode dual number
+//! `a + b·ε` with `ε² = 0`. Evaluating a function at
+//! `Dual::variable(x₀) = x₀ + 1·ε` returns `f(x₀)` in the real part and `f'(x₀)`
+//! in the `ε` part, exact to machine precision — the chain rule falls out of
+//! `Dual`'s arithmetic impls.
 //!
-//! `Dual` drops in with **no adapter**: it already implements the
-//! `deep_causality_num` `Zero` / `One` this crate re-sources, plus `Add` / `Mul`,
-//! and derives `Clone` — exactly the per-method bound set PR1's `RModule<S>`
-//! signatures ask for. Nothing here re-implements the module structure; it
-//! parameterises it.
+//! `Dual` drops in with **no adapter**: it implements catgraph's own
+//! [`Zero`](catgraph_applied::rig::Zero) / [`One`](catgraph_applied::rig::One)
+//! plus `Add` / `Mul` and derives `Clone` — exactly the per-method bound set
+//! PR1's `RModule<S>` signatures ask for. Nothing here re-implements the module
+//! structure; it parameterises it.
 //!
 //! **Honesty note on anchors.** Dual numbers are *not* a CDL construction — the
 //! paper's differentiation content is a citation to the gradient-based-learning
@@ -27,14 +27,15 @@
 //! walkthrough is where the CDL §3.1 `Para` reading of a gradient step is spelled
 //! out.
 //!
-//! ## Single import seam
+//! ## Where `Dual` lives
 //!
-//! This file is the **only** one in the crate that names
-//! `deep_causality_num_dual`, mirroring the `src/endofunctor.rs` convention for
-//! `deep_causality_haft`. [`Dual`] is re-exported here so consumers of the `ad`
-//! feature never add the upstream crate to their own manifest.
+//! [`Dual`] is defined in the sibling `para::dual` module and re-exported here,
+//! so `para::ad` stays the single public entry point for the whole feature —
+//! the path `catgraph_dl::para::ad::Dual` is unchanged from when the type came
+//! from `deep_causality_num_dual` (#221). There is no longer an upstream crate
+//! to seam against: the `ad` feature adds no dependency at all.
 
-pub use deep_causality_num_dual::Dual;
+pub use super::dual::Dual;
 
 use super::module_actegory::{F64Module, RModule};
 

@@ -5,11 +5,11 @@
 
 use std::ops::MulAssign;
 
-use deep_causality_num::One;
 use itertools::Itertools;
 use rand::RngExt;
 
 use crate::F32_EPSILON;
+use crate::rig::One;
 use catgraph::{category::HasIdentity, errors::CatgraphError, operadic::Operadic};
 
 type IntervalCoord = f32;

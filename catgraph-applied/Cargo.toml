@@ -48,14 +48,16 @@ serde = ["dep:serde"]
 
 [dependencies]
 catgraph = { workspace = true }
-deep_causality_num = { workspace = true }
 either.workspace = true
 itertools.workspace = true
 nalgebra = { workspace = true, optional = true }
-# `num` is narrowed to BigInt / Complex / ToPrimitive / pow ONLY — Zero/One are
-# re-sourced from `deep_causality_num` (Phase 2 re-substrate). A CI grep-guard
-# keeps `num::{Zero,One}` from creeping back outside the documented exception
-# list (z.rs, temperley_lieb.rs, petri_net.rs, e2_operad.rs).
+# `num` is narrowed to BigInt / Complex / ToPrimitive / pow ONLY — `Zero`/`One`
+# are catgraph's own, defined in `src/rig.rs` next to `Rig` (#219). A CI
+# grep-guard keeps `num::{Zero,One}` from creeping back. Three files legitimately
+# name them: temperley_lieb.rs and linear_combination.rs (the `num::Complex<i32>`
+# coefficient substrate) are the guard's two file exclusions, and z.rs imports
+# them *aliased* (`One as NumOne`, to drive the inner BigInt), which the guard's
+# `(?!\s+as)` lookahead skips without needing an exclusion.
 num.workspace = true
 permutations.workspace = true
 rand.workspace = true
