@@ -10,6 +10,60 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **`BranchialSpectrum::eigenvalue_zero_tolerance`**
+  ([#166](https://github.com/sustia-llc/catgraph/issues/166)) — the
+  spectrum-scaled tolerance now used by `connected_components` and
+  `spectral_gap`, exposed so callers can see (and reproduce) the zero test.
+
+### Changed
+
+- **`multiway::branchial_spectrum` hygiene pass**
+  ([#166](https://github.com/sustia-llc/catgraph/issues/166), `spectral`
+  feature, no new dependencies):
+  - **Degrees hoisted out of the Laplacian cell closure** — a readability
+    change with **no complexity or work difference**. #166 reported the old
+    inline `(0..n).filter(…).count()` as an accidental O(n³) construction; that
+    is **incorrect**, and the correction is recorded on the issue. `from_fn`
+    evaluates its closure once per cell and the scan sat behind `if i == j`, so
+    it ran on the n diagonal cells only — Θ(n²), exactly what the hoisted loop
+    costs. The old form was merely easy to misread as O(n³).
+  - **Eigenvector reordering applies the sort permutation in place** (cycle
+    walk over `swap_columns`) instead of rebuilding the whole n×n matrix cell
+    by cell into a second allocation.
+  - **Eigenvalue zero detection is relative, not absolute.** The fixed
+    `EIGENVALUE_ZERO_THRESHOLD = 1e-10` is replaced by
+    `100 · ε · n · max(λ_max, 1)`, mirroring the `O(ε · n · ‖L‖₂)`
+    backward-error bound of a symmetric eigensolver. A fixed absolute
+    threshold does not grow with the solver's own error, so large or
+    weight-scaled graphs could misclassify zero eigenvalues and hence
+    **miscount connected components**. The `max(λ_max, 1)` floor keeps an
+    edgeless graph (every eigenvalue zero) counting every node as its own
+    component.
+  - **k-means seeding, empty clusters, and convergence.** Seeds now come from
+    farthest-first traversal (the deterministic analogue of k-means++) rather
+    than the first `k` pairwise-distinct points, which could place every
+    centroid inside a single dense blob; clusters that go empty are reseeded
+    onto the point farthest from its own centroid instead of being parked at a
+    zero centroid — so all `k` clusters stay populated whenever the embedding
+    has at least `k` distinct points (with coincident points, k-means cannot
+    fill `k` clusters at all, and the rustdoc says so); and the sweep now stops
+    on a centroid-movement tolerance as well as on the 100-iteration cap.
+    Clustering remains fully deterministic — no RNG, all ties broken toward the
+    lowest index.
+  - `fiedler_vector`'s copy is now documented, with `spectrum.eigenvectors
+    .column(1)` named as the zero-copy alternative.
+  - `spectral_gap` gained an explicit empty-spectrum guard. The relative
+    tolerance is zero for an empty spectrum (there is no λ_max to scale
+    against), so the `λ_max < tolerance` test could no longer catch that case
+    and the ratio would have evaluated to `0/0 = NaN` where the old absolute
+    threshold returned `0.0`.
+
+  Normalized Laplacians (`L_sym` / `L_rw`), listed as optional in #166, are
+  **deferred** to [#223](https://github.com/sustia-llc/catgraph/issues/223) —
+  they add public API and want their own test matrix.
+
 ## [workspace-v0.4.0] - 2026-07-25
 
 ### Added
