@@ -6,12 +6,25 @@
 //! seven near-identical inline copies across tests, benches, and examples
 //! (issue #33).
 //!
-//! The only helper today is [`Lcg`], a minimal deterministic linear
-//! congruential generator used to build seeded fixtures without pulling `rand`
-//! into the dev-dependency graph.
+//! Helpers:
+//!
+//! - [`Lcg`] — a minimal deterministic linear congruential generator used to
+//!   build seeded fixtures without pulling `rand` into the dev-dependency
+//!   graph (#33).
+//! - [`approx_rel`] and [`assert_approx_rel!`] — relative-plus-absolute float
+//!   comparison, so an assertion's tolerance intent is explicit rather than a
+//!   bare absolute epsilon (#169).
+//! - [`strategy`] — shared `proptest` float strategies covering the wide
+//!   dynamic ranges and near-cancellation pairs the workspace's uniform-
+//!   magnitude strategies never reached (#169).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+mod approx;
+pub mod strategy;
+
+pub use approx::approx_rel;
 
 /// The LCG multiplier — the 64-bit constant from the PCG family / Knuth MMIX
 /// lineage (also used by `pcg64`). Shared by every stream this type produces.

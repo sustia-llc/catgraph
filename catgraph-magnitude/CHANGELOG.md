@@ -14,6 +14,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Möbius and (co)weighting test tolerances migrated to `approx_rel`**
+  ([#169](https://github.com/sustia-llc/catgraph/issues/169), tests only — no
+  library change). `tests/mobius_chains.rs` and `tests/weighting_coweighting.rs`
+  replace bare absolute epsilons with named relative + absolute-floor constants,
+  so each assertion states which regime it polices.
+
+  The migration **surfaced a real accuracy fact the absolute epsilon was
+  hiding**: on the 4-state *boundary* fixture (`slack = 0.1`, where
+  `r = (n − 1)·e^(−d) → 1⁻` and the truncated chain-sum DFS converges slowly),
+  the two Möbius routes disagree by **1.08e-9 relative** — `2.448e-10` on an
+  entry of `0.2267`. The old `1e-9` absolute bound passed it only because the
+  entries are below 1. That fixture now carries its own documented
+  `MOBIUS_BOUNDARY_REL_TOL = 1e-8`, distinct from the `1e-9` used in the
+  converged regime; the random-slack proptest (`slack ∈ 0.5..3.0`) passes at the
+  tighter bound unchanged — a sweep of that whole domain measures a worst
+  relative disagreement of `9.99e-14`, four orders under it.
+
+  Where the new bounds differ from the old absolute epsilons, each is recorded
+  at its constant rather than glossed. The migration is **not** uniformly
+  tightening: entry-wise comparisons (sub-unit values) get tighter, the
+  boundary fixture and the sum identities against the `2.8449` magnitude get
+  looser, and the two singleton assertions — which are bit-exact — keep their
+  `1e-12` via pure-absolute mode (`rel = 0.0`) rather than being widened to
+  `1e-9` by a relative bound against `1.0`.
+
 ## [workspace-v0.7.0] - 2026-08-02
 
 ### Added
