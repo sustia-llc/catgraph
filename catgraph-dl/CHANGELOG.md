@@ -13,6 +13,8 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+## [workspace-v0.9.0] - 2026-08-04
+
 ### Added
 
 - **`para::dual` — the forward-mode `Dual<T>` is now catgraph's own**
