@@ -226,10 +226,18 @@ to come from `deep_causality_num`.
 - `deep_causality_haft` — the `HKT` / `Functor` endofunctor witnesses (#12) and
   the `Either` sum used by `TreeEndo`. (The former dependency on the `either`
   crate was dropped — `Either` now comes from haft.)
-- dev: `proptest`.
+- `serde` — **optional**, off by default, behind the `serde` feature (#230).
+- dev: `proptest`, `criterion`, `serde_json` (the round-trip driver for
+  `tests/serde_roundtrip.rs`), and the workspace's unpublished
+  `catgraph-testutil` (deterministic bench LCG).
 
-That is the whole list — `deep_causality_haft` is the crate's only non-catgraph
-dependency, and the `ad` feature adds nothing to it. The `Zero` / `One` behind
+That is the whole list — `deep_causality_haft` is the crate's only unconditional
+non-catgraph `[dependencies]` entry, and the `ad` feature adds nothing to it.
+`serde` is the one feature that adds a direct edge, which is why it stays off by
+default (note serde itself already appears in the default build transitively,
+under `catgraph-applied → rust_decimal` — the feature adds this crate's *own*
+edge plus `serde_derive`, not serde's first appearance). The
+`Zero` / `One` behind
 `RModule<S>` came from `deep_causality_num` until #219, and the `Dual<T>` behind
 `ad` came from `deep_causality_num_dual` until #221; both are catgraph's own now
 (`catgraph-applied/src/rig.rs` and `src/para/dual.rs` respectively). haft brings
@@ -325,6 +333,7 @@ evidence trail.
 | Feature | Default | What it adds |
 |---|---|---|
 | `ad` | off | Forward-mode automatic differentiation ([#74](https://github.com/sustia-llc/catgraph/issues/74)). Exposes `para::ad`: the crate's own `Dual<f64>` as a scalar for the generic `RModule<S>` stack, the alias `DualF64Module = RModule<Dual<f64>>`, and the `seed` / `gradient` helpers. Adds **no dependency** ([#221](https://github.com/sustia-llc/catgraph/issues/221)). |
+| `serde` | off | `Serialize`/`Deserialize` derives on the parameter carriers ([#230](https://github.com/sustia-llc/catgraph/issues/230)): `RModule<S>`, `DirectSum<A, B>`, and — under `ad` too — `Dual<T>`. Adds `serde` (derive). Mirrors `catgraph-applied`'s opt-in `serde` ([#81](https://github.com/sustia-llc/catgraph/issues/81)), which persists *terms*; this persists the parameter data they act on, for the #72/#73 persistence track. |
 
 `ad` is **additive, not a code path**: `Dual` satisfies every `RModule<S>` method
 bound (`Zero`, `One`, `Add`, `Mul`, `Clone`), so the feature adds two modules
@@ -332,9 +341,24 @@ without changing any existing behaviour. Since #221 it pulls in no crate at all,
 so `cargo tree -p catgraph-dl` and `cargo tree -p catgraph-dl --features ad`
 now print the same tree.
 
+`serde` is likewise additive — derives only, no behaviour change — but unlike
+`ad` it *does* add a direct edge (`serde` + `serde_derive`), so it stays off by
+default; see the Dependencies note above for the pre-existing transitive serde.
+Deserialization reconstructs `RModule`'s coordinate vector directly: a
+document's dimension is whatever it says, nothing checks it against the
+dimension a caller expected, and of the module's operations only `add` rejects
+a mismatch (with `None`) — `scale`, `direct_sum`, `flatten`, and the slice
+accessors operate at whatever dimension was loaded. **Check `dim()` once at
+your own entry point.** The full trust-boundary statement of record — including
+the untagged wire shape and the non-finite-float `null` asymmetry — is
+`RModule`'s Serde rustdoc section.
+
 ```sh
 cargo test -p catgraph-dl --features ad
 cargo run  -p catgraph-dl --features ad --example gradient_descent_para
+cargo test -p catgraph-dl --features serde
+# `Dual` lives in the `ad`-gated `para::ad`, so its derives need both:
+cargo test -p catgraph-dl --features "serde ad"
 ```
 
 ## Build

@@ -13,6 +13,37 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Optional `serde` feature** ([#230](https://github.com/sustia-llc/catgraph/issues/230)):
+  `Serialize`/`Deserialize` derives on the parameter carriers — `RModule<S>`,
+  `DirectSum<A, B>`, and (only when `ad` is also enabled, since `para::ad` is
+  `ad`-gated) `Dual<T>`. Each is generic over its payload's own serde impls.
+  **Off by default**, so the default build takes no direct serde edge. This is
+  the dl mirror of `catgraph-applied`'s #81 feature and the other half of the
+  persistence track ([#72](https://github.com/sustia-llc/catgraph/issues/72)/[#73](https://github.com/sustia-llc/catgraph/issues/73)):
+  applied/syntax persist *terms*, while `RModule<S>` is the plain `Vec<S>`
+  parameter data those terms act on, which nothing could persist before.
+  ("Off by default" precisely: the feature adds no *direct* serde edge to the
+  default build — serde already appears there transitively, under
+  `catgraph-applied → rust_decimal`.)
+  - **Trust boundary** (the statement of record is `RModule`'s Serde rustdoc
+    section — this is the summary): a deserialized module's `dim()` is
+    whatever the payload's coordinate count says, exactly as with
+    `RModule::new`; nothing checks it against the dimension the caller
+    expected, and of the module's operations only `add` rejects a mismatch
+    (with `None`) — `scale`/`direct_sum`/`flatten` and the slice accessors
+    operate at whatever dimension was loaded. **Check `dim()` at your entry
+    point.** The wire shape carries no type tag, and non-finite floats
+    serialize to JSON `null` (save succeeds, load fails) — both pinned by
+    `tests/serde_roundtrip.rs`.
+  - CI: dl joins the applied/syntax serde **clippy** lane whole; its test runs
+    are scoped to `--test serde_roundtrip` under `--features serde` and
+    `--features "serde ad"` (the only lane reaching the `Dual` derives), plus
+    a `cargo doc --features "serde ad"` pass — the workspace doc gate runs
+    default features only, so the feature-gated rustdoc was otherwise never
+    link-checked.
+
 ### Fixed
 
 - **Browser-wasm lib builds no longer fail in `getrandom`**
@@ -1144,7 +1175,8 @@ Initial scaffold release. Types-only surface; bodies land in Phase DL-2.
   coherence verification, and the algebra-homomorphism unroller arrive in
   Phase DL-2 with the `catgraph-coalition` v0.4.0 enriched-actegory body.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...HEAD
+[workspace-v0.9.0]: https://github.com/sustia-llc/catgraph/compare/v0.8.0...v0.9.0
 [workspace-v0.6.0]: https://github.com/sustia-llc/catgraph/compare/v0.5.0...v0.6.0
 [workspace-v0.5.0]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...v0.5.0
 [workspace-v0.4.0]: https://github.com/sustia-llc/catgraph/compare/v0.2.1...v0.4.0

@@ -27,7 +27,11 @@
 //!   carry the base ring as a type parameter. Under the off-by-default `ad`
 //!   feature, the `para::ad` submodule adds `Dual<f64>` as a second scalar,
 //!   giving forward-mode automatic differentiation over the same stack
-//!   (issue #74).
+//!   (issue #74). A second off-by-default feature, `serde`, adds
+//!   `Serialize`/`Deserialize` derives on the parameter carriers
+//!   ([`para::RModule`], [`para::DirectSum`], and — with `ad` too — `Dual`)
+//!   for the #72/#73 persistence track; the trust-boundary statement of
+//!   record is `RModule`'s Serde section (issue #230).
 //! - [`algebra`] — `FAlgebra<F>`, `FCoalgebra<F>`, `MonadAlgebra<M>` plus
 //!   homomorphism wrappers `FAlgebraHom` / `FCoalgebraHom` /
 //!   `MonadAlgebraHom` with caller-sampled `verify_commutes`, and (issue #40)

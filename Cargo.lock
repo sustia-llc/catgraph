@@ -273,6 +273,8 @@ dependencies = [
  "criterion",
  "deep_causality_haft",
  "proptest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

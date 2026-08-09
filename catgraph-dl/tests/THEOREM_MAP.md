@@ -109,3 +109,17 @@ it has no paper anchor to link. Registering them would fake traceability.
 |---|---|---|
 | `scaffold_smoke::*_constructs` | CDL Example 2.x / B.x | construction smoke (types inhabit) |
 | `coalition_consumption_simulation::tie_weights_consumption_pathway_simulation` | CDL Thm G.10 | weight-tying consumption pathway (BTV21-adjacent) |
+
+## Serde round-trips (feature-gated: `serde`, `serde ad`) — #230
+
+Serialization itself is engineering, not a CDL surface; these rows are
+registered because the tests re-assert anchored module/`⊕` content on
+**deserialized** values (the same laws the rows above pin on constructed ones).
+CI reaches them only through the `--features serde` / `--features "serde ad"`
+lanes.
+
+| Witness | Anchor | Law |
+|---|---|---|
+| `serde_roundtrip::direct_sum_round_trips_and_still_flattens` + `::direct_sum_with_the_empty_summand_round_trips` | CDL Ex E.4 / Ex G.3 | `⊕` concatenation and the `R⁰` unit re-asserted on loaded values |
+| `serde_roundtrip::deserialized_module_still_satisfies_the_module_axioms` | CDL Def E.2 | module axioms re-driven via `common::assert_f64_module_axioms` on a loaded block |
+| `serde_roundtrip::ad::dual_module_round_trips_and_still_differentiates` | CDL Def E.2 (`S = Dual<f64>`) | scaling still carries the tangent on a loaded `RModule<Dual<f64>>` |

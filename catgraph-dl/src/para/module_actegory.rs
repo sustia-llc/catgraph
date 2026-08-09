@@ -108,7 +108,18 @@ use super::monoidal_category::MonoidalCategory;
 /// direct sum of two concrete [`RModule`]s as one concatenated module.
 ///
 /// CDL Definition E.2 / Example E.4.
+///
+/// # Serde (feature `serde`)
+///
+/// Under `--features serde` the carrier round-trips whenever both summands do
+/// ([#230](https://github.com/sustia-llc/catgraph/issues/230)). It is a plain
+/// pair with public fields and no cross-slot invariant, so there is nothing a
+/// document could state that [`DirectSum::flatten`] would not equally accept
+/// from a hand-built value — the trust boundary is entirely the summands'
+/// (for [`RModule`], see its Serde section, which is the statement of record;
+/// the untagged-wire-shape caveat there applies to this pair too).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DirectSum<A, B>(pub A, pub B);
 
 impl<S> DirectSum<RModule<S>, RModule<S>> {
@@ -162,7 +173,49 @@ impl<S> DirectSum<RModule<S>, RModule<S>> {
 /// arbitrary reals are subject to ordinary floating-point rounding and are
 /// **not** asserted associative/distributive on the nose; tests use the
 /// NaN-free `finite_f64` strategy.
+///
+/// # Serde (feature `serde`)
+///
+/// Under `--features serde` a module round-trips as its bare coordinate
+/// vector, for any scalar `S` with serde impls of its own
+/// ([#230](https://github.com/sustia-llc/catgraph/issues/230)) — in this
+/// workspace that means `f64` (and the other std primitives) plus, under
+/// `ad`, `Dual<f64>`; `catgraph-applied`'s rig scalars (`F64Rig`, `Tropical`,
+/// …) carry no serde impls today, so `RModule<Tropical>` does not serialize.
+/// This is the parameter half of the persistence track
+/// ([#72](https://github.com/sustia-llc/catgraph/issues/72)/[#73](https://github.com/sustia-llc/catgraph/issues/73));
+/// terms are the other half, serialized in `catgraph-applied`
+/// ([#81](https://github.com/sustia-llc/catgraph/issues/81)).
+///
+/// **This section is the trust-boundary statement of record** — the README,
+/// CHANGELOG, and feature comment point here. What deserialization does and
+/// does not check:
+///
+/// - A deserialized module's [`dim`](Self::dim) is whatever the payload's
+///   coordinate count says — the same situation as [`RModule::new`], which
+///   accepts any `Vec<S>`, so serde admits no state the constructor did not.
+///   Nothing checks it against the dimension the *caller* expected.
+/// - Only [`add`](Self::add) rejects a dimension mismatch with `None`
+///   ([`basis`](Self::basis) guards an index, but it is an associated
+///   constructor — it never sees a loaded value). [`scale`](Self::scale),
+///   [`direct_sum`](Self::direct_sum), [`DirectSum::flatten`],
+///   [`as_slice`](Self::as_slice), and [`into_vec`](Self::into_vec) all
+///   operate at whatever dimension was loaded, so a wrong-size document
+///   propagates silently through them — and consumer code indexing the slice
+///   panics out of range. **Check `dim()` once at your own entry point**;
+///   that is the whole discipline (the #81 `Presentation` analogue).
+/// - The wire shape carries no type tag: at matching float counts, an
+///   `RModule<f64>` of dim 2, a [`DirectSum<f64, f64>`](DirectSum), and an
+///   `ad` `Dual<f64>` document are mutually acceptable — `[0.5,1.5]` reads
+///   back as any of the three. Which type a document means is metadata the
+///   consumer keeps.
+/// - Non-finite scalars do not survive JSON: `serde_json` serializes
+///   `NaN`/`±∞` as `null` (the save succeeds; the values are destroyed and
+///   indistinguishable) and deserializing that `null` back into `f64` fails —
+///   a checkpoint written from a non-finite state is unreadable. Pinned by
+///   `tests/serde_roundtrip.rs`.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RModule<S>(Vec<S>);
 
 /// The finite-dimensional real module `Rⁿ` over `R = f64` — the default

@@ -63,8 +63,27 @@ jobs:
       # #81: the opt-in `serde` feature is off by default, so the runs above
       # never exercise its derives or round-trip tests. This targeted run (plus
       # the clippy pass) keeps the serde surface from rotting silently.
+      # applied/syntax stay unscoped: their serde-gated tests span several
+      # files (serde_roundtrip, colored, rewrite, arity_overflow).
       - run: cargo test -p catgraph-applied -p catgraph-syntax --features serde
-      - run: cargo clippy -p catgraph-applied -p catgraph-syntax --features serde --all-targets -- -D warnings
+      # #230: catgraph-dl joins the clippy lane whole (compile coverage over
+      # all targets is cheap) but scopes its test runs to --test
+      # serde_roundtrip — dl's only serde-reachable tests — rather than
+      # re-running the full dl suite a third and fourth time under feature
+      # sets that are derives-only.
+      - run: cargo clippy -p catgraph-applied -p catgraph-syntax -p catgraph-dl --features serde --all-targets -- -D warnings
+      - run: cargo test -p catgraph-dl --features serde --test serde_roundtrip
+      # #230, second half: dl's third serde carrier is `Dual<T>`, and
+      # `para::{ad,dual}` compile only under `ad` — so its derives and the
+      # `RModule<Dual<f64>>` round-trips are reachable from neither the
+      # serde-only lane above nor the `ad`-only lane below. Only the
+      # combination covers them. The doc pass exists because the workspace doc
+      # gate (#85) runs default features only, so the ad/serde-gated rustdoc
+      # (`Dual`'s Serde section and its intra-doc links) is otherwise never
+      # link-checked anywhere.
+      - run: cargo test -p catgraph-dl --features "serde ad" --test serde_roundtrip
+      - run: cargo clippy -p catgraph-dl --features "serde ad" --all-targets -- -D warnings
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc -p catgraph-dl --features "serde ad" --no-deps
       # #174: `internal-probes` exposes two SMC-NF test hooks, both guarding
       # numbers in `docs/SMC-NF-RECONCILIATION.md` that were hand-measured and so
       # could drift silently — `nf_without_column_pass` for the §4.5 ablation
@@ -92,12 +111,13 @@ jobs:
             cargo run -q -p catgraph-dl --example "$ex"
           done
       # #74 PR2: the opt-in `ad` feature (forward-mode AD over the crate's own
-      # `Dual<T>`, catgraph-owned since #221) is off by default, so every run
-      # above leaves `para::ad`, `para::dual`, and the `RModule<Dual<f64>>`
-      # instance uncompiled. Targeted
-      # test + clippy pass (the #81 serde-lane shape), plus the feature-gated
-      # example run (the #34 self-checking-example convention; declared
-      # `required-features = ["ad"]`, so the loop above skips it).
+      # `Dual<T>`, catgraph-owned since #221) is off by default. Since #230 the
+      # `serde ad` lane above also compiles `para::{ad,dual}`, so this lane's
+      # residual value is the ad-WITHOUT-serde build — catching serde-gated
+      # symbols leaking into ad-only code — plus the full-suite run under `ad`
+      # and the feature-gated example (the #34 self-checking-example
+      # convention; declared `required-features = ["ad"]`, so the loop above
+      # skips it).
       - run: cargo test -p catgraph-dl --features ad
       - run: cargo clippy -p catgraph-dl --features ad --all-targets -- -D warnings
       - run: cargo run -q -p catgraph-dl --features ad --example gradient_descent_para
