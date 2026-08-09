@@ -13,6 +13,50 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Fixed
+
+- **Browser-wasm lib builds of this crate no longer fail in `getrandom`**
+  ([#232](https://github.com/sustia-llc/catgraph/issues/232)). The workspace
+  `rand` entry drops its default features entirely: the default
+  `sys_rng`/`thread_rng` pair pulled `getrandom`, whose `compile_error!` aborts
+  every browser-wasm build that reaches it — and this crate's `rand` edge was
+  the sole path to it for `catgraph-magnitude`, `catgraph-dl`, and
+  `catgraph-syntax` too. The verified claim, exactly:
+  `cargo check --lib -p <crate> --target wasm32-unknown-unknown` now passes for
+  all four crates. Dev graphs still reach `getrandom` through
+  `proptest`, so `--all-targets`/`--tests` forms on that target still fail —
+  the guarantee is the lib/normal-dependency graph.
+  - No API or behaviour change. The only non-test `rand` surface this crate
+    exposes is `E1::random(cur_arity, rng: &mut impl RngExt)`, whose RNG is
+    caller-supplied; nothing here reads OS entropy. The lib edge now carries
+    **no** rand features at all — the seeded `StdRng` tests and `mat_ops_bench`
+    fixtures moved their `std`/`std_rng` needs to this crate's own
+    dev-dependency edge, so downstream lib graphs also shed `chacha20`.
+  - **Feature-unification caveat.** `rustworkx-core` (behind
+    `catgraph-physics`' default `rustworkx` feature) declares `rand` WITH its
+    default features, and cargo unifies features per crate version across a
+    build graph. Any invocation that includes `catgraph-physics` — a
+    `--workspace` build, or a downstream depending on both crates — re-enables
+    `sys_rng`/`thread_rng`, and `getrandom` is back. The slim graph is real
+    only physics-free: per-package `-p` builds, or physics with
+    `--no-default-features`. Native workspace builds and compile times are
+    unchanged for the same reason. The per-package CI wasm lane guarding this
+    is [#233](https://github.com/sustia-llc/catgraph/issues/233).
+  - **Downstream note.** The published manifest now declares featureless
+    `rand`, so this crate no longer contributes rand's defaults to a consumer's
+    feature union — a consumer that was getting `thread_rng`/`sys_rng` "for
+    free" through this crate must now enable them itself. Callers of
+    `E1::random` supply the RNG from their own `rand 0.10` dependency (this
+    crate re-exports nothing from `rand`).
+  - **Runtime caveat for browser builds.** The default `parallel` feature
+    compiles `rayon` cleanly on `wasm32-unknown-unknown`, but that target
+    cannot spawn threads at runtime — browser consumers should build with
+    `--no-default-features`, matching the README's wasip1 recipes.
+  - **Not a change of supported-target policy.** Browsers stay out of scope
+    (the policy statement lives in catgraph's README, WASM section);
+    `wasm32-wasip1` remains the wasm lane. This removes an accidental blocker,
+    it does not add a tier.
+
 ## [workspace-v0.9.0] - 2026-08-04
 
 ### Added

@@ -699,7 +699,11 @@ mod test {
     #[test]
     fn permutatation_manual() {
         use super::Cospan;
-        let whatever_types: Vec<_> = (0..5).map(|_| rand::random::<bool>()).collect();
+        // A literal, not an RNG (#232): the five bools are arbitrary payload the
+        // assertions carry through, so entropy bought nothing — and a visible
+        // mixed pattern guarantees the middle comparison stays discriminating
+        // (a seeded stream could silently degenerate to all-equal).
+        let whatever_types = vec![true, false, true, false, true];
         let mut full_types: Vec<bool> = vec![true, true];
         full_types.extend(whatever_types.clone());
         let cospan = Cospan::<bool>::new((0..=6).collect(), vec![1, 0, 2, 3], full_types);

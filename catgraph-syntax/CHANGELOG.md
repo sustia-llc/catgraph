@@ -7,6 +7,18 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Browser-wasm lib builds no longer fail in `getrandom`**
+  ([#232](https://github.com/sustia-llc/catgraph/issues/232), fixed in
+  `catgraph-applied`). This crate's only path to `getrandom` was
+  `catgraph-applied`'s `rand` edge; with the workspace `rand` entry slimmed to
+  no default features, `cargo check --lib -p catgraph-syntax --target
+  wasm32-unknown-unknown` now passes. Dev graphs still reach `getrandom` via
+  `proptest`, and any build graph containing `catgraph-physics` re-enables
+  rand's defaults by feature unification — see `catgraph-applied`'s #232 entry
+  for the full caveats.
+
 ## [workspace-v0.8.0] - 2026-08-03
 
 ### Added

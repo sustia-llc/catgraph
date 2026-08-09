@@ -67,7 +67,28 @@ union-find     = "0.4"
 either       = "1.6.1"
 itertools    = "0.15"
 num          = "0.4"   # narrowed to BigInt / Complex / ToPrimitive / pow (NOT Zero/One — those are catgraph's own, in catgraph-applied's `rig`)
-rand         = "0.10"
+# Featureless — the default `sys_rng`/`thread_rng` pair pulls `getrandom`,
+# whose `compile_error!` fails every `wasm32-unknown-unknown` LIB build of
+# `catgraph-applied` and, through it, magnitude / dl / syntax (#232). The lib
+# edge needs NO features: the only non-test rand surface in published API is
+# `E1::random(_, rng: &mut impl RngExt)` — caller-supplied RNG, no OS entropy
+# anywhere in src. The seeded `StdRng` fixtures live on the two
+# [dev-dependencies] edges (catgraph, catgraph-applied), which add
+# `std`/`std_rng` for themselves only — so downstream lib graphs also shed
+# `chacha20`. Dev graphs still reach `getrandom` through proptest: the wasm
+# guarantee is `cargo check --lib`, not `--all-targets`.
+# The slim declaration must live HERE (deps are centralized in
+# [workspace.dependencies], and a member edge can only ADD features — note a
+# member writing `default-features = true` WOULD re-enable the defaults, so
+# member edges stay bare). CAVEAT: any build graph containing catgraph-physics
+# re-enables the defaults anyway — its default `rustworkx` feature pulls
+# rustworkx-core, which declares rand WITH defaults, and cargo unifies features
+# per crate version. The slim graph is therefore real only in physics-free
+# `-p` invocations; the per-package CI wasm lane is #233.
+# Not a supported-target policy change — `wasm32-wasip1` remains the wasm lane,
+# and browsers stay out of scope (the policy statement lives in
+# catgraph/README.md's WASM section); this only removes an accidental blocker.
+rand         = { version = "0.10", default-features = false }
 rayon        = "1.12"
 rust_decimal = "1"
 # `serde` is opt-in per member (`{ workspace = true, optional = true }` behind a
