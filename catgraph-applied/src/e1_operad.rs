@@ -113,6 +113,12 @@ impl E1 {
     /// The sort's `partial_cmp` expect panics if any sample is not finite, which
     /// cannot occur for `random_range(0.0..1.0)`. The terminal `expect` documents
     /// the resampling invariant and likewise cannot fire.
+    ///
+    /// # RNG supply
+    ///
+    /// The `rng` is any `rand 0.10` [`RngExt`] implementor from the *caller's*
+    /// own `rand` dependency — this crate re-exports nothing from `rand` and
+    /// enables none of its features (#232), so it never supplies OS entropy.
     pub fn random(cur_arity: usize, rng: &mut impl RngExt) -> Self {
         // Strictly above the `E1::new` width threshold (`F32_EPSILON`), with slack,
         // so every accepted interval has positive width and neighbouring intervals

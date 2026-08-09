@@ -6,6 +6,21 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **`cospan::test::permutatation_manual` uses a literal payload instead of
+  `rand::random()`** ([#232](https://github.com/sustia-llc/catgraph/issues/232)).
+  Test-only; no public API or behaviour is affected. The five booleans are
+  arbitrary payload the test's own assertions carry through, so entropy bought
+  nothing — a visible mixed literal replaces the RNG outright and keeps the
+  middle-label comparison discriminating by construction. The trigger:
+  `rand::random()` needs `rand`'s `thread_rng` feature, which the slimmed
+  workspace declaration no longer enables — in physics-free builds; a build
+  graph containing `catgraph-physics` unifies rand's defaults back on (see
+  `catgraph-applied`'s #232 entry), which is why the literal, not a feature
+  bump, is the right fix. `rand` remains a dev-dependency only, now carrying
+  `std`/`std_rng` on its own dev edge since the workspace entry is featureless.
+
 ## [workspace-v0.9.0] - 2026-08-04
 
 ### Changed

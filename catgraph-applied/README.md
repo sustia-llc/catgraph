@@ -108,6 +108,24 @@ cargo build --lib -p catgraph-applied --target wasm32-wasip1-threads
 cargo build --lib -p catgraph-applied --target wasm32-wasip1 --no-default-features
 ```
 
+Browsers (`wasm32-unknown-unknown`) remain **out of scope** as a supported
+target (the policy statement lives in catgraph's README, WASM section), but
+since [#232](https://github.com/sustia-llc/catgraph/issues/232) the lib build
+is no longer accidentally blocked — the workspace `rand` entry carries no
+default features, so `getrandom` never enters this crate's normal-dependency
+graph:
+
+```sh
+cargo check --lib -p catgraph-applied --target wasm32-unknown-unknown --no-default-features
+```
+
+Use `--no-default-features` here too: the default `parallel` feature compiles
+`rayon` cleanly on this target, but browsers cannot spawn threads at runtime.
+Two caveats: dev graphs (`--all-targets`, `--tests`) still reach `getrandom`
+through `proptest`, and any build graph containing `catgraph-physics`
+re-enables `rand`'s defaults by feature unification (its `rustworkx` chain
+declares them) — the slim graph is real only physics-free.
+
 See `examples/wasi_smoke_applied.rs` for a minimal `LinearCombination`
 multiplication smoke test exercising the `CondIterator` parallel arm.
 
