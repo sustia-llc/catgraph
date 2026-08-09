@@ -16,22 +16,63 @@
 //!   [`negation_action`] / [`trivial_action`] / [`abs_map`] / [`first_coord`],
 //!   the [`Z2Endo`] / [`Z2Action`] / [`VecMap`] aliases, and the NaN-free
 //!   [`finite_f64`] proptest strategy.
+//! - The deep-carrier fixtures for the #231 recursion guard,
+//!   [`spine_tree`] / [`spine_free_mnd`], shared by
+//!   `tests/free_monad_bijections.rs` and `tests/architecture_unrollers.rs`.
 //!
 //! `#![allow(dead_code)]`: each integration-test binary `mod common;`-includes
 //! this whole module but uses only the parts it needs, so the unused items are
 //! expected per compilation unit.
 #![allow(dead_code)]
 
+use core::convert::Infallible;
 use core::marker::PhantomData;
 
 use catgraph_dl::algebra::{GroupActionEndo, Z2Group};
+use catgraph_dl::free_monad::Free;
+use catgraph_dl::free_monad::tree_endo::{BinaryTree, TreeEndo};
 use catgraph_dl::para::{Actegory, DirectSum, F64Actegory, F64Module, MonoidalCategory};
 use catgraph_dl::{
-    Container, DebugFunctor, EndoWitness, EqFunctor, Functor, HKT, NaturalTransformation,
+    Container, DebugFunctor, Either, EndoWitness, EqFunctor, Functor, HKT, NaturalTransformation,
     NoConstraint, Pointed, Satisfies,
 };
 
 use proptest::prelude::*;
+
+/// A left caterpillar `BinaryTree<u8>` of structural depth `depth` (`depth ≥ 1`)
+/// — every internal node has a leaf as its right child, so the tree has `depth`
+/// leaves and its longest root-to-leaf path is `depth` long. The degenerate
+/// shape the #231 recursion guard exists for.
+///
+/// Built **iteratively**, from the leaf upward: a recursive builder would blow
+/// the stack constructing the very fixture meant to prove the guard catches
+/// deep input. (Its `Drop` still recurses — see the `depth` module's "Scope"
+/// note — so callers keep `depth` well inside the measured-safe 4 096.)
+pub fn spine_tree(depth: usize) -> BinaryTree<u8> {
+    assert!(depth >= 1, "a BinaryTree has at least one node");
+    let mut acc = BinaryTree::leaf(0_u8);
+    for _ in 1..depth {
+        acc = BinaryTree::node(acc, BinaryTree::leaf(0_u8));
+    }
+    acc
+}
+
+/// The [`spine_tree`] shape built directly in the `Free<TreeEndo<u8>,
+/// Infallible>` encoding.
+///
+/// Needed because the over-limit case cannot be produced by
+/// `tree_to_free_mnd` — that helper is itself guarded, and refuses exactly the
+/// input this fixture supplies. Iterative for the same reason as
+/// [`spine_tree`].
+pub fn spine_free_mnd(depth: usize) -> Free<TreeEndo<u8>, Infallible> {
+    assert!(depth >= 1, "a Free spine has at least one cell");
+    let leaf = || Free::Suspend(Either::Left(0_u8));
+    let mut acc = leaf();
+    for _ in 1..depth {
+        acc = Free::Suspend(Either::Right((Box::new(acc), Box::new(leaf()))));
+    }
+    acc
+}
 
 /// The `Z2` group-action endofunctor `Z2 × −` used by the algebra law suites.
 pub type Z2Endo = GroupActionEndo<Z2Group>;

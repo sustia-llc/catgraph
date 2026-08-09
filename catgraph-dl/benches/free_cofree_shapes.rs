@@ -48,13 +48,20 @@
 //! - **`tree_balanced`** — the bushy extreme. `L = 2^d` leaves at depth `d`;
 //!   maximum leaves per unit depth. This is the issue's "leaf-dense" case.
 //! - **`tree_spine`** — the degenerate extreme. A left caterpillar: `L` leaves
-//!   at depth `L − 1`; minimum leaves per unit depth, i.e. deep branching with
+//!   at depth `L`; minimum leaves per unit depth, i.e. deep branching with
 //!   as few leaves as the encoding permits. This is the issue's "branch-dense"
 //!   case.
 //!
 //! Both allocate `2·(L − 1)` boxes at equal `L`; the measured spread between
 //! them is pure locality and recursion-depth cost, not encoding cost. Reporting
 //! that flatness *is* part of the baseline.
+//!
+//! **The two shapes no longer share a size axis** (issue #231). A caterpillar's
+//! structural depth *is* its leaf count, so `tree_to_free_mnd` — now behind the
+//! crate's `MAX_TREE_DEPTH` recursion guard — refuses one past 256. The
+//! caterpillar rows therefore run [`SPINE_LEAVES`] and the balanced rows keep
+//! the full [`TREE_LEAVES`] range; `L = 64` is in both, so the equal-leaf-count
+//! comparison above still has a common size to be read at.
 //!
 //! ## Allocation accounting
 //!
@@ -84,7 +91,10 @@
 //! `Bencher::iter` on `unfold` inflated its rows by ~27–40 % before review.
 //! One caveat survives by design: the bijection helpers *consume* their input,
 //! so the `carrier::construct` window legitimately includes freeing the source
-//! `Vec` / `BinaryTree` — see the `Measured baseline` note below.
+//! `Vec` / `BinaryTree` — see the `Measured baseline` note below. Since #231 the
+//! tree `construct` window also includes the depth guard's iterative pre-flight
+//! walk, which is part of what `tree_to_free_mnd` now costs and belongs inside
+//! the measurement.
 //!
 //! This bench file is the only place in `catgraph-dl` containing `unsafe`; the
 //! library crate keeps its `#![forbid(unsafe_code)]`. The unsafe surface is the
@@ -122,11 +132,47 @@
 //! teardown moved out of the timed window (see `bench_unfold`). The full
 //! shape × op table lives in
 //! `.claude/docs/2026-08-01-156-dl-bench-baseline.md`; latencies there are
-//! machine-relative, the allocation counts are exact. Headlines:
+//! machine-relative, the allocation counts are exact.
+//!
+//! **The recorded table predates #231's depth guard** and is a pre-guard
+//! record, in two distinct senses:
+//!
+//! - **Retired rows.** The `tree_spine` rows at `L = 1024` and `L = 4096` are
+//!   no longer reproducible — `tree_to_free_mnd` refuses a caterpillar that
+//!   deep (see [`SPINE_LEAVES`]).
+//! - **Changed windows.** Every `tree_*` `construct` row still *runs*, but its
+//!   measured window now additionally contains the guard's pre-flight walk
+//!   (see the amendment below), so the recorded construct *latencies* are not
+//!   like-for-like against a post-#231 re-run. The `list`, `fold`, `unfold`,
+//!   and lazy/eager rows are genuinely untouched.
+//!
+//! Of the headlines below, one rests partly on retired rows: the *widening*
+//! half of the shape-costs-latency finding was read off the 1 024 / 4 096
+//! spine pairs (said again, in full, at that headline). The others survive.
+//!
+//! Headlines:
 //!
 //! - **Allocation count is exactly the hole count.** `1·n` boxes for a list of
 //!   `n` cons cells; `2·(L − 1)` for a tree of `L` leaves. Zero `realloc`s
-//!   anywhere. Per-node sizes on **this target and toolchain**
+//!   anywhere.
+//!
+//!   **Amended for #231:** the `tree_*` `construct` rows now also carry the
+//!   depth guard's cost, because `tree_to_free_mnd` pre-flights inside the
+//!   measured window. That is exactly **one extra `alloc`** — the iterative
+//!   measure's worklist, a DFS stack whose peak occupancy is the structural
+//!   depth plus one pending sibling per level (~13 entries at a balanced
+//!   `L = 4096`, 2 on a caterpillar — never a breadth-first frontier),
+//!   pre-sized to `MAX_TREE_DEPTH + 2` so it **never regrows** for an
+//!   accepted fixture. So the tree construct rows read `2·(L − 1) + 1`
+//!   allocations, the worklist's fixed block shows up in their `bytes`
+//!   column, and the "zero `realloc`s anywhere" headline holds unchanged. The
+//!   `fold` and `unfold` rows are untouched (their programs are built outside
+//!   the window, and `Cofree::unfold` is unguarded), and so are all the
+//!   `list` rows (the list helpers are loops and need no guard). Trading one
+//!   heap `Vec` for an overflow-free depth measurement is the whole point of
+//!   the guard being iterative.
+//!
+//!   Per-node sizes on **this target and toolchain**
 //!   (x86-64, 64-bit pointers, current niche layout) are 24 B per list node,
 //!   16 B per `Free` tree node and 24 B per `Cofree` tree node — the extra 8 B
 //!   being the `head: A` label. Those byte figures depend on pointer width and
@@ -148,7 +194,12 @@
 //! - **Shape costs latency, not memory.** `tree_spine` and `tree_balanced`
 //!   allocate identically at equal leaf count (as the identity above forces)
 //!   while the spine runs 1.3–18 % slower, the gap widening monotonically with
-//!   size in all three carrier operations at the sizes measured.
+//!   size in all three carrier operations at the sizes measured. The widening
+//!   half of that was read off the 1 024 / 4 096 pairs; post-#231 only `L = 64`
+//!   remains a like-for-like pair, so re-establishing the trend would need the
+//!   spine cases moved onto a thread with an explicit larger stack and the guard
+//!   bypassed — the allocation identity, which is what the finding turns on,
+//!   still holds at every measured size.
 //! - **All three lazy surfaces are allocation-free** at every size; the eager
 //!   `unroll_to_vec` sibling takes exactly one `Vec::with_capacity` (8 B/step,
 //!   no regrowth), so the lazy saving is one allocation and 2–14 % of wall
@@ -172,6 +223,7 @@ use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group};
 
 use catgraph_dl::Either;
 use catgraph_dl::architectures::{MealyCell, MooreCell, UnfoldingRnn};
+use catgraph_dl::depth::MAX_TREE_DEPTH;
 use catgraph_dl::free_monad::Cofree;
 use catgraph_dl::free_monad::list_endo::{ListEndo, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, TreeEndo, tree_to_free_mnd};
@@ -183,21 +235,46 @@ const SEED: u64 = 0x0000_0000_0000_009C | 1;
 /// Cons-cell counts for the `ListEndo` (single-hole) fixtures.
 const LIST_SIZES: [usize; 3] = [64, 1024, 4096];
 
-/// Leaf counts for both `TreeEndo` (two-hole) fixtures. `tree_balanced` needs
-/// powers of two; `tree_spine` uses the same values so the two shapes are
-/// directly comparable at equal leaf count (and therefore at equal allocation
-/// count — see the module docs).
+/// Leaf counts for the **balanced** `TreeEndo` (two-hole) fixture. Powers of
+/// two, as `balanced_tree` requires.
 ///
-/// **The 4 096 cap is deliberate, not arbitrary.** `tree_spine` builds a
-/// caterpillar of depth `L − 1`, and every walker that touches it is
-/// depth-recursive — this file's `spine_tree`, the crate's `tree_to_free_mnd` /
-/// `free_mnd_to_tree`, haft's `Free::fold` and `Cofree::unfold`, and the
-/// compiler's own drop glue. At `L = 4096` that is ~4 095 nested frames, well
-/// inside the 8 MiB main-thread stack criterion runs on; a much larger spine
-/// (64 k, say) would overflow it. There is **no runtime guard** — raising this
-/// constant means re-checking the stack budget by hand, or moving the spine
-/// cases onto a thread with an explicit larger stack.
+/// A balanced tree of `L` leaves is only `log₂ L + 1` deep — 13 at `L = 4096` —
+/// so the whole range sits far inside the crate's `MAX_TREE_DEPTH` guard and
+/// these rows are unaffected by it.
 const TREE_LEAVES: [usize; 3] = [64, 1024, 4096];
+
+/// Leaf counts for the **caterpillar** `TreeEndo` fixture, which is a separate
+/// axis from [`TREE_LEAVES`] and stops at `MAX_TREE_DEPTH`.
+///
+/// `spine_tree` builds a left caterpillar whose structural depth *is* its leaf
+/// count, and every walker that touches it is depth-recursive: this file's
+/// `spine_tree`, the crate's `tree_to_free_mnd` / `free_mnd_to_tree`, haft's
+/// `Free::fold` and `Cofree::unfold`, and the compiler's own drop glue. That is
+/// exactly the shape issue #231's guard exists to bound, so `tree_to_free_mnd`
+/// now **refuses** a caterpillar past
+/// [`MAX_TREE_DEPTH`](catgraph_dl::depth::MAX_TREE_DEPTH) = 256 and the axis
+/// ends there.
+///
+/// The pre-#231 axis was `[64, 1024, 4096]`, shared with [`TREE_LEAVES`]; the
+/// 4 096 cap was a hand-checked stack budget (~4 095 nested frames, comfortable
+/// on the 8 MiB main-thread stack criterion runs on, overflowing at 64 k) with
+/// no runtime guard behind it. Those two rows per operation are gone rather
+/// than stale — see the "Measured baseline" note in the module docs. 64 remains
+/// in both axes, so the shape comparison the file was built for still has a
+/// common size.
+///
+/// The ceiling is [`MAX_TREE_DEPTH`] itself, not a literal, so the axis cannot
+/// silently drift from the guard boundary. That tie also covers the `unfold`
+/// rows, which reach these sizes through haft's **unguarded** `Cofree::unfold`
+/// (see the crate's `depth` module, "Scope") — their cap is this constant, not
+/// the guard; and any over-limit fixture panics loudly in the first `construct`
+/// row's [`GUARD_OK`] expect regardless of pass ordering.
+const SPINE_LEAVES: [usize; 3] = [16, 64, MAX_TREE_DEPTH];
+
+/// Every bench tree fixture is built at or below `MAX_TREE_DEPTH`, so the
+/// guarded bijection helper accepts all of them; a rejection is a fixture bug,
+/// not a runtime condition.
+const GUARD_OK: &str = "bench tree fixtures are built within MAX_TREE_DEPTH";
 
 /// Step counts for the lazy / eager `architectures` surfaces.
 const LAZY_STEPS: [usize; 3] = [64, 1024, 4096];
@@ -328,8 +405,10 @@ fn balanced_tree(depth: u32, labels: &[f64], next: &mut usize) -> BinaryTree<f64
     }
 }
 
-/// A left caterpillar with `leaves` leaves and depth `leaves − 1`: every
-/// internal node has a leaf as its right child.
+/// A left caterpillar with `leaves` leaves and structural depth `leaves`
+/// (leaf depth is 1 — the crate's `tree_depth` convention, which is what
+/// lets [`SPINE_LEAVES`] end exactly at `MAX_TREE_DEPTH`): every internal
+/// node has a leaf as its right child.
 fn spine_tree(leaves: usize, labels: &[f64]) -> BinaryTree<f64> {
     assert!(leaves >= 1, "spine_tree needs at least one leaf");
     let mut acc = BinaryTree::leaf(labels[0]);
@@ -351,6 +430,26 @@ fn leaves_to_depth(leaves: usize) -> u32 {
 fn build_balanced(leaves: usize, labels: &[f64]) -> BinaryTree<f64> {
     let mut next = 0usize;
     balanced_tree(leaves_to_depth(leaves), labels, &mut next)
+}
+
+/// Every tree fixture, as `(shape, leaves, tree)` — the balanced range first,
+/// then the guard-bounded caterpillar range.
+///
+/// The two shapes no longer share a size axis (see [`SPINE_LEAVES`]), so this is
+/// a concatenation, not a cross product. Each carrier operation walks this one
+/// list, which keeps the allocation pass and the criterion groups reporting the
+/// same rows.
+fn tree_fixtures() -> Vec<(&'static str, usize, BinaryTree<f64>)> {
+    let mut out = Vec::with_capacity(TREE_LEAVES.len() + SPINE_LEAVES.len());
+    for leaves in TREE_LEAVES {
+        let labels = payloads(leaves);
+        out.push(("tree_balanced", leaves, build_balanced(leaves, &labels)));
+    }
+    for leaves in SPINE_LEAVES {
+        let labels = payloads(leaves);
+        out.push(("tree_spine", leaves, spine_tree(leaves, &labels)));
+    }
+    out
 }
 
 /// Sum-of-labels algebra for `Free<ListEndo<f64>, ()>`.
@@ -443,23 +542,17 @@ fn allocation_pass() {
             delta,
         });
     }
-    for leaves in TREE_LEAVES {
-        let labels = payloads(leaves);
-        for (shape, tree) in [
-            ("tree_balanced", build_balanced(leaves, &labels)),
-            ("tree_spine", spine_tree(leaves, &labels)),
-        ] {
-            drop(black_box(tree_to_free_mnd(tree.clone())));
-            let input = tree.clone();
-            let (delta, built) = measure(|| tree_to_free_mnd(input));
-            drop(built);
-            rows.push(Row {
-                shape,
-                op: "construct",
-                size: leaves,
-                delta,
-            });
-        }
+    for (shape, leaves, tree) in tree_fixtures() {
+        drop(black_box(tree_to_free_mnd(tree.clone()).expect(GUARD_OK)));
+        let input = tree.clone();
+        let (delta, built) = measure(|| tree_to_free_mnd(input));
+        drop(built);
+        rows.push(Row {
+            shape,
+            op: "construct",
+            size: leaves,
+            delta,
+        });
     }
 
     // --- fold ------------------------------------------------------------
@@ -476,23 +569,21 @@ fn allocation_pass() {
             delta,
         });
     }
-    for leaves in TREE_LEAVES {
-        let labels = payloads(leaves);
-        for (shape, tree) in [
-            ("tree_balanced", build_balanced(leaves, &labels)),
-            ("tree_spine", spine_tree(leaves, &labels)),
-        ] {
-            let _ = black_box(tree_to_free_mnd(tree.clone()).fold(&tree_pure_case, &tree_algebra));
-            let program = tree_to_free_mnd(tree.clone());
-            let (delta, total) = measure(|| program.fold(&tree_pure_case, &tree_algebra));
-            let _ = black_box(total);
-            rows.push(Row {
-                shape,
-                op: "fold",
-                size: leaves,
-                delta,
-            });
-        }
+    for (shape, leaves, tree) in tree_fixtures() {
+        let _ = black_box(
+            tree_to_free_mnd(tree.clone())
+                .expect(GUARD_OK)
+                .fold(&tree_pure_case, &tree_algebra),
+        );
+        let program = tree_to_free_mnd(tree.clone()).expect(GUARD_OK);
+        let (delta, total) = measure(|| program.fold(&tree_pure_case, &tree_algebra));
+        let _ = black_box(total);
+        rows.push(Row {
+            shape,
+            op: "fold",
+            size: leaves,
+            delta,
+        });
     }
 
     // --- unfold ----------------------------------------------------------
@@ -525,7 +616,12 @@ fn allocation_pass() {
             size: leaves,
             delta,
         });
-
+    }
+    // `Cofree::unfold` is haft's own entry, so #231's guard does not reach it
+    // (see the crate's `depth` module, "Scope") — but the caterpillar rows use
+    // [`SPINE_LEAVES`] anyway, so the three carrier operations report the same
+    // sizes and stay comparable.
+    for leaves in SPINE_LEAVES {
         let spine = leaves - 1;
         drop(black_box(Cofree::<TreeEndo<f64>, f64>::unfold(
             spine,
@@ -643,21 +739,19 @@ fn bench_construct(c: &mut Criterion) {
             );
         });
     }
-    for leaves in TREE_LEAVES {
-        let labels = payloads(leaves);
+    for (shape, leaves, tree) in tree_fixtures() {
         group.throughput(Throughput::Elements(leaves as u64));
-        for (shape, tree) in [
-            ("tree_balanced", build_balanced(leaves, &labels)),
-            ("tree_spine", spine_tree(leaves, &labels)),
-        ] {
-            group.bench_with_input(BenchmarkId::new(shape, leaves), &tree, |b, tree| {
-                b.iter_batched(
-                    || tree.clone(),
-                    |tree| black_box(tree_to_free_mnd(tree)),
-                    BatchSize::LargeInput,
-                );
-            });
-        }
+        group.bench_with_input(BenchmarkId::new(shape, leaves), &tree, |b, tree| {
+            b.iter_batched(
+                || tree.clone(),
+                // `.expect(GUARD_OK)` matches every other guarded call site in
+                // this file: if the fixture/limit invariant ever drifts, this
+                // row must panic loudly, not silently benchmark the guard's
+                // Err fast path as a "construct" measurement.
+                |tree| black_box(tree_to_free_mnd(tree).expect(GUARD_OK)),
+                BatchSize::LargeInput,
+            );
+        });
     }
     group.finish();
 }
@@ -675,21 +769,15 @@ fn bench_fold(c: &mut Criterion) {
             );
         });
     }
-    for leaves in TREE_LEAVES {
-        let labels = payloads(leaves);
+    for (shape, leaves, tree) in tree_fixtures() {
         group.throughput(Throughput::Elements(leaves as u64));
-        for (shape, tree) in [
-            ("tree_balanced", build_balanced(leaves, &labels)),
-            ("tree_spine", spine_tree(leaves, &labels)),
-        ] {
-            group.bench_with_input(BenchmarkId::new(shape, leaves), &tree, |b, tree| {
-                b.iter_batched(
-                    || tree_to_free_mnd(tree.clone()),
-                    |program| black_box(program.fold(&tree_pure_case, &tree_algebra)),
-                    BatchSize::LargeInput,
-                );
-            });
-        }
+        group.bench_with_input(BenchmarkId::new(shape, leaves), &tree, |b, tree| {
+            b.iter_batched(
+                || tree_to_free_mnd(tree.clone()).expect(GUARD_OK),
+                |program| black_box(program.fold(&tree_pure_case, &tree_algebra)),
+                BatchSize::LargeInput,
+            );
+        });
     }
     group.finish();
 }
@@ -732,6 +820,9 @@ fn bench_unfold(c: &mut Criterion) {
                 );
             },
         );
+    }
+    for leaves in SPINE_LEAVES {
+        group.throughput(Throughput::Elements(leaves as u64));
         let spine = leaves - 1;
         group.bench_with_input(BenchmarkId::new("tree_spine", leaves), &spine, |b, &n| {
             b.iter_batched(

@@ -56,6 +56,11 @@ deep_causality_haft = { workspace = true }
 # build takes no direct serde edge of its own (transitive serde under
 # rust_decimal is pre-existing and feature-independent).
 serde = { workspace = true, optional = true }
+# Workspace error-derive pattern (already in the tree via catgraph core's
+# `CatgraphError`, catgraph-applied's `HypergraphError`, and catgraph-syntax's
+# `SyntaxError`; adopted here for `errors::DepthError`, the recursion guard's
+# rejection, per #231 — no new lockfile entry).
+thiserror.workspace = true
 
 [dev-dependencies]
 # Deterministic LCG for the #156 shape-axis bench fixtures — the payload stream

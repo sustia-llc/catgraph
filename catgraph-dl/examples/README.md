@@ -15,6 +15,13 @@ asserting its results, so `cargo run --example <name>` doubles as a smoke check.
 
 † requires `--features ad` (off by default).
 
+`free_monad_basics` and `architecture_unrollers` return
+`Result<(), DepthError>`: the tree bijection helpers and `RecursiveNn::unroll`
+pre-flight the `depth` recursion guard
+([#231](https://github.com/sustia-llc/catgraph/issues/231)). Their fixtures are
+depth 3, so the `?`s never fire — they are there to show the shape callers
+write.
+
 ```sh
 cargo run -p catgraph-dl --example para_walkthrough
 cargo run -p catgraph-dl --example weight_tying

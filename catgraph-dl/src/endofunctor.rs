@@ -69,6 +69,21 @@
 //! | `A + (−)²` | [`crate::free_monad::tree_endo::TreeEndo<A>`] | [`Either<A, (X, X)>`] |
 //! | `G × −` | [`crate::algebra::GroupActionEndo<G>`] | `(G, X)` |
 //!
+//! # Unguarded recursion across this seam (#231 / #200)
+//!
+//! [`Free`] and [`Cofree`] are re-exported here **as they are upstream**:
+//! their recursion-consuming methods ([`Free::fold`], [`Cofree::unfold`]) and
+//! their drop glue recurse with nothing in front of them — guarding those
+//! would mean changing `deep_causality_haft`, which
+//! [#231](https://github.com/sustia-llc/catgraph/issues/231) does not do. The
+//! crate-owned carriers have unguarded recursion of their own (drop glue and
+//! derived impls on `BinaryTree`, fixable in-crate). [`crate::depth`]'s
+//! **Scope** section is the canonical account of the whole residual surface;
+//! [#200](https://github.com/sustia-llc/catgraph/issues/200) stays open as its
+//! tracker. Callers driving haft's methods on programmatically-generated data
+//! can pre-flight [`crate::depth::free_mnd_depth`] themselves — noting the
+//! measured value's own eventual drop is part of the residual.
+//!
 //! # Co-design note (#41)
 //!
 //! haft ships [`Pure`] and [`NaturalIso`] but not `Pointed` /

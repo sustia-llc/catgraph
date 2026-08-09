@@ -17,7 +17,7 @@ monoidal categories are admitted by the trait surface but not yet instantiated
 
 ## Public surface
 
-Seven public modules plus one private namespace stub. Every item below is
+Nine public modules plus one private namespace stub. Every item below is
 re-exported from its module root.
 
 ### `para` — the 2-category `Para(M, C)` (CDL §3.1)
@@ -121,7 +121,28 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
 - **`ListEndo<A>`** with `vec_to_free_mnd` / `free_mnd_to_vec` — the list
   bijection witness (CDL Example B.19).
 - **`TreeEndo<A>`** + the **`BinaryTree<A>`** carrier with `tree_to_free_mnd` /
-  `free_mnd_to_tree` — the tree bijection witness (CDL Example B.20).
+  `free_mnd_to_tree` — the tree bijection witness (CDL Example B.20). Both walk
+  the carrier recursively, so both are **fallible**: they pre-flight the `depth`
+  guard below and return `DepthError` rather than risk a stack overflow
+  ([#231](https://github.com/sustia-llc/catgraph/issues/231)). The list helpers
+  are loops and stay infallible.
+
+### `depth` / `errors` — the pre-flight recursion guard (#231)
+
+- **`MAX_TREE_DEPTH = 256`**, the ceiling the crate's three tree-recursive
+  entries (`tree_to_free_mnd`, `free_mnd_to_tree`, `RecursiveNn::unroll`) check
+  before walking. Equal to `catgraph-syntax`'s `MAX_TERM_DEPTH`
+  ([#99](https://github.com/sustia-llc/catgraph/issues/99)), so the workspace has
+  one recursion ceiling.
+- **`tree_depth` / `free_mnd_depth`** — *iterative* depth measures (explicit
+  worklist), so reporting that a carrier is too deep never overflows on the way
+  to the report. **`guard_tree_depth` / `guard_free_mnd_depth`** are the checks;
+  **`DepthError::TreeDepthExceeded { depth, limit }`** the rejection.
+- Engineering, not a CDL surface: the guard rejects inputs that would abort the
+  process and changes nothing about the ones it accepts. It covers this crate's
+  own entries only — direct `deep_causality_haft` `Free::fold` / `Cofree::unfold`
+  calls and the carriers' recursive drop glue stay unguarded, tracked in
+  [#200](https://github.com/sustia-llc/catgraph/issues/200).
 
 ### `architectures` — (co)algebra-as-architecture catalogue (CDL Appendix I / J)
 
@@ -138,6 +159,10 @@ behavioural tests only, with final-coalgebra equivalence tracked in
 | `RecursiveNn` | `Para(A + (−)²)` algebra |
 | `MealyCell` (full RNN) | `Para(I → O × −)` coalgebra |
 | `MooreCell` | `Para(O × (I → −))` coalgebra |
+
+`RecursiveNn::unroll` is the only depth-recursive unroller of the five, so it is
+the only fallible one — it pre-flights the `depth` guard (#231). The other four
+are folds and `from_fn` state machines.
 
 ### `endofunctor` — the shared functor substrate
 
@@ -226,17 +251,22 @@ to come from `deep_causality_num`.
 - `deep_causality_haft` — the `HKT` / `Functor` endofunctor witnesses (#12) and
   the `Either` sum used by `TreeEndo`. (The former dependency on the `either`
   crate was dropped — `Either` now comes from haft.)
+- `thiserror` — the workspace error-derive pattern, for `errors::DepthError`
+  ([#231](https://github.com/sustia-llc/catgraph/issues/231)). Already in the
+  tree via core's `CatgraphError`, applied's `HypergraphError`, and syntax's
+  `SyntaxError`, so it adds no lockfile entry.
 - `serde` — **optional**, off by default, behind the `serde` feature (#230).
 - dev: `proptest`, `criterion`, `serde_json` (the round-trip driver for
   `tests/serde_roundtrip.rs`), and the workspace's unpublished
   `catgraph-testutil` (deterministic bench LCG).
 
-That is the whole list — `deep_causality_haft` is the crate's only unconditional
-non-catgraph `[dependencies]` entry, and the `ad` feature adds nothing to it.
-`serde` is the one feature that adds a direct edge, which is why it stays off by
-default (note serde itself already appears in the default build transitively,
-under `catgraph-applied → rust_decimal` — the feature adds this crate's *own*
-edge plus `serde_derive`, not serde's first appearance). The
+That is the whole list — `deep_causality_haft` and `thiserror` are the crate's
+only unconditional non-catgraph `[dependencies]` entries, and the `ad` feature
+adds nothing to them. `serde` is the one feature that adds a direct edge, which
+is why it stays off by default (note serde itself already appears in the
+default build transitively, under `catgraph-applied → rust_decimal` — the
+feature adds this crate's *own* edge plus `serde_derive`, not serde's first
+appearance). The
 `Zero` / `One` behind
 `RModule<S>` came from `deep_causality_num` until #219, and the `Dual<T>` behind
 `ad` came from `deep_causality_num_dual` until #221; both are catgraph's own now
