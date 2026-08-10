@@ -140,7 +140,7 @@ fn unroll_tree_via_free_mnd(
 ) -> i64 {
     match free_mnd {
         Free::Pure(z) => match z {}, // Infallible: unreachable.
-        // haft boxes each recursive subtree *inside* the `Either` hole.
+        // Each recursive subtree is boxed *inside* the `Either` hole.
         Free::Suspend(node) => match node {
             Either::Left(_a) => (cell.cell_0)(cell.parameter),
             Either::Right((l, r)) => {
@@ -177,10 +177,10 @@ fn leftmost_leaf_payload(t: &Free<TreeEndo<u8>, core::convert::Infallible>) -> u
 // the `unroll_*_via_free_mnd` walkers on the algebra side: the wrapper's bounded
 // output must equal the walk of the prefix built from the same seed.
 //
-// The generators below are re-expressed through haft's `Cofree::unfold` (the
-// anamorphism, dual of `Free::fold`) — the payoff of adopting the haft carrier:
-// the bounded-depth / bounded-input control is threaded through the coalgebra
-// seed, and the depth-0 / empty-input case is the top-level `Option`.
+// The generators below are expressed through `Cofree::unfold` (the anamorphism,
+// dual of `Free::fold`) — the bounded-depth / bounded-input control is threaded
+// through the coalgebra seed, and the depth-0 / empty-input case is the
+// top-level `Option`.
 
 /// A bounded stream prefix over `O` — the coalgebra-direction dual of the
 /// `Free<ListEndo<_>, ()>` cons tower.
@@ -188,8 +188,8 @@ type StreamPrefix<O> = Cofree<OptionWitness, O>;
 
 /// Walk a bounded `Cofree<OptionWitness, O>` prefix into its observed output
 /// sequence — the counit-then-tail projection, collected left to right. `None`
-/// (the depth-0 / empty case) yields `[]`. haft's `Cofree` has private fields, so
-/// the walk goes through `into_parts()` (`head : O`, `tail : Option<Box<Self>>`).
+/// (the depth-0 / empty case) yields `[]`. `Cofree` has private fields, so the
+/// walk goes through `into_parts()` (`head : O`, `tail : Option<Box<Self>>`).
 fn cofree_prefix_to_vec<O>(prefix: Option<StreamPrefix<O>>) -> Vec<O> {
     let mut out = Vec::new();
     let mut cur = prefix;

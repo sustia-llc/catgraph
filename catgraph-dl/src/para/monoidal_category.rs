@@ -54,35 +54,23 @@
 //! today at "static methods only" would force a breaking change later when
 //! those non-`(Set, ×, 1)` instances land.
 //!
-//! This is a narrow divergence from the `causality:hkt-type-system`
-//! convention in `deep_causality_haft`'s core `Functor`/`Monad`
-//! witnesses, which use static dispatch exclusively (`VecWitness::fmap(v,
-//! f)`, not `v.fmap(f)`, with the witness as a type-level token never
-//! instantiated). HAFT itself accommodates runtime payload via a separate
-//! `Context` type parameter — e.g. `Adjunction<L, R, Context>` (unified,
-//! replacing `BoundedAdjunction`) and the `Effect5::Fixed{1..4}`
-//! payload slots. cg-dl's [`MonoidalCategory`] folds the equivalent
-//! runtime-payload role into the `&self` receiver instead of carrying a
-//! separate `Context` parameter — so the divergence is in the *placement*
-//! of runtime data (receiver vs context-parameter), not in HAFT's
-//! capacity to carry runtime data at all. cg-dl's choice keeps the API
-//! shape aligned with idiomatic Rust trait-method calls (`monoidal.tensor_objects(a, b)`)
-//! at the cost of forgoing HAFT's witness-first static-dispatch
+//! This is a narrow divergence from the witness convention of
+//! [`crate::endofunctor`], whose `Functor`/`Monad` traits dispatch statically
+//! and exclusively (`ListEndo::fmap(x, f)`, not `x.fmap(f)`, with the witness a
+//! type-level token never instantiated). A witness-first design carries runtime
+//! payload in a separate `Context` type parameter; [`MonoidalCategory`] folds
+//! the equivalent role into the `&self` receiver instead — so the divergence is
+//! in the *placement* of runtime data (receiver vs context-parameter), not in
+//! whether the design can carry it. The `&self` choice keeps the API shape
+//! aligned with idiomatic Rust trait-method calls
+//! (`monoidal.tensor_objects(a, b)`) at the cost of forgoing the witness-first
 //! convention.
 //!
-//! Since #12, cg-dl's *endofunctor* layer (`ListEndo` / `TreeEndo` /
-//! `GroupActionEndo`) adopts HAFT's `HKT` / `Functor` witnesses directly and
-//! follows the witness-first static-dispatch convention (`ListEndo::fmap(x,
-//! f)`). [`MonoidalCategory`] is therefore the deliberate *local* exception:
-//! it keeps the `&self` receiver for the runtime-payload slot while the rest
-//! of the crate aligns with HAFT's static dispatch.
-//!
-//! See `causality:hkt-type-system` skill Gotcha #6 ("Static dispatch only —
-//! call `VecWitness::fmap(v, f)`, never `v.fmap(f)`. The witness is a
-//! type-level token.") for the HAFT `Functor`/`Monad` static-only side of
-//! the comparison; cg-dl deliberately diverges here for the R-module /
-//! hyperdoctrine / vector-bundle slot, picking up `&self` payload where
-//! HAFT would use a `Context` type parameter.
+//! Since #12, the crate's *endofunctor* layer (`ListEndo` / `TreeEndo` /
+//! `GroupActionEndo`) follows the static-dispatch convention throughout.
+//! [`MonoidalCategory`] is therefore the deliberate *local* exception: it keeps
+//! the `&self` receiver for the runtime-payload slot while the rest of the crate
+//! stays witness-first.
 //!
 //! **Rationale validation:** a downstream coalition
 //! `impl Actegory<SetMonoidal>` for `UnitIntervalQ` / `TropicalQ` /

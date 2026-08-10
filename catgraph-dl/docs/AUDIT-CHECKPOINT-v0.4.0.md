@@ -15,7 +15,9 @@ would ratify it and the current standing.
 ## Background
 
 Both traits take `&self` on every method — a deliberate divergence from the
-`deep_causality_haft` static-dispatch (associated-fn-on-ZST-witness) convention.
+`deep_causality_haft` static-dispatch (associated-fn-on-ZST-witness) convention
+(historical — substrate crate-owned since #222; the convention itself is
+unchanged and now stated by `src/endofunctor/`).
 The rationale lives in the trait rustdoc ("## Why methods take `&self`" in
 `para/monoidal_category.rs` and `para/actegory.rs`): a future instance that
 carries **runtime data** — an `R`-module actegory holding its base ring, a
@@ -83,4 +85,5 @@ builds.
 - Out-of-tree validators: the coalition/enriched-magnitude track
   (`QuantaleActegory` family), referenced in `para/comonoid.rs`.
 - `deep_causality_haft` static-dispatch convention: the `causality:hkt-type-system`
-  skill (causality plugin).
+  skill (causality plugin) — historical; substrate crate-owned since #222, and
+  `src/endofunctor/` is now the in-tree statement of the same convention.

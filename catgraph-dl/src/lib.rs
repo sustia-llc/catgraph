@@ -37,14 +37,14 @@
 //!   `MonadAlgebraHom` with caller-sampled `verify_commutes`, and (issue #40)
 //!   machine-checked monad-algebra coherence verifiers (`verify_unit_law` /
 //!   `verify_assoc_law` on `MonadAlgebra`; `verify_unit_coherence` /
-//!   `verify_mult_coherence` on `MonadAlgebraHom`) built on haft's `Monad`
+//!   `verify_mult_coherence` on `MonadAlgebraHom`) built on [`Monad`]
 //!   (`η = Pure`, `μ = join`). The `Z2Group`-action GDL recovery test in
 //!   `tests/algebra_homomorphisms.rs` is the headline reification of CDL §2.1
 //!   Ex 2.6 (equivariant maps as monad-algebra homomorphisms). CDL §2.
 //! - [`free_monad`] — the free monad `FreeMnd(F)(Z) = Fix(X ↦ F(X) + Z)` and
-//!   its cofree-comonad dual, adopted from `deep_causality_haft` as
-//!   [`Free`] / [`Cofree`] (issue #93). `ListEndo<A>` / `TreeEndo<A>`
-//!   bijection witnesses for CDL Examples B.19 / B.20. CDL Proposition B.18.
+//!   its cofree-comonad dual, the crate-owned [`Free`] / [`Cofree`] carriers
+//!   (issues #93, #222). `ListEndo<A>` / `TreeEndo<A>` bijection witnesses for
+//!   CDL Examples B.19 / B.20. CDL Proposition B.18.
 //! - [`architectures`] — five typed (co)algebra-as-architecture unrollers
 //!   (Folding RNN, Unfolding RNN, Recursive NN, Mealy cell, Moore cell). The
 //!   two algebra-direction unrollers (Folding RNN, Recursive NN) ship
@@ -54,15 +54,15 @@
 //!   final-coalgebra equivalence is tracked in
 //!   [#64](https://github.com/sustia-llc/catgraph/issues/64). CDL
 //!   Appendix I + Appendix J.
-//! - [`endofunctor`] — the `deep_causality_haft` `HKT` / `Functor` witness
-//!   substrate (single import seam), shared by `algebra::` and
-//!   `free_monad::`. Replaces the former hand-rolled `EndoFunctor` trait
-//!   (issue #12).
+//! - [`endofunctor`] — the crate-owned `HKT` / `Functor` witness substrate
+//!   (single import seam), shared by `algebra::` and `free_monad::`. Replaces
+//!   the former hand-rolled `EndoFunctor` trait (issue #12); brought in-tree
+//!   whole by issue #222.
 //! - [`natural`] — first-class [`natural::NaturalTransformation<F, G>`]
 //!   (component family `α_X : F(X) → G(X)`; Gavranović et al. Def 1.5) with
-//!   [`natural::IsoForward`] / [`natural::IsoBackward`] adapters over haft's
-//!   `NaturalIso`, and the blanket [`natural::Pointed`] endofunctor marker
-//!   `(F, σ)` with `σ = ` haft's `Pure` (CDL Def B.3). Issue #41.
+//!   [`natural::IsoForward`] / [`natural::IsoBackward`] adapters over
+//!   [`NaturalIso`], and the blanket [`natural::Pointed`] endofunctor marker
+//!   `(F, σ)` with `σ = ` [`Pure`] (CDL Def B.3). Issue #41.
 //! - [`container`] — the [`container::Container`] shape/position presentation of
 //!   a polynomial endofunctor `⟦S ◁ P⟧(X) = Σ_{s} X^{P(s)}`
 //!   (Abbott–Altenkirch–Ghani 2003, via CDL), finitary (`Vec`-of-contents)
@@ -125,13 +125,6 @@
 //!   `MooreCell::run_iter` siblings); `unroll_to_vec` stays the bounded
 //!   eager surface. No `tokio_stream::Stream` adapter (no async deps) —
 //!   that variant remains unbuilt by design.
-//! - **Upstream haft adoption of `Pointed` / `NaturalTransformation`** — the
-//!   first-class surfaces themselves shipped in [`natural`] and [`container`]
-//!   ([#41](https://github.com/sustia-llc/catgraph/issues/41)); what remains
-//!   deferred is proposing `Pointed` / `NaturalTransformation` to
-//!   `deep_causality_haft` itself, so cg-dl re-exports rather than defines
-//!   them — tracked as
-//!   [#62](https://github.com/sustia-llc/catgraph/issues/62).
 //! - **Symbiogenesis / Levin bioelectric / active inference / cellular-
 //!   automata coalitions** — ambitious tier; lands in a future external
 //!   sibling `catgraph-coalition-dl`, not here.
@@ -167,21 +160,22 @@ mod hopf_fibration;
 pub mod natural;
 pub mod para;
 
-// Top-level convenience re-export: the endofunctor abstraction is now
-// `deep_causality_haft`'s `HKT` (object map) + `Functor` (morphism map),
-// shared between `algebra::` (F-algebras and homomorphisms) and
-// `free_monad::` (the recursive `Free` / `Cofree` carriers). `Either` is the
-// sum carried by `TreeEndo`. `Pure`, `NaturalIso`, and `Monad` are mirrored
-// here too: implementing `Pointed` downstream requires `Pure<Self>`, driving
-// the `IsoForward` / `IsoBackward` adapters requires naming `NaturalIso`, and
-// the monad-algebra verifiers bound `M: EndoWitness + Monad<M>`. `Free` /
-// `Cofree` (+ their `FreeWitness` / `CofreeWitness` HKT witnesses) and the
-// `EqFunctor` / `DebugFunctor` capability traits their opt-in `Eq`/`Debug`
-// route through are mirrored for the free-monad surface (issue #93). The
-// former `catgraph_dl::EndoFunctor` path is removed (breaking; issue #12).
+// Top-level convenience re-export: the endofunctor abstraction is `HKT` (object
+// map) + `Functor` (morphism map), shared between `algebra::` (F-algebras and
+// homomorphisms) and `free_monad::` (the recursive `Free` / `Cofree` carriers).
+// `Either` is the sum carried by `TreeEndo`. `Pure`, `NaturalIso`, and `Monad`
+// are mirrored here too: implementing `Pointed` downstream requires
+// `Pure<Self>`, driving the `IsoForward` / `IsoBackward` adapters requires
+// naming `NaturalIso`, and the monad-algebra verifiers bound
+// `M: EndoWitness + Monad<M>`. `Free` / `Cofree` (+ their `FreeWitness` /
+// `CofreeWitness` HKT witnesses) and the `EqFunctor` / `DebugFunctor`
+// capability traits their opt-in `Eq`/`Debug` route through are mirrored for
+// the free-monad surface (issue #93). The former `catgraph_dl::EndoFunctor`
+// path is removed (breaking; issue #12), as are `NoConstraint` / `Satisfies`
+// (breaking; issue #222 — the object map carries no constraint slot).
 pub use endofunctor::{
     Cofree, CofreeWitness, DebugFunctor, Either, EndoWitness, EqFunctor, Free, FreeWitness,
-    Functor, HKT, Monad, NaturalIso, NoConstraint, Pure, Satisfies,
+    Functor, HKT, Monad, NaturalIso, Pure,
 };
 
 // The first-class natural-transformation / pointed-endofunctor / container

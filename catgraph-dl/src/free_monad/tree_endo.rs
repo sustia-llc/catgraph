@@ -11,10 +11,9 @@
 //! the encoding collapses to leaves drawn purely from `A`. With `Z = ()`
 //! leaves are `A + ()` — either an actual `A` or a "hole" placeholder.
 //!
-//! In Rust we encode `A + X²` as [`Either<A, (X, X)>`] from
-//! `deep_causality_haft`. The `Left(a)` summand is a tree leaf with payload
-//! `a : A`; the `Right((l, r))` summand is an internal node with left/right
-//! subtrees.
+//! In Rust we encode `A + X²` as [`Either<A, (X, X)>`], the crate's own sum.
+//! The `Left(a)` summand is a tree leaf with payload `a : A`; the
+//! `Right((l, r))` summand is an internal node with left/right subtrees.
 //!
 //! ## Carrier type
 //!
@@ -37,8 +36,8 @@
 //! (issue [#231](https://github.com/sustia-llc/catgraph/issues/231)). The
 //! private `*_inner` walkers below run *after* the guard, so they are bounded
 //! by construction. See [`crate::depth`]'s "Scope" section for what the guard
-//! does **not** cover — direct `deep_causality_haft` `Free::fold` calls, and the
-//! recursive drop glue of the `Box`-nested carriers themselves.
+//! does **not** cover — direct [`Free::fold`] calls, and the recursive drop glue
+//! of the `Box`-nested carriers themselves.
 //!
 //! # Why `Infallible`?
 //!
@@ -53,9 +52,7 @@ use core::marker::PhantomData;
 
 use crate::container::Container;
 use crate::depth::{guard_free_mnd_depth, guard_tree_depth};
-use crate::endofunctor::{
-    DebugFunctor, Either, EqFunctor, Free, Functor, HKT, NoConstraint, Satisfies,
-};
+use crate::endofunctor::{DebugFunctor, Either, EqFunctor, Free, Functor, HKT};
 use crate::errors::DepthError;
 
 /// The endofunctor `A + (−)²` for a fixed leaf alphabet `A`.
@@ -76,15 +73,12 @@ impl<A> TreeEndo<A> {
 }
 
 impl<A> HKT for TreeEndo<A> {
-    type Constraint = NoConstraint;
     type Type<X> = Either<A, (X, X)>;
 }
 
 impl<A> Functor<Self> for TreeEndo<A> {
     fn fmap<X, Y, Func>(fx: Either<A, (X, X)>, mut f: Func) -> Either<A, (Y, Y)>
     where
-        X: Satisfies<NoConstraint>,
-        Y: Satisfies<NoConstraint>,
         Func: FnMut(X) -> Y,
     {
         // Identity law: `fmap(Left(a), _) = Left(a)`, `fmap(Right((l, r)),
@@ -99,9 +93,8 @@ impl<A> Functor<Self> for TreeEndo<A> {
 }
 
 // Opt-in structural equality for `Free<TreeEndo<A>, Z>`: route the comparison of
-// the functor hole `Either<A, (T, T)>` through haft `Either`'s derived `==`
-// (which derives `PartialEq`). Bounded `A: PartialEq`; `T: PartialEq` from the
-// trait method.
+// the functor hole `Either<A, (T, T)>` through `Either`'s derived `==`. Bounded
+// `A: PartialEq`; `T: PartialEq` from the trait method.
 impl<A: PartialEq> EqFunctor for TreeEndo<A> {
     fn eq_type<T: PartialEq>(a: &Either<A, (T, T)>, b: &Either<A, (T, T)>) -> bool {
         a == b
@@ -109,7 +102,7 @@ impl<A: PartialEq> EqFunctor for TreeEndo<A> {
 }
 
 // Opt-in `Debug` for `Free<TreeEndo<A>, Z>`: delegate the functor hole to
-// haft `Either`'s derived `Debug`. Bounded `A: Debug`.
+// `Either`'s derived `Debug`. Bounded `A: Debug`.
 impl<A: core::fmt::Debug> DebugFunctor for TreeEndo<A> {
     fn fmt_type<T: core::fmt::Debug>(
         fa: &Either<A, (T, T)>,
@@ -169,9 +162,8 @@ impl<A: PartialEq + core::fmt::Debug> Container for TreeEndo<A> {
 /// glue — recurse over the same `Box` spine the #231 guard bounds for the
 /// walker entries, and sit **outside** that guard: cloning, comparing, or
 /// `{:?}`-logging an over-deep tree can abort where the guarded walk would
-/// have errored. This is a crate-owned residual (iterative impls are writable
-/// here without touching haft); [`crate::depth`]'s Scope section and #200
-/// record it.
+/// have errored. Iterative impls are writable in-crate; [`crate::depth`]'s
+/// Scope section and #200 record the residual.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryTree<A> {
     /// A leaf labelled by `A`.
@@ -231,7 +223,7 @@ fn tree_to_free_mnd_inner<A>(tree: BinaryTree<A>) -> Free<TreeEndo<A>, Infallibl
         BinaryTree::Node(left, right) => {
             let l = tree_to_free_mnd_inner(*left);
             let r = tree_to_free_mnd_inner(*right);
-            // haft boxes each recursive slot *inside* the `Either` hole.
+            // Each recursive slot is boxed *inside* the `Either` hole.
             Free::Suspend(Either::Right((Box::new(l), Box::new(r))))
         }
     }

@@ -33,7 +33,7 @@ fn main() -> Result<(), DepthError> {
     // ---- 1. The list free monad `FreeMnd(1 + A × −)` --------------------
     //
     // `Pure(z)` is the terminator; `Suspend(Some((a, Box(rest))))` is a cons cell
-    // (haft boxes the recursion inside the functor hole). The empty list is
+    // (the recursion is boxed inside the functor hole). The empty list is
     // exactly `Pure(())`.
     let empty: Free<ListEndo<u32>, ()> = Free::Pure(());
     let (items, ()) = free_mnd_to_vec(empty);
@@ -68,7 +68,7 @@ fn main() -> Result<(), DepthError> {
     // ---- 3. The dual: cofree comonad (a bounded stream prefix) ----------
     //
     // `Cofree<OptionWitness, O>` is `head : O` + `tail : Option<Box<Self>>`; a
-    // `None` tail terminates. haft's `Cofree` has private fields, so build with
+    // `None` tail terminates. `Cofree` has private fields, so build with
     // `Cofree::new` and walk through `into_parts()`. Build the 2-element prefix
     // `1, 2` and walk it.
     let stream: Cofree<OptionWitness, i64> =
@@ -106,11 +106,11 @@ fn main() -> Result<(), DepthError> {
 
 /// Fold a `Free<ListEndo<i64>, ()>` cons tower through an `FAlgebra`'s
 /// structure map — the catamorphism (unique algebra hom out of the initial
-/// algebra). Re-expressed via haft's [`Free::fold`]: the `pure_case` handles the
+/// algebra). Expressed via [`Free::fold`]: the `pure_case` handles the
 /// `Pure(())` terminator (the algebra's `None` case), and the `algebra` is the
 /// structure map itself — `fold` walks the tree, threading the recursive result
-/// into the `Option<(i64, i64)>` hole functorially. This is the payoff of the
-/// haft carrier: the hand-written recursion collapses to the library fold.
+/// into the `Option<(i64, i64)>` hole functorially, so the hand-written
+/// recursion collapses to the library fold.
 fn cata_list<S>(free: Free<ListEndo<i64>, ()>, alg: &FAlgebra<ListEndo<i64>, i64, S>) -> i64
 where
     S: Fn(Option<(i64, i64)>) -> i64,

@@ -14,8 +14,8 @@
 //! Deep Learning.
 //!
 //! Construction wrappers + the commuting-square verifier inherited via the
-//! underlying [`FAlgebraHom`] check. Coherence with `η` (= haft's `Pure`) and
-//! `μ` (= haft's provided `Monad::join`) is now **machine-checked** against
+//! underlying [`FAlgebraHom`] check. Coherence with `η` (= `Pure`) and
+//! `μ` (= the provided `Monad::join`) is now **machine-checked** against
 //! caller-supplied samples: [`MonadAlgebra::verify_unit_law`] /
 //! [`MonadAlgebra::verify_assoc_law`] on an algebra, and
 //! [`MonadAlgebraHom::verify_unit_coherence`] /
@@ -61,8 +61,8 @@ where
     M: EndoWitness + Monad<M>,
 {
     /// Verify the monad-algebra **unit law** `a ∘ η_A = id_A` on a single
-    /// sample `x : A` (CDL Definition 2.3). With `η = ` haft's [`Pure`](crate::endofunctor::Pure), this
-    /// checks `a(M::pure(x)) == x`.
+    /// sample `x : A` (CDL Definition 2.3). With `η = ` [`Pure`](crate::endofunctor::Pure),
+    /// this checks `a(M::pure(x)) == x`.
     ///
     /// **Caller-sampled**, not exhaustive — the law is universally quantified
     /// over `A`, but Rust has no way to enumerate it; mirrors
@@ -84,7 +84,7 @@ where
     }
 
     /// Verify the monad-algebra **associativity law** `a ∘ M(a) = a ∘ μ_A` on a
-    /// single sample `mma : M(M(A))` (CDL Definition 2.3). With `μ = ` haft's
+    /// single sample `mma : M(M(A))` (CDL Definition 2.3). With `μ = ` the
     /// provided [`Monad::join`], this checks
     /// `a(M::fmap(mma, a)) == a(M::join(mma))`.
     ///
@@ -110,7 +110,7 @@ where
         // LHS: a ∘ M(a) — fmap the structure map over the inner layer, then a.
         let lhs: A = a(M::fmap(mma.clone(), a));
 
-        // RHS: a ∘ μ_A — μ is haft's provided `join`.
+        // RHS: a ∘ μ_A — μ is the provided `join`.
         let rhs: A = a(M::join(mma));
 
         lhs == rhs
@@ -153,8 +153,9 @@ where
 /// are machine-checkable against caller samples: the F-algebra square (point 1)
 /// via `self.algebra_hom.verify_commutes(...)`, and the unit + multiplication
 /// coherence (point 2) via [`MonadAlgebraHom::verify_unit_coherence`] and
-/// [`MonadAlgebraHom::verify_mult_coherence`]. `η` is haft's [`Pure`](crate::endofunctor::Pure) and `μ`
-/// haft's provided [`Monad::join`]; the verifiers bound
+/// [`MonadAlgebraHom::verify_mult_coherence`]. `η` is
+/// [`Pure`](crate::endofunctor::Pure) and `μ` the provided
+/// [`Monad::join`]; the verifiers bound
 /// `M: EndoWitness + Monad<M>` and are caller-sampled, not exhaustive.
 ///
 /// ⚠️ **Only the square (point 1) discriminates homs.** The two point-2
@@ -243,7 +244,7 @@ where
 {
     /// Verify the **unit-preservation** law `M(f) ∘ η_A = η_B ∘ f` on a single
     /// sample `x : A` — the left diagram in [`MonadAlgebraHom`]'s rustdoc. With
-    /// `η = ` haft's [`Pure`](crate::endofunctor::Pure), this checks
+    /// `η = ` [`Pure`](crate::endofunctor::Pure), this checks
     /// `M::fmap(M::pure(x), f) == M::pure(f(x))`.
     ///
     /// ⚠️ **This law cannot reject a non-homomorphism.** `η_A` and `η_B` are
@@ -283,7 +284,7 @@ where
     /// Verify the **multiplication-compatibility** law
     /// `f ∘ a ∘ M(a) = f ∘ a ∘ μ_A` on a single sample `mma : M(M(A))`
     /// (CDL Definition 2.3's associativity diagram post-composed with `f`;
-    /// `a` is the **source** algebra's structure map). With `μ = ` haft's
+    /// `a` is the **source** algebra's structure map). With `μ = ` the
     /// provided [`Monad::join`], this checks
     /// `f(a(M::fmap(mma, a))) == f(a(M::join(mma)))`.
     ///

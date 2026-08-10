@@ -36,7 +36,7 @@
 use core::marker::PhantomData;
 
 use crate::container::Container;
-use crate::endofunctor::{Functor, HKT, Monad, NoConstraint, Pure, Satisfies};
+use crate::endofunctor::{Functor, HKT, Monad, Pure};
 
 /// A group with associative binary `compose` and identity `identity`.
 ///
@@ -107,15 +107,12 @@ impl<G> GroupActionEndo<G> {
 }
 
 impl<G> HKT for GroupActionEndo<G> {
-    type Constraint = NoConstraint;
     type Type<X> = (G, X);
 }
 
 impl<G> Functor<Self> for GroupActionEndo<G> {
     fn fmap<X, Y, Func>(fx: (G, X), mut f: Func) -> (G, Y)
     where
-        X: Satisfies<NoConstraint>,
-        Y: Satisfies<NoConstraint>,
         Func: FnMut(X) -> Y,
     {
         let (g, x) = fx;
@@ -128,15 +125,12 @@ impl<G> Functor<Self> for GroupActionEndo<G> {
 /// identity `e = G::identity()`. σ-naturality
 /// `fmap(pure(x), f) == pure(f(x))` holds because `fmap` preserves the group
 /// slot untouched — both sides carry `e` and apply `f` to the second slot.
-/// This is the crate's own inhabitant of [`crate::natural::Pointed`] (haft
-/// witnesses re-exported through the seam, e.g. `OptionWitness`, are also
-/// pointed via their upstream `Pure` impls); see that module for why
-/// `ListEndo` / `TreeEndo` ship no point.
+/// This is the crate's CDL-shaped inhabitant of [`crate::natural::Pointed`]; the
+/// stock [`OptionWitness`](crate::endofunctor::OptionWitness) is pointed too via
+/// its own `Pure` impl. See [`crate::natural`] for why `ListEndo` / `TreeEndo`
+/// ship no point.
 impl<G: Group> Pure<Self> for GroupActionEndo<G> {
-    fn pure<X>(value: X) -> (G, X)
-    where
-        X: Satisfies<NoConstraint>,
-    {
+    fn pure<X>(value: X) -> (G, X) {
         (G::identity(), value)
     }
 }
@@ -166,8 +160,6 @@ impl<G: Group> Pure<Self> for GroupActionEndo<G> {
 impl<G: Group> Monad<Self> for GroupActionEndo<G> {
     fn bind<X, Y, Func>(m_a: (G, X), mut f: Func) -> (G, Y)
     where
-        X: Satisfies<NoConstraint>,
-        Y: Satisfies<NoConstraint>,
         Func: FnMut(X) -> (G, Y),
     {
         let (g, x) = m_a;
