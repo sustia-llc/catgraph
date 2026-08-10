@@ -16,11 +16,12 @@ layer). Item-by-item map in [`docs/ANCHORS.md`](docs/ANCHORS.md).
 Delivered incrementally, one phase per branch — the full **S1–S5** surface is
 shipped, completing the
 [#5](https://github.com/sustia-llc/catgraph/issues/5) milestone *surface*.
-Post-milestone follow-ups (multi-sorted props
-[#79](https://github.com/sustia-llc/catgraph/issues/79), the Cospan-valued
-complete-functor spike [#80](https://github.com/sustia-llc/catgraph/issues/80),
-serde on `PropExpr` [#81](https://github.com/sustia-llc/catgraph/issues/81))
-stay tracked on #5.
+The post-milestone follow-ups have shipped too: the Cospan-valued complete
+functor [#80](https://github.com/sustia-llc/catgraph/issues/80) and serde on
+`PropExpr` [#81](https://github.com/sustia-llc/catgraph/issues/81) at
+`v0.4.0`, and multi-sorted (Λ-colored) props
+[#79](https://github.com/sustia-llc/catgraph/issues/79) completed at
+`v0.5.0`.
 
 | Phase | Contents |
 |---|---|

@@ -94,8 +94,9 @@ Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBU
 > **complete** (S1–S5 merged 2026-07-11): S1 printer, S2 parser + presentation
 > files, S3 interpreter (ArrowModel/eval/SfgModel), S4 Frobenius layer
 > (FrobeniusOr/spiders/E_frob/to_mat_kron), S5 Traced typed builder over the
-> haft Arrow seam. Post-milestone follow-ups on #5 (#79/#80/#81); other open
-> follow-ups + audit/README reconciliation tracked as GitHub issues (e.g. #7).
+> haft Arrow seam. The post-milestone follow-ups #79/#80/#81 have ALL shipped
+> (#80/#81 at v0.4.0, #79 completed at v0.5.0); other open follow-ups +
+> audit/README reconciliation tracked as GitHub issues (e.g. #7).
 >
 > **Paper-audit (papers-vs-implementation citation sweep), ALL phases 1–7
 > complete (2026-07-19):** core (#112/#113), applied (#118/#119 — Thm 5.60

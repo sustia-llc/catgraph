@@ -9,7 +9,7 @@ Anchored to:
 - [Leinster, *The Euler characteristic of a category* (2008)](https://arxiv.org/abs/math/0610260) — Cor 1.5 integer-exact Möbius for finite circuit-free categories.
 - [Bradley, Terilla & Vlassopoulos, *An enriched category theory of language* (2021)](https://arxiv.org/abs/2106.07890) — representable copresheaf semantics (Yoneda embedding) + asymmetric semantic internal hom (Lemma 2 Eq 11 / §5 metric).
 
-**Status:** workspace version `0.7.0`. Released as workspace tags `v0.1.0`
+**Status:** workspace version `0.10.0`. Released as workspace tags `v0.1.0`
 (2026-07-01: semantic + determinism + coalition layer, #19–#23), `v0.1.1`
 (ULP-tolerant triangle-inequality checks, #29/#30), `v0.2.0` (2026-07-02:
 incremental coalition magnitude for the decision hot path, #31/PR #32), and
@@ -20,8 +20,12 @@ opt-in `f64-fast` factorization route with `cond₁(ζ)` reporting, and exact
 zero-diversity proofs on the coalition evaluator), and `v0.7.0` (2026-08-02:
 the `coalition_typed` typed-magnitude valuation surface — role shares,
 ρ-modulation + the role-grid factorization certificate, and the θ-collapse of
-channel-valued couplings, #211). The intervening `v0.2.1` and
-`v0.3.0` tags carried no magnitude-facing change.
+channel-valued couplings, #211), `v0.9.0` (2026-08-04: the rig identities
+`Zero`/`One` become catgraph's own in `catgraph-applied`, re-exported here —
+`deep_causality_num` retired, #219), and `v0.10.0` (2026-08-09: browser-wasm
+lib builds clear `getrandom` via the workspace `rand` slimming, #232). The
+intervening `v0.2.1`, `v0.3.0`, and `v0.8.0` tags carried no magnitude-facing
+change.
 Workspace-wide versioning supersedes the pre-reboot per-crate lineage; the full
 BV 2025 / Leinster 2013 / LS 2017 / Leinster 2008 math stack was migrated intact
 onto the DeepCausality substrate in reboot Phase 3 (#8).
