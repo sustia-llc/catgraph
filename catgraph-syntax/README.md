@@ -25,11 +25,11 @@ functor [#80](https://github.com/sustia-llc/catgraph/issues/80) and serde on
 
 | Phase | Contents |
 |---|---|
-| **S1** | workspace member, crate docs, `SyntaxError`, `arrow_seam` (haft seam), the structural pretty-printer (`GeneratorSyntax`, `Pretty`, `print`) |
+| **S1** | workspace member, crate docs, `SyntaxError`, `arrow_seam` (the Arrow seam), the structural pretty-printer (`GeneratorSyntax`, `Pretty`, `print`) |
 | **S2** | recursive-descent parser (`parse`) + presentation print/parse + the `SfgGenerator<R>` `GeneratorSyntax` impl (round-trip law-tested) |
 | **S3** | interpreter (`ArrowModel`, `eval`, `SfgModel`) — the executable term-action, cross-checked against the Thm 5.53 matrix functor |
 | **S4** | Frobenius layer (`FrobeniusOr`, spiders, the nine SCFM equations, `hypergraph_presentation`, the sound `to_mat_kron` checker) |
-| **S5** | typed `Traced` builder over the haft Arrow seam (`Wires`, paired combinators) — one value that both *runs* and *denotes a term* |
+| **S5** | typed `Traced` builder over the Arrow seam (`Wires`, paired combinators) — one value that both *runs* and *denotes a term* |
 
 ### Printer + parser (S1–S2)
 
@@ -144,12 +144,12 @@ the free hypergraph category on the palette `Λ` (F&S 2019 Def 2.12 / Lemma 3.10
 
 ### Typed builder (S5)
 
-A `Traced<A, G>` carries a morphism as **both** an executable haft `Arrow` `A`
+A `Traced<A, G>` carries a morphism as **both** an executable `Arrow` `A`
 **and** the `PropExpr<G>` term it denotes, so one value can be *run* (via the
 arrow) and *reasoned about* (print it, parse over it, `eval` it under any
 `ArrowModel`, normalize it, feed it to the presentation engine). It is the typed
 track of the Arrow bridge: the S3 interpreter works over flat `Vec<V>` wire
-bundles, while haft arrows speak in nested pairs, and `Wires<V>` is the lawful
+bundles, while arrows speak in nested pairs, and `Wires<V>` is the lawful
 bridge — `Wire<V>` is one wire, `()` is zero, `(L, R)` is `L` then `R`, and
 `flatten`/`unflatten` (with the compile-time `WireCount::COUNT`) move any pair-tree
 to/from the canonical `Vec<V>`.
@@ -182,8 +182,8 @@ automatically a `Wires` bundle.
 - **Three deliberate omissions.** General `braid(m, n)` (would need type-level
   rebracketing of nested pairs); `fanout`/`&&&` (**rejected** so the arrow cannot
   copy a wire no term generator copied — Fanout ≠ Frobenius δ); and spider arrows
-  (haft `Arrow` has no Frobenius structure). The `traced` module docs are the
-  canonical statement of each rejection.
+  (the `Arrow` algebra has no Frobenius structure). The `traced` module docs are
+  the canonical statement of each rejection.
 
 ## The standing disclaimer
 
@@ -195,11 +195,15 @@ route (`eq_mod_functorial` + a `CompleteFunctor`), which today means Mat(R)
 (`MatrixNFFunctor`, Seven Sketches Thm 5.60). Nothing here promotes an
 incomplete `None` into a decision.
 
-## haft seam
+## Arrow seam
 
-`deep_causality_haft` is consumed through the single file
-[`src/arrow_seam.rs`](src/arrow_seam.rs) — the only file naming haft, following
-catgraph-dl's `src/endofunctor.rs` precedent
-([#12](https://github.com/sustia-llc/catgraph/issues/12)). Its Arrow re-exports
-are live public API; the Arrow surface itself is first exercised by the S5
+The Arrow algebra is crate-owned
+([#222](https://github.com/sustia-llc/catgraph/issues/222)):
+[`src/arrow_seam.rs`](src/arrow_seam.rs) *defines* the `Arrow` trait, the
+combinator structs, and the `ArrowBuilder` outright. Until v0.11.0 the same
+module was the single re-export seam over `deep_causality_haft` (the #12
+single-seam precedent, shared with catgraph-dl's `src/endofunctor.rs`); the
+ten names, their paths, and their shapes are unchanged from that era, and the
+module's *Historical note* records what was deliberately not carried over. All
+ten names are live public API; the Arrow surface is first exercised by the S5
 `Traced` builder ([typed builder](#typed-builder-s5) above).

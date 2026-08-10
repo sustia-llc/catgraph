@@ -7,6 +7,31 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: the Arrow algebra is crate-owned; `deep_causality_haft` leaves
+  this crate's dependencies**
+  ([#222](https://github.com/sustia-llc/catgraph/issues/222)).
+  `src/arrow_seam.rs` now *defines* the surface it used to re-export — all ten
+  names (`Arrow`, `Compose`, `Split`, `Id`, `Lift`, `First`, `Second`,
+  `Fanout`, `ArrowBuilder`, `arrow`) keep their paths, shapes, and
+  constructors, so `catgraph_syntax::arrow_seam::…` call sites compile
+  unchanged (`traced.rs` itself needed zero code changes). What breaks is
+  nominal identity — the types are no longer haft's — plus one deliberate
+  omission: haft's provided `left`/`right`/`choice`/`fanin` methods (reachable
+  through the old trait, never re-exported) are not part of the owned surface;
+  the module's *Deliberate minimality* section records this.
+  - New `tests/arrow_laws.rs`: identity as the unit of `compose` on both
+    sides, `compose` associativity, `Split` bifunctoriality (interchange and
+    `id *** id`), the strength/fanout defining equations, and
+    builder-denotation agreement. Owning the algebra means owning its laws —
+    the S5 coherence suite exercised them only indirectly.
+  - The `Fanout` ≠ Frobenius `δ` rejection stays a nameable, documented
+    distinction (`traced.rs` *Deliberate omissions*): the type still exists
+    precisely so the rejection can name it.
+  - This crate's external dependency set is now catgraph + catgraph-applied +
+    thiserror (+ opt-in serde).
+
 ## [workspace-v0.10.0] - 2026-08-09
 
 ### Fixed
