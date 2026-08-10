@@ -6,13 +6,29 @@
 use std::ops::MulAssign;
 
 use itertools::Itertools;
-use rand::RngExt;
 
 use crate::F32_EPSILON;
 use crate::rig::One;
 use catgraph::{category::HasIdentity, errors::CatgraphError, operadic::Operadic};
 
+use rand_core::Rng;
+
 type IntervalCoord = f32;
+
+/// One uniform sample from the `f32` grid of \[0, 1): the top 24 bits of a
+/// single `u32` word, scaled by 2⁻²⁴.
+///
+/// In-tree because the published dependency is `rand_core` alone (#239), which
+/// supplies raw words and no float distributions. Every value `k · 2⁻²⁴`
+/// (`k < 2²⁴`) is exactly representable in [`IntervalCoord`], the maximum is
+/// `1 − 2⁻²⁴`, and the range is genuinely half-open — the strict upper bound
+/// is this function's postcondition, not a consumer tolerance. Finite by
+/// construction.
+#[inline]
+#[allow(clippy::cast_precision_loss)] // k < 2^24 is exactly representable in f32
+fn uniform_unit(rng: &mut impl Rng) -> IntervalCoord {
+    (rng.next_u32() >> 8) as IntervalCoord * (1.0 / (1u32 << 24) as IntervalCoord)
+}
 
 /// An n-ary operation in the E1 operad: a configuration of `n` disjoint subintervals of \[0, 1\].
 #[derive(Clone, Debug)]
@@ -110,16 +126,53 @@ impl E1 {
     ///
     /// # Panics
     ///
-    /// The sort's `partial_cmp` expect panics if any sample is not finite, which
-    /// cannot occur for `random_range(0.0..1.0)`. The terminal `expect` documents
-    /// the resampling invariant and likewise cannot fire.
+    /// - If `2 * cur_arity` (the draw count) overflows `usize`.
+    /// - The sort's `partial_cmp` expect and the terminal `expect` document
+    ///   invariants — samples are finite by construction (see `uniform_unit`),
+    ///   resampled coordinates are strictly separated — and cannot fire.
+    ///
+    /// # Termination
+    ///
+    /// The separation resampling makes termination probabilistic, and it
+    /// requires the generator to yield uniformly distributed words. The accept
+    /// probability for `m = 2 * cur_arity` sorted uniform draws is roughly
+    /// `(1 − m · MIN_SEPARATION)^m` — a negligible retry rate at small
+    /// arities (≈ 1e-3 at arity 10), shrinking steeply once arities reach the
+    /// low thousands, and effectively non-terminating well before the
+    /// pigeonhole bound `m · MIN_SEPARATION > 1` (arity ≈ 250 000). A
+    /// degenerate generator (constant or low-entropy words) collapses the
+    /// draws and never separates. There is deliberately no iteration cap:
+    /// supply a real RNG and practical arities.
     ///
     /// # RNG supply
     ///
-    /// The `rng` is any `rand 0.10` [`RngExt`] implementor from the *caller's*
-    /// own `rand` dependency — this crate re-exports nothing from `rand` and
-    /// enables none of its features (#232), so it never supplies OS entropy.
-    pub fn random(cur_arity: usize, rng: &mut impl RngExt) -> Self {
+    /// The `rng` is any `rand_core 0.10` [`Rng`] implementor — an engine from
+    /// the *caller's* own RNG crate (`StdRng`, `rand_chacha 0.10`'s
+    /// `ChaCha20Rng`, …). The engine must sit on the rand_core **0.10** line:
+    /// one built against rand_core 0.9 does not satisfy the bound, and the
+    /// compiler reports the mismatch as two same-named `Rng` traits. The
+    /// bound and its base trait are re-exported at the crate root
+    /// ([`crate::Rng`], [`crate::TryRng`]) so callers can *name* them — a
+    /// generic wrapper, or a custom engine via `TryRng<Error = Infallible>`
+    /// (`Rng` itself is blanket-implemented and cannot be implemented
+    /// directly) — without a direct `rand_core` dependency; engines
+    /// themselves still come from the caller's chosen crate. The uniform
+    /// \[0, 1) sampler is in-tree, so this crate's published edge is
+    /// `rand_core` alone — no distributions, no engines, and no OS entropy
+    /// anywhere in `src` (#239, #232).
+    ///
+    /// ```
+    /// use catgraph_applied::Rng; // the re-exported supply contract
+    /// use catgraph_applied::e1_operad::E1;
+    /// use rand::{SeedableRng, rngs::StdRng};
+    ///
+    /// // The bound is nameable through this crate alone.
+    /// fn sample(rng: &mut impl Rng) -> E1 {
+    ///     E1::random(3, rng)
+    /// }
+    /// assert_eq!(sample(&mut StdRng::seed_from_u64(7)).arity(), 3);
+    /// ```
+    pub fn random(cur_arity: usize, rng: &mut impl Rng) -> Self {
         // Strictly above the `E1::new` width threshold (`F32_EPSILON`), with slack,
         // so every accepted interval has positive width and neighbouring intervals
         // are strictly disjoint. The guarantee comes entirely from this loop:
@@ -127,13 +180,15 @@ impl E1 {
         // re-checks widths and bounds, not disjointness.
         const MIN_SEPARATION: f32 = 2.0 * F32_EPSILON;
 
+        let draw_count = cur_arity
+            .checked_mul(2)
+            .expect("E1::random draw count 2 * cur_arity overflows usize");
         let sub_ints = loop {
-            let mut sub_ints: Vec<IntervalCoord> = (0..2 * cur_arity)
-                .map(|_| rng.random_range(0.0..1.0))
-                .collect();
+            let mut sub_ints: Vec<IntervalCoord> =
+                (0..draw_count).map(|_| uniform_unit(rng)).collect();
             sub_ints.sort_unstable_by(|a, b| {
                 a.partial_cmp(b)
-                    .expect("invariant: samples from random_range(0.0..1.0) are finite")
+                    .expect("invariant: uniform_unit samples are finite by construction")
             });
             // An empty sample vec (cur_arity == 0) has no adjacent pairs, so `all`
             // is vacuously true and the loop exits on the first iteration.
@@ -309,6 +364,85 @@ mod test {
     /// `benches/mat_ops_bench.rs`). Tests needing an independent stream
     /// thread a small offset off this constant.
     const SEED: u64 = 1001;
+
+    /// A fixed-word engine over `rand_core::TryRng` — pins the sampler's
+    /// endpoints without any rand-family engine.
+    struct FixedWord(u32);
+
+    impl rand_core::TryRng for FixedWord {
+        type Error = core::convert::Infallible;
+        fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+            Ok(self.0)
+        }
+        fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+            Ok((u64::from(self.0) << 32) | u64::from(self.0))
+        }
+        fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+            for chunk in dst.chunks_mut(4) {
+                let word = self.0.to_le_bytes();
+                chunk.copy_from_slice(&word[..chunk.len()]);
+            }
+            Ok(())
+        }
+    }
+
+    /// A minimal xorshift32 engine over `rand_core::TryRng` — the documented
+    /// custom-engine route, exercised end to end with no rand-family crate.
+    struct XorShift32(u32);
+
+    impl XorShift32 {
+        fn step(&mut self) -> u32 {
+            let mut x = self.0;
+            x ^= x << 13;
+            x ^= x >> 17;
+            x ^= x << 5;
+            self.0 = x;
+            x
+        }
+    }
+
+    impl rand_core::TryRng for XorShift32 {
+        type Error = core::convert::Infallible;
+        fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+            Ok(self.step())
+        }
+        fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+            Ok((u64::from(self.step()) << 32) | u64::from(self.step()))
+        }
+        fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+            for chunk in dst.chunks_mut(4) {
+                let word = self.step().to_le_bytes();
+                chunk.copy_from_slice(&word[..chunk.len()]);
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn uniform_unit_endpoints_are_exact_and_half_open() {
+        use super::uniform_unit;
+
+        // Zero word -> exactly 0.0.
+        assert_eq!(uniform_unit(&mut FixedWord(0)), 0.0);
+        // Max word -> the top of the ladder, one f32 grid step below 1.
+        let max = uniform_unit(&mut FixedWord(u32::MAX));
+        assert_eq!(max, 1.0 - f32::EPSILON / 2.0);
+        assert!(max < 1.0, "the range must stay strictly half-open");
+    }
+
+    #[test]
+    fn e1_random_accepts_a_custom_tryrng_engine() {
+        use super::E1;
+
+        let mut rng = XorShift32(0x2A2A_2A2A);
+        let e1 = E1::random(4, &mut rng);
+        assert_eq!(e1.arity(), 4);
+        for (a, b) in e1.sub_intervals() {
+            assert!(*a >= 0.0, "left endpoint below 0: {a}");
+            assert!(*b < 1.0, "right endpoint reaches 1.0: {b}");
+            assert!(a < b, "non-positive width: ({a}, {b})");
+        }
+    }
 
     #[test]
     fn identity_e1_nullary() {

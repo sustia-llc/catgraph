@@ -13,6 +13,49 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed
+
+- **`E1::random` now takes any `rand_core 0.10` generator, and the published
+  randomness edge shrinks to `rand_core` alone**
+  ([#239](https://github.com/sustia-llc/catgraph/issues/239)). The signature
+  is `E1::random(cur_arity, rng: &mut impl Rng)` with `Rng` = `rand_core
+  0.10`'s infallible generator trait (note the upstream 0.10 rename:
+  `RngCore` is now a deprecated stub pointing at `Rng`). The uniform \[0, 1)
+  sampling moved in-tree — a 24-bit `f32` ladder over `next_u32`, exact on
+  the `f32` grid, maximum `1 − 2⁻²⁴`, genuinely half-open — so this crate's
+  `[dependencies]` carry `rand_core` instead of `rand`: no distributions, no
+  engines, no OS-entropy path anywhere in `src`. `rand` itself is dev-only
+  now, workspace-wide, enforced by a CI guard
+  (`scripts/check_rand_dev_only.py`). Downstream lib graphs of this crate
+  (and of magnitude / dl / syntax through it) shed `rand` entirely.
+  - **Source-compatible.** `rand 0.10`'s `RngExt` is a subtrait of the same
+    `rand_core::Rng`, so existing call sites — engines passed directly, or
+    generic code bounded `R: RngExt` — compile unchanged. The one
+    requirement: the engine must sit on the rand_core **0.10** line. An
+    0.9-line engine (`rand 0.9`'s `StdRng`, `rand_chacha 0.9`'s
+    `ChaCha20Rng`) fails the bound with a two-same-named-traits diagnostic;
+    the fix is bumping the caller's own rand-family crates to the 0.10 line.
+  - **Supply contract.** `catgraph_applied::{Rng, TryRng}` are re-exported so
+    callers can *name* the bound — a generic wrapper, or a custom engine via
+    `TryRng<Error = Infallible>` (`Rng` is blanket-implemented over `TryRng`
+    and cannot be implemented directly) — without a direct `rand_core`
+    dependency. Engines themselves still come from the caller's own RNG
+    crate. Note the coupling this creates: rand_core's major version is now
+    part of this crate's public API, so a future rand_core 0.11 adoption is
+    a breaking change here.
+  - **Behavioral note.** Draws remain i.i.d. uniform on \[0, 1), but the
+    stream differs from `rand`'s `random_range(0.0..1.0)`: a seeded sequence
+    of `E1::random` configurations is not bit-identical across this change.
+    Nothing in-tree pins exact drawn values (the seeded suites assert
+    structural invariants only); new direct tests pin the ladder's exact
+    endpoints, and a custom `TryRng` engine test pins the supply contract
+    end to end.
+  - The [#232](https://github.com/sustia-llc/catgraph/issues/232)
+    feature-unification caveat (any build graph containing `catgraph-physics`
+    re-enables `rand`'s defaults through `rustworkx-core`) is unchanged — see
+    the #232 entry below; it is now a statement about physics-containing
+    graphs only.
+
 ## [workspace-v0.10.0] - 2026-08-09
 
 ### Fixed

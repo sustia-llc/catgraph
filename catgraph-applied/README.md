@@ -111,9 +111,12 @@ cargo build --lib -p catgraph-applied --target wasm32-wasip1 --no-default-featur
 Browsers (`wasm32-unknown-unknown`) remain **out of scope** as a supported
 target (the policy statement lives in catgraph's README, WASM section), but
 since [#232](https://github.com/sustia-llc/catgraph/issues/232) the lib build
-is no longer accidentally blocked — the workspace `rand` entry carries no
-default features, so `getrandom` never enters this crate's normal-dependency
-graph:
+is no longer accidentally blocked — and since
+[#239](https://github.com/sustia-llc/catgraph/issues/239) `rand` itself is
+dev-only: the published edge is `rand_core` alone (`E1::random` takes a
+caller-supplied `rand_core 0.10` generator, nameable as
+`catgraph_applied::Rng`, and samples in-tree), so `getrandom` never enters
+this crate's normal-dependency graph:
 
 ```sh
 cargo check --lib -p catgraph-applied --target wasm32-unknown-unknown --no-default-features

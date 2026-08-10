@@ -100,3 +100,14 @@ pub use integer::ZAlgebra;
 // Convenience re-exports for the K1 hypergraph container (koalisi#4 consumer
 // surface). Long paths `catgraph_applied::hypergraph::…` remain valid.
 pub use hypergraph::{HyperedgeIndex, Hypergraph, HypergraphError, VertexIndex};
+
+/// The RNG supply contract for [`e1_operad::E1::random`] (#239): `rand_core
+/// 0.10`'s infallible generator trait `Rng` and, for custom engines, its base
+/// trait `TryRng` (implement `TryRng<Error = Infallible>`; `Rng` is
+/// blanket-implemented over it and cannot be implemented directly).
+/// Re-exported so callers can *name* the bound — a generic wrapper or a
+/// custom engine — without a direct `rand_core` dependency; engines
+/// themselves still come from the caller's own RNG crate, on the rand_core
+/// 0.10 line. The re-export ties this crate's public API to rand_core's
+/// major version by design.
+pub use rand_core::{Rng, TryRng};
