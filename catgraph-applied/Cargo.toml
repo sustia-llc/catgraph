@@ -60,12 +60,7 @@ nalgebra = { workspace = true, optional = true }
 # `(?!\s+as)` lookahead skips without needing an exclusion.
 num.workspace = true
 permutations.workspace = true
-# Base RNG traits only (#239): `E1::random` takes a caller-supplied
-# `rand_core::Rng` and samples uniform \[0,1) in-tree from raw `u64` words, so
-# the published edge carries no distributions, no engines, and no OS entropy.
-# `rand_core::Rng` is re-exported (`catgraph_applied::Rng`) as the supply
-# contract — downstream needs no `rand_core` dependency of its own. This edge
-# replaced the former `rand` one, which is now dev-only (below).
+# Base RNG traits only — rationale at the workspace `rand_core` entry (#239).
 rand_core.workspace = true
 rayon = { workspace = true, optional = true }
 rayon-cond = { version = "0.4", optional = true }

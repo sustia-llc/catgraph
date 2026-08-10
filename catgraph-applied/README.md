@@ -114,8 +114,9 @@ since [#232](https://github.com/sustia-llc/catgraph/issues/232) the lib build
 is no longer accidentally blocked — and since
 [#239](https://github.com/sustia-llc/catgraph/issues/239) `rand` itself is
 dev-only: the published edge is `rand_core` alone (`E1::random` takes a
-caller-supplied [`Rng`](https://docs.rs/rand_core) and samples in-tree), so
-`getrandom` never enters this crate's normal-dependency graph:
+caller-supplied `rand_core 0.10` generator, nameable as
+`catgraph_applied::Rng`, and samples in-tree), so `getrandom` never enters
+this crate's normal-dependency graph:
 
 ```sh
 cargo check --lib -p catgraph-applied --target wasm32-unknown-unknown --no-default-features

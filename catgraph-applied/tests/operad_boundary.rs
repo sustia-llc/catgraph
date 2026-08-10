@@ -369,8 +369,9 @@ fn e1_random_produces_valid_config() {
 
     for arity in 1..=10 {
         // Many trials per arity so the seeded run exercises many draws. (Resampling
-        // is rare — roughly 1e-3 per call at these arities — and these seeds happen
-        // not to hit it; the validity assertions below hold either way.)
+        // is rare — roughly 1e-3 per call at these arities; the validity
+        // assertions below are structural and hold whether or not a given seed
+        // hits the resample branch.)
         for _ in 0..20 {
             let e1 = E1::random(arity, &mut rng);
             let intervals = e1.extract_sub_intervals();

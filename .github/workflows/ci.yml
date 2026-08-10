@@ -48,6 +48,12 @@ jobs:
       # from the archived coalition audit, #53 item 3; joined the gate here).
       - name: audit-count guard (#111)
         run: python3 scripts/check_audit_counts.py catgraph/docs/FS19-AUDIT.md catgraph-applied/docs/FS18-AUDIT.md catgraph-magnitude/docs/BV25-AUDIT.md catgraph-magnitude/docs/BTV21-AUDIT.md
+      # #239: rand is dev-only — the published randomness edge is rand_core
+      # (catgraph-applied's supply contract). The wasm lanes below cannot catch
+      # a re-added featureless rand lib edge (it compiles fine), so this guard
+      # pins the manifest-level invariant.
+      - name: rand-dev-only guard (#239)
+        run: python3 scripts/check_rand_dev_only.py
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # #85: broken intra-doc links (unresolved / private / redundant) shipped
@@ -184,8 +190,11 @@ jobs:
       - run: cargo check -p catgraph-physics --no-default-features --target wasm32-wasip1
       # wasm32-wasip1-threads: core at default features.
       - run: cargo check -p catgraph --target wasm32-wasip1-threads
-      # wasm32-unknown-unknown, unblocked by #232 (rand slimming): `--lib`
-      # only, per applied's CHANGELOG pointer at this issue for the guard.
+      # wasm32-unknown-unknown, unblocked by #232 (rand feature slimming) and
+      # held trivially since #239 (rand left the published lib graphs
+      # entirely; the dev-only invariant itself is the rand-dev-only guard's
+      # job above — this lane can't see a re-added featureless lib edge).
+      # `--lib` only, per applied's CHANGELOG pointer at #232 for the guard.
       - run: cargo check --lib -p catgraph -p catgraph-applied -p catgraph-magnitude -p catgraph-dl -p catgraph-syntax --target wasm32-unknown-unknown
       # catgraph-physics at DEFAULTS stays red on this target by design: its
       # `rustworkx` feature pulls rustworkx-core WITH default features ->
