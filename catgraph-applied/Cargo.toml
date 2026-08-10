@@ -60,7 +60,13 @@ nalgebra = { workspace = true, optional = true }
 # `(?!\s+as)` lookahead skips without needing an exclusion.
 num.workspace = true
 permutations.workspace = true
-rand.workspace = true
+# Base RNG traits only (#239): `E1::random` takes a caller-supplied
+# `rand_core::Rng` and samples uniform \[0,1) in-tree from raw `u64` words, so
+# the published edge carries no distributions, no engines, and no OS entropy.
+# `rand_core::Rng` is re-exported (`catgraph_applied::Rng`) as the supply
+# contract — downstream needs no `rand_core` dependency of its own. This edge
+# replaced the former `rand` one, which is now dev-only (below).
+rand_core.workspace = true
 rayon = { workspace = true, optional = true }
 rayon-cond = { version = "0.4", optional = true }
 rust_decimal.workspace = true
@@ -78,9 +84,12 @@ union-find.workspace = true
 # counts are pinned, so its randomness must be byte-stable across machines and
 # runs (#33's byte-identity contract is exactly that guarantee).
 catgraph-testutil.workspace = true
-# `std`/`std_rng` re-added on this dev-only edge: the workspace `rand` entry is
-# featureless (#232) so the lib edge above ships no rand features downstream,
-# while the seeded `StdRng` tests and `mat_ops_bench` fixtures keep `StdRng`.
+# `rand` is dev-only here (#239 removed the lib edge; `rand_core` replaced it).
+# `std`/`std_rng` are re-added on this edge because the workspace entry is
+# featureless (#232): the seeded `StdRng` tests, the `operad_boundary`
+# integration fixtures, and `mat_ops_bench` all need `StdRng`, and none of it
+# reaches downstream lib graphs. `StdRng` satisfies the lib's
+# `rand_core::Rng` bound directly — same `rand_core` 0.10 traits.
 rand = { workspace = true, features = ["std", "std_rng"] }
 criterion.workspace = true
 proptest.workspace = true

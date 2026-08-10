@@ -6,13 +6,33 @@
 use std::ops::MulAssign;
 
 use itertools::Itertools;
-use rand::RngExt;
 
 use crate::F32_EPSILON;
 use crate::rig::One;
 use catgraph::{category::HasIdentity, errors::CatgraphError, operadic::Operadic};
 
+/// The RNG supply contract for [`E1::random`]: `rand_core 0.10`'s base
+/// generator trait, re-exported so callers need no direct `rand_core`
+/// dependency of their own (#239).
+pub use rand_core::Rng;
+
 type IntervalCoord = f32;
+
+/// One uniform sample from \[0, 1), drawn as the standard 53-bit ladder: the
+/// top 53 bits of a single `u64` word, scaled by 2⁻⁵³.
+///
+/// In-tree because the published dependency is `rand_core` alone (#239), which
+/// supplies raw words and no float distributions. The `f64` ladder is exact (an
+/// integer below 2⁵³ is representable, and 2⁻⁵³ is a power of two) and is then
+/// rounded once to [`IntervalCoord`]; every result is finite by construction.
+/// Rounding is the one place the half-open range widens: an `f64` draw within
+/// 2⁻²⁵ of 1 rounds up to exactly `1.0f32`, which [`E1::new`] accepts as a right
+/// endpoint, and which [`E1::random`]'s separation loop resamples away whenever
+/// it leaves no room for the coordinate that must follow it.
+fn uniform_unit(rng: &mut impl Rng) -> IntervalCoord {
+    let ladder = (rng.next_u64() >> 11) as f64 * (1.0 / (1u64 << 53) as f64);
+    ladder as IntervalCoord
+}
 
 /// An n-ary operation in the E1 operad: a configuration of `n` disjoint subintervals of \[0, 1\].
 #[derive(Clone, Debug)]
@@ -111,15 +131,20 @@ impl E1 {
     /// # Panics
     ///
     /// The sort's `partial_cmp` expect panics if any sample is not finite, which
-    /// cannot occur for `random_range(0.0..1.0)`. The terminal `expect` documents
-    /// the resampling invariant and likewise cannot fire.
+    /// cannot occur: each sample is an integer below 2⁵³ scaled by 2⁻⁵³, hence
+    /// finite by construction. The terminal `expect` documents the resampling
+    /// invariant and likewise cannot fire.
     ///
     /// # RNG supply
     ///
-    /// The `rng` is any `rand 0.10` [`RngExt`] implementor from the *caller's*
-    /// own `rand` dependency — this crate re-exports nothing from `rand` and
-    /// enables none of its features (#232), so it never supplies OS entropy.
-    pub fn random(cur_arity: usize, rng: &mut impl RngExt) -> Self {
+    /// The `rng` is any `rand_core 0.10` [`Rng`] implementor from the *caller's*
+    /// own RNG crate — `ChaCha20Rng`, `StdRng`, a custom engine, anything that
+    /// yields words. The trait is re-exported here as [`Rng`] (also at the crate
+    /// root), so callers need no direct `rand_core` dependency; the uniform
+    /// \[0, 1) sampler is in-tree, so this crate's published edge is `rand_core`
+    /// alone — no distributions, no engines, and no OS entropy anywhere in `src`
+    /// (#239, #232).
+    pub fn random(cur_arity: usize, rng: &mut impl Rng) -> Self {
         // Strictly above the `E1::new` width threshold (`F32_EPSILON`), with slack,
         // so every accepted interval has positive width and neighbouring intervals
         // are strictly disjoint. The guarantee comes entirely from this loop:
@@ -128,12 +153,11 @@ impl E1 {
         const MIN_SEPARATION: f32 = 2.0 * F32_EPSILON;
 
         let sub_ints = loop {
-            let mut sub_ints: Vec<IntervalCoord> = (0..2 * cur_arity)
-                .map(|_| rng.random_range(0.0..1.0))
-                .collect();
+            let mut sub_ints: Vec<IntervalCoord> =
+                (0..2 * cur_arity).map(|_| uniform_unit(rng)).collect();
             sub_ints.sort_unstable_by(|a, b| {
                 a.partial_cmp(b)
-                    .expect("invariant: samples from random_range(0.0..1.0) are finite")
+                    .expect("invariant: 53-bit ladder samples are finite by construction")
             });
             // An empty sample vec (cur_arity == 0) has no adjacent pairs, so `all`
             // is vacuously true and the loop exits on the first iteration.

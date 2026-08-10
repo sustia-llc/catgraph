@@ -254,6 +254,7 @@ dependencies = [
  "permutations",
  "proptest",
  "rand 0.10.2",
+ "rand_core 0.10.1",
  "rayon",
  "rayon-cond",
  "rust_decimal",

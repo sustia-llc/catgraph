@@ -100,3 +100,10 @@ pub use integer::ZAlgebra;
 // Convenience re-exports for the K1 hypergraph container (koalisi#4 consumer
 // surface). Long paths `catgraph_applied::hypergraph::…` remain valid.
 pub use hypergraph::{HyperedgeIndex, Hypergraph, HypergraphError, VertexIndex};
+
+/// The RNG supply contract for [`e1_operad::E1::random`]: `rand_core 0.10`'s
+/// base generator trait. Re-exported (root mirror of
+/// [`e1_operad::Rng`]) so callers can satisfy the bound without adding a
+/// `rand_core` dependency of their own — the only randomness this crate's
+/// published API needs (#239).
+pub use e1_operad::Rng;
