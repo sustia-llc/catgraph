@@ -36,18 +36,33 @@ All notable changes to this crate are documented here. Format follows
   - The carrier method surface is the deliberately minimal consumed set
     (the #76 precedent): `Free` = public variants + `fold` (the Rem 2.13
     catamorphism); `Cofree` = `new`/`head`/`tail`/`into_parts` + `unfold`
-    (the Rem H.6 anamorphism); opt-in `Eq`/`Debug` via the capability
-    traits. haft's `bind`/`map`/`lift` on `Free` and
-    `map`/`extend`/`extract` on `Cofree` (zero in-tree consumers) are not
-    part of the owned surface; `Clone`/`CoMonad`/`duplicate` stay out
-    (#154's declines are unchanged by ownership).
+    (the Rem H.6 anamorphism); opt-in `PartialEq`/`Debug` via the
+    capability traits. Enumerating everything previously reachable through
+    the re-exported names that the owned surface does NOT provide:
+    `Free::{bind, map, lift}` and the `Free::pure` inherent (use the public
+    `Pure` variant or `FreeWitness`'s `Pure` impl);
+    `Cofree::{map, extend, extract, duplicate}`; carrier `Clone` (upstream,
+    `Cofree<OptionWitness, _>: Clone` was reachable via haft's
+    `CloneFunctor` — #154's decline now extends to that route too);
+    `CofreeWitness`'s `Functor` impl (upstream it existed as `CoMonad`'s
+    supertrait, so `CofreeWitness` is no longer an `EndoWitness`);
+    `OptionWitness`'s `Monad` impl (the in-tree `Monad` inhabitant is
+    `GroupActionEndo`); and the carriers' `Eq` markers — deliberately
+    dropped, not just unported: `EqFunctor` is PartialEq-strength over the
+    witness's own label slots, so a carrier-level `Eq` violated `Eq`'s
+    totality contract for float-labelled witnesses (`NaN`-labelled values
+    compared unequal to themselves under a claimed total equivalence).
+    All of these had zero in-tree consumers.
   - `fold`/`unfold` are faithful recursive ports; the #231 pre-flight depth
     guards and the guarded walker entries stand unchanged. The #200
     residual ("haft-blocked" recursion items) is now fully crate-owned and
     fixable in-tree — re-recorded on that issue.
   - The behavior pins pass unchanged: the `free_monad_bijections` suite,
-    the five unroller-equivalence suites, and all four self-checking
+    the five unroller-equivalence suites, and all five self-checking
     examples run against the owned carriers with no assertion changes.
+  - The owned trait and carrier shapes are derived from
+    `deep_causality_haft` 0.4.2 (MIT) — attributed in each defining file's
+    license header.
   - This crate's unconditional external dependency set is now `thiserror`
     alone; `deep_causality_algebra`/`deep_causality_num` leave the lock with
     the workspace sweep.

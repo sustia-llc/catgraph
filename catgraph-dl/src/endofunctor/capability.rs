@@ -1,3 +1,9 @@
+// Portions derived from deep_causality_haft 0.4.2 (the crate this substrate
+// replaced at #222), used under the MIT license:
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2023 - 2026. The DeepCausality Authors.
+// Copyright (c) 2026 sustia-llc.
+
 //! Witness capabilities: [`EqFunctor`] and [`DebugFunctor`], the opt-in routes
 //! by which a witness gives the recursive carriers their `PartialEq`/`Eq` and
 //! `Debug` instances.
@@ -38,9 +44,14 @@ use crate::endofunctor::HKT;
 ///
 /// # Law
 ///
-/// `eq_type` is the container's structural equality: reflexive, symmetric and
-/// transitive whenever `T`'s `PartialEq` is. The `PartialEq` it induces on the
-/// carriers is then a structural equivalence by induction on the tree.
+/// `eq_type` is the container's structural equality: exactly as reflexive,
+/// symmetric and transitive as the comparisons it delegates to — the payload
+/// `T`'s `PartialEq` *and the witness's own label comparisons*. A
+/// float-labelled witness (e.g. `ListEndo<f64>`, whose `eq_type` compares the
+/// `f64` label) is only partial: `NaN != NaN` even at a total-`PartialEq`
+/// payload type. This is why the carriers expose `PartialEq` and no `Eq`
+/// marker — claiming total equivalence at the carrier while the capability is
+/// partial over label slots would violate `Eq`'s contract.
 pub trait EqFunctor: HKT {
     /// Structural equality of two `Self::Type<T>` containers, given
     /// `T: PartialEq`.

@@ -1,3 +1,9 @@
+// Portions derived from deep_causality_haft 0.4.2 (the crate this substrate
+// replaced at #222), used under the MIT license:
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2023 - 2026. The DeepCausality Authors.
+// Copyright (c) 2026 sustia-llc.
+
 //! The cofree comonad carrier `Cofree<F, A> = a :< f (Cofree f a)`.
 //!
 //! This module is private; the carrier is re-exported through
@@ -53,7 +59,9 @@ where
         &self.head
     }
 
-    /// The `F`-structure of child sub-trees at this node.
+    /// The `F`-structure of child sub-trees at this node — the borrowing
+    /// accessor paired with [`into_parts`](Cofree::into_parts)'s by-value
+    /// form, mirroring [`head`](Cofree::head).
     #[inline]
     pub fn tail(&self) -> &F::Type<Box<Cofree<F, A>>> {
         &self.tail
@@ -89,9 +97,11 @@ where
     }
 }
 
-// Opt-in `PartialEq`/`Eq`/`Debug` through the functor's capability traits — the
-// same cycle-free mechanism `free.rs` documents (a projection bound on
-// `F::Type<Box<Cofree<F, A>>>` would overflow the trait solver, `error[E0275]`).
+// Opt-in `PartialEq`/`Debug` through the functor's capability traits — the
+// same cycle-free mechanism `crate::endofunctor::EqFunctor` documents (a
+// projection bound on `F::Type<Box<Cofree<F, A>>>` would overflow the trait
+// solver, `error[E0275]`). No `Eq` marker, for the reason stated there: the
+// capability is only PartialEq-strength over the witness's own label slots.
 
 /// Structural equality: equal labels and equal `F`-structures of sub-trees,
 /// compared through the functor's `eq_type`.
@@ -105,32 +115,24 @@ where
     }
 }
 
-/// `Eq` is the marker upgrade of the structural `PartialEq`.
-impl<F, A> Eq for Cofree<F, A>
-where
-    F: EqFunctor,
-    A: Eq,
-{
-}
-
-/// `Debug` renders `Cofree { head, tail }`, formatting the `F`-structure through
-/// the functor's `fmt_type`.
+/// `Debug` mirrors the derive shape (`Cofree { head, tail }`), formatting the
+/// `F`-structure through the functor's `fmt_type`.
 impl<F, A> fmt::Debug for Cofree<F, A>
 where
     F: DebugFunctor,
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Cofree { head: ")?;
-        fmt::Debug::fmt(&self.head, f)?;
-        f.write_str(", tail: ")?;
-        F::fmt_type(&self.tail, f)?;
-        f.write_str(" }")
+        f.debug_struct("Cofree")
+            .field("head", &self.head)
+            .field("tail", &super::FmtType::<F, _>(&self.tail))
+            .finish()
     }
 }
 
 /// The [`HKT`] witness for the cofree comonad over the functor `F` (dual of
 /// [`FreeWitness`](crate::free_monad::FreeWitness)).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct CofreeWitness<F>(PhantomData<F>);
 
 impl<F> HKT for CofreeWitness<F>

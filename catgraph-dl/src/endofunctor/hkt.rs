@@ -1,3 +1,9 @@
+// Portions derived from deep_causality_haft 0.4.2 (the crate this substrate
+// replaced at #222), used under the MIT license:
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2023 - 2026. The DeepCausality Authors.
+// Copyright (c) 2026 sustia-llc.
+
 //! The arity-1 witness tower: [`HKT`] (object map), [`Functor`] (morphism map),
 //! [`Pure`] (the unit `η : Id ⇒ F`), and [`Monad`] (`bind`, with `μ = join`
 //! derived from it).

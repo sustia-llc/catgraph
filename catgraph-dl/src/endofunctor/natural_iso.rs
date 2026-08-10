@@ -1,3 +1,9 @@
+// Portions derived from deep_causality_haft 0.4.2 (the crate this substrate
+// replaced at #222), used under the MIT license:
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2023 - 2026. The DeepCausality Authors.
+// Copyright (c) 2026 sustia-llc.
+
 //! Natural isomorphism between two arity-1 witnesses, plus its law helpers.
 //!
 //! The laws live on the [`NaturalIso`] rustdoc — this module is private and
@@ -80,6 +86,13 @@ where
 /// supplied `fa` and `h`. The symmetric law via `to_source` follows from forward
 /// naturality together with the round-trip law; deep coverage composes this with
 /// [`assert_natural_iso_round_trip`].
+///
+/// This checks the same square as `tests/common`'s witness-generic
+/// `assert_natural_transformation_naturality` does for a
+/// [`crate::natural::NaturalTransformation`] — kept separate deliberately: this
+/// helper speaks the iso's `to_target` directly (no adapter needed), and it is
+/// the ported law pair the seam has always exposed. Iso law tests use this
+/// pair; transformation law tests use the `tests/common` helper.
 ///
 /// # Panics
 ///

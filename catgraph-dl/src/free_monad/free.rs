@@ -1,3 +1,9 @@
+// Portions derived from deep_causality_haft 0.4.2 (the crate this substrate
+// replaced at #222), used under the MIT license:
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2023 - 2026. The DeepCausality Authors.
+// Copyright (c) 2026 sustia-llc.
+
 //! The free monad carrier `Free<F, A> = Pure a | Suspend (f (Free f a))`.
 //!
 //! This module is private; the carrier is re-exported through
@@ -21,8 +27,10 @@ use crate::endofunctor::{DebugFunctor, EqFunctor, Functor, HKT, Pure};
 ///
 /// `F` is an [`HKT`] witness; the recursion-consuming [`fold`](Free::fold)
 /// additionally needs its [`Functor`] instance. Variants are public — pattern
-/// matching *is* the carrier's surface, exactly as it is for the
-/// [`BinaryTree`](crate::free_monad::tree_endo::BinaryTree) it is isomorphic to.
+/// matching *is* the carrier's surface, as it is for
+/// [`BinaryTree`](crate::free_monad::tree_endo::BinaryTree) (to which the
+/// [`TreeEndo`](crate::free_monad::tree_endo::TreeEndo) instantiation — and
+/// only that one — is isomorphic, CDL Example B.20).
 pub enum Free<F, A>
 where
     F: HKT,
@@ -61,13 +69,12 @@ where
     }
 }
 
-// `Free` has no *derived* `PartialEq`/`Eq`/`Debug`. A `#[derive]`, or any hand
-// impl gated on the GAT-projection field bound `F::Type<Box<Free<F, A>>>: Trait`,
-// makes the instance conditional on that projection, so discharging it at a
-// concrete witness re-enters the trait solver and overflows (`error[E0275]`).
-// The impls below route the recursion through the witness's `EqFunctor` /
-// `DebugFunctor` capability instead, which discharges against *this* impl's
-// stable bounds and terminates — see `crate::endofunctor::EqFunctor`.
+// Opt-in `PartialEq`/`Debug` route through the witness capability traits —
+// `crate::endofunctor::EqFunctor` is the canonical statement of why a
+// `#[derive]` (or any projection-bound hand impl) would overflow the trait
+// solver (`error[E0275]`). No `Eq` marker: `eq_type` is only PartialEq-strength
+// over the witness's own label slots (see `EqFunctor`'s law note), so claiming
+// total equivalence would be false for float-labelled witnesses.
 
 /// Structural equality: equal leaves, or equal operation nodes compared through
 /// the functor's `eq_type`.
@@ -85,14 +92,6 @@ where
     }
 }
 
-/// `Eq` is the marker upgrade of the structural `PartialEq`.
-impl<F, A> Eq for Free<F, A>
-where
-    F: EqFunctor,
-    A: Eq,
-{
-}
-
 /// `Debug` mirrors the derive shape (`Pure(..)` / `Suspend(..)`), formatting the
 /// operation node through the functor's `fmt_type`.
 impl<F, A> fmt::Debug for Free<F, A>
@@ -102,21 +101,17 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Free::Pure(a) => {
-                f.write_str("Pure(")?;
-                fmt::Debug::fmt(a, f)?;
-                f.write_str(")")
-            }
-            Free::Suspend(x) => {
-                f.write_str("Suspend(")?;
-                F::fmt_type(x, f)?;
-                f.write_str(")")
-            }
+            Free::Pure(a) => f.debug_tuple("Pure").field(a).finish(),
+            Free::Suspend(x) => f
+                .debug_tuple("Suspend")
+                .field(&super::FmtType::<F, _>(x))
+                .finish(),
         }
     }
 }
 
 /// The [`HKT`] witness for the free monad over the operation functor `F`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct FreeWitness<F>(PhantomData<F>);
 
 impl<F> HKT for FreeWitness<F>
@@ -128,7 +123,7 @@ where
 
 impl<F> Pure<FreeWitness<F>> for FreeWitness<F>
 where
-    F: HKT + Functor<F>,
+    F: HKT,
 {
     #[inline]
     fn pure<T>(value: T) -> Free<F, T> {

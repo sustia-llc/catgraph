@@ -42,7 +42,9 @@
 //!   [`Cofree::unfold`](crate::endofunctor::Cofree::unfold) recurse over the
 //!   spine with no guard in front of them, as the crate's own bench and law
 //!   tests reach them directly, and the carriers' recursive `Box` drop glue is
-//!   compiler-generated.
+//!   compiler-generated. The carriers' capability-routed `==` and `{:?}`
+//!   (their opt-in `PartialEq`/`Debug`) recurse over the same spine, equally
+//!   unguarded.
 //! - **The concrete tree carrier.** [`BinaryTree`]'s recursion is wider than the
 //!   guarded walkers: the drop glue recurses over the same spine when a value
 //!   dies — **including a value the guard has just rejected**, since the

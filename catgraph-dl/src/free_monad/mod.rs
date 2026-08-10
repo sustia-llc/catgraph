@@ -69,7 +69,8 @@
 //!
 //! **The guard covers this crate's walker entries only.** Direct [`Free::fold`]
 //! / [`Cofree::unfold`] calls, the recursive drop glue of the `Box`-nested
-//! carriers (including a value the guard just *rejected*), and
+//! carriers (including a value the guard just *rejected*), the carriers' own
+//! capability-routed `==` / `{:?}` (they recurse over the spine too), and
 //! [`BinaryTree`](tree_endo::BinaryTree)'s derived `Clone`/`PartialEq`/`Debug`
 //! all still recurse unguarded — [`crate::depth`]'s **Scope** section is the
 //! canonical account of that residual surface, and [#200] stays open as its
@@ -77,24 +78,34 @@
 //!
 //! ## Equality / Debug (opt-in, via capability traits)
 //!
-//! [`Free`]/[`Cofree`] have **no** `#[derive]`d `PartialEq`/`Eq`/`Debug` (a
+//! [`Free`]/[`Cofree`] have **no** `#[derive]`d `PartialEq`/`Debug` (a
 //! derive would gate on the GAT projection `F::Type<Box<…>>` and overflow the
 //! trait solver, `error[E0275]`). Instead the instances are opt-in and route
 //! through the operation functor's
 //! [`EqFunctor::eq_type`](crate::endofunctor::EqFunctor::eq_type) /
-//! [`DebugFunctor::fmt_type`](crate::endofunctor::DebugFunctor::fmt_type)
+//! [`DebugFunctor::fmt_type`]
 //! capability. `ListEndo` / `TreeEndo` implement them next to their
 //! `HKT`/`Functor` impls (bounded `A: PartialEq` / `A: Debug`), as does the stock
-//! [`OptionWitness`](crate::endofunctor::OptionWitness).
+//! [`OptionWitness`](crate::endofunctor::OptionWitness). There is no `Eq`
+//! marker on either carrier: the capability is PartialEq-strength over the
+//! witness's own label slots (see
+//! [`EqFunctor`](crate::endofunctor::EqFunctor)'s law note), so a carrier-level
+//! `Eq` would be false for float-labelled witnesses.
 //!
 //! ## Deliberate minimality of the carrier surface (#76 → #93 → #222)
 //!
 //! The carriers ship the recursion schemes and nothing else: [`Free`] is its two
 //! variants plus [`fold`](Free::fold); [`Cofree`] is
 //! [`new`](Cofree::new)/[`head`](Cofree::head)/[`tail`](Cofree::tail)/[`into_parts`](Cofree::into_parts)
-//! plus [`unfold`](Cofree::unfold); both get opt-in `Eq`/`Debug`. There is no
-//! `bind`/`map`/`lift` on `Free`, no `extract`/`extend`/`duplicate`/`CoMonad` on
-//! `Cofree`, and no carrier `Clone` — that is the #76 minimality precedent kept
+//! plus [`unfold`](Cofree::unfold); both get opt-in `PartialEq`/`Debug`. There
+//! is no `bind`/`map`/`lift` on `Free` (nor the `Free::pure` inherent — the
+//! unit is the public `Pure` variant, or
+//! [`FreeWitness`]'s [`Pure`](crate::endofunctor::Pure) impl), no
+//! `extract`/`extend`/`duplicate`/`CoMonad` on `Cofree`, no
+//! [`Functor`] impl on [`CofreeWitness`] (it existed upstream only as
+//! `CoMonad`'s supertrait), no `Monad` impl on
+//! [`OptionWitness`](crate::endofunctor::OptionWitness), and no carrier
+//! `Clone` — the #76 minimality precedent kept
 //! intact, and it is what this crate consumes: the unrollers and bijections walk
 //! with `into_parts()` and the two recursion schemes, and where a clone would be
 //! wanted the value is constructed twice (heap sharing is `Arc`'s job — the #42
@@ -126,3 +137,23 @@ pub use free::{Free, FreeWitness};
 // (issue #12); surfaced here so this module's consumers can name the bound the
 // bijection helpers below are written against.
 pub use crate::endofunctor::{EndoWitness, Functor, HKT};
+
+use core::fmt;
+
+use crate::endofunctor::DebugFunctor;
+
+/// Formats an `F::Type<T>` through the witness's `fmt_type` — lets the carrier
+/// `Debug` impls hand a GAT projection to `debug_tuple`/`debug_struct` (which
+/// take `&dyn Debug`) without the projection bound whose E0275 hazard
+/// [`crate::endofunctor::EqFunctor`] documents.
+struct FmtType<'a, F: HKT, T>(&'a F::Type<T>);
+
+impl<F, T> fmt::Debug for FmtType<'_, F, T>
+where
+    F: DebugFunctor,
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        F::fmt_type(self.0, f)
+    }
+}

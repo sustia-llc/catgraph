@@ -1,3 +1,9 @@
+// Portions derived from deep_causality_haft 0.4.2 (the crate this substrate
+// replaced at #222), used under the MIT license:
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2023 - 2026. The DeepCausality Authors.
+// Copyright (c) 2026 sustia-llc.
+
 //! [`OptionWitness`] — the ready-made `Option<T>` endofunctor.
 //!
 //! This module is private; the witness is re-exported through
@@ -48,5 +54,28 @@ impl EqFunctor for OptionWitness {
 impl DebugFunctor for OptionWitness {
     fn fmt_type<T: fmt::Debug>(fa: &Option<T>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(fa, f)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::OptionWitness;
+    use crate::free_monad::Cofree;
+
+    /// The stock witness's `EqFunctor`/`DebugFunctor` capabilities, exercised
+    /// at the stream carrier they exist for — `==` and the derive-shaped
+    /// `{:?}` both route through them.
+    #[test]
+    fn capabilities_reach_the_stream_carrier() {
+        let one = Cofree::<OptionWitness, u32>::new(1, Some(Box::new(Cofree::new(2, None))));
+        let same = Cofree::<OptionWitness, u32>::new(1, Some(Box::new(Cofree::new(2, None))));
+        let other = Cofree::<OptionWitness, u32>::new(1, None);
+
+        assert_eq!(one, same);
+        assert_ne!(one, other);
+        assert_eq!(
+            format!("{one:?}"),
+            "Cofree { head: 1, tail: Some(Cofree { head: 2, tail: None }) }"
+        );
     }
 }

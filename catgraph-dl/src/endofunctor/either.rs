@@ -1,3 +1,9 @@
+// Portions derived from deep_causality_haft 0.4.2 (the crate this substrate
+// replaced at #222), used under the MIT license:
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2023 - 2026. The DeepCausality Authors.
+// Copyright (c) 2026 sustia-llc.
+
 //! The two-variant sum [`Either<L, R>`].
 //!
 //! This module is private; the type is re-exported through
@@ -11,6 +17,14 @@
 /// [`TreeEndo<A>`](crate::free_monad::tree_endo::TreeEndo)'s object map
 /// `Type<X> = Either<A, (X, X)>` — leaf label on the left, the two subtree slots
 /// on the right.
+///
+/// Also deliberately distinct from the `either` crate's `Either` that core and
+/// applied use in their cospan APIs: this sum is part of the owned endofunctor
+/// substrate ([#222](https://github.com/sustia-llc/catgraph/issues/222)
+/// decision D-2) — it appears inside GAT projections and `depth`'s pattern
+/// matches, and pinning the substrate's shape to a foreign crate's type is
+/// what #222 removed. No API takes both; a consumer bridging them matches
+/// explicitly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Either<L, R> {
     /// The left variant.

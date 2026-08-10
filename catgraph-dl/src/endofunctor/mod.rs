@@ -6,8 +6,12 @@
 //! [#222](https://github.com/sustia-llc/catgraph/issues/222): the witness tower,
 //! the [`Either`] sum, the [`EqFunctor`]/[`DebugFunctor`] capabilities, the
 //! [`NaturalIso`] surface, the stock [`OptionWitness`], and the two carriers are
-//! all defined in this crate, and this module is their single import point (and
-//! documentation home). It arrived in three steps: the pre-#12 hand-rolled
+//! all defined in this crate (trait and carrier shapes derived from
+//! `deep_causality_haft` 0.4.2, MIT — attributed in each defining file), and
+//! this module is the substrate's single import point. Documentation is
+//! unidirectional: the traits' prose lives here, the carriers' lives in
+//! [`crate::free_monad`], and the carrier re-export below is a compatibility
+//! mirror, not a second documentation home. It arrived in three steps: the pre-#12 hand-rolled
 //! `EndoFunctor` trait (a GAT `type Apply<X>` plus an `fmap`) was replaced by
 //! external split witnesses in #12; the carriers followed in #93; #222 brings
 //! the consumed surface in-tree — the traits below unchanged in shape apart from
@@ -107,9 +111,10 @@ pub use hkt::{Functor, HKT, Monad, Pure};
 pub use natural_iso::NaturalIso;
 pub use option_witness::OptionWitness;
 
-// The recursive carriers are defined next to the CDL Proposition B.18 module
-// that documents them (`crate::free_monad`) and surfaced here so the rest of the
-// crate keeps importing the whole substrate from one seam.
+// Compatibility mirror: the recursive carriers are defined and documented in
+// `crate::free_monad` (the CDL Proposition B.18 module); they are surfaced
+// here only so the rest of the crate keeps importing the whole substrate from
+// one seam.
 pub use crate::free_monad::{Cofree, CofreeWitness, Free, FreeWitness};
 
 // The natural-iso law helpers. `doc(hidden)` because they are test support, not
