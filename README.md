@@ -5,11 +5,13 @@ a strict implementation of Fong & Spivak, *Hypergraph Categories* (2019), with
 applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions.
 
 > **Status:** the five proven crates (core / applied / magnitude / physics / dl)
-> have landed. The algebraic substrate is catgraph's own — the `Rig` semiring
-> and its `Zero` / `One` identities live in `catgraph-applied` — with one
-> external algebraic dependency left, `deep_causality_haft` (catgraph-dl's
-> endofunctor witnesses), and `nalgebra` kept
-> optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.10.0)
+> have landed. The algebraic substrate is entirely catgraph's own (#218,
+> completed at #222) — the `Rig` semiring and its `Zero` / `One` identities
+> live in `catgraph-applied`, the endofunctor / `Free` / `Cofree` substrate in
+> `catgraph-dl`, and the value-level Arrow algebra in `catgraph-syntax` (the
+> latter two derived from `deep_causality_haft` 0.4.2, MIT, attributed in the
+> defining files) — with zero external algebraic dependencies and `nalgebra`
+> kept optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.10.0)
 > and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, the Arrow
 > presentation frontend, #5): the S1–S5 milestone surface is **complete**
 > (printer, parser + presentation files, interpreter, Frobenius layer, Traced

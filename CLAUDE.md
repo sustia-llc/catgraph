@@ -26,25 +26,18 @@ catgraph (F&S core) ─▶ catgraph-applied ─▶ catgraph-magnitude
 LCG), pulled in only via `[dev-dependencies]` — never a published crate's
 `[dependencies]` (#33).
 
-`deep_causality_haft` pinned `=0.4.2` — the workspace's only external algebraic
-dependency, held by catgraph-dl (`src/endofunctor.rs`) and catgraph-syntax
-(`src/arrow_seam.rs`), one seam file each.
-haft 0.4.1 shipped the post-0.4.0 categorical machinery —
-PROP `SymMonoidal`, `ArrowTerm`, native `NaturalTransformation`, `Cofree` —
-re-evaluation #93 resolved 2026-07-19: `Free`/`Cofree` adopted as catgraph-dl's
-carriers; `ArrowTerm` vs `PropExpr` and `Category`/`Kleisli` vs `eval` assessed
-no-adopt; `SymMonoidal` decided-no — cartesian, not a Frobenius substrate.
-haft 0.4.2 (purely additive) adds `CloneFunctor`, opt-in `Clone` for
-`Free`/`Cofree`, `Cofree::duplicate`, and `Functor`/`CoMonad` impls on
-`CofreeWitness`; **carrier `Clone` stays unadopted** (#93 owner decision),
-adoption tracked in #154. Resolve haft from crates.io — DC `main` still reads
-0.4.1 in its own manifest (deepcausality-rs/deep_causality#720).
-`catgraph-dl` uses `haft`'s `HKT`/`Functor` witnesses as its endofunctor
-substrate (EndoFunctor→haft migration landed, #12). `deep_causality_algebra`
-remains transitive under haft; our source never names it
-(`rg deep_causality_algebra */src` stays empty). `catgraph` (core),
-`catgraph-applied`, `catgraph-magnitude`, and `catgraph-physics` carry no DC
-dependency at all.
+**Zero external algebraic dependencies** (#218, completed at #222): the whole
+substrate is catgraph-owned. catgraph-dl defines the endofunctor witness tower
+and the `Free`/`Cofree` carriers (`src/endofunctor/`, `src/free_monad/`);
+catgraph-syntax defines the value-level Arrow algebra (`src/arrow_seam.rs`).
+Both surfaces keep shape parity with the `deep_causality_haft` 0.4.2 code they
+replaced (MIT, attributed in the defining files' license headers), so the #12
+(EndoFunctor→haft) and #93 (Free/Cofree adoption) call sites survived the
+divestment unchanged; the #93 no-adopt verdicts (`ArrowTerm` vs `PropExpr`,
+`Category`/`Kleisli` vs `eval`, `SymMonoidal` — cartesian, not a Frobenius
+substrate) are pin-independent and stand. No `deep_causality_*` crate remains
+anywhere in the lockfile (`rg -i haft */src` stays empty outside historical
+docs).
 
 **Streamlining landed (#218):** `deep_causality_num` retired in **#219** (D1) —
 `Zero`/`One` are catgraph's own, defined in `catgraph-applied/src/rig.rs` next
@@ -56,7 +49,12 @@ hyperdoctrine/vector-bundle/lazy surfaces). `deep_causality_num_dual` retired in
 **#221** (D3), forced by the same change: the orphan rule forbids implementing a
 catgraph-owned `Zero`/`One` for a foreign `Dual`, so forward-mode `Dual<T>` moved
 to `catgraph-dl/src/para/dual.rs`. catgraph-dl's off-by-default `ad` feature
-(#74 PR2) now adds **no dependency at all**.
+(#74 PR2) now adds **no dependency at all**. `deep_causality_haft` retired in
+**#222** (D4): the dl endofunctor/carrier substrate and the syntax Arrow
+algebra moved in-tree at shape parity; `catgraph-applied`'s published
+randomness edge slimmed to `rand_core` in the same window (#239,
+`E1::random` over `catgraph_applied::Rng`, `rand` dev-only + CI-guarded).
+The #218 streamlining arc is complete.
 
 ## Paper anchors
 
@@ -69,7 +67,8 @@ to `catgraph-dl/src/para/dual.rs`. catgraph-dl's off-by-default `ad` feature
   (multi)computational irreducibility*); inspiration-anchored, not
   theorem-anchored — provenance in `catgraph-physics/docs/ANCHORS.md`
 - **catgraph-syntax** — F&S 2018 Ch. 5 (props, presentations, Thm 5.60) + F&S 2019
-  (Frobenius/hypergraph layer); haft Arrow via the `arrow_seam` (design: #5)
+  (Frobenius/hypergraph layer); owned Arrow algebra via the `arrow_seam`
+  (design: #5; crate-owned since #222)
 
 Paper PDFs are **not** kept in-tree (arXiv licensing does not grant
 redistribution for all anchors); fetch papers via the arXiv links in each
@@ -94,7 +93,7 @@ Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBU
 > **complete** (S1–S5 merged 2026-07-11): S1 printer, S2 parser + presentation
 > files, S3 interpreter (ArrowModel/eval/SfgModel), S4 Frobenius layer
 > (FrobeniusOr/spiders/E_frob/to_mat_kron), S5 Traced typed builder over the
-> haft Arrow seam. The post-milestone follow-ups #79/#80/#81 have ALL shipped
+> Arrow seam (crate-owned since #222). The post-milestone follow-ups #79/#80/#81 have ALL shipped
 > (#80/#81 at v0.4.0, #79 completed at v0.5.0); other open follow-ups +
 > audit/README reconciliation tracked as GitHub issues (e.g. #7).
 >
