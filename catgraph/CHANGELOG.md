@@ -184,6 +184,7 @@ substrate (numeric backends kept optional).
 
 [Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...HEAD
 [workspace-v0.10.0]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...v0.10.0
+[workspace-v0.9.0]: https://github.com/sustia-llc/catgraph/compare/v0.8.0...v0.9.0
 [workspace-v0.6.0]: https://github.com/sustia-llc/catgraph/compare/v0.5.0...v0.6.0
 [workspace-v0.4.0]: https://github.com/sustia-llc/catgraph/compare/v0.1.0...v0.4.0
 [workspace-v0.1.0]: https://github.com/sustia-llc/catgraph/releases/tag/v0.1.0

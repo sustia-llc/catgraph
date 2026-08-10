@@ -13,7 +13,9 @@ applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions
 > and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, the Arrow
 > presentation frontend, #5): the S1–S5 milestone surface is **complete**
 > (printer, parser + presentation files, interpreter, Frobenius layer, Traced
-> typed builder); post-milestone follow-ups are tracked on #5 (#79/#80/#81).
+> typed builder), and the post-milestone follow-ups have all shipped — #80
+> (Cospan-valued complete functor) and #81 (serde) at v0.4.0, #79 (Λ-colored
+> props) completed at v0.5.0.
 
 ## Workspace
 
