@@ -13,6 +13,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: `E1::random` now takes any `rand_core` generator, and the
+  published randomness edge shrinks to `rand_core` alone**
+  ([#239](https://github.com/sustia-llc/catgraph/issues/239)). The signature is
+  `E1::random(cur_arity, rng: &mut impl Rng)`, where `Rng` is `rand_core
+  0.10`'s base generator trait, re-exported as `catgraph_applied::Rng` — the
+  supply contract, so callers need no `rand_core` dependency of their own.
+  (Note the upstream 0.10 rename: `rand_core::RngCore` is now a deprecated
+  stub pointing at `Rng`.) The uniform \[0, 1) sampling moved in-tree (the
+  standard 53-bit ladder over `next_u64`), so this crate's `[dependencies]`
+  carry `rand_core` instead of `rand`: no distributions, no engines, no
+  OS-entropy path anywhere in `src` — `rand` itself is dev-only now. Downstream
+  lib graphs of this crate (and of magnitude / dl / syntax through it) shed
+  `rand` entirely.
+  - **Migration.** Call sites passing a `rand 0.10` engine (`StdRng`,
+    `SmallRng`, `ChaCha20Rng`, …) compile unchanged — every engine implements
+    `rand_core::Rng`. Code that *named* `RngExt` in its own bounds to feed
+    `E1::random` should name `catgraph_applied::Rng` instead.
+  - **Behavioral note.** Draws are still i.i.d. uniform on \[0, 1), but the
+    stream differs from `rand`'s `random_range(0.0..1.0)` — a seeded sequence
+    of `E1::random` configurations is not bit-identical across this change.
+    Nothing in-tree pins exact drawn values (the seeded suites assert
+    structural invariants only).
+  - The [#232](https://github.com/sustia-llc/catgraph/issues/232)
+    feature-unification caveat is unchanged: any build graph containing
+    `catgraph-physics` re-enables `rand`'s defaults through `rustworkx-core`;
+    the slim graph is real only physics-free.
+
 ## [workspace-v0.10.0] - 2026-08-09
 
 ### Fixed
