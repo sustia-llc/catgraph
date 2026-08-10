@@ -30,16 +30,22 @@ LCG), pulled in only via `[dev-dependencies]` — never a published crate's
 substrate is catgraph-owned. catgraph-dl defines the endofunctor witness tower
 and the `Free`/`Cofree` carriers (`src/endofunctor/`, `src/free_monad/`);
 catgraph-syntax defines the value-level Arrow algebra (`src/arrow_seam.rs`).
-Both surfaces keep shape parity with the `deep_causality_haft` 0.4.2 code they
-replaced (MIT, attributed in the defining files' license headers), so the #12
-(EndoFunctor→haft) and #93 (Free/Cofree adoption) call sites survived the
-divestment unchanged; the #93 no-adopt verdicts (`ArrowTerm` vs `PropExpr`,
-`Category`/`Kleisli` vs `eval`, `SymMonoidal` — cartesian, not a Frobenius
-substrate) are pin-independent and stand. No `deep_causality_*` crate remains
-anywhere in the lockfile (`rg -i haft */src` stays empty outside historical
-docs).
+The owned surfaces keep *carrier/combinator shape parity* with the
+`deep_causality_haft` 0.4.2 code they replaced (MIT, attributed in the
+defining files' license headers; 0.4.2 = tag `deep_causality_haft-v0.4.2`,
+commit `aeff6549e` — DC `main` read 0.4.1, DC#720), so construction and match
+sites compile unchanged — but #222 is BREAKING in both crates: the constraint
+slot (`Satisfies`/`NoConstraint`) is gone, the carrier/witness method surface
+is the consumed-only set, and haft's provided `⊕` arrow methods are not
+carried (each crate's CHANGELOG enumerates its cuts). The #93 no-adopt
+verdicts (`ArrowTerm` vs `PropExpr`, `Category`/`Kleisli` vs `eval`,
+`SymMonoidal` — cartesian, not a Frobenius substrate) are pin-independent and
+stand. No `deep_causality_*` crate remains anywhere in the graph
+(`rg deep_causality Cargo.lock */Cargo.toml` stays empty; CI-guarded).
 
-**Streamlining landed (#218):** `deep_causality_num` retired in **#219** (D1) —
+**Streamlining landed (#218):** the graph-crate edge retired in **#220** (D2 —
+toposort/connectivity in-tree; see catgraph's CHANGELOG);
+`deep_causality_num` retired in **#219** (D1) —
 `Zero`/`One` are catgraph's own, defined in `catgraph-applied/src/rig.rs` next
 to the native `Rig` and re-exported by magnitude and dl. They back the
 `RModule<S>` R-module actegory too (`F64Module = RModule<f64>`;
@@ -88,7 +94,8 @@ crate's `docs/`.
 Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 > **Status:** crate migration complete — the five proven crates (core / applied /
-> magnitude / physics / dl) landed on the thin DC substrate (Phases 0–5, merged).
+> magnitude / physics / dl) landed on the then-current thin DC substrate
+> (Phases 0–5, merged; that substrate has since been divested entirely, #218/#222).
 > Phase 6 (`catgraph-syntax`, the Arrow presentation frontend, #5) is
 > **complete** (S1–S5 merged 2026-07-11): S1 printer, S2 parser + presentation
 > files, S3 interpreter (ArrowModel/eval/SfgModel), S4 Frobenius layer

@@ -268,7 +268,6 @@ dependencies = [
 name = "catgraph-dl"
 version = "0.10.0"
 dependencies = [
- "catgraph",
  "catgraph-applied",
  "catgraph-testutil",
  "criterion",

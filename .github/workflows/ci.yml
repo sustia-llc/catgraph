@@ -54,6 +54,21 @@ jobs:
       # pins the manifest-level invariant.
       - name: rand-dev-only guard (#239)
         run: python3 scripts/check_rand_dev_only.py
+      # #222: the workspace carries ZERO deep_causality_* crates (the #218 arc's
+      # end state). A transitive re-introduction would land green without this —
+      # nothing else looks at the lockfile's package set.
+      - name: no-deep-causality guard (#222)
+        run: |
+          if rg -q 'deep_causality' Cargo.lock; then
+            echo "::error::a deep_causality_* crate re-entered the lockfile (#222 invariant)"
+            rg -n 'deep_causality' Cargo.lock
+            exit 1
+          fi
+          echo "no-deep-causality guard ok: lockfile is deep_causality-free"
+      # #222 sweep: the committed lockfile must be canonical — CI otherwise
+      # re-resolves a stale lock in-runner and passes on a graph nobody
+      # committed.
+      - run: cargo metadata --locked --format-version 1 > /dev/null
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       # #85: broken intra-doc links (unresolved / private / redundant) shipped

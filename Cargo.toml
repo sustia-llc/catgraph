@@ -21,7 +21,6 @@ repository = "https://github.com/sustia-llc/catgraph"
 # --- intra-workspace (path wins locally; version present for a future publish) ---
 catgraph           = { path = "catgraph",           version = "0.10.0", default-features = false }
 catgraph-applied   = { path = "catgraph-applied",   version = "0.10.0", default-features = false }
-catgraph-magnitude = { path = "catgraph-magnitude", version = "0.10.0" }
 # Dev-only, unpublished (`publish = false`): only ever a `[dev-dependencies]`
 # entry, never a published crate's `[dependencies]`. Shared seeded-fixture LCG (#33).
 catgraph-testutil  = { path = "catgraph-testutil" }
@@ -37,9 +36,11 @@ catgraph-testutil  = { path = "catgraph-testutil" }
 #     `deep_causality_num`) left the lockfile at #222.
 
 # --- math / graph — numeric-only, NOT an algebraic substrate ---
-# (members opt in with `{ workspace = true, optional = true }`; `optional` is illegal here.)
+# (nalgebra / rustworkx-core are opt-in per member, `{ workspace = true,
+# optional = true }`; permutations / union-find are unconditional edges of
+# core+applied; `optional` is illegal here either way.)
 nalgebra       = "0.35"   # field-bounded paths only
-permutations   = "0.1"    # backs braiding — DC Arrow has none
+permutations   = "0.1"    # backs braiding — the owned Arrow algebra (arrow_seam) has none
 rustworkx-core = "0.18"   # `catgraph-physics` only — coloring + k-core, behind its `rustworkx` feature gate (#10)
 # Disjoint sets, the whole graph substrate `catgraph` and `catgraph-applied` need:
 # cospan/corel pushouts and Temperley-Lieb composition connectivity. The toposort

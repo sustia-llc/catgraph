@@ -31,7 +31,9 @@ ad = []
 serde = ["dep:serde"]
 
 [dependencies]
-catgraph = { workspace = true }
+# No direct `catgraph` edge: this crate names no `catgraph::` path (core types
+# arrive through catgraph-applied's re-exports); the former declaration was a
+# phantom direct dependency, pruned at #222's sweep.
 catgraph-applied = { workspace = true }
 # The algebraic substrate is catgraph's own, and this crate declares no
 # dependency for it.
