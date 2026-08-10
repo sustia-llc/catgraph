@@ -49,7 +49,23 @@ use catgraph_applied::rig::{One, Zero};
 /// assert_eq!(y.value(), 33.0); // 3³ + 2·3
 /// assert_eq!(y.derivative(), 29.0); // 3·3² + 2
 /// ```
+///
+/// # Serde (features `serde` **and** `ad`)
+///
+/// Under `--features "serde ad"` a dual round-trips as its two components
+/// ([#230](https://github.com/sustia-llc/catgraph/issues/230)) — the derives are
+/// inherently gated on both, since this whole module exists only under `ad`.
+/// Both fields are public and independent; `re + du·ε` is well-formed for any
+/// pair, so deserialization admits nothing [`Dual::new`] would not. The one
+/// thing a document *carries* rather than derives is the tangent: a value
+/// deserialized with `du = 0` is a constant, not a seeded
+/// [`variable`](Dual::variable), so re-seed at the entry point rather than
+/// trusting a persisted derivative channel to still mean what it did upstream.
+/// The untagged-wire-shape and non-finite-`null` caveats on
+/// [`RModule`](super::RModule)'s Serde section apply here too — a `du` that
+/// went `NaN`/`±∞` serializes as `null` and will not load back.
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Dual<T> {
     /// The real part `a` — the function value.
     pub re: T,

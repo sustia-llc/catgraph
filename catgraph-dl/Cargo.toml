@@ -18,6 +18,17 @@ repository.workspace = true
 # feature adds **no dependency at all**, only two modules: nothing behind
 # `#[cfg(feature = "ad")]` changes default-build behavior.
 ad = []
+# `serde` adds `Serialize`/`Deserialize` derives on the parameter carriers
+# (`RModule<S>`, `DirectSum<A, B>`, and — only when `ad` is also on —
+# `Dual<T>`). Off by default, mirroring applied's #81 (#230). Precisely: the
+# default build takes no DIRECT serde edge of its own — serde already sits in
+# the default graph transitively (catgraph-applied → rust_decimal), so what
+# the feature adds is this crate's own edge plus serde_derive. The persistence
+# track (#72/#73) already serializes *terms* through applied/syntax;
+# `RModule<S>` is the other half — plain `Vec<S>` parameter data. The
+# trust-boundary statement of record is `RModule`'s Serde rustdoc section;
+# consumers re-check `dim()` at their own entry points.
+serde = ["dep:serde"]
 
 [dependencies]
 catgraph = { workspace = true }
@@ -41,6 +52,10 @@ catgraph-applied = { workspace = true }
 # `deep_causality_num` still sit in the lock beneath haft; our source names
 # neither (`rg deep_causality_algebra */src` stays empty).
 deep_causality_haft = { workspace = true }
+# Opt-in only, behind the `serde` feature (#230; the #81 pattern). The default
+# build takes no direct serde edge of its own (transitive serde under
+# rust_decimal is pre-existing and feature-independent).
+serde = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Deterministic LCG for the #156 shape-axis bench fixtures — the payload stream
@@ -50,6 +65,9 @@ deep_causality_haft = { workspace = true }
 catgraph-testutil.workspace = true
 criterion.workspace = true
 proptest.workspace = true
+# Round-trip driver for `tests/serde_roundtrip.rs` (#230), which is itself
+# gated on `--features serde`.
+serde_json.workspace = true
 
 # #156 Phase 1: the crate's first bench target. Shape-axis baseline for the haft
 # `Free`/`Cofree` carriers (construction / `fold` / `unfold` / the #36 lazy
