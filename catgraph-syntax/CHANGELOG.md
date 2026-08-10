@@ -29,8 +29,10 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
   - The `Fanout` ≠ Frobenius `δ` rejection stays a nameable, documented
     distinction (`traced.rs` *Deliberate omissions*): the type still exists
     precisely so the rejection can name it.
-  - This crate's external dependency set is now catgraph + catgraph-applied +
-    thiserror (+ opt-in serde).
+  - The owned module is derived from `deep_causality_haft` 0.4.2's Arrow
+    module (MIT) — attributed in the file's license header.
+  - This crate's runtime dependency set is now catgraph + catgraph-applied +
+    thiserror (+ opt-in serde); dev adds proptest and serde_json.
 
 ## [workspace-v0.10.0] - 2026-08-09
 

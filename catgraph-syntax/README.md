@@ -200,10 +200,15 @@ incomplete `None` into a decision.
 The Arrow algebra is crate-owned
 ([#222](https://github.com/sustia-llc/catgraph/issues/222)):
 [`src/arrow_seam.rs`](src/arrow_seam.rs) *defines* the `Arrow` trait, the
-combinator structs, and the `ArrowBuilder` outright. Until v0.11.0 the same
-module was the single re-export seam over `deep_causality_haft` (the #12
-single-seam precedent, shared with catgraph-dl's `src/endofunctor.rs`); the
-ten names, their paths, and their shapes are unchanged from that era, and the
-module's *Historical note* records what was deliberately not carried over. All
-ten names are live public API; the Arrow surface is first exercised by the S5
-`Traced` builder ([typed builder](#typed-builder-s5) above).
+combinator structs, and the `ArrowBuilder` outright, derived from
+`deep_causality_haft` 0.4.2's Arrow module (MIT, attributed in the file
+header). Before #222 the same module was the single re-export seam over that
+crate (the #12 single-seam precedent, shared with catgraph-dl's `endofunctor`
+module). The ten names, their paths, and their constructors are unchanged from
+that era, with one deliberate cut: the re-export era's trait additionally
+*provided* `left`/`right`/`choice`/`fanin` methods, which the owned trait
+omits — the module's *Deliberate minimality* section records the cut, and its
+*Historical note* records the never-re-exported surfaces. All ten names are
+live public API, law-tested in `tests/arrow_laws.rs`; the Arrow surface is
+first exercised by the S5 `Traced` builder
+([typed builder](#typed-builder-s5) above).

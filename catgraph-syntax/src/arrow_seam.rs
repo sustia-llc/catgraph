@@ -1,3 +1,9 @@
+// Portions derived from deep_causality_haft 0.4.2 (the crate this module
+// re-exported before #222), used under the MIT license:
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2023 - 2026. The DeepCausality Authors.
+// Copyright (c) 2026 sustia-llc.
+
 //! Arrow substrate — catgraph-syntax's own value-level Arrow algebra.
 //!
 //! A strong category in the sense of John Hughes' Arrow interface (*Generalising
@@ -10,13 +16,15 @@
 //! citation, not a theorem anchor: the crate's anchors are F&S 2018 / 2019, and
 //! nothing here claims an Arrow-law completeness result.
 //!
-//! The algebra is catgraph's own as of
-//! [#222](https://github.com/sustia-llc/catgraph/issues/222). This module was
-//! previously a re-export seam over an external algebra crate's Arrow module and
-//! is now the definition site, leaving catgraph-syntax with a
-//! `catgraph` + `catgraph-applied` + `thiserror` dependency set (plus optional
-//! `serde`). The module *name* is kept so the public path
-//! `catgraph_syntax::arrow_seam` and the ten names it exports are unchanged.
+//! The algebra is crate-owned as of
+//! [#222](https://github.com/sustia-llc/catgraph/issues/222), derived from
+//! `deep_causality_haft` 0.4.2's Arrow module (MIT — see this file's license
+//! header). This module was previously the re-export seam over that crate and
+//! is now the definition site, leaving catgraph-syntax with a runtime
+//! dependency set of `catgraph` + `catgraph-applied` + `thiserror` (plus
+//! opt-in `serde`; dev adds `proptest` and `serde_json`). The module *name* is
+//! kept so the public path `catgraph_syntax::arrow_seam` and the ten names it
+//! exports are unchanged.
 //!
 //! # What the typed builder consumes
 //!
@@ -49,11 +57,12 @@
 //!   through the builder anyway (`par` with a
 //!   [`traced_id`](crate::traced::traced_id)), so not exposed as a dedicated
 //!   `Traced` combinator.
-//! - [`Fanout`] — the Cartesian diagonal `A → (A, A)`; **rejected** by the
-//!   builder, because pairing it with a term would let the arrow duplicate a wire
-//!   no term generator copied (`Fanout` ≠ Frobenius `δ`) — [`crate::traced`]'s
-//!   *Deliberate omissions* is the canonical statement; the type stays public so
-//!   that distinction can be *named*.
+//! - [`Fanout`] — Cartesian fanout `A → (B, C)` (the diagonal `A → (A, A)` at
+//!   `id &&& id`); **rejected** by the builder, because pairing it with a term
+//!   would let the arrow duplicate a wire no term generator copied (`Fanout` ≠
+//!   Frobenius `δ`) — [`crate::traced`]'s *Deliberate omissions* is the
+//!   canonical statement; the type stays public so that distinction can be
+//!   *named*.
 //!
 //! # Deliberate minimality
 //!
@@ -105,7 +114,7 @@ use core::marker::PhantomData;
 /// absent — see the module docs.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` is not an `Arrow`",
-    note = "lift a function with `Lift::new(f)` (or the `arrow(f)` builder), or implement `Arrow` for your operator type"
+    note = "lift a function with `Lift::new(f)` (or the `arrow(f)` builder), or implement `Arrow` for your type"
 )]
 pub trait Arrow {
     /// The input object the arrow consumes.
@@ -114,6 +123,7 @@ pub trait Arrow {
     type Out;
 
     /// Apply the arrow to an input.
+    #[must_use = "dropping the output discards the computation"]
     fn run(&self, input: Self::In) -> Self::Out;
 
     /// Sequential composition `f >>> g`: run `self`, then `g` on its output.
@@ -162,9 +172,9 @@ pub trait Arrow {
     }
 
     /// Fanout `&&&`: feed one input to two arrows — `A → (B, C)` from
-    /// `self: A → B` and `g: A → C`. Requires `In: Clone` (the input is
-    /// duplicated), which is why the typed builder rejects it — see the module
-    /// docs.
+    /// `self: A → B` and `g: A → C`. The `In: Clone` bound is the type-level
+    /// symptom of what the typed builder rejects on principle: the copy is
+    /// Cartesian, and no term generator copies a wire — see the module docs.
     #[inline]
     #[must_use]
     fn fanout<G>(self, g: G) -> Fanout<Self, G>
@@ -178,7 +188,11 @@ pub trait Arrow {
 }
 
 /// The identity arrow `A → A` — the unit of composition.
-pub struct Id<A>(PhantomData<A>);
+///
+/// The wire type is carried as `PhantomData<fn(A) -> A>` (a function-pointer
+/// phantom), so `Id<A>` is `Send`/`Sync` regardless of `A` — no `A` value is
+/// ever stored.
+pub struct Id<A>(PhantomData<fn(A) -> A>);
 
 impl<A> Id<A> {
     /// Constructs the identity arrow.
@@ -303,7 +317,10 @@ where
 
 /// Strength on the first component: lifts `F: A → B` to `(A, C) → (B, C)`,
 /// passing the second component through unchanged.
-pub struct First<F, C>(F, PhantomData<C>);
+///
+/// The pass-through type is a function-pointer phantom (`fn(C) -> C`), so the
+/// composite's auto traits do not depend on `C`.
+pub struct First<F, C>(F, PhantomData<fn(C) -> C>);
 
 impl<F, C> First<F, C> {
     /// Builds the `first` arrow. Prefer [`Arrow::first`].
@@ -329,7 +346,10 @@ where
 
 /// Strength on the second component: lifts `F: A → B` to `(C, A) → (C, B)`,
 /// passing the first component through unchanged.
-pub struct Second<F, C>(F, PhantomData<C>);
+///
+/// The pass-through type is a function-pointer phantom (`fn(C) -> C`), so the
+/// composite's auto traits do not depend on `C`.
+pub struct Second<F, C>(F, PhantomData<fn(C) -> C>);
 
 impl<F, C> Second<F, C> {
     /// Builds the `second` arrow. Prefer [`Arrow::second`].
@@ -356,9 +376,10 @@ where
 /// Fanout `&&&`: feeds one input to two arrows — `A → (B, C)` from `f: A → B` and
 /// `g: A → C`. Requires the input to be `Clone` (it is duplicated).
 ///
-/// The copy is a *Cartesian* diagonal, not a Frobenius `δ`; [`crate::traced`]'s
-/// *Deliberate omissions* is the canonical statement of why the typed builder
-/// refuses to pair it with a term.
+/// The duplication is *Cartesian* copying (the diagonal `A → (A, A)` arises at
+/// `id &&& id`), not a Frobenius `δ`; [`crate::traced`]'s *Deliberate
+/// omissions* is the canonical statement of why the typed builder refuses to
+/// pair it with a term.
 pub struct Fanout<F, G>(F, G);
 
 impl<F, G> Fanout<F, G> {
@@ -385,9 +406,11 @@ where
     }
 }
 
-/// Return type of [`ArrowBuilder::then_fn`], factored out to satisfy
-/// `clippy::type_complexity`.
-type ThenFn<S, C, G> = ArrowBuilder<Compose<S, Lift<<S as Arrow>::Out, C, G>>>;
+/// Return type of [`ArrowBuilder::then_fn`] — the builder wrapping the chain
+/// composed with the lifted closure. Public so the name rustdoc shows in
+/// `then_fn`'s signature resolves; callers normally never write it (the
+/// builder chain infers it).
+pub type ThenFn<S, C, G> = ArrowBuilder<Compose<S, Lift<<S as Arrow>::Out, C, G>>>;
 
 /// A fluent builder over the [`Arrow`] algebra that hides the combinator types.
 ///
@@ -463,7 +486,10 @@ where
         ArrowBuilder(self.0.split(g))
     }
 
-    /// Fanout step (`&&&`): feed the same input to a second arrow.
+    /// Fanout step (`&&&`): feed the chain's **original input** to a second
+    /// arrow (the bound is `G: Arrow<In = S::In>`, not `In = S::Out`) — the
+    /// result pairs the whole chain's output with `g` applied to the input the
+    /// chain started from, not to the current stage's output.
     #[inline]
     #[must_use]
     pub fn fanout<G>(self, g: G) -> ArrowBuilder<Fanout<S, G>>
@@ -484,6 +510,7 @@ where
 
     /// Terminal: apply the composed arrow to an input.
     #[inline]
+    #[must_use = "dropping the output discards the computation"]
     pub fn run(&self, input: S::In) -> S::Out {
         self.0.run(input)
     }

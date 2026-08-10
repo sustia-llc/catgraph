@@ -26,9 +26,11 @@ use catgraph_syntax::arrow_seam::{Arrow, ArrowBuilder, Fanout, First, Id, Lift, 
 const SAMPLES: [i64; 5] = [-7, -1, 0, 3, 11];
 
 /// The sample pairs for the two-wire (`***`) laws — the `SAMPLES` points paired
-/// with a shifted copy of themselves, so the two components never agree.
+/// with a rotation of themselves. `SAMPLES` has no repeated values, so the two
+/// components of every pair genuinely differ (a fixed point like `(0, 0)`
+/// would blind the component-swap-sensitive laws).
 fn sample_pairs() -> impl Iterator<Item = (i64, i64)> {
-    SAMPLES.into_iter().zip(SAMPLES.into_iter().rev())
+    SAMPLES.into_iter().zip(SAMPLES.into_iter().cycle().skip(1))
 }
 
 fn inc() -> impl Arrow<In = i64, Out = i64> {
@@ -94,26 +96,29 @@ fn split_is_bifunctorial() {
 
 #[test]
 fn strength_and_fanout_match_their_defining_equations() {
-    // `first`/`second` are the tensor with an identity on the other side.
+    // `first`/`second` (the provided methods) are the tensor with an identity
+    // on the other side.
     let first = inc().first();
     let first_as_split = inc().split(Id::new());
-    let second = Second::new(inc());
+    let second = inc().second();
     let second_as_split = Id::new().split(inc());
     // `fanout` duplicates the input into both branches.
     let fanout = inc().fanout(dbl());
 
     for (a, b) in sample_pairs() {
         assert_eq!(first.run((a, b)), first_as_split.run((a, b)));
-        assert_eq!(second.run((a, b)), second_as_split.run((a, b)));
+        assert_eq!(second.run((b, a)), second_as_split.run((b, a)));
         assert_eq!(fanout.run(a), (a + 1, a * 2), "fanout differs at {a}");
     }
 
     // The explicit constructors agree with the combinator methods.
     let first_direct = First::new(inc());
+    let second_direct = Second::new(inc());
     let fanout_direct = Fanout::new(inc(), dbl());
-    for x in SAMPLES {
-        assert_eq!(first_direct.run((x, ())), (x + 1, ()));
-        assert_eq!(fanout_direct.run(x), fanout.run(x));
+    for (a, b) in sample_pairs() {
+        assert_eq!(first_direct.run((a, b)), first.run((a, b)));
+        assert_eq!(second_direct.run((b, a)), second.run((b, a)));
+        assert_eq!(fanout_direct.run(a), fanout.run(a));
     }
 }
 
@@ -123,6 +128,13 @@ fn builder_chains_denote_the_combinators_they_hide() {
     let hand = inc().compose(dbl());
     let wrapped = ArrowBuilder::new(inc()).then(dbl());
     let paired = arrow(|x: i64| x + 1).par(neg()).build();
+    // `fanout` on a builder feeds the CHAIN'S ORIGINAL input to the second
+    // arrow (bound `G: Arrow<In = S::In>`), pairing the chain's output with
+    // `g(original)` — not `g(current stage output)`.
+    let fanned = arrow(|x: i64| x + 1)
+        .then_fn(|x| x * 2)
+        .fanout(neg())
+        .build();
 
     for (a, b) in sample_pairs() {
         assert_eq!(built.run(a), hand.run(a), "then_fn chain differs at {a}");
@@ -131,6 +143,11 @@ fn builder_chains_denote_the_combinators_they_hide() {
             paired.run((a, b)),
             (a + 1, -b),
             "par chain differs at ({a}, {b})"
+        );
+        assert_eq!(
+            fanned.run(a),
+            ((a + 1) * 2, -a),
+            "builder fanout must feed the chain's original input at {a}"
         );
     }
 }

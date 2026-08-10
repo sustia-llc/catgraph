@@ -23,10 +23,12 @@ catgraph = { workspace = true }
 # constructors, and the `PropSignature` supertrait `GeneratorSyntax` extends.
 catgraph-applied = { workspace = true }
 # NO algebra dependency: the value-level Arrow algebra behind the S5 `Traced`
-# builder is catgraph's own, defined in `src/arrow_seam.rs` (#222). All ten
+# builder is crate-owned, defined in `src/arrow_seam.rs` (#222; derived from
+# deep_causality_haft 0.4.2, MIT — attributed in the file header). All ten
 # exported names (`Arrow`, `ArrowBuilder`, `Compose`, `Fanout`, `First`, `Id`,
-# `Lift`, `Second`, `Split`, `arrow`) are declared there, so this crate's whole
-# dependency set is catgraph + catgraph-applied + thiserror (+ optional serde).
+# `Lift`, `Second`, `Split`, `arrow`) are declared there, so this crate's
+# runtime dependency set is catgraph + catgraph-applied + thiserror
+# (+ opt-in serde); dev adds proptest + serde_json.
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
