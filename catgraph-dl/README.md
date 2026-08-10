@@ -96,7 +96,7 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
 - **`FAlgebra<F>`** `(A, a : F(A) → A)`, **`FCoalgebra<F>`** (dual), and
   **`MonadAlgebra<M>`** (CDL Definitions 2.3, 2.8, B.2). `MonadAlgebra` carries
   machine-checked monad-law verifiers **`verify_unit_law`** /
-  **`verify_assoc_law`** (`η = ` haft's `Pure`, `μ = ` haft's `Monad::join`).
+  **`verify_assoc_law`** (`η = ` the substrate's `Pure`, `μ = Monad::join`).
 - Homomorphism wrappers **`FAlgebraHom`** / **`FCoalgebraHom`** /
   **`MonadAlgebraHom`**, each with a caller-sampled `verify_commutes`;
   `MonadAlgebraHom` additionally carries the unit/multiplication coherence
@@ -115,7 +115,9 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
 
 - **`Free<F, Z>`** — realises the paper's `FreeMnd(F)(Z) = Fix(X ↦ F(X) + Z)`
   (CDL Def B.8), plus the cofree-comonad dual **`Cofree`**. Both are
-  `deep_causality_haft` 0.4.2 carriers, adopted per
+  crate-owned carriers
+  ([#222](https://github.com/sustia-llc/catgraph/issues/222)), keeping shape
+  parity with the haft carriers adopted at
   [#93](https://github.com/sustia-llc/catgraph/issues/93) (the box sits inside
   the functor hole: `Suspend(F::Type<Box>)`).
 - **`ListEndo<A>`** with `vec_to_free_mnd` / `free_mnd_to_vec` — the list
@@ -140,8 +142,10 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
   **`DepthError::TreeDepthExceeded { depth, limit }`** the rejection.
 - Engineering, not a CDL surface: the guard rejects inputs that would abort the
   process and changes nothing about the ones it accepts. It covers this crate's
-  own entries only — direct `deep_causality_haft` `Free::fold` / `Cofree::unfold`
-  calls and the carriers' recursive drop glue stay unguarded, tracked in
+  own entries only — direct `Free::fold` / `Cofree::unfold` calls and the
+  carriers' recursive drop glue stay unguarded; since
+  [#222](https://github.com/sustia-llc/catgraph/issues/222) the carriers are
+  crate-owned, so every remaining item is fixable in-tree, tracked in
   [#200](https://github.com/sustia-llc/catgraph/issues/200).
 
 ### `architectures` — (co)algebra-as-architecture catalogue (CDL Appendix I / J)
@@ -166,15 +170,16 @@ are folds and `from_fn` state machines.
 
 ### `endofunctor` — the shared functor substrate
 
-- **`HKT` / `Functor`** — `deep_causality_haft`'s GAT-based witness traits
-  (object map `HKT::Type<X>`, morphism map `Functor::fmap`), re-exported through
-  `crate::endofunctor` as the single import seam and shared by `algebra`
-  (F-algebras and homomorphisms) and `free_monad` (the recursive `Free` /
-  `Cofree` carriers — `deep_causality_haft` 0.4.2, adopted per
-  [#93](https://github.com/sustia-llc/catgraph/issues/93)). Replaces the former
-  hand-rolled `EndoFunctor` trait
-  ([#12](https://github.com/sustia-llc/catgraph/issues/12)); every shipped
-  witness uses `NoConstraint`.
+- **`HKT` / `Functor`** — crate-owned GAT-based witness traits (object map
+  `HKT::Type<X>`, morphism map `Functor::fmap`), defined in
+  `crate::endofunctor` and shared by `algebra` (F-algebras and homomorphisms)
+  and `free_monad` (the recursive `Free` / `Cofree` carriers). History: the
+  hand-rolled `EndoFunctor` trait was replaced by haft's witnesses
+  ([#12](https://github.com/sustia-llc/catgraph/issues/12)), which the crate
+  then owned outright
+  ([#222](https://github.com/sustia-llc/catgraph/issues/222)). The ambient
+  category is `Set` by construction, so the owned traits carry no constraint
+  machinery at all.
 
 ### `natural` — natural transformations and pointed endofunctors (CDL Def 1.5 / B.3)
 
@@ -183,15 +188,16 @@ are folds and `from_fn` state machines.
   witness (matching the `Functor::fmap` dispatch style), with the naturality
   law `transform(F::fmap(fa, h)) == G::fmap(transform(fa), h)` as the
   implementor obligation.
-- **`IsoForward`** / **`IsoBackward`** — adapter witnesses turning any haft
+- **`IsoForward`** / **`IsoBackward`** — adapter witnesses turning any
   `NaturalIso<F, G>` into its two natural transformations (`F ⇒ G` and `G ⇒ F`);
   separate types because the two directions would otherwise be overlapping
   blanket impls.
 - **`Pointed`** — blanket marker for a pointed endofunctor `(F, σ)` with
-  `σ = ` haft's `Pure` (the natural transformation `id ⇒ F`). `GroupActionEndo<G>`
+  `σ = ` the substrate's `Pure` (the natural transformation `id ⇒ F`).
+  `GroupActionEndo<G>`
   is the crate's own inhabitant (`σ(x) = (e, x)`, the writer-functor point);
-  haft witnesses reachable through the seam (e.g. `OptionWitness`) are also
-  pointed via their upstream `Pure` impls. `ListEndo` / `TreeEndo` ship no
+  seam witnesses (e.g. `OptionWitness`) are also
+  pointed via their `Pure` impls. `ListEndo` / `TreeEndo` ship no
   point — the former's only natural point (constant `None`) trivialises every
   pointed-algebra, the latter's diagonal point is natural but not representable
   under `Pure`'s no-`Clone` signature (see `src/natural.rs`).
@@ -233,10 +239,11 @@ For a single import path, the Tier-3 enrichment substrate is re-exported from
 
 ## Status
 
-Phase 5 (`catgraph-dl`) is merged. The endofunctor layer now runs on
-`deep_causality_haft`'s `HKT` / `Functor` witnesses (EndoFunctor→haft migration
-landed, [#12](https://github.com/sustia-llc/catgraph/issues/12)) — imported in
-`src/endofunctor.rs`, the single seam. The `RModule<S>` R-module actegory
+Phase 5 (`catgraph-dl`) is merged. The endofunctor layer runs on crate-owned
+`HKT` / `Functor` witnesses in `crate::endofunctor` — the lineage is
+hand-rolled `EndoFunctor` → haft witnesses
+([#12](https://github.com/sustia-llc/catgraph/issues/12)) → crate-owned
+([#222](https://github.com/sustia-llc/catgraph/issues/222)). The `RModule<S>` R-module actegory
 ([#36](https://github.com/sustia-llc/catgraph/issues/36)) takes its ring
 identities — filling the zero vector and marking the standard basis — from
 `catgraph_applied::rig::{Zero, One}`, the same pair the `Rig` bound is written
@@ -248,9 +255,6 @@ to come from `deep_causality_num`.
 - `catgraph` — core Fong & Spivak types.
 - `catgraph-applied` — the `Rig` + `EnrichedCategory` substrate (crate-graph
   position: `catgraph-applied` → `catgraph-dl`).
-- `deep_causality_haft` — the `HKT` / `Functor` endofunctor witnesses (#12) and
-  the `Either` sum used by `TreeEndo`. (The former dependency on the `either`
-  crate was dropped — `Either` now comes from haft.)
 - `thiserror` — the workspace error-derive pattern, for `errors::DepthError`
   ([#231](https://github.com/sustia-llc/catgraph/issues/231)). Already in the
   tree via core's `CatgraphError`, applied's `HypergraphError`, and syntax's
@@ -260,19 +264,19 @@ to come from `deep_causality_num`.
   `tests/serde_roundtrip.rs`), and the workspace's unpublished
   `catgraph-testutil` (deterministic bench LCG).
 
-That is the whole list — `deep_causality_haft` and `thiserror` are the crate's
-only unconditional non-catgraph `[dependencies]` entries, and the `ad` feature
-adds nothing to them. `serde` is the one feature that adds a direct edge, which
+That is the whole list — `thiserror` is the crate's only unconditional
+non-catgraph `[dependencies]` entry, and the `ad` feature adds nothing to it.
+`serde` is the one feature that adds a direct edge, which
 is why it stays off by default (note serde itself already appears in the
 default build transitively, under `catgraph-applied → rust_decimal` — the
 feature adds this crate's *own* edge plus `serde_derive`, not serde's first
 appearance). The
 `Zero` / `One` behind
-`RModule<S>` came from `deep_causality_num` until #219, and the `Dual<T>` behind
-`ad` came from `deep_causality_num_dual` until #221; both are catgraph's own now
-(`catgraph-applied/src/rig.rs` and `src/para/dual.rs` respectively). haft brings
-`deep_causality_algebra` and `deep_causality_num` along transitively — catgraph
-source names neither.
+`RModule<S>` came from `deep_causality_num` until #219, the `Dual<T>` behind
+`ad` came from `deep_causality_num_dual` until #221, and the
+`HKT` / `Functor` / `Either` / `Free` / `Cofree` substrate came from
+`deep_causality_haft` until #222; all are catgraph's own now. No
+`deep_causality_*` crate remains anywhere in this crate's dependency graph.
 
 ## Deferred surfaces
 
@@ -305,17 +309,12 @@ GitHub issue where one exists, otherwise plainly deferred.
   [#64](https://github.com/sustia-llc/catgraph/issues/64)). The individual
   `verify_commutes` entry points stay caller-sampled by design (the domain is
   not enumerable).
-- **Upstream haft adoption of `Pointed` / `NaturalTransformation`** — the
-  local `natural` traits stand in until the proposal to add them to
-  `deep_causality_haft` itself lands —
-  [#62](https://github.com/sustia-llc/catgraph/issues/62). On adoption they
-  become seam re-exports.
 - ~~**Machine-checked `MonadAlgebraHom` coherence laws** (`M(f) ∘ η_A = η_B ∘ f`,
   associativity with `μ`)~~ — **shipped**
   ([#40](https://github.com/sustia-llc/catgraph/issues/40)).
   `MonadAlgebra::verify_unit_law` / `verify_assoc_law` and
   `MonadAlgebraHom::verify_unit_coherence` / `verify_mult_coherence`, built on
-  haft's `Monad` (`η = Pure`, `μ = join`) and law-tested in
+  the substrate's `Monad` (`η = Pure`, `μ = join`) and law-tested in
   `tests/monad_algebra_laws.rs`. Verifiers are caller-sampled; construction
   still does not enforce the laws; the two hom-side coherence checks probe the
   ambient monad/algebra structure and cannot reject a non-homomorphism (the

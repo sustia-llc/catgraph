@@ -13,6 +13,45 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: the endofunctor / carrier substrate is crate-owned;
+  `deep_causality_haft` leaves this crate's dependencies**
+  ([#222](https://github.com/sustia-llc/catgraph/issues/222)).
+  `crate::endofunctor` now *defines* `HKT`, `Functor`, `Pure`, `Monad`,
+  `Either`, `NaturalIso` (+ the `#[doc(hidden)]` iso law helpers),
+  `EqFunctor`/`DebugFunctor`, and `OptionWitness`; `crate::free_monad` defines
+  the `Free`/`Cofree` carriers (+ `FreeWitness`/`CofreeWitness`). Every public
+  path that resolved before keeps resolving — seam paths and crate-root
+  mirrors alike — and the carrier shapes are haft-parity (`Free` =
+  `Pure(A) | Suspend(F::Type<Box<Free>>)`, box inside the functor hole), so
+  construction/match sites compile unchanged. What breaks:
+  - **`Satisfies` and `NoConstraint` are gone.** The owned `HKT` has no
+    constraint slot — the ambient category is `Set` by construction (CDL), and
+    no witness ever used another constraint. `EndoWitness` is now
+    `HKT + Functor<Self>`; witness impls simply delete their
+    `type Constraint = NoConstraint;` line.
+  - The 15 re-exported names change nominal identity (they are no longer
+    haft's types) even where shapes are identical.
+  - The carrier method surface is the deliberately minimal consumed set
+    (the #76 precedent): `Free` = public variants + `fold` (the Rem 2.13
+    catamorphism); `Cofree` = `new`/`head`/`tail`/`into_parts` + `unfold`
+    (the Rem H.6 anamorphism); opt-in `Eq`/`Debug` via the capability
+    traits. haft's `bind`/`map`/`lift` on `Free` and
+    `map`/`extend`/`extract` on `Cofree` (zero in-tree consumers) are not
+    part of the owned surface; `Clone`/`CoMonad`/`duplicate` stay out
+    (#154's declines are unchanged by ownership).
+  - `fold`/`unfold` are faithful recursive ports; the #231 pre-flight depth
+    guards and the guarded walker entries stand unchanged. The #200
+    residual ("haft-blocked" recursion items) is now fully crate-owned and
+    fixable in-tree — re-recorded on that issue.
+  - The behavior pins pass unchanged: the `free_monad_bijections` suite,
+    the five unroller-equivalence suites, and all four self-checking
+    examples run against the owned carriers with no assertion changes.
+  - This crate's unconditional external dependency set is now `thiserror`
+    alone; `deep_causality_algebra`/`deep_causality_num` leave the lock with
+    the workspace sweep.
+
 ## [workspace-v0.10.0] - 2026-08-09
 
 ### Added
