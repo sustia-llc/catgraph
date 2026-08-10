@@ -17,7 +17,7 @@
 //! SCFM equations per colour, and the sound
 //! [`to_mat_kron`](frobenius::to_mat_kron) checker,
 //! F&S 2019), and the *typed builder* ([`traced`] — a
-//! [`Traced<A, G>`](traced::Traced) pairs an executable haft
+//! [`Traced<A, G>`](traced::Traced) pairs an executable
 //! [`Arrow`](arrow_seam::Arrow) with the [`PropExpr`](catgraph_applied::prop::PropExpr)
 //! term it denotes, bridged by [`Wires`](traced::Wires), so one value can be both
 //! *run* and *reasoned about*; the first consumer of the [`arrow_seam`]).
