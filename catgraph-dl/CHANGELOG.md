@@ -13,6 +13,8 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+## [workspace-v0.10.0] - 2026-08-09
+
 ### Added
 
 - **Optional `serde` feature** ([#230](https://github.com/sustia-llc/catgraph/issues/230)):
@@ -1249,7 +1251,8 @@ Initial scaffold release. Types-only surface; bodies land in Phase DL-2.
   coherence verification, and the algebra-homomorphism unroller arrive in
   Phase DL-2 with the `catgraph-coalition` v0.4.0 enriched-actegory body.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...HEAD
+[workspace-v0.10.0]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...v0.10.0
 [workspace-v0.9.0]: https://github.com/sustia-llc/catgraph/compare/v0.8.0...v0.9.0
 [workspace-v0.6.0]: https://github.com/sustia-llc/catgraph/compare/v0.5.0...v0.6.0
 [workspace-v0.5.0]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...v0.5.0

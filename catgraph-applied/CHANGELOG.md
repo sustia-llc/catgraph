@@ -13,6 +13,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.10.0] - 2026-08-09
+
 ### Fixed
 
 - **Browser-wasm lib builds of this crate no longer fail in `getrandom`**
@@ -2011,7 +2013,8 @@ Tier 1 gap closures (from v0.2.0 audit).
   - `e2_operad.rs` — little-disks operad (E₂).
 - Criterion bench `rayon_thresholds`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...HEAD
+[workspace-v0.10.0]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...v0.10.0
 [workspace-v0.8.0]: https://github.com/sustia-llc/catgraph/compare/v0.7.0...v0.8.0
 [workspace-v0.6.0]: https://github.com/sustia-llc/catgraph/compare/v0.5.0...v0.6.0
 [workspace-v0.5.0]: https://github.com/sustia-llc/catgraph/compare/v0.4.0...v0.5.0
