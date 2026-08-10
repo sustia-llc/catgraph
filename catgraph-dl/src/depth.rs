@@ -32,26 +32,26 @@
 //! # Scope — what the guard does and does not cover
 //!
 //! The guard covers **this crate's own walker entries**, and only the walk
-//! itself. [#200] stays open as the tracker for the residual recursion, which
-//! splits by who could fix it:
+//! itself. Everything below is now crate-owned — the carriers came in-tree with
+//! [#222](https://github.com/sustia-llc/catgraph/issues/222), so an iterative
+//! rewrite or a hand-written `Drop` is writable here rather than upstream — but
+//! #222 was a port, not a fix, and the guard-at-the-entries posture stands.
+//! [#200] stays open as the tracker, and carries the fix design:
 //!
-//! - **Haft-blocked.** [`Free::fold`] and
-//!   [`Cofree::unfold`](crate::endofunctor::Cofree::unfold) are upstream
-//!   methods on upstream types, re-exported through [`crate::endofunctor`]. A
-//!   caller reaching them directly — as the crate's own bench and law tests
-//!   do — walks or grows a spine with no guard in front of it, and `Free`'s
-//!   recursive `Box` drop glue is likewise upstream. Guarding those would mean
-//!   changing haft, which #231 explicitly does not do.
-//! - **Crate-owned (fixable here, recorded on #200).**
-//!   [`BinaryTree`] is this crate's
-//!   type, and its recursion is wider than the guarded walkers: the compiler's
-//!   drop glue recurses over the same spine when a value dies — **including a
-//!   value the guard has just rejected**, since the fallible entries take it
-//!   by value — and the derived `Clone` / `PartialEq` / `Debug` impls recurse
-//!   identically (`tree.clone()`, `==`, or logging a suspect tree with `{:?}`
-//!   can abort where the guarded walk would have errored). Iterative `Drop` /
-//!   `Clone` / `Debug` impls are writable in-crate with the same worklist
-//!   technique this module uses; #200 records that option.
+//! - **The recursion schemes.** [`Free::fold`] and
+//!   [`Cofree::unfold`](crate::endofunctor::Cofree::unfold) recurse over the
+//!   spine with no guard in front of them, as the crate's own bench and law
+//!   tests reach them directly, and the carriers' recursive `Box` drop glue is
+//!   compiler-generated. The carriers' capability-routed `==` and `{:?}`
+//!   (their opt-in `PartialEq`/`Debug`) recurse over the same spine, equally
+//!   unguarded.
+//! - **The concrete tree carrier.** [`BinaryTree`]'s recursion is wider than the
+//!   guarded walkers: the drop glue recurses over the same spine when a value
+//!   dies — **including a value the guard has just rejected**, since the
+//!   fallible entries take it by value — and the derived `Clone` / `PartialEq` /
+//!   `Debug` impls recurse identically (`tree.clone()`, `==`, or logging a
+//!   suspect tree with `{:?}` can abort where the guarded walk would have
+//!   errored).
 //!
 //! In practice the residuals sit far above the guard: the pre-guard
 //! measurement of record (see [`MAX_TREE_DEPTH`]) put the abort threshold in
@@ -83,8 +83,8 @@ use crate::free_monad::tree_endo::{BinaryTree, TreeEndo};
 ///   of construction, `fold`, `unfold` and drop glue) ran comfortably on the
 ///   8 MiB stack criterion's main thread gets. 256 sits **16×** below that.
 ///   Post-guard, the guarded public entries refuse a spine that deep, so the
-///   measurement is a historical record, not a reproducible row (haft's
-///   unguarded `fold`/`unfold` remain the way to re-measure the deep regime).
+///   measurement is a historical record, not a reproducible row (the unguarded
+///   `fold`/`unfold` remain the way to re-measure the deep regime).
 /// - **Rust test threads default to 2 MiB**, a quarter of the measured budget;
 ///   scaling the measured-safe depth by that ratio leaves roughly a thousand
 ///   frames, and 256 is a quarter of *that* again. (#99 learned this the hard

@@ -40,7 +40,7 @@
 use core::marker::PhantomData;
 
 use crate::container::Container;
-use crate::endofunctor::{DebugFunctor, EqFunctor, Free, Functor, HKT, NoConstraint, Satisfies};
+use crate::endofunctor::{DebugFunctor, EqFunctor, Free, Functor, HKT};
 
 /// The endofunctor `1 + A × −` for a fixed alphabet `A`.
 ///
@@ -60,15 +60,12 @@ impl<A> ListEndo<A> {
 }
 
 impl<A> HKT for ListEndo<A> {
-    type Constraint = NoConstraint;
     type Type<X> = Option<(A, X)>;
 }
 
 impl<A> Functor<Self> for ListEndo<A> {
     fn fmap<X, Y, Func>(fx: Option<(A, X)>, mut f: Func) -> Option<(A, Y)>
     where
-        X: Satisfies<NoConstraint>,
-        Y: Satisfies<NoConstraint>,
         Func: FnMut(X) -> Y,
     {
         // Identity law: `fmap(None, _) = None`, `fmap(Some((a, x)), id) =
@@ -82,7 +79,7 @@ impl<A> Functor<Self> for ListEndo<A> {
 // Opt-in structural equality for `Free<ListEndo<A>, Z>` (and `Cofree`): route
 // the comparison of the functor hole `Option<(A, T)>` through `Option`/tuple's
 // own `==`. Bounded `A: PartialEq` so the label participates; `T: PartialEq`
-// comes from the trait method. Mirrors haft's `OptionWitness: EqFunctor`.
+// comes from the trait method.
 impl<A: PartialEq> EqFunctor for ListEndo<A> {
     fn eq_type<T: PartialEq>(a: &Option<(A, T)>, b: &Option<(A, T)>) -> bool {
         a == b
@@ -163,7 +160,7 @@ pub fn free_mnd_to_vec<A, Z>(input: Free<ListEndo<A>, Z>) -> (Vec<A>, Z) {
     loop {
         match current {
             Free::Pure(z) => return (items, z),
-            // haft boxes the recursion *inside* the functor hole, so the node is
+            // The recursion is boxed *inside* the functor hole, so the node is
             // `Option<(A, Box<Free<…>>)>` — no outer `Box` to deref.
             Free::Suspend(node) => match node {
                 None => {
@@ -207,7 +204,7 @@ pub fn free_mnd_to_vec<A, Z>(input: Free<ListEndo<A>, Z>) -> (Vec<A>, Z) {
 pub fn vec_to_free_mnd<A, Z>(items: Vec<A>, terminator: Z) -> Free<ListEndo<A>, Z> {
     let mut acc: Free<ListEndo<A>, Z> = Free::Pure(terminator);
     for a in items.into_iter().rev() {
-        // Box the recursive slot *inside* the `Option` hole (haft's shape).
+        // Box the recursive slot *inside* the `Option` hole.
         acc = Free::Suspend(Some((a, Box::new(acc))));
     }
     acc

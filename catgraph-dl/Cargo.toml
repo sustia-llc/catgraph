@@ -33,12 +33,16 @@ serde = ["dep:serde"]
 [dependencies]
 catgraph = { workspace = true }
 catgraph-applied = { workspace = true }
-# DeepCausality substrate.
-# `deep_causality_haft` is IN USE (issue #12): the endofunctor abstraction is
-# haft's `HKT`/`Functor` witnesses, adopted in `src/endofunctor.rs` (the single
-# import seam) and consumed across `algebra::` and `free_monad::`. `Either` (for
-# `TreeEndo`) is sourced from haft too, so `catgraph-dl` no longer needs the
-# `either` crate.
+# The algebraic substrate is catgraph's own, and this crate declares no
+# dependency for it.
+# The endofunctor witnesses (`HKT`/`Functor`/`Pure`/`Monad`), the `Either` sum
+# `TreeEndo` projects to, the `EqFunctor`/`DebugFunctor` capabilities, the
+# `NaturalIso` surface, and the `Free`/`Cofree` carriers all live in
+# `src/endofunctor/` and `src/free_monad/` as of #222. History: the pre-#12
+# hand-rolled `EndoFunctor` trait gave way to external witnesses in #12 and the
+# carriers followed in #93; #222 brought that consumed surface in-tree, dropping
+# the `deep_causality_haft` edge (and with it the last external algebraic
+# dependency of this crate).
 # The `Zero`/`One` behind the `RModule<S>` R-module actegory (issue #36;
 # `F64Module = RModule<f64>` — the additive identity fills the zero vector in
 # `RModule::zeros`, the multiplicative identity marks each standard-basis
@@ -48,10 +52,7 @@ catgraph-applied = { workspace = true }
 # `deep_causality_num_dual` was retired in #221 — `Dual` is now
 # `src/para/dual.rs`, which is what lets it implement the catgraph-owned
 # `Zero`/`One` at all (the orphan rule forbids a foreign trait on a foreign
-# type). `ad` therefore declares no dependency now. `deep_causality_algebra` and
-# `deep_causality_num` still sit in the lock beneath haft; our source names
-# neither (`rg deep_causality_algebra */src` stays empty).
-deep_causality_haft = { workspace = true }
+# type). `ad` therefore declares no dependency now.
 # Opt-in only, behind the `serde` feature (#230; the #81 pattern). The default
 # build takes no direct serde edge of its own (transitive serde under
 # rust_decimal is pre-existing and feature-independent).
@@ -74,9 +75,9 @@ proptest.workspace = true
 # gated on `--features serde`.
 serde_json.workspace = true
 
-# #156 Phase 1: the crate's first bench target. Shape-axis baseline for the haft
+# #156 Phase 1: the crate's first bench target. Shape-axis baseline for the
 # `Free`/`Cofree` carriers (construction / `fold` / `unfold` / the #36 lazy
-# surfaces), with a counting global allocator. No native-vs-haft comparison —
+# surfaces), with a counting global allocator. No carrier-vs-carrier comparison —
 # Phase 2 did not run.
 [[bench]]
 name = "free_cofree_shapes"

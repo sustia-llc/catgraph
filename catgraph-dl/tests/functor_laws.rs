@@ -1,6 +1,6 @@
 //! Functor-law acceptance tests for the three shipped endofunctor witnesses.
 //!
-//! Identity + composition (CDL Def 1.4 morphism-map laws; `deep_causality_haft`
+//! Identity + composition (CDL Def 1.4 morphism-map laws; `catgraph_dl`
 //! `Functor` law docs) for `ListEndo`, `TreeEndo`, and `GroupActionEndo`. Each
 //! feeds per-witness sample values into the single generic
 //! [`common::assert_functor_laws`] helper — previously these were documented

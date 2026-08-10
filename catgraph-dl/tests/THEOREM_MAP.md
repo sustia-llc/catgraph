@@ -23,7 +23,7 @@ PR (this is the #70 discipline). Style: reference `<file>::<test_fn>`.
 | `functor_laws::list_endo_functor_laws`, `::tree_endo_functor_laws`, `::group_action_endo_functor_laws` | CDL Def 1.4 | Functor identity + composition |
 | `natural_pointed_laws::*_natural_transformation*` | CDL Def 1.5 | Naturality square `transform ∘ F(f) == G(f) ∘ transform` |
 | `natural_pointed_laws::*_pointed_sigma_naturality` | CDL Def B.3 | σ-naturality `fmap(pure(x), f) == pure(f(x))` |
-| `natural_pointed_laws::*_iso_*` (via `iso::test_support`) | CDL Def 1.5 | `NaturalIso` round-trip + naturality |
+| `natural_pointed_laws::*_iso_*` (via `endofunctor::assert_natural_iso_*`) | CDL Def 1.5 | `NaturalIso` round-trip + naturality |
 | `common::assert_functor_laws` / `::assert_natural_transformation_naturality` / `::assert_pointed_naturality` | (helpers) | witness-generic drivers for the above |
 
 ## Container laws
@@ -85,7 +85,7 @@ it has no paper anchor to link. Registering them would fake traceability.
 | `architecture_unrollers::mealy_cell_run_iter_agrees` (+ proptest) | **CDL Remark H.6** / App I.4 | `MealyCell::run_iter`: full/prefix consumption = `run` = `Cofree` walk |
 | `architecture_unrollers::moore_cell_run_iter_agrees` (+ proptest) | **CDL Remark H.6** / App I.5 | `MooreCell::run_iter`: output-then-step consumption = `run` = `Cofree` walk |
 | `architecture_unrollers::gdl_recovery_via_z2_invariant_folding` | CDL Example 2.6 | GDL recovery: Z2-invariant fold |
-| `free_monad_bijections::*` | CDL Example B.19/B.20, Prop B.18 | haft `Free`/`Cofree` ↔ concrete-carrier bijections |
+| `free_monad_bijections::*` | CDL Example B.19/B.20, Prop B.18 | owned `Free`/`Cofree` ↔ concrete-carrier bijections |
 
 > **Not law tests (#231):** `free_monad_bijections::tree_bijection_depth_guard`
 > and `architecture_unrollers::recursive_nn_depth_guard` are the `MAX_TREE_DEPTH`

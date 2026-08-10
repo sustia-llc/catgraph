@@ -7,7 +7,7 @@
 //!   witnessing a natural transformation `α : F ⇒ G` (Gavranović et al., ICML
 //!   2024, Def 1.5).
 //! - [`Pointed`] — a pointed endofunctor `(F, σ)` with `σ : id ⇒ F` supplied
-//!   by haft's [`Pure`] (CDL Def B.3, Appendix B.1).
+//!   by [`Pure`] (CDL Def B.3, Appendix B.1).
 //!
 //! Both mirror the crate's witness-first static-dispatch style: the transform
 //! is a static method on a zero-sized witness (`W::transform(fa)`), never a
@@ -46,12 +46,12 @@
 //!   Rust-representability obstruction, not a naturality failure.
 //!
 //! [`crate::algebra::GroupActionEndo<G>`] (`Type<X> = (G, X)`) is the crate's
-//! own pointed witness: `σ(x) = (G::identity(), x)` — the writer-functor
+//! CDL-shaped pointed witness: `σ(x) = (G::identity(), x)` — the writer-functor
 //! point. Its σ-naturality holds because `fmap` never touches the group slot.
-//! The blanket impl also admits haft witnesses re-exported through the seam:
+//! The blanket impl also admits the stock substrate witness:
 //! [`OptionWitness`](crate::endofunctor::OptionWitness) implements `Pure`
-//! upstream (`pure(x) = Some(x)`), so it too is [`Pointed`] here; its
-//! σ-naturality is law-checked alongside `GroupActionEndo`'s in
+//! (`pure(x) = Some(x)`), so it too is [`Pointed`]; its σ-naturality is
+//! law-checked alongside `GroupActionEndo`'s in
 //! `tests/natural_pointed_laws.rs`.
 
 use core::marker::PhantomData;
@@ -108,9 +108,6 @@ where
     G: EndoWitness,
 {
     fn transform<T>(fa: F::Type<T>) -> G::Type<T> {
-        // `Satisfies<F::Constraint>` / `Satisfies<G::Constraint>` discharge
-        // automatically: both constraints are `NoConstraint` (an `EndoWitness`
-        // invariant) and `impl<T> Satisfies<NoConstraint> for T` is blanket.
         W::to_target(fa)
     }
 }
@@ -129,7 +126,7 @@ where
 /// A **pointed endofunctor** `(F, σ)` on `Set` (CDL Def B.3, Appendix B.1): an
 /// endofunctor together with a natural transformation `σ : id ⇒ F`.
 ///
-/// The point `σ` is exactly haft's [`Pure`] (`σ_X(x) = F::pure(x)`, the
+/// The point `σ` is exactly [`Pure`] (`σ_X(x) = F::pure(x)`, the
 /// natural transformation `η : Id → F`). This is a blanket-implemented marker,
 /// mirroring [`EndoWitness`]: any endofunctor that also implements `Pure<Self>`
 /// is pointed automatically, so instances never name `Pointed`.

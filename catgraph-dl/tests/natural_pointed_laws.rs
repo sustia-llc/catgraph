@@ -2,14 +2,14 @@
 //!
 //! Covers three surfaces:
 //!
-//! - The blanket [`Pointed`] instances — the crate's own
-//!   `GroupActionEndo<Z2Group>` and haft's `OptionWitness` (pointed via its
-//!   upstream `Pure`, reachable through the seam) — σ-naturality
+//! - The blanket [`Pointed`] instances — the CDL-shaped
+//!   `GroupActionEndo<Z2Group>` and the stock `OptionWitness` (pointed via its
+//!   `Pure`, reachable through the seam) — σ-naturality
 //!   `fmap(pure(x), f) == pure(f(x))` (CDL Def B.3).
 //! - The iso adapters [`IsoForward`] / [`IsoBackward`] over a genuine
 //!   cross-witness [`NaturalIso`]: `ListEndo<()>` (`Option<((), X)>`) ≅
-//!   `OptionWitness` (`Option<X>`). Both NT directions are exercised, and
-//!   haft's own natural-iso law helpers (re-exported through the crate seam)
+//!   `OptionWitness` (`Option<X>`). Both NT directions are exercised, and the
+//!   substrate's own natural-iso law helpers (reached through the crate seam)
 //!   confirm the underlying iso.
 //! - A hand-written [`NaturalTransformation`] that is **not** iso-derived —
 //!   `ListEndo<i32> ⇒ ListEndo<i64>` widening the shape label — to show the
@@ -24,7 +24,7 @@ use catgraph_dl::endofunctor::{
     NaturalIso, OptionWitness, assert_natural_iso_naturality, assert_natural_iso_round_trip,
 };
 use catgraph_dl::free_monad::list_endo::ListEndo;
-use catgraph_dl::{IsoBackward, IsoForward, NaturalTransformation, NoConstraint, Satisfies};
+use catgraph_dl::{IsoBackward, IsoForward, NaturalTransformation};
 
 /// A genuine cross-witness natural isomorphism `ListEndo<()> ≅ OptionWitness`:
 /// `Option<((), X)> ≅ Option<X>` — the unit label carries no information, so
@@ -32,17 +32,11 @@ use catgraph_dl::{IsoBackward, IsoForward, NaturalTransformation, NoConstraint, 
 struct ListUnitOptionIso;
 
 impl NaturalIso<ListEndo<()>, OptionWitness> for ListUnitOptionIso {
-    fn to_target<T>(fa: Option<((), T)>) -> Option<T>
-    where
-        T: Satisfies<NoConstraint>,
-    {
+    fn to_target<T>(fa: Option<((), T)>) -> Option<T> {
         fa.map(|((), x)| x)
     }
 
-    fn to_source<T>(ga: Option<T>) -> Option<((), T)>
-    where
-        T: Satisfies<NoConstraint>,
-    {
+    fn to_source<T>(ga: Option<T>) -> Option<((), T)> {
         ga.map(|x| ((), x))
     }
 }
@@ -70,9 +64,9 @@ fn group_action_endo_pointed_sigma_naturality() {
 
 #[test]
 fn option_witness_pointed_sigma_naturality() {
-    // haft's OptionWitness reaches Pointed through the same blanket impl via
-    // its upstream Pure (`pure(x) = Some(x)`); law-check it like any other
-    // inhabitant so every publicly reachable Pointed witness is covered.
+    // OptionWitness reaches Pointed through the same blanket impl via its own
+    // Pure (`pure(x) = Some(x)`); law-check it like any other inhabitant so
+    // every publicly reachable Pointed witness is covered.
     for x in [0_i32, 5, -7, i32::MAX] {
         assert_pointed_naturality::<OptionWitness>(x);
     }
@@ -106,8 +100,8 @@ fn iso_adapters_natural_transformation_both_directions() {
 }
 
 #[test]
-fn list_unit_option_iso_haft_laws_via_seam() {
-    // haft's own round-trip + naturality helpers, reached through the crate
+fn list_unit_option_iso_substrate_laws_via_seam() {
+    // The substrate's round-trip + naturality helpers, reached through the crate
     // seam's re-exports — proving the seam surfaces them correctly. Independent
     // `fa` / `ga` inputs so a non-bijective witness cannot slip through.
     assert_natural_iso_round_trip::<ListUnitOptionIso, ListEndo<()>, OptionWitness, i32>(

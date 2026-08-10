@@ -4,13 +4,12 @@
 //! architecture wrappers, the F-(co)algebra newtypes, the free-monad
 //! recursive carriers, and the `Para` type-level handle all instantiate.
 //!
-//! haft's `Free<F, Z>` / `Cofree<F, Z>` require `F: HKT<Constraint = NoConstraint>`
-//! on their data (GAT object map; `Functor<F>` is additionally required by their
-//! recursion-consuming methods). The endofunctor
-//! placeholders below are aliases of the shared trivial `common::UnitEndo`
-//! witness (unit `Type<X> = ()` projection) because no semantics are exercised
-//! here; semantics for `ListEndo` / `TreeEndo` are tested in
-//! `tests/functor_laws.rs` and `tests/free_monad_bijections.rs`.
+//! `Free<F, Z>` / `Cofree<F, Z>` require `F: HKT` on their data (the GAT object
+//! map; `Functor<F>` is additionally required by their recursion-consuming
+//! methods). The endofunctor placeholders below are aliases of the shared
+//! trivial `common::UnitEndo` witness (unit `Type<X> = ()` projection) because
+//! no semantics are exercised here; semantics for `ListEndo` / `TreeEndo` are
+//! tested in `tests/functor_laws.rs` and `tests/free_monad_bijections.rs`.
 
 #![allow(clippy::type_complexity, clippy::float_cmp)]
 
@@ -103,8 +102,8 @@ fn monad_algebra_constructs() {
 
 #[test]
 fn free_monad_witnesses_construct() {
-    // FreeMnd(1 + A × −) ≅ List in CDL Example B.19. haft's `Free` has no
-    // `new()`; the monadic unit is `Free::Pure`.
+    // FreeMnd(1 + A × −) ≅ List in CDL Example B.19. `Free` has no `new()`; the
+    // monadic unit is `Free::Pure`.
     let _free: Free<ListEndo<u8>, ()> = Free::Pure(());
     let _free_tree: Free<TreeEndo<u8>, ()> = Free::Pure(());
 

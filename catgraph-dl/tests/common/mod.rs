@@ -34,7 +34,7 @@ use catgraph_dl::free_monad::tree_endo::{BinaryTree, TreeEndo};
 use catgraph_dl::para::{Actegory, DirectSum, F64Actegory, F64Module, MonoidalCategory};
 use catgraph_dl::{
     Container, DebugFunctor, Either, EndoWitness, EqFunctor, Functor, HKT, NaturalTransformation,
-    NoConstraint, Pointed, Satisfies,
+    Pointed,
 };
 
 use proptest::prelude::*;
@@ -129,8 +129,8 @@ pub fn finite_f64() -> impl Strategy<Value = f64> {
 ///
 /// The morphisms are pure `i32 -> i32` maps using wrapping arithmetic, so both
 /// legs stay equal across the full `i32` range without overflow panics (see the
-/// pure-morphism caveat in `catgraph_dl::endofunctor`). Cites the
-/// `deep_causality_haft` `Functor` law docs and Gavranović et al., ICML 2024.
+/// pure-morphism caveat in `catgraph_dl::endofunctor`). Cites that module's
+/// `Functor` law docs and Gavranović et al., ICML 2024.
 pub fn assert_functor_laws<F>(fx: F::Type<i32>)
 where
     F: EndoWitness,
@@ -503,15 +503,12 @@ pub fn assert_direct_sum_monoid(u: Vec<f64>, v: Vec<f64>, w: Vec<f64>) {
 pub struct UnitEndo<Tag>(PhantomData<Tag>);
 
 impl<Tag> HKT for UnitEndo<Tag> {
-    type Constraint = NoConstraint;
     type Type<X> = ();
 }
 
 impl<Tag> Functor<Self> for UnitEndo<Tag> {
     fn fmap<X, Y, Func>(m_a: <Self as HKT>::Type<X>, _f: Func) -> <Self as HKT>::Type<Y>
     where
-        X: Satisfies<NoConstraint>,
-        Y: Satisfies<NoConstraint>,
         Func: FnMut(X) -> Y,
     {
         m_a

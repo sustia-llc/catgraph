@@ -272,7 +272,6 @@ dependencies = [
  "catgraph-applied",
  "catgraph-testutil",
  "criterion",
- "deep_causality_haft",
  "proptest",
  "serde",
  "serde_json",

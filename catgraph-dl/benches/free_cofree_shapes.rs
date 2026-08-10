@@ -1,4 +1,4 @@
-//! Shape-axis baseline for the haft `Free` / `Cofree` carriers (issue #156).
+//! Shape-axis baseline for the `Free` / `Cofree` carriers (issue #156).
 //!
 //! `catgraph-dl` had no `benches/` target before this file. This is the
 //! **Phase 1** baseline the issue asks for: latency *and* allocation counts for
@@ -6,14 +6,14 @@
 //! (or the #74 AD path, or the #36 lazy surfaces feeding something real) has
 //! something to be measured against.
 //!
-//! **Scope fence.** Phase 2 of #156 (re-instating the retired native carriers at
+//! **Scope fence.** Phase 2 of #156 (re-instating the pre-#93 carriers at
 //! `65a1103^` for a side-by-side) did **not** run. Nothing here is, or may be
-//! read as, a native-vs-haft performance claim. Every number below characterises
-//! the *current* encoding only.
+//! read as, a carrier-vs-carrier performance claim. Every number below
+//! characterises the *current* encoding only.
 //!
 //! ## Why shape is the axis
 //!
-//! haft places the recursion indirection *inside* the functor hole —
+//! The recursion indirection sits *inside* the functor hole —
 //! `Free::Suspend(F::Type<Box<Free<F, A>>>)`, `Cofree { tail: F::Type<Box<…>> }`.
 //! So the allocation count of a carrier value is exactly **one `Box` per
 //! recursive hole**, and the hole count is a function of the shape:
@@ -248,7 +248,7 @@ const TREE_LEAVES: [usize; 3] = [64, 1024, 4096];
 ///
 /// `spine_tree` builds a left caterpillar whose structural depth *is* its leaf
 /// count, and every walker that touches it is depth-recursive: this file's
-/// `spine_tree`, the crate's `tree_to_free_mnd` / `free_mnd_to_tree`, haft's
+/// `spine_tree`, the crate's `tree_to_free_mnd` / `free_mnd_to_tree`,
 /// `Free::fold` and `Cofree::unfold`, and the compiler's own drop glue. That is
 /// exactly the shape issue #231's guard exists to bound, so `tree_to_free_mnd`
 /// now **refuses** a caterpillar past
@@ -265,7 +265,7 @@ const TREE_LEAVES: [usize; 3] = [64, 1024, 4096];
 ///
 /// The ceiling is [`MAX_TREE_DEPTH`] itself, not a literal, so the axis cannot
 /// silently drift from the guard boundary. That tie also covers the `unfold`
-/// rows, which reach these sizes through haft's **unguarded** `Cofree::unfold`
+/// rows, which reach these sizes through the **unguarded** `Cofree::unfold`
 /// (see the crate's `depth` module, "Scope") — their cap is this constant, not
 /// the guard; and any over-limit fixture panics loudly in the first `construct`
 /// row's [`GUARD_OK`] expect regardless of pass ordering.
@@ -617,7 +617,8 @@ fn allocation_pass() {
             delta,
         });
     }
-    // `Cofree::unfold` is haft's own entry, so #231's guard does not reach it
+    // `Cofree::unfold` is a carrier entry, not a walker entry, so #231's guard
+    // does not reach it
     // (see the crate's `depth` module, "Scope") — but the caterpillar rows use
     // [`SPINE_LEAVES`] anyway, so the three carrier operations report the same
     // sizes and stay comparable.
@@ -699,7 +700,7 @@ fn allocation_pass() {
 
 fn print_rows(rows: &[Row]) {
     println!();
-    println!("catgraph-dl #156 — shape-axis allocation baseline (Phase 1; haft carriers only)");
+    println!("catgraph-dl #156 — shape-axis allocation baseline (Phase 1; current carriers only)");
     println!(
         "size = cons cells (list) / leaves (tree) / steps (lazy). bytes = requested, not resident."
     );

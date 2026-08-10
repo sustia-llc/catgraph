@@ -4,7 +4,7 @@
 //! `(M, η, μ)` must satisfy the **unit law** `a ∘ η_A = id_A` and the
 //! **associativity law** `a ∘ M(a) = a ∘ μ_A`. These tests exercise the four
 //! sample-based verifiers added in issue #40 against the group-action monad
-//! `Z2 × −` on `Vec<f64>` (`η = ` haft's `Pure`, `μ = ` haft's `Monad::join`):
+//! `Z2 × −` on `Vec<f64>` (`η = Pure`, `μ = Monad::join`):
 //!
 //! - [`MonadAlgebra::verify_unit_law`] / [`MonadAlgebra::verify_assoc_law`]
 //! - [`MonadAlgebraHom::verify_unit_coherence`] /

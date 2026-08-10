@@ -22,10 +22,9 @@
 //!
 //! ## Endofunctor witnesses
 //!
-//! The endofunctor abstraction is `deep_causality_haft`'s [`HKT`] (object
-//! map [`HKT::Type`]) + [`Functor`] (morphism map). They are re-exported
-//! from [`crate::endofunctor`] and surfaced here for this module's
-//! consumers (issue #12).
+//! The endofunctor abstraction is [`HKT`] (object map [`HKT::Type`]) +
+//! [`Functor`] (morphism map). Both are defined in [`crate::endofunctor`], the
+//! substrate seam, and surfaced here for this module's consumers (issue #12).
 
 mod coalgebra;
 mod f_algebra;

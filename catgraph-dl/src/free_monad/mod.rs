@@ -12,20 +12,17 @@
 //! CofreeCmnd(F)(Z) = Fix(X ↦ F(X) × Z)
 //! ```
 //!
-//! Both carriers are **adopted from `deep_causality_haft`** ([`Free`] /
-//! [`Cofree`], re-exported through [`crate::endofunctor`]; see the
-//! [`Free`]/[`Cofree`] rustdoc and the "Relationship to haft" section below):
+//! Both carriers are **crate-owned** (also reachable through
+//! [`crate::endofunctor`], the substrate seam):
 //!
 //! - [`Free<F, A>`] — the inductive enum `Pure(A) | Suspend(F::Type<Box<Free>>)`.
 //!   The free monad `FreeMnd(F)(A)`.
 //! - [`Cofree<F, A>`] — the record `head :< F::Type<Box<Cofree>>`. The cofree
 //!   comonad `CofreeCmnd(F)(A)`.
 //!
-//! Note the **box placement**: haft puts the recursion indirection *inside* the
+//! Note the **box placement**: the recursion indirection sits *inside* the
 //! functor hole (`Suspend(F::Type<Box<Free<F, A>>>)`, `tail : F::Type<Box<Cofree<
-//! F, A>>>`). The retired native carriers boxed the whole applied functor
-//! (`Roll(Box<F::Type<Self>>)`); the bijection helpers below are re-derived
-//! against the new shape.
+//! F, A>>>`), so a carrier value costs exactly one `Box` per recursive hole.
 //!
 //! Specialisations of interest (CDL Example B.19, B.20):
 //! - `FreeMnd(1 + A × −)` → `List_{−+1}(A)` (lists of `A` with last
@@ -70,72 +67,93 @@
 //! [#200](https://github.com/sustia-llc/catgraph/issues/200)). The list helpers
 //! need no guard: they are loops.
 //!
-//! **The guard covers this crate's walker entries only.** Direct haft
-//! [`Free::fold`] / [`Cofree::unfold`] calls, the recursive drop glue of the
-//! `Box`-nested carriers (including a value the guard just *rejected*), and
+//! **The guard covers this crate's walker entries only.** Direct [`Free::fold`]
+//! / [`Cofree::unfold`] calls, the recursive drop glue of the `Box`-nested
+//! carriers (including a value the guard just *rejected*), the carriers' own
+//! capability-routed `==` / `{:?}` (they recurse over the spine too), and
 //! [`BinaryTree`](tree_endo::BinaryTree)'s derived `Clone`/`PartialEq`/`Debug`
 //! all still recurse unguarded — [`crate::depth`]'s **Scope** section is the
 //! canonical account of that residual surface, and [#200] stays open as its
 //! tracker.
 //!
-//! ## Constraint restriction
-//!
-//! [`Free`]/[`Cofree`] carry their data under `F: HKT<Constraint = NoConstraint>`
-//! and add `Functor<F>` on the recursion-consuming methods. Only *unconstrained*
-//! haft witnesses can therefore instantiate them — a witness whose
-//! `Constraint != NoConstraint` (e.g. a hypothetical `CausalTensor`-style carrier
-//! with an inner-type bound) is rejected. This is deliberate: CDL's ambient
-//! category is `Set`, and all three shipped witnesses (`ListEndo`, `TreeEndo`,
-//! the `OptionWitness` stream carrier) are unconstrained. The same rejection
-//! story the retired native carriers documented carries over unchanged.
-//!
 //! ## Equality / Debug (opt-in, via capability traits)
 //!
-//! haft's [`Free`]/[`Cofree`] have **no** `#[derive]`d `PartialEq`/`Eq`/`Debug`
-//! (a derive would gate on the GAT projection `F::Type<Box<…>>` and overflow the
+//! [`Free`]/[`Cofree`] have **no** `#[derive]`d `PartialEq`/`Debug` (a
+//! derive would gate on the GAT projection `F::Type<Box<…>>` and overflow the
 //! trait solver, `error[E0275]`). Instead the instances are opt-in and route
 //! through the operation functor's
 //! [`EqFunctor::eq_type`](crate::endofunctor::EqFunctor::eq_type) /
-//! [`DebugFunctor::fmt_type`](crate::endofunctor::DebugFunctor::fmt_type)
-//! capability. haft ships those for its own single-hole witnesses
-//! (`OptionWitness`, `VecWitness`, `BoxWitness`, …); the crate's own `ListEndo` /
-//! `TreeEndo` implement them next to their `HKT`/`Functor` impls (bounded
-//! `A: PartialEq` / `A: Debug`). haft 0.4.2 adds a third sibling, `CloneFunctor`
-//! (`clone_type`), which would give `Free`/`Cofree` an opt-in `Clone` the same
-//! way — **deliberately not adopted here** (#93 owner decision): heap sharing is
-//! `Arc`'s job (the #42 `tie_weights` precedent, where `Clone` was *semantic* δ —
-//! carrier `Clone` here is not), and the one site that forced a carrier clone was
-//! incidental. The #93 spike then confirmed no need: the walkers use
-//! `into_parts()` and never require one, and adopting `Cofree::unfold` even
-//! dropped the native `S: Clone` seed bound. Consumers that would otherwise clone
-//! a carrier construct the value twice.
+//! [`DebugFunctor::fmt_type`]
+//! capability. `ListEndo` / `TreeEndo` implement them next to their
+//! `HKT`/`Functor` impls (bounded `A: PartialEq` / `A: Debug`), as does the stock
+//! [`OptionWitness`](crate::endofunctor::OptionWitness). There is no `Eq`
+//! marker on either carrier: the capability is PartialEq-strength over the
+//! witness's own label slots (see
+//! [`EqFunctor`](crate::endofunctor::EqFunctor)'s law note), so a carrier-level
+//! `Eq` would be false for float-labelled witnesses.
 //!
-//! ## Relationship to haft's `Free` / `Cofree` (#76 → #93)
+//! ## Deliberate minimality of the carrier surface (#76 → #93 → #222)
 //!
-//! The native `FreeMnd` / `CofreeCmnd` carriers were kept hand-rolled through
-//! #76 (2026-07-12) because haft 0.4.0 shipped `Free` but *no* `Eq`/`Debug` and
-//! *no* cofree twin. **haft 0.4.1 resolved both blockers** — it adds
-//! `Cofree`/`CofreeWitness` and opt-in `Eq`/`Debug` via the new
-//! `EqFunctor`/`DebugFunctor` capability traits — so #93 reverses the #76
-//! decision (owner decision, 2026-07-19): the native carriers are removed and
-//! this module re-exports haft's [`Free`] / [`Cofree`] through
-//! [`crate::endofunctor`]. The adoption is a **re-derivation, not a drop-in
-//! swap**: the box placement differs (native `Roll(Box<F::Type<Self>>)` vs haft
-//! `Suspend(F::Type<Box<Self>>)`), so every constructor, pattern match, and
-//! bijection helper is re-shaped for the inside-the-hole box. In exchange the
-//! module gains [`Free::fold`] (the catamorphism — the previously-deferred
-//! `foldr`/`foldl` algebra-hom unroller, CDL Remark 2.13) and [`Cofree::unfold`]
-//! (the anamorphism — the coalgebra-direction unroller, CDL Remark H.6 / App I).
+//! The carriers ship the recursion schemes and nothing else: [`Free`] is its two
+//! variants plus [`fold`](Free::fold); [`Cofree`] is
+//! [`new`](Cofree::new)/[`head`](Cofree::head)/[`tail`](Cofree::tail)/[`into_parts`](Cofree::into_parts)
+//! plus [`unfold`](Cofree::unfold); both get opt-in `PartialEq`/`Debug`. There
+//! is no `bind`/`map`/`lift` on `Free` (nor the `Free::pure` inherent — the
+//! unit is the public `Pure` variant, or
+//! [`FreeWitness`]'s [`Pure`](crate::endofunctor::Pure) impl), no
+//! `extract`/`extend`/`duplicate`/`CoMonad` on `Cofree`, no
+//! [`Functor`] impl on [`CofreeWitness`] (it existed upstream only as
+//! `CoMonad`'s supertrait), no `Monad` impl on
+//! [`OptionWitness`](crate::endofunctor::OptionWitness), and no carrier
+//! `Clone` — the #76 minimality precedent kept
+//! intact, and it is what this crate consumes: the unrollers and bijections walk
+//! with `into_parts()` and the two recursion schemes, and where a clone would be
+//! wanted the value is constructed twice (heap sharing is `Arc`'s job — the #42
+//! `tie_weights` precedent, where `Clone` was *semantic* δ; a carrier `Clone`
+//! here is not).
+//!
+//! The history behind that shape: the carriers were hand-rolled through #76
+//! (2026-07-12), replaced in #93 (2026-07-19) by an external pair whose box
+//! placement forced a re-derivation of every constructor, pattern match and
+//! bijection helper, and brought back in-tree by
+//! [#222](https://github.com/sustia-llc/catgraph/issues/222). What #93 added and
+//! #222 keeps is the two library recursion schemes: [`Free::fold`] (the
+//! catamorphism — the previously-deferred `foldr`/`foldl` algebra-hom unroller,
+//! CDL Remark 2.13) and [`Cofree::unfold`] (the anamorphism — the
+//! coalgebra-direction unroller, CDL Remark H.6 / App I).
 //!
 //! [#200]: https://github.com/sustia-llc/catgraph/issues/200
+
+mod cofree;
+mod free;
 
 pub mod list_endo;
 pub mod tree_endo;
 
-// The endofunctor witnesses are the `deep_causality_haft` `HKT` / `Functor`
-// traits, re-exported through `crate::endofunctor` (issue #12). The recursive
-// carriers `Free` / `Cofree` (+ their HKT witnesses `FreeWitness` /
-// `CofreeWitness`) are re-exported through the same seam (issue #93) and
-// surfaced here so `catgraph_dl::free_monad::{Free, Cofree}` resolves for the
-// bijection helpers below.
-pub use crate::endofunctor::{Cofree, CofreeWitness, EndoWitness, Free, FreeWitness, Functor, HKT};
+pub use cofree::{Cofree, CofreeWitness};
+pub use free::{Free, FreeWitness};
+
+// The endofunctor witnesses live in `crate::endofunctor`, the substrate seam
+// (issue #12); surfaced here so this module's consumers can name the bound the
+// bijection helpers below are written against.
+pub use crate::endofunctor::{EndoWitness, Functor, HKT};
+
+use core::fmt;
+
+use crate::endofunctor::DebugFunctor;
+
+/// Formats an `F::Type<T>` through the witness's `fmt_type` — lets the carrier
+/// `Debug` impls hand a GAT projection to `debug_tuple`/`debug_struct` (which
+/// take `&dyn Debug`) without the projection bound whose E0275 hazard
+/// [`crate::endofunctor::EqFunctor`] documents.
+struct FmtType<'a, F: HKT, T>(&'a F::Type<T>);
+
+impl<F, T> fmt::Debug for FmtType<'_, F, T>
+where
+    F: DebugFunctor,
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        F::fmt_type(self.0, f)
+    }
+}
