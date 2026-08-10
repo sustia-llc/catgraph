@@ -22,14 +22,13 @@ catgraph = { workspace = true }
 # `catgraph-applied` is the term engine: `PropExpr<G>`, `Free` smart
 # constructors, and the `PropSignature` supertrait `GeneratorSyntax` extends.
 catgraph-applied = { workspace = true }
-# `deep_causality_haft` is consumed via the SINGLE seam `src/arrow_seam.rs`
-# (following catgraph-dl's `src/endofunctor.rs` #12 precedent — the ONLY file
-# naming haft). The seam's re-exports (`Arrow`, `ArrowBuilder`, `Compose`,
-# `Fanout`, `First`, `Id`, `Lift`, `Second`, `Split`, `arrow`) are LIVE public
-# API now; the Arrow surface itself is first EXERCISED from Phase S5 (the
-# `Traced` typed builder). Mirrors catgraph-dl's documented-reserved-dep
-# precedent (its `num` dep carried deps-only ahead of the #36 R-module surface).
-deep_causality_haft = { workspace = true }
+# NO algebra dependency: the value-level Arrow algebra behind the S5 `Traced`
+# builder is crate-owned, defined in `src/arrow_seam.rs` (#222; derived from
+# deep_causality_haft 0.4.2, MIT — attributed in the file header). All ten
+# exported names (`Arrow`, `ArrowBuilder`, `Compose`, `Fanout`, `First`, `Id`,
+# `Lift`, `Second`, `Split`, `arrow`) are declared there, so this crate's
+# runtime dependency set is catgraph + catgraph-applied + thiserror
+# (+ opt-in serde); dev adds proptest + serde_json.
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
 

@@ -2,14 +2,14 @@
 //! pairing that completes the [#5](https://github.com/sustia-llc/catgraph/issues/5)
 //! milestone surface.
 //!
-//! A [`Traced<A, G>`] pairs a runnable haft [`Arrow`]
+//! A [`Traced<A, G>`] pairs a runnable [`Arrow`]
 //! with the [`PropExpr<G>`](catgraph_applied::prop::PropExpr) *term* it denotes,
 //! so a single value can be both **run** (via the arrow) and **reasoned about**
 //! (via the term — printed, parsed, evaluated under any
 //! [`ArrowModel`](crate::eval::ArrowModel), normalized, or fed to the presentation
 //! engine). This is the typed track of the design's *Arrow bridge*: the S3
 //! [interpreter](crate::eval) works over `Vec<V>` wire bundles sized by `usize`
-//! arities, while haft arrows live in a world of nested pairs; [`Wires`] is the
+//! arities, while arrows live in a world of nested pairs; [`Wires`] is the
 //! lawful, arity-preserving bridge between the two.
 //!
 //! # Intellectual lineage
@@ -17,7 +17,8 @@
 //! The combinator vocabulary ([`then`](Traced::then) = `>>>`, [`par`](Traced::par)
 //! = `***`, the identity/generator builders) is John Hughes' Arrow interface
 //! (*Generalising Monads to Arrows*, Science of Computer Programming 37, 2000),
-//! reached here through haft's value-level Arrow algebra. This is a **lineage**
+//! reached here through the crate's own value-level Arrow algebra
+//! ([`crate::arrow_seam`]). This is a **lineage**
 //! citation, not a theorem anchor: the milestone law below (S5's coherence
 //! contract) is what is proven, not an Arrow-law completeness result.
 //!
@@ -71,24 +72,25 @@
 //!   would have to rebracket arbitrary nested pair types at the type level (turn
 //!   `((A, B), C)` into a permuted nesting), which the [`Wires`] encoding does not
 //!   express — flatten canonicalizes *values*, not *types*. Out of scope.
-//! - **`fanout` (`&&&`) — rejected.** haft's [`Fanout`](crate::arrow_seam::Fanout)
-//!   is the Cartesian diagonal `A → (A, A)` (copy is free in `Set`). Pairing it
+//! - **`fanout` (`&&&`) — rejected.** The algebra's
+//!   [`Fanout`](crate::arrow_seam::Fanout) is the Cartesian diagonal `A → (A, A)`
+//!   (copy is free in `Set`). Pairing it
 //!   with a term would let the arrow *duplicate* a wire while no term generator
 //!   did — the arrow and the term would denote different morphisms. Copying is a
 //!   *model* concern (a Frobenius comultiplication `δ` the model must supply, e.g.
 //!   [`SfgGenerator::Copy`](catgraph_applied::sfg::SfgGenerator::Copy) whose
 //!   `Clone` lives in [`SfgModel`](crate::eval::SfgModel)), never a free structure
 //!   map. This is the interpreter's *no-`Clone`-in-`eval`* discipline (see
-//!   [`crate::eval`]'s "No `Clone` on the wire values") and the seam's
-//!   `Fanout` note ([`crate::arrow_seam`]) made **type-level**: the diagonal is
+//!   [`crate::eval`]'s "No `Clone` on the wire values") and
+//!   [`crate::arrow_seam`]'s `Fanout` note made **type-level**: the diagonal is
 //!   simply unreachable through this builder.
-//! - **Spider arrows.** haft's [`Arrow`] has no
+//! - **Spider arrows.** The [`Arrow`] algebra has no
 //!   Frobenius structure, so μ/η/δ/ε have no arrow realization here; spiders are
 //!   interpreter / matrix territory ([`crate::eval`], [`crate::frobenius`]).
 //!
-//! The `EndoArrow` (haft's iteration arrow) stays excluded on the same footing —
-//! it is not re-exported by [`crate::arrow_seam`] (see that module's exclusion
-//! note), and a loop / fixed-point combinator is not wanted by this design.
+//! An iteration / fixed-point combinator stays out on the same footing —
+//! [`crate::arrow_seam`] defines none (see that module's *Historical note*), and
+//! a loop combinator is not wanted by this design.
 
 use std::vec;
 
@@ -226,7 +228,7 @@ where
     }
 }
 
-/// A typed wire bundle: the value-carrying bridge between a haft arrow's
+/// A typed wire bundle: the value-carrying bridge between an [`Arrow`]'s
 /// nested-pair interface and the [interpreter](crate::eval)'s flat `Vec<V>`
 /// bundles.
 ///
@@ -281,7 +283,7 @@ impl<V, T> Wires<V> for T where T: WireCount + sealed::WiresInternal<V> {}
 
 /// A morphism carried as both an executable arrow and the term it denotes.
 ///
-/// `Traced<A, G>` bundles a haft [`Arrow`] `A` with the
+/// `Traced<A, G>` bundles an [`Arrow`] `A` with the
 /// [`PropExpr<G>`](catgraph_applied::prop::PropExpr) it stands for. The fields are
 /// **private on purpose**: the two halves are kept in sync — the term's source
 /// arity equals `A::In`'s [`WireCount::COUNT`], its target equals `A::Out`'s —
@@ -418,7 +420,7 @@ where
     })
 }
 
-/// The identity morphism on a `W`-shaped bundle — the haft [`Id`] arrow paired
+/// The identity morphism on a `W`-shaped bundle — the [`Id`] arrow paired
 /// with [`Free::identity(W::COUNT)`](catgraph_applied::prop::Free::identity).
 /// Infallible. Carries no value type `V`: the term needs only the arity.
 #[must_use]

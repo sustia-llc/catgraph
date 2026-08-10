@@ -313,7 +313,6 @@ version = "0.10.0"
 dependencies = [
  "catgraph",
  "catgraph-applied",
- "deep_causality_haft",
  "proptest",
  "serde",
  "serde_json",
