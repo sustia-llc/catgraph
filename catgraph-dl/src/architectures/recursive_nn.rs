@@ -22,10 +22,16 @@
 //! `FreeMnd(A + (−)²) ≅ BinaryTree(A)` into the cell's algebra. It walks
 //! the tree post-order: leaves discharge through `cell_0(p)` (the scaffold
 //! ignores the leaf payload), internal nodes recurse into both subtrees
-//! and combine via `cell_1`.
+//! and combine via `cell_1`. Being tree-recursive, it is the one architecture
+//! unroller behind [`crate::depth`]'s pre-flight guard — it returns
+//! [`DepthError`](crate::errors::DepthError) for a tree deeper than
+//! [`MAX_TREE_DEPTH`](crate::depth::MAX_TREE_DEPTH) (#231). The list/stream
+//! unrollers are folds and `from_fn` state machines, and stay infallible.
 
 use core::marker::PhantomData;
 
+use crate::depth::guard_tree_depth;
+use crate::errors::DepthError;
 use crate::free_monad::tree_endo::BinaryTree;
 
 /// A recursive-NN cell: algebra of `Para(A + (−)²)` on state `S`.
@@ -87,15 +93,42 @@ where
     /// Tree walks here are recursive — same convention as
     /// [`crate::free_monad::tree_endo::tree_to_free_mnd`] /
     /// [`crate::free_monad::tree_endo::free_mnd_to_tree`]. Trees are
-    /// inherently tree-shaped; recursive walks are idiomatic and tests
-    /// stay shallow (depth ≤ 3) so stack consumption is bounded.
-    pub fn unroll(cell: &RecursiveNn<P, S, Cell0, Cell1, A>, tree: BinaryTree<A>) -> S {
+    /// inherently tree-shaped and recursive walks are idiomatic, so the walk
+    /// is pre-flighted against [`crate::depth`]'s
+    /// [`MAX_TREE_DEPTH`](crate::depth::MAX_TREE_DEPTH) rather than relying on
+    /// callers keeping their trees shallow (issue
+    /// [#231](https://github.com/sustia-llc/catgraph/issues/231)). The private
+    /// `unroll_inner` below runs after the guard, so its recursion is bounded
+    /// by construction.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DepthError::TreeDepthExceeded`] if `tree` is deeper than
+    /// [`MAX_TREE_DEPTH`](crate::depth::MAX_TREE_DEPTH). The *measurement* is
+    /// iterative and cannot overflow; note the rejected `tree` is still
+    /// consumed and dropped here, and `BinaryTree`'s drop glue recurses over
+    /// its spine — a value deep enough to abort in `Drop` aborts regardless
+    /// (see [`crate::depth`]'s Scope section; pre-flight
+    /// [`guard_tree_depth`](crate::depth::guard_tree_depth) by reference
+    /// first to keep an over-deep value alive). A tree at or below the limit
+    /// unrolls exactly as it did before the guard existed.
+    pub fn unroll(
+        cell: &RecursiveNn<P, S, Cell0, Cell1, A>,
+        tree: BinaryTree<A>,
+    ) -> Result<S, DepthError> {
+        guard_tree_depth(&tree)?;
+        Ok(Self::unroll_inner(cell, tree))
+    }
+
+    /// The recursive body of [`unroll`](Self::unroll), run only after the depth
+    /// guard has accepted the whole tree.
+    fn unroll_inner(cell: &RecursiveNn<P, S, Cell0, Cell1, A>, tree: BinaryTree<A>) -> S {
         match tree {
             BinaryTree::Leaf(_a) => (cell.cell_0)(cell.parameter.clone()),
             BinaryTree::Node(left, right) => {
                 let leftmost = leftmost_leaf(&left);
-                let l = Self::unroll(cell, *left);
-                let r = Self::unroll(cell, *right);
+                let l = Self::unroll_inner(cell, *left);
+                let r = Self::unroll_inner(cell, *right);
                 (cell.cell_1)((cell.parameter.clone(), leftmost, l, r))
             }
         }

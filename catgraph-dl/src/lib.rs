@@ -7,7 +7,7 @@
 //!
 //! ## Scope
 //!
-//! Seven public modules. The crate is types + (co)algebra wrappers
+//! Nine public modules. The crate is types + (co)algebra wrappers
 //! over `(Set, ×, 1)` by default, plus the first non-`(Set, ×, 1)`
 //! `MonoidalCategory` / `Actegory` instance — the R-module actegory
 //! `(FinReal, ⊕, R⁰)` ([`para::F64Monoidal`] / [`para::F64Actegory`],
@@ -67,6 +67,16 @@
 //!   a polynomial endofunctor `⟦S ◁ P⟧(X) = Σ_{s} X^{P(s)}`
 //!   (Abbott–Altenkirch–Ghani 2003, via CDL), finitary (`Vec`-of-contents)
 //!   presentation. Issue #41.
+//! - [`depth`] — the pre-flight recursion guard. Iterative depth measures for
+//!   the tree carriers ([`depth::tree_depth`] / [`depth::free_mnd_depth`]) and
+//!   the [`depth::MAX_TREE_DEPTH`] ceiling the crate's three tree-recursive
+//!   entries check before walking. Engineering, not a CDL surface: it rejects
+//!   inputs that would abort the process, and changes nothing about the ones it
+//!   accepts. Issue [#231](https://github.com/sustia-llc/catgraph/issues/231);
+//!   residual recursion the guard cannot reach is tracked in
+//!   [#200](https://github.com/sustia-llc/catgraph/issues/200).
+//! - [`errors`] — [`errors::DepthError`], the guard's rejection. The crate's
+//!   only error type.
 //! - `hopf_fibration` (private) — namespace stub for Dudzik's carry-operation
 //!   conjecture. Pre-publication research; not in CDL ICML 2024. Not part
 //!   of the public surface. See ⚠️ CAREFUL section below for the 2026-05-06
@@ -149,7 +159,9 @@
 pub mod algebra;
 pub mod architectures;
 pub mod container;
+pub mod depth;
 pub mod endofunctor;
+pub mod errors;
 pub mod free_monad;
 mod hopf_fibration;
 pub mod natural;
@@ -177,6 +189,11 @@ pub use endofunctor::{
 // re-export convention as the modules above.
 pub use container::Container;
 pub use natural::{IsoBackward, IsoForward, NaturalTransformation, Pointed};
+
+// The recursion guard's rejection (issue #231). Mirrored at the crate root on
+// the same convention as the surfaces above: three public entries return it, so
+// callers should not have to reach into `errors::` to name it.
+pub use errors::DepthError;
 
 // Re-exports of the Tier 3 enrichment substrate from catgraph-applied. Same
 // pattern as `catgraph-magnitude` — a single import path for downstream

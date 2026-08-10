@@ -10,7 +10,7 @@
 //!
 //! ## Test taxonomy
 //!
-//! Five consolidated tests, one per acceptance criterion:
+//! Six consolidated tests, one per acceptance criterion:
 //!
 //! 1. `vec_round_trip_proptest` — proptest-driven round trip for `Vec<u32>`
 //!    in both directions.
@@ -22,16 +22,22 @@
 //!    round-trip via the `Free<TreeEndo, Infallible>` encoding.
 //! 5. `cofree_cmnd_smoke` — `Cofree<TrivialEndo, u32>` constructs and
 //!    `head()` is accessible. Compile-time + runtime sanity for the dual.
+//! 6. `tree_bijection_depth_guard` — both helpers accept a carrier at
+//!    `MAX_TREE_DEPTH` and reject one cell deeper (issue #231). Engineering,
+//!    not a CDL law: the guard rejects inputs that would abort the process and
+//!    leaves accepted ones untouched.
 
 #![allow(clippy::float_cmp, clippy::single_match_else)]
 
 mod common;
 
+use catgraph_dl::DepthError;
+use catgraph_dl::depth::{MAX_TREE_DEPTH, free_mnd_depth, tree_depth};
 use catgraph_dl::free_monad::list_endo::{free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, free_mnd_to_tree, tree_to_free_mnd};
 use catgraph_dl::free_monad::{Cofree, Free};
 
-use common::UnitEndo;
+use common::{UnitEndo, spine_free_mnd, spine_tree};
 
 use proptest::prelude::*;
 
@@ -103,15 +109,15 @@ fn cons_cell_explicit_structure_round_trips() {
 fn tree_round_trip_examples() {
     // Case 1: a single leaf.
     let leaf = BinaryTree::leaf(7_u32);
-    let f1 = tree_to_free_mnd(leaf.clone());
-    let back1 = free_mnd_to_tree(f1);
+    let f1 = tree_to_free_mnd(leaf.clone()).unwrap();
+    let back1 = free_mnd_to_tree(f1).unwrap();
     assert_eq!(back1, leaf);
 
     // Case 2: a single internal node with two leaves —
     //     Node(Leaf(1), Leaf(2)).
     let node = BinaryTree::node(BinaryTree::leaf(1_u32), BinaryTree::leaf(2_u32));
-    let f2 = tree_to_free_mnd(node.clone());
-    let back2 = free_mnd_to_tree(f2);
+    let f2 = tree_to_free_mnd(node.clone()).unwrap();
+    let back2 = free_mnd_to_tree(f2).unwrap();
     assert_eq!(back2, node);
 
     // Case 3: a depth-3 tree — Node(Node(Leaf(1), Leaf(2)),
@@ -123,9 +129,58 @@ fn tree_round_trip_examples() {
             BinaryTree::node(BinaryTree::leaf(4_u32), BinaryTree::leaf(5_u32)),
         ),
     );
-    let f3 = tree_to_free_mnd(deep.clone());
-    let back3 = free_mnd_to_tree(f3);
+    let f3 = tree_to_free_mnd(deep.clone()).unwrap();
+    let back3 = free_mnd_to_tree(f3).unwrap();
     assert_eq!(back3, deep);
+}
+
+/// Issue #231 — the pre-flight recursion guard on both tree bijection helpers.
+///
+/// Not a CDL law: a depth check is engineering, and the paper's Example B.20 iso
+/// is unaffected for every carrier the guard accepts. What is asserted is the
+/// boundary in both directions, for both helpers:
+///
+/// - a left caterpillar at exactly [`MAX_TREE_DEPTH`] round-trips, and the
+///   bijection **preserves depth** (so a `Free` produced by `tree_to_free_mnd`
+///   always clears `free_mnd_to_tree`'s guard);
+/// - one cell deeper is refused with
+///   [`DepthError::TreeDepthExceeded`] carrying the exact `{ depth, limit }`.
+///
+/// The over-limit `Free` is built directly by `spine_free_mnd` — it cannot come
+/// from `tree_to_free_mnd`, which refuses to produce it. Both fixtures stay
+/// ~16× (depth 257 vs 4 096) inside the pre-guard measured-safe depth, so
+/// their own recursive drop glue is not at risk.
+#[test]
+fn tree_bijection_depth_guard() {
+    // --- at the limit: accepted, and depth-preserving --------------------
+    let at_limit = spine_tree(MAX_TREE_DEPTH);
+    assert_eq!(tree_depth(&at_limit), MAX_TREE_DEPTH);
+
+    let encoded = tree_to_free_mnd(at_limit.clone()).expect("a tree at the limit is accepted");
+    assert_eq!(
+        free_mnd_depth(&encoded),
+        MAX_TREE_DEPTH,
+        "the B.20 bijection preserves structural depth"
+    );
+    let decoded = free_mnd_to_tree(encoded).expect("a spine at the limit is accepted");
+    assert_eq!(decoded, at_limit, "round trip survives at the limit");
+
+    // --- one deeper: rejected, with the measured depth -------------------
+    let over = MAX_TREE_DEPTH + 1;
+    match tree_to_free_mnd(spine_tree(over)) {
+        Err(DepthError::TreeDepthExceeded { depth, limit }) => {
+            assert_eq!(depth, over);
+            assert_eq!(limit, MAX_TREE_DEPTH);
+        }
+        other => panic!("tree_to_free_mnd: expected TreeDepthExceeded, got {other:?}"),
+    }
+    match free_mnd_to_tree(spine_free_mnd(over)) {
+        Err(DepthError::TreeDepthExceeded { depth, limit }) => {
+            assert_eq!(depth, over);
+            assert_eq!(limit, MAX_TREE_DEPTH);
+        }
+        other => panic!("free_mnd_to_tree: expected TreeDepthExceeded, got {other:?}"),
+    }
 }
 
 /// A trivial endofunctor with `Type<X> = ()` — collapses to "no recursive

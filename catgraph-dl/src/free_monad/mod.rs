@@ -57,6 +57,27 @@
 //! `catgraph_dl::free_monad::tree_endo::*` for downstream consumers, so the
 //! crate root surface stays focused on the categorical primitives.
 //!
+//! ## Recursion depth — what is guarded and what is not (#231 / #200)
+//!
+//! The tree carrier nests through `Box`, so every walk of it recurses, and a
+//! deep enough spine overflows the stack — an **abort**, not a catchable error.
+//! The two tree bijection helpers
+//! ([`tree_endo::tree_to_free_mnd`] / [`tree_endo::free_mnd_to_tree`]) therefore
+//! pre-flight [`crate::depth`]'s
+//! [`MAX_TREE_DEPTH`](crate::depth::MAX_TREE_DEPTH) and return
+//! [`DepthError`](crate::errors::DepthError) rather than recursing
+//! (issue [#231](https://github.com/sustia-llc/catgraph/issues/231), option 2 of
+//! [#200](https://github.com/sustia-llc/catgraph/issues/200)). The list helpers
+//! need no guard: they are loops.
+//!
+//! **The guard covers this crate's walker entries only.** Direct haft
+//! [`Free::fold`] / [`Cofree::unfold`] calls, the recursive drop glue of the
+//! `Box`-nested carriers (including a value the guard just *rejected*), and
+//! [`BinaryTree`](tree_endo::BinaryTree)'s derived `Clone`/`PartialEq`/`Debug`
+//! all still recurse unguarded — [`crate::depth`]'s **Scope** section is the
+//! canonical account of that residual surface, and [#200] stays open as its
+//! tracker.
+//!
 //! ## Constraint restriction
 //!
 //! [`Free`]/[`Cofree`] carry their data under `F: HKT<Constraint = NoConstraint>`
@@ -105,6 +126,8 @@
 //! module gains [`Free::fold`] (the catamorphism — the previously-deferred
 //! `foldr`/`foldl` algebra-hom unroller, CDL Remark 2.13) and [`Cofree::unfold`]
 //! (the anamorphism — the coalgebra-direction unroller, CDL Remark H.6 / App I).
+//!
+//! [#200]: https://github.com/sustia-llc/catgraph/issues/200
 
 pub mod list_endo;
 pub mod tree_endo;

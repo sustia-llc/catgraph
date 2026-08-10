@@ -43,6 +43,80 @@ All notable changes to this crate are documented here. Format follows
     a `cargo doc --features "serde ad"` pass — the workspace doc gate runs
     default features only, so the feature-gated rustdoc was otherwise never
     link-checked.
+- **`depth` and `errors` — a pre-flight recursion guard at the crate's own
+  tree entries** ([#231](https://github.com/sustia-llc/catgraph/issues/231),
+  adopting option 2 of
+  [#200](https://github.com/sustia-llc/catgraph/issues/200)). Two new modules,
+  following the `MAX_TREE_DEPTH` / `MAX_TERM_DEPTH` precedent
+  [catgraph-syntax set in #99](https://github.com/sustia-llc/catgraph/issues/99)
+  down to the `{ depth, limit }` payload:
+  - `depth::MAX_TREE_DEPTH = 256` — deliberately equal to syntax's
+    `MAX_TERM_DEPTH`, so the workspace has one recursion ceiling. The
+    measurement of record (`benches/free_cofree_shapes.rs`) walks a 4 096-deep
+    caterpillar fine on an 8 MiB main-thread stack; 256 sits 16× below that,
+    which leaves margin for a 2 MiB Rust test thread and for wasm targets, whose
+    shadow stack is around a megabyte and may be configured smaller. The full
+    argument is on the constant.
+  - `depth::tree_depth` / `depth::free_mnd_depth` — **iterative** (explicit
+    worklist) depth measures for `BinaryTree<A>` and `Free<TreeEndo<A>,
+    Infallible>`, so measuring a carrier that is too deep never overflows on the
+    way to saying so. `depth::guard_tree_depth` / `depth::guard_free_mnd_depth`
+    are the pre-flight checks.
+  - `errors::DepthError` (also re-exported at the crate root) — the crate's
+    first error type, a `#[non_exhaustive]` **enum** (match with a wildcard
+    arm from outside the crate) whose one variant today is
+    `TreeDepthExceeded { depth, limit }`; the variant's fields destructure
+    normally. `thiserror` joins the manifest for it; no new lockfile entry,
+    since core, applied, and syntax already carry it.
+
+  Motivation: a *programmatic* driver (a genome, a generator, a parser) can
+  build a degenerate spine of any depth, which #200's "no dl consumer builds
+  deep spines" premise did not anticipate, and a deep enough one aborts the
+  process rather than returning an error.
+
+### Changed
+
+- **BREAKING — the three depth-recursive tree entries are now fallible**
+  (#231). Each pre-flights the guard and returns `Result<_, DepthError>`:
+  - `free_monad::tree_endo::tree_to_free_mnd` → `Result<Free<TreeEndo<A>,
+    Infallible>, DepthError>`
+  - `free_monad::tree_endo::free_mnd_to_tree` → `Result<BinaryTree<A>,
+    DepthError>`
+  - `architectures::RecursiveNn::unroll` → `Result<S, DepthError>`
+
+  Callers add `?` / `.expect(…)`; nothing else changes. This is a **pre-flight
+  rejection, not a semantic change** — every carrier at or below the limit
+  produces exactly the value it did before, and the CDL Example B.20 bijection
+  and Example J.3 unrolling are untouched. The list-shaped siblings
+  (`vec_to_free_mnd`, `free_mnd_to_vec`, `FoldingRnn::unroll`) are loops and
+  folds and stay infallible, as do the three `from_fn` coalgebra unrollers.
+- **Documented residual, tracked by #200.** The guard reaches this crate's own
+  walker entries only. Two residual classes stay unguarded, split by who could
+  fix them: direct `deep_causality_haft` `Free::fold` / `Cofree::unfold` calls
+  and `Free`'s drop glue are **haft-blocked** (closing them would mean changing
+  haft, which #231 does not do); `BinaryTree`'s drop glue — including a
+  *rejected* value's — and its derived `Clone`/`PartialEq`/`Debug` are
+  **crate-owned** and fixable here with iterative impls, an option #200 now
+  records. The canonical account is `depth`'s Scope section; the `free_monad`
+  and `endofunctor` module docs point to it, and #200 remains open as the
+  tracker.
+- **`benches/free_cofree_shapes.rs` caterpillar axis re-based to the guard.**
+  A caterpillar's structural depth *is* its leaf count, so the pre-#231 shared
+  axis `[64, 1024, 4096]` is no longer constructible through the now-guarded
+  `tree_to_free_mnd`. The balanced fixture keeps `TREE_LEAVES = [64, 1024,
+  4096]` (a balanced tree of 4 096 leaves is only 13 deep); the caterpillar runs
+  a new `SPINE_LEAVES = [16, 64, MAX_TREE_DEPTH]` — the ceiling is the guard
+  constant itself, so the axis cannot drift from the boundary. `L = 64` is in
+  both, so the equal-leaf-count shape comparison still has a common size. The
+  recorded baseline in `.claude/docs/2026-08-01-156-dl-bench-baseline.md` is a
+  pre-guard record: its two deepest `tree_spine` rows per operation are
+  retired, the tree `construct` latencies are no longer like-for-like (the
+  guard's pre-flight walk is now inside their measured window), and the
+  *widening* half of the shape-costs-latency headline rested on the retired
+  pairs — the bench module docs carry the row-by-row accounting. The guard
+  adds exactly one pre-sized worklist `Vec` per tree construct (no regrowth on
+  accepted fixtures), so the "zero reallocs anywhere" allocation headline
+  still holds.
 
 ### Fixed
 

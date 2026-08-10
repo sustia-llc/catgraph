@@ -15,15 +15,21 @@
 //! bijections with their obvious carriers, and folds an [`FAlgebra`] over a free
 //! monad (a *catamorphism*) — the operation the architecture unrollers generalise.
 //!
+//! The **tree** bijection is fallible: both directions recurse, so they
+//! pre-flight the [`catgraph_dl::depth`] guard and return [`DepthError`] for a
+//! carrier deeper than [`MAX_TREE_DEPTH`](catgraph_dl::depth::MAX_TREE_DEPTH)
+//! (issue #231). The list bijection is a loop and stays infallible.
+//!
 //! Run with `cargo run -p catgraph-dl --example free_monad_basics`.
 
+use catgraph_dl::DepthError;
 use catgraph_dl::algebra::FAlgebra;
 use catgraph_dl::endofunctor::OptionWitness;
 use catgraph_dl::free_monad::list_endo::{ListEndo, free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, free_mnd_to_tree, tree_to_free_mnd};
 use catgraph_dl::free_monad::{Cofree, Free};
 
-fn main() {
+fn main() -> Result<(), DepthError> {
     // ---- 1. The list free monad `FreeMnd(1 + A × −)` --------------------
     //
     // `Pure(z)` is the terminator; `Suspend(Some((a, Box(rest))))` is a cons cell
@@ -54,7 +60,8 @@ fn main() {
         BinaryTree::node(BinaryTree::leaf(1_u32), BinaryTree::leaf(2_u32)),
         BinaryTree::leaf(3_u32),
     );
-    let back = free_mnd_to_tree(tree_to_free_mnd(tree.clone()));
+    // Depth 3 — comfortably inside `MAX_TREE_DEPTH`, so neither `?` fires.
+    let back = free_mnd_to_tree(tree_to_free_mnd(tree.clone())?)?;
     assert_eq!(back, tree);
     println!("tree free monad: BinaryTree ⇄ Free<TreeEndo> bijection round-trips");
 
@@ -94,6 +101,7 @@ fn main() {
     println!("algebra fold: sum-algebra catamorphism over [10, 20, 12] = {total}");
 
     println!("free_monad_basics: all assertions passed");
+    Ok(())
 }
 
 /// Fold a `Free<ListEndo<i64>, ()>` cons tower through an `FAlgebra`'s

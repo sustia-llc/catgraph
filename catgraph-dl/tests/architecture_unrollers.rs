@@ -49,8 +49,13 @@
 //! 14. `unfolding_rnn_unroll_iter_agrees_and_is_lazy` — the lazy `unroll_iter` surface (#36): its `.take(n)` prefix agrees with both `unroll_to_vec` and the `Cofree` prefix walk for several `n` (incl. 0), and a `cell_n` that panics past a bound is never tripped by a bounded `.take` (laziness witness — no eager over-evaluation of the infinite tail).
 //! 15. `mealy_cell_run_iter_agrees` — the lazy `MealyCell::run_iter` surface (#36): full-consumption `.collect()` equals `run`, every `.take(k)` prefix agrees, and it matches the `Cofree` prefix walk.
 //! 16. `moore_cell_run_iter_agrees` — same for `MooreCell::run_iter` (#36), preserving output-then-step order.
+//! 17. `recursive_nn_depth_guard` — issue #231: `RecursiveNn::unroll` accepts a
+//!     tree at `MAX_TREE_DEPTH` and rejects one deeper with
+//!     `DepthError::TreeDepthExceeded`. It is the only depth-recursive unroller
+//!     (the other four are folds and `from_fn` state machines), so it is the
+//!     only one that is fallible. Engineering, not a CDL law.
 //!
-//! Total: 16 tests + 8 proptests (the spec asked for at least 8). The three
+//! Total: 17 tests + 8 proptests (the spec asked for at least 8). The three
 //! Cofree coalgebra tests and the three `run_iter`/`unroll_iter` lazy surfaces
 //! each get a proptest lift; see "Coalgebra-direction anchor".
 //!
@@ -80,12 +85,17 @@
     reason = "Test file. type_complexity: the FoldingRnn<…5 type params…> spelling is exactly what callers see — a `type` alias would still need every parameter. items_after_statements: helper `fn`s nested inside tests are scoped to that test by intent. doc_markdown: backtick-wrapping every CDL type name in module-level prose is busywork; the in-line doc comments on individual tests already use backticks where load-bearing. Same precedent as Agent D's tests/algebra_homomorphisms.rs module-level allows."
 )]
 
-use catgraph_dl::Either;
+mod common;
+
 use catgraph_dl::architectures::{FoldingRnn, MealyCell, MooreCell, RecursiveNn, UnfoldingRnn};
+use catgraph_dl::depth::MAX_TREE_DEPTH;
 use catgraph_dl::endofunctor::OptionWitness;
 use catgraph_dl::free_monad::list_endo::{ListEndo, free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, TreeEndo, tree_to_free_mnd};
 use catgraph_dl::free_monad::{Cofree, Free};
+use catgraph_dl::{DepthError, Either};
+
+use common::spine_tree;
 
 use proptest::prelude::*;
 
@@ -323,7 +333,7 @@ fn recursive_nn_constant_leaf_and_combine() {
     // Single leaf.
     let leaf = BinaryTree::leaf(7_u8);
     assert_eq!(
-        RecursiveNn::unroll(&cell, leaf),
+        RecursiveNn::unroll(&cell, leaf).unwrap(),
         1,
         "leaf collapses to cell_0(p)"
     );
@@ -331,7 +341,7 @@ fn recursive_nn_constant_leaf_and_combine() {
     // Two leaves, one combine.
     let two_leaves = BinaryTree::node(BinaryTree::leaf(1_u8), BinaryTree::leaf(2_u8));
     assert_eq!(
-        RecursiveNn::unroll(&cell, two_leaves),
+        RecursiveNn::unroll(&cell, two_leaves).unwrap(),
         3,
         "Node(Leaf, Leaf): 1 + 1 (cell_0 each) + 1 (cell_1) = 3"
     );
@@ -342,7 +352,7 @@ fn recursive_nn_constant_leaf_and_combine() {
         BinaryTree::leaf(3_u8),
     );
     assert_eq!(
-        RecursiveNn::unroll(&cell, depth3),
+        RecursiveNn::unroll(&cell, depth3).unwrap(),
         5,
         "Node(Node(L, L), L): 3 leaves + 2 combines = 5"
     );
@@ -353,10 +363,49 @@ fn recursive_nn_constant_leaf_and_combine() {
         BinaryTree::node(BinaryTree::leaf(5_u8), BinaryTree::leaf(6_u8)),
     );
     assert_eq!(
-        RecursiveNn::unroll(&cell, depth3_right),
+        RecursiveNn::unroll(&cell, depth3_right).unwrap(),
         5,
         "Node(L, Node(L, L)): same shape sum"
     );
+}
+
+/// **Test 17 — `RecursiveNn::unroll` depth guard.** (Issue #231.)
+///
+/// Engineering, not a CDL law: the guard rejects a tree that would abort the
+/// process in `unroll`'s own recursion, and leaves every accepted tree's
+/// semantics untouched — which is what the at-limit half asserts by pinning the
+/// unroll's value, not merely its `is_ok()`.
+///
+/// `RecursiveNn` is the only depth-recursive unroller of the five, so it is the
+/// only fallible one; `FoldingRnn::unroll` is an iterator fold and
+/// `UnfoldingRnn` / `MealyCell` / `MooreCell` are `from_fn` state machines.
+///
+/// The caterpillar is `common::spine_tree`, built iteratively and kept ~16×
+/// (depth 257 vs 4 096) inside the pre-guard measured-safe depth so its
+/// recursive drop glue is not at risk.
+#[test]
+fn recursive_nn_depth_guard() {
+    // Node-counting cell, as in test 3: a caterpillar of `d` leaves has `d − 1`
+    // internal nodes, so the value is `d + (d − 1) = 2d − 1`.
+    let cell: RecursiveNn<i64, i64, TreeCell0, TreeCell1, u8> =
+        RecursiveNn::new(1_i64, |p| p, |(_p, _a, l, r)| l + r + 1);
+
+    let limit = i64::try_from(MAX_TREE_DEPTH).expect("MAX_TREE_DEPTH fits in i64");
+    assert_eq!(
+        RecursiveNn::unroll(&cell, spine_tree(MAX_TREE_DEPTH))
+            .expect("a tree at the limit is accepted"),
+        2 * limit - 1,
+        "an at-limit tree unrolls with the same semantics as a shallow one"
+    );
+
+    let over = MAX_TREE_DEPTH + 1;
+    match RecursiveNn::unroll(&cell, spine_tree(over)) {
+        Err(DepthError::TreeDepthExceeded { depth, limit }) => {
+            assert_eq!(depth, over);
+            assert_eq!(limit, MAX_TREE_DEPTH);
+        }
+        other => panic!("expected TreeDepthExceeded, got {other:?}"),
+    }
 }
 
 /// **Test 4 — `UnfoldingRnn::unroll_to_vec` counter.**
@@ -636,8 +685,8 @@ fn recursive_nn_equivalent_to_free_mnd_unroller() {
             BinaryTree::node(BinaryTree::leaf(5_u8), BinaryTree::leaf(6_u8)),
         ),
     ] {
-        let direct = RecursiveNn::unroll(&cell, tree.clone());
-        let via_free_mnd = unroll_tree_via_free_mnd(&cell, tree_to_free_mnd(tree.clone()));
+        let direct = RecursiveNn::unroll(&cell, tree.clone()).unwrap();
+        let via_free_mnd = unroll_tree_via_free_mnd(&cell, tree_to_free_mnd(tree.clone()).unwrap());
         assert_eq!(
             direct, via_free_mnd,
             "RecursiveNn::unroll(cell, {tree:?}) MUST equal unroll_tree_via_free_mnd(cell, tree_to_free_mnd({tree:?}))"
@@ -970,8 +1019,10 @@ proptest! {
     fn recursive_nn_free_mnd_equivalence_proptest(tree in arb_binary_tree()) {
         let cell: RecursiveNn<i64, i64, TreeCell0, TreeCell1, u8> =
             RecursiveNn::new(1_i64, |p| p, |(_p, _a, l, r)| l + r + 1);
-        let direct = RecursiveNn::unroll(&cell, tree.clone());
-        let via_free_mnd = unroll_tree_via_free_mnd(&cell, tree_to_free_mnd(tree));
+        // `arb_binary_tree` caps recursion at depth 4, so both guards accept
+        // every generated tree; a rejection here would be a fixture bug.
+        let direct = RecursiveNn::unroll(&cell, tree.clone()).unwrap();
+        let via_free_mnd = unroll_tree_via_free_mnd(&cell, tree_to_free_mnd(tree).unwrap());
         prop_assert_eq!(direct, via_free_mnd);
     }
 

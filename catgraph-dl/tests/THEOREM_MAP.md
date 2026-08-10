@@ -87,6 +87,17 @@ it has no paper anchor to link. Registering them would fake traceability.
 | `architecture_unrollers::gdl_recovery_via_z2_invariant_folding` | CDL Example 2.6 | GDL recovery: Z2-invariant fold |
 | `free_monad_bijections::*` | CDL Example B.19/B.20, Prop B.18 | haft `Free`/`Cofree` ↔ concrete-carrier bijections |
 
+> **Not law tests (#231):** `free_monad_bijections::tree_bijection_depth_guard`
+> and `architecture_unrollers::recursive_nn_depth_guard` are the `MAX_TREE_DEPTH`
+> recursion guard's boundary tests, so the `free_monad_bijections::*` glob above
+> reaches one of them. They carry **no paper anchor** and get no row of their own:
+> a depth check is engineering, not a CDL statement. It is also non-interfering —
+> the guard is a pre-flight rejection of carriers that would abort the process,
+> and every carrier it accepts is transformed exactly as before, so the Example
+> B.19/B.20 and Remark 2.13 witnesses above are untouched. The residual recursion
+> the guard cannot reach is tracked in
+> [#200](https://github.com/sustia-llc/catgraph/issues/200).
+
 > **Anchor correction (#64):** the coalgebra-direction dual of Remark 2.13 is
 > **Remark H.6** ("streams are a terminal object in the category of
 > `(O × −)`-coalgebras"), and the three coalgebra wrappers live in **App I**

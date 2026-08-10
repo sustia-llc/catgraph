@@ -28,8 +28,17 @@
 //!
 //! Tree walks here are *recursive* — unlike the list helpers, where we
 //! avoid stack pressure with a loop. Trees are inherently tree-shaped;
-//! recursive walks are the idiomatic choice and tests stay shallow
-//! (depth ≤ 3) so stack consumption is bounded.
+//! recursive walks are the idiomatic choice.
+//!
+//! Bounded stack consumption is no longer left to the tests staying shallow:
+//! both helpers pre-flight [`crate::depth`]'s
+//! [`MAX_TREE_DEPTH`](crate::depth::MAX_TREE_DEPTH) guard and return
+//! [`DepthError`] rather than recursing over a carrier deep enough to overflow
+//! (issue [#231](https://github.com/sustia-llc/catgraph/issues/231)). The
+//! private `*_inner` walkers below run *after* the guard, so they are bounded
+//! by construction. See [`crate::depth`]'s "Scope" section for what the guard
+//! does **not** cover — direct `deep_causality_haft` `Free::fold` calls, and the
+//! recursive drop glue of the `Box`-nested carriers themselves.
 //!
 //! # Why `Infallible`?
 //!
@@ -43,9 +52,11 @@ use core::convert::Infallible;
 use core::marker::PhantomData;
 
 use crate::container::Container;
+use crate::depth::{guard_free_mnd_depth, guard_tree_depth};
 use crate::endofunctor::{
     DebugFunctor, Either, EqFunctor, Free, Functor, HKT, NoConstraint, Satisfies,
 };
+use crate::errors::DepthError;
 
 /// The endofunctor `A + (−)²` for a fixed leaf alphabet `A`.
 ///
@@ -153,6 +164,14 @@ impl<A: PartialEq + core::fmt::Debug> Container for TreeEndo<A> {
 ///
 /// `Box` indirection on `Node` is required by the standard recursive-type
 /// finite-size discipline.
+///
+/// The derived `Clone` / `PartialEq` / `Debug` — and the compiler's drop
+/// glue — recurse over the same `Box` spine the #231 guard bounds for the
+/// walker entries, and sit **outside** that guard: cloning, comparing, or
+/// `{:?}`-logging an over-deep tree can abort where the guarded walk would
+/// have errored. This is a crate-owned residual (iterative impls are writable
+/// here without touching haft); [`crate::depth`]'s Scope section and #200
+/// record it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryTree<A> {
     /// A leaf labelled by `A`.
@@ -184,13 +203,34 @@ impl<A> BinaryTree<A> {
 /// the tree become `Suspend(Left(a))` cells; internal nodes become
 /// `Suspend(Right((l', r')))` cells with recursively-embedded (boxed)
 /// subtrees. `Pure` is unreachable — the `Z` slot is `Infallible`.
-#[must_use]
-pub fn tree_to_free_mnd<A>(tree: BinaryTree<A>) -> Free<TreeEndo<A>, Infallible> {
+///
+/// # Errors
+///
+/// Returns [`DepthError::TreeDepthExceeded`] if `tree` is deeper than
+/// [`MAX_TREE_DEPTH`](crate::depth::MAX_TREE_DEPTH) — the pre-flight recursion
+/// guard (#231). The *measurement* is iterative and cannot overflow; note the
+/// rejected `tree` is still consumed and dropped here, and [`BinaryTree`]'s
+/// drop glue recurses over its spine, so a value deep enough to abort in
+/// `Drop` aborts regardless ([`crate::depth`]'s Scope section and #200 carry
+/// that residual — pre-flight [`guard_tree_depth`] by reference first if you
+/// need to keep or leak an over-deep value). A tree at or below the limit is
+/// embedded exactly as before the guard existed.
+pub fn tree_to_free_mnd<A>(
+    tree: BinaryTree<A>,
+) -> Result<Free<TreeEndo<A>, Infallible>, DepthError> {
+    guard_tree_depth(&tree)?;
+    Ok(tree_to_free_mnd_inner(tree))
+}
+
+/// The recursive body of [`tree_to_free_mnd`], run only after the depth guard
+/// has accepted the whole tree — so its recursion is bounded by
+/// [`MAX_TREE_DEPTH`](crate::depth::MAX_TREE_DEPTH).
+fn tree_to_free_mnd_inner<A>(tree: BinaryTree<A>) -> Free<TreeEndo<A>, Infallible> {
     match tree {
         BinaryTree::Leaf(a) => Free::Suspend(Either::Left(a)),
         BinaryTree::Node(left, right) => {
-            let l = tree_to_free_mnd(*left);
-            let r = tree_to_free_mnd(*right);
+            let l = tree_to_free_mnd_inner(*left);
+            let r = tree_to_free_mnd_inner(*right);
             // haft boxes each recursive slot *inside* the `Either` hole.
             Free::Suspend(Either::Right((Box::new(l), Box::new(r))))
         }
@@ -205,15 +245,41 @@ pub fn tree_to_free_mnd<A>(tree: BinaryTree<A>) -> Free<TreeEndo<A>, Infallible>
 /// if a (presumably user-constructed) value somehow lands on `Pure`,
 /// `Infallible` semantics let us discharge the impossible case with the
 /// idiomatic `match z {}` exhaustion.
-#[must_use]
-pub fn free_mnd_to_tree<A>(input: Free<TreeEndo<A>, Infallible>) -> BinaryTree<A> {
+///
+/// # Errors
+///
+/// Returns [`DepthError::TreeDepthExceeded`] if `input`'s spine is deeper than
+/// [`MAX_TREE_DEPTH`](crate::depth::MAX_TREE_DEPTH) — the pre-flight recursion
+/// guard (#231). The *measurement* is iterative and cannot overflow; note the
+/// rejected `input` is still consumed and dropped here, and `Free`'s drop glue
+/// recurses over its spine, so a value deep enough to abort in `Drop` aborts
+/// regardless (see [`crate::depth`]'s Scope section — pre-flight
+/// [`guard_free_mnd_depth`] by reference first to keep an over-deep value
+/// alive). A spine at or below the limit is projected exactly as before the
+/// guard existed. Note that a `Free` produced by [`tree_to_free_mnd`] has
+/// already passed the same check (the bijection preserves depth); the guard
+/// here is for spines built by hand — nested `Free::Suspend` cells, as the
+/// crate's own tests do — which this function cannot know were pre-flighted.
+pub fn free_mnd_to_tree<A>(
+    input: Free<TreeEndo<A>, Infallible>,
+) -> Result<BinaryTree<A>, DepthError> {
+    guard_free_mnd_depth(&input)?;
+    Ok(free_mnd_to_tree_inner(input))
+}
+
+/// The recursive body of [`free_mnd_to_tree`], run only after the depth guard
+/// has accepted the whole spine — so its recursion is bounded by
+/// [`MAX_TREE_DEPTH`](crate::depth::MAX_TREE_DEPTH).
+fn free_mnd_to_tree_inner<A>(input: Free<TreeEndo<A>, Infallible>) -> BinaryTree<A> {
     match input {
         // `Infallible` has no values; this arm is statically unreachable
         // but we discharge it explicitly so the function is total.
         Free::Pure(z) => match z {},
         Free::Suspend(node) => match node {
             Either::Left(a) => BinaryTree::Leaf(a),
-            Either::Right((l, r)) => BinaryTree::node(free_mnd_to_tree(*l), free_mnd_to_tree(*r)),
+            Either::Right((l, r)) => {
+                BinaryTree::node(free_mnd_to_tree_inner(*l), free_mnd_to_tree_inner(*r))
+            }
         },
     }
 }
