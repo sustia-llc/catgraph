@@ -21,41 +21,26 @@ repository = "https://github.com/sustia-llc/catgraph"
 # --- intra-workspace (path wins locally; version present for a future publish) ---
 catgraph           = { path = "catgraph",           version = "0.10.0", default-features = false }
 catgraph-applied   = { path = "catgraph-applied",   version = "0.10.0", default-features = false }
-catgraph-magnitude = { path = "catgraph-magnitude", version = "0.10.0" }
 # Dev-only, unpublished (`publish = false`): only ever a `[dev-dependencies]`
 # entry, never a published crate's `[dependencies]`. Shared seeded-fixture LCG (#33).
 catgraph-testutil  = { path = "catgraph-testutil" }
 
-# --- DeepCausality thin substrate — PIN EXACT (DC is 0.x, churning).
-#     Resolve from crates.io (upstream's own guidance on DC#720). If a git fallback is ever needed,
-#     it MUST pin an exact `rev` — NEVER a branch: upstream tagged + published haft 0.4.2 from a
-#     branch that was never pushed, so DC `main` still reads 0.4.1 in its own Cargo.toml and a
-#     branch-pinned dep silently resolves to PRE-0.4.2 source (deepcausality-rs/deep_causality#720).
-#     Fallback (if ever): { git = "https://github.com/deepcausality-rs/deep_causality", rev = "aeff6549e" }
-#     — the deep_causality_haft-v0.4.2 tag commit; reachable via the tag even though no branch
-#     contains it. (Prior fallback rev, 0.4.1-era: 3280cb844.)
-#     haft 0.4.1 (DC v0.15.0 stack, 2026-07-14) shipped the categorical machinery (Category/Kleisli, reified ArrowTerm +
-#     interpret_kleisli, symmetric-monoidal PROP, Foldable::fold_map, NaturalTransformation, the Cofree
-#     comonad & EqFunctor/DebugFunctor); 0.4.2 adds CloneFunctor + opt-in Clone for Free/Cofree,
-#     Cofree::duplicate, and Functor/CoMonad trait impls on CofreeWitness (purely additive). Carrier
-#     Clone stays UNADOPTED here — #93 owner decision; adoption tracked as #154.
-#     haft is live (catgraph-dl endofunctor layer, #12) and is now the only entry here.
-#     `deep_causality_num` was retired in #219 (D1 of the #218 streamlining): the
-#     `Zero`/`One` it supplied to applied/magnitude/dl are catgraph's own, in
-#     `catgraph-applied/src/rig.rs` next to the native `Rig`.
-#     `deep_causality_num_dual` was retired in #221 (D3), in the same change: the
-#     forward-mode `Dual` behind catgraph-dl's opt-in `ad` feature is now
-#     `catgraph-dl/src/para/dual.rs`. It had to move with the traits — the orphan
-#     rule forbids implementing a catgraph-owned `Zero`/`One` for a foreign `Dual`.
-#     `ad` now adds no dependency whatsoever (`ad = []`). Note what does NOT change:
-#     deep_causality_algebra and deep_causality_num remain in the lock beneath haft
-#     either way — catgraph source just never names them.
-deep_causality_haft = "=0.4.2"
+# --- NO external algebraic substrate (#218, complete at #222) ---
+#     The whole algebraic layer is catgraph-owned: `Rig`/`Zero`/`One` in
+#     catgraph-applied's `rig` (#219), forward-mode `Dual` in catgraph-dl's
+#     `para/dual.rs` (#221), and the endofunctor/carrier substrate + Arrow
+#     algebra in catgraph-dl's `endofunctor`/`free_monad` and catgraph-syntax's
+#     `arrow_seam` (#222; shapes derived from deep_causality_haft 0.4.2, MIT —
+#     attributed in the defining files). The former `deep_causality_haft`
+#     dependency (and its transitive `deep_causality_algebra`/
+#     `deep_causality_num`) left the lockfile at #222.
 
 # --- math / graph — numeric-only, NOT an algebraic substrate ---
-# (members opt in with `{ workspace = true, optional = true }`; `optional` is illegal here.)
+# (nalgebra / rustworkx-core are opt-in per member, `{ workspace = true,
+# optional = true }`; permutations / union-find are unconditional edges of
+# core+applied; `optional` is illegal here either way.)
 nalgebra       = "0.35"   # field-bounded paths only
-permutations   = "0.1"    # backs braiding — DC Arrow has none
+permutations   = "0.1"    # backs braiding — the owned Arrow algebra (arrow_seam) has none
 rustworkx-core = "0.18"   # `catgraph-physics` only — coloring + k-core, behind its `rustworkx` feature gate (#10)
 # Disjoint sets, the whole graph substrate `catgraph` and `catgraph-applied` need:
 # cospan/corel pushouts and Temperley-Lieb composition connectivity. The toposort

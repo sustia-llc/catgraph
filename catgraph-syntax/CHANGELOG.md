@@ -9,6 +9,14 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ### Changed
 
+- **`rand` leaves this crate's normal-dependency graph**
+  ([#239](https://github.com/sustia-llc/catgraph/issues/239), changed in
+  `catgraph-applied`). This crate's only path to `rand` was
+  catgraph-applied's lib edge, which now carries `rand_core` alone
+  (`E1::random` takes a caller-supplied generator; sampling in-tree) — so
+  `rand` no longer appears in this crate's lib graph at all. See
+  catgraph-applied's #239 entry for the supply contract and caveats (the
+  catgraph-physics feature-unification caveat is unchanged).
 - **BREAKING: the Arrow algebra is crate-owned; `deep_causality_haft` leaves
   this crate's dependencies**
   ([#222](https://github.com/sustia-llc/catgraph/issues/222)).
