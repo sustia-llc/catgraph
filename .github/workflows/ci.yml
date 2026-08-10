@@ -146,3 +146,50 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test -p catgraph-magnitude --release --test euler_char_identity
+
+  # #233: wasm compile-only regression guard, so the wasm properties probed
+  # for #230-#232 can't regress silently. Check-only — running the wasi smoke
+  # examples needs the proptest/wait-timeout workaround documented in
+  # catgraph/examples/wasi_smoke_core.rs and stays out of scope here.
+  wasm-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1, wasm32-wasip1-threads, wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # NEVER `--workspace` on a wasm target: catgraph-testutil declares
+      # proptest as a NORMAL dependency (deliberate, #33), dragging in
+      # rusty-fork -> wait-timeout, which has no wasip1 backend. Every lane
+      # below scopes to `-p` over the six published crates only.
+      #
+      # Plain `cargo check -p <crate>` — no `--all-targets`, no `--tests`:
+      # the dev graph reaches getrandom 0.3.4 via proptest on wasm and would
+      # go red. `cargo check -p` still builds examples where a crate has
+      # them; core's and applied's wasi_smoke_* examples compile clean for
+      # wasip1 (they were written for it).
+      #
+      # wasm32-wasip1: the six published crates at default features,
+      # including catgraph-physics FULL (rustworkx + spectral + parallel).
+      - run: cargo check -p catgraph -p catgraph-applied -p catgraph-magnitude -p catgraph-physics -p catgraph-dl -p catgraph-syntax --target wasm32-wasip1
+      # representative opt-ins
+      - run: cargo check -p catgraph-magnitude --features f64-fast --target wasm32-wasip1
+      - run: cargo check -p catgraph-dl --features ad --target wasm32-wasip1
+      - run: cargo check -p catgraph-dl --features "serde ad" --target wasm32-wasip1
+      - run: cargo check -p catgraph-applied -p catgraph-syntax --features serde --target wasm32-wasip1
+      # slim tier
+      - run: cargo check -p catgraph --no-default-features --target wasm32-wasip1
+      - run: cargo check -p catgraph-applied --no-default-features --target wasm32-wasip1
+      - run: cargo check -p catgraph-physics --no-default-features --target wasm32-wasip1
+      # wasm32-wasip1-threads: core at default features.
+      - run: cargo check -p catgraph --target wasm32-wasip1-threads
+      # wasm32-unknown-unknown, unblocked by #232 (rand slimming): `--lib`
+      # only, per applied's CHANGELOG pointer at this issue for the guard.
+      - run: cargo check --lib -p catgraph -p catgraph-applied -p catgraph-magnitude -p catgraph-dl -p catgraph-syntax --target wasm32-unknown-unknown
+      # catgraph-physics at DEFAULTS stays red on this target by design: its
+      # `rustworkx` feature pulls rustworkx-core WITH default features ->
+      # getrandom, and cargo feature unification means any graph containing
+      # physics-with-rustworkx re-enables getrandom (this is also why
+      # --workspace is banned on this whole job). Slim build only.
+      - run: cargo check -p catgraph-physics --no-default-features --lib --target wasm32-unknown-unknown
