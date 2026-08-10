@@ -32,8 +32,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
     `SmallRng`, `ChaCha20Rng`, …) compile unchanged — every engine implements
     `rand_core::Rng`. Code that *named* `RngExt` in its own bounds to feed
     `E1::random` should name `catgraph_applied::Rng` instead.
-  - **Behavioral note.** Draws are still i.i.d. uniform on \[0, 1), but the
-    stream differs from `rand`'s `random_range(0.0..1.0)` — a seeded sequence
+  - **Behavioral note.** Draws are still i.i.d. uniform — the `f64` ladder is
+    exact on \[0, 1); its single rounding to `f32` can land on exactly `1.0`,
+    which the separation loop admits only as a final right endpoint — but the
+    stream differs from `rand`'s `random_range(0.0..1.0)`: a seeded sequence
     of `E1::random` configurations is not bit-identical across this change.
     Nothing in-tree pins exact drawn values (the seeded suites assert
     structural invariants only).
