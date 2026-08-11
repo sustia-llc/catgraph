@@ -11,7 +11,9 @@ applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions
 > `catgraph-dl`, and the value-level Arrow algebra in `catgraph-syntax` (the
 > latter two derived from `deep_causality_haft` 0.4.2, MIT, attributed in the
 > defining files) — with zero external algebraic dependencies and `nalgebra`
-> kept optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.10.0)
+> kept optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.11.0;
+> v0.11.0 is the divestment release — #222/#239, `THIRD-PARTY.md` carries the
+> derivation notice)
 > and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, the Arrow
 > presentation frontend, #5): the S1–S5 milestone surface is **complete**
 > (printer, parser + presentation files, interpreter, Frobenius layer, Traced

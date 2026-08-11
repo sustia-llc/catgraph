@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.11.0] - 2026-08-10
+
 ### Changed
 
 - **`rand` leaves this crate's normal-dependency graph**
@@ -1515,7 +1517,8 @@ Both BV 2025 verifications pass at v0.1.0:
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.11.0...HEAD
+[workspace-v0.11.0]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...v0.11.0
 [workspace-v0.10.0]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...v0.10.0
 [workspace-v0.9.0]: https://github.com/sustia-llc/catgraph/compare/v0.8.0...v0.9.0
 [workspace-v0.7.0]: https://github.com/sustia-llc/catgraph/compare/v0.6.0...v0.7.0
