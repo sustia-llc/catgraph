@@ -54,6 +54,13 @@ jobs:
       # pins the manifest-level invariant.
       - name: rand-dev-only guard (#239)
         run: python3 scripts/check_rand_dev_only.py
+      # Release-consistency guard: [workspace.package].version, the
+      # intra-workspace pins, every published CHANGELOG's [Unreleased]
+      # baseline, and the magnitude README status line must agree. The
+      # stale-version class recurred at three consecutive releases before
+      # this script; a bump commit now fails CI until every reference moves.
+      - name: version-refs guard
+        run: python3 scripts/check_version_refs.py
       # #222: the workspace carries ZERO deep_causality_* crates (the #218 arc's
       # end state). A transitive re-introduction would land green without this —
       # nothing else looks at the lockfile's package set.
