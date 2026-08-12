@@ -1,0 +1,5 @@
+[build]
+# sccache (the global rustc-wrapper) does not cache incremental compiles, and
+# cargo never GC's target/debug/incremental — it reached 97G by 2026-08-12.
+# Non-incremental rebuilds of these seven small crates are cheap via sccache.
+incremental = false
