@@ -240,6 +240,43 @@ fn presentation_default_engine_is_cc() {
 }
 
 #[test]
+fn presentation_exposes_its_configured_rewrite_depth() {
+    // The sibling of `engine()`, and needed for the same reason: a consumer that
+    // stores a presentation as its parts and rebuilds it later has to be able to
+    // read the depth back. Without this accessor a rebuild through
+    // `new()` + `add_equation` silently restored the default 32.
+    assert_eq!(Presentation::<TestGen>::new().rewrite_depth(), 32);
+    assert_eq!(Presentation::<TestGen>::default().rewrite_depth(), 32);
+    assert_eq!(Presentation::<TestGen>::with_depth(7).rewrite_depth(), 7);
+    assert_eq!(Presentation::<TestGen>::with_depth(0).rewrite_depth(), 0);
+
+    // `with_engine` is the other constructor that takes no depth, and it lands on
+    // the same default `new()` does above.
+    assert_eq!(
+        Presentation::<TestGen>::with_engine(NormalizeEngine::Structural).rewrite_depth(),
+        32
+    );
+
+    // And the documented rebuild really does need both calls: `with_depth`
+    // carries the depth alone, so the engine has to be restored separately or it
+    // silently reverts to the default — the same silent-default bug the depth
+    // accessor exists to prevent, one slot over.
+    assert_eq!(
+        Presentation::<TestGen>::with_depth(7).engine(),
+        NormalizeEngine::CongruenceClosure
+    );
+    let mut rebuilt = Presentation::<TestGen>::with_depth(7);
+    rebuilt.set_engine(NormalizeEngine::Structural);
+    assert_eq!(rebuilt.rewrite_depth(), 7);
+    assert_eq!(rebuilt.engine(), NormalizeEngine::Structural);
+
+    // Adding equations does not disturb it.
+    let mut pres = Presentation::<TestGen>::with_depth(7);
+    pres.add_equation(g(TestGen::A), g(TestGen::B)).unwrap();
+    assert_eq!(pres.rewrite_depth(), 7);
+}
+
+#[test]
 fn presentation_with_engine_structural_recovers_v050_behavior() {
     // Under the Structural engine, a simple non-overlapping equation should
     // still work: A = B ⟹ eq_mod(A, B) = Some(true).
