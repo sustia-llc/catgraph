@@ -13,6 +13,54 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Fixed
+
+- **`verify_sfg_to_mat_is_full_and_faithful` buckets by matrix value, not by a
+  `Debug` string** ([#167](https://github.com/sustia-llc/catgraph/issues/167)).
+  The enumerated SFG expressions were keyed by
+  `format!("{}×{} {:?}", m.rows(), m.cols(), m.entries())`; the key is now
+  `(rows, cols, Vec<Vec<R>>)`, asking the rig's own `Eq`/`Hash` about the
+  entries. Shape stays in the key because `entries()` alone cannot carry it —
+  `Zero : 0 → 1` has empty entries whatever the column count, and
+  `Discard : 1 → 0` has `vec![vec![]]`. **Zero new derives**: `MatR<R>` still
+  derives only `Clone, Debug, PartialEq`, and `R: Eq + Hash` was already a bound
+  on the function.
+
+  - **This was a reintroduction of #58's bug, one layer up.** `F64Rig`'s `Hash`
+    normalizes `-0.0` to `0.0` and its `Eq` is the derived IEEE `PartialEq`
+    (under which `-0.0 == 0.0`) — that pairing *is* the #58 fix, for "a `-0.0`
+    and `0.0` splitting a congruence class". But `Debug` on `F64Rig(pub f64)` is
+    *derived*, so it renders the sign bit: the string key printed
+    `F64Rig(-0.0)` and `F64Rig(0.0)` differently and split them again, in the
+    bucketing rather than in the closure. Keying on the value inherits #58's
+    normalization instead of routing around it.
+  - **Latent with a live trigger, not dormant.** Matrix entries come only from
+    `R::zero()`, `R::one()`, the caller's `rig_samples`, and `MatR::matmul` —
+    and matmul accumulates from `R::zero()`, so `-1.0 × 0.0` is summed into
+    `+0.0` before it is stored. The shipped depth-2 fixtures therefore never
+    produce a `-0.0` entry, **and the four pinned baselines do not move**
+    (BoolRig 748, UnitInterval 1114, Tropical 1594, F64Rig 1590 — re-measured
+    in release, all unchanged). `rig_samples` is a public argument, though: a
+    caller passing `F64Rig(-0.0)` puts one straight into a `Scalar` generator's
+    `1×1` matrix and splits the bucket. New non-ignored test
+    `signed_zero_is_one_matrix_bucket_not_two` pins the split, the fix, and the
+    matmul-normalizes claim that makes the baselines stand.
+  - ⚠ **The value key inherits all of the rig's equality, NaN included** — the
+    #58 posture of documenting IEEE semantics rather than papering over them. A
+    non-`Eq`-reflexive value (`F64Rig(f64::NAN)`, reachable only by putting a
+    NaN or infinity in `rig_samples`) can never match its own `HashMap` entry,
+    so each NaN-imaged expression lands in a bucket of one and contributes
+    nothing; the `Debug` key merged them instead. Neither is more correct —
+    asking the rig is the behaviour this function wants, and a rig whose `Eq`
+    is not an equivalence gives a bucketing that is not one either.
+  - **No tolerance.** A tolerance-aware comparison was considered for #167 and
+    **rejected**. The question this consumer asks is whether `S(a) == S(b)` *as
+    matrices over R*, which is exact (Rule 1, the paper is the spec). A
+    tolerance would merge buckets the functor keeps apart and manufacture
+    faithfulness witnesses `S` does not assert.
+  - Scope: the bucketing key only. The `mat_f64` bridge (`solve` / `rank` /
+    `trace`), the other half of #167 as filed, is untouched here.
+
 ## [workspace-v0.13.0] - 2026-08-15
 
 ### Added

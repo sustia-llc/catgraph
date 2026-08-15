@@ -189,18 +189,95 @@
 //! 1590 post-#189). All baselines
 //! live in the `BASELINE_*_D2` module consts.
 //!
+//! #58 had a sequel: the harness's *bucket* key was a `Debug` string until
+//! [#167](https://github.com/sustia-llc/catgraph/issues/167), and derived
+//! `Debug` on `F64Rig(pub f64)` renders the sign bit — reinstating the very
+//! `-0.0`/`0.0` split #58 closed, one layer up. The key is the matrix value
+//! now. None of the four baselines moved: `MatR::matmul` accumulates from
+//! `R::zero()`, so `-1.0 × 0.0` is summed into `+0.0` before it is stored and
+//! these fixtures never build a `-0.0` entry. It is reachable through
+//! `rig_samples`, which is why `signed_zero_is_one_matrix_bucket_not_two`
+//! (non-ignored, below) pins it.
+//!
 //! [`CongruenceClosure`]: catgraph_applied::prop::presentation::NormalizeEngine::CongruenceClosure
 //! [`MatrixNFFunctor<R>`]: catgraph_applied::prop::presentation::functorial::MatrixNFFunctor
 //! [`Presentation::eq_mod_functorial`]: catgraph_applied::prop::presentation::Presentation::eq_mod_functorial
 
 use catgraph_applied::{
     graphical_linalg::{matr_presentation, verify_sfg_to_mat_is_full_and_faithful},
+    mat::MatR,
     rig::{BoolRig, F64Rig, Rig, Tropical, UnitInterval},
     sfg::SignalFlowGraph,
     sfg_to_mat::sfg_to_mat,
 };
 
 // ---- Smoke tests (always active): the presentation builds across all rigs ----
+
+/// #167: `verify_sfg_to_mat_is_full_and_faithful` buckets by the matrix
+/// **value**, not by a `Debug` rendering of it.
+///
+/// The retired key was `format!("{}×{} {:?}", rows, cols, entries)`. `Debug` on
+/// `F64Rig(pub f64)` is derived, so it renders the sign bit — reinstating,
+/// in the bucketing, the very `-0.0`/`0.0` split #58 closed in the rig
+/// `Hash` impls. This test pins both halves of the replacement and the
+/// reachability claim the rustdoc makes about it.
+#[test]
+fn signed_zero_is_one_matrix_bucket_not_two() {
+    /// Exactly the key the harness builds. `MatR` itself cannot be the key —
+    /// it derives only `Clone, Debug, PartialEq` — so shape rides alongside
+    /// the entries (`Zero : 0 → 1` and `Discard : 1 → 0` are the shapes that
+    /// need it: their `entries()` carry no column count).
+    fn key(m: &MatR<F64Rig>) -> (usize, usize, Vec<Vec<F64Rig>>) {
+        (m.rows(), m.cols(), m.entries().to_vec())
+    }
+
+    // Both values hashed with the SAME `BuildHasher`; a per-call `RandomState`
+    // reseeds and would make even identical values disagree.
+    fn hashes_agree<T: std::hash::Hash>(a: &T, b: &T) -> bool {
+        use std::hash::{BuildHasher, RandomState};
+        let state = RandomState::new();
+        state.hash_one(a) == state.hash_one(b)
+    }
+
+    let pos = MatR::new(1, 1, vec![vec![F64Rig(0.0)]]).unwrap();
+    let neg = MatR::new(1, 1, vec![vec![F64Rig(-0.0)]]).unwrap();
+
+    // The retired key really did split them...
+    assert_ne!(
+        format!("{}×{} {:?}", pos.rows(), pos.cols(), pos.entries()),
+        format!("{}×{} {:?}", neg.rows(), neg.cols(), neg.entries()),
+        "if `Debug` ever stopped rendering the sign bit this test would be \
+         vacuous — it asserts the old key's defect, not the new key's virtue"
+    );
+
+    // ...and the live key does not. `Eq` alone is not enough for a `HashMap`:
+    // the entries must hash alike too, which is what #58 bought.
+    assert_eq!(key(&pos), key(&neg));
+    assert!(hashes_agree(&key(&pos), &key(&neg)));
+
+    // Reachability, in both directions.
+    //
+    // A `Scalar` generator puts its sample straight into a 1×1 matrix, so a
+    // caller passing `F64Rig(-0.0)` in `rig_samples` — a public argument —
+    // triggers the split immediately.
+    let from_scalar = sfg_to_mat(&SignalFlowGraph::scalar(F64Rig(-0.0))).unwrap();
+    assert!(from_scalar.entries()[0][0].0.is_sign_negative());
+
+    // The shipped depth-2 fixtures cannot: every other entry comes from
+    // `R::zero()`, `R::one()`, or `MatR::matmul`, and matmul accumulates from
+    // `R::zero()`, so the `-1.0 × 0.0` the #58 note names is summed into
+    // `+0.0` before it is ever stored. That is why the pinned baselines below
+    // do not move under #167 — and this assertion is what makes the claim fail
+    // loudly if the accumulation is ever restructured.
+    let via_matmul = sfg_to_mat(
+        &SignalFlowGraph::scalar(F64Rig(-1.0))
+            .compose(&SignalFlowGraph::scalar(F64Rig(0.0)))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(via_matmul.entries()[0][0], F64Rig(0.0));
+    assert!(via_matmul.entries()[0][0].0.is_sign_positive());
+}
 
 #[test]
 fn matr_presentation_builds_bool() {
