@@ -59,6 +59,17 @@ magnitude's, and the two do not meet at the term level.
   deliberately **not `Ord`** (`Color` need not be), so buckets are unordered;
   never depend on iteration order. Serde **does not re-run** `check`, so a
   `ColoredExpr` rebuilt from a document is trusted rather than validated.
+- **The dedup key can now be persisted** ([#255]). `ContentKey` round-trips
+  under catgraph-applied's off-by-default `serde` feature, so a table like
+  `workflow_dedup.rs`'s survives a restart instead of being rebuilt. The
+  caveats matter more than the capability: it is a **key, not a term** —
+  deserialization does not re-run `canonical_key` and nothing can, since the
+  content is not carried, so a hand-crafted document can be a key of no content
+  at all; and the serialized shape is the **private field layout**, hence *not*
+  a stable wire format across crate versions. Persist keys as a cache under a
+  version you control, or recompute on load. Round-tripping a value the crate
+  produced is sound — that is the contract. Persistence adds storage, **not
+  ordering**: the not-`Ord` seam above is unchanged.
 - **`eq_mod` is not transitive** ([#189]). Every verdict is sound for the pair
   asked about, but they do not compose: a caller that wants equivalence
   *classes* must take connected components of the `Some(true)` graph.
@@ -67,3 +78,4 @@ magnitude's, and the two do not meet at the term level.
   `eq_colored` remain the deciders and are untouched by it.
 
 [#189]: https://github.com/sustia-llc/catgraph/issues/189
+[#255]: https://github.com/sustia-llc/catgraph/issues/255

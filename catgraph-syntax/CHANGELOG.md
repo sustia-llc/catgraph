@@ -7,6 +7,20 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Documentation
+
+- **The `workflow_dedup` example now states that `ContentKey` is persistable**
+  ([#264](https://github.com/sustia-llc/catgraph/issues/264), following
+  [#255](https://github.com/sustia-llc/catgraph/issues/255)). The example is
+  #255's consumer shape — a `HashMap` keyed by `canonical_key` across several
+  writings of one process — so it is where a reader looks to find out whether
+  such a table can survive a restart. It can, under catgraph-applied's
+  off-by-default `serde` feature. Recorded with its caveats: the key is **not a
+  term** (deserialization cannot re-run `canonical_key`, since the content is
+  not carried), the serialized shape is the **private field layout** and so is
+  **not a stable wire format**, and `ContentKey` remains **not `Ord`** —
+  persistence adds storage, not ordering. Prose only; no API change.
+
 ## [workspace-v0.11.0] - 2026-08-10
 
 ### Changed
