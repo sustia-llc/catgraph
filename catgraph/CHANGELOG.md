@@ -6,6 +6,45 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`cospan_canon::ApexClass<Λ>` and `CospanCanon::classes`** — a read surface
+  for the data that actually discriminates a canonical form
+  ([#254](https://github.com/sustia-llc/catgraph/issues/254)). `CospanCanon`
+  already derived `Eq`/`Hash` and worked as a key, but its apex signatures were
+  private and the accessors stopped at `dom_len`/`cod_len`/`scalar_count`/
+  `apex_len`, so a consumer could compare two canonical forms in-process and
+  nothing else. `classes()` now returns `&[ApexClass<Λ>]`, and each class
+  exposes `label()`, `dom_preimage()`, `cod_preimage()` (both preimages sorted
+  ascending — a documented invariant callers may rely on), and `is_scalar()`
+  for the both-empty bubble case. A canonical form can therefore be inspected,
+  written out, re-encoded into another representation, or logged, not only
+  compared. No serde: the core crate carries none, and this is a read surface,
+  not a wire format.
+  - **Read-only, deliberately: this is not a round trip.** There is no
+    `CospanCanon::from_parts` and no `ApexClass::new`, so a form that has been
+    written out cannot be read back into a `CospanCanon` — a consumer wanting
+    to compare against stored data after a restart still keeps the originating
+    `Cospan` and re-runs `canonical_form()`. A public constructor cannot be a
+    plain `new`: the type's `Eq`/`Hash` decide cospan isomorphism only because
+    the private construction path guarantees sortedness of the classes, of each
+    preimage, and that the preimages partition the two boundaries. Whether the
+    type should round-trip, and under which of those validations, is
+    [#261](https://github.com/sustia-llc/catgraph/issues/261).
+  - **The canonical form itself is unchanged** — its `Eq`, its `Hash`, and its
+    sort order are all bit-identical to before, so persisted comparisons remain
+    valid and this is *not* a format change. `ApexClass` replaces an anonymous
+    `(Λ, Vec<usize>, Vec<usize>)` tuple in a **private** field; its fields are
+    declared in that same order and it derives the same traits, so the derived
+    `Ord` driving the canonicalising `classes.sort()` — the sort that makes the
+    value invariant under apex relabelling — is exactly the tuple's
+    lexicographic order. A test pins this against an in-test rebuild of the
+    tuple vector sorted under tuple `Ord`, and pins the field-by-field
+    tie-break directly.
+  - `scalar_count` is rewritten as a filter on `is_scalar()`; behaviour,
+    signature, and docs are unchanged, as are `CospanCanon`'s derives and its
+    four existing accessors.
+
 ## [workspace-v0.10.0] - 2026-08-09
 
 ### Changed
