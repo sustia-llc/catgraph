@@ -10,6 +10,106 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **Multiway DAG centrality**
+  ([#161](https://github.com/sustia-llc/catgraph/issues/161), `rustworkx`
+  feature, no new dependencies) — in `multiway::branchial_analysis`:
+  - **`MultiwayEvolutionGraph::to_petgraph`** — the directed sibling of
+    `BranchialGraph::to_petgraph`, returning `(DiGraph<MultiwayNodeId, ()>,
+    Vec<MultiwayNodeId>)` where `order[i]` is the node at `NodeIndex::new(i)`.
+    Node order is **canonical `(step, branch_id)` ascending**, not `HashMap`
+    order: the evolution graph stores nodes in a map, so an unsorted export
+    would give a different index assignment on every run and move every
+    index-keyed score with it.
+  - **`multiway_betweenness(graph, normalized)`** — branching-junction load
+    via Brandes, endpoints excluded, parallelised through rustworkx-core's
+    `CondIterator` at or above 50 nodes **when the `parallel` feature is on**.
+    This is the crate's first direct rayon call site, so the threshold is
+    `usize::MAX` under `--no-default-features`: an ungated `CondIterator`
+    would spawn rayon work on a single-threaded or WASI build and fail at
+    *runtime* on a no-threads wasm target, and only for graphs large enough
+    to cross the threshold. ⚠ The parallel path is **not bit-reproducible** —
+    rustworkx accumulates per-source partials from rayon workers, so f64
+    summation order varies run to run; the node *ordering* is canonical
+    either way. Build without `parallel` for pinnable scores.
+  - **`multiway_katz(graph, alpha, max_iter, tol)`** — α-damped inbound path
+    count, L2-normalized. Returns `Option`, so rustworkx-core's
+    non-convergence / zero-norm case is surfaced rather than collapsed to
+    zeros or an empty map — except for an **empty** graph, which scores
+    `Some(empty)` to match `multiway_betweenness` (rustworkx's convergence
+    test is `0.0 < 0.0` there, so it would otherwise report a
+    non-convergence that never happened).
+  - ⚠ **The DAG grading that makes Katz terminate is a convention, not an
+    invariant.** `add_merge_edge` validates neither endpoint nor step
+    ordering, so a same-step or backward edge is constructible — and its own
+    documented workflow permits one, since `add_fork` leaves every step-`t+1`
+    sibling active. Such an edge makes the adjacency non-nilpotent; if
+    `ρ(A) ≥ 1/alpha` the iteration diverges and returns `None`. On a graph
+    carrying merge edges, read `None` as "α too large" at least as readily as
+    "needs more iterations". Relatedly, `to_petgraph` **drops** edges whose
+    endpoints are not registered nodes, so on such a graph the centralities
+    are computed over a different topology than `edge_count()` reports; both
+    behaviours are now documented at the API.
+  - **Substitution: Katz, not eigenvector centrality.** The issue asked for
+    betweenness *and eigenvector* centrality. **Eigenvector centrality is
+    undefined on a multiway evolution graph** and is deliberately not
+    shipped. The graph is a step-graded DAG, so its adjacency is nilpotent
+    and its spectral radius is 0 — there is no dominant eigenvector for power
+    iteration to find. rustworkx-core's `eigenvector_centrality` returns
+    `Ok(None)` at its defaults; forced to terminate, it reports a *sink
+    indicator*, scoring the root of a star fork at ≈ 0 — the exact branching
+    junction the issue wanted measured. Katz's `+ β` term makes the iteration
+    terminate on a nilpotent adjacency and floors a source at β instead. All
+    three behaviours are pinned by
+    `katz_floors_the_root_where_eigenvector_centrality_degenerates`. The
+    rationale is also in `multiway_katz`'s rustdoc, where a future reader
+    will actually meet it.
+  - Betweenness is verified against a hand-computed diamond (fork + merge),
+    both raw and normalized.
+
+- **Widened test / bench topologies via seeded rustworkx-core generators**
+  ([#163](https://github.com/sustia-llc/catgraph/issues/163)) —
+  `rustworkx-core` is now also a **dev-dependency**; the published dependency
+  tree is unchanged (it was already an optional lib dep behind the default-on
+  `rustworkx` feature).
+  - **The insertion point is `BranchialGraph`, not `MultiwayEvolutionGraph`.**
+    The issue proposed generating topologies at the evolution-graph level, but
+    that is not constructible: `MultiwayEvolutionGraph`'s fields are private
+    and its only builders are `add_root` / `add_fork` /
+    `add_sequential_step`, so every branchial cross-section it can produce is
+    a Kₙ. `BranchialGraph`'s `nodes` / `edges` are public, so a generated
+    `UnGraph` translates into one directly. The existing evolution-level
+    `arb_branched_graph` strategy is unchanged; the generated topologies are
+    siblings of it. The three pre-existing proptests are still served, because
+    what they assert (λ₂ positivity, zero-eigenvalue multiplicity, proper
+    coloring) are *branchial* properties.
+  - Seven pinned fixtures in `tests/branchial_analysis.rs`: sparse and dense
+    Erdős–Rényi, Barabási–Albert, 3-regular, path, Petersen, and a 4×6 grid —
+    covering disconnected, connected-but-incomplete, regular, and
+    heavy-tailed-degree shapes that Kₙ never reaches. A non-property test
+    (`generated_topologies_escape_the_complete_graph_regime`) pins that the
+    set is actually wider, so the new proptests cannot silently degenerate
+    back to complete graphs.
+  - New `benches/branchial_bench.rs` (`required-features = ["rustworkx",
+    "spectral"]`) with fixtures for `branchial_analysis` (coloring, k-core,
+    articulation points at n = 100 and n = 1000) and `branchial_spectrum`
+    (n = 100/200/300 — the dense `SymmetricEigen` is Θ(n³), so it stops short
+    of 1000). Fixtures only; no performance claim is made.
+  - **Determinism**: every generator seed is a pinned literal, and the
+    generators supply *topology only*. Numeric fixtures stay on
+    `catgraph-testutil`'s LCG, whose stream is byte-identity-pinned (#33);
+    nothing LCG-derived changed.
+
+### Changed
+
+- **Dependency comments repointed off the closed issue #10**
+  ([#161](https://github.com/sustia-llc/catgraph/issues/161)) — the workspace
+  `Cargo.toml` `rustworkx-core` line and this crate's `rustworkx` /
+  `spectral` feature comments cited #10 (the feature-gate work, long since
+  closed) as if it were the standing rationale. They now point at
+  `catgraph-physics/README.md`, "Dependencies", which is the live one.
+
 ## [workspace-v0.9.0] - 2026-08-04
 
 ### Added

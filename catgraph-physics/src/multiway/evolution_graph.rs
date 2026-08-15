@@ -335,6 +335,25 @@ impl<S, T> MultiwayEvolutionGraph<S, T> {
             .get(id)
             .is_some_and(|edges| edges.len() > 1)
     }
+
+    /// Every node ID, in the canonical order `(step, branch_id)` ascending.
+    ///
+    /// `nodes` is a `HashMap`, so its iteration order varies between runs and
+    /// between builds. Any export that assigns *positional* indices to nodes
+    /// — and hence any score keyed by those indices — must therefore go
+    /// through this, or it is not reproducible. Used by
+    /// [`MultiwayEvolutionGraph::to_petgraph`](crate::multiway::branchial_analysis).
+    ///
+    /// `(step, branch_id)` rather than the derived field order because `step`
+    /// is the semantically meaningful major key: the export then lists the
+    /// evolution front by front. It also matches the existing sort in
+    /// [`Self::find_cycles_across_branches`].
+    #[cfg(feature = "rustworkx")]
+    pub(super) fn node_ids_sorted(&self) -> Vec<MultiwayNodeId> {
+        let mut ids: Vec<MultiwayNodeId> = self.nodes.keys().copied().collect();
+        ids.sort_unstable_by_key(|id| (id.step, id.branch_id.0));
+        ids
+    }
 }
 
 impl<S: Hash, T: Clone> MultiwayEvolutionGraph<S, T> {

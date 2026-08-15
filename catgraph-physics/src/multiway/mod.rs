@@ -12,8 +12,9 @@
 
 pub mod branchial;
 // petgraph/rustworkx-core graph algorithms (coloring, k-core, articulation
-// points) — gated so `--no-default-features` drops the rustworkx-core → ndarray
-// chain, matching the slim-build opt-out the sibling crates offer (issue #10).
+// points, betweenness / Katz centrality) — gated so `--no-default-features`
+// drops the rustworkx-core → ndarray chain, matching the slim-build opt-out the
+// sibling crates offer. Rationale: `catgraph-physics/README.md`, "Dependencies".
 #[cfg(feature = "rustworkx")]
 pub mod branchial_analysis;
 // nalgebra dense-Laplacian eigendecomposition — gated so `--no-default-features`
@@ -32,6 +33,7 @@ pub use branchial::{
 #[cfg(feature = "rustworkx")]
 pub use branchial_analysis::{
     branchial_articulation_points, branchial_coloring, branchial_core_numbers,
+    multiway_betweenness, multiway_katz,
 };
 // spectral re-export — gated with the dense-Laplacian module above (issue #43).
 #[cfg(feature = "spectral")]
