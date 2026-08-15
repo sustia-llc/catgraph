@@ -39,11 +39,22 @@ internal-bench = []
 #     against the same corpora and buckets its pins the same way (#57 a1).
 # Opt-in only (NOT in `default`).
 internal-probes = []
-# `serde` adds `Serialize`/`Deserialize` derives on the term surface
-# (`PropExpr`, `Presentation`, `PresentedProp`, `NormalizeEngine`,
-# `NormalizeResult`, `SfgGenerator`). Off by default — zero-dep default build
-# preserved. Terms are the machine-persistence representation of morphisms
-# (feeds #72/#73). Deserialization trusts the arity invariant (see `Presentation`).
+# `serde` adds `Serialize`/`Deserialize` derives on the persistence surface:
+#   * terms — `PropExpr`, `ColoredExpr`, `Presentation`, `PresentedProp`,
+#     `NormalizeEngine`, `NormalizeResult`, `SfgGenerator`;
+#   * rewrite traces (#249) — `RewriteStep`, `RewriteOutcome`;
+#   * the content-equality key (#255) — `ContentKey`.
+# Off by default: the feature adds no dependency to the default build. That is
+# NOT the same as a serde-free default graph — `serde` is already reachable
+# transitively via `rust_decimal` (`cargo tree -e normal -i serde`); what this
+# gates is *this crate's* own edge and the derives. Terms are the
+# machine-persistence representation of morphisms (feeds #72/#73).
+# Deserialization is a trusted path throughout, at boundaries documented
+# per type: it never re-runs the constructor's checks. `RewriteStep` is the
+# exception that proves it — `replay` re-derives every step against the
+# running content, which is why that derive needs no validator of its own.
+# `RewriteRule` deliberately carries NO derives: its four `new` conditions are
+# never re-checked, so a rule is rebuilt from its persisted `(lhs, rhs)` pair.
 serde = ["dep:serde"]
 
 [dependencies]
