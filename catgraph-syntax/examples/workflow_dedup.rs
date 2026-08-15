@@ -306,6 +306,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     // * **serde does not re-run `check`** — a `ColoredExpr` rebuilt from a
     //   document is trusted, not validated. Re-validate untrusted input by
     //   rebuilding through `ColoredExpr::new`.
+    // * **the key itself round-trips** under catgraph-applied's off-by-default
+    //   `serde` feature (#255), so a table like this one can be persisted rather
+    //   than rebuilt on every start. Three caveats travel with that, and the
+    //   capability is the easy half:
+    //   - it is a **key, not a term**. Deserialization does not re-run
+    //     `canonical_key`, and nothing could — the content is not carried. A
+    //     hand-crafted document can therefore be a key of no content at all.
+    //     Round-tripping a value this crate produced is sound; that is the
+    //     whole contract.
+    //   - the serialized shape is the **private field layout**, so it is not a
+    //     stable wire format across crate versions. Persist keys as a cache
+    //     under a version the consumer controls, or recompute on load.
+    //   - still **not `Ord`** — see above. Persistence adds storage, not
+    //     ordering.
     let mut table: HashMap<_, Vec<&str>> = HashMap::new();
     for (name, workflow) in &variants {
         table
