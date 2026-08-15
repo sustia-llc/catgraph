@@ -312,15 +312,22 @@ impl<G: PropSignature> Free<G> {
 /// transpositions in the order performed. `adjacent_swaps(p)[i] = t` means the
 /// `i`-th swap exchanged positions `t` and `t + 1`.
 ///
-/// This is the shared decomposition core behind all three call sites:
-/// [`crate::mat_to_sfg`]'s `permutation_sfg` (which maps each `t` to a braid
-/// layer `id_t ⊗ σ ⊗ id_{k-t-2}`, in swap order) and
-/// [`presentation::smc_nf`]'s `decompose_braid` + `canonicalize_run` (which
-/// build `Layer<G>` values from the REVERSED sequence — their perms are
-/// output-indexed, so the sort word undoes the braid and its reversal
-/// rebuilds it). `O(k²)`
-/// swaps for `k = perm.len()`; the empty vector is returned when `perm` is
-/// already sorted (including `k ≤ 1`). Applying the returned swaps to `perm`
+/// This is the shared decomposition core behind all four call sites, which
+/// split by how their perm is indexed:
+///
+/// - **Input-indexed, consumed forward** — [`crate::mat_to_sfg`]'s
+///   `permutation_sfg` and `PropExpr`'s
+///   [`SymmetricMonoidalMorphism::from_permutation`], which map each `t` to a
+///   braid layer `id_t ⊗ σ ⊗ id_{k-t-2}` in swap order (the first over
+///   [`SignalFlowGraph`](crate::sfg::SignalFlowGraph), the second over
+///   [`PropExpr`]; same network, same convention).
+/// - **Output-indexed, consumed REVERSED** — [`presentation::smc_nf`]'s
+///   `decompose_braid` + `canonicalize_run`, which build `Layer<G>` values from
+///   the reversed sequence: their perms say which *input* each output position
+///   holds, so the sort word undoes the braid and its reversal rebuilds it.
+///
+/// `O(k²)` swaps for `k = perm.len()`; the empty vector is returned when `perm`
+/// is already sorted (including `k ≤ 1`). Applying the returned swaps to `perm`
 /// left-to-right yields the ascending sort.
 pub(crate) fn adjacent_swaps(perm: &[usize]) -> Vec<usize> {
     let k = perm.len();
@@ -383,14 +390,70 @@ impl<G: PropSignature> Monoidal for PropExpr<G> {
 }
 
 impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
-    /// Return a `PropExpr` representing the given permutation on `n` wires.
+    /// The pure-braiding morphism `n → n` realizing the permutation `p`, as a
+    /// network of adjacent transpositions.
     ///
-    /// **WARNING — PLACEHOLDER:** This method returns `Identity(n)` for any
-    /// permutation `p`, which does **NOT** preserve the permutation's action
-    /// on wires. See the function body for the rationale. Callers that need
-    /// a faithful permutation representation should use
-    /// `MatR::permutation_matrix` via the `Mat(R)` prop, which encodes the
-    /// permutation directly as a matrix and bypasses `PropExpr` entirely.
+    /// **Convention:** a wire entering at position `i` exits at position
+    /// `perm[i] = p.apply(i)` — the perm is *input-indexed*. Under the functor
+    /// `S` of F&S Thm 5.53 ([`crate::sfg_to_mat`]) the result is therefore the
+    /// permutation matrix with `entries[i][p.apply(i)] = 1`, i.e. exactly
+    /// [`MatR::permutation_matrix`](crate::mat::MatR::permutation_matrix); the
+    /// two are checked against each other over all permutations of `n = 3` and
+    /// `n = 4` in `tests/prop.rs` ([#252]).
+    ///
+    /// **Construction:** `perm` is bubble-sorted into ascending order by the
+    /// shared `adjacent_swaps` core, and each adjacent swap at position `t`
+    /// becomes one braid layer `Identity(t) ⊗ Braid(1, 1) ⊗ Identity(n-t-2)`,
+    /// composed in the swap order (input side first). `O(n²)` layers for `n`
+    /// wires; the identity permutation (including `n ≤ 1`) sorts with no swaps
+    /// and yields `Identity(n)`.
+    ///
+    /// Those layers are `O(n²)` *deep*, not merely `O(n²)` many: the result is a
+    /// left-nested `Compose` spine, and every consumer walks it recursively
+    /// (`sfg_to_mat`, `content_of`'s builder, and the derived `Drop`/`PartialEq`
+    /// /`Hash`). A few hundred wires is enough to overflow a default stack. This
+    /// is the same shape `permutation_sfg` already produces, and bounding arity
+    /// magnitude remains the caller's obligation
+    /// ([#197](https://github.com/sustia-llc/catgraph/issues/197)) — noted here
+    /// because a layer *count* reads as a cost note and this one is also a depth.
+    ///
+    /// The sibling construction is `permutation_sfg` in [`crate::mat_to_sfg`],
+    /// which builds the same network over [`SignalFlowGraph`] from the same
+    /// core and the same input-indexed convention. [`presentation::smc_nf`]'s
+    /// `decompose_braid` consumes the core REVERSED instead, because its perms
+    /// are output-indexed — see the `adjacent_swaps` doc comment.
+    ///
+    /// `types` contributes only its length: objects of a prop are natural
+    /// numbers (encoded `Vec<()>`), so there is no color to place on one side
+    /// or the other. `types_as_on_domain` is accordingly ignored, matching
+    /// every single-sorted impl in this crate ([`MatR`](crate::mat::MatR),
+    /// [`MatKron`](crate::mat_kron::MatKron)); the result is an endomorphism
+    /// of `n`, so both sides carry the same object either way.
+    ///
+    /// **This is not the whole workspace's convention, and the difference is a
+    /// direction, not an arity.** The core crate's cospan family *honours* the
+    /// flag as an inversion — `Cospan::from_permutation` computes
+    /// `if types_as_on_domain { p.inv() } else { p }` so that
+    /// `from(p₁) ; from(p₂) = from(p₁ ; p₂)` (`catgraph/src/cospan.rs:501`), and
+    /// `Span` and `FrobeniusMorphism` follow it. So generic code calling
+    /// `M::from_permutation(p, types, true)` gets `p` on `PropExpr`/`MatR` and
+    /// `p⁻¹` on `Cospan`/`Corel`. Ignoring the flag here is forced rather than
+    /// chosen: `MatR` ignores it, and the two must agree for the `S`-functor
+    /// square `sfg_to_mat(from_permutation(p)) = MatR::from_permutation(p)` to
+    /// hold — which the exhaustive oracle checks. Do not "fix" this impl to
+    /// honour the flag without moving `MatR` with it.
+    ///
+    /// [`SignalFlowGraph`]: crate::sfg::SignalFlowGraph
+    /// [#252]: https://github.com/sustia-llc/catgraph/issues/252
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::Composition`] if `p.len() != types.len()`.
+    ///
+    /// The layer composition can in principle also return
+    /// [`CatgraphError::CompositionSizeMismatch`], but every layer is built at
+    /// width `n` against a running term of width `n`, so it cannot occur; the
+    /// `?` mirrors `permutation_sfg`.
     fn from_permutation(
         p: Permutation,
         types: &[()],
@@ -405,19 +468,98 @@ impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
                 ),
             });
         }
-        // F&S 2018 does not give a canonical decomposition of arbitrary permutations
-        // into braids of the free prop; a faithful implementation would compute a
-        // Bubblesort-style decomposition using the `permutations` crate's cycle
-        // structure. We return Identity(n) — explicitly documenting that
-        // this does NOT preserve the permutation's action. Callers that need faithful
-        // permutation representations should use `MatR::permutation_matrix` directly
-        // via the Mat(R) prop, which bypasses PropExpr entirely.
-        Ok(PropExpr::Identity(n))
+        // Input-indexed: the wire at position i is routed to position perm[i].
+        let perm: Vec<usize> = (0..n).map(|i| p.apply(i)).collect();
+        let mut expr = PropExpr::Identity(n);
+        for t in adjacent_swaps(&perm) {
+            // A swap at t exchanges positions t and t+1 of an n-element array,
+            // so t + 1 < n and the right-hand identity has width n - t - 2 ≥ 0.
+            // Both subtractions are `checked_` so that a future change to
+            // `adjacent_swaps` can only surface as a loud panic on a stated
+            // invariant, never as a wrapped (release) or differently-panicking
+            // (debug) width — the arithmetic itself cannot be slipped past.
+            let right = n
+                .checked_sub(t)
+                .and_then(|rest| rest.checked_sub(2))
+                .expect("invariant: adjacent_swaps only emits t with t + 1 < n, so t + 2 <= n");
+            let layer = Free::<G>::tensor(
+                Free::<G>::tensor(Free::identity(t), Free::braid(1, 1)),
+                Free::identity(right),
+            );
+            expr = Free::<G>::compose(expr, layer)?;
+        }
+        Ok(expr)
     }
 
+    /// Permute the wires on one side of `self`, in place: postcompose a
+    /// braiding onto the codomain (`of_codomain = true`) or precompose one onto
+    /// the domain (`of_codomain = false`).
+    ///
+    /// Source and target *counts* are invariant either way — the spliced
+    /// braiding is an endomorphism of the permuted side's arity.
+    ///
+    /// # Which side gets `p` and which gets `p.inv()`
+    ///
+    /// The semantics of record are [`MatR`](crate::mat::MatR)'s `permute_side`:
+    /// *right-multiply by `P` to permute columns (codomain side); left-multiply
+    /// by `Pᵀ` to permute rows (domain side)*. `MatR`'s composition **is**
+    /// `matmul` and [`sfg_to_mat`](crate::sfg_to_mat) sends `Compose(f, g)` to
+    /// `S(f).matmul(S(g))`, so `Compose(_, b)` is right-multiplication by `b`
+    /// and `Compose(b, _)` is left-multiplication by it. With
+    /// `P = MatR::permutation_matrix(p)` — exactly what
+    /// [`from_permutation`](SymmetricMonoidalMorphism::from_permutation)
+    /// realizes under `S` — that reads:
+    ///
+    /// - **codomain:** `self ; from_permutation(p)` (`self · P`)
+    /// - **domain:** `from_permutation(p.inv()) ; self` (`Pᵀ · self`)
+    ///
+    /// The domain side takes `p.inv()` because `Pᵀ = P⁻¹` for a permutation
+    /// matrix, and `permutation_matrix` is the *only* thing this impl can
+    /// splice: `MatR`'s `Pᵀ` has `entries[p.apply(i)][i] = 1`, while
+    /// `permutation_matrix(p.inv())` has `entries[i][p.inv().apply(i)] = 1` —
+    /// substituting `i = p.apply(j)` turns the second into the first, so they
+    /// are the same matrix. **The two sides are therefore not symmetric**, and
+    /// passing `p` on both would silently transpose one of them.
+    ///
+    /// The inversion is applied to the *permutation*, never to
+    /// `types_as_on_domain`:
+    /// [`from_permutation`](SymmetricMonoidalMorphism::from_permutation)
+    /// deliberately ignores that flag so that it agrees with `MatR`, and the
+    /// `S`-functor square depends on that agreement. A constant is passed for
+    /// it below to keep the flag visibly inert.
+    ///
+    /// # Cost
+    ///
+    /// One
+    /// [`from_permutation`](SymmetricMonoidalMorphism::from_permutation)
+    /// network per call: `O(n²)` braid layers for `n` wires on the permuted
+    /// side. Those layers are `O(n²)` **deep**, not merely `O(n²)` many — the
+    /// same spine hazard `from_permutation` documents, since the layers form a
+    /// left-nested `Compose` spine that every consumer walks recursively
+    /// (`sfg_to_mat`, `content_of`'s builder, and the derived `Drop` /
+    /// `PartialEq` / `Hash`). A few hundred wires is enough to overflow a
+    /// default stack; bounding arity magnitude remains the caller's obligation
+    /// ([#197](https://github.com/sustia-llc/catgraph/issues/197)).
+    ///
+    /// # Length mismatch
+    ///
+    /// The trait signature is non-fallible, so a `p` whose length does not
+    /// match the permuted side's arity — a caller bug — leaves `self`
+    /// **unchanged** rather than panicking, matching `MatR`'s defensive no-op.
+    ///
+    /// # Oracle
+    ///
+    /// The `S`-functor square
+    /// `sfg_to_mat(f.permute_side(p, side)) == sfg_to_mat(f).permute_side(p, side)`
+    /// is asserted for both values of `side` over every permutation of `n = 3`
+    /// and `n = 4` in `tests/prop.rs`
+    /// ([#252](https://github.com/sustia-llc/catgraph/issues/252)). Before that
+    /// fix this method spliced `PropExpr::Braid(0, n)` — which is `Identity(n)`,
+    /// as `presentation::smc_nf`'s Step 0 rewrite states outright — so every
+    /// call was a silent no-op.
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool) {
-        // Precompose (domain side) or postcompose (codomain side) with a
-        // braiding block of the appropriate arity. Source/target counts
+        // Precompose (domain side) or postcompose (codomain side) with the
+        // braiding network of the appropriate arity. Source/target counts
         // remain invariant because braids are endomorphisms.
         let n = if of_codomain {
             self.target()
@@ -430,7 +572,17 @@ impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
             // so we leave `self` unchanged (defensive) rather than panic.
             return;
         }
-        let braid: PropExpr<G> = PropExpr::Braid(0, n);
+        // Codomain side postcomposes `P`; domain side precomposes `Pᵀ = P⁻¹`,
+        // which is `from_permutation(p.inv())` — see the doc comment. The
+        // inversion has to be spelled out here: `from_permutation` ignores
+        // `types_as_on_domain`, so a constant is passed for it.
+        let perm = if of_codomain { p.clone() } else { p.inv() };
+        let types = as_object(n);
+        let braid: PropExpr<G> =
+            <Self as SymmetricMonoidalMorphism<()>>::from_permutation(perm, &types, false).expect(
+                "invariant: from_permutation's only error is a p.len() != types.len() mismatch, \
+                 and p.len() == n == types.len() was just checked (p.inv() preserves length)",
+            );
         let old = std::mem::replace(self, PropExpr::Identity(0));
         *self = if of_codomain {
             PropExpr::Compose(Box::new(old), Box::new(braid))
