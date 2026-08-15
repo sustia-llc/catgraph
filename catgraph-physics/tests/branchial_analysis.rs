@@ -322,10 +322,21 @@ mod proptests {
             let coloring = branchial_coloring(&branchial);
             let cores = branchial_core_numbers(&branchial);
 
+            // Presence is asserted BEFORE the comparison. `coloring.get(a)`
+            // returning `None` would make a `prop_assert_ne!` against
+            // `Some(_)` pass vacuously, and these fixtures are the first to
+            // contain isolated nodes (fixture 0 is deliberately sparse and
+            // disconnected), so a future regression that dropped nodes from
+            // `branchial_coloring` would slip through silently.
             for (a, b) in &branchial.edges {
+                prop_assert!(
+                    coloring.contains_key(a) && coloring.contains_key(b),
+                    "fixture {}: coloring must cover both endpoints of every edge",
+                    i
+                );
                 prop_assert_ne!(
-                    coloring.get(a),
-                    coloring.get(b),
+                    coloring[a],
+                    coloring[b],
                     "fixture {}: adjacent nodes must have different colors",
                     i
                 );
@@ -337,7 +348,14 @@ mod proptests {
                     .iter()
                     .filter(|(a, b)| *a == node || *b == node)
                     .count();
-                let core = cores.get(&node).copied().unwrap_or(0);
+                // Same reasoning: `unwrap_or(0)` would default a *missing*
+                // node to a value that satisfies `core <= degree` for free.
+                prop_assert!(
+                    cores.contains_key(&node),
+                    "fixture {}: core numbers must cover every node, including isolated ones",
+                    i
+                );
+                let core = cores[&node];
                 prop_assert!(
                     core <= degree,
                     "fixture {}: core number {} exceeds degree {}",

@@ -24,11 +24,33 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
     index-keyed score with it.
   - **`multiway_betweenness(graph, normalized)`** — branching-junction load
     via Brandes, endpoints excluded, parallelised through rustworkx-core's
-    `CondIterator` above 50 nodes.
+    `CondIterator` at or above 50 nodes **when the `parallel` feature is on**.
+    This is the crate's first direct rayon call site, so the threshold is
+    `usize::MAX` under `--no-default-features`: an ungated `CondIterator`
+    would spawn rayon work on a single-threaded or WASI build and fail at
+    *runtime* on a no-threads wasm target, and only for graphs large enough
+    to cross the threshold. ⚠ The parallel path is **not bit-reproducible** —
+    rustworkx accumulates per-source partials from rayon workers, so f64
+    summation order varies run to run; the node *ordering* is canonical
+    either way. Build without `parallel` for pinnable scores.
   - **`multiway_katz(graph, alpha, max_iter, tol)`** — α-damped inbound path
     count, L2-normalized. Returns `Option`, so rustworkx-core's
     non-convergence / zero-norm case is surfaced rather than collapsed to
-    zeros or an empty map.
+    zeros or an empty map — except for an **empty** graph, which scores
+    `Some(empty)` to match `multiway_betweenness` (rustworkx's convergence
+    test is `0.0 < 0.0` there, so it would otherwise report a
+    non-convergence that never happened).
+  - ⚠ **The DAG grading that makes Katz terminate is a convention, not an
+    invariant.** `add_merge_edge` validates neither endpoint nor step
+    ordering, so a same-step or backward edge is constructible — and its own
+    documented workflow permits one, since `add_fork` leaves every step-`t+1`
+    sibling active. Such an edge makes the adjacency non-nilpotent; if
+    `ρ(A) ≥ 1/alpha` the iteration diverges and returns `None`. On a graph
+    carrying merge edges, read `None` as "α too large" at least as readily as
+    "needs more iterations". Relatedly, `to_petgraph` **drops** edges whose
+    endpoints are not registered nodes, so on such a graph the centralities
+    are computed over a different topology than `edge_count()` reports; both
+    behaviours are now documented at the API.
   - **Substitution: Katz, not eigenvector centrality.** The issue asked for
     betweenness *and eigenvector* centrality. **Eigenvector centrality is
     undefined on a multiway evolution graph** and is deliberately not

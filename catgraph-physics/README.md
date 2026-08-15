@@ -47,10 +47,21 @@ cargo bench -p catgraph-physics --bench branchial_bench
 
 ## WASM support
 
-`[features] parallel` (default-on) is a pass-through of `catgraph/parallel`.
-This crate has no direct rayon call sites yet; the feature wires the
-upstream toggle through so `--no-default-features` produces a
-single-threaded catgraph dep transitively. `--no-default-features` also
+`[features] parallel` (default-on) is a pass-through of `catgraph/parallel`,
+and it wires the upstream toggle through so `--no-default-features` produces a
+single-threaded catgraph dep transitively.
+
+Since #161 this crate also has **one direct rayon call site**:
+`multiway_betweenness` hands the Brandes sweep to rustworkx-core's
+`CondIterator` at ≥ 50 nodes. It is gated — with `parallel` off the threshold
+is `usize::MAX`, so the sweep is always sequential. That gate matters for more
+than tidiness: on a no-threads wasm target an ungated `CondIterator` would fail
+at *runtime* on rayon's global pool init, and only for graphs large enough to
+cross the threshold. Note the parallel path is also not bit-reproducible
+(rustworkx accumulates partials from rayon workers, so f64 summation order
+varies); build without `parallel` if you need pinnable scores.
+
+`--no-default-features` also
 drops the `rustworkx` feature (the `rustworkx-core` → `petgraph` chain) and
 the `spectral` feature (the nalgebra stack behind `BranchialSpectrum`),
 which is what makes the plain `wasm32-wasip1` build slim. Both WASI
