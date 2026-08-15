@@ -13,6 +13,10 @@ hand; this recomputes the invariant set instead:
      is `v<workspace version>` (catgraph-testutil's perpetual `[Unreleased]`
      has no link line and is naturally exempt).
   3. catgraph-magnitude/README.md's status line names the workspace version.
+  4. The root README's tag-range line ends at `v<workspace version>`. Added
+     2026-08-15 from the v0.13.0 release review: it is hand-maintained and
+     version-bearing like (3), it was simply the one such site the guard did
+     not cover, and "updated correctly this time" is not a mechanism.
 
 Run from the repo root, or pass the root as argv[1].
 """
@@ -57,6 +61,17 @@ def main() -> int:
     if f"workspace version `{version}`" not in magnitude_readme:
         errors.append(
             f"catgraph-magnitude/README.md: status line does not name {version!r}"
+        )
+
+    root_readme = (root / "README.md").read_text(encoding="utf-8")
+    tag_range = re.search(r"tags v[0-9.]+ → v([0-9.]+)\)", root_readme)
+    if not tag_range:
+        errors.append(
+            "README.md: cannot find the 'tags v… → v…)' range line the guard pins"
+        )
+    elif tag_range.group(1) != version:
+        errors.append(
+            f"README.md: tag range ends at v{tag_range.group(1)}, not v{version}"
         )
 
     if errors:
