@@ -1517,7 +1517,7 @@ Both BV 2025 verifications pass at v0.1.0:
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.12.0...HEAD
 [workspace-v0.11.0]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...v0.11.0
 [workspace-v0.10.0]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...v0.10.0
 [workspace-v0.9.0]: https://github.com/sustia-llc/catgraph/compare/v0.8.0...v0.9.0
