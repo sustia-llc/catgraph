@@ -13,7 +13,7 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
 | `hypergraph/` | Hypergraph DPO rewriting, evolution tracking, categorical span/cospan bridges, lattice gauge theory |
 | `multiway/` | Generic multiway (non-deterministic) evolution graphs, branchial foliation, Ollivier-Ricci curvature, Wasserstein transport |
 | `multiway/branchial_spectrum.rs` | Graph Laplacian eigendecomposition: algebraic connectivity (λ₂), spectral gap, Fiedler vector, spectral clustering |
-| `multiway/branchial_analysis.rs` | Graph algorithms via rustworkx-core: greedy coloring, k-core decomposition, articulation points |
+| `multiway/branchial_analysis.rs` | Graph algorithms via rustworkx-core: greedy coloring, k-core decomposition, articulation points; betweenness and Katz centrality on multiway evolution graphs |
 
 ## Dependencies
 
@@ -25,10 +25,16 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
 - `petgraph` + `rustworkx-core` — graph algorithms, gated behind the default-on
   `rustworkx` feature (gates `multiway::branchial_analysis`; opt out with
   `--no-default-features` to drop the `rustworkx-core` → `petgraph` chain).
-  Retained deliberately, and not tracked for replacement: greedy coloring and
-  k-core are not the kind of short, self-contained pass the toposort and
-  connectivity sites turned out to be (#220). The feature gate that makes the
-  slim build possible landed in #10.
+  Retained deliberately, and not tracked for replacement: greedy coloring,
+  k-core, and the Brandes betweenness sweep are not the kind of short,
+  self-contained pass the toposort and connectivity sites turned out to be
+  (#220). This bullet is the live rationale for the dependency; the
+  `Cargo.toml` comments point here rather than at the closed issue that
+  originally added the gate.
+
+  `rustworkx-core` is *additionally* a `[dev-dependencies]` entry (#163), for
+  its seeded topology generators in proptest and bench fixtures. That edge is
+  dev-only and does not widen the published dependency tree.
 
 ## Build
 
@@ -36,6 +42,7 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
 cargo test -p catgraph-physics
 cargo clippy -p catgraph-physics -- -W clippy::pedantic
 cargo bench -p catgraph-physics --bench wasserstein_bench
+cargo bench -p catgraph-physics --bench branchial_bench
 ```
 
 ## WASM support

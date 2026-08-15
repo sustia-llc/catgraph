@@ -3,10 +3,11 @@
     clippy::cast_possible_wrap,
 )]
 // Exercises both the rustworkx-gated `branchial_coloring` / `branchial_core_numbers`
-// (issue #10) and the spectral-gated `BranchialSpectrum` (issue #43), so it needs
+// and the spectral-gated `BranchialSpectrum` (issue #43), so it needs
 // both features; excluded from `--no-default-features` builds and from builds that
 // enable only one of the two. Spectrum-only coverage lives in the inline unit tests
-// in `branchial_spectrum.rs`.
+// in `branchial_spectrum.rs`. Why the `rustworkx` gate exists at all: see
+// `catgraph-physics/README.md` "Dependencies".
 #![cfg(all(feature = "rustworkx", feature = "spectral"))]
 
 //! Integration tests for branchial analysis on real multiway evolutions.

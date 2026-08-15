@@ -12,6 +12,40 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
+- **Multiway DAG centrality**
+  ([#161](https://github.com/sustia-llc/catgraph/issues/161), `rustworkx`
+  feature, no new dependencies) — in `multiway::branchial_analysis`:
+  - **`MultiwayEvolutionGraph::to_petgraph`** — the directed sibling of
+    `BranchialGraph::to_petgraph`, returning `(DiGraph<MultiwayNodeId, ()>,
+    Vec<MultiwayNodeId>)` where `order[i]` is the node at `NodeIndex::new(i)`.
+    Node order is **canonical `(step, branch_id)` ascending**, not `HashMap`
+    order: the evolution graph stores nodes in a map, so an unsorted export
+    would give a different index assignment on every run and move every
+    index-keyed score with it.
+  - **`multiway_betweenness(graph, normalized)`** — branching-junction load
+    via Brandes, endpoints excluded, parallelised through rustworkx-core's
+    `CondIterator` above 50 nodes.
+  - **`multiway_katz(graph, alpha, max_iter, tol)`** — α-damped inbound path
+    count, L2-normalized. Returns `Option`, so rustworkx-core's
+    non-convergence / zero-norm case is surfaced rather than collapsed to
+    zeros or an empty map.
+  - **Substitution: Katz, not eigenvector centrality.** The issue asked for
+    betweenness *and eigenvector* centrality. **Eigenvector centrality is
+    undefined on a multiway evolution graph** and is deliberately not
+    shipped. The graph is a step-graded DAG, so its adjacency is nilpotent
+    and its spectral radius is 0 — there is no dominant eigenvector for power
+    iteration to find. rustworkx-core's `eigenvector_centrality` returns
+    `Ok(None)` at its defaults; forced to terminate, it reports a *sink
+    indicator*, scoring the root of a star fork at ≈ 0 — the exact branching
+    junction the issue wanted measured. Katz's `+ β` term makes the iteration
+    terminate on a nilpotent adjacency and floors a source at β instead. All
+    three behaviours are pinned by
+    `katz_floors_the_root_where_eigenvector_centrality_degenerates`. The
+    rationale is also in `multiway_katz`'s rustdoc, where a future reader
+    will actually meet it.
+  - Betweenness is verified against a hand-computed diamond (fork + merge),
+    both raw and normalized.
+
 - **Widened test / bench topologies via seeded rustworkx-core generators**
   ([#163](https://github.com/sustia-llc/catgraph/issues/163)) —
   `rustworkx-core` is now also a **dev-dependency**; the published dependency
@@ -44,6 +78,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
     generators supply *topology only*. Numeric fixtures stay on
     `catgraph-testutil`'s LCG, whose stream is byte-identity-pinned (#33);
     nothing LCG-derived changed.
+
+### Changed
+
+- **Dependency comments repointed off the closed issue #10**
+  ([#161](https://github.com/sustia-llc/catgraph/issues/161)) — the workspace
+  `Cargo.toml` `rustworkx-core` line and this crate's `rustworkx` /
+  `spectral` feature comments cited #10 (the feature-gate work, long since
+  closed) as if it were the standing rationale. They now point at
+  `catgraph-physics/README.md`, "Dependencies", which is the live one.
 
 ## [workspace-v0.9.0] - 2026-08-04
 

@@ -16,16 +16,17 @@ default = ["parallel", "rustworkx", "spectral"]
 # be single-threaded too.
 parallel = ["catgraph/parallel"]
 # `rustworkx` gates `multiway::branchial_analysis` — the petgraph + rustworkx-core
-# graph algorithms (greedy coloring, k-core, articulation points) on branchial
-# graphs. Default-on for source-compatibility; opt out via `default-features =
-# false` to drop the rustworkx-core → petgraph + ndarray chain for slim / WASM
-# builds (issue #10; parity with the sibling crates' slim-build opt-out).
+# graph algorithms: greedy coloring, k-core, and articulation points on branchial
+# graphs, plus betweenness / Katz centrality on multiway evolution graphs (#161).
+# Default-on for source-compatibility; opt out via `default-features = false` to
+# drop the rustworkx-core → petgraph + ndarray chain for slim / WASM builds.
+# Rationale: README.md, "Dependencies".
 rustworkx = ["dep:rustworkx-core", "dep:petgraph"]
 # `spectral` gates `multiway::branchial_spectrum` — the dense-Laplacian
 # eigendecomposition (`SymmetricEigen`: algebraic connectivity λ₂, spectral gap,
 # Fiedler vector, spectral clustering). Default-on for source-compatibility; opt
 # out via `default-features = false` to drop the nalgebra stack for slim / WASM
-# builds (issue #43; companion to the #10 rustworkx gate).
+# builds (issue #43; companion to the `rustworkx` gate above).
 spectral = ["dep:nalgebra"]
 
 [dependencies]

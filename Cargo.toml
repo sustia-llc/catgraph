@@ -41,7 +41,10 @@ catgraph-testutil  = { path = "catgraph-testutil" }
 # core+applied; `optional` is illegal here either way.)
 nalgebra       = "0.35"   # field-bounded paths only
 permutations   = "0.1"    # backs braiding — the owned Arrow algebra (arrow_seam) has none
-rustworkx-core = "0.18"   # `catgraph-physics` only — coloring + k-core, behind its `rustworkx` feature gate (#10)
+# `catgraph-physics` only — coloring / k-core / articulation points / centrality,
+# behind its default-on `rustworkx` gate. Rationale: catgraph-physics/README.md,
+# "Dependencies". Also a dev-dep there for seeded topology generators (#163).
+rustworkx-core = "0.18"
 # Disjoint sets, the whole graph substrate `catgraph` and `catgraph-applied` need:
 # cospan/corel pushouts and Temperley-Lieb composition connectivity. The toposort
 # and connected-components sites that used to justify a graph crate are now local
