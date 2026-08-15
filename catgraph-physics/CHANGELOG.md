@@ -10,6 +10,41 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **Widened test / bench topologies via seeded rustworkx-core generators**
+  ([#163](https://github.com/sustia-llc/catgraph/issues/163)) —
+  `rustworkx-core` is now also a **dev-dependency**; the published dependency
+  tree is unchanged (it was already an optional lib dep behind the default-on
+  `rustworkx` feature).
+  - **The insertion point is `BranchialGraph`, not `MultiwayEvolutionGraph`.**
+    The issue proposed generating topologies at the evolution-graph level, but
+    that is not constructible: `MultiwayEvolutionGraph`'s fields are private
+    and its only builders are `add_root` / `add_fork` /
+    `add_sequential_step`, so every branchial cross-section it can produce is
+    a Kₙ. `BranchialGraph`'s `nodes` / `edges` are public, so a generated
+    `UnGraph` translates into one directly. The existing evolution-level
+    `arb_branched_graph` strategy is unchanged; the generated topologies are
+    siblings of it. The three pre-existing proptests are still served, because
+    what they assert (λ₂ positivity, zero-eigenvalue multiplicity, proper
+    coloring) are *branchial* properties.
+  - Seven pinned fixtures in `tests/branchial_analysis.rs`: sparse and dense
+    Erdős–Rényi, Barabási–Albert, 3-regular, path, Petersen, and a 4×6 grid —
+    covering disconnected, connected-but-incomplete, regular, and
+    heavy-tailed-degree shapes that Kₙ never reaches. A non-property test
+    (`generated_topologies_escape_the_complete_graph_regime`) pins that the
+    set is actually wider, so the new proptests cannot silently degenerate
+    back to complete graphs.
+  - New `benches/branchial_bench.rs` (`required-features = ["rustworkx",
+    "spectral"]`) with fixtures for `branchial_analysis` (coloring, k-core,
+    articulation points at n = 100 and n = 1000) and `branchial_spectrum`
+    (n = 100/200/300 — the dense `SymmetricEigen` is Θ(n³), so it stops short
+    of 1000). Fixtures only; no performance claim is made.
+  - **Determinism**: every generator seed is a pinned literal, and the
+    generators supply *topology only*. Numeric fixtures stay on
+    `catgraph-testutil`'s LCG, whose stream is byte-identity-pinned (#33);
+    nothing LCG-derived changed.
+
 ## [workspace-v0.9.0] - 2026-08-04
 
 ### Added

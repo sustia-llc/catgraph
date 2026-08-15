@@ -39,6 +39,14 @@ criterion.workspace = true
 proptest.workspace = true
 # Shared deterministic LCG for seeded bench fixtures (#33).
 catgraph-testutil.workspace = true
+# Seeded topology generators (`gnp_random_graph`, `barabasi_albert_graph`,
+# `random_regular_graph`, `path_graph`, `petersen_graph`, `grid_graph`) for
+# proptest and bench fixtures (#163). This is a *dev* edge on a crate that is
+# already an optional lib dep, so the published dep tree is unchanged; it is
+# what lets test topologies go past the star / Kₙ shapes the evolution-graph
+# builder can produce. Topology only — numeric fixtures stay on the
+# `catgraph-testutil` LCG, whose stream is byte-identity-pinned (#33).
+rustworkx-core = { workspace = true }
 
 [[bench]]
 name = "wasserstein_bench"
@@ -46,3 +54,10 @@ harness = false
 # The bench compares nalgebra `DMatrix` against the shipped `Vec` implementation,
 # so it needs the nalgebra stack (issue #43).
 required-features = ["spectral"]
+
+[[bench]]
+name = "branchial_bench"
+harness = false
+# Exercises `multiway::branchial_analysis` (rustworkx) and
+# `multiway::branchial_spectrum` (nalgebra), so it needs both gates (#163).
+required-features = ["rustworkx", "spectral"]
