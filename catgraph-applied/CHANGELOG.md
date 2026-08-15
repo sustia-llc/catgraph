@@ -94,6 +94,77 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   stops there restores `CongruenceClosure` over a stored `Structural` and
   reintroduces the same silent-default bug one slot over.
 
+### Fixed
+
+- **`PropExpr::from_permutation` now realizes the permutation instead of
+  returning the identity**
+  ([#252](https://github.com/sustia-llc/catgraph/issues/252)).
+  `<PropExpr<G> as SymmetricMonoidalMorphism<()>>::from_permutation` rejected a
+  length mismatch and then returned `PropExpr::Identity(n)` for **every**
+  correct-length permutation, discarding the permutation's action on wires. It
+  was documented as a placeholder, but it type-checks and returns `Ok`, so any
+  caller reaching it through the trait — including generic code written against
+  `SymmetricMonoidalMorphism` with no idea which carrier it lands on — silently
+  received the wrong morphism. The body is now the faithful decomposition:
+  `perm[i] = p.apply(i)` is bubble-sorted by the `adjacent_swaps` core shared
+  with `mat_to_sfg`, and each adjacent swap at position `t` contributes one
+  braid layer `Identity(t) ⊗ Braid(1, 1) ⊗ Identity(n-t-2)`, composed in swap
+  order (`O(n²)` layers).
+  - **Convention** (unchanged from the sibling `permutation_sfg` in
+    `mat_to_sfg` and from `MatR::permutation_matrix`): a wire entering at
+    position `i` exits at position `p.apply(i)`. The perm is input-indexed, so
+    no reversal is applied — unlike `presentation::smc_nf`'s `decompose_braid`,
+    whose perms are output-indexed.
+  - **Oracle.** `sfg_to_mat(from_permutation(p))` is asserted equal to
+    `MatR::permutation_matrix(&p)` for *every* permutation of `n = 3` and
+    `n = 4` (6 + 24 cases), plus named shapes at other widths. Every one of
+    those comparisons collapsed to the identity matrix under the old body.
+  - The length-mismatch rejection, its error message, and the
+    `SymmetricMonoidalMorphism` trait are all unchanged. `types_as_on_domain`
+    stays ignored, as in this crate's other single-sorted impls (`MatR`,
+    `MatKron`): objects of a prop are natural numbers, the result is an
+    endomorphism of `n`, and both sides carry the same object either way — now
+    stated in the rustdoc and pinned by a test.
+
+- **`PropExpr::permute_side` now actually permutes the requested side**
+  ([#252](https://github.com/sustia-llc/catgraph/issues/252)). The same defect
+  class as `from_permutation` above, in the sibling method of the same trait
+  impl, and found by review of that fix.
+  `<PropExpr<G> as SymmetricMonoidalMorphism<()>>::permute_side` spliced
+  `PropExpr::Braid(0, n)` — that is `σ_{0,n}`, the **identity** on `n` wires,
+  as `presentation::smc_nf`'s Step 0 rewrite (`Braid(0, n) → Identity(n)`)
+  states outright. So `f.permute_side(&p, side)` handed back `f` wrapped in a
+  vacuous composition for **every** `p`, on both sides: the same
+  silent-wrong-answer shape, reaching the same generic
+  `SymmetricMonoidalMorphism` callers. The body now splices the
+  `from_permutation` network, which is faithful as of the entry above.
+  - **Direction.** The two sides are *not* symmetric. The codomain side
+    postcomposes `from_permutation(p)`; the domain side precomposes
+    `from_permutation(p.inv())`. This follows `MatR::permute_side`, the
+    semantics of record ("right-mul by `P` permutes columns (codomain side);
+    left-mul by `Pᵀ` permutes rows (domain side)") together with
+    `sfg_to_mat`'s `Compose(f, g) → S(f).matmul(S(g))`: `Pᵀ = P⁻¹` for a
+    permutation matrix, and `permutation_matrix(p.inv())` *is* `Pᵀ`. The
+    inversion is applied to the permutation, not to `types_as_on_domain` —
+    that flag stays ignored, as above.
+  - **Oracle.** The `S`-functor square
+    `sfg_to_mat(f.permute_side(p, side)) == sfg_to_mat(f).permute_side(p, side)`
+    is asserted for **both** sides over *every* permutation of `n = 3` and
+    `n = 4` (12 + 48 cases), against a deliberately non-symmetric, invertible
+    witness `f` — a symmetric or identity `f` can hide an inverted convention.
+    The right-hand side runs the faithful `MatR::permute_side`, so the square
+    cannot pass under a flipped direction. A direct `assert_ne!` against the
+    input covers the no-op itself; the only prior test asserted that source and
+    target were unchanged, which a no-op satisfies vacuously.
+  - **Cost.** One `from_permutation` network per call: `O(n²)` braid layers,
+    and `O(n²)` *deep* — the same left-nested `Compose` spine hazard
+    `from_permutation` documents. Bounding arity magnitude stays the caller's
+    obligation ([#197](https://github.com/sustia-llc/catgraph/issues/197)).
+  - The defensive no-op on a length mismatch (a caller bug, and the trait
+    signature is non-fallible) is unchanged, and now pinned by a test on both
+    sides. `MatR`, `MatKron`, `mat_to_sfg`, `sfg_to_mat`, `adjacent_swaps`, and
+    the `SymmetricMonoidalMorphism` trait are all untouched.
+
 ## [workspace-v0.11.0] - 2026-08-10
 
 ### Changed
