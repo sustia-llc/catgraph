@@ -223,6 +223,31 @@ pub fn cost_of<G: PropSignature>(content: &Content<G>, per_gen: impl Fn(&G) -> u
 /// The two sides are parallel colored morphisms; [`RewriteRule::new`] validates
 /// that and the extra conditions the DPO step needs, so every value of this type
 /// is applicable and no rewrite site has to re-check.
+///
+/// # No serde, deliberately (feature `serde`)
+///
+/// [`RewriteStep`] and [`RewriteOutcome`] gained `Serialize` / `Deserialize`
+/// under the `serde` feature
+/// ([#249](https://github.com/sustia-llc/catgraph/issues/249)). This type did
+/// **not**, and the asymmetry is the design rather than an omission: it is
+/// exactly the sentence above. A step is re-derived at every use, so a forged
+/// one is an `Err` from [`replay`]. A rule is validated **once**, in
+/// [`RewriteRule::new`], and *nothing re-checks it afterwards* — the four
+/// conditions below are established there and then read as facts by the matcher
+/// and the DPO step. A `Deserialize` derive would hand that unchecked: an
+/// edge-free `lhs` that matches everywhere, a non-mono left interface whose
+/// pushout complement is not unique, sides that are not the colored morphisms
+/// they claim to be. Nor are the compiled fields free of the same problem —
+/// `interior` and `order` are *derived* from `lhs`, and a document that
+/// contradicts them is describing a rule that no `new` could build.
+///
+/// The supported round trip is the pair the rule was built from: persist the
+/// `(lhs, rhs)` [`ColoredExpr`]s, which do serialize (under their own documented
+/// boundary), and rebuild through [`RewriteRule::new`] at load — which re-runs
+/// all four conditions, so the rebuilt rule is as trustworthy as an in-process
+/// one. Rebuild the slice **in the same order**: a [`RewriteStep`] binds a rule
+/// *index*, not a rule identity, so a reordered slice replays a stored trace to
+/// a different endpoint (see [`replay`]).
 #[derive(Clone, Debug)]
 pub struct RewriteRule<G: PropSignature> {
     lhs: Content<G>,
@@ -497,7 +522,10 @@ impl MatchSite {
     /// is index-based against the *running* content of a replay, which is a
     /// different content at every position, so pinning it to the one content the
     /// site was enumerated from would reject legal traces. [`replay`] re-derives
-    /// each step's assignment against the state it has actually reached.
+    /// each step's assignment against the state it has actually reached — which
+    /// is also what lets a step be persisted and a `MatchSite` not: re-derivation
+    /// at use is a stronger check than a stored hash of a content the loader no
+    /// longer has (see [`RewriteStep`]'s serde section).
     #[must_use]
     pub fn into_step(self, rule: usize) -> RewriteStep {
         RewriteStep {
@@ -983,7 +1011,49 @@ pub fn apply_at<G: PropSignature>(
 /// site a caller chose itself into one, so a search driven over [`match_sites`]
 /// and [`apply_at`] produces traces of the same kind, replayable the same way
 /// ([#250](https://github.com/sustia-llc/catgraph/issues/250)).
+///
+/// # Serde (feature `serde`)
+///
+/// `Serialize` / `Deserialize` round-trip both fields
+/// ([#249](https://github.com/sustia-llc/catgraph/issues/249)), and this is the
+/// one type on the rewrite surface where a derive is safe **without** a
+/// validating constructor behind it. A step is a *claim* about where a rule
+/// fired, and [`replay`] does not take the claim on trust: it re-derives every
+/// step's assignment with the private `match_at`, against the state it has
+/// actually reached, and rejects one whose recorded hyperedges are not a convex
+/// match of the named rule *there*. So a deserialized trace is **checked, not
+/// trusted** — a hand-crafted document buys an `Err`, not a silent bad rewrite.
+/// That is why the fields may stay `pub`-less and the type still cross a process
+/// boundary: the validator is at the far end, not at construction.
+///
+/// Three things a document can still do, none of them unsound — each is a legal
+/// derivation, just not necessarily *the* one the trace was recorded from:
+///
+/// - **Name a different derivation.** Validation is relative to the `rules`
+///   slice as given, and a step binds a rule *index*, not a rule identity. A
+///   trace replayed against a differently-ordered slice may reach a different —
+///   still legal — endpoint. Persist the rules' `(lhs, rhs)` pairs alongside the
+///   trace and rebuild them in the same order (see [`RewriteRule`]).
+/// - **Mean something else against a different start.** The same binding by
+///   position applies to the *content*: `matched_edges` are indices into the
+///   running content, so a trace only says what it was recorded to say against
+///   the `start` it was recorded from. Replayed against a different well-formed
+///   start whose edge indices happen to line up, [`replay`] returns `Ok` with an
+///   unrelated endpoint and nothing marks it. **Persist the start with the
+///   trace** — a [`RewriteOutcome`] does not carry one, so a store that keeps
+///   only the outcome is the default way to meet this.
+/// - **Describe a legal derivation nobody searched for.** [`replay`] certifies
+///   that the steps compose to a rewriting step sequence modulo SMC structure
+///   (BGKSZ Thm 5.6); it says nothing about which search, if any, produced them.
+///
+/// **The serialized shape is the private field layout**, as it is for
+/// [`ContentKey`](super::content::ContentKey): no version tag is embedded, and a
+/// later version of this crate may add a field — additive by this crate's own
+/// standards, but every previously stored document would then fail to load on a
+/// missing field. Durable storage should carry a version the consumer controls,
+/// or be treated as a cache that can be rebuilt.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RewriteStep {
     rule: usize,
     matched_edges: Vec<usize>,
@@ -1005,7 +1075,61 @@ impl RewriteStep {
 
 /// What [`optimize`] found: the cheapest representative it reached, its cost
 /// against the start's, and the trace that gets there.
+///
+/// # Serde (feature `serde`)
+///
+/// `Serialize` / `Deserialize` round-trip every field
+/// ([#249](https://github.com/sustia-llc/catgraph/issues/249)). The trust
+/// boundary is **not uniform across them**, and the honest statement is
+/// per-field rather than per-type — this is a *report* on a search, and only
+/// part of a report is checkable at all:
+///
+/// - [`Self::steps`] is validated **at use**. Hand it to [`replay`] with the
+///   rules and every step is re-derived against the running content; see
+///   [`RewriteStep`].
+/// - [`Self::best`] inherits [`ColoredExpr`]'s documented boundary:
+///   deserialization does not re-run `check`, and every public entry point of
+///   this module re-validates the morphism it is handed (the private
+///   `revalidate`) precisely because of it. **A successful [`replay`] does not
+///   certify it.** Nothing in this crate compares `best` against what the trace
+///   replays to, so an edited document can keep an honest trace — `replay`
+///   returns `Ok` — and still carry an unrelated `best`. Unlike the numbers
+///   below, this one *is* exactly re-derivable: [`optimize`] builds `best` as
+///   the readback of the state its trace reaches, which is the value [`replay`]
+///   returns, so compare the two (or just use [`replay`]'s result) when `best`
+///   has to be right.
+/// - [`Self::initial_cost`], [`Self::best_cost`], [`Self::states_explored`] and
+///   [`Self::fuel_exhausted`] have **no validator anywhere in this crate**, and
+///   can have none: they are facts about a search that already happened, not
+///   properties of the data carried here. A hand-crafted document may claim any
+///   numbers it likes — a `best_cost` above its `initial_cost`, which
+///   [`optimize`] cannot produce since the start is itself a candidate; a
+///   `states_explored` unrelated to the trace; a `fuel_exhausted` that never
+///   bit. Nothing rejects them. If a number has to be right, recompute it:
+///   [`cost_of`] on the start and on the replayed endpoint re-derives both
+///   costs, and the other two are not re-derivable from the document at all.
+///
+/// Round-tripping a value this crate produced is always sound; that is the
+/// contract. For untrusted input, the checkable core is *the trace* — and only
+/// against the starting morphism it was recorded from, which **this type does
+/// not carry**: [`Self::best`] is the endpoint, and [`replay`] needs a `start` a
+/// store has to persist separately. So read a stored outcome as a trace plus a
+/// separately-kept start, replay it, and treat every other field — `best`
+/// included — as a hint until re-derived.
+///
+/// The same wire-format caveat applies as to [`RewriteStep`]: the serialized
+/// shape is the private field layout, with no version tag, so a field added in a
+/// later version would fail every stored document on load. Version durable
+/// storage yourself, or treat it as a rebuildable cache.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "G: serde::Serialize, G::Color: serde::Serialize",
+        deserialize = "G: serde::Deserialize<'de>, G::Color: serde::Deserialize<'de>"
+    ))
+)]
 pub struct RewriteOutcome<G: PropSignature> {
     best: ColoredExpr<G>,
     initial_cost: u64,
@@ -1222,6 +1346,20 @@ pub fn optimize<G: PropSignature>(
 /// is relative to `rules` **as given** — the trace binds rule *indices*, not
 /// rule identities; a different rules slice may replay to a different, still
 /// legal endpoint.
+///
+/// # Replaying a persisted trace
+///
+/// The re-validation is what makes a [`RewriteStep`] safe to deserialize
+/// ([#249](https://github.com/sustia-llc/catgraph/issues/249)), so this function
+/// is also the load-side entry point for a stored trace. The index binding above
+/// is then the thing to get right, because a store has to reconstruct the slice:
+/// [`RewriteRule`] carries no serde derives on purpose, so persist each rule's
+/// `(lhs, rhs)` [`ColoredExpr`] pair, rebuild through [`RewriteRule::new`], and
+/// **preserve the order** — a slice rebuilt in a different order is a different
+/// `rules` argument, and the same stored trace then replays to a different
+/// endpoint with no error to mark it. Only the `start` and the trace need to be
+/// trusted-then-checked; the rest of a stored [`RewriteOutcome`] is a report,
+/// with the per-field boundary documented there.
 ///
 /// # Errors
 ///

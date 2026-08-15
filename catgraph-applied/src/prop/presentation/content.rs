@@ -758,6 +758,7 @@ fn incidences(p: &Profile, node: usize) -> [Option<(usize, usize)>; 2] {
 
 /// One hyperedge under a canonical numbering.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct EdgeRecord<G> {
     label: G,
     sources: Vec<usize>,
@@ -776,6 +777,7 @@ struct EdgeRecord<G> {
 /// generator touches has no producer and takes the boundary word's letter
 /// instead.)
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct ClosedBlock<G> {
     node_count: usize,
     edges: Vec<EdgeRecord<G>>,
@@ -1137,6 +1139,61 @@ pub fn content_eq<G: PropSignature>(a: &Content<G>, b: &Content<G>) -> bool {
 
 // ---------------------------------------------------------------- canonical key
 
+/// `Vec<Option<C>>` in a shape a self-describing format can read back.
+///
+/// `Option<C>` is **not** round-trippable through JSON when `C` itself
+/// serializes as `null` — and that is exactly the monochromatic case
+/// `Color = ()`, the most common signature in this crate (`SfgGenerator`'s among
+/// them). `Some(())` and `None` both write `null`, and `null` reads back as
+/// `None`, so a key of a fully-typed content would come home with every color
+/// erased: still a valid `ContentKey` value, no longer `canonical_key(c)` for
+/// the `c` it was computed from, and unequal to a freshly computed key — the
+/// silent-drift failure [#255](https://github.com/sustia-llc/catgraph/issues/255)
+/// exists to prevent. So the slot is made explicit instead of leaning on
+/// `Option`'s representation.
+///
+/// Found by the round-trip test, not by inspection.
+#[cfg(feature = "serde")]
+mod color_slots {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    /// A node's color slot, tagged so `Untyped` and a null-serializing letter
+    /// cannot collide.
+    #[derive(Serialize, Deserialize)]
+    enum Slot<C> {
+        /// A wire no generator touches: no producer, hence no declared letter
+        /// (see [`content_of`](super::content_of)).
+        Untyped,
+        /// The letter its producer declares.
+        Typed(C),
+    }
+
+    pub(super) fn serialize<C, S>(colors: &[Option<C>], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        C: Serialize,
+        S: Serializer,
+    {
+        serializer.collect_seq(colors.iter().map(|slot| match slot {
+            Some(color) => Slot::Typed(color),
+            None => Slot::Untyped,
+        }))
+    }
+
+    pub(super) fn deserialize<'de, C, D>(deserializer: D) -> Result<Vec<Option<C>>, D::Error>
+    where
+        C: Deserialize<'de>,
+        D: Deserializer<'de>,
+    {
+        Ok(Vec::<Slot<C>>::deserialize(deserializer)?
+            .into_iter()
+            .map(|slot| match slot {
+                Slot::Untyped => None,
+                Slot::Typed(color) => Some(color),
+            })
+            .collect())
+    }
+}
+
 /// A hashable canonical form of a [`Content`], with
 /// `canonical_key(a) == canonical_key(b)` **iff** `content_eq(&a, &b)`.
 ///
@@ -1150,12 +1207,54 @@ pub fn content_eq<G: PropSignature>(a: &Content<G>, b: &Content<G>) -> bool {
 ///
 /// [`PropSignature::Color`] is not required to be `Ord`, and the key records
 /// colors, so there is no total order to derive. `Eq + Hash` is the whole
-/// contract.
+/// contract — unchanged by the serde derives below, which add persistence and
+/// not ordering. A store that needs a sort order has to impose one itself, on
+/// the serialized form or on a consumer-side wrapper.
+///
+/// # Serde (feature `serde`)
+///
+/// `Serialize` / `Deserialize` round-trip the canonical form
+/// ([#255](https://github.com/sustia-llc/catgraph/issues/255)), which is what a
+/// downstream store needs: the anchored canonicalization behind
+/// [`canonical_key`] is too subtle to reimplement faithfully, and a
+/// reimplementation that drifted would disagree *silently* — two contents the
+/// crate calls equal landing in different buckets, or worse, the reverse.
+///
+/// **It is a key, not a term.** Deserialization reconstructs the fields directly
+/// and does not re-run [`canonical_key`]; nothing here can, because the content
+/// it was computed from is not carried. So a hand-crafted document can be a key
+/// of no content at all — a colors vector of the wrong length for its
+/// `node_count`, an anchor naming a node past the end, closed blocks in an order
+/// no seed minimization produces. Such a value is still a perfectly good
+/// `HashMap` key; it simply is not `canonical_key(c)` for any `c`, so the `iff`
+/// at the top of this type's docs does not hold of it, and a lookup against it
+/// answers a question nobody asked. Round-tripping a value this crate produced
+/// is always sound, and is the contract; treat an untrusted document as a
+/// *claim* about a content, and re-derive the key from the content itself when
+/// the answer has to mean something.
+///
+/// The serialized shape is the private field layout, so it is **not** a stable
+/// wire format across crate versions: the canonicalization may gain structure,
+/// and no version tag is embedded. Persist keys as a cache keyed by a version
+/// you control, or recompute on load. One field does not use its type's default
+/// representation: the per-node color slots are written as an explicit
+/// `Untyped` / `Typed(c)` tag rather than as `Option<C>`, because `Option` is
+/// lossy in JSON for a color that serializes as `null` — see the private
+/// `color_slots`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "G: serde::Serialize, G::Color: serde::Serialize",
+        deserialize = "G: serde::Deserialize<'de>, G::Color: serde::Deserialize<'de>"
+    ))
+)]
 pub struct ContentKey<G: PropSignature> {
     /// Nodes of the boundary-attached part, canonically numbered.
     node_count: usize,
     /// Colors of those nodes, in canonical order.
+    #[cfg_attr(feature = "serde", serde(with = "color_slots"))]
     colors: Vec<Option<G::Color>>,
     /// Their hyperedges, in canonical discovery order.
     edges: Vec<EdgeRecord<G>>,

@@ -13,6 +13,115 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **`prop::presentation::rewrite` — rewrite traces cross a process boundary**
+  ([#249](https://github.com/sustia-llc/catgraph/issues/249)). `RewriteStep` and
+  `RewriteOutcome<G>` gain `Serialize`/`Deserialize` behind the existing
+  off-by-default `serde` feature — the #81 pattern `PropExpr` / `ColoredExpr` /
+  `Presentation` already use. Purely additive: no new type, no signature change,
+  no behaviour change, and **no new dependency on the default build** — the
+  crate's own `serde` edge stays optional. (Not the same as a serde-free default
+  graph: `serde` is already there transitively, via `rust_decimal`. What the
+  feature gates is *this crate's* edge and the derives.)
+
+  - **Why the derive is safe on a step, which is the whole point.** A
+    `RewriteStep`'s fields are private and it has no validating constructor —
+    and it does not need one, because `replay` re-derives every step's
+    assignment with the private `match_at` against the state it has *actually
+    reached*, and rejects one whose recorded hyperedges are not a convex match
+    of the named rule there. A deserialized trace is **checked, not trusted**:
+    a hand-crafted document buys an `Err`, not a silent rewrite at a place
+    nobody chose. This is the same trust boundary `apply_at` applies to a
+    caller-supplied `MatchSite` (#250), one level up.
+  - **Why `RewriteRule<G>` deliberately gains nothing.** Its four `new`
+    conditions — parallel sides, both sides re-validated on arity *and* words,
+    a non-empty `lhs`, and a mono left interface (which is what keeps the DPO
+    pushout complement unique) — are checked **once** and never re-checked; the
+    matcher and the DPO step read the compiled span
+    (`lhs`/`rhs`/`interior`/`order`) as
+    established fact. A `Deserialize` derive would hand all of that over
+    unchecked. The supported round trip is the pair the rule was built from:
+    persist the `(lhs, rhs)` `ColoredExpr`s, which already serialize, and
+    rebuild through `RewriteRule::new` at load — **in the same order**, since a
+    step binds a rule *index* and not a rule identity, and a reordered slice
+    replays a stored trace to a different endpoint with no error to mark it.
+    Now stated in `replay`'s docs as well as the rule's.
+  - **What is not validated, said plainly.** `RewriteOutcome`'s trust boundary
+    is per-field, not per-type. `steps` is checked at use (by `replay`); but
+    `initial_cost`, `best_cost`, `states_explored` and `fuel_exhausted` have
+    **no validator anywhere in the crate** and can have none — they are facts
+    about a search that already happened. A forged document may claim a
+    `best_cost` above its `initial_cost`, a shape `optimize` cannot produce.
+    Recompute with `cost_of` if the number has to be right. Asserted in the
+    honest direction by `tests/serde_roundtrip.rs`, which pins that a forged
+    number *survives*.
+    - **`best` is not certified by a successful `replay` either**, and that is
+      easy to misread: nothing in the crate compares `best` against what the
+      trace replays to, so an edited document can pair an honest trace with an
+      unrelated `best` and `replay` still returns `Ok`. Unlike the numbers, it
+      is exactly re-derivable — `optimize` builds `best` as the readback of the
+      state its trace reaches, which is what `replay` returns — so compare the
+      two, or just use `replay`'s result.
+    - **A trace is only meaningful against the start it was recorded from**, by
+      the same binding-by-position that makes rule *order* matter:
+      `matched_edges` are indices into the running content. Replayed against a
+      different well-formed start whose indices happen to line up, `replay`
+      returns `Ok` with an unrelated endpoint. `RewriteOutcome` does **not**
+      carry a start, so persist one alongside it.
+    - **Neither type promises a stable wire format.** The serialized shape is
+      the private field layout with no version tag — the caveat `ContentKey`
+      already carries below. A field added in a later version is additive by
+      this crate's standards but would fail every stored document on load, so
+      durable storage wants a consumer-controlled version or a rebuildable
+      cache.
+  - **Oracle.** A trace serialized to JSON, reloaded, and replayed against rules
+    rebuilt from round-tripped `(lhs, rhs)` pairs reaches the same
+    `canonical_key` as the in-process trace — the end-to-end consumer story, not
+    a derive smoke test. Three tampered documents (an out-of-range rule index, a
+    permuted match, a match slid onto a same-labelled hyperedge elsewhere) are
+    each rejected. Every one of those assertions was falsified against a
+    deliberately broken build before being kept.
+
+- **`prop::presentation::content::ContentKey<G>` is persistable**
+  ([#255](https://github.com/sustia-llc/catgraph/issues/255)), under the same
+  feature. The complete content-equality key the rewrite engine dedups on can
+  now be stored, logged, and re-encoded across a process boundary, so a
+  downstream store no longer has to reimplement the anchored canonicalization
+  behind `canonical_key` — a reimplementation that drifted would disagree
+  *silently*, which is the failure the issue exists to prevent. The two private
+  component types (`EdgeRecord`, `ClosedBlock`) carry the derive too.
+
+  - **It is a key, not a term.** Deserialization does not re-run `canonical_key`
+    and nothing here can, since the content is not carried; a hand-crafted
+    document can be a key of no content at all. Round-tripping a value this
+    crate produced is always sound, and that is the contract.
+  - **Still not `Ord`**, unchanged: `Color` need not be, so `Eq + Hash` remains
+    the whole contract. The serialized shape is the private field layout and is
+    **not** a stable wire format across versions.
+  - **`Option` is lossy here, and the naive derive was wrong.** `colors` is
+    `Vec<Option<G::Color>>`, and in a self-describing format `Some(c)` is
+    indistinguishable from `None` whenever `C` itself serializes as `null` —
+    which is exactly the monochromatic `Color = ()` case that most of this crate
+    (`SfgGenerator` included) uses. A plain derive brought every key home with
+    all colors erased. The field is now written through a private `color_slots`
+    module as an explicit `Untyped` / `Typed(c)` tag. Found by the round-trip
+    test, not by inspection.
+  - **Oracle.** Both color regimes are pinned. The equal-by-a-different-writing
+    fixture is `content_equality.rs`'s `trapped_closed_block` witness (§4.6(c)),
+    chosen because its two writings disagree on raw indices *and* its canonical
+    form has a non-empty closed part — so the round trip exercises the
+    `ClosedBlock` half and the anchored renumbering is doing real work. (The
+    shorter candidates do not: `dead_braid_prefix` and `eta_layer_slack` both
+    survive a reseeding to raw index order, so they would have asserted nothing
+    about canonicalization.) The foil differs only *inside* the closed
+    component. The round-tripped key must be `==`, hash-equal, and still usable
+    as a live `HashMap` key against a freshly computed one.
+
+- The `serde` feature comment in `Cargo.toml` now enumerates the full derived
+  surface. It was already stale before this change — `ColoredExpr` (#79) was
+  missing.
+
 ## [workspace-v0.12.0] - 2026-08-15
 
 ### Added
