@@ -489,6 +489,42 @@ impl<G: PropSignature> Presentation<G> {
         self.engine
     }
 
+    /// Borrow the depth bound [`Self::normalize`] and [`Self::eq_mod`] run to.
+    ///
+    /// The sibling of [`Self::engine`], and needed for the same reason: a
+    /// consumer that stores a presentation as its `(equations, depth, engine)`
+    /// parts and rebuilds it later can read the engine back but, until this
+    /// accessor, could not read the depth. A rebuild that goes through
+    /// [`Self::new`] plus [`Self::add_equation`] therefore restored the **default
+    /// 32** silently — no error, no warning, just a different bound than the one
+    /// configured, and with it a different `converged` verdict on any
+    /// presentation whose normalization needed the longer budget.
+    ///
+    /// # Rebuilding: both parts, or the same bug in the other slot
+    ///
+    /// No constructor takes a depth *and* an engine, so restoring both is two
+    /// calls: [`Self::with_depth`] for the depth, then [`Self::set_engine`] for
+    /// the engine, then the equations.
+    ///
+    /// ```ignore
+    /// let mut rebuilt = Presentation::with_depth(depth);
+    /// rebuilt.set_engine(engine);
+    /// for (lhs, rhs) in equations { rebuilt.add_equation(lhs, rhs)?; }
+    /// ```
+    ///
+    /// The `set_engine` line is not optional. [`Self::with_depth`] carries the
+    /// depth and *only* the depth — its engine is `NormalizeEngine::default()`,
+    /// i.e. [`NormalizeEngine::CongruenceClosure`]
+    /// — so a rebuild that stops after `with_depth` silently restores
+    /// `CongruenceClosure` over a stored [`NormalizeEngine::Structural`],
+    /// reintroducing in the engine slot exactly the silent-default bug this
+    /// accessor was added to fix in the depth slot. Symmetrically,
+    /// [`Self::with_engine`] carries the engine and defaults the depth to 32.
+    #[must_use]
+    pub fn rewrite_depth(&self) -> usize {
+        self.rewrite_depth
+    }
+
     /// Decide equality using a semantic functor `f : Free(G) → T` that is
     /// *complete* on this presentation.
     ///

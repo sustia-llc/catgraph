@@ -15,6 +15,21 @@
 //! returns the cheapest representative it reached within a caller-supplied fuel
 //! budget, together with a replayable trace.
 //!
+//! # The policy and the primitives it is built from
+//!
+//! [`optimize`] is *one* policy — descend on [`cost_of`], stop on fuel. The two
+//! things it does underneath are public in their own right
+//! ([#250](https://github.com/sustia-llc/catgraph/issues/250)): [`match_sites`]
+//! enumerates every convex match of a rule, preferring none, and [`apply_at`]
+//! fires one chosen site, comparing nothing. A caller with a different objective
+//! — a neutral walk, a search that must move through a *dearer* writing to reach
+//! a cheaper one, an externally scored choice — writes it over that pair rather
+//! than reshaping the search. [`MatchSite::into_step`] turns the sites it picked
+//! into ordinary [`RewriteStep`]s, so such a walk is [`replay`]-able like any
+//! other trace. [`match_sites_of`] / [`rewrite_at`] are the same pair over a
+//! [`ColoredExpr`], for a single named step; a multi-step search stays on
+//! [`Content`] and pays the readback once at the end.
+//!
 //! # Anchors
 //!
 //! Bonchi–Gadducci–Kissinger–Sobociński–Zanasi, *Rewriting modulo symmetric
@@ -82,7 +97,9 @@
 //! optimization signal.
 
 use std::cmp::Reverse;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
+use std::hash::{Hash, Hasher};
 
 use catgraph::errors::CatgraphError;
 
@@ -350,11 +367,144 @@ fn incidence<G: PropSignature>(content: &Content<G>) -> (Vec<Option<usize>>, Vec
 
 // ---------------------------------------------------------------- matching
 
+/// A structural hash of `content` **as a representation** — not up to iso.
+///
+/// This is deliberately *not* [`canonical_key`]. That key is a complete
+/// invariant of the SMC-iso class, so it is stable under exactly the renumbering
+/// this has to detect: `apply_match` renumbers the surviving nodes densely and
+/// appends the rhs's hyperedges, and two different states can be iso-equal while
+/// their index spaces disagree. A [`MatchSite`] is a tuple of *indices*, so what
+/// it has to be pinned to is the writing, not the class.
+///
+/// Hashed, in order: the node count, the node colors, the hyperedge count, then
+/// each hyperedge's `(label, sources, targets)` **in index order**, then the
+/// input and output anchors. Every one of those moves under a renumbering that
+/// changes which edge an index names, which is the property the check needs.
+///
+/// It is a hash, so it is a screen and not a proof: distinct contents may
+/// collide with probability ~2⁻⁶⁴, and a collision degrades exactly to the
+/// pre-fingerprint behaviour — the convex-match re-derivation `match_at` runs
+/// next, which is what previously carried the whole check.
+fn fingerprint<G: PropSignature>(content: &Content<G>) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    content.node_count().hash(&mut hasher);
+    content.node_colors().hash(&mut hasher);
+    content.edges().len().hash(&mut hasher);
+    for edge in content.edges() {
+        edge.label.hash(&mut hasher);
+        edge.sources.hash(&mut hasher);
+        edge.targets.hash(&mut hasher);
+    }
+    content.input().hash(&mut hasher);
+    content.output().hash(&mut hasher);
+    hasher.finish()
+}
+
 /// One convex match: the target node and edge each `lhs` item maps to.
-#[derive(Clone, Debug)]
-struct Match {
+///
+/// Sites are produced by [`match_sites`] and consumed by [`apply_at`] — together
+/// the **neutral** primitive pair [`optimize`] is built from: enumeration, and
+/// apply-at-a-chosen-site, with no cost descent and no fuel
+/// ([#250](https://github.com/sustia-llc/catgraph/issues/250)). A caller wanting
+/// some policy other than "descend on cost" writes it over these two; `optimize`
+/// keeps its own policy and is not routed through them.
+///
+/// # The edge assignment is what a site *is*
+///
+/// [`Self::matched_nodes`] is forced by [`Self::matched_edges`]: tentacle
+/// positions are content invariants, so binding a `lhs` hyperedge to a target one
+/// binds every node it touches. That is why [`Self::into_step`] loses nothing in
+/// handing the site to a [`RewriteStep`], which records hyperedges alone, and why
+/// [`apply_at`] re-derives the node images from the edges rather than trusting
+/// the ones stored here.
+///
+/// # A site names its content, and is rejected anywhere else
+///
+/// Both index vectors are the *target's* own indices, so a site is meaningful
+/// only against the content it was enumerated from — and a **stale** site is the
+/// dangerous case, not the obvious one. `apply_match` renumbers the surviving
+/// nodes densely and appends the rhs's hyperedges, so after one step the old
+/// indices name *different* edges; in a repetitive content they can still happen
+/// to form a perfectly convex match there. Re-deriving the assignment alone
+/// would accept such a site and rewrite the wrong place in silence — `A ; A ; A`
+/// under `A ⇒ B` is the two-line demonstration.
+///
+/// So a site also carries a private **fingerprint** of the content it came from
+/// (the private `fingerprint`: a structural hash of that content as a
+/// *representation*, not up to iso), and [`apply_at`] checks it first. The two
+/// rejections are kept apart deliberately: a site from another content is a
+/// stale or foreign *site*, while a site whose content is right but whose
+/// assignment is not convex for this rule is a bad *pairing* — different
+/// diagnoses, and a caller has to be able to tell them apart. The correct loop
+/// re-enumerates after every apply.
+///
+/// The fingerprint is *not* carried into a step. [`Self::into_step`] drops it,
+/// because a [`RewriteStep`] is index-based by design and [`replay`] re-derives
+/// every step against the running content it has actually reached — which is
+/// also why the site the private `match_at` builds is stamped with the content
+/// it was just validated against rather than with any earlier one.
+///
+/// # Equality
+///
+/// Two sites enumerated from the same content compare exactly as their index
+/// vectors do; sites from different contents differ on the fingerprint too,
+/// which is the same statement as "a site is meaningful only against its own
+/// content".
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MatchSite {
     nodes: Vec<usize>,
     edges: Vec<usize>,
+    /// The private `fingerprint` of the content this site was enumerated — or,
+    /// through the private `match_at`, validated — against.
+    content: u64,
+}
+
+impl MatchSite {
+    /// The target hyperedges this site occupies, indexed by `lhs` hyperedge:
+    /// position `i` is the image of `lhs` hyperedge `i`.
+    ///
+    /// The same vector [`RewriteStep::matched_edges`] carries, in the same
+    /// **`lhs`-hyperedge index order** — *not* the matcher's traversal order,
+    /// which is [`RewriteRule`]'s internal connectivity-first permutation of the
+    /// same edges. The two are different sequences, so correlating position `i`
+    /// here with the `i`-th edge the matcher visited reads the wrong `lhs` edge.
+    #[must_use]
+    pub fn matched_edges(&self) -> &[usize] {
+        &self.edges
+    }
+
+    /// The target nodes this site occupies, indexed by `lhs` node.
+    ///
+    /// Determined by [`Self::matched_edges`] (see the type docs), so this is a
+    /// convenience for reading *where* a site sits — which wires it would glue
+    /// along — not an independent degree of freedom.
+    #[must_use]
+    pub fn matched_nodes(&self) -> &[usize] {
+        &self.nodes
+    }
+
+    /// Record this site as a trace step firing rule index `rule`.
+    ///
+    /// The bridge from the neutral surface to the trace surface: the result is an
+    /// ordinary [`RewriteStep`], so a caller driving its own search with
+    /// [`match_sites`] / [`apply_at`] can hand the sequence it chose to
+    /// [`replay`] and have every step re-validated. `rule` indexes the `rules`
+    /// slice the replay will be given — a step binds a rule *index*, not a rule
+    /// identity, so the two must line up.
+    ///
+    /// The site's content fingerprint is **dropped** here, and a
+    /// [`RewriteStep`] carries none. That is the design, not an omission: a step
+    /// is index-based against the *running* content of a replay, which is a
+    /// different content at every position, so pinning it to the one content the
+    /// site was enumerated from would reject legal traces. [`replay`] re-derives
+    /// each step's assignment against the state it has actually reached.
+    #[must_use]
+    pub fn into_step(self, rule: usize) -> RewriteStep {
+        RewriteStep {
+            rule,
+            matched_edges: self.edges,
+        }
+    }
 }
 
 /// Whether the sub-hypergraph spanned by `image` is **convex** (BGKSZ Def 3.10):
@@ -407,6 +557,9 @@ fn is_convex<G: PropSignature>(
 /// A partial match being extended by backtracking.
 struct Matcher<'a, G: PropSignature> {
     target: &'a Content<G>,
+    /// The private `fingerprint` of `target`, computed once here and stamped
+    /// onto every [`MatchSite`] this matcher produces.
+    target_fingerprint: u64,
     lhs: &'a Content<G>,
     interior: &'a [bool],
     anchored: Vec<bool>,
@@ -426,6 +579,7 @@ impl<'a, G: PropSignature> Matcher<'a, G> {
         }
         Self {
             target,
+            target_fingerprint: fingerprint(target),
             lhs: &rule.lhs,
             interior: &rule.interior,
             anchored,
@@ -484,7 +638,7 @@ impl<'a, G: PropSignature> Matcher<'a, G> {
     }
 
     /// Turn a total binding into a match, or reject it.
-    fn finish(&self) -> Option<Match> {
+    fn finish(&self) -> Option<MatchSite> {
         let mut nodes = Vec::with_capacity(self.node_map.len());
         for slot in &self.node_map {
             nodes.push((*slot)?);
@@ -508,11 +662,19 @@ impl<'a, G: PropSignature> Matcher<'a, G> {
                 return None;
             }
         }
-        is_convex(self.target, &self.consumer, &edges).then_some(Match { nodes, edges })
+        // Stamped with the fingerprint of the content the match was just
+        // established against — the target of *this* matcher, whether it was
+        // built by `match_sites`'s enumeration or by `match_at`'s re-derivation
+        // of a caller-supplied assignment.
+        is_convex(self.target, &self.consumer, &edges).then_some(MatchSite {
+            nodes,
+            edges,
+            content: self.target_fingerprint,
+        })
     }
 
     /// Depth-first extension over `order`, collecting at most `limit` matches.
-    fn collect(&mut self, depth: usize, order: &[usize], limit: usize, out: &mut Vec<Match>) {
+    fn collect(&mut self, depth: usize, order: &[usize], limit: usize, out: &mut Vec<MatchSite>) {
         if out.len() >= limit {
             return;
         }
@@ -542,17 +704,34 @@ impl<'a, G: PropSignature> Matcher<'a, G> {
 
 /// Every convex match of `rule`'s left-hand side in `target`, up to `limit`.
 ///
+/// The **enumeration** half of the neutral primitive pair
+/// ([#250](https://github.com/sustia-llc/catgraph/issues/250)); [`apply_at`] is
+/// the other. Neutral in the exact sense that no site is preferred: every convex
+/// match is returned, cheaper or dearer or neither, with no cost functional
+/// consulted and no fuel spent. [`optimize`] is the cost-descending policy built
+/// on top; this is what it is built *from*, and a caller wanting some other
+/// policy — enumerate, score by its own criterion, apply one — writes it here
+/// instead of reaching into the search.
+///
+/// `limit` truncates: enumeration stops as soon as `limit` sites are in hand, so
+/// which sites come back is the matcher's own order and not a ranking. `limit`
+/// of `0` returns nothing.
+///
+/// [`match_sites_of`] is the same enumeration one level up, over a
+/// [`ColoredExpr`] rather than its content.
+///
 /// # Cost
 ///
 /// Backtracking over hyperedges, pruned by label equality, tentacle-position
 /// forcing and node colors. Worst case **exponential in `|lhs|`** — the
 /// small-rule assumption is explicit: rules are expected to be a handful of
 /// generators, the size the equations of a presentation actually are.
-fn matches_of<G: PropSignature>(
+#[must_use]
+pub fn match_sites<G: PropSignature>(
     target: &Content<G>,
     rule: &RewriteRule<G>,
     limit: usize,
-) -> Vec<Match> {
+) -> Vec<MatchSite> {
     let mut out = Vec::new();
     if limit == 0 {
         return out;
@@ -623,7 +802,7 @@ fn union(parent: &mut [usize], a: usize, b: usize) {
 fn apply_match<G: PropSignature>(
     target: &Content<G>,
     rule: &RewriteRule<G>,
-    found: &Match,
+    found: &MatchSite,
 ) -> Result<Content<G>, CatgraphError> {
     let (lhs, rhs) = (&rule.lhs, &rule.rhs);
     let t_nodes = target.node_count();
@@ -717,14 +896,93 @@ fn apply_match<G: PropSignature>(
     from_parts(node_colors.len(), node_colors, edges, input, output)
 }
 
+/// Apply `rule` at `site` in `target`, and return the rewritten content.
+///
+/// The **apply-at-a-chosen-site** half of the neutral primitive pair
+/// ([#250](https://github.com/sustia-llc/catgraph/issues/250)); [`match_sites`]
+/// is the other. It fires wherever the caller points it: no cost is compared, no
+/// fuel is spent, and a site that *raises* the cost is applied as readily as one
+/// that lowers it. [`optimize`]'s cost descent is a policy over this, not a
+/// property of it.
+///
+/// # The site is re-validated, not trusted — in two independent stages
+///
+/// A [`MatchSite`] is an ordinary value: it can be enumerated against one content
+/// and handed to another, kept across an apply that renumbered everything, or
+/// paired with a rule it never matched. Two checks answer those separately, and
+/// the order matters.
+///
+/// 1. **Is this the site's content at all?** The site's fingerprint (see
+///    [`MatchSite`]) must equal `target`'s. Re-deriving the assignment would
+///    *not* settle this: this function renumbers the surviving nodes and appends
+///    the rhs, so a site kept across one apply names different hyperedges
+///    afterwards and, in a repetitive content, can still form a convex match
+///    there. Without this stage such a site is applied at the wrong location in
+///    silence — the failure the stage exists to make impossible.
+/// 2. **Is this assignment a convex match of *this rule* here?** The hyperedge
+///    assignment is then re-run through every condition [`match_sites`] enforces
+///    — label agreement, injectivity, positional tentacle binding, node colors,
+///    no deleted boundary node, and BGKSZ Def 3.10 convexity — before any gluing
+///    happens, and the node images the step uses are the ones that re-derivation
+///    produces rather than the ones the value carries.
+///
+/// This is the same trust boundary [`replay`] applies to a caller-supplied
+/// [`RewriteStep`] (stage 2 of it; a step deliberately carries no fingerprint,
+/// see [`MatchSite::into_step`]), and it is the point of the primitive: an
+/// unchecked apply is what the caller would have had to write themselves.
+///
+/// # Errors
+///
+/// Two **distinct** rejections, reported with different messages because they are
+/// different diagnoses and the fix differs:
+///
+/// - [`CatgraphError::Presentation`] if `site` was enumerated from a *different
+///   content* than `target` — a foreign site, or a stale one held across an
+///   apply. The site's indices name other hyperedges here; the fix is to
+///   re-enumerate against the content in hand. This says nothing about whether
+///   the assignment would have been convex.
+/// - [`CatgraphError::Presentation`] if `site` belongs to `target` but its
+///   hyperedges are not a convex match **of `rule`** there — typically the wrong
+///   rule. The fix is a different rule, or a different site.
+/// - [`CatgraphError::Presentation`] from the rebuild, which re-establishes the
+///   BGKSZ Thm 3.12 image characterization. Unreachable on a convex match, for
+///   the reasons the private `apply_match` argues.
+pub fn apply_at<G: PropSignature>(
+    target: &Content<G>,
+    rule: &RewriteRule<G>,
+    site: &MatchSite,
+) -> Result<Content<G>, CatgraphError> {
+    if site.content != fingerprint(target) {
+        return Err(CatgraphError::Presentation {
+            message: "rewrite at a site: the site was enumerated from a different content, so \
+                      its hyperedge indices do not name the same hyperedges here — re-enumerate \
+                      against this content (a site does not survive an apply)"
+                .to_string(),
+        });
+    }
+    let found = match_at(target, rule, &site.edges).ok_or_else(|| CatgraphError::Presentation {
+        message: "rewrite at a site: the site's hyperedges do not describe a convex match of \
+                  this rule in this content"
+            .to_string(),
+    })?;
+    apply_match(target, rule, &found)
+}
+
 // ---------------------------------------------------------------- the search
 
 /// One applied step of a [`RewriteOutcome`]'s trace: which rule fired, and which
 /// hyperedges of the state it fired on.
 ///
-/// The edge indices are the state's own, in the rule's internal `lhs`-edge
-/// order, which makes the trace a **witness** rather than a summary: replaying
-/// it with [`replay`] re-derives the state it describes.
+/// The edge indices are the state's own, in **`lhs`-hyperedge index order**
+/// (position `i` is the image of `lhs` hyperedge `i`) — *not* the matcher's
+/// traversal order, which is [`RewriteRule`]'s internal connectivity-first
+/// permutation of the same edges. That makes the trace a **witness** rather than
+/// a summary: replaying it with [`replay`] re-derives the state it describes.
+///
+/// [`optimize`] is not the only source of steps: [`MatchSite::into_step`] turns a
+/// site a caller chose itself into one, so a search driven over [`match_sites`]
+/// and [`apply_at`] produces traces of the same kind, replayable the same way
+/// ([#250](https://github.com/sustia-llc/catgraph/issues/250)).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RewriteStep {
     rule: usize,
@@ -829,6 +1087,12 @@ struct SearchState<G: PropSignature> {
 /// cyclic rule set (a commutativity rule and its mirror, say) terminates against
 /// the visited set rather than looping.
 ///
+/// **This is one policy, not the surface.** Cost descent and a fuel budget are
+/// choices made here; [`match_sites`] and [`apply_at`] are the neutral primitives
+/// underneath, and a caller wanting a different policy drives those directly
+/// ([#250](https://github.com/sustia-llc/catgraph/issues/250)) rather than
+/// reshaping this function.
+///
 /// # What the result means
 ///
 /// Each recorded step is a convex-DPO step, so by BGKSZ **Thm 5.6** it is a
@@ -887,7 +1151,7 @@ pub fn optimize<G: PropSignature>(
     'search: while let Some(Reverse((_, index))) = frontier.pop() {
         for (rule_index, rule) in rules.iter().enumerate() {
             // One beyond the budget, so an unaffordable match stays visible.
-            let found = matches_of(&states[index].content, rule, fuel_left.saturating_add(1));
+            let found = match_sites(&states[index].content, rule, fuel_left.saturating_add(1));
             for one in found {
                 if fuel_left == 0 {
                     fuel_exhausted = true;
@@ -994,13 +1258,107 @@ pub fn replay<G: PropSignature>(
     readback(start.source_word(), &content)
 }
 
+// ------------------------------------------------ the expr-level site surface
+
+/// Every convex match of `rule`'s left-hand side in `expr`, up to `limit`.
+///
+/// [`match_sites`] one level up: the expression's content is computed, the
+/// enumeration runs there, and the sites index *that* content — which is the
+/// content [`rewrite_at`] recomputes, so the pair composes. The sites are
+/// fingerprinted with it too (see [`MatchSite`]), so [`rewrite_at`] takes them
+/// and refuses one enumerated from a different expression, or held across an
+/// earlier rewrite.
+///
+/// # Prefer the content level for a multi-step search
+///
+/// This wrapper and [`rewrite_at`] each pay a `content_of_colored` on the way in,
+/// and `rewrite_at` a readback on the way out; a search that takes `n` steps
+/// through them pays `n` of each. The content level pays neither: hold a
+/// [`Content`], loop [`match_sites`] and [`apply_at`] over it, and read back
+/// **once** at the end — [`optimize`] is written exactly that way. That asymmetry
+/// is why both levels exist: this one for a single named step from and to a
+/// [`ColoredExpr`], the content one for search.
+///
+/// # Cost
+///
+/// [`match_sites`]'s, unchanged: backtracking over hyperedges, pruned by label
+/// equality, tentacle-position forcing and node colors, worst case
+/// **exponential in `|lhs|`** under an explicit small-rule assumption — rules are
+/// expected to be a handful of generators, the size the equations of a
+/// presentation actually are.
+///
+/// # Errors
+///
+/// [`CatgraphError::Presentation`] if `expr` is not well-formed — arity or
+/// words, the private `revalidate`, under the same message [`rewrite_at`] uses,
+/// because it is the same screen. Reachable only across [`ColoredExpr`]'s
+/// documented serde trust boundary, and screened here rather than left to panic:
+/// this is the **first** step of the enumerate-then-apply pair, so a malformed
+/// term would abort before `rewrite_at`'s own screen was ever reached.
+///
+/// The malformed case is an `Err`, never an empty `Vec` — "this term is not a
+/// term" and "this term has no sites" are different answers, and returning the
+/// second for the first is a silent wrong answer.
+pub fn match_sites_of<G: PropSignature>(
+    expr: &ColoredExpr<G>,
+    rule: &RewriteRule<G>,
+    limit: usize,
+) -> Result<Vec<MatchSite>, CatgraphError> {
+    revalidate("rewrite site enumeration: the morphism", expr)?;
+    Ok(match_sites(&content_of_colored(expr), rule, limit))
+}
+
+/// Apply `rule` at `site` in `expr`, and read the result back as a colored
+/// morphism.
+///
+/// [`apply_at`] one level up, with the same two-stage re-validation: `site`'s
+/// fingerprint must be `expr`'s content's, and its assignment is then re-derived
+/// there before anything is glued — so a site enumerated from some other
+/// morphism, or held across an earlier rewrite, is rejected rather than
+/// reinterpreted. The output goes through the module's usual two-check readback
+/// — re-checked as a colored morphism, then compared back against the content it
+/// was read off.
+///
+/// Pair it with [`match_sites_of`]; for more than one step, see that function's
+/// note on staying at the content level and paying the readback once.
+///
+/// # Errors
+///
+/// - [`CatgraphError::Presentation`] if `expr` is not well-formed — arity or
+///   words, the private `revalidate` — reachable only across [`ColoredExpr`]'s
+///   serde trust boundary.
+/// - [`CatgraphError::Presentation`] if `site` was enumerated from a different
+///   content than `expr`'s — a foreign or stale site. [`apply_at`]'s first
+///   rejection, with its message.
+/// - [`CatgraphError::Presentation`] if `site` belongs to `expr`'s content but is
+///   not a convex match of `rule` there. [`apply_at`]'s second rejection, kept
+///   distinct from the first because the two call for different fixes.
+/// - [`CatgraphError::Presentation`] if the readback does not re-check as a
+///   colored morphism, or does not carry the rewritten content — an
+///   engine-invariant failure rather than a user error.
+pub fn rewrite_at<G: PropSignature>(
+    expr: &ColoredExpr<G>,
+    rule: &RewriteRule<G>,
+    site: &MatchSite,
+) -> Result<ColoredExpr<G>, CatgraphError> {
+    revalidate("rewrite at a site: the morphism", expr)?;
+    let rewritten = apply_at(&content_of_colored(expr), rule, site)?;
+    readback(expr.source_word(), &rewritten)
+}
+
 /// Rebuild the match a recorded hyperedge assignment describes, re-running every
-/// condition [`matches_of`] enforces.
+/// condition [`match_sites`] enforces.
+///
+/// The [`MatchSite`] this returns is stamped with `target`'s fingerprint — the
+/// content the assignment was just validated against, not any content it may
+/// have been recorded from. That is what keeps [`replay`] working: a step's
+/// assignment is *meant* to be read against the running content at that
+/// position, so the site built from it belongs to that content by construction.
 fn match_at<G: PropSignature>(
     target: &Content<G>,
     rule: &RewriteRule<G>,
     assignment: &[usize],
-) -> Option<Match> {
+) -> Option<MatchSite> {
     if assignment.len() != rule.lhs.edges().len() {
         return None;
     }

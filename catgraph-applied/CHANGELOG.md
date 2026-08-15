@@ -13,6 +13,87 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **`prop::presentation::rewrite` — the match-site surface: enumeration and
+  apply-at-a-chosen-site, as public primitives**
+  ([#250](https://github.com/sustia-llc/catgraph/issues/250)). `optimize` is one
+  *policy* — descend on `cost_of`, stop on fuel — and until now it was the only
+  way to fire a rule at all, so a caller whose objective was not "cheaper" (a
+  neutral walk, an externally scored choice, a detour through a dearer writing
+  to reach a cheaper one) was locked out of the engine entirely. The two things
+  the search does underneath are now callable on their own terms. Purely
+  additive: no existing signature or behaviour moved, `optimize` and `replay`
+  are unchanged, and the private matcher is the same code both surfaces run.
+
+  - `match_sites(&Content<G>, &RewriteRule<G>, limit) -> Vec<MatchSite>`
+    enumerates every convex match (BGKSZ [arXiv:1602.06771] Def 3.10 / 5.4) of
+    the rule's left-hand side, preferring none — no cost functional is consulted
+    and no fuel is spent. `limit` truncates the enumeration; it does not rank
+    it. The **cost warning carries over unchanged**: backtracking over
+    hyperedges, worst case exponential in `|lhs|`, under the explicit small-rule
+    assumption that a rule is the handful of generators a presentation's
+    equations actually are.
+  - `apply_at(&Content<G>, &RewriteRule<G>, &MatchSite) -> Result<Content<G>,
+    CatgraphError>` fires one chosen site. A `MatchSite` is an ordinary value —
+    it can be enumerated against one content and handed to another, kept across
+    an apply, or paired with a rule it never matched — so it is re-validated in
+    **two stages**, with two distinct `CatgraphError::Presentation` messages
+    because they are different diagnoses calling for different fixes:
+    - *is this the site's content at all?* Each site carries a private
+      **fingerprint** of the content it was enumerated from — a structural hash
+      of that content as a *representation*, not up to iso. A **stale** site is
+      the dangerous case and re-deriving the assignment does not catch it:
+      `apply_at` renumbers the surviving nodes and appends the rhs, so a site
+      held across one apply names different hyperedges afterwards and, in a
+      repetitive content, can still form a perfectly convex match there
+      (`A ; A ; A` under `A ⇒ B` is the two-line demonstration). Rejected here,
+      naming the stale-content case; the fix is to re-enumerate.
+    - *is this assignment a convex match of this rule here?* The hyperedge
+      assignment is then re-run through every condition the enumerator enforces
+      before anything is glued. That is the same trust boundary `replay` already
+      applies to a caller-supplied `RewriteStep`, and it is the point of the
+      primitive: an unchecked apply is what the caller would otherwise have
+      written themselves.
+  - `MatchSite` exposes `matched_edges()` and `matched_nodes()` (the target's own
+    indices, in **`lhs`-hyperedge index order** — position `i` is the image of
+    `lhs` hyperedge `i`, *not* the matcher's connectivity-first traversal order)
+    and `into_step(rule) -> RewriteStep`. The edge assignment is what a site
+    *is* — node images are forced by it, since tentacle positions are content
+    invariants — so `into_step` loses nothing, and a search a caller drove
+    itself produces traces `replay` re-derives exactly like `optimize`'s. The
+    fingerprint is deliberately **not** carried into a `RewriteStep`: a step is
+    index-based against a replay's *running* content, which differs at every
+    position. No serde impl: that is a separate decision.
+  - `match_sites_of(&ColoredExpr<G>, …) -> Result<Vec<MatchSite>,
+    CatgraphError>` and `rewrite_at(&ColoredExpr<G>, …)` are the same pair one
+    level up, doing the `content_of_colored` / readback round trip for a single
+    named step. Both levels exist because the round trip is not free: an
+    `n`-step search through the expression level pays `n` contents and `n`
+    readbacks, while the content level pays the readback **once**, at the end —
+    which is how `optimize` is written. Both re-validate their expression at
+    entry, with the same message: `match_sites_of` is the *first* step of the
+    pair, so leaving it to panic through `content_of_colored` would abort across
+    the documented serde trust boundary before `rewrite_at`'s screen was ever
+    reached. A malformed term is an `Err`, never an empty `Vec` — "not a term"
+    and "no sites" are different answers. The content-level `match_sites` still
+    returns a bare `Vec`: it takes an already-built `Content` and has nothing to
+    screen.
+
+- **`Presentation::rewrite_depth()` — the depth bound is readable**
+  (the A11(iii) serde-rebuild hazard, found in `catgraph-surreal` step-2). The
+  sibling of the existing `engine()` accessor, and missing for no reason: a
+  consumer that stores a presentation as its `(equations, depth, engine)` parts
+  and rebuilds it later could read the engine back but not the depth, so a
+  rebuild through `new()` + `add_equation` silently restored the **default 32** —
+  no error, no warning, just a different bound than the one configured, and with
+  it a different `converged` verdict on any presentation whose normalization
+  needed the longer budget. Carry the value across such a round trip and rebuild
+  through `with_depth(depth)` **followed by `set_engine(engine)`** — no
+  constructor takes both, and `with_depth` defaults the engine, so a rebuild that
+  stops there restores `CongruenceClosure` over a stored `Structural` and
+  reintroduces the same silent-default bug one slot over.
+
 ## [workspace-v0.11.0] - 2026-08-10
 
 ### Changed

@@ -18,7 +18,16 @@
 //!   the image and returns, and an interface node used twice;
 //! - **per-step soundness against the decider** — an optimized representative
 //!   is `eq_mod`-equal to its start under the presentation the rules came from;
-//! - **fuel bounds the search**, and the visited set closes rule cycles.
+//! - **fuel bounds the search**, and the visited set closes rule cycles;
+//! - **the neutral site surface** ([#250](https://github.com/sustia-llc/catgraph/issues/250))
+//!   — enumeration returns every convex match and prefers none, apply-at-a-site
+//!   fires where it is pointed even where cost descent would not go, a site is
+//!   re-validated against the content it is handed to rather than trusted, and
+//!   `MatchSite::into_step` records a chosen site as a replayable `RewriteStep`;
+//! - **a site does not outlive its content** — an apply renumbers everything, so
+//!   a site from an earlier enumeration can still form a convex match at a place
+//!   nobody chose. The content fingerprint rejects it, with a message that is
+//!   the *stale-site* diagnosis and not the not-a-convex-match one.
 
 use std::borrow::Cow;
 
@@ -28,9 +37,11 @@ use catgraph_applied::prop::presentation::Presentation;
 #[cfg(feature = "serde")]
 use catgraph_applied::prop::presentation::content::is_arity_well_formed;
 use catgraph_applied::prop::presentation::content::{
-    canonical_key, content_eq, content_of, content_of_colored,
+    Content, canonical_key, content_eq, content_of, content_of_colored,
 };
-use catgraph_applied::prop::presentation::rewrite::{RewriteRule, cost_of, optimize, replay};
+use catgraph_applied::prop::presentation::rewrite::{
+    RewriteRule, apply_at, cost_of, match_sites, match_sites_of, optimize, replay, rewrite_at,
+};
 use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
 
 // ---- A monochromatic tool chain (Λ = {•}, spelled `()`) ----------------------
@@ -81,6 +92,11 @@ fn tool(g: Tool) -> PropExpr<Tool> {
 /// Compose two steps whose interfaces meet.
 fn chain(parts: [Tool; 2]) -> PropExpr<Tool> {
     Free::compose(tool(parts[0]), tool(parts[1])).expect("the two interfaces meet")
+}
+
+/// Compose three `1 → 1` steps.
+fn seq3(parts: [Tool; 3]) -> PropExpr<Tool> {
+    Free::compose(chain([parts[0], parts[1]]), tool(parts[2])).expect("1 → 1 throughout")
 }
 
 /// Pin `width` monochromatic wires onto `expr`.
@@ -315,6 +331,19 @@ fn every_entry_point_screens_a_color_forged_document() {
         other => panic!("{where_}: expected the word screen, got {other:?}"),
     };
 
+    // The site surface is an entry point too, and both halves of it screen: since
+    // #250's review, `match_sites_of` returns a `Result` rather than panicking
+    // through `content_of_colored`, which matters because it is the *first* step
+    // of the pair — a panic there aborts before `rewrite_at`'s screen is reached.
+    let rule = RewriteRule::new(
+        at(Role::Author, task(Task::Write)),
+        at(Role::Author, task(Task::Fast)),
+    )
+    .expect("both [Author] → [Reviewer], one hyperedge, mono interface");
+    let honest = at(Role::Author, task(Task::Write));
+    let sites = match_sites_of(&honest, &rule, 1).expect("an honestly built expression");
+    assert_eq!(sites.len(), 1);
+
     for forged in [ill_typed, mislabelled] {
         screened(
             "RewriteRule::new",
@@ -322,6 +351,14 @@ fn every_entry_point_screens_a_color_forged_document() {
         );
         screened("optimize", optimize(&forged, &[], 8, |_| 1).map(|_| ()));
         screened("replay", replay(&forged, &[], &[]).map(|_| ()));
+        screened(
+            "match_sites_of",
+            match_sites_of(&forged, &rule, 8).map(|_| ()),
+        );
+        screened(
+            "rewrite_at",
+            rewrite_at(&forged, &rule, &sites[0]).map(|_| ()),
+        );
     }
 }
 
@@ -586,4 +623,269 @@ fn the_colored_workflow_and_the_monochromatic_instance_both_run_end_to_end() {
         1,
         Free::compose(tool(Tool::C), tool(Tool::D)).expect("1 → 1")
     )));
+}
+
+// ---- #250: the neutral site surface ------------------------------------------
+//
+// `optimize` is a *policy* — descend on cost, stop on fuel — over two things:
+// enumerate every convex match, and fire one chosen match. These pin that the
+// two are now available on their own terms, that the applier re-validates what
+// the enumerator handed out rather than trusting it, and that a site a caller
+// picked itself records as an ordinary `RewriteStep`.
+
+#[test]
+fn enumeration_returns_every_site_and_the_applier_accepts_each_one() {
+    // `A ⇒ D` has a one-hyperedge left-hand side, so `A ; C ; A` offers two legal
+    // sites and nothing in the rule prefers either.
+    let rule = RewriteRule::new(wired(1, tool(Tool::A)), wired(1, tool(Tool::D)))
+        .expect("parallel 1 → 1, one hyperedge, mono interface");
+    let start = wired(1, seq3([Tool::A, Tool::C, Tool::A]));
+    let content = content_of_colored(&start);
+
+    let sites = match_sites(&content, &rule, 8);
+    assert_eq!(sites.len(), 2, "both `A` occurrences are legal sites");
+    assert_ne!(
+        sites[0].matched_edges(),
+        sites[1].matched_edges(),
+        "two sites, not one reported twice"
+    );
+    for site in &sites {
+        // One `lhs` hyperedge, and the two wires it sits between.
+        assert_eq!(site.matched_edges().len(), 1);
+        assert_eq!(site.matched_nodes().len(), 2);
+        assert!(site.matched_edges()[0] < content.edges().len());
+        assert!(
+            site.matched_nodes()
+                .iter()
+                .all(|&x| x < content.node_count()),
+            "the indices are the target's own"
+        );
+    }
+
+    // `limit` truncates the enumeration; it does not rank it.
+    assert_eq!(match_sites(&content, &rule, 1).len(), 1);
+    assert!(match_sites(&content, &rule, 0).is_empty());
+
+    // Nothing the enumerator hands out is refused by the applier's own
+    // re-validation: the two halves agree on what a site is.
+    let mut rewritten: Vec<ColoredExpr<Tool>> = Vec::new();
+    for site in &sites {
+        let next = apply_at(&content, &rule, site).expect("an enumerated site is a convex match");
+        assert_eq!(cost_of(&next, |_| 1), 3, "`A ⇒ D` is cost-neutral here");
+        rewritten.push(rewrite_at(&start, &rule, site).expect("the same site, one level up"));
+    }
+
+    // Which site was chosen is visible in the result, and both choices are
+    // legal — the surface fires where it is pointed.
+    let leading = wired(1, seq3([Tool::D, Tool::C, Tool::A]));
+    let trailing = wired(1, seq3([Tool::A, Tool::C, Tool::D]));
+    assert!(!leading.eq_colored(&trailing));
+    assert!(
+        rewritten.iter().any(|e| e.eq_colored(&leading)),
+        "one site rewrites the leading `A`"
+    );
+    assert!(
+        rewritten.iter().any(|e| e.eq_colored(&trailing)),
+        "the other rewrites the trailing one"
+    );
+}
+
+#[test]
+fn a_site_applies_where_cost_descent_would_never_go() {
+    // `D ⇒ A ; B` strictly *raises* the generator count, so the optimizer has no
+    // reason to fire it — and does not: it keeps the start.
+    let expand = RewriteRule::new(wired(1, tool(Tool::D)), wired(1, chain([Tool::A, Tool::B])))
+        .expect("parallel 1 → 1; only the *left* interface must be mono");
+    let start = wired(1, chain([Tool::D, Tool::C]));
+
+    let outcome =
+        optimize(&start, std::slice::from_ref(&expand), 64, |_| 1).expect("well-formed start");
+    assert_eq!(outcome.initial_cost(), 2);
+    assert_eq!(outcome.best_cost(), 2);
+    assert!(
+        outcome.steps().is_empty(),
+        "no cheaper writing exists under this rule, so cost descent records nothing"
+    );
+    assert!(outcome.best().eq_colored(&start));
+
+    // The neutral surface fires it anyway. This is the gap #250 closes: a caller
+    // whose objective is not "cheaper" — a walk, an externally scored choice, a
+    // detour through a dearer writing — was locked out of the engine entirely.
+    let sites = match_sites_of(&start, &expand, 8).expect("an honestly built expression");
+    assert_eq!(sites.len(), 1);
+    let widened = rewrite_at(&start, &expand, &sites[0]).expect("the site is a convex match");
+    assert!(widened.eq_colored(&wired(1, seq3([Tool::A, Tool::B, Tool::C]))));
+    assert_eq!(
+        cost_of(&content_of_colored(&widened), |_| 1),
+        3,
+        "dearer than the start, and applied regardless"
+    );
+}
+
+#[test]
+fn a_site_is_re_validated_against_the_content_it_is_handed_to() {
+    let sequential = RewriteRule::new(wired(1, chain([Tool::A, Tool::B])), wired(1, tool(Tool::D)))
+        .expect("A ; B ⇒ D");
+    let gluing = RewriteRule::new(
+        wired(1, chain([Tool::Split, Tool::Join])),
+        wired(1, PropExpr::Identity(1)),
+    )
+    .expect("Split ; Join ⇒ id₁");
+
+    // The site's provenance is the enumerator — the only way a caller can get
+    // one. Everything below hands that honest value somewhere it does not belong.
+    let here = wired(1, chain([Tool::A, Tool::B]));
+    let content_here = content_of_colored(&here);
+    let sites = match_sites(&content_here, &sequential, 8);
+    assert_eq!(sites.len(), 1);
+    let site = sites[0].clone();
+
+    // Two *different* rejections, and the test pins which one fires where: a
+    // site from another content is a stale-or-foreign site, while a site whose
+    // content is right but whose assignment is not convex for the rule is a bad
+    // pairing. Collapsing them would hide the location bug the fingerprint
+    // exists to catch.
+    let rejected = |what: &str, needle: &str, result: Result<(), CatgraphError>| match result {
+        Err(CatgraphError::Presentation { message }) => {
+            assert!(message.contains(needle), "{what}: got {message}");
+        }
+        other => panic!("{what}: expected the site screen, got {other:?}"),
+    };
+    let foreign = "enumerated from a different content";
+    let not_a_match = "convex match";
+
+    // A different content, whose hyperedges carry other labels…
+    let elsewhere = content_of_colored(&wired(1, chain([Tool::C, Tool::C])));
+    rejected(
+        "other labels",
+        foreign,
+        apply_at(&elsewhere, &sequential, &site).map(|_| ()),
+    );
+    // …one too small to hold the assignment at all…
+    let smaller = content_of_colored(&wired(1, tool(Tool::A)));
+    rejected(
+        "out of range",
+        foreign,
+        apply_at(&smaller, &sequential, &site).map(|_| ()),
+    );
+    // …and the right content under the wrong rule, which is the *other*
+    // diagnosis: the site does belong here, it is simply not a match of this
+    // rule.
+    rejected(
+        "wrong rule",
+        not_a_match,
+        apply_at(&content_here, &gluing, &site).map(|_| ()),
+    );
+
+    // The expression-level wrapper carries the same screen.
+    rejected(
+        "expression level",
+        foreign,
+        rewrite_at(&wired(1, chain([Tool::C, Tool::C])), &sequential, &site).map(|_| ()),
+    );
+
+    // The site that does belong still fires, and to the expected content.
+    let applied = apply_at(&content_here, &sequential, &site).expect("its own content");
+    assert!(content_eq(
+        &applied,
+        &content_of_colored(&wired(1, tool(Tool::D)))
+    ));
+}
+
+#[test]
+fn a_chosen_site_records_as_a_step_the_replay_re_derives() {
+    let rule = RewriteRule::new(wired(1, tool(Tool::A)), wired(1, tool(Tool::D))).expect("A ⇒ D");
+    let rules = [rule.clone()];
+    let start = wired(1, seq3([Tool::A, Tool::C, Tool::A]));
+    let content = content_of_colored(&start);
+
+    let sites = match_sites(&content, &rule, 8);
+    assert_eq!(sites.len(), 2);
+    // The expression-level enumerator is the same enumeration one level up —
+    // same sites, and the same content fingerprint on each, since
+    // `match_sites_of` enumerates against exactly this content.
+    assert_eq!(
+        match_sites_of(&start, &rule, 8).expect("an honestly built expression"),
+        sites
+    );
+
+    for site in &sites {
+        // The expression pair is the content pair with `content_of_colored` in
+        // front and the readback behind — nothing else.
+        let by_content = apply_at(&content, &rule, site).expect("an enumerated site");
+        let by_expr = rewrite_at(&start, &rule, site).expect("the same site, one level up");
+        assert!(content_eq(&content_of_colored(&by_expr), &by_content));
+        assert_eq!(by_expr.source_word(), start.source_word());
+        assert_eq!(by_expr.target_word(), start.target_word());
+
+        // A step recorded from a site replays to exactly that state — the
+        // coherence claim `into_step` rests on: the trace surface and the site
+        // surface agree on which match "this" is.
+        let step = site.clone().into_step(0);
+        assert_eq!(step.rule(), 0);
+        assert_eq!(step.matched_edges(), site.matched_edges());
+        let replayed = replay(&start, &rules, std::slice::from_ref(&step))
+            .expect("a step built from a real site is a legal trace");
+        assert!(replayed.eq_colored(&by_expr));
+        assert_eq!(
+            canonical_key(&content_of_colored(&replayed)),
+            canonical_key(&by_content)
+        );
+    }
+}
+
+#[test]
+fn a_stale_site_is_rejected_rather_than_applied_at_the_wrong_place() {
+    // The #250 review probe, pinned. `apply_at` renumbers the surviving nodes and
+    // appends the rhs, so after one apply the indices an earlier enumeration
+    // handed out name *different* hyperedges. In a repetitive content they can
+    // still form a perfectly convex match there, so re-deriving the assignment
+    // alone accepts the stale site and rewrites the wrong occurrence in silence:
+    //
+    //     c0 = A ; A ; A            sites: three, one per occurrence
+    //     c1 = apply_at(c0, s[0])   one A is now a B, and everything renumbered
+    //     apply_at(c1, s[1])        used to succeed — at a location nobody chose
+    //
+    // The site's content fingerprint is what turns that second call into an
+    // error, and into the *right* error: stale site, not "no convex match".
+    let rule = RewriteRule::new(wired(1, tool(Tool::A)), wired(1, tool(Tool::B))).expect("A ⇒ B");
+    let start = wired(1, seq3([Tool::A, Tool::A, Tool::A]));
+    let c0 = content_of_colored(&start);
+
+    let count = |content: &Content<Tool>, g: Tool| cost_of(content, |x| u64::from(*x == g));
+    assert_eq!(count(&c0, Tool::A), 3);
+
+    let stale = match_sites(&c0, &rule, 8);
+    assert_eq!(stale.len(), 3, "three interchangeable `A` occurrences");
+
+    let c1 = apply_at(&c0, &rule, &stale[0]).expect("a site applied to its own content");
+    assert_eq!((count(&c1, Tool::A), count(&c1, Tool::B)), (2, 1));
+
+    // Every site of the now-stale enumeration is refused against `c1` — including
+    // the two that were never fired, which are the dangerous ones — and the
+    // message names the stale-content case rather than convexity.
+    for (which, site) in stale.iter().enumerate() {
+        match apply_at(&c1, &rule, site) {
+            Err(CatgraphError::Presentation { message }) => assert!(
+                message.contains("enumerated from a different content"),
+                "site {which}: got {message}"
+            ),
+            other => panic!("site {which}: a stale site must not apply, got {other:?}"),
+        }
+    }
+
+    // The correct loop re-enumerates after each apply. Three steps, three `B`s,
+    // and no site ever outlives the content it was enumerated from.
+    let mut content = c0.clone();
+    for step in 0..3 {
+        let sites = match_sites(&content, &rule, 8);
+        assert_eq!(sites.len(), 3 - step, "one fewer `A` to match each round");
+        content = apply_at(&content, &rule, &sites[0]).expect("a freshly enumerated site");
+    }
+    assert_eq!((count(&content, Tool::A), count(&content, Tool::B)), (0, 3));
+    assert!(match_sites(&content, &rule, 8).is_empty());
+    assert!(content_eq(
+        &content,
+        &content_of_colored(&wired(1, seq3([Tool::B, Tool::B, Tool::B])))
+    ));
 }
