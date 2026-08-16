@@ -24,7 +24,8 @@ fn construction() {
         vec!['a', 'b', 'c'],    // middle labels
         vec!["in_0", "in_1"],   // left port names
         vec!["out_0", "out_1"], // right port names
-    );
+    )
+    .unwrap();
 
     println!("left_names       = {:?}", nc.left_names());
     println!("right_names      = {:?}", nc.right_names());
@@ -82,7 +83,8 @@ fn composition() {
         vec!['a', 'b'],
         vec!["x", "y"],
         vec!["p", "q"],
-    );
+    )
+    .unwrap();
 
     // g: {a,b} -> {a} with left names ["p","q"], right names ["out"]
     let g: NamedCospan<char, &str, &str> = NamedCospan::new(
@@ -91,7 +93,8 @@ fn composition() {
         vec!['a', 'b'],
         vec!["p", "q"],
         vec!["out"],
-    );
+    )
+    .unwrap();
 
     println!(
         "f: left_names={:?}, right_names={:?}",
@@ -121,7 +124,7 @@ fn port_manipulation() {
     println!("=== Port Manipulation ===\n");
 
     let mut nc: NamedCospan<char, &str, &str> =
-        NamedCospan::new(vec![0], vec![0], vec!['a'], vec!["in_0"], vec!["out_0"]);
+        NamedCospan::new(vec![0], vec![0], vec!['a'], vec!["in_0"], vec!["out_0"]).unwrap();
     println!(
         "initial: left={:?}, right={:?}, middle={:?}",
         nc.left_names(),
@@ -165,7 +168,8 @@ fn connect_and_query() {
         vec!['a', 'a', 'a'],
         vec!["in_0", "in_1"],
         vec!["out_0"],
-    );
+    )
+    .unwrap();
 
     // Query if two named ports map to the same middle node
     let same = nc.map_to_same(Left("in_0"), Left("in_1"));
@@ -192,7 +196,8 @@ fn name_search() {
         vec!['a', 'b', 'c'],
         vec!["alpha", "beta", "gamma"],
         vec!["delta", "epsilon"],
-    );
+    )
+    .unwrap();
 
     // Find all nodes whose names start with a given prefix
     let results = nc.find_nodes_by_name_predicate(
@@ -227,7 +232,8 @@ fn name_mutation() {
         vec!['a', 'b'],
         vec!["in_a".to_string(), "in_b".to_string()],
         vec!["out".to_string()],
-    );
+    )
+    .unwrap();
     println!("before: left_names = {:?}", nc.left_names());
 
     // Change a single port name
@@ -257,9 +263,9 @@ fn monoidal_product() {
     println!("=== Monoidal Product ===\n");
 
     let mut a: NamedCospan<char, &str, &str> =
-        NamedCospan::new(vec![0], vec![0], vec!['x'], vec!["a_in"], vec!["a_out"]);
+        NamedCospan::new(vec![0], vec![0], vec!['x'], vec!["a_in"], vec!["a_out"]).unwrap();
     let b: NamedCospan<char, &str, &str> =
-        NamedCospan::new(vec![0], vec![0], vec!['y'], vec!["b_in"], vec!["b_out"]);
+        NamedCospan::new(vec![0], vec![0], vec!['y'], vec!["b_in"], vec!["b_out"]).unwrap();
 
     println!("a: left={:?}, right={:?}", a.left_names(), a.right_names());
     println!("b: left={:?}, right={:?}", b.left_names(), b.right_names());
@@ -286,7 +292,8 @@ fn map_labels() {
         vec!['a', 'b'],
         vec!["in_0", "in_1"],
         vec!["out_0"],
-    );
+    )
+    .unwrap();
 
     let mapped = nc.map(|ch| ch.to_ascii_uppercase());
     println!("original middle = {:?}", nc.cospan().middle());

@@ -57,7 +57,7 @@ fn dagger_involution_on_general_span() {
     let left = vec!['a', 'b', 'a'];
     let right = vec!['a', 'b'];
     let middle = vec![(0, 0), (1, 1), (2, 0)];
-    let s = Span::new(left, right, middle);
+    let s = Span::new(left, right, middle).unwrap();
 
     let dd = s.dagger().dagger();
     assert!(spans_eq(&s, &dd));
@@ -74,11 +74,11 @@ fn composition_is_associative() {
     let t = vec!['a', 'a', 'a'];
 
     // R: some subset of {0,1,2} x {0,1,2}
-    let r = Span::new(t.clone(), t.clone(), vec![(0, 1), (1, 2)]);
+    let r = Span::new(t.clone(), t.clone(), vec![(0, 1), (1, 2)]).unwrap();
     // S: another subset
-    let s = Span::new(t.clone(), t.clone(), vec![(1, 0), (2, 2)]);
+    let s = Span::new(t.clone(), t.clone(), vec![(1, 0), (2, 2)]).unwrap();
     // T: another subset
-    let tt = Span::new(t.clone(), t.clone(), vec![(0, 0), (2, 1)]);
+    let tt = Span::new(t.clone(), t.clone(), vec![(0, 0), (2, 1)]).unwrap();
 
     let rs = r.compose(&s).expect("R;S");
     let rs_t = rs.compose(&tt).expect("(R;S);T");
@@ -99,7 +99,7 @@ fn identity_is_neutral_for_composition() {
     let id_left = Span::<char>::identity(&types);
 
     // R: a span from types -> types (all 'a'/'b' compatible)
-    let r = Span::new(types.clone(), types.clone(), vec![(0, 2), (1, 1), (2, 0)]);
+    let r = Span::new(types.clone(), types.clone(), vec![(0, 2), (1, 1), (2, 0)]).unwrap();
 
     let id_r = id_left.compose(&r).expect("id;R");
     let r_id = r.compose(&Span::identity(&types)).expect("R;id");
@@ -115,8 +115,8 @@ fn identity_is_neutral_for_composition() {
 #[test]
 fn dagger_reverses_composition() {
     let t = vec!['a', 'a', 'a'];
-    let r = Span::new(t.clone(), t.clone(), vec![(0, 1), (1, 2), (2, 0)]);
-    let s = Span::new(t.clone(), t.clone(), vec![(0, 0), (1, 1), (2, 2)]);
+    let r = Span::new(t.clone(), t.clone(), vec![(0, 1), (1, 2), (2, 0)]).unwrap();
+    let s = Span::new(t.clone(), t.clone(), vec![(0, 0), (1, 1), (2, 2)]).unwrap();
 
     let rs = r.compose(&s).expect("R;S");
     let dagger_rs = rs.dagger();
@@ -138,7 +138,7 @@ fn symmetric_span_equals_its_dagger() {
     // Types must be uniform for this to work: all 'a'.
     let t = vec!['a', 'a'];
     // Symmetric set of pairs: {(0,1), (1,0)} -- flipping each gives the same set.
-    let s = Span::new(t.clone(), t.clone(), vec![(0, 1), (1, 0)]);
+    let s = Span::new(t.clone(), t.clone(), vec![(0, 1), (1, 0)]).unwrap();
     let d = s.dagger();
 
     assert!(spans_eq_unordered(&s, &d));
@@ -225,7 +225,7 @@ fn rel_new_validates_joint_injectivity() {
     // Build a non-jointly-injective span: duplicate (0, 0) pair
     let left = vec!['a', 'a'];
     let right = vec!['a', 'a'];
-    let span = Span::new(left, right, vec![(0, 0), (0, 0)]);
+    let span = Span::new(left, right, vec![(0, 0), (0, 0)]).unwrap();
     assert!(!span.is_jointly_injective());
 
     let result = Rel::new(span);
@@ -241,7 +241,7 @@ fn rel_new_unchecked_bypasses() {
     // Same non-jointly-injective span
     let left = vec!['a', 'a'];
     let right = vec!['a', 'a'];
-    let span = Span::new(left, right, vec![(0, 0), (0, 0)]);
+    let span = Span::new(left, right, vec![(0, 0), (0, 0)]).unwrap();
     assert!(!span.is_jointly_injective());
 
     // new_unchecked should succeed without checking
@@ -269,7 +269,7 @@ fn rel_equivalence_relation() {
         (3, 2),
         (3, 3),
     ];
-    let rel = Rel::new(Span::new(types.clone(), types, pairs)).unwrap();
+    let rel = Rel::new(Span::new(types.clone(), types, pairs).unwrap()).unwrap();
 
     assert!(rel.is_equivalence_rel());
     // An equivalence relation is reflexive, symmetric, transitive
@@ -289,7 +289,7 @@ fn rel_partial_order() {
     // Pairs: (0,0),(0,1),(0,2),(1,1),(1,2),(2,2)
     let types = vec!['a', 'a', 'a'];
     let pairs = vec![(0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)];
-    let rel = Rel::new(Span::new(types.clone(), types, pairs)).unwrap();
+    let rel = Rel::new(Span::new(types.clone(), types, pairs).unwrap()).unwrap();
 
     assert!(rel.is_partial_order());
     assert!(rel.is_reflexive());
@@ -307,7 +307,7 @@ fn rel_not_transitive() {
     // {(0,0),(1,1),(2,2),(0,1),(1,0),(1,2),(2,1)} but NOT (0,2) or (2,0)
     let types = vec!['a', 'a', 'a'];
     let pairs = vec![(0, 0), (1, 1), (2, 2), (0, 1), (1, 0), (1, 2), (2, 1)];
-    let rel = Rel::new(Span::new(types.clone(), types, pairs)).unwrap();
+    let rel = Rel::new(Span::new(types.clone(), types, pairs).unwrap()).unwrap();
 
     assert!(rel.is_reflexive());
     assert!(rel.is_symmetric());
@@ -323,18 +323,12 @@ fn rel_not_transitive() {
 #[test]
 fn rel_union_intersection() {
     let types = vec!['a', 'a', 'a'];
-    let r1 = Rel::new(Span::new(
-        types.clone(),
-        types.clone(),
-        vec![(0, 0), (0, 1), (1, 1)],
-    ))
-    .unwrap();
-    let r2 = Rel::new(Span::new(
-        types.clone(),
-        types.clone(),
-        vec![(0, 1), (1, 1), (2, 2)],
-    ))
-    .unwrap();
+    let r1 =
+        Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0), (0, 1), (1, 1)]).unwrap())
+            .unwrap();
+    let r2 =
+        Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 1), (1, 1), (2, 2)]).unwrap())
+            .unwrap();
 
     let u = r1.union(&r2).unwrap();
     let u_pairs: HashSet<(usize, usize)> = u.as_span().middle_pairs().iter().copied().collect();
@@ -360,12 +354,9 @@ fn rel_union_intersection() {
 #[test]
 fn rel_complement_involution() {
     let types = vec!['a', 'a', 'a'];
-    let r = Rel::new(Span::new(
-        types.clone(),
-        types.clone(),
-        vec![(0, 0), (1, 2), (2, 1)],
-    ))
-    .unwrap();
+    let r =
+        Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0), (1, 2), (2, 1)]).unwrap())
+            .unwrap();
 
     let comp = r.complement().expect("complement should succeed");
     let double_comp = comp.complement().expect("double complement should succeed");
@@ -391,18 +382,17 @@ fn rel_complement_involution() {
 #[test]
 fn rel_subsumes() {
     let types = vec!['a', 'a', 'a'];
-    let full = Rel::new(Span::new(
-        types.clone(),
-        types.clone(),
-        vec![(0, 0), (0, 1), (1, 1), (2, 2)],
-    ))
+    let full = Rel::new(
+        Span::new(
+            types.clone(),
+            types.clone(),
+            vec![(0, 0), (0, 1), (1, 1), (2, 2)],
+        )
+        .unwrap(),
+    )
     .unwrap();
-    let partial = Rel::new(Span::new(
-        types.clone(),
-        types.clone(),
-        vec![(0, 0), (1, 1)],
-    ))
-    .unwrap();
+    let partial =
+        Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0), (1, 1)]).unwrap()).unwrap();
 
     assert!(full.subsumes(&partial).unwrap());
     assert!(!partial.subsumes(&full).unwrap());
@@ -418,21 +408,21 @@ fn rel_subsumes() {
 fn rel_is_irreflexive() {
     // Strict order: no diagonal pairs
     let types = vec!['a', 'a', 'a'];
-    let strict = Rel::new(Span::new(
-        types.clone(),
-        types.clone(),
-        vec![(0, 1), (0, 2), (1, 2)],
-    ))
-    .unwrap();
+    let strict =
+        Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 1), (0, 2), (1, 2)]).unwrap())
+            .unwrap();
 
     assert!(strict.is_irreflexive());
     assert!(!strict.is_reflexive());
     // Adding a diagonal pair breaks irreflexivity
-    let not_strict = Rel::new(Span::new(
-        types.clone(),
-        types.clone(),
-        vec![(0, 0), (0, 1), (0, 2), (1, 2)],
-    ))
+    let not_strict = Rel::new(
+        Span::new(
+            types.clone(),
+            types.clone(),
+            vec![(0, 0), (0, 1), (0, 2), (1, 2)],
+        )
+        .unwrap(),
+    )
     .unwrap();
     assert!(!not_strict.is_irreflexive());
 }
@@ -447,7 +437,7 @@ fn rel_heterogeneous() {
     let domain = vec!['a', 'b'];
     let codomain = vec!['x', 'y'];
     // Empty middle — no pairs to check type compatibility
-    let rel = Rel::new(Span::new(domain, codomain, vec![])).unwrap();
+    let rel = Rel::new(Span::new(domain, codomain, vec![]).unwrap()).unwrap();
 
     assert!(!rel.is_homogeneous());
 }

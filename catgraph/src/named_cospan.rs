@@ -3,7 +3,7 @@
 //! Wraps [`Cospan`] and attaches unique names to domain and codomain nodes,
 //! enabling port-level mutation, lookup, and predicate-based search.
 
-use crate::errors::CatgraphError;
+use crate::errors::{BoundaryLeg, CatgraphError};
 
 use {
     crate::{
@@ -71,38 +71,101 @@ where
 {
     /// Construct from explicit legs, middle set, and port names.
     ///
-    /// Name uniqueness is assumed but not enforced (port names may lack `Hash`).
+    /// Both structural invariants are checked **in every build profile**: one
+    /// name per boundary port, and both leg maps landing inside the apex. This
+    /// is the trust-boundary constructor — use it for data arriving from outside
+    /// the crate, a store, a wire format, a parser, a user. Internal callers
+    /// building from data that is correct by construction should use
+    /// [`new_unchecked`](Self::new_unchecked), which costs nothing in release.
     ///
-    /// # Panics
+    /// Mirrors [`Cospan::new`](Cospan::new) / [`Span::new`](crate::span::Span::new):
+    /// the checked constructor owns the plain name.
     ///
-    /// Panics if `left_names.len() != left.len()` or `right_names.len() != right.len()`.
-    #[must_use]
+    /// Name **uniqueness** is still assumed rather than enforced — port names
+    /// need only be `Eq`, so deduplicating them is not something this
+    /// constructor can do in general. See
+    /// [`assert_valid`](Self::assert_valid), which checks it under `Hash` in
+    /// debug builds.
+    ///
+    /// # Errors
+    ///
+    /// - [`CatgraphError::ConstructionNameCountMismatch`] if
+    ///   `left_names.len() != left.len()` or `right_names.len() != right.len()`.
+    ///   Before [#256](https://github.com/sustia-llc/catgraph/issues/256) these
+    ///   two were `assert!`s, so they aborted the process in every profile; they
+    ///   are now reported like every other construction failure.
+    /// - [`CatgraphError::ConstructionIndexOutOfBounds`] if any `left` or `right`
+    ///   entry targets an index at or beyond `middle.len()`. This check is not
+    ///   re-implemented here — it is [`Cospan::new`](Cospan::new)'s, so the leg
+    ///   bounds have exactly one home and one error shape.
+    ///
+    /// The name counts are checked before the leg bounds, and the domain side
+    /// before the codomain side, so the reported failure is the first one in
+    /// that order. Name counts come first because they are a property of the
+    /// argument lists alone: which one is reported never depends on whether the
+    /// apex happens to be malformed as well.
     pub fn new(
         left: Vec<MiddleIndex>,
         right: Vec<MiddleIndex>,
         middle: Vec<Lambda>,
         left_names: Vec<LeftPortName>,
         right_names: Vec<RightPortName>,
-    ) -> Self {
-        assert!(
-            left_names.len() == left.len(),
-            "There must be names for everything in the domain and no others"
-        );
-        assert!(
-            right_names.len() == right.len(),
-            "There must be names for everything in the codomain and no others"
-        );
-        Self {
-            cospan: Cospan::new(left, right, middle),
+    ) -> Result<Self, CatgraphError> {
+        for (leg, boundary_len, name_count) in [
+            (BoundaryLeg::Domain, left.len(), left_names.len()),
+            (BoundaryLeg::Codomain, right.len(), right_names.len()),
+        ] {
+            if name_count != boundary_len {
+                return Err(CatgraphError::ConstructionNameCountMismatch {
+                    leg,
+                    boundary_len,
+                    name_count,
+                });
+            }
+        }
+        Ok(Self {
+            cospan: Cospan::new(left, right, middle)?,
             left_names,
             right_names,
-        }
+        })
+    }
+
+    /// Construct without checking the name counts or the leg bounds.
+    ///
+    /// Both invariants are the caller's responsibility; both are re-checked by
+    /// `debug_assert!` only (via [`assert_valid_nohash`](Self::assert_valid_nohash)),
+    /// so a release build accepts a mismatched name list or an out-of-bounds leg
+    /// and defers the failure to whatever indexes it later. Use this where the
+    /// data is correct **by construction** and [`new`](Self::new) everywhere it
+    /// crosses a trust boundary.
+    ///
+    /// Mirrors [`Cospan::new_unchecked`](Cospan::new_unchecked): the whole check
+    /// set compiles away in release, so the constructor costs nothing there.
+    /// Note this is *uniformly* weaker than the pre-#256 `new`, whose leg bounds
+    /// were already `debug_assert!`-only but whose name counts were hard
+    /// `assert!`s — an `_unchecked` constructor that kept a release panic for one
+    /// of its two invariants would mean two different things by the same suffix.
+    #[must_use]
+    pub fn new_unchecked(
+        left: Vec<MiddleIndex>,
+        right: Vec<MiddleIndex>,
+        middle: Vec<Lambda>,
+        left_names: Vec<LeftPortName>,
+        right_names: Vec<RightPortName>,
+    ) -> Self {
+        let answer = Self {
+            cospan: Cospan::new_unchecked(left, right, middle),
+            left_names,
+            right_names,
+        };
+        answer.assert_valid_nohash(false);
+        answer
     }
 
     /// The named cospan with empty domain, codomain, and middle set.
     #[must_use]
     pub fn empty() -> Self {
-        Self::new(vec![], vec![], vec![], vec![], vec![])
+        Self::new_unchecked(vec![], vec![], vec![], vec![], vec![])
     }
 
     #[must_use]
@@ -591,6 +654,270 @@ mod test {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
+    // ---- #256: `new` validates in EVERY profile, `new_unchecked` does not ----
+
+    /// `NamedCospan::new` refuses a leg entry that overshoots the apex, on either
+    /// side, with the same payload `Cospan::new` reports — because it *is*
+    /// `Cospan::new`'s check, delegated rather than re-implemented.
+    ///
+    /// The check under test is unconditional, not a `debug_assert!`, so this
+    /// test states the release-build behaviour and must be run under `--release`
+    /// too. Before #256 this constructor built its cospan with
+    /// `Cospan::new_unchecked`, which made it the last public path in core that
+    /// accepted an out-of-bounds leg in a release build.
+    #[test]
+    fn named_cospan_new_rejects_out_of_bounds_leg_entries() {
+        use crate::errors::{BoundaryLeg, CatgraphError};
+
+        // Domain leg: entry 1 targets apex index 2, apex has 2 vertices.
+        // Both name counts are correct, so nothing but the leg check can fire.
+        // `NamedCospan` has no `Debug` impl, so `expect_err` is unavailable;
+        // `let`-`else` pins the same thing without widening the public API.
+        let Err(err) = NamedCospan::<char, &str, &str>::new(
+            vec![0, 2],
+            vec![1],
+            vec!['a', 'b'],
+            vec!["x", "y"],
+            vec!["z"],
+        ) else {
+            panic!("left leg index 2 is out of bounds for a 2-vertex apex");
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionIndexOutOfBounds {
+                leg: BoundaryLeg::Domain,
+                position: 1,
+                target: 2,
+                target_len: 2,
+            }
+        );
+        assert_eq!(
+            err.to_string(),
+            "construction error: domain leg entry 1 targets index 2, but the target set has 2 element(s)"
+        );
+
+        // The repaired input — same shape, leg entry pulled back in bounds —
+        // constructs, so the rejection above cannot be blamed on anything else.
+        let repaired = NamedCospan::<char, &str, &str>::new(
+            vec![0, 1],
+            vec![1],
+            vec!['a', 'b'],
+            vec!["x", "y"],
+            vec!["z"],
+        )
+        .expect("the repaired domain leg is in bounds");
+        assert_eq!(repaired.cospan().left_to_middle(), &[0, 1]);
+
+        // Codomain leg: entry 1 targets apex index 7, apex has 2 vertices.
+        let Err(err) = NamedCospan::<char, &str, &str>::new(
+            vec![0],
+            vec![1, 7],
+            vec!['a', 'b'],
+            vec!["x"],
+            vec!["y", "z"],
+        ) else {
+            panic!("right leg index 7 is out of bounds for a 2-vertex apex");
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionIndexOutOfBounds {
+                leg: BoundaryLeg::Codomain,
+                position: 1,
+                target: 7,
+                target_len: 2,
+            }
+        );
+
+        let repaired = NamedCospan::<char, &str, &str>::new(
+            vec![0],
+            vec![1, 0],
+            vec!['a', 'b'],
+            vec!["x"],
+            vec!["y", "z"],
+        )
+        .expect("the repaired codomain leg is in bounds");
+        assert_eq!(repaired.cospan().right_to_middle(), &[1, 0]);
+    }
+
+    /// `NamedCospan::new` refuses a port-name list whose length does not match
+    /// its boundary, on either side.
+    ///
+    /// Before #256 these two were `assert!`s (`named_cospan.rs:97-104`), i.e.
+    /// they aborted the process in **every** profile including release. They are
+    /// now reported like the leg-bounds failure, so a caller reconstructing a
+    /// named cospan from stored columns gets an error rather than a panic — the
+    /// whole point of `new` being the trust-boundary constructor.
+    #[test]
+    fn named_cospan_new_rejects_name_count_mismatch() {
+        use crate::errors::{BoundaryLeg, CatgraphError};
+
+        // Domain: 2 ports, 1 name. Legs are in bounds, so only this can fire.
+        let Err(err) = NamedCospan::<char, &str, &str>::new(
+            vec![0, 1],
+            vec![0],
+            vec!['a', 'b'],
+            vec!["x"],
+            vec!["z"],
+        ) else {
+            panic!("2 domain ports were given 1 name");
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionNameCountMismatch {
+                leg: BoundaryLeg::Domain,
+                boundary_len: 2,
+                name_count: 1,
+            }
+        );
+        assert_eq!(
+            err.to_string(),
+            "construction error: the domain has 2 port(s) but 1 port name(s) were supplied; \
+             there must be exactly one name per port"
+        );
+
+        // Repaired: the missing name supplied, everything else identical.
+        let repaired = NamedCospan::<char, &str, &str>::new(
+            vec![0, 1],
+            vec![0],
+            vec!['a', 'b'],
+            vec!["x", "y"],
+            vec!["z"],
+        )
+        .expect("2 domain ports with 2 names construct");
+        assert_eq!(repaired.left_names(), &vec!["x", "y"]);
+
+        // Codomain: 1 port, 2 names.
+        let Err(err) = NamedCospan::<char, &str, &str>::new(
+            vec![0, 1],
+            vec![0],
+            vec!['a', 'b'],
+            vec!["x", "y"],
+            vec!["z", "w"],
+        ) else {
+            panic!("1 codomain port was given 2 names");
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionNameCountMismatch {
+                leg: BoundaryLeg::Codomain,
+                boundary_len: 1,
+                name_count: 2,
+            }
+        );
+
+        let repaired = NamedCospan::<char, &str, &str>::new(
+            vec![0, 1],
+            vec![0],
+            vec!['a', 'b'],
+            vec!["x", "y"],
+            vec!["z"],
+        )
+        .expect("1 codomain port with 1 name constructs");
+        assert_eq!(repaired.right_names(), &vec!["z"]);
+
+        // Both sides mismatched: the domain is scanned first, so it is reported.
+        let Err(err) = NamedCospan::<char, &str, &str>::new(
+            vec![0, 1],
+            vec![0],
+            vec!['a', 'b'],
+            vec![],
+            vec!["z", "w"],
+        ) else {
+            panic!("both name lists are the wrong length");
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionNameCountMismatch {
+                leg: BoundaryLeg::Domain,
+                boundary_len: 2,
+                name_count: 0,
+            },
+            "the domain side must win the race, otherwise the reported leg is not deterministic"
+        );
+
+        // Name counts are checked BEFORE the leg bounds: with both broken, the
+        // name-count failure is the one reported. This pins the documented
+        // order, which is what makes the reported error independent of whether
+        // the apex happens to be malformed too.
+        let Err(err) = NamedCospan::<char, &str, &str>::new(
+            vec![0, 9],
+            vec![0],
+            vec!['a', 'b'],
+            vec!["x"],
+            vec!["z"],
+        ) else {
+            panic!("the domain name count is wrong AND its leg overshoots the apex");
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionNameCountMismatch {
+                leg: BoundaryLeg::Domain,
+                boundary_len: 2,
+                name_count: 1,
+            },
+            "name counts are documented to be checked before the leg bounds"
+        );
+    }
+
+    /// `new_unchecked` takes both invariants on trust: a release build accepts a
+    /// leg that overshoots the apex and a name list of the wrong length, exactly
+    /// as `Cospan::new_unchecked` accepts the former.
+    ///
+    /// Release-only, because in a debug build the `debug_assert!`s in
+    /// `assert_valid_nohash` fire — which IS the contract. Same shape as
+    /// `cospan::test::cospan_new_unchecked_accepts_what_new_refuses`.
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn named_cospan_new_unchecked_accepts_what_new_refuses() {
+        // Out-of-bounds domain leg.
+        let bad = NamedCospan::<char, &str, &str>::new_unchecked(
+            vec![0, 2],
+            vec![1],
+            vec!['a', 'b'],
+            vec!["x", "y"],
+            vec!["z"],
+        );
+        assert_eq!(bad.cospan().left_to_middle(), &[0, 2]);
+        assert_eq!(bad.cospan().middle().len(), 2);
+        assert!(
+            NamedCospan::<char, &str, &str>::new(
+                vec![0, 2],
+                vec![1],
+                vec!['a', 'b'],
+                vec!["x", "y"],
+                vec!["z"],
+            )
+            .is_err(),
+            "the same input must be refused by the checked constructor"
+        );
+
+        // Name list shorter than its boundary.
+        let bad = NamedCospan::<char, &str, &str>::new_unchecked(
+            vec![0, 1],
+            vec![0],
+            vec!['a', 'b'],
+            vec!["x"],
+            vec!["z"],
+        );
+        assert_eq!(bad.cospan().left_to_middle().len(), 2);
+        assert_eq!(
+            bad.left_names().len(),
+            1,
+            "new_unchecked keeps the caller's name list verbatim, mismatch and all"
+        );
+        assert!(
+            NamedCospan::<char, &str, &str>::new(
+                vec![0, 1],
+                vec![0],
+                vec!['a', 'b'],
+                vec!["x"],
+                vec!["z"],
+            )
+            .is_err(),
+            "the same input must be refused by the checked constructor"
+        );
+    }
+
     #[test]
     fn named_cospan_new() {
         let cospan: NamedCospan<char, &str, &str> = NamedCospan::new(
@@ -599,7 +926,8 @@ mod test {
             vec!['a', 'b'],
             vec!["x", "y"],
             vec!["z"],
-        );
+        )
+        .unwrap();
         assert_eq!(cospan.left_names().len(), 2);
         assert_eq!(cospan.right_names().len(), 1);
     }
@@ -624,7 +952,7 @@ mod test {
     #[test]
     fn named_cospan_add_boundary_node_known_target() {
         let mut cospan: NamedCospan<char, &str, &str> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec!["left1"], vec!["right1"]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec!["left1"], vec!["right1"]).unwrap();
 
         // Add left boundary node pointing to existing middle
         let idx = cospan.add_boundary_node_known_target(0, Left("left2"));
@@ -640,7 +968,7 @@ mod test {
     #[test]
     fn named_cospan_add_boundary_node_unknown_target() {
         let mut cospan: NamedCospan<char, &str, &str> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec!["left1"], vec!["right1"]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec!["left1"], vec!["right1"]).unwrap();
 
         // Add left boundary with new middle node
         let idx = cospan.add_boundary_node_unknown_target('b', Left("left2"));
@@ -654,7 +982,7 @@ mod test {
     #[test]
     fn named_cospan_delete_boundary_node() {
         let mut cospan: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0, 1], vec![0], vec!['a', 'b'], vec![1, 2], vec![3]);
+            NamedCospan::new(vec![0, 1], vec![0], vec!['a', 'b'], vec![1, 2], vec![3]).unwrap();
 
         cospan.delete_boundary_node(Left(0));
         assert_eq!(cospan.left_names().len(), 1);
@@ -666,7 +994,7 @@ mod test {
     #[test]
     fn named_cospan_delete_boundary_node_by_name() {
         let mut cospan: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0, 1], vec![0], vec!['a', 'b'], vec![1, 2], vec![3]);
+            NamedCospan::new(vec![0, 1], vec![0], vec!['a', 'b'], vec![1, 2], vec![3]).unwrap();
 
         cospan.delete_boundary_node_by_name(Left(1));
         assert_eq!(cospan.left_names().len(), 1);
@@ -679,7 +1007,7 @@ mod test {
     #[test]
     fn named_cospan_map_to_same() {
         let mut cospan: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0, 0], vec![0], vec!['a'], vec![1, 2], vec![3]);
+            NamedCospan::new(vec![0, 0], vec![0], vec!['a'], vec![1, 2], vec![3]).unwrap();
 
         // Both left nodes map to same middle
         assert!(cospan.map_to_same(Left(1), Left(2)));
@@ -697,7 +1025,8 @@ mod test {
             vec!['a', 'a'],
             vec![1, 2],
             vec![3, 4],
-        );
+        )
+        .unwrap();
 
         // Connect two nodes with same label
         cospan.connect_pair(Left(1), Left(2));
@@ -713,7 +1042,8 @@ mod test {
             vec!['a', 'b', 'c'],
             vec![1, 2, 3],
             vec![4, 5],
-        );
+        )
+        .unwrap();
 
         // Find nodes with even names
         let found = cospan.find_nodes_by_name_predicate(|n| n % 2 == 0, |n| n % 2 == 0, false);
@@ -727,7 +1057,7 @@ mod test {
     #[test]
     fn named_cospan_change_boundary_node_name() {
         let mut cospan: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]).unwrap();
 
         cospan.change_boundary_node_name(Left((1, 10)));
         assert_eq!(cospan.left_names(), &vec![10]);
@@ -739,7 +1069,7 @@ mod test {
     #[test]
     fn named_cospan_change_boundary_node_names() {
         let mut cospan: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0, 1], vec![0], vec!['a', 'b'], vec![1, 2], vec![3]);
+            NamedCospan::new(vec![0, 1], vec![0], vec!['a', 'b'], vec![1, 2], vec![3]).unwrap();
 
         // Change all left names
         let left_fn = |n: &mut i32| *n *= 10;
@@ -755,7 +1085,7 @@ mod test {
     #[test]
     fn named_cospan_add_middle() {
         let mut cospan: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]).unwrap();
 
         cospan.add_middle('b');
         // Middle now has 2 elements
@@ -764,7 +1094,7 @@ mod test {
     #[test]
     fn named_cospan_map() {
         let cospan: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]).unwrap();
 
         let mapped = cospan.map(|c| c.to_ascii_uppercase());
         assert_eq!(mapped.domain(), vec!['A']);
@@ -773,9 +1103,9 @@ mod test {
     #[test]
     fn named_cospan_monoidal() {
         let cospan1: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]).unwrap();
         let cospan2: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['b'], vec![3], vec![4]);
+            NamedCospan::new(vec![0], vec![0], vec!['b'], vec![3], vec![4]).unwrap();
 
         let mut combined = cospan1;
         combined.monoidal(cospan2);
@@ -787,9 +1117,9 @@ mod test {
     #[test]
     fn named_cospan_compose() {
         let cospan1: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]).unwrap();
         let cospan2: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![3], vec![4]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![3], vec![4]).unwrap();
 
         let composed = cospan1.compose(&cospan2);
         assert!(composed.is_ok());
@@ -801,14 +1131,14 @@ mod test {
     #[test]
     fn named_cospan_composable() {
         let cospan1: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]).unwrap();
         let cospan2: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![3], vec![4]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![3], vec![4]).unwrap();
 
         assert!(cospan1.composable(&cospan2).is_ok());
 
         let cospan3: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['b'], vec![5], vec![6]);
+            NamedCospan::new(vec![0], vec![0], vec!['b'], vec![5], vec![6]).unwrap();
         assert!(cospan1.composable(&cospan3).is_err());
     }
 
@@ -822,7 +1152,8 @@ mod test {
             vec!['a', 'b'],
             vec![1, 2],
             vec![3, 4],
-        );
+        )
+        .unwrap();
 
         let p = Permutation::rotation_left(2, 1);
 
@@ -838,7 +1169,7 @@ mod test {
     #[test]
     fn named_cospan_assert_valid() {
         let cospan: NamedCospan<char, i32, i32> =
-            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]);
+            NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]).unwrap();
         cospan.assert_valid(false);
         cospan.assert_valid_nohash(false);
     }

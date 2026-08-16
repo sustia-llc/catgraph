@@ -132,7 +132,8 @@ fn composition() {
 fn cospan_bridge() {
     println!("=== Cospan Bridge ===\n");
 
-    let cospan: Cospan<char> = Cospan::new(vec![0, 1, 1, 1], vec![2, 2], vec!['N', 'H', 'A']);
+    let cospan: Cospan<char> =
+        Cospan::new(vec![0, 1, 1, 1], vec![2, 2], vec!['N', 'H', 'A']).unwrap();
     let net = PetriNet::from_cospan(&cospan);
     println!(
         "from_cospan: {} places, {} transitions",

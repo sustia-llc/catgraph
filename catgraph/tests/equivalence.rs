@@ -175,7 +175,7 @@ fn cap_types() {
 fn roundtrip_a_to_h_to_a_objects() {
     // A_{H_{Part}}(X) = H_{Part}(∅, X) = Part(∅ ⊕ X) = Part(X)
     let a = alg();
-    let partition = Cospan::new(vec![], vec![0, 0], vec!['a']);
+    let partition = Cospan::new(vec![], vec![0, 0], vec!['a']).unwrap();
 
     let morph = PartMorph::new(Arc::clone(&a), partition.clone(), vec![], vec!['a', 'b']);
     assert!(morph.domain().is_empty());
@@ -188,7 +188,7 @@ fn roundtrip_a_to_h_to_a_morphisms() {
     let part = PartitionAlgebra;
 
     // Element e ∈ Part([a]) = Cospan(∅, [a])
-    let e = Cospan::new(vec![], vec![0], vec!['a']);
+    let e = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
     // Cospan c: [a] → [a] (identity)
     let c = Cospan::<char>::identity(&vec!['a']);
     // Part(c)(e) — direct
@@ -202,7 +202,7 @@ fn roundtrip_partition_identity_via_h() {
     // The identity in H_{Part}([a],[a]) should act as identity when composed
     let a = alg();
     // Create a non-trivial morphism: [a] → [a] via a partition
-    let s = Cospan::new(vec![], vec![0, 0], vec!['a']);
+    let s = Cospan::new(vec![], vec![0, 0], vec!['a']).unwrap();
     let f = PartMorph::new(Arc::clone(&a), s, vec!['a'], vec!['a']);
 
     let id = PartMorph::identity_in(Arc::clone(&a), &['a']);
@@ -224,7 +224,7 @@ fn roundtrip_cospan_to_partition_objects() {
     assert!(unit.codomain().is_empty());
 
     // Map through cospan ∅ → [a] to get element of Part([a])
-    let s = Cospan::new(vec![], vec![0], vec!['a']);
+    let s = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
     let elem = part.map_cospan(&s, &unit).unwrap();
     assert!(elem.domain().is_empty());
     assert_eq!(elem.codomain(), vec!['a']);

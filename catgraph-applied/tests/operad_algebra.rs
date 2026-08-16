@@ -41,13 +41,16 @@ fn make_inner_5_port() -> WiringDiagram<bool, i32, usize> {
         (Dir::Out, 3),
         (Dir::Out, 4),
     ];
-    WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0, 1, 2, 2, 0],
-        vec![true, true, false],
-        vec![],
-        inner_right_names,
-    ))
+    WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0, 1, 2, 2, 0],
+            vec![true, true, false],
+            vec![],
+            inner_right_names,
+        )
+        .unwrap(),
+    )
 }
 
 /// Borrowed from the same test: outer diagram has 2 inner circles; circle 0
@@ -62,13 +65,16 @@ fn make_outer_two_inner_circles() -> WiringDiagram<bool, i32, usize> {
         (Dir::In, 0, 4),
         (Dir::Undirected, 1, 500),
     ];
-    WiringDiagram::new(NamedCospan::new(
-        vec![0, 0, 1, 1, 0, 1],
-        vec![0],
-        vec![true, false],
-        outer_left_names,
-        vec![(Dir::Out, 0)],
-    ))
+    WiringDiagram::new(
+        NamedCospan::new(
+            vec![0, 0, 1, 1, 0, 1],
+            vec![0],
+            vec![true, false],
+            outer_left_names,
+            vec![(Dir::Out, 0)],
+        )
+        .unwrap(),
+    )
 }
 
 #[test]

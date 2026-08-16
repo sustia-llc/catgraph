@@ -13,6 +13,28 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed
+
+- **`PetriNet::transition_as_cospan` now panics on an arc that references a
+  place the net does not have**, instead of silently returning a structurally
+  invalid `Cospan`
+  ([#256](https://github.com/sustia-llc/catgraph/issues/256)). Its legs are arc
+  place indices, and `PetriNet::new` accepts arcs without checking them against
+  `places`, so this is the one construction site in the crate that is *not*
+  correct by construction — it therefore routes through the newly checked
+  `Cospan::new` and reports the stated invariant. The method already documented
+  a `# Panics` section (for arc weights not representable as `u64`) and already
+  panics on an out-of-range `transition` index, so garbage-in-panic-out is its
+  existing contract; a well-formed net is unaffected.
+
+- **`WiringDiagram` construction sites follow core's `NamedCospan::new`, which
+  now returns `Result`** ([#256](https://github.com/sustia-llc/catgraph/issues/256)).
+  No change to this crate's own API — every `NamedCospan::new` call in
+  `catgraph-applied` lives in `#[cfg(test)]`, `tests/`, `examples/` or
+  `benches/`, and each gained a `.unwrap()`. Users copying the
+  `wiring_diagram` / `operad_algebra_circ` examples need the same `.unwrap()`
+  (or `?`) after upgrading.
+
 ### Added
 
 - **`FaithfulnessReport::matrix_buckets`** — the number of distinct matrix

@@ -20,13 +20,16 @@ fn main() {
         (Dir::Out, 3),
         (Dir::Out, 4),
     ];
-    let inner: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0, 1, 2, 2, 0],
-        vec![true, true, false],
-        vec![],
-        inner_right_names,
-    ));
+    let inner: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0, 1, 2, 2, 0],
+            vec![true, true, false],
+            vec![],
+            inner_right_names,
+        )
+        .unwrap(),
+    );
 
     // Outer host: 2 inner circles; circle 0 has 5 ports that match the
     // inner's outer ports; circle 1 has 1 port. Exactly one outer port.
@@ -38,13 +41,16 @@ fn main() {
         (Dir::In, 0, 4),
         (Dir::Undirected, 1, 500),
     ];
-    let mut outer: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-        vec![0, 0, 1, 1, 0, 1],
-        vec![0],
-        vec![true, false],
-        outer_left_names,
-        vec![(Dir::Out, 0)],
-    ));
+    let mut outer: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![0, 0, 1, 1, 0, 1],
+            vec![0],
+            vec![true, false],
+            outer_left_names,
+            vec![(Dir::Out, 0)],
+        )
+        .unwrap(),
+    );
 
     let before = CircAlgebra.evaluate(&outer, &[]).expect("evaluate before");
     println!("Circ(outer) before substitution = {before}");

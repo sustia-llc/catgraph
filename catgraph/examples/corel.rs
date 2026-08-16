@@ -10,7 +10,7 @@ use catgraph::{
 fn main() {
     println!("=== Corel<char> example ===\n");
 
-    let c = Cospan::new(vec![0], vec![0], vec!['z']);
+    let c = Cospan::new(vec![0], vec![0], vec!['z']).unwrap();
     let corel = Corel::new(c).expect("jointly surjective");
 
     println!(
@@ -26,7 +26,7 @@ fn main() {
         println!("  class {i}: {} elements", class.len());
     }
 
-    let second = Corel::new(Cospan::new(vec![0], vec![0], vec!['z'])).unwrap();
+    let second = Corel::new(Cospan::new(vec![0], vec![0], vec!['z']).unwrap()).unwrap();
     let composed = corel.compose(&second).unwrap();
     println!(
         "\nComposed shape: {:?} → {:?}",

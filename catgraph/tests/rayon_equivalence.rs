@@ -55,7 +55,7 @@ fn build_named_cospan(n: usize) -> NamedCospan<char, i32, i32> {
     let middle: Vec<char> = (0..2 * n).map(|_| 'x').collect();
     let left_names: Vec<i32> = (0..n as i32).collect();
     let right_names: Vec<i32> = (n as i32..2 * n as i32).collect();
-    NamedCospan::new(left, right, middle, left_names, right_names)
+    NamedCospan::new(left, right, middle, left_names, right_names).unwrap()
 }
 
 /// Sequential reference reimplementation of `find_nodes_by_name_predicate`,
@@ -194,7 +194,7 @@ fn cospan_to_frobenius_hflip_deterministic() {
     let right: Vec<usize> = (0..n).rev().collect();
 
     let build = || {
-        let cospan = Cospan::new(left.clone(), right.clone(), middle.clone());
+        let cospan = Cospan::new(left.clone(), right.clone(), middle.clone()).unwrap();
         cospan_to_frobenius::<i32, ()>(&cospan).expect("epi-mono decomposition should succeed")
     };
     let first = build();
@@ -211,8 +211,9 @@ fn cospan_to_frobenius_hflip_deterministic() {
 fn ccr_deterministic_across_runs() {
     use catgraph::{corel::Corel, cospan::Cospan};
 
-    let a = Corel::<char>::new(Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'a'])).unwrap();
-    let b = Corel::<char>::new(Cospan::new(vec![0, 0], vec![0, 0], vec!['a'])).unwrap();
+    let a =
+        Corel::<char>::new(Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'a']).unwrap()).unwrap();
+    let b = Corel::<char>::new(Cospan::new(vec![0, 0], vec![0, 0], vec!['a']).unwrap()).unwrap();
 
     let r1 = a.coarsest_common_refinement(&b).unwrap();
     let r2 = a.coarsest_common_refinement(&b).unwrap();

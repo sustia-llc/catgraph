@@ -30,7 +30,7 @@ fn partition_unit_coherence() {
 fn partition_identity_is_identity_function() {
     let alg = PartitionAlgebra;
     // element: [] → [a, b] (a partition of {a, b} into one group)
-    let element = Cospan::new(vec![], vec![0, 1], vec!['a', 'b']);
+    let element = Cospan::new(vec![], vec![0, 1], vec!['a', 'b']).unwrap();
     let id = Cospan::<char>::identity(&vec!['a', 'b']);
     let mapped = alg.map_cospan(&id, &element).unwrap();
     // Identity should preserve the element's codomain
@@ -41,7 +41,7 @@ fn partition_identity_is_identity_function() {
 fn partition_functoriality() {
     let alg = PartitionAlgebra;
     // element: [] → [a]
-    let element = Cospan::new(vec![], vec![0], vec!['a']);
+    let element = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
     // c1: [a] → [a] (identity)
     let c1 = Cospan::<char>::identity(&vec!['a']);
     // c2: [a] → [a] (identity)
@@ -59,8 +59,8 @@ fn partition_functoriality() {
 #[test]
 fn partition_lax_monoidal_coherence() {
     let alg = PartitionAlgebra;
-    let a = Cospan::new(vec![], vec![0], vec!['a']);
-    let b = Cospan::new(vec![], vec![0], vec!['b']);
+    let a = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
+    let b = Cospan::new(vec![], vec![0], vec!['b']).unwrap();
     let combined: Cospan<char> = alg.lax_monoidal(&a, &b);
     assert!(combined.domain().is_empty());
     assert_eq!(combined.codomain(), vec!['a', 'b']);
@@ -70,9 +70,9 @@ fn partition_lax_monoidal_coherence() {
 fn partition_merge_cospan() {
     let alg = PartitionAlgebra;
     // element: [] → [a, a] (two nodes, both type 'a')
-    let element = Cospan::new(vec![], vec![0, 1], vec!['a', 'a']);
+    let element = Cospan::new(vec![], vec![0, 1], vec!['a', 'a']).unwrap();
     // merge: [a, a] → [a] (both inputs map to same node)
-    let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+    let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
     let mapped = alg.map_cospan(&merge, &element).unwrap();
     assert!(mapped.domain().is_empty());
     assert_eq!(mapped.codomain(), vec!['a']);
@@ -82,9 +82,9 @@ fn partition_merge_cospan() {
 fn partition_split_cospan() {
     let alg = PartitionAlgebra;
     // element: [] → [a]
-    let element = Cospan::new(vec![], vec![0], vec!['a']);
+    let element = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
     // split: [a] → [a, a] (one input maps to one node, two outputs from same node)
-    let split = Cospan::new(vec![0], vec![0, 0], vec!['a']);
+    let split = Cospan::new(vec![0], vec![0, 0], vec!['a']).unwrap();
     let mapped = alg.map_cospan(&split, &element).unwrap();
     assert!(mapped.domain().is_empty());
     assert_eq!(mapped.codomain(), vec!['a', 'a']);
@@ -143,7 +143,7 @@ fn name_merge_cospan() {
     // element: [] → [a, a] (cup_single gives η;δ)
     let element: FM = cup_single('a');
     // merge: [a, a] → [a]
-    let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+    let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
     let mapped = alg.map_cospan(&merge, &element).unwrap();
     assert!(mapped.domain().is_empty());
     assert_eq!(mapped.codomain(), vec!['a']);
@@ -155,7 +155,7 @@ fn name_split_cospan() {
     // element: [] → [a]
     let element: FM = FrobeniusOperation::Unit('a').into();
     // split: [a] → [a, a]
-    let split = Cospan::new(vec![0], vec![0, 0], vec!['a']);
+    let split = Cospan::new(vec![0], vec![0, 0], vec!['a']).unwrap();
     let mapped = alg.map_cospan(&split, &element).unwrap();
     assert!(mapped.domain().is_empty());
     assert_eq!(mapped.codomain(), vec!['a', 'a']);
@@ -209,7 +209,7 @@ fn arb_part_element() -> impl Strategy<Value = Cospan<char>> {
     (1usize..=3, prop::sample::select(vec!['a', 'b', 'c'])).prop_map(|(n, c)| {
         let cod: Vec<char> = std::iter::repeat_n(c, n).collect();
         let right_to_mid: Vec<usize> = (0..n).collect();
-        Cospan::new(vec![], right_to_mid, cod)
+        Cospan::new(vec![], right_to_mid, cod).unwrap()
     })
 }
 
@@ -299,7 +299,7 @@ proptest! {
 #[test]
 fn prop_4_6_partition_identity_is_unique_self_map() {
     let alg = PartitionAlgebra;
-    let c = Cospan::new(vec![], vec![0], vec!['a']);
+    let c = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
     let mapped = initial_map(&alg, &c);
     assert_eq!(mapped.codomain(), c.codomain());
     assert_eq!(mapped.middle().to_vec(), c.middle().to_vec());
@@ -341,6 +341,7 @@ fn relabel_part_element(c: &Cospan<char>) -> Cospan<u32> {
         c.right_to_middle().to_vec(),
         new_middle,
     )
+    .unwrap()
 }
 
 #[test]
@@ -364,9 +365,9 @@ fn lemma_4_3_relabeling_naturality() {
     let tgt_part = PartitionAlgebra;
 
     // e: [] → [a, a] in Part<char> (two disjoint middle nodes both type 'a')
-    let e = Cospan::new(vec![], vec![0, 1], vec!['a', 'a']);
+    let e = Cospan::new(vec![], vec![0, 1], vec!['a', 'a']).unwrap();
     // c: [a, a] → [a] (merge) in Cospan<char>
-    let c = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+    let c = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
 
     // LHS: α_y(A_H(c)(e))
     let lhs_src_elem: Cospan<char> = src_part.map_cospan(&c, &e).unwrap();
@@ -388,8 +389,8 @@ fn lemma_4_3_relabeling_monoidal() {
     let src_part = PartitionAlgebra;
     let tgt_part = PartitionAlgebra;
 
-    let e1 = Cospan::new(vec![], vec![0], vec!['a']);
-    let e2 = Cospan::new(vec![], vec![0], vec!['b']);
+    let e1 = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
+    let e2 = Cospan::new(vec![], vec![0], vec!['b']).unwrap();
 
     // LHS: α_{x⊕y}(A_H.lax_monoidal(e1, e2))
     let combined_src: Cospan<char> = src_part.lax_monoidal(&e1, &e2);
@@ -409,7 +410,7 @@ fn lemma_4_3_relabeling_matches_direct_relabel() {
     // F = RelabelingFunctor is exactly pointwise relabeling of the cospan middle,
     // so the induced α must agree with hand-written `relabel_part_element`.
     let relabel: RelabelingFunctor<fn(char) -> u32> = RelabelingFunctor::new(char_to_u32);
-    let c = Cospan::new(vec![0, 1], vec![0], vec!['a', 'b']);
+    let c = Cospan::new(vec![0, 1], vec![0], vec!['a', 'b']).unwrap();
     let lhs: Cospan<u32> = functor_induced_algebra_map(&relabel, &c).unwrap();
     let rhs = relabel_part_element(&c);
     assert_eq!(lhs.middle(), rhs.middle());
@@ -438,9 +439,9 @@ fn lemma_4_3_cospan_to_frobenius_naturality() {
     let tgt_name = NameAlgebra::<String>::new();
 
     // e: [] → [a, a] (two disjoint nodes, both type 'a')
-    let e = Cospan::new(vec![], vec![0, 1], vec!['a', 'a']);
+    let e = Cospan::new(vec![], vec![0, 1], vec!['a', 'a']).unwrap();
     // c: [a, a] → [a] (merge)
-    let c = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+    let c = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
 
     // LHS: α_y(Part(c)(e))
     let lhs_src_elem: Cospan<char> = src_part.map_cospan(&c, &e).unwrap();
@@ -460,8 +461,8 @@ fn lemma_4_3_cospan_to_frobenius_monoidal() {
     let src_part = PartitionAlgebra;
     let tgt_name = NameAlgebra::<String>::new();
 
-    let e1 = Cospan::new(vec![], vec![0], vec!['a']);
-    let e2 = Cospan::new(vec![], vec![0], vec!['b']);
+    let e1 = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
+    let e2 = Cospan::new(vec![], vec![0], vec!['b']).unwrap();
 
     let combined_src: Cospan<char> = src_part.lax_monoidal(&e1, &e2);
     let lhs: FM = functor_induced_algebra_map(&f, &combined_src).unwrap();

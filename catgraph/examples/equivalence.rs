@@ -73,7 +73,7 @@ fn main() {
 
     // Direction 2: A → H_A → A_{H_A} = A
     println!("  Direction 2: A → H_A → A_(H_A) = A");
-    let part_elem = Cospan::new(vec![], vec![0], vec!['a']);
+    let part_elem = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
     let as_morph = PartMorph::new(Arc::clone(&alg), part_elem, vec![], vec!['a']);
     println!(
         "    Part([a]) element as H_Part(∅,[a]): {:?} → {:?}",
@@ -86,7 +86,7 @@ fn main() {
     println!("    A_(Cospan_Λ) = Part_Λ (Remark 4.5)");
     let part = PartitionAlgebra;
     let unit: Cospan<char> = part.unit();
-    let s = Cospan::new(vec![], vec![0], vec!['a']);
+    let s = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
     let elem = part.map_cospan(&s, &unit).unwrap();
     println!("    Part([a]) element: ∅ → {:?}", elem.codomain());
 

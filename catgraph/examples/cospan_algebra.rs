@@ -28,7 +28,7 @@ fn main() {
     );
 
     // An element of Part([a, b]): a partition [] → [a, b]
-    let element = Cospan::new(vec![], vec![0, 1], vec!['a', 'b']);
+    let element = Cospan::new(vec![], vec![0, 1], vec!['a', 'b']).unwrap();
     println!(
         "Element:  domain={:?}, codomain={:?}, middle={:?}",
         element.domain(),
@@ -47,8 +47,8 @@ fn main() {
 
     // Functorial action: map through a merge cospan
     // Merge: [a, a] → [a] (both domain nodes map to same middle)
-    let merge_elem = Cospan::new(vec![], vec![0, 0], vec!['a', 'a']);
-    let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+    let merge_elem = Cospan::new(vec![], vec![0, 0], vec!['a', 'a']).unwrap();
+    let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
     let merged = part.map_cospan(&merge, &merge_elem).unwrap();
     println!(
         "map(μ):   domain={:?}, codomain={:?}  (merged to single group)",
@@ -57,8 +57,8 @@ fn main() {
     );
 
     // Lax monoidal: combine two elements via tensor product
-    let a_elem = Cospan::new(vec![], vec![0], vec!['a']);
-    let b_elem = Cospan::new(vec![], vec![0], vec!['b']);
+    let a_elem = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
+    let b_elem = Cospan::new(vec![], vec![0], vec!['b']).unwrap();
     let combined = part.lax_monoidal(&a_elem, &b_elem);
     println!(
         "a ⊕ b:    domain={:?}, codomain={:?}  (monoidal product)",
@@ -70,7 +70,7 @@ fn main() {
     let c1 = Cospan::<char>::identity(&vec!['a']);
     let c2 = Cospan::<char>::identity(&vec!['a']);
     let composed = c1.compose(&c2).unwrap();
-    let elem_a = Cospan::new(vec![], vec![0], vec!['a']);
+    let elem_a = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
     let via_composed = part.map_cospan(&composed, &elem_a).unwrap();
     let via_sequential = {
         let step1 = part.map_cospan(&c1, &elem_a).unwrap();
@@ -114,7 +114,7 @@ fn main() {
 
     // Map a cup [] → [a,a] through a merge cospan [a,a] → [a]
     let cup_a: FM = cup_single('a');
-    let merge_a = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+    let merge_a = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
     let mapped_cup = name_alg.map_cospan(&merge_a, &cup_a).unwrap();
     println!(
         "map(μ, cup): domain={:?}, codomain={:?}  (cup composed with merge)",
@@ -144,7 +144,7 @@ fn main() {
     );
 
     // Merge cospan → multiplication generator
-    let merge_cospan = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+    let merge_cospan = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
     let merge_morph: FM = cospan_to_frobenius(&merge_cospan).unwrap();
     println!(
         "merge:      {:?} → {:?}  (multiplication)",
@@ -153,7 +153,7 @@ fn main() {
     );
 
     // Split cospan → comultiplication generator
-    let split_cospan = Cospan::new(vec![0], vec![0, 0], vec!['a']);
+    let split_cospan = Cospan::new(vec![0], vec![0, 0], vec!['a']).unwrap();
     let split_morph: FM = cospan_to_frobenius(&split_cospan).unwrap();
     println!(
         "split:      {:?} → {:?}  (comultiplication)",
@@ -162,7 +162,7 @@ fn main() {
     );
 
     // Creation cospan → unit generator
-    let create_cospan = Cospan::new(vec![], vec![0], vec!['a']);
+    let create_cospan = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
     let create_morph: FM = cospan_to_frobenius(&create_cospan).unwrap();
     println!(
         "create:     {:?} → {:?}  (unit η)",
@@ -171,7 +171,7 @@ fn main() {
     );
 
     // Destruction cospan → counit generator
-    let destroy_cospan = Cospan::new(vec![0], vec![], vec!['a']);
+    let destroy_cospan = Cospan::new(vec![0], vec![], vec!['a']).unwrap();
     let destroy_morph: FM = cospan_to_frobenius(&destroy_cospan).unwrap();
     println!(
         "destroy:    {:?} → {:?}  (counit ε)",

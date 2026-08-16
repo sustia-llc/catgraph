@@ -33,13 +33,16 @@ type WireName = usize;
 /// Middle nodes: 0 = true, 1 = true, 2 = false.
 /// Right (outer) boundary: (In,0)→mid0, (Out,1)→mid1, (In,2)→mid2.
 fn leaf_diagram() -> WiringDiagram<bool, CircleName, WireName> {
-    WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0, 1, 2],
-        vec![true, true, false],
-        vec![],
-        vec![(Dir::In, 0), (Dir::Out, 1), (Dir::In, 2)],
-    ))
+    WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0, 1, 2],
+            vec![true, true, false],
+            vec![],
+            vec![(Dir::In, 0), (Dir::Out, 1), (Dir::In, 2)],
+        )
+        .unwrap(),
+    )
 }
 
 /// An outer WD with one inner circle (circle 0) whose interface matches
@@ -53,22 +56,25 @@ fn leaf_diagram() -> WiringDiagram<bool, CircleName, WireName> {
 /// All inner ports of type true map to the same middle node, and the type-false
 /// port maps to a second middle node — matching the unit test pattern.
 fn one_hole_outer() -> WiringDiagram<bool, CircleName, WireName> {
-    WiringDiagram::new(NamedCospan::new(
-        // left → middle  (inner circle 0 ports)
-        vec![0, 0, 1],
-        // right → middle (outer boundary)
-        vec![0],
-        // middle types
-        vec![true, false],
-        // left names: orientation-flipped mirror of leaf_diagram's right names
-        vec![
-            (Dir::Out, 0, 0), // mirrors (In, 0)
-            (Dir::In, 0, 1),  // mirrors (Out, 1)
-            (Dir::Out, 0, 2), // mirrors (In, 2)
-        ],
-        // right (outer) names
-        vec![(Dir::Out, 0)],
-    ))
+    WiringDiagram::new(
+        NamedCospan::new(
+            // left → middle  (inner circle 0 ports)
+            vec![0, 0, 1],
+            // right → middle (outer boundary)
+            vec![0],
+            // middle types
+            vec![true, false],
+            // left names: orientation-flipped mirror of leaf_diagram's right names
+            vec![
+                (Dir::Out, 0, 0), // mirrors (In, 0)
+                (Dir::In, 0, 1),  // mirrors (Out, 1)
+                (Dir::Out, 0, 2), // mirrors (In, 2)
+            ],
+            // right (outer) names
+            vec![(Dir::Out, 0)],
+        )
+        .unwrap(),
+    )
 }
 
 /// An outer WD with two inner circles (circle 1 and circle 2), untyped labels.
@@ -81,49 +87,58 @@ fn one_hole_outer() -> WiringDiagram<bool, CircleName, WireName> {
 /// circles because `operadic_substitution` drops the `InterCircle` when building
 /// the permutation target — see line 213 of `wiring_diagram.rs`.
 fn two_hole_outer() -> WiringDiagram<(), CircleName, WireName> {
-    WiringDiagram::new(NamedCospan::new(
-        // left → middle
-        vec![0, 1, 2],
-        // right → middle
-        vec![0, 2],
-        // middle
-        vec![(), (), ()],
-        // left names: flipped mirror of inner circles' outer boundaries
-        // Wire names 10,11 for circle 1; wire name 20 for circle 2 — globally unique.
-        vec![
-            (Dir::Out, 1, 10), // circle 1, mirrors (In, 10) on leaf
-            (Dir::In, 1, 11),  // circle 1, mirrors (Out, 11) on leaf
-            (Dir::Out, 2, 20), // circle 2, mirrors (In, 20) on leaf
-        ],
-        // right (outer) names
-        vec![(Dir::Out, 50), (Dir::In, 51)],
-    ))
+    WiringDiagram::new(
+        NamedCospan::new(
+            // left → middle
+            vec![0, 1, 2],
+            // right → middle
+            vec![0, 2],
+            // middle
+            vec![(), (), ()],
+            // left names: flipped mirror of inner circles' outer boundaries
+            // Wire names 10,11 for circle 1; wire name 20 for circle 2 — globally unique.
+            vec![
+                (Dir::Out, 1, 10), // circle 1, mirrors (In, 10) on leaf
+                (Dir::In, 1, 11),  // circle 1, mirrors (Out, 11) on leaf
+                (Dir::Out, 2, 20), // circle 2, mirrors (In, 20) on leaf
+            ],
+            // right (outer) names
+            vec![(Dir::Out, 50), (Dir::In, 51)],
+        )
+        .unwrap(),
+    )
 }
 
 /// A leaf WD with 2 outer ports matching circle 1 of `two_hole_outer`.
 ///
 /// Right names must be the orientation-flipped mirror of the outer's circle 1 left names.
 fn leaf_for_circle_1() -> WiringDiagram<(), CircleName, WireName> {
-    WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0, 1],
-        vec![(), ()],
-        vec![],
-        // Flipped from outer's (Dir::Out,1,10) and (Dir::In,1,11)
-        vec![(Dir::In, 10), (Dir::Out, 11)],
-    ))
+    WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0, 1],
+            vec![(), ()],
+            vec![],
+            // Flipped from outer's (Dir::Out,1,10) and (Dir::In,1,11)
+            vec![(Dir::In, 10), (Dir::Out, 11)],
+        )
+        .unwrap(),
+    )
 }
 
 /// A leaf WD with 1 outer port matching circle 2 of `two_hole_outer`.
 fn leaf_for_circle_2() -> WiringDiagram<(), CircleName, WireName> {
-    WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0],
-        vec![()],
-        vec![],
-        // Flipped from outer's (Dir::Out,2,20)
-        vec![(Dir::In, 20)],
-    ))
+    WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0],
+            vec![()],
+            vec![],
+            // Flipped from outer's (Dir::Out,2,20)
+            vec![(Dir::In, 20)],
+        )
+        .unwrap(),
+    )
 }
 
 // ===========================================================================
@@ -158,15 +173,17 @@ fn basic_operadic_substitution_succeeds() {
 fn type_mismatch_fails_substitution() {
     // Build an outer expecting circle 0 with ports of type true/true/false,
     // but provide an inner whose outer boundary has different types.
-    let mismatched_inner: WiringDiagram<bool, CircleName, WireName> =
-        WiringDiagram::new(NamedCospan::new(
+    let mismatched_inner: WiringDiagram<bool, CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
             vec![],
             vec![0, 1, 2],
             // All false — does not match the outer's expectation (true, true, false)
             vec![false, false, false],
             vec![],
             vec![(Dir::In, 0), (Dir::Out, 1), (Dir::In, 2)],
-        ));
+        )
+        .unwrap(),
+    );
     let mut outer = one_hole_outer();
     let result = outer.operadic_substitution(0, mismatched_inner);
     assert_err!(result);
@@ -390,22 +407,28 @@ fn delete_inner_port_breaks_substitution() {
 #[test]
 fn sequential_compose_basic() {
     // WD_A: no inner circles, domain = [], codomain = [(), ()]
-    let wd_a: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0, 1],
-        vec![(), ()],
-        vec![],
-        vec![(Dir::Out, 10), (Dir::In, 11)],
-    ));
+    let wd_a: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0, 1],
+            vec![(), ()],
+            vec![],
+            vec![(Dir::Out, 10), (Dir::In, 11)],
+        )
+        .unwrap(),
+    );
 
     // WD_B: domain = [(), ()], codomain = [()]
-    let wd_b: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(NamedCospan::new(
-        vec![0, 0],
-        vec![0],
-        vec![()],
-        vec![(Dir::In, 1, 10), (Dir::Out, 1, 11)],
-        vec![(Dir::Out, 50)],
-    ));
+    let wd_b: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![0, 0],
+            vec![0],
+            vec![()],
+            vec![(Dir::In, 1, 10), (Dir::Out, 1, 11)],
+            vec![(Dir::Out, 50)],
+        )
+        .unwrap(),
+    );
 
     assert_eq!(wd_a.codomain(), vec![(), ()]);
     assert_eq!(wd_b.domain(), vec![(), ()]);
@@ -424,13 +447,16 @@ fn sequential_compose_basic() {
 /// Composing with an identity named cospan preserves domain and codomain.
 #[test]
 fn compose_identity_is_neutral() {
-    let wd: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(NamedCospan::new(
-        vec![0],
-        vec![0, 1],
-        vec![(), ()],
-        vec![(Dir::In, 0, 10)],
-        vec![(Dir::Out, 20), (Dir::In, 21)],
-    ));
+    let wd: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![0],
+            vec![0, 1],
+            vec![(), ()],
+            vec![(Dir::In, 0, 10)],
+            vec![(Dir::Out, 20), (Dir::In, 21)],
+        )
+        .unwrap(),
+    );
 
     // Build an identity WD whose domain/codomain = wd.codomain() = [(), ()].
     // Port names must differ from wd's right names (names are independent).
@@ -458,21 +484,27 @@ fn compose_identity_is_neutral() {
 /// Parallel composition concatenates domain and codomain type lists.
 #[test]
 fn monoidal_tensor_of_two_diagrams() {
-    let wd_a: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(NamedCospan::new(
-        vec![0],
-        vec![0],
-        vec![()],
-        vec![(Dir::In, 0, 10)],
-        vec![(Dir::Out, 50)],
-    ));
+    let wd_a: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![0],
+            vec![0],
+            vec![()],
+            vec![(Dir::In, 0, 10)],
+            vec![(Dir::Out, 50)],
+        )
+        .unwrap(),
+    );
 
-    let wd_b: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(NamedCospan::new(
-        vec![0, 1],
-        vec![0],
-        vec![(), ()],
-        vec![(Dir::In, 1, 20), (Dir::Out, 1, 21)],
-        vec![(Dir::In, 51)],
-    ));
+    let wd_b: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![0, 1],
+            vec![0],
+            vec![(), ()],
+            vec![(Dir::In, 1, 20), (Dir::Out, 1, 21)],
+            vec![(Dir::In, 51)],
+        )
+        .unwrap(),
+    );
 
     let dom_a = wd_a.domain();
     let dom_b = wd_b.domain();

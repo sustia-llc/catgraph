@@ -103,7 +103,10 @@ where
 
     fn map_mor(&self, f: &Cospan<L1>) -> Result<Cospan<L2>, CatgraphError> {
         let new_middle: Vec<L2> = f.middle().iter().map(|z| (self.relabel)(*z)).collect();
-        Ok(Cospan::new(
+        // Correct by construction: the legs are copied verbatim from an
+        // already-valid cospan and `relabel` is pointwise, so the apex keeps its
+        // length.
+        Ok(Cospan::new_unchecked(
             f.left_to_middle().to_vec(),
             f.right_to_middle().to_vec(),
             new_middle,
@@ -191,7 +194,7 @@ mod tests {
     fn relabeling_map_mor_preserves_structure() {
         let f = RelabelingFunctor::new(char_to_u32);
         // merge cospan: [a, a] → [a], both left nodes to middle[0]
-        let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+        let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
         let mapped = f.map_mor(&merge).unwrap();
         assert_eq!(mapped.left_to_middle(), merge.left_to_middle());
         assert_eq!(mapped.right_to_middle(), merge.right_to_middle());
@@ -233,7 +236,7 @@ mod tests {
     #[test]
     fn cospan_to_frob_functor_map_mor_merge() {
         let f = CospanToFrobeniusFunctor::<String>::new();
-        let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+        let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
         let mapped: FM = f.map_mor(&merge).unwrap();
         assert_eq!(mapped.domain(), vec!['a', 'a']);
         assert_eq!(mapped.codomain(), vec!['a']);

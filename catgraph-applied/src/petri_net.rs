@@ -440,7 +440,10 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if any arc weight is not representable as `u64`.
+    /// Panics if any arc weight is not representable as `u64`, or if an arc
+    /// references a place index at or beyond [`Self::place_count`] — the arcs of
+    /// a well-formed net index its own places, and [`PetriNet::new`] does not
+    /// check that for the caller.
     #[must_use]
     pub fn transition_as_cospan(&self, transition: usize) -> Cospan<Lambda> {
         let t = &self.transitions[transition];
@@ -458,7 +461,12 @@ where
                 right.push(*p);
             }
         }
+        // NOT correct by construction: the legs are arc place indices, and
+        // `PetriNet::new` accepts arcs without checking them against `places`.
+        // The checked constructor turns a malformed net into a stated-invariant
+        // panic here rather than an invalid cospan that fails somewhere later.
         Cospan::new(left, right, self.places.clone())
+            .expect("invariant: a net's arcs reference place indices that exist in that net")
     }
 
     /// Parallel composition (monoidal product): disjoint union of places and transitions.
@@ -1040,7 +1048,8 @@ mod test {
 
     #[test]
     fn from_cospan_single_transition() {
-        let cospan: Cospan<char> = Cospan::new(vec![0, 1, 1, 1], vec![2, 2], vec!['N', 'H', 'A']);
+        let cospan: Cospan<char> =
+            Cospan::new(vec![0, 1, 1, 1], vec![2, 2], vec!['N', 'H', 'A']).unwrap();
         let net = PetriNet::from_cospan(&cospan);
         assert_eq!(net.place_count(), 3);
         assert_eq!(net.transition_count(), 1);

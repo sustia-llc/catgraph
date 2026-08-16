@@ -18,7 +18,7 @@ use catgraph::{
 
 /// Build a cospan from slices for brevity.
 fn cospan(left: &[usize], right: &[usize], middle: &[char]) -> Cospan<char> {
-    Cospan::new(left.to_vec(), right.to_vec(), middle.to_vec())
+    Cospan::new(left.to_vec(), right.to_vec(), middle.to_vec()).unwrap()
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 //!
 //! Composition is via pullback. Middle pairs map into Lambda-typed domain and codomain sets.
 
-use crate::errors::CatgraphError;
+use crate::errors::{BoundaryLeg, CatgraphError};
 
 use {
     crate::{
@@ -40,46 +40,123 @@ where
     Lambda: Sized + Eq + Copy + Debug,
 {
     /// Debug-asserts structural invariants: leg indices in bounds, type consistency, identity flags.
+    ///
+    /// Every check is written **inside** its `debug_assert!`, so the whole
+    /// method compiles away in release. That is load-bearing rather than
+    /// cosmetic: the label-agreement check indexes both boundaries, so when it
+    /// was computed into a `let` first (as it was before
+    /// [#256](https://github.com/sustia-llc/catgraph/issues/256)) an
+    /// out-of-bounds middle pair panicked with a bare "index out of bounds"
+    /// even in release — which is neither what the method's name promises nor
+    /// what [`Span::new_unchecked`] documents. The bounds assertions still
+    /// precede the label assertion, so a debug build reports the specific
+    /// invariant rather than an index panic.
     pub fn assert_valid(&self, check_id_strong: bool, check_id_weak: bool) {
-        let left_size = self.left.len();
-        let left_in_bounds = self.middle.iter().all(|(z, _)| *z < left_size);
         debug_assert!(
-            left_in_bounds,
+            self.middle.iter().all(|(z, _)| *z < self.left.len()),
             "A target for one of the left arrows was out of bounds"
         );
-        let right_size = self.right.len();
-        let right_in_bounds = self.middle.iter().all(|(_, z)| *z < right_size);
         debug_assert!(
-            right_in_bounds,
+            self.middle.iter().all(|(_, z)| *z < self.right.len()),
             "A target for one of the right arrows was out of bounds"
         );
-        let left_right_types_match = self
-            .middle
-            .iter()
-            .all(|(z1, z2)| self.left[*z1] == self.right[*z2]);
         debug_assert!(
-            left_right_types_match,
+            self.middle
+                .iter()
+                .all(|(z1, z2)| self.left[*z1] == self.right[*z2]),
             "There was a left and right linked by something in the span, but their lambda types didn't match"
         );
         if check_id_strong || (check_id_weak && self.is_left_id) {
-            let is_left_really_id = represents_id(self.middle_to_left().into_iter());
             debug_assert_eq!(
-                is_left_really_id, self.is_left_id,
+                represents_id(self.middle_to_left().into_iter()),
+                self.is_left_id,
                 "The identity nature of the left arrow was wrong"
             );
         }
         if check_id_strong || (check_id_weak && self.is_right_id) {
-            let is_right_really_id = represents_id(self.middle_to_right().into_iter());
             debug_assert_eq!(
-                is_right_really_id, self.is_right_id,
+                represents_id(self.middle_to_right().into_iter()),
+                self.is_right_id,
                 "The identity nature of the right arrow was wrong"
             );
         }
     }
 
     /// Construct a span from domain labels, codomain labels, and middle pairs, computing identity flags.
-    #[must_use]
+    ///
+    /// Every middle pair is checked against both boundaries **in every build
+    /// profile**: each component must be in bounds, and the two labels it names
+    /// must agree. This is the trust-boundary constructor: use it for pairs
+    /// arriving from outside the crate — a store, a wire format, a parser, a
+    /// user. Internal callers building a span from data that is correct by
+    /// construction should use [`new_unchecked`](Self::new_unchecked), which
+    /// costs nothing in release.
+    ///
+    /// Mirrors [`Rel::new`](Rel::new) / [`Corel::new`](crate::corel::Corel::new):
+    /// the checked constructor owns the plain name.
+    ///
+    /// # Errors
+    ///
+    /// - [`CatgraphError::ConstructionIndexOutOfBounds`] if a pair's `.0` is at
+    ///   or beyond `left.len()`, or its `.1` at or beyond `right.len()`, naming
+    ///   the leg, the pair's position, the out-of-range target and the boundary
+    ///   size.
+    /// - [`CatgraphError::ConstructionLabelMismatch`] if a pair is in bounds on
+    ///   both sides but `left[pair.0] != right[pair.1]`, naming the pair's
+    ///   position, both indices and both labels.
+    ///
+    /// Pairs are scanned in ascending position order, and within a pair the
+    /// bounds checks precede the label check, so the reported failure is the
+    /// first one in that order.
     pub fn new(
+        left: Vec<Lambda>,
+        right: Vec<Lambda>,
+        middle: Vec<(LeftIndex, RightIndex)>,
+    ) -> Result<Self, CatgraphError> {
+        for (position, &(z1, z2)) in middle.iter().enumerate() {
+            if z1 >= left.len() {
+                return Err(CatgraphError::ConstructionIndexOutOfBounds {
+                    leg: BoundaryLeg::Domain,
+                    position,
+                    target: z1,
+                    target_len: left.len(),
+                });
+            }
+            if z2 >= right.len() {
+                return Err(CatgraphError::ConstructionIndexOutOfBounds {
+                    leg: BoundaryLeg::Codomain,
+                    position,
+                    target: z2,
+                    target_len: right.len(),
+                });
+            }
+            if left[z1] != right[z2] {
+                return Err(CatgraphError::ConstructionLabelMismatch {
+                    position,
+                    left_index: z1,
+                    right_index: z2,
+                    left_label: format!("{:?}", left[z1]),
+                    right_label: format!("{:?}", right[z2]),
+                });
+            }
+        }
+        Ok(Self::new_unchecked(left, right, middle))
+    }
+
+    /// Construct a span without checking the middle pairs against the boundaries.
+    ///
+    /// Both the bounds and the label-agreement invariants are the caller's
+    /// responsibility; they are re-checked by `debug_assert!` only, so a release
+    /// build accepts a malformed pair and defers the failure to whatever indexes
+    /// it later. Use this where the pairs are correct **by construction** —
+    /// composition results, identity and dagger builders, permutation builders,
+    /// monoidal products — and [`new`](Self::new) everywhere data crosses a
+    /// trust boundary.
+    ///
+    /// Mirrors [`Rel::new_unchecked`](Rel::new_unchecked) /
+    /// [`Corel::new_unchecked`](crate::corel::Corel::new_unchecked).
+    #[must_use]
+    pub fn new_unchecked(
         left: Vec<Lambda>,
         right: Vec<Lambda>,
         middle: Vec<(LeftIndex, RightIndex)>,
@@ -182,7 +259,10 @@ where
         F: Fn(Lambda) -> Mu,
         Mu: Sized + Eq + Copy + Debug,
     {
-        Span::new(
+        // Correct by construction: `f` is applied pointwise, so both boundaries
+        // keep their lengths (bounds preserved) and any pair whose labels agreed
+        // before still names two labels that are images of one value under `f`.
+        Span::new_unchecked(
             self.left.iter().map(|l| f(*l)).collect(),
             self.right.iter().map(|l| f(*l)).collect(),
             self.middle.clone(),
@@ -199,7 +279,9 @@ where
     /// Swap domain and codomain (dagger / adjoint involution).
     #[must_use]
     pub fn dagger(&self) -> Self {
-        Self::new(
+        // Correct by construction: boundaries and pair components are swapped
+        // together, so bounds and label agreement transpose with them.
+        Self::new_unchecked(
             self.codomain(),
             self.domain(),
             self.middle.iter().map(|(z, w)| (*w, *z)).collect(),
@@ -235,7 +317,9 @@ where
         self.composable(other)?;
         // could shortuct if self.is_right_id or other.is_left_id, but unnecessary
         let max_middle = self.middle.len().max(other.middle.len());
-        let mut answer = Self::new(
+        // Correct by construction: the middle starts empty (only pre-sized), and
+        // every subsequent pair goes through `add_middle`, which re-checks labels.
+        let mut answer = Self::new_unchecked(
             self.left.clone(),
             other.right.clone(),
             Vec::with_capacity(max_middle),
@@ -494,8 +578,12 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
         }
 
         let capacity = self.0.middle.len().min(other.0.middle.len());
-        let mut ret_val =
-            Span::<Lambda>::new(self.domain(), self.codomain(), Vec::with_capacity(capacity));
+        // Empty middle, so trivially valid; `add_middle` guards every insertion.
+        let mut ret_val = Span::<Lambda>::new_unchecked(
+            self.domain(),
+            self.codomain(),
+            Vec::with_capacity(capacity),
+        );
 
         #[allow(clippy::from_iter_instead_of_collect)]
         let self_pairs: HashSet<(usize, usize)> = HashSet::from_iter(self.0.middle.iter().copied());
@@ -520,8 +608,12 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
         let target_size = self.codomain().len();
 
         let capacity = source_size * target_size - self.0.middle.len();
-        let mut ret_val =
-            Span::<Lambda>::new(self.domain(), self.codomain(), Vec::with_capacity(capacity));
+        // Empty middle, so trivially valid; `add_middle` guards every insertion.
+        let mut ret_val = Span::<Lambda>::new_unchecked(
+            self.domain(),
+            self.codomain(),
+            Vec::with_capacity(capacity),
+        );
 
         #[allow(clippy::from_iter_instead_of_collect)]
         let self_pairs: HashSet<(usize, usize)> = HashSet::from_iter(self.0.middle.iter().copied());
@@ -605,13 +697,127 @@ mod test {
     use crate::category::{Composable, HasIdentity};
     use crate::monoidal::Monoidal;
 
+    // ---- #256: `new` validates in EVERY profile, `new_unchecked` does not ----
+
+    /// `Span::new` refuses a middle pair that points outside either boundary,
+    /// and says which leg, which pair, which target, and how big that boundary
+    /// was.
+    ///
+    /// The check under test is the *unconditional* one in `new`, not the
+    /// `debug_assert!` in `assert_valid` — this test therefore states the
+    /// release-build behaviour and must be run under `--release` too.
+    #[test]
+    fn span_new_rejects_out_of_bounds_middle_pairs() {
+        use crate::errors::{BoundaryLeg, CatgraphError};
+
+        // `Span` has no `Debug`, so `expect_err` is unavailable — destructure.
+        // Domain side: pair 1's `.0` is 4, the domain has 2 elements.
+        let Err(err) = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (4, 1)]) else {
+            panic!("left index 4 is out of bounds for a 2-element domain")
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionIndexOutOfBounds {
+                leg: BoundaryLeg::Domain,
+                position: 1,
+                target: 4,
+                target_len: 2,
+            }
+        );
+        assert_eq!(
+            err.to_string(),
+            "construction error: domain leg entry 1 targets index 4, but the target set has 2 element(s)"
+        );
+
+        // Codomain side: pair 1's `.1` is 6, the codomain has 2 elements.
+        let Err(err) = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 6)]) else {
+            panic!("right index 6 is out of bounds for a 2-element codomain")
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionIndexOutOfBounds {
+                leg: BoundaryLeg::Codomain,
+                position: 1,
+                target: 6,
+                target_len: 2,
+            }
+        );
+
+        // Both components bad: the domain component is checked first.
+        let Err(err) = Span::new(vec!['a'], vec!['a'], vec![(3, 8)]) else {
+            panic!("both components are out of bounds")
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionIndexOutOfBounds {
+                leg: BoundaryLeg::Domain,
+                position: 0,
+                target: 3,
+                target_len: 1,
+            },
+            "the domain component must win the race, otherwise the reported leg is not deterministic"
+        );
+
+        // The valid neighbour of the first case still constructs.
+        assert!(Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]).is_ok());
+    }
+
+    /// `Span::new` refuses an in-bounds pair whose two labels disagree — a span
+    /// witnesses a relation between *equally labelled* boundary elements.
+    ///
+    /// Release-build behaviour, same as the bounds test above.
+    #[test]
+    fn span_new_rejects_label_mismatch() {
+        use crate::errors::CatgraphError;
+
+        // Pair 0 agrees ('a' = 'a'); pair 1 does not ('b' vs 'c').
+        let Err(err) = Span::new(vec!['a', 'b'], vec!['a', 'c'], vec![(0, 0), (1, 1)]) else {
+            panic!("pair 1 links 'b' on the domain to 'c' on the codomain")
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionLabelMismatch {
+                position: 1,
+                left_index: 1,
+                right_index: 1,
+                left_label: "'b'".to_string(),
+                right_label: "'c'".to_string(),
+            }
+        );
+        assert_eq!(
+            err.to_string(),
+            "construction error: middle pair 1 links domain index 1 to codomain index 1, \
+             but their labels disagree ('b' vs 'c')"
+        );
+
+        // The pairing, not the boundaries, is what decides. Same two boundaries,
+        // two different pairings: the diagonal mismatches, the anti-diagonal is fine.
+        assert!(Span::new(vec!['a', 'b'], vec!['b', 'a'], vec![(0, 0)]).is_err());
+        assert!(Span::new(vec!['a', 'b'], vec!['b', 'a'], vec![(0, 1), (1, 0)]).is_ok());
+    }
+
+    /// `new_unchecked` keeps the pre-#256 contract: both invariants are the
+    /// caller's, checked by `debug_assert!` only. Release-only, because in a
+    /// debug build those `debug_assert!`s fire — which IS the contract.
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn span_new_unchecked_accepts_what_new_refuses() {
+        let out_of_bounds = Span::new_unchecked(vec!['a'], vec!['a'], vec![(3, 0)]);
+        assert_eq!(out_of_bounds.middle_pairs(), &[(3, 0)]);
+        assert!(Span::new(vec!['a'], vec!['a'], vec![(3, 0)]).is_err());
+
+        let mismatched = Span::new_unchecked(vec!['a'], vec!['b'], vec![(0, 0)]);
+        assert_eq!(mismatched.middle_pairs(), &[(0, 0)]);
+        assert!(Span::new(vec!['a'], vec!['b'], vec![(0, 0)]).is_err());
+    }
+
     #[test]
     fn span_new_and_accessors() {
         // Create a simple span with matching types
         let left = vec!['a', 'b'];
         let right = vec!['a', 'b'];
         let middle = vec![(0, 0), (1, 1)];
-        let span = Span::new(left.clone(), right.clone(), middle);
+        let span = Span::new(left.clone(), right.clone(), middle).unwrap();
 
         assert_eq!(span.domain(), left);
         assert_eq!(span.codomain(), right);
@@ -649,8 +855,8 @@ mod test {
         // f;g should have middle elements where f's right matches g's left
         let left = vec!['a', 'b'];
         let right = vec!['a', 'b'];
-        let f = Span::new(left.clone(), right.clone(), vec![(0, 0), (1, 1)]);
-        let g = Span::new(left.clone(), right.clone(), vec![(0, 0), (1, 1)]);
+        let f = Span::new(left.clone(), right.clone(), vec![(0, 0), (1, 1)]).unwrap();
+        let g = Span::new(left.clone(), right.clone(), vec![(0, 0), (1, 1)]).unwrap();
 
         let result = f.compose(&g);
         assert!(result.is_ok());
@@ -659,8 +865,8 @@ mod test {
     #[test]
     fn span_compose_mismatch() {
         // Spans with matching internal types but incompatible interfaces
-        let span1 = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]);
-        let span2 = Span::new(vec!['b'], vec!['b'], vec![(0, 0)]);
+        let span1 = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]).unwrap();
+        let span2 = Span::new(vec!['b'], vec!['b'], vec![(0, 0)]).unwrap();
 
         let result = span1.compose(&span2);
         assert!(result.is_err());
@@ -668,8 +874,8 @@ mod test {
 
     #[test]
     fn span_monoidal() {
-        let span1 = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]);
-        let span2 = Span::new(vec!['b'], vec!['b'], vec![(0, 0)]);
+        let span1 = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]).unwrap();
+        let span2 = Span::new(vec!['b'], vec!['b'], vec![(0, 0)]).unwrap();
 
         let mut combined = span1;
         combined.monoidal(span2);
@@ -681,7 +887,7 @@ mod test {
     #[test]
     fn span_dagger() {
         // middle pairs must have matching types at their positions
-        let span = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]);
+        let span = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]).unwrap();
         let dagger = span.dagger();
 
         assert_eq!(dagger.domain(), vec!['a', 'b']);
@@ -691,17 +897,17 @@ mod test {
     #[test]
     fn span_is_jointly_injective() {
         // Injective: no duplicate pairs
-        let span1 = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]);
+        let span1 = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]).unwrap();
         assert!(span1.is_jointly_injective());
 
         // Not injective: duplicate pair
-        let span2 = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (0, 0)]);
+        let span2 = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (0, 0)]).unwrap();
         assert!(!span2.is_jointly_injective());
     }
 
     #[test]
     fn span_add_middle() {
-        let mut span = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![]);
+        let mut span = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![]).unwrap();
 
         // Add matching types
         let result = span.add_middle((0, 0));
@@ -714,7 +920,7 @@ mod test {
 
     #[test]
     fn span_map() {
-        let span = Span::new(vec![1, 2], vec![1, 2], vec![(0, 0), (1, 1)]);
+        let span = Span::new(vec![1, 2], vec![1, 2], vec![(0, 0), (1, 1)]).unwrap();
         let mapped = span.map(|x| x * 10);
 
         assert_eq!(mapped.domain(), vec![10, 20]);
@@ -724,7 +930,7 @@ mod test {
     #[test]
     fn span_add_boundary_node() {
         // Start with matching types
-        let mut span = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]);
+        let mut span = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]).unwrap();
 
         let left_idx = span.add_boundary_node(Left('c'));
         assert!(matches!(left_idx, Left(1)));
@@ -766,13 +972,10 @@ mod test {
     #[test]
     fn rel_subsumes() {
         let types = vec!['a', 'b'];
-        let full = Rel::new(Span::new(
-            types.clone(),
-            types.clone(),
-            vec![(0, 0), (1, 1)],
-        ))
-        .unwrap();
-        let partial = Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0)])).unwrap();
+        let full = Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0), (1, 1)]).unwrap())
+            .unwrap();
+        let partial =
+            Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0)]).unwrap()).unwrap();
 
         assert!(full.subsumes(&partial).unwrap());
         assert!(!partial.subsumes(&full).unwrap());
@@ -781,13 +984,10 @@ mod test {
     #[test]
     fn rel_intersection() {
         let types = vec!['a', 'b'];
-        let rel1 = Rel::new(Span::new(
-            types.clone(),
-            types.clone(),
-            vec![(0, 0), (1, 1)],
-        ))
-        .unwrap();
-        let rel2 = Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0)])).unwrap();
+        let rel1 = Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0), (1, 1)]).unwrap())
+            .unwrap();
+        let rel2 =
+            Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0)]).unwrap()).unwrap();
 
         let intersect = rel1.intersection(&rel2).unwrap();
         assert_eq!(intersect.0.middle.len(), 1);
@@ -796,8 +996,10 @@ mod test {
     #[test]
     fn rel_union() {
         let types = vec!['a', 'b'];
-        let rel1 = Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0)])).unwrap();
-        let rel2 = Rel::new(Span::new(types.clone(), types.clone(), vec![(1, 1)])).unwrap();
+        let rel1 =
+            Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 0)]).unwrap()).unwrap();
+        let rel2 =
+            Rel::new(Span::new(types.clone(), types.clone(), vec![(1, 1)]).unwrap()).unwrap();
 
         let union = rel1.union(&rel2).unwrap();
         assert_eq!(union.0.middle.len(), 2);
@@ -805,11 +1007,11 @@ mod test {
 
     #[test]
     fn rel_is_homogeneous() {
-        let same = Rel::new(Span::new(vec!['a'], vec!['a'], vec![(0, 0)])).unwrap();
+        let same = Rel::new(Span::new(vec!['a'], vec!['a'], vec![(0, 0)]).unwrap()).unwrap();
         assert!(same.is_homogeneous());
 
         // For non-homogeneous, use empty middle to avoid type mismatch validation
-        let diff = Rel::new(Span::new(vec!['a'], vec!['b'], vec![])).unwrap();
+        let diff = Rel::new(Span::new(vec!['a'], vec!['b'], vec![]).unwrap()).unwrap();
         assert!(!diff.is_homogeneous());
     }
 
@@ -822,12 +1024,9 @@ mod test {
         // For not reflexive, we can use a relation that's missing the diagonal
         // Use same type at all positions
         let same_types = vec!['a', 'a'];
-        let not_reflexive = Rel::new(Span::new(
-            same_types.clone(),
-            same_types.clone(),
-            vec![(0, 1)],
-        ))
-        .unwrap();
+        let not_reflexive =
+            Rel::new(Span::new(same_types.clone(), same_types.clone(), vec![(0, 1)]).unwrap())
+                .unwrap();
         assert!(!not_reflexive.is_reflexive());
     }
 
@@ -835,17 +1034,14 @@ mod test {
     fn rel_is_symmetric() {
         let types = vec!['a', 'a'];
         // Symmetric: contains both (0,1) and (1,0)
-        let symmetric = Rel::new(Span::new(
-            types.clone(),
-            types.clone(),
-            vec![(0, 1), (1, 0)],
-        ))
-        .unwrap();
+        let symmetric =
+            Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 1), (1, 0)]).unwrap())
+                .unwrap();
         assert!(symmetric.is_symmetric());
 
         // Not symmetric: only (0,1)
         let not_symmetric =
-            Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 1)])).unwrap();
+            Rel::new(Span::new(types.clone(), types.clone(), vec![(0, 1)]).unwrap()).unwrap();
         assert!(!not_symmetric.is_symmetric());
     }
 
@@ -890,7 +1086,7 @@ mod test {
         let pairs = vec![(0, 0), (2, 1)];
         let original_count = pairs.len();
 
-        let rel = Rel::new(Span::new(domain.clone(), codomain.clone(), pairs)).unwrap();
+        let rel = Rel::new(Span::new(domain.clone(), codomain.clone(), pairs).unwrap()).unwrap();
 
         let comp = rel.complement().expect("complement should succeed");
 

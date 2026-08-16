@@ -200,7 +200,9 @@ where
 
         // Materialize the full member cospan (discrete legs on `0..m`).
         let legs: Vec<NodeId> = (0..m).collect();
-        let cospan_inner = Cospan::new(legs.clone(), legs, members.to_vec());
+        // Correct by construction: both legs are `0..m` and the apex is the
+        // `m`-element member list.
+        let cospan_inner = Cospan::new_unchecked(legs.clone(), legs, members.to_vec());
         let mut wc = WeightedCospan::from_cospan_uniform(cospan_inner, UnitInterval::zero());
         for i in 0..m {
             wc.set_weight(i, i, UnitInterval::one()); // identity axiom d(i,i) = 0

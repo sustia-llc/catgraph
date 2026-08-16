@@ -33,10 +33,10 @@ use catgraph::cospan::Cospan;
 
 fn main() {
     // c1: left legs → {a, b}, right legs → {a, b, c}. Middle = [a, b, c].
-    let c1: Cospan<char> = Cospan::new(vec![0, 1], vec![0, 1, 2], vec!['a', 'b', 'c']);
+    let c1: Cospan<char> = Cospan::new(vec![0, 1], vec![0, 1, 2], vec!['a', 'b', 'c']).unwrap();
     // c2 is chosen so c1's right boundary matches c2's left boundary label-by-label:
     // c2.left → [a, b, c] (indices [0, 1, 2]), so pushout composes cleanly.
-    let c2: Cospan<char> = Cospan::new(vec![0, 1, 2], vec![1, 2], vec!['a', 'b', 'c']);
+    let c2: Cospan<char> = Cospan::new(vec![0, 1, 2], vec![1, 2], vec!['a', 'b', 'c']).unwrap();
 
     let composed = c1
         .compose(&c2)

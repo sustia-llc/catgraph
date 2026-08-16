@@ -158,7 +158,7 @@ fn arb_cospan() -> impl Strategy<Value = Cospan<char>> {
             };
             (left, right, labels)
         })
-        .prop_map(|(left, right, middle)| Cospan::new(left, right, middle))
+        .prop_map(|(left, right, middle)| Cospan::new(left, right, middle).unwrap())
 }
 
 /// Generate two composable cospans: f: A -> B and g: B -> C.
@@ -205,7 +205,7 @@ fn arb_composable_cospans() -> impl Strategy<Value = (Cospan<char>, Cospan<char>
             .prop_map(move |(codomain, left_g, right_g, extra_labels)| {
                 let mut middle_g: Vec<char> = codomain;
                 middle_g.extend(extra_labels);
-                let g = Cospan::new(left_g, right_g, middle_g);
+                let g = Cospan::new(left_g, right_g, middle_g).unwrap();
                 (f.clone(), g)
             })
     })
@@ -254,7 +254,7 @@ fn arb_three_composable_cospans()
             .prop_map(move |(codomain_g, left_h, right_h, extra_labels)| {
                 let mut middle_h: Vec<char> = codomain_g;
                 middle_h.extend(extra_labels);
-                let h = Cospan::new(left_h, right_h, middle_h);
+                let h = Cospan::new(left_h, right_h, middle_h).unwrap();
                 (f.clone(), g.clone(), h)
             })
     })
@@ -281,7 +281,7 @@ fn arb_span() -> impl Strategy<Value = DebugSpan> {
             };
             (Just(labels.clone()), Just(labels), pairs)
         })
-        .prop_map(|(left, right, middle)| DebugSpan(Span::new(left, right, middle)))
+        .prop_map(|(left, right, middle)| DebugSpan(Span::new(left, right, middle).unwrap()))
 }
 
 // ---------------------------------------------------------------------------
@@ -414,7 +414,8 @@ impl Clone for DebugRel {
             s.left().to_vec(),
             s.right().to_vec(),
             s.middle_pairs().to_vec(),
-        );
+        )
+        .unwrap();
         Self(Rel::new_unchecked(span))
     }
 }
@@ -456,7 +457,7 @@ fn arb_homogeneous_rel() -> impl Strategy<Value = DebugRel> {
                 .filter(|&(_, keep)| *keep)
                 .map(|(pair, _)| pair)
                 .collect();
-            let span = Span::new(types.clone(), types, pairs);
+            let span = Span::new(types.clone(), types, pairs).unwrap();
             DebugRel(Rel::new_unchecked(span))
         })
 }
@@ -480,7 +481,9 @@ fn arb_three_homogeneous_rels() -> impl Strategy<Value = (DebugRel, DebugRel, De
                     .filter(|&(_, keep)| *keep)
                     .map(|(pair, _)| pair)
                     .collect();
-                DebugRel(Rel::new_unchecked(Span::new(types.clone(), types, pairs)))
+                DebugRel(Rel::new_unchecked(
+                    Span::new(types.clone(), types, pairs).unwrap(),
+                ))
             };
             (build(&m1), build(&m2), build(&m3))
         })

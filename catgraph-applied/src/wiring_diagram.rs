@@ -258,13 +258,16 @@ mod test {
             (Dir::Out, 3),
             (Dir::Out, 4),
         ];
-        let mut example: WiringDiagram<_, (), _> = WiringDiagram::new(NamedCospan::new(
-            vec![],
-            vec![0, 1, 2, 2, 0],
-            vec![true, true, false],
-            vec![],
-            unchanged_right_names.clone(),
-        ));
+        let mut example: WiringDiagram<_, (), _> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![],
+                vec![0, 1, 2, 2, 0],
+                vec![true, true, false],
+                vec![],
+                unchanged_right_names.clone(),
+            )
+            .unwrap(),
+        );
         assert_eq!(*example.0.right_names(), unchanged_right_names);
         example.change_boundary_node_name(Right(((Dir::In, 0), (Dir::Out, 0))));
         let changed_names = example.0.right_names();
@@ -307,14 +310,16 @@ mod test {
         0 and 2 are oriented in to the boundary
         their names are just the numbers and orientations
         */
-        let example_inner: WiringDiagram<_, CircleName, WireName> =
-            WiringDiagram::new(NamedCospan::new(
+        let example_inner: WiringDiagram<_, CircleName, WireName> = WiringDiagram::new(
+            NamedCospan::new(
                 vec![],
                 vec![0, 1, 2, 2, 0],
                 vec![true, true, false],
                 vec![],
                 inner_right_names,
-            ));
+            )
+            .unwrap(),
+        );
         /*
         outer circle has 2 inner circles
         the first has 5 ports for the outer of previous to connect to
@@ -323,13 +328,16 @@ mod test {
         2 and 3 are connected to a common middle with type false
         the second has 1 port which is undirected and labelled 500 and of type false
         */
-        let mut example_outer: WiringDiagram<_, _, _> = WiringDiagram::new(NamedCospan::new(
-            vec![0, 0, 1, 1, 0, 1],
-            vec![0],
-            vec![true, false],
-            outer_left_names.clone(),
-            vec![(Dir::Out, 0)],
-        ));
+        let mut example_outer: WiringDiagram<_, _, _> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![0, 0, 1, 1, 0, 1],
+                vec![0],
+                vec![true, false],
+                outer_left_names.clone(),
+                vec![(Dir::Out, 0)],
+            )
+            .unwrap(),
+        );
         /*
         permuting the domain of outer doesn't matter because the
         wires will be matched up by name not by index
@@ -409,13 +417,16 @@ mod test {
             they are named w,x,y,z and are connected to 1,4,5,6
         there are no colors to the wires
         */
-        let mut example_outer: WiringDiagram<_, _, _> = WiringDiagram::new(NamedCospan::new(
-            vec![1, 0, 2, 3, 2, 0, 3, 4, 5],
-            vec![0, 1, 2, 4, 5],
-            vec![(); 6],
-            outer_left_names.clone(),
-            outer_right_names.clone(),
-        ));
+        let mut example_outer: WiringDiagram<_, _, _> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![1, 0, 2, 3, 2, 0, 3, 4, 5],
+                vec![0, 1, 2, 4, 5],
+                vec![(); 6],
+                outer_left_names.clone(),
+                outer_right_names.clone(),
+            )
+            .unwrap(),
+        );
         /*
         permuting the domain of outer doesn't matter because the
         wires will be matched up by name not by index
@@ -460,13 +471,16 @@ mod test {
         r and s go to the same middle
         there are no internal circles
         */
-        let example_inner_1: WiringDiagram<_, _, _> = WiringDiagram::new(NamedCospan::new(
-            vec![],
-            vec![1, 1, 0],
-            vec![(), ()],
-            inner_1_left_names,
-            inner_1_right_names,
-        ));
+        let example_inner_1: WiringDiagram<_, _, _> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![],
+                vec![1, 1, 0],
+                vec![(), ()],
+                inner_1_left_names,
+                inner_1_right_names,
+            )
+            .unwrap(),
+        );
 
         let subbed = example_outer.operadic_substitution(1, example_inner_1);
         assert_ok!(subbed);
@@ -595,13 +609,16 @@ mod test {
         that middle connects to a inner circle with port name q
         */
         let make_example_inner_2 = || {
-            WiringDiagram::new(NamedCospan::new(
-                vec![0],
-                vec![0, 0],
-                vec![()],
-                inner_2_left_names.clone(),
-                inner_2_right_names.clone(),
-            ))
+            WiringDiagram::new(
+                NamedCospan::new(
+                    vec![0],
+                    vec![0, 0],
+                    vec![()],
+                    inner_2_left_names.clone(),
+                    inner_2_right_names.clone(),
+                )
+                .unwrap(),
+            )
         };
 
         let subbed = example_outer.operadic_substitution(1, make_example_inner_2());
@@ -726,13 +743,16 @@ mod test {
         use catgraph::named_cospan::NamedCospan;
         // middle nodes: 0=true, 1=true, 2=false
         // right boundary: node 0 -> middle 0, node 1 -> middle 1, node 2 -> middle 2
-        WiringDiagram::new(NamedCospan::new(
-            vec![],
-            vec![0, 1, 2],
-            vec![true, true, false],
-            vec![],
-            vec![(Dir::In, 0), (Dir::Out, 1), (Dir::In, 2)],
-        ))
+        WiringDiagram::new(
+            NamedCospan::new(
+                vec![],
+                vec![0, 1, 2],
+                vec![true, true, false],
+                vec![],
+                vec![(Dir::In, 0), (Dir::Out, 1), (Dir::In, 2)],
+            )
+            .unwrap(),
+        )
     }
 
     #[test]
@@ -857,13 +877,16 @@ mod test {
         use catgraph::named_cospan::NamedCospan;
         use either::Either::Left;
         // Build a diagram with left-side nodes
-        let mut wd: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-            vec![0, 1],
-            vec![0],
-            vec![true, false],
-            vec![(Dir::In, 1, 10), (Dir::Out, 2, 20)],
-            vec![(Dir::In, 0)],
-        ));
+        let mut wd: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![0, 1],
+                vec![0],
+                vec![true, false],
+                vec![(Dir::In, 1, 10), (Dir::Out, 2, 20)],
+                vec![(Dir::In, 0)],
+            )
+            .unwrap(),
+        );
         assert!(wd.0.left_names().contains(&(Dir::In, 1, 10)));
         // Rename (Dir::In, 1, 10) -> (Dir::Undirected, 1, 10)
         wd.change_boundary_node_name(Left(((Dir::In, 1, 10), (Dir::Undirected, 1, 10))));
@@ -905,13 +928,16 @@ mod test {
         use super::Dir;
         use super::WiringDiagram;
         use catgraph::named_cospan::NamedCospan;
-        let mut wd: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-            vec![0, 1],
-            vec![],
-            vec![true, false],
-            vec![(Dir::In, 1, 10), (Dir::Out, 2, 20)],
-            vec![],
-        ));
+        let mut wd: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![0, 1],
+                vec![],
+                vec![true, false],
+                vec![(Dir::In, 1, 10), (Dir::Out, 2, 20)],
+                vec![],
+            )
+            .unwrap(),
+        );
         assert_eq!(wd.0.left_names()[0].0, Dir::In);
         assert_eq!(wd.0.left_names()[1].0, Dir::Out);
         // Toggle left side (of_left_side = true)
@@ -926,13 +952,16 @@ mod test {
         use super::Dir;
         use super::WiringDiagram;
         use catgraph::named_cospan::NamedCospan;
-        let mut wd: WiringDiagram<bool, (), usize> = WiringDiagram::new(NamedCospan::new(
-            vec![],
-            vec![0],
-            vec![true],
-            vec![],
-            vec![(Dir::Undirected, 0)],
-        ));
+        let mut wd: WiringDiagram<bool, (), usize> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![],
+                vec![0],
+                vec![true],
+                vec![],
+                vec![(Dir::Undirected, 0)],
+            )
+            .unwrap(),
+        );
         assert_eq!(wd.0.right_names()[0].0, Dir::Undirected);
         wd.toggle_orientation(false);
         // Undirected stays Undirected after toggle
@@ -962,23 +991,29 @@ mod test {
 
         // WD1: domain [true, false], codomain [true, false]
         // Left ports on circle 0, right ports unadorned.
-        let wd1: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-            vec![0, 1],        // left → middle
-            vec![0, 1],        // right → middle
-            vec![true, false], // middle types
-            vec![(Dir::In, 0, 10), (Dir::Out, 0, 11)],
-            vec![(Dir::Out, 0), (Dir::In, 1)],
-        ));
+        let wd1: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![0, 1],        // left → middle
+                vec![0, 1],        // right → middle
+                vec![true, false], // middle types
+                vec![(Dir::In, 0, 10), (Dir::Out, 0, 11)],
+                vec![(Dir::Out, 0), (Dir::In, 1)],
+            )
+            .unwrap(),
+        );
 
         // WD2: domain [true, false], codomain [true]
         // Both domain ports map to a single middle node of type true.
-        let wd2: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-            vec![0, 1],
-            vec![0],
-            vec![true, false],
-            vec![(Dir::In, 1, 20), (Dir::Out, 1, 21)],
-            vec![(Dir::Out, 0)],
-        ));
+        let wd2: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![0, 1],
+                vec![0],
+                vec![true, false],
+                vec![(Dir::In, 1, 20), (Dir::Out, 1, 21)],
+                vec![(Dir::Out, 0)],
+            )
+            .unwrap(),
+        );
 
         assert_eq!(wd1.codomain(), vec![true, false]);
         assert_eq!(wd2.domain(), vec![true, false]);
@@ -1002,22 +1037,28 @@ mod test {
         use catgraph::named_cospan::NamedCospan;
 
         // WD1 codomain: [true, false]
-        let wd1: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-            vec![0],
-            vec![0, 1],
-            vec![true, false],
-            vec![(Dir::In, 0, 10)],
-            vec![(Dir::Out, 0), (Dir::In, 1)],
-        ));
+        let wd1: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![0],
+                vec![0, 1],
+                vec![true, false],
+                vec![(Dir::In, 0, 10)],
+                vec![(Dir::Out, 0), (Dir::In, 1)],
+            )
+            .unwrap(),
+        );
 
         // WD2 domain: [false, false] — does not match WD1 codomain
-        let wd2: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-            vec![0, 0],
-            vec![0],
-            vec![false],
-            vec![(Dir::In, 1, 20), (Dir::Out, 1, 21)],
-            vec![(Dir::Out, 0)],
-        ));
+        let wd2: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![0, 0],
+                vec![0],
+                vec![false],
+                vec![(Dir::In, 1, 20), (Dir::Out, 1, 21)],
+                vec![(Dir::Out, 0)],
+            )
+            .unwrap(),
+        );
 
         let result = wd1.compose(&wd2);
         assert!(result.is_err(), "compose with mismatched types must fail");
@@ -1032,22 +1073,28 @@ mod test {
         use catgraph::named_cospan::NamedCospan;
 
         // WD_A: domain [true], codomain [true]
-        let wd_a: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-            vec![0],
-            vec![0],
-            vec![true],
-            vec![(Dir::In, 0, 10)],
-            vec![(Dir::Out, 0)],
-        ));
+        let wd_a: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![0],
+                vec![0],
+                vec![true],
+                vec![(Dir::In, 0, 10)],
+                vec![(Dir::Out, 0)],
+            )
+            .unwrap(),
+        );
 
         // WD_B: domain [false], codomain [false]
-        let wd_b: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-            vec![0],
-            vec![0],
-            vec![false],
-            vec![(Dir::In, 1, 20)],
-            vec![(Dir::Out, 1)],
-        ));
+        let wd_b: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![0],
+                vec![0],
+                vec![false],
+                vec![(Dir::In, 1, 20)],
+                vec![(Dir::Out, 1)],
+            )
+            .unwrap(),
+        );
 
         let mut combined = wd_a;
         combined.monoidal(wd_b);
@@ -1089,21 +1136,26 @@ mod test {
             .collect();
         outer_left_names.push((Dir::Undirected, circle_b.clone(), 500));
 
-        let example_inner: WiringDiagram<_, CircleName, WireName> =
-            WiringDiagram::new(NamedCospan::new(
+        let example_inner: WiringDiagram<_, CircleName, WireName> = WiringDiagram::new(
+            NamedCospan::new(
                 vec![],
                 vec![0, 1, 2, 2, 0],
                 vec![true, true, false],
                 vec![],
                 inner_right_names,
-            ));
-        let mut example_outer: WiringDiagram<_, _, _> = WiringDiagram::new(NamedCospan::new(
-            vec![0, 0, 1, 1, 0, 1],
-            vec![0],
-            vec![true, false],
-            outer_left_names,
-            vec![(Dir::Out, 0)],
-        ));
+            )
+            .unwrap(),
+        );
+        let mut example_outer: WiringDiagram<_, _, _> = WiringDiagram::new(
+            NamedCospan::new(
+                vec![0, 0, 1, 1, 0, 1],
+                vec![0],
+                vec![true, false],
+                outer_left_names,
+                vec![(Dir::Out, 0)],
+            )
+            .unwrap(),
+        );
         let op_subbed = example_outer.operadic_substitution(circle_a, example_inner);
         assert_ok!(op_subbed);
         assert_eq!(

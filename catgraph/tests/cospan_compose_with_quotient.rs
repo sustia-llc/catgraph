@@ -38,8 +38,8 @@ fn t1_2_surjective_coequalizer_merges_shared_element() {
     // Right cospan: domain [b], codomain [c], middle [b, c], legs [0], [1]
     // Compose glues Left.right (= middle[1] = b) to Right.left (= middle[0] = b)
     // Pushout apex has 3 classes: {a}, {b (shared)}, {c}
-    let left = Cospan::<char>::new(vec![0], vec![1], vec!['a', 'b']);
-    let right = Cospan::<char>::new(vec![0], vec![1], vec!['b', 'c']);
+    let left = Cospan::<char>::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
+    let right = Cospan::<char>::new(vec![0], vec![1], vec!['b', 'c']).unwrap();
 
     let (composed, quotient) = left.compose_with_quotient(&right).unwrap();
 
@@ -72,8 +72,8 @@ fn t1_3_roundtrip_with_plain_compose() {
             Cospan::<char>::identity(&vec!['x']),
         ),
         (
-            Cospan::<char>::new(vec![0], vec![1], vec!['p', 'q']),
-            Cospan::<char>::new(vec![0], vec![1], vec!['q', 'r']),
+            Cospan::<char>::new(vec![0], vec![1], vec!['p', 'q']).unwrap(),
+            Cospan::<char>::new(vec![0], vec![1], vec!['q', 'r']).unwrap(),
         ),
     ];
     for (a, b) in &cases {
@@ -94,8 +94,10 @@ fn t2_1_quotient_is_surjective_onto_composed_middle_indices() {
     // the quotient must surject onto exactly `0..composed.middle.len()` — this
     // is what makes `quotient` a valid pushforward index for downstream
     // `Decoration::pushforward` calls in `catgraph-applied::DecoratedCospan`.
-    let left = Cospan::<char>::new(vec![0, 1], vec![2, 3, 4], vec!['a', 'b', 'c', 'd', 'e']);
-    let right = Cospan::<char>::new(vec![0, 1, 2], vec![3, 4], vec!['c', 'd', 'e', 'f', 'g']);
+    let left =
+        Cospan::<char>::new(vec![0, 1], vec![2, 3, 4], vec!['a', 'b', 'c', 'd', 'e']).unwrap();
+    let right =
+        Cospan::<char>::new(vec![0, 1, 2], vec![3, 4], vec!['c', 'd', 'e', 'f', 'g']).unwrap();
 
     let (composed, quotient) = left.compose_with_quotient(&right).unwrap();
 
@@ -126,9 +128,9 @@ fn t2_2_multi_element_collision_in_apex() {
     // of left.middle[1,2,3] = 'p','q','r' is distinct — so the result has 5
     // composed-apex classes: {x}, {p}, {q}, {r}, {z}. We then build a *second*
     // composition where multiple right.middle entries genuinely collapse.
-    let left = Cospan::<char>::new(vec![0, 0, 0], vec![1, 1, 1], vec!['s', 't']);
+    let left = Cospan::<char>::new(vec![0, 0, 0], vec![1, 1, 1], vec!['s', 't']).unwrap();
     // Three left-domain elements all into apex idx 0; three left-codomain all into apex idx 1.
-    let right = Cospan::<char>::new(vec![0, 0, 0], vec![1], vec!['t', 'u']);
+    let right = Cospan::<char>::new(vec![0, 0, 0], vec![1], vec!['t', 'u']).unwrap();
 
     let (composed, quotient) = left.compose_with_quotient(&right).unwrap();
 

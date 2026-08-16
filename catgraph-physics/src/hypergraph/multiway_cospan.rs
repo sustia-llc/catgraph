@@ -302,8 +302,8 @@ mod tests {
 
     #[test]
     fn compose_path_incompatible_returns_none() {
-        let c1: Cospan<u32> = Cospan::new(vec![0, 1, 2], vec![0, 1], vec![10, 20, 30]);
-        let c2: Cospan<u32> = Cospan::new(vec![0, 0, 0, 0, 0], vec![0], vec![99]);
+        let c1: Cospan<u32> = Cospan::new(vec![0, 1, 2], vec![0, 1], vec![10, 20, 30]).unwrap();
+        let c2: Cospan<u32> = Cospan::new(vec![0, 0, 0, 0, 0], vec![0], vec![99]).unwrap();
 
         let result = compose_cospan_path(&[&c1, &c2]);
         assert!(result.is_none());

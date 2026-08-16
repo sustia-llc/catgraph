@@ -28,7 +28,7 @@ fn small_cospan_strategy() -> impl Strategy<Value = Cospan<char>> {
         let left = proptest::collection::vec(0usize..m, 0..=6);
         let right = proptest::collection::vec(0usize..m, 0..=6);
         (Just(middle), left, right)
-            .prop_map(|(middle, left, right)| Cospan::new(left, right, middle))
+            .prop_map(|(middle, left, right)| Cospan::new(left, right, middle).unwrap())
     })
 }
 
@@ -79,7 +79,7 @@ fn into_metric_space_matches_minus_ln_pi() {
     let middle = vec!['x', 'y', 'z'];
     let left = vec![0, 1, 2];
     let right = vec![0, 1, 2];
-    let cospan = Cospan::new(left, right, middle);
+    let cospan = Cospan::new(left, right, middle).unwrap();
 
     let mut wc = WeightedCospan::from_cospan_uniform(cospan, UnitInterval::one());
 
@@ -160,7 +160,7 @@ fn absent_edge_weight_is_zero_tropical() {
 #[test]
 fn into_validated_metric_space_accepts_valid_lm_v0_1_1() {
     let middle = vec!['x', 'y', 'z'];
-    let cospan = Cospan::new(vec![0, 1, 2], vec![0, 1, 2], middle);
+    let cospan = Cospan::new(vec![0, 1, 2], vec![0, 1, 2], middle).unwrap();
     let one = UnitInterval::one();
     let mut wc = WeightedCospan::from_cospan_uniform(cospan, one);
     // Identity axiom: d(i, i) = 0 ⇒ prob(i, i) = 1.0 (uniform default).
@@ -189,7 +189,7 @@ fn into_validated_metric_space_accepts_valid_lm_v0_1_1() {
 #[test]
 fn into_validated_metric_space_rejects_triangle_violation_v0_1_1() {
     let middle = vec!['x', 'y', 'z'];
-    let cospan = Cospan::new(vec![0, 1, 2], vec![0, 1, 2], middle);
+    let cospan = Cospan::new(vec![0, 1, 2], vec![0, 1, 2], middle).unwrap();
     let one = UnitInterval::one();
     let mut wc = WeightedCospan::from_cospan_uniform(cospan, one);
     let half = UnitInterval::new(0.5).unwrap();
@@ -210,7 +210,7 @@ fn into_validated_metric_space_rejects_triangle_violation_v0_1_1() {
 #[allow(clippy::cast_precision_loss)]
 fn from_cospan_with_weights_per_pair() {
     let middle = vec!['a', 'b'];
-    let cospan = Cospan::new(vec![0, 1], vec![0, 1], middle);
+    let cospan = Cospan::new(vec![0, 1], vec![0, 1], middle).unwrap();
     let wc = WeightedCospan::from_cospan_with_weights(cospan, |i, j| F64Rig((i * 10 + j) as f64));
     assert_eq!(wc.weight(0, 0), F64Rig(0.0));
     assert_eq!(wc.weight(0, 1), F64Rig(1.0));

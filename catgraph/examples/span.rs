@@ -22,7 +22,7 @@ fn construction() {
     let left = vec!['a', 'b', 'a'];
     let right = vec!['a', 'b'];
     let middle = vec![(0, 0), (1, 1), (2, 0)];
-    let s = Span::new(left, right, middle);
+    let s = Span::new(left, right, middle).unwrap();
 
     println!("left (domain)    = {:?}", s.left());
     println!("right (codomain) = {:?}", s.right());
@@ -63,10 +63,10 @@ fn composition() {
     println!("=== Composition (Pullback) ===\n");
 
     // f: {a,b} -> {a,b} with identity-like middle
-    let f = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]);
+    let f = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]).unwrap();
     // g: {a,b} -> {a,b} with middle mapping both source elements to index 0
     // Pair (0,0): left[0]='a' == right[0]='a', pair (1,1): left[1]='b' == right[1]='b'
-    let g = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]);
+    let g = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]).unwrap();
 
     println!(
         "f.domain = {:?}, f.codomain = {:?}",
@@ -104,7 +104,7 @@ fn dagger() {
     println!("=== Dagger (Transpose) ===\n");
 
     // Pairs (0,1) and (1,0): left[0]='a'=right[1], left[1]='b'=right[0]
-    let s = Span::new(vec!['a', 'b'], vec!['b', 'a'], vec![(0, 1), (1, 0)]);
+    let s = Span::new(vec!['a', 'b'], vec!['b', 'a'], vec![(0, 1), (1, 0)]).unwrap();
     let d = s.dagger();
 
     println!(
@@ -129,8 +129,8 @@ fn dagger() {
 fn monoidal_product() {
     println!("=== Monoidal Product (Tensor) ===\n");
 
-    let mut a = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]);
-    let b = Span::new(vec!['b'], vec!['b'], vec![(0, 0)]);
+    let mut a = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]).unwrap();
+    let b = Span::new(vec!['b'], vec!['b'], vec![(0, 0)]).unwrap();
 
     println!(
         "a: domain = {:?}, codomain = {:?}",
@@ -158,7 +158,7 @@ fn monoidal_product() {
 fn map_labels() {
     println!("=== Map Labels ===\n");
 
-    let s = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]);
+    let s = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]).unwrap();
     let mapped = s.map(|ch| ch.to_ascii_uppercase());
 
     println!("original: left = {:?}, right = {:?}", s.left(), s.right());
@@ -178,7 +178,7 @@ fn rel_construction() {
     println!("=== Rel Construction ===\n");
 
     // A jointly-injective span can become a Rel (all types must match across pairs)
-    let span = Span::new(vec!['a', 'a'], vec!['a', 'a'], vec![(0, 0), (1, 1)]);
+    let span = Span::new(vec!['a', 'a'], vec!['a', 'a'], vec![(0, 0), (1, 1)]).unwrap();
     println!(
         "span.is_jointly_injective = {}",
         span.is_jointly_injective()
@@ -190,7 +190,7 @@ fn rel_construction() {
     println!("  codomain = {:?}", rel.as_span().right());
 
     // A non-injective span (duplicate pairs) cannot be a Rel
-    let non_inj = Span::new(vec!['a', 'a'], vec!['a', 'a'], vec![(0, 0), (0, 0)]);
+    let non_inj = Span::new(vec!['a', 'a'], vec!['a', 'a'], vec![(0, 0), (0, 0)]).unwrap();
     println!(
         "\nnon-injective span: is_jointly_injective = {}",
         non_inj.is_jointly_injective()
@@ -208,11 +208,14 @@ fn rel_equivalence() {
 
     // Full equivalence on {a,a}: every pair present (universal relation)
     // All types are the same so any pair is valid.
-    let universal = Rel::new_unchecked(Span::new(
-        vec!['a', 'a'],
-        vec!['a', 'a'],
-        vec![(0, 0), (0, 1), (1, 0), (1, 1)],
-    ));
+    let universal = Rel::new_unchecked(
+        Span::new(
+            vec!['a', 'a'],
+            vec!['a', 'a'],
+            vec![(0, 0), (0, 1), (1, 0), (1, 1)],
+        )
+        .unwrap(),
+    );
     println!("universal relation on 2 elements:");
     println!("  is_reflexive   = {}", universal.is_reflexive());
     println!("  is_symmetric   = {}", universal.is_symmetric());
@@ -242,11 +245,14 @@ fn rel_partial_order() {
 
     // <= on 3 elements represented as: (0,0),(0,1),(0,2),(1,1),(1,2),(2,2)
     // All elements have the same type so every pair is valid.
-    let leq = Rel::new_unchecked(Span::new(
-        vec!['a', 'a', 'a'],
-        vec!['a', 'a', 'a'],
-        vec![(0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)],
-    ));
+    let leq = Rel::new_unchecked(
+        Span::new(
+            vec!['a', 'a', 'a'],
+            vec!['a', 'a', 'a'],
+            vec![(0, 0), (0, 1), (0, 2), (1, 1), (1, 2), (2, 2)],
+        )
+        .unwrap(),
+    );
     println!("leq relation on 3 elements (total order):");
     println!("  is_reflexive     = {}", leq.is_reflexive());
     println!("  is_antisymmetric = {}", leq.is_antisymmetric());
@@ -264,16 +270,12 @@ fn rel_set_operations() {
     println!("=== Rel: Set Operations ===\n");
 
     // Uniform types allow any (i, j) pair
-    let r1 = Rel::new_unchecked(Span::new(
-        vec!['a', 'a'],
-        vec!['a', 'a'],
-        vec![(0, 0), (0, 1)],
-    ));
-    let r2 = Rel::new_unchecked(Span::new(
-        vec!['a', 'a'],
-        vec!['a', 'a'],
-        vec![(0, 0), (1, 1)],
-    ));
+    let r1 = Rel::new_unchecked(
+        Span::new(vec!['a', 'a'], vec!['a', 'a'], vec![(0, 0), (0, 1)]).unwrap(),
+    );
+    let r2 = Rel::new_unchecked(
+        Span::new(vec!['a', 'a'], vec!['a', 'a'], vec![(0, 0), (1, 1)]).unwrap(),
+    );
 
     println!("r1 pairs = {:?}", r1.as_span().middle_pairs());
     println!("r2 pairs = {:?}", r2.as_span().middle_pairs());
@@ -304,16 +306,12 @@ fn rel_composition() {
     println!("=== Rel: Composition ===\n");
 
     // Compose two relations: relational composition (exists z. (x,z) in R and (z,y) in S)
-    let r = Rel::new_unchecked(Span::new(
-        vec!['a', 'a'],
-        vec!['a', 'a'],
-        vec![(0, 0), (0, 1)],
-    ));
-    let s = Rel::new_unchecked(Span::new(
-        vec!['a', 'a'],
-        vec!['a', 'a'],
-        vec![(0, 0), (1, 0)],
-    ));
+    let r = Rel::new_unchecked(
+        Span::new(vec!['a', 'a'], vec!['a', 'a'], vec![(0, 0), (0, 1)]).unwrap(),
+    );
+    let s = Rel::new_unchecked(
+        Span::new(vec!['a', 'a'], vec!['a', 'a'], vec![(0, 0), (1, 0)]).unwrap(),
+    );
 
     println!("r pairs = {:?}", r.as_span().middle_pairs());
     println!("s pairs = {:?}", s.as_span().middle_pairs());

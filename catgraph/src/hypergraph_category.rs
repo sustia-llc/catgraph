@@ -76,24 +76,27 @@ impl<Lambda> HypergraphCategory<Lambda> for Cospan<Lambda>
 where
     Lambda: Eq + Copy + Debug,
 {
+    // The four Frobenius generators are literal one-vertex-apex cospans whose
+    // every leg entry is the literal `0`, so they are correct by construction
+    // and take `new_unchecked`.
     fn unit(z: Lambda) -> Self {
         // η: [] → [z] — empty left, one right node pointing to middle
-        Cospan::new(vec![], vec![0], vec![z])
+        Cospan::new_unchecked(vec![], vec![0], vec![z])
     }
 
     fn counit(z: Lambda) -> Self {
         // ε: [z] → [] — one left node pointing to middle, empty right
-        Cospan::new(vec![0], vec![], vec![z])
+        Cospan::new_unchecked(vec![0], vec![], vec![z])
     }
 
     fn multiplication(z: Lambda) -> Self {
         // μ: [z, z] → [z] — two left nodes merge to one middle node
-        Cospan::new(vec![0, 0], vec![0], vec![z])
+        Cospan::new_unchecked(vec![0, 0], vec![0], vec![z])
     }
 
     fn comultiplication(z: Lambda) -> Self {
         // δ: [z] → [z, z] — one left node, two right nodes from same middle
-        Cospan::new(vec![0], vec![0, 0], vec![z])
+        Cospan::new_unchecked(vec![0], vec![0, 0], vec![z])
     }
 
     fn cup(z: Lambda) -> Result<Self, CatgraphError> {

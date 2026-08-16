@@ -85,7 +85,7 @@ fn bench_named_cospan_predicate(c: &mut Criterion) {
         let right_indices = vec![0usize];
 
         let named: NamedCospan<(), u32, u32> =
-            NamedCospan::new(indices, right_indices, middle, left_names, right_names);
+            NamedCospan::new(indices, right_indices, middle, left_names, right_names).unwrap();
 
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |bencher, _| {
             bencher

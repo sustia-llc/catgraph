@@ -282,7 +282,9 @@ impl<Lambda: Eq + Sized + Debug + Copy> Corel<Lambda> {
             right.push(mid_idx);
         }
 
-        let cospan = Cospan::new(left, right, middle);
+        // Correct by construction: every index pushed into `left`/`right` is a
+        // `middle.len()` captured before the corresponding `middle.push`.
+        let cospan = Cospan::new_unchecked(left, right, middle);
         Corel::new(cospan)
     }
 }
@@ -394,28 +396,28 @@ mod tests {
 
     #[test]
     fn corel_new_accepts_jointly_surjective() {
-        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']);
+        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
         let result = Corel::new(c);
         assert!(result.is_ok());
     }
 
     #[test]
     fn corel_new_rejects_non_surjective() {
-        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b', 'c']);
+        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b', 'c']).unwrap();
         let result = Corel::new(c);
         assert!(matches!(result, Err(CatgraphError::Corel { .. })));
     }
 
     #[test]
     fn corel_new_unchecked_bypasses_validation() {
-        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b', 'c']);
+        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b', 'c']).unwrap();
         let _corel = Corel::new_unchecked(c);
         // no panic, no error — invariant is caller's responsibility
     }
 
     #[test]
     fn corel_as_cospan_returns_underlying() {
-        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']);
+        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
         let corel = Corel::new(c).unwrap();
         assert_eq!(corel.as_cospan().middle(), &['a', 'b']);
     }
@@ -442,7 +444,7 @@ mod tests {
     #[test]
     fn corel_domain_codomain_from_underlying_cospan() {
         use crate::category::Composable;
-        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']);
+        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
         let corel = Corel::new(c).unwrap();
         assert_eq!(corel.domain(), vec!['a']);
         assert_eq!(corel.codomain(), vec!['b']);
@@ -451,8 +453,8 @@ mod tests {
     #[test]
     fn corel_monoidal_preserves_surjectivity() {
         use crate::monoidal::Monoidal;
-        let c1 = Cospan::new(vec![0], vec![0], vec!['a']);
-        let c2 = Cospan::new(vec![0], vec![0], vec!['b']);
+        let c1 = Cospan::new(vec![0], vec![0], vec!['a']).unwrap();
+        let c2 = Cospan::new(vec![0], vec![0], vec!['b']).unwrap();
         let mut corel1 = Corel::new(c1).unwrap();
         let corel2 = Corel::new(c2).unwrap();
         corel1.monoidal(corel2);
@@ -494,7 +496,7 @@ mod tests {
     #[test]
     fn corel_equivalence_classes_split() {
         // Cospan [0] → [1] with middle ['a', 'b']: two separate classes.
-        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']);
+        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
         let corel = Corel::new(c).unwrap();
         let classes = corel.equivalence_classes();
         assert_eq!(classes.len(), 2);
@@ -503,7 +505,7 @@ mod tests {
     #[test]
     fn corel_equivalence_classes_merged() {
         // Cospan [0] → [0] with middle ['a']: one class.
-        let c = Cospan::new(vec![0], vec![0], vec!['a']);
+        let c = Cospan::new(vec![0], vec![0], vec!['a']).unwrap();
         let corel = Corel::new(c).unwrap();
         let classes = corel.equivalence_classes();
         assert_eq!(classes.len(), 1);
@@ -520,7 +522,7 @@ mod tests {
 
     #[test]
     fn corel_merges_false_when_different_classes() {
-        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']);
+        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
         let corel = Corel::new(c).unwrap();
         // Flat: [0] = dom, [1, 2] = middle, [3] = cod. dom(0) is in class 0; cod(3) is in class 1.
         assert!(!corel.merges(0, 3));
@@ -542,9 +544,9 @@ mod tests {
 
     #[test]
     fn corel_refines_self() {
-        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']);
+        let c = Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
         let corel = Corel::new(c).unwrap();
-        let same = Corel::new(Cospan::new(vec![0], vec![1], vec!['a', 'b'])).unwrap();
+        let same = Corel::new(Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap()).unwrap();
         assert!(corel.refines(&same).unwrap());
     }
 
@@ -552,16 +554,17 @@ mod tests {
     fn corel_refines_coarser_but_not_converse() {
         // fine: [a, a] → [a, a] with each domain paired to its own codomain (two classes).
         // coarse: [a, a] → [a, a] with everything merged (one class).
-        let fine = Corel::new(Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'a'])).unwrap();
-        let coarse = Corel::new(Cospan::new(vec![0, 0], vec![0, 0], vec!['a'])).unwrap();
+        let fine =
+            Corel::new(Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'a']).unwrap()).unwrap();
+        let coarse = Corel::new(Cospan::new(vec![0, 0], vec![0, 0], vec!['a']).unwrap()).unwrap();
         assert!(fine.refines(&coarse).unwrap());
         assert!(!coarse.refines(&fine).unwrap());
     }
 
     #[test]
     fn corel_ccr_matches_self_when_both_equal() {
-        let a = Corel::new(Cospan::new(vec![0], vec![1], vec!['a', 'b'])).unwrap();
-        let b = Corel::new(Cospan::new(vec![0], vec![1], vec!['a', 'b'])).unwrap();
+        let a = Corel::new(Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap()).unwrap();
+        let b = Corel::new(Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap()).unwrap();
         let ccr = a.coarsest_common_refinement(&b).unwrap();
         assert_eq!(
             ccr.equivalence_classes().len(),

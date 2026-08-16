@@ -84,7 +84,7 @@ fn build_coalition_cospan() -> WeightedCospan<&'static str, UnitInterval> {
     let left: Vec<usize> = (0..n).collect();
     let right: Vec<usize> = (0..n).collect();
     let middle: Vec<&'static str> = AGENTS.to_vec();
-    let cospan = Cospan::new(left, right, middle);
+    let cospan = Cospan::new(left, right, middle).unwrap();
 
     let mut wc = WeightedCospan::from_cospan_uniform(cospan, UnitInterval::new(0.0).unwrap());
 

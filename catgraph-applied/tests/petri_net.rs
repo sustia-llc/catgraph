@@ -139,7 +139,8 @@ fn parallel_independence() {
 
 #[test]
 fn cospan_roundtrip_preserves_structure() {
-    let cospan: Cospan<char> = Cospan::new(vec![0, 1, 1, 1], vec![2, 2], vec!['N', 'H', 'A']);
+    let cospan: Cospan<char> =
+        Cospan::new(vec![0, 1, 1, 1], vec![2, 2], vec!['N', 'H', 'A']).unwrap();
     let net = PetriNet::from_cospan(&cospan);
     let back = net.transition_as_cospan(0);
     assert_eq!(back.middle(), cospan.middle());

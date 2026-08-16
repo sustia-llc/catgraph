@@ -324,7 +324,7 @@ mod tests {
     fn partition_identity_cospan_preserves_element() {
         let alg = PartitionAlgebra;
         // element: [] → [a, b]
-        let element = Cospan::new(vec![], vec![0, 1], vec!['a', 'b']);
+        let element = Cospan::new(vec![], vec![0, 1], vec!['a', 'b']).unwrap();
         let id = Cospan::<char>::identity(&vec!['a', 'b']);
         let mapped = alg.map_cospan(&id, &element).unwrap();
         assert_eq!(mapped.domain(), element.domain());
@@ -335,7 +335,7 @@ mod tests {
     fn partition_composition_is_sequential() {
         let alg = PartitionAlgebra;
         // element: [] → [a]
-        let element = Cospan::new(vec![], vec![0], vec!['a']);
+        let element = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
         // c1: [a] → [a, a] (identity into a merge)
         let c1 = Cospan::<char>::identity(&vec!['a']);
         // Map through identity
@@ -346,8 +346,8 @@ mod tests {
     #[test]
     fn partition_lax_monoidal_is_tensor() {
         let alg = PartitionAlgebra;
-        let a = Cospan::new(vec![], vec![0], vec!['a']);
-        let b = Cospan::new(vec![], vec![0], vec!['b']);
+        let a = Cospan::new(vec![], vec![0], vec!['a']).unwrap();
+        let b = Cospan::new(vec![], vec![0], vec!['b']).unwrap();
         let combined = alg.lax_monoidal(&a, &b);
         assert!(combined.domain().is_empty());
         assert_eq!(combined.codomain(), vec!['a', 'b']);
@@ -395,7 +395,7 @@ mod tests {
         assert_eq!(element.codomain(), vec!['a', 'a']);
 
         // merge cospan: [a, a] → [a] (both inputs map to same middle node)
-        let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+        let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
         let mapped = alg.map_cospan(&merge, &element).unwrap();
         assert!(mapped.domain().is_empty());
         assert_eq!(mapped.codomain(), vec!['a']);
@@ -412,7 +412,7 @@ mod tests {
     #[test]
     fn cospan_to_frobenius_merge() {
         // [a, a] → [a]: both left nodes map to middle node 0
-        let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+        let merge = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
         let morph: FM = cospan_to_frobenius(&merge).unwrap();
         assert_eq!(morph.domain(), vec!['a', 'a']);
         assert_eq!(morph.codomain(), vec!['a']);
@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn cospan_to_frobenius_split() {
         // [a] → [a, a]: right nodes both map to middle node 0
-        let split = Cospan::new(vec![0], vec![0, 0], vec!['a']);
+        let split = Cospan::new(vec![0], vec![0, 0], vec!['a']).unwrap();
         let morph: FM = cospan_to_frobenius(&split).unwrap();
         assert_eq!(morph.domain(), vec!['a']);
         assert_eq!(morph.codomain(), vec!['a', 'a']);

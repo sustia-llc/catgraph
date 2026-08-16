@@ -6,6 +6,155 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **`Cospan::new` and `Span::new` are now validated constructors returning
+  `Result<Self, CatgraphError>`; the previous infallible bodies moved to
+  `Cospan::new_unchecked` / `Span::new_unchecked`**
+  ([#256](https://github.com/sustia-llc/catgraph/issues/256)). Until now the
+  structural invariants were checked by `debug_assert!` only, so a **release**
+  build accepted a cospan whose leg pointed outside its apex and deferred the
+  failure to whatever indexed it later — a composition, a downstream store's
+  canonicalisation, or nothing at all. `new` now performs those same checks
+  unconditionally, in every profile:
+  - `Cospan::new` — every `left` and every `right` entry must be `< middle.len()`.
+  - `Span::new` — every middle pair's `.0` must be `< left.len()` and its `.1`
+    `< right.len()`, **and** the two labels it names must agree
+    (`left[pair.0] == right[pair.1]`).
+
+  This is the crate's existing convention, not a new one: `Rel::new` /
+  `Rel::new_unchecked` and `Corel::new` / `Corel::new_unchecked` already split
+  this way, with the **checked** constructor owning the plain name. Shipping a
+  `try_new` beside an infallible `new` would have left two opposite idioms for
+  the same thing on types one layer apart.
+
+  **Migration.** Data that is correct *by construction* — composition results,
+  `identity`/`unit`/`counit`/`multiplication`/`comultiplication`, permutation
+  builders, monoidal products, anything rebuilt from an already-valid value —
+  should call `new_unchecked`, which is exactly the old `new` and costs nothing
+  in release. Reserve `new` for data crossing a trust boundary: a store, a wire
+  format, a parser, a user. In tests, `.unwrap()` is the expected fix.
+
+- **`NamedCospan::new` is now a validated constructor returning
+  `Result<Self, CatgraphError>`; the previous infallible body moved to the new
+  `NamedCospan::new_unchecked`**
+  ([#256](https://github.com/sustia-llc/catgraph/issues/256)). This was the last
+  public constructor in core that accepted a leg map pointing outside its apex
+  in a **release** build: it took raw `Vec<MiddleIndex>` legs — a trust boundary
+  by the same criterion as `Cospan::new` — but built its inner cospan with
+  `Cospan::new_unchecked`. `new` now validates both structural invariants
+  unconditionally, in every profile:
+  - **one name per port** — `left_names.len() == left.len()` and
+    `right_names.len() == right.len()`. These were `assert!`s, so they aborted
+    the process in every profile; they are now errors. A constructor that
+    returns `Result` for one precondition and panics for another is only
+    half-checked, and a name-count mismatch is precisely the corruption a
+    caller reconstructing a named cospan from stored columns hits.
+  - **leg bounds** — delegated to `Cospan::new` rather than re-implemented, so
+    the check has one home and one error shape.
+
+  The name counts are checked before the leg bounds, and the domain side before
+  the codomain side, so the reported failure is the first one in that order.
+
+  **Migration.** Same rule as `Cospan`/`Span` above: `new_unchecked` for data
+  correct by construction, `new` for data crossing a trust boundary, `.unwrap()`
+  in tests. `NamedCospan::empty` moved to `new_unchecked` and is unchanged
+  behaviourally. Note `new_unchecked` is *uniformly* `debug_assert!`-only —
+  including the name counts, which the old `new` enforced with a hard `assert!`.
+  Keeping a release panic for one of its two invariants would have made the
+  `_unchecked` suffix mean two different things on one constructor and broken
+  the zero-release-cost contract `Cospan::new_unchecked` documents.
+
+- **`CatgraphError` is `#[non_exhaustive]`.** Downstream `match`es must carry a
+  wildcard arm; after this release a new variant is no longer a breaking
+  change. Core was the last crate in the workspace whose error enum was not
+  marked — `catgraph-syntax::SyntaxError` and `catgraph-dl::DepthError` already
+  were.
+
+### Added
+
+- **`CatgraphError::ConstructionIndexOutOfBounds { leg, position, target,
+  target_len }`** — a cospan or span leg entry targets an index outside the set
+  it must land in. `leg` is the new `errors::BoundaryLeg` (`Domain` /
+  `Codomain`, rendered as `domain`/`codomain`), `position` is the entry's index
+  within that leg, `target` the out-of-range value, `target_len` the size of
+  the set it had to land in. The vocabulary deliberately matches what the
+  downstream `catgraph-surreal` store already reports for a corrupt leg, so the
+  store can retire its parallel spelling.
+- **`CatgraphError::ConstructionLabelMismatch { position, left_index,
+  right_index, left_label, right_label }`** — a `Span` middle pair links a
+  domain element to a codomain element carrying a different label. `left_label`
+  / `right_label` are the `Debug` renderings of the two labels.
+- **`CatgraphError::ConstructionNameCountMismatch { leg, boundary_len,
+  name_count }`** — a `NamedCospan` was handed a port-name list whose length
+  does not match the boundary it names. `leg` reuses `BoundaryLeg`,
+  `boundary_len` is `left.len()` / `right.len()`, `name_count` the number of
+  names supplied for it. Raised by `NamedCospan::new`.
+- **`errors::BoundaryLeg`** — `Domain` / `Codomain`, with `as_str()` and
+  `Display`. Not `#[non_exhaustive]`: a span or cospan has exactly two legs, so
+  matching it exhaustively is safe.
+- **`CospanCanon` round-trips: `CospanCanon::from_parts`,
+  `CospanCanon::to_cospan`, and `ApexClass::new`**
+  ([#261](https://github.com/sustia-llc/catgraph/issues/261)). Purely
+  **additive** — no existing signature changes. Until now the only way to obtain
+  a canonical form was `Cospan::canonical_form()`, so a consumer could read one
+  (`classes()`, since #254), persist it, and log it, but never *reload* it: to
+  compare against a stored form after a restart it had to keep the originating
+  cospan and re-run `canonical_form()`, which is the work the canonical form
+  exists to save.
+  - `ApexClass::new(label, dom_preimage, cod_preimage) -> Self` — assembles one
+    class signature. Infallible and **non-validating**: neither documented
+    invariant is a property of a class in isolation.
+  - `CospanCanon::from_parts(dom_len, cod_len, classes) -> Result<Self,
+    CatgraphError>` — re-establishes all three: `classes` sorted under
+    `ApexClass`'s `Ord`, each preimage strictly ascending, and the preimages
+    partitioning `0..dom_len` / `0..cod_len` (the "each leg is a function"
+    property). `CospanCanon`'s `Eq`/`Hash` decide apex isomorphism *because of*
+    those invariants, so a constructor that skipped them would hand back a value
+    unequal to the `canonical_form()` of every cospan.
+  - `CospanCanon::to_cospan(&self) -> Cospan<Lambda>` — rebuilds a witnessing
+    cospan: apex = classes in canonical order, `left[i]` = the class whose
+    `dom_preimage` contains `i`, `right[k]` likewise. Scalars (bubbles) are
+    placed in the apex although no leg reaches them, so `k` bubbles round-trip
+    as `k`. The apex comes back in canonical order, which is generally *not*
+    `structurally_equal` to the originating cospan — that difference is
+    precisely the apex labelling the form forgets.
+
+  **Rejects, does not repair.** Nothing sorts the input into shape. The intended
+  input is reloaded data, where silently repairing a malformed value hides
+  corruption exactly where the caller most needs to hear about it — same posture
+  as `Cospan::new` above.
+
+  **The round trip is the oracle, not a convenience.** The three invariants are
+  not merely necessary but *sufficient* to rebuild a witness, so
+  `c.canonical_form().to_cospan().canonical_form() == c.canonical_form()` is a
+  real property test for the validation rather than a hand-checked list.
+- **Four `CatgraphError` variants for canonical-form construction**, all raised
+  by `CospanCanon::from_parts` and all reusing `BoundaryLeg`:
+  `CanonClassesNotSorted { position }`;
+  `CanonPreimageNotAscending { leg, class_position, position }`;
+  `CanonPreimageOutOfBounds { leg, class_position, position, index,
+  boundary_len }`; and
+  `CanonPreimageNotAPartition { leg, index, occurrences, boundary_len }`, where
+  `occurrences` is `0` for an unclaimed boundary index and `>= 2` for one
+  claimed by several classes. `CanonPreimageOutOfBounds` is deliberately not
+  `ConstructionIndexOutOfBounds`: that one points the other way (a leg entry
+  overshoots the apex), and locating this one needs the class's position as well
+  as the position within the preimage.
+
+### Fixed
+
+- **`Span::assert_valid` no longer panics in release.** Its label-agreement
+  check indexes both boundaries, and the check was computed into a `let`
+  *before* being handed to `debug_assert!` — so the indexing ran in every
+  profile and an out-of-bounds middle pair produced a bare `index out of
+  bounds` panic in release, which is neither what the method's name promises
+  nor what `new_unchecked` documents. Both `assert_valid` methods now write
+  every check inside its `debug_assert!`, so they compile away entirely in
+  release. Debug behaviour is unchanged, including the order in which the
+  invariants are reported (bounds before labels, so a debug build still names
+  the specific invariant rather than index-panicking).
+
 ## [workspace-v0.12.0] - 2026-08-15
 
 ### Added
