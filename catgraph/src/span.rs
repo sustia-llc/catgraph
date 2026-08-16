@@ -97,10 +97,14 @@ where
     ///
     /// # Errors
     ///
-    /// - [`CatgraphError::ConstructionIndexOutOfBounds`] if a pair's `.0` is at
-    ///   or beyond `left.len()`, or its `.1` at or beyond `right.len()`, naming
-    ///   the leg, the pair's position, the out-of-range target and the boundary
-    ///   size.
+    /// - [`CatgraphError::ConstructionMiddlePairOutOfBounds`] if a pair's `.0`
+    ///   is at or beyond `left.len()`, or its `.1` at or beyond `right.len()`,
+    ///   naming which half was out of range, the pair's position **in the
+    ///   middle-pair list**, the out-of-range target and the boundary size.
+    ///   Deliberately *not*
+    ///   [`CatgraphError::ConstructionIndexOutOfBounds`], which a cospan raises:
+    ///   there the offending element is an entry of the named leg, here it is a
+    ///   middle pair, so the position fields index different things.
     /// - [`CatgraphError::ConstructionLabelMismatch`] if a pair is in bounds on
     ///   both sides but `left[pair.0] != right[pair.1]`, naming the pair's
     ///   position, both indices and both labels.

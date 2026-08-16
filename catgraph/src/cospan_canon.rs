@@ -289,9 +289,22 @@ impl<Lambda: Ord> CospanCanon<Lambda> {
     ///    at or beyond `dom_len` / `cod_len`; then
     ///    [`CatgraphError::CanonPreimageNotAscending`] — an entry fails to
     ///    strictly exceed its predecessor.
-    /// 3. [`CatgraphError::CanonPreimageNotAPartition`] — some index in
-    ///    `0..dom_len` (then `0..cod_len`) does not occur in exactly one class's
-    ///    preimage.
+    /// 3. [`CatgraphError::CanonPreimageCardinalityMismatch`] — the class
+    ///    preimages for a leg do not have `dom_len` / `cod_len` members in
+    ///    total, so no distribution of them could partition the boundary. **Both
+    ///    legs are checked here, domain then codomain, before step 4 runs on
+    ///    either.** That ordering is load-bearing rather than incidental: this
+    ///    is the reload constructor, so `dom_len` / `cod_len` are untrusted, and
+    ///    step 4 sizes an occurrence tally from them. A corrupt length is
+    ///    refused here instead of becoming an enormous allocation.
+    /// 4. [`CatgraphError::CanonPreimageNotAPartition`] — the totals agree but
+    ///    some index in `0..dom_len` (then `0..cod_len`) does not occur in
+    ///    exactly one class's preimage, i.e. the right *number* of members
+    ///    distributed wrongly.
+    ///
+    /// Because step 3 clears both legs before step 4 begins, a value that is
+    /// mis-distributed on the domain *and* mis-counted on the codomain reports
+    /// the codomain fault — the steps are ordered, not the legs.
     ///
     /// # Examples
     ///

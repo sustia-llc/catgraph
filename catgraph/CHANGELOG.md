@@ -103,13 +103,24 @@ All notable changes to `catgraph` are documented here. The format follows
 ### Added
 
 - **`CatgraphError::ConstructionIndexOutOfBounds { leg, position, target,
-  target_len }`** — a cospan or span leg entry targets an index outside the set
-  it must land in. `leg` is the new `errors::BoundaryLeg` (`Domain` /
-  `Codomain`, rendered as `domain`/`codomain`), `position` is the entry's index
-  within that leg, `target` the out-of-range value, `target_len` the size of
-  the set it had to land in. The vocabulary deliberately matches what the
-  downstream `catgraph-surreal` store already reports for a corrupt leg, so the
-  store can retire its parallel spelling.
+  target_len }`** — a **cospan** leg entry targets an index outside the apex it
+  must land in. Raised by `Cospan::new`, and through it by `NamedCospan::new`.
+  `leg` is the new `errors::BoundaryLeg` (`Domain` / `Codomain`, rendered as
+  `domain`/`codomain`), `position` is the entry's index within that leg,
+  `target` the out-of-range value, `target_len` the apex size. The vocabulary
+  deliberately matches what the downstream `catgraph-surreal` store already
+  reports for a corrupt leg, so the store can retire its parallel spelling.
+- **`CatgraphError::ConstructionMiddlePairOutOfBounds { leg, pair_position,
+  target, target_len }`** — a **span** middle pair names a boundary index
+  outside the boundary set it must land in. Raised by `Span::new`.
+
+  ⚠ **A span does not raise `ConstructionIndexOutOfBounds`**, and matching only
+  that variant will silently route every out-of-bounds span pair into your
+  wildcard arm. The two describe different elements: a cospan's legs are vectors
+  of indices, so `(leg, position)` locates the bad entry inside the named leg; a
+  span's legs are derived from one shared middle-pair list, so the bad element is
+  a *pair* and `pair_position` indexes that list. `leg` still says which half of
+  the pair was out of range, and hence which boundary `target_len` measures.
 - **`CatgraphError::ConstructionLabelMismatch { position, left_index,
   right_index, left_label, right_label }`** — a `Span` middle pair links a
   domain element to a codomain element carrying a different label. `left_label`
@@ -158,18 +169,27 @@ All notable changes to `catgraph` are documented here. The format follows
   not merely necessary but *sufficient* to rebuild a witness, so
   `c.canonical_form().to_cospan().canonical_form() == c.canonical_form()` is a
   real property test for the validation rather than a hand-checked list.
-- **Four `CatgraphError` variants for canonical-form construction**, all raised
+- **Five `CatgraphError` variants for canonical-form construction**, all raised
   by `CospanCanon::from_parts` and all reusing `BoundaryLeg`:
   `CanonClassesNotSorted { position }`;
   `CanonPreimageNotAscending { leg, class_position, position }`;
   `CanonPreimageOutOfBounds { leg, class_position, position, index,
-  boundary_len }`; and
+  boundary_len }`;
+  `CanonPreimageCardinalityMismatch { leg, total, boundary_len }`; and
   `CanonPreimageNotAPartition { leg, index, occurrences, boundary_len }`, where
   `occurrences` is `0` for an unclaimed boundary index and `>= 2` for one
-  claimed by several classes. `CanonPreimageOutOfBounds` is deliberately not
-  `ConstructionIndexOutOfBounds`: that one points the other way (a leg entry
-  overshoots the apex), and locating this one needs the class's position as well
-  as the position within the preimage.
+  claimed by several classes.
+
+  ⚠ **`CanonPreimageCardinalityMismatch` is the commonest failure on a corrupt
+  reload**, not `CanonPreimageNotAPartition` — a caller matching only the latter
+  will miss both "too few members" and "too many members". The partition tally
+  runs only once the totals agree, so it reports the narrower fault: the right
+  *number* of preimage members distributed wrongly.
+
+  `CanonPreimageOutOfBounds` is deliberately not `ConstructionIndexOutOfBounds`:
+  that one points the other way (a leg entry overshoots the apex), and locating
+  this one needs the class's position as well as the position within the
+  preimage.
 
 ### Fixed
 
