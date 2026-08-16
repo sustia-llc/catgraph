@@ -7,6 +7,8 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+## [workspace-v0.14.0] - 2026-08-16
+
 ### Documentation
 
 - **The `workflow_dedup` example now states that `ContentKey` is persistable**
@@ -414,7 +416,8 @@ presentation surface for hypergraph-category morphisms over
   combinators preserve it) and tested per combinator. Hughes 2000 cited as
   lineage.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...HEAD
+[workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0
 [workspace-v0.11.0]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...v0.11.0
 [workspace-v0.10.0]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...v0.10.0
 [workspace-v0.8.0]: https://github.com/sustia-llc/catgraph/compare/v0.7.0...v0.8.0

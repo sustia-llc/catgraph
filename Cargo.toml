@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.13.0"
+version = "0.14.0"
 edition = "2024"
 license = "MIT"
 authors = ["sustia-llc"]
@@ -19,8 +19,8 @@ repository = "https://github.com/sustia-llc/catgraph"
 
 [workspace.dependencies]
 # --- intra-workspace (path wins locally; version present for a future publish) ---
-catgraph           = { path = "catgraph",           version = "0.13.0", default-features = false }
-catgraph-applied   = { path = "catgraph-applied",   version = "0.13.0", default-features = false }
+catgraph           = { path = "catgraph",           version = "0.14.0", default-features = false }
+catgraph-applied   = { path = "catgraph-applied",   version = "0.14.0", default-features = false }
 # Dev-only, unpublished (`publish = false`): only ever a `[dev-dependencies]`
 # entry, never a published crate's `[dependencies]`. Shared seeded-fixture LCG (#33).
 catgraph-testutil  = { path = "catgraph-testutil" }
