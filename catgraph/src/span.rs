@@ -113,26 +113,26 @@ where
         right: Vec<Lambda>,
         middle: Vec<(LeftIndex, RightIndex)>,
     ) -> Result<Self, CatgraphError> {
-        for (position, &(z1, z2)) in middle.iter().enumerate() {
+        for (pair_position, &(z1, z2)) in middle.iter().enumerate() {
             if z1 >= left.len() {
-                return Err(CatgraphError::ConstructionIndexOutOfBounds {
+                return Err(CatgraphError::ConstructionMiddlePairOutOfBounds {
                     leg: BoundaryLeg::Domain,
-                    position,
+                    pair_position,
                     target: z1,
                     target_len: left.len(),
                 });
             }
             if z2 >= right.len() {
-                return Err(CatgraphError::ConstructionIndexOutOfBounds {
+                return Err(CatgraphError::ConstructionMiddlePairOutOfBounds {
                     leg: BoundaryLeg::Codomain,
-                    position,
+                    pair_position,
                     target: z2,
                     target_len: right.len(),
                 });
             }
             if left[z1] != right[z2] {
                 return Err(CatgraphError::ConstructionLabelMismatch {
-                    position,
+                    position: pair_position,
                     left_index: z1,
                     right_index: z2,
                     left_label: format!("{:?}", left[z1]),
@@ -717,16 +717,16 @@ mod test {
         };
         assert_eq!(
             err,
-            CatgraphError::ConstructionIndexOutOfBounds {
+            CatgraphError::ConstructionMiddlePairOutOfBounds {
                 leg: BoundaryLeg::Domain,
-                position: 1,
+                pair_position: 1,
                 target: 4,
                 target_len: 2,
             }
         );
         assert_eq!(
             err.to_string(),
-            "construction error: domain leg entry 1 targets index 4, but the target set has 2 element(s)"
+            "construction error: middle pair 1 targets domain index 4, but the domain has 2 element(s)"
         );
 
         // Codomain side: pair 1's `.1` is 6, the codomain has 2 elements.
@@ -735,9 +735,9 @@ mod test {
         };
         assert_eq!(
             err,
-            CatgraphError::ConstructionIndexOutOfBounds {
+            CatgraphError::ConstructionMiddlePairOutOfBounds {
                 leg: BoundaryLeg::Codomain,
-                position: 1,
+                pair_position: 1,
                 target: 6,
                 target_len: 2,
             }
@@ -749,13 +749,32 @@ mod test {
         };
         assert_eq!(
             err,
-            CatgraphError::ConstructionIndexOutOfBounds {
+            CatgraphError::ConstructionMiddlePairOutOfBounds {
                 leg: BoundaryLeg::Domain,
-                position: 0,
+                pair_position: 0,
                 target: 3,
                 target_len: 1,
             },
             "the domain component must win the race, otherwise the reported leg is not deterministic"
+        );
+
+        // `pair_position` indexes the MIDDLE-PAIR list, not the named leg —
+        // the distinction this variant exists for. Here the domain has 3
+        // elements and every one is in range, yet the offending pair sits at
+        // position 0 of a one-element middle list: a consumer reading
+        // `(leg, pair_position)` as a leg offset would look at domain entry 0,
+        // which is perfectly valid.
+        let Err(err) = Span::new(vec!['a', 'b', 'c'], vec!['a'], vec![(9, 0)]) else {
+            panic!("pair 0's domain component is out of bounds")
+        };
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionMiddlePairOutOfBounds {
+                leg: BoundaryLeg::Domain,
+                pair_position: 0,
+                target: 9,
+                target_len: 3,
+            }
         );
 
         // The valid neighbour of the first case still constructs.

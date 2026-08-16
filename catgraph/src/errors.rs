@@ -64,15 +64,17 @@ impl fmt::Display for BoundaryLeg {
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum CatgraphError {
-    /// A [`Cospan`](crate::cospan::Cospan) or [`Span`](crate::span::Span) leg
-    /// entry targets an index outside the set it must land in.
+    /// A [`Cospan`](crate::cospan::Cospan) leg entry targets an index outside
+    /// the apex (middle) set it must land in.
     ///
-    /// For a cospan the legs land in the apex (middle) set, so `target_len` is
-    /// the apex size; for a span the middle pairs land in the boundary sets, so
-    /// `target_len` is the size of the named boundary. Raised by
-    /// [`Cospan::new`](crate::cospan::Cospan::new) and
-    /// [`Span::new`](crate::span::Span::new) — the `_unchecked` constructors
-    /// leave this to a `debug_assert!`.
+    /// Raised by [`Cospan::new`](crate::cospan::Cospan::new) — and, via it, by
+    /// [`NamedCospan::new`](crate::named_cospan::NamedCospan::new). The
+    /// `_unchecked` constructors leave this to a `debug_assert!`.
+    ///
+    /// A span's failure of the same kind is
+    /// [`ConstructionMiddlePairOutOfBounds`](Self::ConstructionMiddlePairOutOfBounds),
+    /// **not** this variant: a span's offending element is a *middle pair*, so
+    /// `(leg, position)` would not locate it — see that variant's note.
     #[error(
         "construction error: {leg} leg entry {position} targets index {target}, but the target set has {target_len} element(s)"
     )]
@@ -84,6 +86,39 @@ pub enum CatgraphError {
         /// The out-of-range index the entry targets.
         target: usize,
         /// The size of the set the entry had to land in.
+        target_len: usize,
+    },
+
+    /// A [`Span`](crate::span::Span) middle pair names a boundary index outside
+    /// the boundary set it must land in.
+    ///
+    /// Distinct from
+    /// [`ConstructionIndexOutOfBounds`](Self::ConstructionIndexOutOfBounds)
+    /// because the offending *element* is different in kind. A cospan's legs are
+    /// vectors of indices, so `(leg, position)` locates the bad entry inside the
+    /// named leg. A span's legs are derived from one shared list of middle
+    /// pairs, so the bad element is a **pair**, and `pair_position` indexes that
+    /// list — not the domain or codomain. Reusing the cospan variant here would
+    /// mis-locate the element for any consumer using `(leg, position)` as
+    /// documented, and would report the same `position` for the domain and
+    /// codomain failures of a single pair.
+    ///
+    /// `leg` still says which half of the pair was out of range, and hence which
+    /// boundary `target_len` measures. Raised by
+    /// [`Span::new`](crate::span::Span::new) — `new_unchecked` leaves this to a
+    /// `debug_assert!`.
+    #[error(
+        "construction error: middle pair {pair_position} targets {leg} index {target}, but the {leg} has {target_len} element(s)"
+    )]
+    ConstructionMiddlePairOutOfBounds {
+        /// Which half of the pair was out of range, and so which boundary
+        /// `target_len` measures.
+        leg: BoundaryLeg,
+        /// The offending pair's position in the middle-pair list.
+        pair_position: usize,
+        /// The out-of-range boundary index that half of the pair names.
+        target: usize,
+        /// The size of the boundary set that half had to land in.
         target_len: usize,
     },
 
@@ -221,6 +256,33 @@ pub enum CatgraphError {
         /// How many class preimages contain it: `0` when no class claims it,
         /// `>= 2` when several do.
         occurrences: usize,
+        /// The size of the boundary the preimages had to partition —
+        /// `dom_len` or `cod_len`.
+        boundary_len: usize,
+    },
+
+    /// The class preimages for one leg do not have `boundary_len` members in
+    /// total, so they cannot partition `0..boundary_len` whatever their contents.
+    ///
+    /// Checked **before** the per-index tally in
+    /// [`CospanCanon::from_parts`](crate::cospan_canon::CospanCanon::from_parts),
+    /// and deliberately so: `from_parts` is the reload constructor, so
+    /// `dom_len`/`cod_len` are untrusted. A corrupt length satisfies the
+    /// sortedness and ascending checks with a single in-range class, and sizing
+    /// the tally from it would abort the process on an enormous allocation
+    /// instead of returning an error. A cardinality comparison decides the same
+    /// question without allocating.
+    ///
+    /// [`CanonPreimageNotAPartition`](Self::CanonPreimageNotAPartition) is the
+    /// finer report that follows once the totals agree.
+    #[error(
+        "canonical form error: the {leg} preimages hold {total} index/indices in total but must partition a boundary of {boundary_len}"
+    )]
+    CanonPreimageCardinalityMismatch {
+        /// Which leg's preimages have the wrong total size.
+        leg: BoundaryLeg,
+        /// The summed length of every class's preimage on that leg.
+        total: usize,
         /// The size of the boundary the preimages had to partition —
         /// `dom_len` or `cod_len`.
         boundary_len: usize,

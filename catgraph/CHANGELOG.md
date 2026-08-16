@@ -6,6 +6,35 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed — from the #256/#261 code review
+
+- **`CospanCanon::from_parts` no longer sizes its occurrence tally from an
+  unvalidated `dom_len`/`cod_len`.** `from_parts` is the *reload* constructor,
+  so those lengths arrive from a store or a wire format and are untrusted. A
+  corrupt `dom_len` of `1 << 40` satisfied the sortedness and ascending checks
+  with a single in-range class and then allocated an 8 TB tally — an allocation
+  abort, not a catchable `Err`. A cardinality comparison
+  (`sum(preimage.len()) == boundary_len`) decides the same question without
+  allocating and now runs first, reporting the new
+  `CatgraphError::CanonPreimageCardinalityMismatch`.
+  `CanonPreimageNotAPartition` remains the finer report for the case the
+  cardinality check cannot catch — the right *number* of members distributed
+  wrongly — and is pinned by two new fixtures so it stays reachable.
+- **`Span::new` reports `CatgraphError::ConstructionMiddlePairOutOfBounds`
+  instead of reusing `ConstructionIndexOutOfBounds`.** The two describe
+  different elements: a cospan's legs are vectors of indices, so
+  `(leg, position)` locates the bad entry inside the named leg; a span's legs
+  are derived from one shared middle-pair list, so the bad element is a *pair*.
+  Reusing the cospan variant mis-located it for any consumer using the fields
+  as documented, and emitted the same `position` for the domain and codomain
+  failures of a single pair.
+- **CI now runs `cargo test -p catgraph --lib --release`.** The three
+  `#[cfg(not(debug_assertions))]` tests that pin this release's central claim —
+  that `new_unchecked` is `debug_assert!`-only and so accepts what `new`
+  refuses — are compiled out of the debug workspace run, and the only release
+  job covered `catgraph-magnitude`. Without this lane the `Span::assert_valid`
+  bug fixed below would have shipped green.
+
 ### Changed — BREAKING
 
 - **`Cospan::new` and `Span::new` are now validated constructors returning

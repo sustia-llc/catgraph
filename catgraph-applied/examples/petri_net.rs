@@ -22,7 +22,8 @@ fn construction() {
     let net: PetriNet<&str> = PetriNet::new(
         vec!["H2", "O2", "H2O"],
         vec![Transition::new(vec![(0, d(2)), (1, d(1))], vec![(2, d(2))])],
-    );
+    )
+    .unwrap();
     println!("places:      {}", net.place_count());
     println!("transitions: {}", net.transition_count());
     println!("source places: {:?}", net.source_places());
@@ -43,7 +44,8 @@ fn firing() {
     let net: PetriNet<&str> = PetriNet::new(
         vec!["H2", "O2", "H2O"],
         vec![Transition::new(vec![(0, d(2)), (1, d(1))], vec![(2, d(2))])],
-    );
+    )
+    .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(4)), (1, d(2))]);
     println!("m0: H2={}, O2={}, H2O={}", m0.get(0), m0.get(1), m0.get(2));
     println!("enabled: {:?}", net.enabled(&m0));
@@ -70,7 +72,8 @@ fn reachability() {
             Transition::new(vec![(0, d(1))], vec![(1, d(1))]),
             Transition::new(vec![(1, d(1))], vec![(0, d(1))]),
         ],
-    );
+    )
+    .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(2))]);
     let reachable = net.reachable(&m0, 10);
     println!("buffer size 2: {} reachable markings", reachable.len());
@@ -96,11 +99,13 @@ fn composition() {
     let step1: PetriNet<char> = PetriNet::new(
         vec!['A', 'B'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-    );
+    )
+    .unwrap();
     let step2: PetriNet<char> = PetriNet::new(
         vec!['B', 'C'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-    );
+    )
+    .unwrap();
 
     let parallel = step1.parallel(&step2);
     println!(

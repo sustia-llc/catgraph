@@ -219,9 +219,49 @@ impl<Lambda> PetriNet<Lambda>
 where
     Lambda: Sized + Eq + Copy + Debug,
 {
-    /// Construct a Petri net from its places and transitions.
+    /// Construct a Petri net, checking that every arc indexes a place of this
+    /// net.
+    ///
+    /// That property is what makes a net *well-formed*, and several operations
+    /// depend on it — [`transition_as_cospan`](Self::transition_as_cospan) builds
+    /// its legs directly out of arc place indices, so an arc pointing past the
+    /// places vector produces a structurally invalid cospan.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::PetriNet`] naming the transition, the side, and
+    /// the offending index if any `pre` or `post` arc references a place index
+    /// at or beyond `places.len()`. Transitions are scanned in order and, within
+    /// a transition, `pre` before `post`.
+    pub fn new(places: Vec<Lambda>, transitions: Vec<Transition>) -> Result<Self, CatgraphError> {
+        for (transition, t) in transitions.iter().enumerate() {
+            for (side, arcs) in [("pre", &t.pre), ("post", &t.post)] {
+                for &(place, _) in arcs {
+                    if place >= places.len() {
+                        return Err(CatgraphError::PetriNet {
+                            message: format!(
+                                "transition {transition}'s {side} arc references place {place}, \
+                                 but the net has {} place(s)",
+                                places.len()
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+        Ok(Self::new_unchecked(places, transitions))
+    }
+
+    /// Construct a Petri net without checking that its arcs index its places.
+    ///
+    /// The well-formedness invariant is the caller's responsibility. Use this
+    /// where the arcs are correct **by construction** — a net assembled from
+    /// another net's own places, or a literal fixture — and [`new`](Self::new)
+    /// everywhere the places and transitions cross a trust boundary.
+    ///
+    /// Mirrors [`Cospan::new_unchecked`](catgraph::cospan::Cospan::new_unchecked).
     #[must_use]
-    pub fn new(places: Vec<Lambda>, transitions: Vec<Transition>) -> Self {
+    pub fn new_unchecked(places: Vec<Lambda>, transitions: Vec<Transition>) -> Self {
         Self {
             places,
             transitions,
@@ -429,7 +469,10 @@ where
         }
         let pre: Vec<(usize, Decimal)> = pre_counts.into_iter().collect();
         let post: Vec<(usize, Decimal)> = post_counts.into_iter().collect();
-        Self::new(places, vec![Transition::new(pre, post)])
+        // Correct by construction: the arc indices are the cospan's own leg
+        // entries and the places are its middle set, so every arc is in range by
+        // `Cospan`'s bounds invariant.
+        Self::new_unchecked(places, vec![Transition::new(pre, post)])
     }
 
     /// Convert a single transition to its cospan representation.
@@ -440,10 +483,14 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if any arc weight is not representable as `u64`, or if an arc
-    /// references a place index at or beyond [`Self::place_count`] — the arcs of
-    /// a well-formed net index its own places, and [`PetriNet::new`] does not
-    /// check that for the caller.
+    /// Panics if any arc weight is not representable as `u64`.
+    ///
+    /// The legs are arc place indices, so they must index this net's places.
+    /// [`PetriNet::new`] establishes that; a net built with
+    /// [`PetriNet::new_unchecked`] from arcs that do not is malformed, and the
+    /// cospan built here inherits the fault (a `debug_assert!` catches it in a
+    /// debug build, and it is deferred to whatever indexes the legs later in a
+    /// release build).
     #[must_use]
     pub fn transition_as_cospan(&self, transition: usize) -> Cospan<Lambda> {
         let t = &self.transitions[transition];
@@ -461,12 +508,11 @@ where
                 right.push(*p);
             }
         }
-        // NOT correct by construction: the legs are arc place indices, and
-        // `PetriNet::new` accepts arcs without checking them against `places`.
-        // The checked constructor turns a malformed net into a stated-invariant
-        // panic here rather than an invalid cospan that fails somewhere later.
-        Cospan::new(left, right, self.places.clone())
-            .expect("invariant: a net's arcs reference place indices that exist in that net")
+        // Correct by construction: the legs are arc place indices, and
+        // `PetriNet::new` refuses a net whose arcs do not index its own places.
+        // A caller that reached past that with `new_unchecked` owns the
+        // invariant, which is what the `# Panics` note above records.
+        Cospan::new_unchecked(left, right, self.places.clone())
     }
 
     /// Parallel composition (monoidal product): disjoint union of places and transitions.
@@ -485,7 +531,10 @@ where
                 t.post.iter().map(|(p, w)| (p + offset, *w)).collect();
             transitions.push(Transition::new(pre, post));
         }
-        Self::new(places, transitions)
+        // Correct by construction: `places` is the concatenation of both nets'
+        // places, `self`'s arcs are unchanged, and `other`'s are shifted by
+        // exactly the offset at which its places were appended.
+        Self::new_unchecked(places, transitions)
     }
 
     /// Sequential composition: merge sink places of `self` with source places of `other`.
@@ -535,7 +584,10 @@ where
                 .collect();
             transitions.push(Transition::new(pre, post));
         }
-        Ok(Self::new(places, transitions))
+        // Correct by construction: `other`'s arc indices are remapped through
+        // `other_index_map`, whose every entry is either an existing `places`
+        // index or one pushed onto `places` here, and `self`'s are unchanged.
+        Ok(Self::new_unchecked(places, transitions))
     }
 }
 
@@ -887,9 +939,61 @@ mod test {
         let net: PetriNet<char> = PetriNet::new(
             vec!['H', 'O', 'W'],
             vec![Transition::new(vec![(0, d(2)), (1, d(1))], vec![(2, d(2))])],
-        );
+        )
+        .unwrap();
         assert_eq!(net.place_count(), 3);
         assert_eq!(net.transition_count(), 1);
+    }
+
+    /// `PetriNet::new` refuses a net whose arcs do not index its own places.
+    ///
+    /// This is the property [`PetriNet::transition_as_cospan`] relies on: before
+    /// it was checked here, a net built from an out-of-range arc produced a
+    /// structurally invalid cospan, and the failure surfaced wherever that
+    /// cospan was next indexed.
+    #[test]
+    fn petri_net_new_rejects_arcs_outside_its_places() {
+        // One place, but the transition's pre-arc names place 5.
+        let err = PetriNet::new(vec!['a'], vec![Transition::new(vec![(5, d(1))], vec![])])
+            .expect_err("arc 5 is out of range for a 1-place net");
+        assert!(
+            matches!(&err, CatgraphError::PetriNet { message }
+                if message.contains("transition 0") && message.contains("pre")
+                    && message.contains("place 5") && message.contains("1 place")),
+            "{err}"
+        );
+
+        // The post side is checked too, and the transition index is reported.
+        let err = PetriNet::new(
+            vec!['a'],
+            vec![
+                Transition::new(vec![(0, d(1))], vec![]),
+                Transition::new(vec![], vec![(2, d(1))]),
+            ],
+        )
+        .expect_err("arc 2 is out of range for a 1-place net");
+        assert!(
+            matches!(&err, CatgraphError::PetriNet { message }
+                if message.contains("transition 1") && message.contains("post")
+                    && message.contains("place 2")),
+            "{err}"
+        );
+
+        // Widening the net so the arcs land in range is accepted — the
+        // transitions themselves were never the problem.
+        assert!(
+            PetriNet::new(
+                vec!['a', 'b', 'c'],
+                vec![Transition::new(vec![(2, d(1))], vec![])],
+            )
+            .is_ok()
+        );
+
+        // `new_unchecked` still accepts what `new` refuses: that is its contract,
+        // and it is what `transition_as_cospan`'s `# Panics` note now describes.
+        let malformed =
+            PetriNet::new_unchecked(vec!['a'], vec![Transition::new(vec![(5, d(1))], vec![])]);
+        assert_eq!(malformed.place_count(), 1);
     }
 
     #[test]
@@ -905,6 +1009,7 @@ mod test {
             vec!['H', 'O', 'W'],
             vec![Transition::new(vec![(0, d(2)), (1, d(1))], vec![(2, d(2))])],
         )
+        .unwrap()
     }
 
     #[test]
@@ -1074,11 +1179,13 @@ mod test {
         let a: PetriNet<char> = PetriNet::new(
             vec!['a', 'b'],
             vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-        );
+        )
+        .unwrap();
         let b: PetriNet<char> = PetriNet::new(
             vec!['c', 'd'],
             vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-        );
+        )
+        .unwrap();
         let combined = a.parallel(&b);
         assert_eq!(combined.place_count(), 4);
         assert_eq!(combined.transition_count(), 2);
@@ -1091,11 +1198,13 @@ mod test {
         let a: PetriNet<char> = PetriNet::new(
             vec!['a', 'b'],
             vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-        );
+        )
+        .unwrap();
         let b: PetriNet<char> = PetriNet::new(
             vec!['b', 'c'],
             vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-        );
+        )
+        .unwrap();
         let composed = a.sequential(&b).unwrap();
         assert_eq!(composed.place_count(), 3);
         assert_eq!(composed.transition_count(), 2);
@@ -1151,11 +1260,13 @@ mod test {
         let a: PetriNet<char> = PetriNet::new(
             vec!['a', 'b'],
             vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-        );
+        )
+        .unwrap();
         let b: PetriNet<char> = PetriNet::new(
             vec!['x', 'y'],
             vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-        );
+        )
+        .unwrap();
         let composed = a.sequential(&b).unwrap();
         assert_eq!(composed.place_count(), 4);
     }

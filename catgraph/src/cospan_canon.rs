@@ -356,6 +356,35 @@ impl<Lambda: Ord> CospanCanon<Lambda> {
         // 3. Each leg is a function: every boundary index occurs in exactly one
         //    class's preimage. Step 2 established that every entry is in range,
         //    so these tallies cannot index out of bounds.
+        //
+        // Cardinality first, *before* allocating anything sized by `dom_len` /
+        // `cod_len`. This is the reload constructor, so those lengths are
+        // untrusted: a corrupt `dom_len` of `1 << 40` satisfies steps 1-2 with a
+        // single in-range class and would then size an 8 TB tally, which aborts
+        // the process instead of returning `Err`. A partition of `0..dom_len`
+        // must have exactly `dom_len` members in total, so this check is
+        // equivalent to the tally below on the size question and allocation-free.
+        for (leg, total, boundary_len) in [
+            (
+                BoundaryLeg::Domain,
+                classes.iter().map(|c| c.dom_preimage.len()).sum::<usize>(),
+                dom_len,
+            ),
+            (
+                BoundaryLeg::Codomain,
+                classes.iter().map(|c| c.cod_preimage.len()).sum::<usize>(),
+                cod_len,
+            ),
+        ] {
+            if total != boundary_len {
+                return Err(CatgraphError::CanonPreimageCardinalityMismatch {
+                    leg,
+                    total,
+                    boundary_len,
+                });
+            }
+        }
+
         let mut dom_occurrences = vec![0_usize; dom_len];
         let mut cod_occurrences = vec![0_usize; cod_len];
         for class in &classes {
@@ -992,8 +1021,10 @@ mod tests {
         );
         assert!(CospanCanon::from_parts(1, 0, vec![ApexClass::new('a', vec![0], vec![])]).is_ok());
 
-        // (b) one boundary index claimed by two classes — the leg is not a
-        //     function, so the two signatures would no longer be distinct
+        // (b) the totals disagree with the boundary, so no distribution of the
+        //     entries could partition it. Caught by cardinality, BEFORE the
+        //     per-index tally is sized from the caller's `dom_len`/`cod_len` —
+        //     see (e) for why that ordering is load-bearing.
         assert_eq!(
             CospanCanon::from_parts(
                 1,
@@ -1004,10 +1035,9 @@ mod tests {
                 ]
             )
             .unwrap_err(),
-            CatgraphError::CanonPreimageNotAPartition {
+            CatgraphError::CanonPreimageCardinalityMismatch {
                 leg: BoundaryLeg::Domain,
-                index: 0,
-                occurrences: 2,
+                total: 2,
                 boundary_len: 1,
             }
         );
@@ -1025,24 +1055,21 @@ mod tests {
             .is_ok()
         );
 
-        // (c) a boundary index claimed by nobody
+        // (c) too few members, on each leg in turn. A bubble does not excuse an
+        //     unclaimed boundary index: the scalar below covers no wire.
         assert_eq!(
             CospanCanon::from_parts(2, 0, vec![ApexClass::new('a', vec![0], vec![])]).unwrap_err(),
-            CatgraphError::CanonPreimageNotAPartition {
+            CatgraphError::CanonPreimageCardinalityMismatch {
                 leg: BoundaryLeg::Domain,
-                index: 1,
-                occurrences: 0,
+                total: 1,
                 boundary_len: 2,
             }
         );
-        // (d) …and on the codomain leg. A bubble does not excuse an unclaimed
-        //     boundary index: the scalar below covers no wire.
         assert_eq!(
             CospanCanon::from_parts(0, 1, vec![ApexClass::new('a', vec![], vec![])]).unwrap_err(),
-            CatgraphError::CanonPreimageNotAPartition {
+            CatgraphError::CanonPreimageCardinalityMismatch {
                 leg: BoundaryLeg::Codomain,
-                index: 0,
-                occurrences: 0,
+                total: 0,
                 boundary_len: 1,
             }
         );
@@ -1057,6 +1084,64 @@ mod tests {
                 ]
             )
             .is_ok()
+        );
+
+        // (d) the right NUMBER of members, distributed wrongly — this is what
+        //     `CanonPreimageNotAPartition` is for, and it is why the cardinality
+        //     check in (b)/(c) cannot replace the tally. Both classes claim
+        //     domain index 0, leaving index 1 unclaimed; the totals still agree.
+        assert_eq!(
+            CospanCanon::from_parts(
+                2,
+                0,
+                vec![
+                    ApexClass::new('a', vec![0], vec![]),
+                    ApexClass::new('b', vec![0], vec![]),
+                ]
+            )
+            .unwrap_err(),
+            CatgraphError::CanonPreimageNotAPartition {
+                leg: BoundaryLeg::Domain,
+                index: 0,
+                occurrences: 2,
+                boundary_len: 2,
+            }
+        );
+        // The mirror case: the tally reports the first index that is not claimed
+        // exactly once, which here is the UNCLAIMED one rather than the doubled
+        // one — so the payload tracks the scan, not the kind of fault.
+        assert_eq!(
+            CospanCanon::from_parts(
+                2,
+                0,
+                vec![
+                    ApexClass::new('a', vec![1], vec![]),
+                    ApexClass::new('b', vec![1], vec![]),
+                ]
+            )
+            .unwrap_err(),
+            CatgraphError::CanonPreimageNotAPartition {
+                leg: BoundaryLeg::Domain,
+                index: 0,
+                occurrences: 0,
+                boundary_len: 2,
+            }
+        );
+
+        // (e) a hostile `dom_len` is refused without allocating a tally for it.
+        //     `from_parts` is the reload constructor, so the boundary lengths are
+        //     untrusted: this value passes the sortedness and ascending checks
+        //     with a single in-range class, and sizing the occurrence tally from
+        //     it would abort the process on a multi-terabyte allocation instead
+        //     of returning an error. Reaching this assertion at all is the pin.
+        assert_eq!(
+            CospanCanon::from_parts(1 << 40, 0, vec![ApexClass::new('a', vec![0], vec![])])
+                .unwrap_err(),
+            CatgraphError::CanonPreimageCardinalityMismatch {
+                leg: BoundaryLeg::Domain,
+                total: 1,
+                boundary_len: 1 << 40,
+            }
         );
     }
 
