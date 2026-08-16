@@ -222,9 +222,25 @@ impl UnionFind {
 
 /// Faithfulness-check report for `S: SFG_R → Mat(R)` on a size-bounded sample.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct FaithfulnessReport<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> {
     pub size_bound: usize,
     pub expressions_checked: usize,
+    /// How many distinct matrix images the enumerated expressions produced —
+    /// i.e. the number of fibres of `S` on this fragment, `|S(enumerated)|`.
+    ///
+    /// Added in #167 because the *partition* was otherwise unobservable: every
+    /// other field here is computed **within** a bucket, so a change to the
+    /// bucket key (say, one that splits `-0.0` from `0.0` by rendering it)
+    /// could move the whole partition without moving a single reported number.
+    /// This is the field that makes such a change visible, and it is the one a
+    /// regression test can pin.
+    ///
+    /// `expressions_checked - collisions_under_s - matrix_buckets` is not a
+    /// meaningful quantity; the three are independent views. Note in particular
+    /// that `matrix_buckets <= expressions_checked` always, with equality iff
+    /// `S` is injective on the fragment.
+    pub matrix_buckets: usize,
     /// Summed over matrix buckets: the bucket's number of `eq_mod`-connected
     /// components, minus one. Zero iff every bucket is a single component, i.e.
     /// iff the default engine proves every equality the matrix functor asserts.
@@ -442,6 +458,7 @@ where
     Ok(FaithfulnessReport {
         size_bound,
         expressions_checked: expressions.len(),
+        matrix_buckets: by_matrix.len(),
         collisions_under_s: collisions,
         witnesses,
     })
@@ -487,9 +504,19 @@ where
         }
         expressions.extend(new_exprs);
 
-        // Deduplicate by structural Debug key to prevent combinatorial explosion.
+        // Deduplicate structurally to prevent combinatorial explosion.
+        //
+        // Keyed on the VALUE, not on `format!("{:?}", …)` (#167). `PropExpr`
+        // derives `Eq + Hash`, so this needs no rendering — and the rendering
+        // was the same defect the bucket key above had: `Debug` on
+        // `F64Rig(pub f64)` is derived and prints the sign bit, so a caller
+        // passing both `0.0` and `-0.0` in `rig_samples` got two `Scalar`
+        // generators that are `Eq`-equal under the rig's own equality yet
+        // survived dedup as distinct expressions — inflating
+        // `expressions_checked` and doing redundant O(k²) `eq_mod` work inside
+        // the single bucket they now share.
         let mut seen = std::collections::HashSet::new();
-        expressions.retain(|e| seen.insert(format!("{:?}", e.as_prop_expr())));
+        expressions.retain(|e| seen.insert(e.as_prop_expr().clone()));
     }
 
     expressions

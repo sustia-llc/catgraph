@@ -308,9 +308,13 @@ impl OllivierFoliation {
 /// unreachable.
 ///
 /// **Slim-build fallback only.** With the default-on `rustworkx` feature this
-/// pass is
-/// [`branchial_distance_matrix`](super::branchial_analysis::branchial_distance_matrix)
-/// instead (#162); this sweep is what keeps
+/// pass is `branchial_analysis::branchial_distance_matrix` instead (#162) —
+/// named in plain code formatting, deliberately: an intra-doc link would be
+/// **unresolvable in the only configuration this item compiles in**, since
+/// `#[cfg(not(feature = "rustworkx"))]` is exactly when
+/// `multiway::branchial_analysis` does not exist. CI's rustdoc gate runs with
+/// default features, so it would not catch the broken link either. This sweep
+/// is what keeps
 /// [`OllivierRicciCurvature::from_branchial`] available to a
 /// `--no-default-features` consumer, for whom `branchial_analysis` — and with
 /// it petgraph and rustworkx-core — does not exist at all. The two must agree

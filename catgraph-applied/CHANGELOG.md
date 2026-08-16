@@ -13,6 +13,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Added
+
+- **`FaithfulnessReport::matrix_buckets`** — the number of distinct matrix
+  images the enumerated expressions produced, i.e. `|S(enumerated)|`
+  ([#167](https://github.com/sustia-llc/catgraph/issues/167)). Added because
+  the bucket *partition* was otherwise **unobservable**: every other field on
+  the report is computed *within* a bucket, so the key change below moved the
+  whole partition without moving a single reported number. Measured: reverting
+  the key left `expressions_checked`, `collisions_under_s` and `witnesses`
+  byte-identical, so no test could have caught a regression. `matrix_buckets`
+  moves iff the partition moves, and `bucket_key_merges_signed_zero_images`
+  pins it (97 correct / 102 on the retired key).
+
+  `FaithfulnessReport` is now `#[non_exhaustive]`, so future fields are not a
+  breaking change — this is the second field-shaped need on the type, and the
+  first one could not be added without one.
+
 ### Fixed
 
 - **`verify_sfg_to_mat_is_full_and_faithful` buckets by matrix value, not by a

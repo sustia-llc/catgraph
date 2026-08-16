@@ -13,7 +13,7 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
 | `hypergraph/` | Hypergraph DPO rewriting, evolution tracking, categorical span/cospan bridges, lattice gauge theory |
 | `multiway/` | Generic multiway (non-deterministic) evolution graphs, branchial foliation, Ollivier-Ricci curvature, Wasserstein transport |
 | `multiway/branchial_spectrum.rs` | Graph Laplacian eigendecomposition: algebraic connectivity (λ₂), spectral gap, Fiedler vector, spectral clustering |
-| `multiway/branchial_analysis.rs` | Graph algorithms via rustworkx-core: greedy coloring, k-core decomposition, articulation points, all-pairs shortest paths; betweenness and Katz centrality on multiway evolution graphs |
+| `multiway/branchial_analysis.rs` | Graph algorithms via rustworkx-core: greedy coloring, k-core decomposition, articulation points; betweenness and Katz centrality on multiway evolution graphs. Also an all-pairs shortest-path pass, but that one is **`pub(crate)`** — it exists to feed `ollivier_ricci`, and is not re-exported from `multiway` |
 
 ## Dependencies
 
