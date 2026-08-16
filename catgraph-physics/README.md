@@ -13,7 +13,7 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
 | `hypergraph/` | Hypergraph DPO rewriting, evolution tracking, categorical span/cospan bridges, lattice gauge theory |
 | `multiway/` | Generic multiway (non-deterministic) evolution graphs, branchial foliation, Ollivier-Ricci curvature, Wasserstein transport |
 | `multiway/branchial_spectrum.rs` | Graph Laplacian eigendecomposition: algebraic connectivity (λ₂), spectral gap, Fiedler vector, spectral clustering |
-| `multiway/branchial_analysis.rs` | Graph algorithms via rustworkx-core: greedy coloring, k-core decomposition, articulation points; betweenness and Katz centrality on multiway evolution graphs |
+| `multiway/branchial_analysis.rs` | Graph algorithms via rustworkx-core: greedy coloring, k-core decomposition, articulation points; betweenness and Katz centrality on multiway evolution graphs. Also an all-pairs shortest-path pass, but that one is **`pub(crate)`** — it exists to feed `ollivier_ricci`, and is not re-exported from `multiway` |
 
 ## Dependencies
 
@@ -31,6 +31,15 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
   (#220). This bullet is the live rationale for the dependency; the
   `Cargo.toml` comments point here rather than at the closed issue that
   originally added the gate.
+
+  Since #162 the gate also selects the all-pairs shortest-path sweep inside
+  `OllivierRicciCurvature::from_branchial`: rustworkx-core's `distance_matrix`
+  when the feature is on, a hand-rolled queue BFS in `ollivier_ricci.rs` when it
+  is off. Same unweighted hop metric either way — the curvature values do not
+  depend on the feature, and the crate's exact-valued curvature tests run on
+  both paths. The `Vec<Vec<f64>>` at that boundary is a deliberate copy out of
+  rustworkx's `ndarray` return: `ndarray` stays undeclared here so it can stay
+  inside the one chain this one gate drops.
 
   `rustworkx-core` is *additionally* a `[dev-dependencies]` entry (#163), for
   its seeded topology generators in proptest and bench fixtures. That edge is
@@ -51,15 +60,20 @@ cargo bench -p catgraph-physics --bench branchial_bench
 and it wires the upstream toggle through so `--no-default-features` produces a
 single-threaded catgraph dep transitively.
 
-Since #161 this crate also has **one direct rayon call site**:
-`multiway_betweenness` hands the Brandes sweep to rustworkx-core's
-`CondIterator` at ≥ 50 nodes. It is gated — with `parallel` off the threshold
-is `usize::MAX`, so the sweep is always sequential. That gate matters for more
-than tidiness: on a no-threads wasm target an ungated `CondIterator` would fail
-at *runtime* on rayon's global pool init, and only for graphs large enough to
-cross the threshold. Note the parallel path is also not bit-reproducible
-(rustworkx accumulates partials from rayon workers, so f64 summation order
-varies); build without `parallel` if you need pinnable scores.
+Since #161 this crate also hands work to rayon, at **two sites**, both inside
+rustworkx-core and both gated the same way — with `parallel` off the threshold
+is `usize::MAX`, so no node count reaches it and the sweep is always
+sequential:
+
+| site | mechanism | threshold | bit-reproducible on the parallel path? |
+|------|-----------|----------:|----------------------------------------|
+| `multiway_betweenness` (#161) | `CondIterator` over the Brandes sweep | 50 | **No** — partials accumulate into a shared buffer, so f64 summation order varies |
+| `OllivierRicciCurvature::from_branchial` (#162) | `distance_matrix`'s `into_par_iter()` over rows | 300 | **Yes** — disjoint rows, integer hop counts, nothing accumulated |
+
+The gate matters for more than tidiness: on a no-threads wasm target an ungated
+rayon path fails at *runtime* on rayon's global pool init, and only for graphs
+large enough to cross the threshold. Build without `parallel` if you need
+pinnable betweenness scores; the distances are pinnable either way.
 
 `--no-default-features` also
 drops the `rustworkx` feature (the `rustworkx-core` → `petgraph` chain) and

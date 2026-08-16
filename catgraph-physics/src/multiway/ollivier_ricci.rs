@@ -16,8 +16,13 @@
 //! - **κ = 0**: Neighbors are exactly at the same distance as x, y (flat).
 //! - **κ < 0**: Neighbors spread apart further than x, y (saddle-like).
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::hash::Hash;
+
+// Only the fallback sweep below needs a queue; with `rustworkx` on, the
+// all-pairs pass is rustworkx-core's bitset-frontier BFS.
+#[cfg(not(feature = "rustworkx"))]
+use std::collections::VecDeque;
 
 use super::branchial::BranchialGraph;
 use super::curvature::{CurvatureFoliation, DiscreteCurvature};
@@ -59,6 +64,20 @@ impl OllivierRicciCurvature {
     ///    `W₁(μ_x, μ_y)`, then `κ(x, y) = 1 - W₁ / d(x, y)`.
     /// 4. Vertex Ricci = average of incident edge curvatures.
     /// 5. Scalar = normalized sum of vertex curvatures.
+    ///
+    /// # Which all-pairs pass runs (#162)
+    ///
+    /// Step 2 goes through rustworkx-core when the default-on `rustworkx`
+    /// feature is enabled, and through a hand-rolled queue BFS otherwise. The
+    /// two agree by construction — same unweighted hop metric, same
+    /// `f64::INFINITY` for an unreachable pair, same `0.0` diagonal — so the
+    /// curvatures do not depend on the feature. rustworkx's sweep may run on
+    /// rayon past `APSP_PARALLEL_THRESHOLD` nodes, but only with the `parallel`
+    /// feature also on, and its output is bit-identical either way (it fills
+    /// disjoint rows with hop counts, never an accumulated sum).
+    ///
+    /// Step 1 is *not* redundant with step 2: `adj` also carries the neighbour
+    /// distributions `μ_x` that step 3 integrates against.
     #[must_use]
     #[allow(
         clippy::cast_precision_loss,
@@ -96,6 +115,9 @@ impl OllivierRicciCurvature {
         }
 
         // --- 2. All-pairs BFS shortest paths ---
+        #[cfg(feature = "rustworkx")]
+        let dist = super::branchial_analysis::branchial_distance_matrix(branchial);
+        #[cfg(not(feature = "rustworkx"))]
         let dist = all_pairs_bfs(&adj, n);
 
         // --- 3. Edge curvatures ---
@@ -284,6 +306,20 @@ impl OllivierFoliation {
 ///
 /// Returns a distance matrix `dist[i][j]` where `f64::INFINITY` means
 /// unreachable.
+///
+/// **Slim-build fallback only.** With the default-on `rustworkx` feature this
+/// pass is `branchial_analysis::branchial_distance_matrix` instead (#162) —
+/// named in plain code formatting, deliberately: an intra-doc link would be
+/// **unresolvable in the only configuration this item compiles in**, since
+/// `#[cfg(not(feature = "rustworkx"))]` is exactly when
+/// `multiway::branchial_analysis` does not exist. CI's rustdoc gate runs with
+/// default features, so it would not catch the broken link either. This sweep
+/// is what keeps
+/// [`OllivierRicciCurvature::from_branchial`] available to a
+/// `--no-default-features` consumer, for whom `branchial_analysis` — and with
+/// it petgraph and rustworkx-core — does not exist at all. The two must agree
+/// on the metric, so any change here is a change to both.
+#[cfg(not(feature = "rustworkx"))]
 fn all_pairs_bfs(adj: &[Vec<usize>], n: usize) -> Vec<Vec<f64>> {
     let mut dist = vec![vec![f64::INFINITY; n]; n];
 
@@ -421,6 +457,16 @@ mod tests {
     /// Tree with branching: 0-{1,2,3}, 3-{4,5}. Edge (0,3) has κ < 0
     /// because the neighborhoods of 0 and 3 point in opposite directions —
     /// transporting mass from {1,2,3} to {0,4,5} costs more than d(0,3)=1.
+    ///
+    /// Pinned exactly at −2/3, because that number is the sharpest available
+    /// check on the all-pairs pass feeding it (#162). μ₀ sits on {1,2,3} and μ₃
+    /// on {0,4,5}, each at mass 1/3, with ground costs `d(1,0)=d(2,0)=d(3,·)=1`
+    /// and `d(1,4)=d(1,5)=d(2,4)=d(2,5)=3`. Every optimal assignment routes one
+    /// unit through the 3-hop leg, giving `W₁ = (1 + 1 + 3)/3 = 5/3` and
+    /// `κ = 1 − 5/3`. It therefore reads distance-2 *and* distance-3 entries of
+    /// the matrix: a swapped row, an off-by-one hop count, or a `null_value`
+    /// leaking into the support would all move it, where a bare `κ < 0` would
+    /// not.
     #[test]
     fn branching_tree_has_negative_curvature() {
         // Graph: 0-1, 0-2, 0-3, 3-4, 3-5
@@ -447,6 +493,47 @@ mod tests {
             kappa < 0.0,
             "Bridge edge (0,3) should have negative curvature, got {kappa}"
         );
+        assert!(
+            (kappa - (-2.0 / 3.0)).abs() < 1e-12,
+            "Bridge edge (0,3) should be exactly 1 - 5/3, got {kappa}"
+        );
+    }
+
+    /// A disconnected branchial graph — the shape that puts `f64::INFINITY`
+    /// into the distance matrix.
+    ///
+    /// Two independent "universes": K₂ on {0,1} and K₃ on {2,3,4}. Every
+    /// cross-component pair is unreachable, so the whole top-right block of the
+    /// matrix is the `null_value`. Curvature must be computed per component and
+    /// come out at the values those components would give in isolation —
+    /// κ = 0 on the K₂ edge, κ = 1/2 on each K₃ edge (half of μ's mass already
+    /// sits on the shared third vertex, so only the other half moves, one hop).
+    ///
+    /// This is the case that a `null_value` mistake shows up in and nothing
+    /// else does: pass rustworkx's own doc-example `0.0` instead of
+    /// `f64::INFINITY` and every unreachable pair reads as *adjacent*, which
+    /// `from_branchial` would neither skip nor notice.
+    #[test]
+    fn disconnected_components_curve_independently() {
+        let branchial =
+            make_branchial(0, vec![0, 1, 2, 3, 4], vec![(0, 1), (2, 3), (2, 4), (3, 4)]);
+        let curv = OllivierRicciCurvature::from_branchial(&branchial);
+
+        assert!(curv.sectional_curvature(0, 1).abs() < 1e-12);
+        for (u, v) in [(2, 3), (2, 4), (3, 4)] {
+            let kappa = curv.sectional_curvature(u, v);
+            assert!(
+                (kappa - 0.5).abs() < 1e-12,
+                "K3 edge ({u},{v}) should be 1/2, got {kappa}"
+            );
+        }
+
+        // Vertex Ricci averages incident edges; scalar averages over all 5
+        // nodes: (0 + 0 + 1/2 + 1/2 + 1/2) / 5.
+        assert!(curv.ricci_curvature(0).abs() < 1e-12);
+        assert!((curv.ricci_curvature(2) - 0.5).abs() < 1e-12);
+        assert!((curv.scalar_curvature() - 0.3).abs() < 1e-12);
+        assert_eq!(curv.edge_curvatures.len(), 4);
     }
 
     /// A single node is trivially flat with dimension 1 and scalar 0.

@@ -10,6 +10,57 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed
+
+- **`OllivierRicciCurvature::from_branchial` gets its all-pairs distances from
+  rustworkx-core** ([#162](https://github.com/sustia-llc/catgraph/issues/162),
+  `rustworkx` feature, **no new dependencies**). The hand-rolled `all_pairs_bfs`
+  queue sweep is replaced by `rustworkx_core::shortest_path::distance_matrix`
+  over the existing `BranchialGraph::to_petgraph` shim, wrapped in a new
+  crate-internal `branchial_distance_matrix`. Behaviour is unchanged: the
+  unweighted hop metric, the `0.0` diagonal, and `f64::INFINITY` for an
+  unreachable pair are all preserved — `f64::INFINITY` is passed as rustworkx's
+  `null_value`, so the sentinel `from_branchial` already skipped on keeps its
+  meaning. Branchial graphs are dense by construction (nodes are joined when
+  they share *any* ancestor), which is the regime rustworkx's `FixedBitSet`
+  frontier is built for.
+
+  - **The rayon threshold is gated, exactly as #161's was.** `distance_matrix`
+    takes a `parallel_threshold` and branches straight onto `into_par_iter()`
+    once the node count reaches it, so it is the crate's *second* path into
+    rayon. It gets its own `APSP_PARALLEL_THRESHOLD`: 300 (rustworkx's own
+    recommended default) with the `parallel` feature on, `usize::MAX` with it
+    off. Ungated, a `--no-default-features --features rustworkx` build — the
+    single-threaded / WASI case — would spawn rayon work from inside a
+    curvature computation, and on a no-threads wasm target rayon's global pool
+    init fails at *runtime*, only for graphs past the threshold. (Mechanism
+    differs from #161's: `distance_matrix` branches on a plain `if`, not
+    `rayon_cond::CondIterator`. The hazard is identical.)
+  - **Unlike betweenness, this one *is* bit-reproducible on the parallel
+    path.** `distance_matrix` fills disjoint rows — each per-source BFS writes
+    only into its own row view, and every value written is an integer-valued
+    hop counter rather than an accumulated sum. There is no shared f64 buffer
+    whose summation order could vary with scheduling, which is precisely what
+    makes the Brandes accumulation non-reproducible.
+  - **No `ndarray` in the signature or in `Cargo.toml`.** `distance_matrix`
+    returns an `ndarray` 2-D array; it is copied to `Vec<Vec<f64>>` at the
+    boundary. `ndarray` is already present transitively beneath rustworkx-core,
+    but *declaring* it would version-lock this crate to rustworkx-core's choice
+    and break the slim/WASM story that one feature gate drops the whole
+    rustworkx-core → petgraph + ndarray chain. The copy is `O(n²)` against an
+    `O(n³/64)` sweep, so it does not change the shape of the cost.
+  - **`--no-default-features` keeps working.** `ollivier_ricci` is not itself
+    gated, so the old queue BFS is retained as the slim-build fallback under
+    `#[cfg(not(feature = "rustworkx"))]`. The two paths agree on the metric,
+    and the module's curvature tests — now pinned to *exact* values rather
+    than signs — run on both.
+  - **Adjacency-list construction stays.** #162 suggested it could be deleted
+    along with the BFS; it cannot. `adj` also carries the uniform neighbour
+    distributions `μ_x` that the Wasserstein step integrates against.
+  - Not done, and deliberately out of scope: memoizing `to_petgraph` across an
+    analysis pass. It is a real observation in #162 but a separate design
+    change, and this pass touches only the distance sweep.
+
 ### Added
 
 - **Multiway DAG centrality**

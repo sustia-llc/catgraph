@@ -222,9 +222,25 @@ impl UnionFind {
 
 /// Faithfulness-check report for `S: SFG_R → Mat(R)` on a size-bounded sample.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct FaithfulnessReport<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> {
     pub size_bound: usize,
     pub expressions_checked: usize,
+    /// How many distinct matrix images the enumerated expressions produced —
+    /// i.e. the number of fibres of `S` on this fragment, `|S(enumerated)|`.
+    ///
+    /// Added in #167 because the *partition* was otherwise unobservable: every
+    /// other field here is computed **within** a bucket, so a change to the
+    /// bucket key (say, one that splits `-0.0` from `0.0` by rendering it)
+    /// could move the whole partition without moving a single reported number.
+    /// This is the field that makes such a change visible, and it is the one a
+    /// regression test can pin.
+    ///
+    /// `expressions_checked - collisions_under_s - matrix_buckets` is not a
+    /// meaningful quantity; the three are independent views. Note in particular
+    /// that `matrix_buckets <= expressions_checked` always, with equality iff
+    /// `S` is injective on the fragment.
+    pub matrix_buckets: usize,
     /// Summed over matrix buckets: the bucket's number of `eq_mod`-connected
     /// components, minus one. Zero iff every bucket is a single component, i.e.
     /// iff the default engine proves every equality the matrix functor asserts.
@@ -235,9 +251,61 @@ pub struct FaithfulnessReport<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 
     pub witnesses: Vec<(SignalFlowGraph<R>, SignalFlowGraph<R>)>,
 }
 
+/// Bucket key for [`verify_sfg_to_mat_is_full_and_faithful`]: an SFG
+/// expression's matrix image under `S`, as `(rows, cols, entries)` (#167).
+///
+/// The entries alone would not do — `Zero : 0 → 1` has empty `entries()`
+/// whatever its column count, and `Discard : 1 → 0` has `vec![vec![]]` — so
+/// shape rides along. `MatR<R>` itself cannot be the key: it derives only
+/// `Clone, Debug, PartialEq`. See that function's rustdoc for why this is the
+/// matrix *value* and not a `Debug` rendering of it.
+type MatrixKey<R> = (usize, usize, Vec<Vec<R>>);
+
 /// Enumerate SFG expressions whose `PropExpr` depth is at most `size_bound`,
 /// bucket them by matrix image under `S`, and count how far each bucket falls
 /// short of being a single `matr_presentation(rig_samples)`-equivalence class.
+///
+/// # What "same matrix image" means here (#167)
+///
+/// Two expressions share a bucket iff `sfg_to_mat` gives them the same shape
+/// **and** entry-wise `Eq`-equal entries — the rig's own equality, asked
+/// directly of the values.
+///
+/// It used to be asked of a `Debug` rendering: the bucket key was
+/// `format!("{}×{} {:?}", m.rows(), m.cols(), m.entries())`. That is a strictly
+/// finer relation than the one the consumer is asking about, and for the
+/// `f64`-backed rigs it is finer in exactly the place [`crate::rig`] went out of
+/// its way to fix. `F64Rig`'s `Hash` normalizes `-0.0` to `0.0` and its `Eq` is
+/// the derived IEEE `PartialEq`, under which `-0.0 == 0.0` — that pairing is the
+/// fix for issue #58, where a signed zero split a congruence class. But `Debug`
+/// on `F64Rig(pub f64)` is *derived*, so it prints `F64Rig(-0.0)` and
+/// `F64Rig(0.0)` differently and reinstates the same split one layer up, in the
+/// bucketing rather than in the closure. Keying on the value inherits #58's
+/// normalization instead of working around it.
+///
+/// Whether that split is *reachable* depends on the sample set. With the
+/// shipped depth-2 fixtures it is not: matrix entries come only from
+/// `R::zero()`, `R::one()`, the `rig_samples` themselves, and `MatR::matmul`,
+/// and `matmul` accumulates from `R::zero()`, so an entry that would be `-0.0`
+/// (`-1.0 × 0.0`) is summed into `+0.0` before it is stored. But `rig_samples`
+/// is a caller's choice, and `F64Rig(-0.0)` in it puts a `-0.0` straight into a
+/// `Scalar` generator's `1×1` matrix. The old key was a latent unsoundness with
+/// a live trigger, not a dormant one.
+///
+/// ⚠ The flip side, stated rather than papered over (the #58 posture): the
+/// value key inherits *all* of the rig's equality, including its NaN behaviour.
+/// A rig value that is not `Eq`-reflexive — `F64Rig(f64::NAN)`, reachable only
+/// by putting a NaN or an infinity in `rig_samples` — can never match its own
+/// `HashMap` entry, so every NaN-imaged expression lands in a bucket of one and
+/// contributes nothing. The `Debug` key merged those instead. Neither is more
+/// correct; asking the rig is the behaviour this function wants, and a rig whose
+/// `Eq` is not an equivalence gives a bucketing that is not one either.
+///
+/// **No tolerance.** A tolerance-aware comparison was considered for #167 and
+/// rejected. This consumer asks whether `S(a) == S(b)` *as matrices over R*,
+/// which is an exact question; merging near-equal matrices would put
+/// presentation-distinct expressions into one bucket and manufacture
+/// faithfulness witnesses that the functor does not assert.
 ///
 /// # How a bucket is partitioned (#189)
 ///
@@ -303,16 +371,17 @@ where
     // Enumerate expressions up to depth = size_bound.
     let expressions = enumerate_sfg_expressions::<R>(size_bound, rig_samples);
 
-    // Primary bucket = matrix image under S. Within each bucket, two
+    // Primary bucket = matrix image under S, keyed by `MatrixKey<R>` — the
+    // matrix *value*, not a rendering of it (#167). Within each bucket, two
     // expressions are a faithfulness-violation witness iff they are NOT
     // equal modulo the presentation. Within-bucket partitioning uses
     // Presentation::eq_mod (which routes through the default
     // CongruenceClosure engine).
-    let mut by_matrix: std::collections::HashMap<String, Vec<SignalFlowGraph<R>>> =
+    let mut by_matrix: std::collections::HashMap<MatrixKey<R>, Vec<SignalFlowGraph<R>>> =
         std::collections::HashMap::new();
     for expr in &expressions {
         let m = sfg_to_mat(expr)?;
-        let matrix_key = format!("{}×{} {:?}", m.rows(), m.cols(), m.entries());
+        let matrix_key = (m.rows(), m.cols(), m.entries().to_vec());
         by_matrix.entry(matrix_key).or_default().push(expr.clone());
     }
 
@@ -389,6 +458,7 @@ where
     Ok(FaithfulnessReport {
         size_bound,
         expressions_checked: expressions.len(),
+        matrix_buckets: by_matrix.len(),
         collisions_under_s: collisions,
         witnesses,
     })
@@ -434,9 +504,19 @@ where
         }
         expressions.extend(new_exprs);
 
-        // Deduplicate by structural Debug key to prevent combinatorial explosion.
+        // Deduplicate structurally to prevent combinatorial explosion.
+        //
+        // Keyed on the VALUE, not on `format!("{:?}", …)` (#167). `PropExpr`
+        // derives `Eq + Hash`, so this needs no rendering — and the rendering
+        // was the same defect the bucket key above had: `Debug` on
+        // `F64Rig(pub f64)` is derived and prints the sign bit, so a caller
+        // passing both `0.0` and `-0.0` in `rig_samples` got two `Scalar`
+        // generators that are `Eq`-equal under the rig's own equality yet
+        // survived dedup as distinct expressions — inflating
+        // `expressions_checked` and doing redundant O(k²) `eq_mod` work inside
+        // the single bucket they now share.
         let mut seen = std::collections::HashSet::new();
-        expressions.retain(|e| seen.insert(format!("{:?}", e.as_prop_expr())));
+        expressions.retain(|e| seen.insert(e.as_prop_expr().clone()));
     }
 
     expressions

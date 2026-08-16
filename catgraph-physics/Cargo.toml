@@ -18,6 +18,9 @@ parallel = ["catgraph/parallel"]
 # `rustworkx` gates `multiway::branchial_analysis` — the petgraph + rustworkx-core
 # graph algorithms: greedy coloring, k-core, and articulation points on branchial
 # graphs, plus betweenness / Katz centrality on multiway evolution graphs (#161).
+# It also selects the all-pairs sweep behind `OllivierRicciCurvature` (#162);
+# with the feature off that falls back to a queue BFS in `ollivier_ricci.rs`, on
+# the same metric, so curvature values are feature-independent.
 # Default-on for source-compatibility; opt out via `default-features = false` to
 # drop the rustworkx-core → petgraph + ndarray chain for slim / WASM builds.
 # Rationale: README.md, "Dependencies".

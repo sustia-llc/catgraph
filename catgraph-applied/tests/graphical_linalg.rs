@@ -189,18 +189,205 @@
 //! 1590 post-#189). All baselines
 //! live in the `BASELINE_*_D2` module consts.
 //!
+//! #58 had a sequel: the harness's *bucket* key was a `Debug` string until
+//! [#167](https://github.com/sustia-llc/catgraph/issues/167), and derived
+//! `Debug` on `F64Rig(pub f64)` renders the sign bit — reinstating the very
+//! `-0.0`/`0.0` split #58 closed, one layer up. The key is the matrix value
+//! now. None of the four baselines moved: `MatR::matmul` accumulates from
+//! `R::zero()`, so `-1.0 × 0.0` is summed into `+0.0` before it is stored and
+//! these fixtures never build a `-0.0` entry. It is reachable through
+//! `rig_samples`, which is why `signed_zero_is_one_matrix_bucket_not_two`
+//! (non-ignored, below) pins it.
+//!
 //! [`CongruenceClosure`]: catgraph_applied::prop::presentation::NormalizeEngine::CongruenceClosure
 //! [`MatrixNFFunctor<R>`]: catgraph_applied::prop::presentation::functorial::MatrixNFFunctor
 //! [`Presentation::eq_mod_functorial`]: catgraph_applied::prop::presentation::Presentation::eq_mod_functorial
 
 use catgraph_applied::{
     graphical_linalg::{matr_presentation, verify_sfg_to_mat_is_full_and_faithful},
+    mat::MatR,
     rig::{BoolRig, F64Rig, Rig, Tropical, UnitInterval},
     sfg::SignalFlowGraph,
     sfg_to_mat::sfg_to_mat,
 };
 
 // ---- Smoke tests (always active): the presentation builds across all rigs ----
+
+/// #167: `verify_sfg_to_mat_is_full_and_faithful` buckets by the matrix
+/// **value**, not by a `Debug` rendering of it.
+///
+/// The retired key was `format!("{}×{} {:?}", rows, cols, entries)`. `Debug` on
+/// `F64Rig(pub f64)` is derived, so it renders the sign bit — reinstating,
+/// in the bucketing, the very `-0.0`/`0.0` split #58 closed in the rig
+/// `Hash` impls. This test pins both halves of the replacement and the
+/// reachability claim the rustdoc makes about it.
+#[test]
+fn signed_zero_is_one_matrix_bucket_not_two() {
+    /// Exactly the key the harness builds. `MatR` itself cannot be the key —
+    /// it derives only `Clone, Debug, PartialEq` — so shape rides alongside
+    /// the entries (`Zero : 0 → 1` and `Discard : 1 → 0` are the shapes that
+    /// need it: their `entries()` carry no column count).
+    fn key(m: &MatR<F64Rig>) -> (usize, usize, Vec<Vec<F64Rig>>) {
+        (m.rows(), m.cols(), m.entries().to_vec())
+    }
+
+    // Both values hashed with the SAME `BuildHasher`; a per-call `RandomState`
+    // reseeds and would make even identical values disagree.
+    fn hashes_agree<T: std::hash::Hash>(a: &T, b: &T) -> bool {
+        use std::hash::{BuildHasher, RandomState};
+        let state = RandomState::new();
+        state.hash_one(a) == state.hash_one(b)
+    }
+
+    let pos = MatR::new(1, 1, vec![vec![F64Rig(0.0)]]).unwrap();
+    let neg = MatR::new(1, 1, vec![vec![F64Rig(-0.0)]]).unwrap();
+
+    // The retired key really did split them...
+    assert_ne!(
+        format!("{}×{} {:?}", pos.rows(), pos.cols(), pos.entries()),
+        format!("{}×{} {:?}", neg.rows(), neg.cols(), neg.entries()),
+        "if `Debug` ever stopped rendering the sign bit this test would be \
+         vacuous — it asserts the old key's defect, not the new key's virtue"
+    );
+
+    // ...and the live key does not. `Eq` alone is not enough for a `HashMap`:
+    // the entries must hash alike too, which is what #58 bought.
+    assert_eq!(key(&pos), key(&neg));
+    assert!(hashes_agree(&key(&pos), &key(&neg)));
+
+    // Reachability, in both directions.
+    //
+    // A `Scalar` generator puts its sample straight into a 1×1 matrix, so a
+    // caller passing `F64Rig(-0.0)` in `rig_samples` — a public argument —
+    // triggers the split immediately.
+    let from_scalar = sfg_to_mat(&SignalFlowGraph::scalar(F64Rig(-0.0))).unwrap();
+    assert!(from_scalar.entries()[0][0].0.is_sign_negative());
+
+    // The shipped depth-2 fixtures cannot: every other entry comes from
+    // `R::zero()`, `R::one()`, or `MatR::matmul`, and matmul accumulates from
+    // `R::zero()`, so the `-1.0 × 0.0` the #58 note names is summed into
+    // `+0.0` before it is ever stored. That is why the pinned baselines below
+    // do not move under #167 — and this assertion is what makes the claim fail
+    // loudly if the accumulation is ever restructured.
+    let via_matmul = sfg_to_mat(
+        &SignalFlowGraph::scalar(F64Rig(-1.0))
+            .compose(&SignalFlowGraph::scalar(F64Rig(0.0)))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(via_matmul.entries()[0][0], F64Rig(0.0));
+    assert!(via_matmul.entries()[0][0].0.is_sign_positive());
+}
+
+/// Runs the harness itself, with `-0.0` in `rig_samples`.
+///
+/// **Why this exists and what it does NOT do.** Every other caller of
+/// `verify_sfg_to_mat_is_full_and_faithful` in this file is `#[ignore]`d
+/// (they are the minutes-long release sweeps), so without this test no
+/// *running* test executes the changed bucketing line at all. This one does,
+/// cheaply, at `size_bound = 1`.
+///
+/// It is deliberately **not** asserted to discriminate the key change, because
+/// **it cannot**, and the reason is worth recording rather than rediscovering:
+///
+/// The `FaithfulnessReport` is provably identical under both keys for this
+/// input — measured, by reverting `graphical_linalg.rs`'s key to the old
+/// `format!("{}×{} {:?}", …)` and re-running: `expressions_checked: 166`,
+/// `collisions_under_s: 4`, same four witnesses, both ways. That is not a
+/// coincidence, and it *proves* something: `F64Rig(0.0)` and `F64Rig(-0.0)`
+/// certainly share a bucket under the value key (equal, and #58 made them hash
+/// alike), so if `eq_mod` distinguished them the count would have risen to 5.
+/// It stayed at 4, so the presentation identifies them too — one connected
+/// component, contributing no collision and no witness.
+///
+/// So the `-0.0` split is invisible in the report *by construction*: the same
+/// rig-level equality that makes the value key merge the bucket also makes
+/// `eq_mod` merge the component. The defect #167 fixes is real but **latent** —
+/// it can only change a bucket *partition*, which the report does not expose.
+/// A semantic pin on the key lives in
+/// [`signed_zero_is_one_matrix_bucket_not_two`]; this one pins that the
+/// production path still runs and stays self-consistent.
+#[test]
+fn public_harness_runs_with_signed_zero_samples() {
+    let samples = vec![F64Rig(0.0), F64Rig(-0.0)];
+    let report = verify_sfg_to_mat_is_full_and_faithful::<F64Rig>(1, &samples).unwrap();
+
+    // Self-consistency of the report, which the bucketing line is responsible
+    // for: every witness pair must have genuinely equal matrix images (that is
+    // what makes it a faithfulness witness at all), and a witness can only be
+    // produced from inside a bucket, so this exercises the key end to end.
+    for (a, b) in &report.witnesses {
+        assert_eq!(
+            sfg_to_mat(a).unwrap(),
+            sfg_to_mat(b).unwrap(),
+            "a witness pair must share its matrix image"
+        );
+    }
+    // Pins the DEDUP half of #167. `enumerate_sfg_expressions` dedups by value
+    // now, not by `format!("{:?}", …)`, so the two `Scalar` generators built
+    // from these samples — `Eq`-equal under the rig, `Debug`-distinct —
+    // collapse to one, and everything built on top of them collapses with it:
+    // **166 → 135**. Reverting that `retain` to the Debug key restores 166 and
+    // fails here.
+    assert_eq!(
+        report.expressions_checked, 135,
+        "value-keyed dedup must collapse the `0.0` / `-0.0` scalars (and their \
+         descendants); 166 means the Debug-string key is back"
+    );
+    assert!(
+        report.collisions_under_s >= report.witnesses.len() / 2,
+        "each reported witness pair sits in some multi-component bucket"
+    );
+}
+
+/// Pins the BUCKET-KEY half of #167 — the half that had no observable until
+/// `FaithfulnessReport::matrix_buckets` was added for exactly this purpose.
+///
+/// Every other field is computed *within* a bucket, so re-splitting `-0.0`
+/// from `0.0` moves the partition without moving a single reported number
+/// (measured: reverting the key leaves `expressions_checked`,
+/// `collisions_under_s` and `witnesses` byte-identical). `matrix_buckets` is
+/// the count of distinct matrix images, so it moves iff the partition moves.
+///
+/// The fixture has to be built with care, because the sibling dedup fix
+/// removes the obvious trigger: `Scalar(0.0)` and `Scalar(-0.0)` are now
+/// `Eq`-equal *as expressions* and collapse before bucketing ever sees them.
+/// So the two expressions here are **structurally distinct** — they survive
+/// dedup — while their matrix images differ only in the sign of zero:
+///
+/// - `Scalar(-0.0)` images to `[-0.0]`;
+/// - `Scalar(-1.0) ; Scalar(0.0)` images to `[+0.0]`, because `MatR::matmul`
+///   accumulates from `R::zero()` and IEEE `+0.0 + (-0.0) == +0.0`.
+///
+/// Equal as rig values, so the value key puts them in ONE bucket. Distinct as
+/// `Debug` renderings, so the retired key put them in TWO.
+#[test]
+fn bucket_key_merges_signed_zero_images() {
+    let samples = vec![F64Rig(-0.0), F64Rig(-1.0), F64Rig(0.0)];
+    let report = verify_sfg_to_mat_is_full_and_faithful::<F64Rig>(1, &samples).unwrap();
+
+    // Both fixture expressions must actually be reachable at this depth, or the
+    // pin below would be vacuous for a reason unrelated to the key.
+    let neg_zero = sfg_to_mat(&SignalFlowGraph::scalar(F64Rig(-0.0))).unwrap();
+    let via_matmul = sfg_to_mat(
+        &SignalFlowGraph::scalar(F64Rig(-1.0))
+            .compose(&SignalFlowGraph::scalar(F64Rig(0.0)))
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(neg_zero.entries()[0][0].0.is_sign_negative());
+    assert!(via_matmul.entries()[0][0].0.is_sign_positive());
+    assert_eq!(neg_zero, via_matmul, "equal as rig values");
+
+    assert_eq!(
+        report.matrix_buckets, 97,
+        "the `-0.0` and `+0.0` images must share ONE bucket. Reverting the key \
+         to `format!(\"{{:?}}\", …)` measures 102 here — every image carrying a \
+         `-0.0` anywhere splits, not just the fixture pair — and no other field \
+         of this report moves at all. That is the #167 regression, and this is \
+         the only assertion that can see it"
+    );
+}
 
 #[test]
 fn matr_presentation_builds_bool() {

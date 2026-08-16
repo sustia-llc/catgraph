@@ -4,7 +4,7 @@
 //! Two petgraph shims live here:
 //!
 //! - [`BranchialGraph::to_petgraph`] → an undirected `UnGraph`, feeding the
-//!   coloring, k-core, and articulation-point wrappers.
+//!   coloring, k-core, articulation-point, and all-pairs-distance wrappers.
 //! - [`MultiwayEvolutionGraph::to_petgraph`] → a directed `DiGraph`, feeding
 //!   the centrality wrappers [`multiway_betweenness`] and [`multiway_katz`].
 
@@ -402,6 +402,98 @@ pub fn branchial_articulation_points(graph: &BranchialGraph) -> Vec<MultiwayNode
         .collect()
 }
 
+/// Node count at which [`branchial_distance_matrix`] hands its per-source BFS
+/// sweep to rayon.
+///
+/// 300 is the value rustworkx-core's own `distance_matrix` documentation names
+/// as a good default — six times the 50 used for the Brandes sweep, a BFS row
+/// being much the cheaper unit of work.
+///
+/// **Gated on the `parallel` feature**, for the same reason as
+/// `BETWEENNESS_PARALLEL_THRESHOLD`: `parallel` is this crate's
+/// single-threading switch, and once `node_count() >= parallel_threshold`
+/// `distance_matrix` branches straight onto rayon's `into_par_iter()`. Without
+/// the gate a consumer building `--no-default-features --features rustworkx` —
+/// a WASI or otherwise single-threaded target — would get rayon work spawned
+/// from inside [`OllivierRicciCurvature`] on any branchial graph of ≥ 300
+/// nodes, and on a no-threads wasm target rayon's global pool init fails at
+/// *runtime*. With the feature off the threshold is `usize::MAX`, which no node
+/// count reaches, so the sweep always runs on the calling thread.
+///
+/// (`distance_matrix` branches on a plain `if`, not the `rayon_cond`
+/// `CondIterator` the centrality functions use. Different mechanism, identical
+/// hazard.)
+///
+/// [`OllivierRicciCurvature`]: super::ollivier_ricci::OllivierRicciCurvature
+#[cfg(feature = "parallel")]
+const APSP_PARALLEL_THRESHOLD: usize = 300;
+
+/// Sequential stand-in for `APSP_PARALLEL_THRESHOLD` when the `parallel`
+/// feature is off: no node count can reach it, so the all-pairs sweep always
+/// runs on the calling thread.
+#[cfg(not(feature = "parallel"))]
+const APSP_PARALLEL_THRESHOLD: usize = usize::MAX;
+
+/// All-pairs shortest-path distances on a branchial graph, in node order.
+///
+/// `dist[i][j]` is the unweighted hop distance from `graph.nodes[i]` to
+/// `graph.nodes[j]`. The diagonal is `0.0` and an unreachable pair is
+/// `f64::INFINITY` — the convention
+/// [`OllivierRicciCurvature`](super::ollivier_ricci::OllivierRicciCurvature)
+/// reads, and the reason `null_value` is passed as `f64::INFINITY` rather than
+/// rustworkx's own `0.0` example value.
+///
+/// # Index alignment
+///
+/// [`BranchialGraph::to_petgraph`] adds nodes in `graph.nodes` order and never
+/// removes one, so `node_bound() == node_count()` and `to_index(i) == i`. That
+/// is exactly the case in which `distance_matrix` skips its internal node
+/// remapping and indexes by `to_index`, so row `i` of the result is
+/// `graph.nodes[i]` — no permutation to undo.
+///
+/// # Determinism
+///
+/// Bit-reproducible at any size, parallel path included — unlike
+/// [`multiway_betweenness`]. `distance_matrix` fills disjoint rows: each
+/// per-source BFS writes only into its own row view, and every value written is
+/// an integer-valued hop counter rather than an accumulated sum. There is no
+/// shared f64 buffer whose summation order could vary with thread scheduling,
+/// which is precisely what makes the Brandes accumulation non-reproducible.
+///
+/// # Cost
+///
+/// rustworkx expands the BFS frontier with `FixedBitSet` word operations, which
+/// is `O(n²/64)` per source regardless of edge count — a win over a queue-based
+/// `O(n + m)` sweep on dense graphs and a loss on very sparse ones. Branchial
+/// graphs sit on the dense end by construction: nodes are joined when they
+/// share *any* ancestor, so a foliation grown from a single root is complete or
+/// near-complete at every step
+/// ([`BranchialGraph::is_fully_connected`] exists to check exactly that).
+///
+/// # Allocation
+///
+/// `distance_matrix` hands back an `ndarray` 2-D array; this copies it into
+/// `Vec<Vec<f64>>` at the boundary. The copy is deliberate: it keeps `ndarray`
+/// out of both this signature and `Cargo.toml`. `ndarray` is present
+/// transitively beneath rustworkx-core, but *declaring* it would version-lock
+/// this crate to rustworkx-core's choice of it, and the slim/WASM feature story
+/// ("one gate drops the whole rustworkx-core → petgraph + ndarray chain") would
+/// stop being true. The copy is `O(n²)` against an `O(n³/64)` sweep, so it does
+/// not change the shape of the cost.
+pub(crate) fn branchial_distance_matrix(graph: &BranchialGraph) -> Vec<Vec<f64>> {
+    let (pg, _) = graph.to_petgraph();
+    let matrix = rustworkx_core::shortest_path::distance_matrix(
+        &pg,
+        APSP_PARALLEL_THRESHOLD,
+        // `pg` is already undirected, so `neighbors` yields both directions;
+        // `as_undirected` would only chain Incoming with Outgoing redundantly.
+        false,
+        f64::INFINITY,
+    );
+
+    matrix.outer_iter().map(|row| row.to_vec()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::evolution_graph::MultiwayEvolutionGraph;
@@ -476,6 +568,63 @@ mod tests {
         for &core in cores.values() {
             assert_eq!(core, 2);
         }
+    }
+
+    /// The all-pairs sweep behind `OllivierRicciCurvature` (#162).
+    ///
+    /// Three things have to hold at once, and each is a way the rustworkx swap
+    /// could have gone wrong silently:
+    ///
+    /// 1. **`null_value`.** An unreachable pair must read `f64::INFINITY`, the
+    ///    sentinel `from_branchial` skips on — not rustworkx's own doc-example
+    ///    `0.0`, which would read as "adjacent" and divide by zero.
+    /// 2. **The diagonal.** `distance_matrix` initialises every cell to
+    ///    `null_value` and only the traversal writes `0.0`, so the diagonal
+    ///    being `0.0` is a property of the traversal, not of the fill.
+    /// 3. **Index alignment.** The branch ids here are deliberately *not*
+    ///    ascending: any export that sorted or hashed nodes rather than keeping
+    ///    `graph.nodes` order would permute the rows and still look plausible.
+    #[test]
+    fn distance_matrix_marks_unreachable_and_keeps_node_order() {
+        use super::super::evolution_graph::BranchId;
+
+        let id = |branch: usize| MultiwayNodeId::new(BranchId(branch), 0);
+        // Path 7-2-9, plus a disjoint edge 4-1. Branch ids are shuffled so that
+        // row order can only come from `nodes`, not from the ids themselves.
+        let graph = BranchialGraph {
+            step: 0,
+            nodes: vec![id(7), id(2), id(9), id(4), id(1)],
+            edges: vec![(id(7), id(2)), (id(2), id(9)), (id(4), id(1))],
+        };
+
+        let inf = f64::INFINITY;
+        assert_eq!(
+            branchial_distance_matrix(&graph),
+            vec![
+                vec![0.0, 1.0, 2.0, inf, inf],
+                vec![1.0, 0.0, 1.0, inf, inf],
+                vec![2.0, 1.0, 0.0, inf, inf],
+                vec![inf, inf, inf, 0.0, 1.0],
+                vec![inf, inf, inf, 1.0, 0.0],
+            ]
+        );
+
+        // Degenerate shapes the curvature entry point short-circuits on, pinned
+        // here because the matrix helper is what would panic if they were not
+        // handled: 0×0 and a lone 0.0 diagonal.
+        let empty = BranchialGraph {
+            step: 0,
+            nodes: Vec::new(),
+            edges: Vec::new(),
+        };
+        assert!(branchial_distance_matrix(&empty).is_empty());
+
+        let singleton = BranchialGraph {
+            step: 0,
+            nodes: vec![id(7)],
+            edges: Vec::new(),
+        };
+        assert_eq!(branchial_distance_matrix(&singleton), vec![vec![0.0]]);
     }
 
     #[test]
