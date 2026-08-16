@@ -14,11 +14,13 @@ fn main() {
     let left = PetriNet::new(
         vec!['x'],
         vec![Transition::new(vec![], vec![(0, Decimal::ONE)])],
-    );
+    )
+    .unwrap();
     let right = PetriNet::new(
         vec!['y'],
         vec![Transition::new(vec![], vec![(0, Decimal::ONE)])],
-    );
+    )
+    .unwrap();
 
     let mut tensor = left;
     tensor.monoidal(right);

@@ -140,7 +140,9 @@ impl TemporalComplex {
             let right = vec![1];
             let middle = vec![t_start, t_end];
 
-            cospans.push(Cospan::new(left, right, middle));
+            // Correct by construction: literal legs `[0]` / `[1]` into a literal
+            // two-vertex apex.
+            cospans.push(Cospan::new_unchecked(left, right, middle));
         }
 
         cospans

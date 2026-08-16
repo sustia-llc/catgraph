@@ -19,7 +19,8 @@ fn combustion_h2_o2_h2o() {
     let net: PetriNet<&str> = PetriNet::new(
         vec!["H2", "O2", "H2O"],
         vec![Transition::new(vec![(0, d(2)), (1, d(1))], vec![(2, d(2))])],
-    );
+    )
+    .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(4)), (1, d(2))]);
     let m1 = net.fire(0, &m0).unwrap();
     let m2 = net.fire(0, &m1).unwrap();
@@ -37,7 +38,8 @@ fn two_step_synthesis() {
             Transition::new(vec![(0, d(1)), (1, d(1))], vec![(2, d(1))]),
             Transition::new(vec![(2, d(1)), (3, d(1))], vec![(4, d(1))]),
         ],
-    );
+    )
+    .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(1)), (1, d(1)), (3, d(1))]);
     assert_eq!(net.enabled(&m0), vec![0]);
     let m1 = net.fire(0, &m0).unwrap();
@@ -52,7 +54,8 @@ fn haber_process_stoichiometry() {
     let net: PetriNet<&str> = PetriNet::new(
         vec!["N2", "H2", "NH3"],
         vec![Transition::new(vec![(0, d(1)), (1, d(3))], vec![(2, d(2))])],
-    );
+    )
+    .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(1)), (1, d(3))]);
     let m1 = net.fire(0, &m0).unwrap();
     assert_eq!(m1.get(2), d(2));
@@ -71,7 +74,8 @@ fn producer_consumer_bounded_buffer() {
             Transition::new(vec![(0, d(1))], vec![(1, d(1))]),
             Transition::new(vec![(1, d(1))], vec![(0, d(1))]),
         ],
-    );
+    )
+    .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(3))]);
     let reachable = net.reachable(&m0, 10);
     assert_eq!(reachable.len(), 4);
@@ -89,7 +93,8 @@ fn deadlock_detection() {
             Transition::new(vec![(3, d(1)), (0, d(1)), (1, d(1))], vec![(5, d(1))]),
             Transition::new(vec![(5, d(1))], vec![(3, d(1)), (0, d(1)), (1, d(1))]),
         ],
-    );
+    )
+    .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(1)), (1, d(1)), (2, d(1)), (3, d(1))]);
     let eating0 = Marking::from_vec(vec![(3, d(1)), (4, d(1))]);
     assert!(net.can_reach(&m0, &eating0, 5));
@@ -104,11 +109,13 @@ fn sequential_pipeline() {
     let step1: PetriNet<char> = PetriNet::new(
         vec!['A', 'B'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-    );
+    )
+    .unwrap();
     let step2: PetriNet<char> = PetriNet::new(
         vec!['B', 'C'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-    );
+    )
+    .unwrap();
     let pipeline = step1.sequential(&step2).unwrap();
     assert_eq!(pipeline.place_count(), 3);
     let m0 = Marking::from_vec(vec![(0, d(1))]);
@@ -121,11 +128,13 @@ fn parallel_independence() {
     let a: PetriNet<char> = PetriNet::new(
         vec!['a', 'b'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-    );
+    )
+    .unwrap();
     let b: PetriNet<char> = PetriNet::new(
         vec!['x', 'y'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
-    );
+    )
+    .unwrap();
     let combined = a.parallel(&b);
     let m0 = Marking::from_vec(vec![(0, d(1))]);
     let m1 = combined.fire(0, &m0).unwrap();
@@ -139,7 +148,8 @@ fn parallel_independence() {
 
 #[test]
 fn cospan_roundtrip_preserves_structure() {
-    let cospan: Cospan<char> = Cospan::new(vec![0, 1, 1, 1], vec![2, 2], vec!['N', 'H', 'A']);
+    let cospan: Cospan<char> =
+        Cospan::new(vec![0, 1, 1, 1], vec![2, 2], vec!['N', 'H', 'A']).unwrap();
     let net = PetriNet::from_cospan(&cospan);
     let back = net.transition_as_cospan(0);
     assert_eq!(back.middle(), cospan.middle());
@@ -171,7 +181,7 @@ mod v0_3_1_braiding {
         let places = vec!['a', 'b'];
         let t0 = Transition::new(vec![(0, Decimal::ONE)], vec![(1, Decimal::ONE)]);
         let t1 = Transition::new(vec![(1, Decimal::ONE)], vec![(0, Decimal::ONE)]);
-        PetriNet::new(places, vec![t0, t1])
+        PetriNet::new(places, vec![t0, t1]).unwrap()
     }
 
     #[test]
@@ -222,11 +232,13 @@ mod v0_3_1_braiding {
         let mut net1 = PetriNet::new(
             vec!['x'],
             vec![Transition::new(vec![], vec![(0, Decimal::ONE)])],
-        );
+        )
+        .unwrap();
         let net2 = PetriNet::new(
             vec!['y'],
             vec![Transition::new(vec![], vec![(0, Decimal::ONE)])],
-        );
+        )
+        .unwrap();
 
         let mut reverse = net2.clone();
         reverse.monoidal(net1.clone());

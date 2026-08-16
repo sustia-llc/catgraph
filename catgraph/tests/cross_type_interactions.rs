@@ -26,7 +26,7 @@ fn span_dagger_involution_non_trivial() {
     let left = vec!['a', 'b', 'c', 'a'];
     let right = vec!['a', 'b', 'c'];
     let middle = vec![(0, 0), (1, 1), (2, 2), (3, 0)];
-    let s = Span::new(left, right, middle);
+    let s = Span::new(left, right, middle).unwrap();
 
     // dagger flips domain/codomain and swaps each pair
     let d = s.dagger();
@@ -61,7 +61,8 @@ fn named_cospan_port_names_survive_composition() {
         vec!['A', 'A'],
         vec!["in_x", "in_y"],
         vec!["mid_a", "mid_b"],
-    );
+    )
+    .unwrap();
 
     // nc2: left_names = ["mid_a", "mid_b"], right_names = ["out_p", "out_q"]
     //   middle has 2 nodes of type 'A', identity-like mapping
@@ -71,7 +72,8 @@ fn named_cospan_port_names_survive_composition() {
         vec!['A', 'A'],
         vec!["mid_a", "mid_b"],
         vec!["out_p", "out_q"],
-    );
+    )
+    .unwrap();
 
     let composed = nc1.compose(&nc2).expect("should compose");
 
@@ -99,7 +101,8 @@ fn named_cospan_operations_match_inner_cospan() {
         vec!['X', 'Y'],
         vec!["a", "b"],
         vec!["c"],
-    );
+    )
+    .unwrap();
 
     let c1 = nc1.cospan();
 
@@ -111,7 +114,8 @@ fn named_cospan_operations_match_inner_cospan() {
         vec!['X', 'Y'],
         vec!["c"],
         vec!["d", "e"],
-    );
+    )
+    .unwrap();
 
     let c2 = nc2.cospan();
 

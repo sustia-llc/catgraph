@@ -12,6 +12,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- **`RewriteSpan::to_span` documents its label-agreement precondition**, and
+  builds its span with the new `Span::new_unchecked`
+  ([#256](https://github.com/sustia-llc/catgraph/issues/256)). **Its observable
+  release behaviour is unchanged.** `RewriteSpan`'s fields are public, so
+  `left_map` and `right_map` may send a kernel vertex to different vertex IDs —
+  the span's labels *are* vertex IDs, so that is a genuine label-agreement
+  violation the type permits. It stays `debug_assert!`-only rather than becoming
+  a release check, which is what `new_unchecked` expresses. Every `RewriteSpan`
+  this crate builds satisfies the invariant (`RewriteRule::to_rewrite_span` uses
+  identity morphisms). Callers wanting the check should validate through
+  `Span::new` themselves.
+
+  An earlier draft of this entry claimed the method "no longer index-panics in a
+  release build". That was wrong and the code review caught it: both pair
+  components come from `left_index` / `right_index`, whose value ranges are
+  exactly `0..left_verts.len()` and `0..right_verts.len()`, and the label
+  vectors have those same lengths — so the bounds were never violated here. The
+  release-mode indexing bug fixed in core's `Span::assert_valid` was
+  unreachable through this path; only the label check, which is debug-only,
+  could ever have fired.
+
 - **`OllivierRicciCurvature::from_branchial` gets its all-pairs distances from
   rustworkx-core** ([#162](https://github.com/sustia-llc/catgraph/issues/162),
   `rustworkx` feature, **no new dependencies**). The hand-rolled `all_pairs_bfs`

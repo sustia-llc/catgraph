@@ -107,7 +107,10 @@ impl HypergraphEvolution {
         let right: Vec<usize> = child_verts.iter().map(|v| apex_index[v]).collect();
         let middle: Vec<u32> = apex_sorted.iter().map(|&v| v as u32).collect();
 
-        Cospan::new(left, right, middle)
+        // Correct by construction: `apex_index` is built from `apex_sorted`,
+        // which is the union of both vertex sets, so every lookup lands inside
+        // the apex.
+        Cospan::new_unchecked(left, right, middle)
     }
 
     /// Composes the deterministic cospan chain into a single composite cospan

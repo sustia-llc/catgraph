@@ -6,7 +6,7 @@
 use {
     crate::{
         category::{Composable, HasIdentity},
-        errors::CatgraphError,
+        errors::{BoundaryLeg, CatgraphError},
         finset::FinSetMap,
         monoidal::SymmetricMonoidalMorphism,
         monoidal::{Monoidal, MonoidalMorphism},
@@ -42,37 +42,98 @@ where
     Lambda: Sized + Eq + Copy + Debug,
 {
     /// Debug-asserts structural invariants: leg indices in bounds, identity flags consistent.
+    ///
+    /// Every check is written **inside** its `debug_assert!`, so the whole
+    /// method compiles away in release — which is what
+    /// [`Cospan::new_unchecked`] documents, and what keeps its release cost at
+    /// zero. (Its `Span` counterpart needed the same shape for a stronger
+    /// reason; see [`Span::assert_valid`](crate::span::Span::assert_valid).)
     pub fn assert_valid(&self, check_id_strong: bool, check_id_weak: bool) {
-        let middle_size = self.middle.len();
-        let left_in_bounds = self.left.iter().all(|z| *z < middle_size);
         debug_assert!(
-            left_in_bounds,
+            self.left.iter().all(|z| *z < self.middle.len()),
             "A target for one of the left arrows was out of bounds"
         );
-        let right_in_bounds = self.right.iter().all(|z| *z < middle_size);
         debug_assert!(
-            right_in_bounds,
+            self.right.iter().all(|z| *z < self.middle.len()),
             "A target for one of the right arrows was out of bounds"
         );
         if check_id_strong || (check_id_weak && self.is_left_id) {
-            let is_left_really_id = represents_id(self.left.iter().copied());
             debug_assert_eq!(
-                is_left_really_id, self.is_left_id,
+                represents_id(self.left.iter().copied()),
+                self.is_left_id,
                 "The identity nature of the left arrow was wrong"
             );
         }
         if check_id_strong || (check_id_weak && self.is_right_id) {
-            let is_right_really_id = represents_id(self.right.iter().copied());
             debug_assert_eq!(
-                is_right_really_id, self.is_right_id,
+                represents_id(self.right.iter().copied()),
+                self.is_right_id,
                 "The identity nature of the right arrow was wrong"
             );
         }
     }
 
     /// Construct a cospan from explicit leg maps and middle set, computing identity flags.
+    ///
+    /// Both legs are checked against the apex **in every build profile**. This is
+    /// the trust-boundary constructor: use it for leg maps arriving from outside
+    /// the crate — a store, a wire format, a parser, a user. Internal callers
+    /// building a cospan from data that is correct by construction should use
+    /// [`new_unchecked`](Self::new_unchecked), which costs nothing in release.
+    ///
+    /// Mirrors [`Corel::new`](crate::corel::Corel::new) /
+    /// [`Rel::new`](crate::span::Rel::new): the checked constructor owns the
+    /// plain name.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::ConstructionIndexOutOfBounds`] if any `left` or
+    /// `right` entry targets an index at or beyond `middle.len()`, naming the
+    /// leg, the entry's position within it, the out-of-range target, and the
+    /// apex size. The domain leg is scanned before the codomain leg, and each
+    /// leg in ascending position order, so the reported failure is the first
+    /// one in that order.
+    pub fn new(
+        left: Vec<MiddleIndex>,
+        right: Vec<MiddleIndex>,
+        middle: Vec<Lambda>,
+    ) -> Result<Self, CatgraphError> {
+        let middle_size = middle.len();
+        for (leg, entries) in [
+            (BoundaryLeg::Domain, left.as_slice()),
+            (BoundaryLeg::Codomain, right.as_slice()),
+        ] {
+            for (position, &target) in entries.iter().enumerate() {
+                if target >= middle_size {
+                    return Err(CatgraphError::ConstructionIndexOutOfBounds {
+                        leg,
+                        position,
+                        target,
+                        target_len: middle_size,
+                    });
+                }
+            }
+        }
+        Ok(Self::new_unchecked(left, right, middle))
+    }
+
+    /// Construct a cospan without checking that either leg lands inside the apex.
+    ///
+    /// The bounds invariant is the caller's responsibility; it is re-checked by
+    /// a `debug_assert!` only, so a release build accepts an out-of-bounds leg
+    /// and defers the failure to whatever indexes it later. Use this where the
+    /// leg maps are correct **by construction** — composition results, identity
+    /// and Frobenius generators, permutation builders, monoidal products — and
+    /// [`new`](Self::new) everywhere data crosses a trust boundary.
+    ///
+    /// Mirrors [`Corel::new_unchecked`](crate::corel::Corel::new_unchecked) /
+    /// [`Rel::new_unchecked`](crate::span::Rel::new_unchecked).
     #[must_use]
-    pub fn new(left: Vec<MiddleIndex>, right: Vec<MiddleIndex>, middle: Vec<Lambda>) -> Self {
+    pub fn new_unchecked(
+        left: Vec<MiddleIndex>,
+        right: Vec<MiddleIndex>,
+        middle: Vec<Lambda>,
+    ) -> Self {
         // Identity requires the leg to be a bijection onto the full middle set:
         // values must be [0, 1, ..., n-1] AND length must equal middle.len()
         let is_left_id = left.len() == middle.len() && represents_id(left.iter().copied());
@@ -91,7 +152,7 @@ where
     /// The cospan with empty domain, codomain, and middle set.
     #[must_use]
     pub fn empty() -> Self {
-        Self::new(vec![], vec![], vec![])
+        Self::new_unchecked(vec![], vec![], vec![])
     }
 
     /// True when all three sets (left, right, middle) are empty.
@@ -309,7 +370,10 @@ where
         F: Fn(Lambda) -> Mu,
         Mu: Sized + Eq + Copy + Debug,
     {
-        Cospan::new(
+        // Correct by construction: the legs are copied verbatim and `f` is
+        // applied pointwise, so the apex keeps its length and every leg entry
+        // stays in bounds.
+        Cospan::new_unchecked(
             self.left.clone(),
             self.right.clone(),
             self.middle.iter().map(|l| f(*l)).collect(),
@@ -417,7 +481,10 @@ where
             .map_err(|e| CatgraphError::Composition {
                 message: e.to_string(),
             })?;
-        let mut composition = Self::new(
+        // Correct by construction: all three vectors start empty (they are only
+        // pre-sized), and every subsequent push goes through `add_middle` /
+        // `add_boundary_node`, which maintain the bounds invariant.
+        let mut composition = Self::new_unchecked(
             Vec::with_capacity(self.left.len()),
             Vec::with_capacity(other.right.len()),
             Vec::with_capacity(pushout_target),
@@ -624,6 +691,83 @@ mod test {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
+    // ---- #256: `new` validates in EVERY profile, `new_unchecked` does not ----
+
+    /// `Cospan::new` refuses an out-of-bounds leg entry on either side, and says
+    /// which leg, which position, which target, and how big the apex was.
+    ///
+    /// The check under test is the *unconditional* one in `new`, not the
+    /// `debug_assert!` in `assert_valid` — this test therefore states the
+    /// release-build behaviour and must be run under `--release` too.
+    #[test]
+    fn cospan_new_rejects_out_of_bounds_leg_entries() {
+        use super::Cospan;
+        use crate::errors::{BoundaryLeg, CatgraphError};
+
+        // Domain leg: entry 1 targets apex index 2, apex has 2 vertices.
+        let err = Cospan::<char>::new(vec![0, 2], vec![1], vec!['a', 'b'])
+            .expect_err("left leg index 2 is out of bounds for a 2-vertex apex");
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionIndexOutOfBounds {
+                leg: BoundaryLeg::Domain,
+                position: 1,
+                target: 2,
+                target_len: 2,
+            }
+        );
+        assert_eq!(
+            err.to_string(),
+            "construction error: domain leg entry 1 targets index 2, but the target set has 2 element(s)"
+        );
+
+        // Codomain leg: entry 1 targets apex index 7, apex has 2 vertices.
+        let err = Cospan::<char>::new(vec![0], vec![1, 7], vec!['a', 'b'])
+            .expect_err("right leg index 7 is out of bounds for a 2-vertex apex");
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionIndexOutOfBounds {
+                leg: BoundaryLeg::Codomain,
+                position: 1,
+                target: 7,
+                target_len: 2,
+            }
+        );
+
+        // Both legs bad: the domain leg is scanned first, so it is reported.
+        let err = Cospan::<char>::new(vec![5], vec![9], vec!['a'])
+            .expect_err("both legs are out of bounds");
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionIndexOutOfBounds {
+                leg: BoundaryLeg::Domain,
+                position: 0,
+                target: 5,
+                target_len: 1,
+            },
+            "the domain leg must win the race, otherwise the reported leg is not deterministic"
+        );
+
+        // The valid neighbour of the first case still constructs.
+        assert!(Cospan::<char>::new(vec![0, 1], vec![1], vec!['a', 'b']).is_ok());
+    }
+
+    /// `new_unchecked` keeps the pre-#256 contract: the bounds invariant is the
+    /// caller's, checked by `debug_assert!` only. Release-only, because in a
+    /// debug build that `debug_assert!` fires — which IS the contract.
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn cospan_new_unchecked_accepts_what_new_refuses() {
+        use super::Cospan;
+        let bad = Cospan::<char>::new_unchecked(vec![0, 2], vec![1], vec!['a', 'b']);
+        assert_eq!(bad.left_to_middle(), &[0, 2]);
+        assert_eq!(bad.middle().len(), 2);
+        assert!(
+            Cospan::<char>::new(vec![0, 2], vec![1], vec!['a', 'b']).is_err(),
+            "the same input must be refused by the checked constructor"
+        );
+    }
+
     #[test]
     fn empty_cospan() {
         use super::Cospan;
@@ -642,7 +786,7 @@ mod test {
     #[test]
     fn compose_chain_single_is_identity_on_input() {
         use super::{Cospan, compose_chain};
-        let c = Cospan::new(vec![0], vec![1], vec![10u32, 20]);
+        let c = Cospan::new(vec![0], vec![1], vec![10u32, 20]).unwrap();
         let result = compose_chain(vec![c.clone()]).unwrap();
         assert_eq!(result.domain(), c.domain());
         assert_eq!(result.codomain(), c.codomain());
@@ -655,9 +799,9 @@ mod test {
         // Three composable u32-typed cospans representing a contiguous
         // interval chain [0,1] ; [1,2] ; [2,3]. Each cospan has the
         // interval structure used by stokes: left=[0], right=[1], middle=[t_i, t_{i+1}].
-        let c0 = Cospan::new(vec![0], vec![1], vec![0u32, 1]);
-        let c1 = Cospan::new(vec![0], vec![1], vec![1u32, 2]);
-        let c2 = Cospan::new(vec![0], vec![1], vec![2u32, 3]);
+        let c0 = Cospan::new(vec![0], vec![1], vec![0u32, 1]).unwrap();
+        let c1 = Cospan::new(vec![0], vec![1], vec![1u32, 2]).unwrap();
+        let c2 = Cospan::new(vec![0], vec![1], vec![2u32, 3]).unwrap();
 
         let folded = compose_chain(vec![c0.clone(), c1.clone(), c2.clone()]).unwrap();
         let manual = c0.compose(&c1).unwrap().compose(&c2).unwrap();
@@ -674,8 +818,8 @@ mod test {
     fn compose_chain_propagates_mismatch_error() {
         use super::{Cospan, compose_chain};
         // Second cospan's left boundary type [5] doesn't match first's right [2].
-        let c0 = Cospan::new(vec![0], vec![1], vec![1u32, 2]);
-        let c1 = Cospan::new(vec![0], vec![1], vec![5u32, 6]);
+        let c0 = Cospan::new(vec![0], vec![1], vec![1u32, 2]).unwrap();
+        let c1 = Cospan::new(vec![0], vec![1], vec![5u32, 6]).unwrap();
         let result = compose_chain(vec![c0, c1]);
         assert!(result.is_err(), "mismatched chain should return Err");
     }
@@ -706,14 +850,15 @@ mod test {
         let whatever_types = vec![true, false, true, false, true];
         let mut full_types: Vec<bool> = vec![true, true];
         full_types.extend(whatever_types.clone());
-        let cospan = Cospan::<bool>::new((0..=6).collect(), vec![1, 0, 2, 3], full_types);
+        let cospan = Cospan::<bool>::new((0..=6).collect(), vec![1, 0, 2, 3], full_types).unwrap();
         assert!(cospan.is_left_id);
         assert!(!cospan.is_right_id);
         let cospan2 = Cospan::<bool>::new(
             vec![0, 1, 2, 3],
             vec![1, 0, 2, 3],
             vec![true, true, whatever_types[0], whatever_types[1]],
-        );
+        )
+        .unwrap();
         let res = cospan.compose(&cospan2);
         let mut exp_middle = vec![true, true];
         exp_middle.extend(whatever_types.clone());
@@ -810,7 +955,7 @@ mod test {
         // f: domain {0,1} -> middle {A,B,C} -> codomain {0,1,2}
         // left=[0,1], right=[0,1,2], middle=[10,20,30]
         // domain labels: [10,20], codomain labels: [10,20,30]
-        let f = Cospan::<u32>::new(vec![0, 1], vec![0, 1, 2], vec![10, 20, 30]);
+        let f = Cospan::<u32>::new(vec![0, 1], vec![0, 1, 2], vec![10, 20, 30]).unwrap();
         assert_eq!(f.domain(), vec![10, 20]);
         assert_eq!(f.codomain(), vec![10, 20, 30]);
 
@@ -819,7 +964,7 @@ mod test {
         // left=[0,1,2], right=[0], middle=[10,20,30]
         // All three codomain nodes of f map to separate middle nodes in g,
         // but the single codomain node of g maps to middle[0].
-        let g = Cospan::<u32>::new(vec![0, 1, 2], vec![0], vec![10, 20, 30]);
+        let g = Cospan::<u32>::new(vec![0, 1, 2], vec![0], vec![10, 20, 30]).unwrap();
         assert_eq!(g.domain(), vec![10, 20, 30]);
         assert_eq!(g.codomain(), vec![10]);
 
@@ -836,9 +981,9 @@ mod test {
         use super::Cospan;
 
         // f: codomain has 2 elements
-        let f = Cospan::<u32>::new(vec![0, 1], vec![0, 1], vec![10, 20]);
+        let f = Cospan::<u32>::new(vec![0, 1], vec![0, 1], vec![10, 20]).unwrap();
         // g: domain has 3 elements (mismatch with f's codomain)
-        let g = Cospan::<u32>::new(vec![0, 1, 2], vec![0], vec![10, 20, 30]);
+        let g = Cospan::<u32>::new(vec![0, 1, 2], vec![0], vec![10, 20, 30]).unwrap();
 
         let result = f.compose(&g);
         assert!(
@@ -863,9 +1008,9 @@ mod test {
         use super::Cospan;
 
         // f: codomain labels = [10, 20]
-        let f = Cospan::<u32>::new(vec![0, 1], vec![0, 1], vec![10, 20]);
+        let f = Cospan::<u32>::new(vec![0, 1], vec![0, 1], vec![10, 20]).unwrap();
         // g: domain labels = [10, 30] (second label differs)
-        let g = Cospan::<u32>::new(vec![0, 1], vec![0], vec![10, 30]);
+        let g = Cospan::<u32>::new(vec![0, 1], vec![0], vec![10, 30]).unwrap();
 
         let result = f.compose(&g);
         assert!(result.is_err(), "should fail: label mismatch at index 1");
@@ -886,7 +1031,7 @@ mod test {
         // id ; f = f (composing identity on the left yields equivalent result)
         use super::Cospan;
 
-        let f = Cospan::<u32>::new(vec![0, 1, 2], vec![0, 1], vec![10, 20, 30]);
+        let f = Cospan::<u32>::new(vec![0, 1, 2], vec![0, 1], vec![10, 20, 30]).unwrap();
         let dom = f.domain();
         let id_left = Cospan::<u32>::identity(&dom);
 
@@ -905,7 +1050,7 @@ mod test {
         // Use a cospan where the right leg is NOT identity (right=[1,0])
         // so the pushout fast path for left_leg_id is not triggered.
         // domain=2, codomain=2, middle has nodes for both sides.
-        let f = Cospan::<u32>::new(vec![0, 1], vec![1, 0], vec![10, 20]);
+        let f = Cospan::<u32>::new(vec![0, 1], vec![1, 0], vec![10, 20]).unwrap();
         let cod = f.codomain();
         let id_right = Cospan::<u32>::identity(&cod);
 
@@ -921,7 +1066,7 @@ mod test {
         // id ; f ; id = f
         use super::Cospan;
 
-        let f = Cospan::<u32>::new(vec![0, 1], vec![0, 2], vec![10, 20, 30]);
+        let f = Cospan::<u32>::new(vec![0, 1], vec![0, 2], vec![10, 20, 30]).unwrap();
         let dom = f.domain();
         let cod = f.codomain();
         let id_left = Cospan::<u32>::identity(&dom);
@@ -942,8 +1087,8 @@ mod test {
         // Monoidal product of two cospans should combine domain/codomain
         use super::Cospan;
 
-        let a = Cospan::<u32>::new(vec![0, 1], vec![0], vec![10, 20]);
-        let b = Cospan::<u32>::new(vec![0], vec![0, 1], vec![30, 40]);
+        let a = Cospan::<u32>::new(vec![0, 1], vec![0], vec![10, 20]).unwrap();
+        let b = Cospan::<u32>::new(vec![0], vec![0, 1], vec![30, 40]).unwrap();
 
         let mut product = a.clone();
         product.monoidal(b.clone());
@@ -966,7 +1111,7 @@ mod test {
         // Monoidal product with empty cospan is a no-op
         use super::Cospan;
 
-        let a = Cospan::<u32>::new(vec![0, 1], vec![0, 1], vec![10, 20]);
+        let a = Cospan::<u32>::new(vec![0, 1], vec![0, 1], vec![10, 20]).unwrap();
         let empty = Cospan::<u32>::empty();
 
         let mut product = a.clone();
@@ -982,8 +1127,8 @@ mod test {
         // After monoidal product, the result should pass validity checks
         use super::Cospan;
 
-        let a = Cospan::<u32>::new(vec![0, 1, 0], vec![1, 0], vec![10, 20]);
-        let b = Cospan::<u32>::new(vec![0], vec![0, 1, 2], vec![30, 40, 50]);
+        let a = Cospan::<u32>::new(vec![0, 1, 0], vec![1, 0], vec![10, 20]).unwrap();
+        let b = Cospan::<u32>::new(vec![0], vec![0, 1, 2], vec![30, 40, 50]).unwrap();
 
         let mut product = a.clone();
         product.monoidal(b.clone());
@@ -1062,19 +1207,19 @@ mod test {
     fn cospan_is_jointly_surjective() {
         use super::Cospan;
         // Surjective: every middle index appears in left or right leg
-        let c1 = Cospan::new(vec![0], vec![1], vec!['a', 'b']);
+        let c1 = Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
         assert!(c1.is_jointly_surjective());
 
         // Not surjective: middle index 2 appears in neither leg
-        let c2 = Cospan::new(vec![0], vec![1], vec!['a', 'b', 'c']);
+        let c2 = Cospan::new(vec![0], vec![1], vec!['a', 'b', 'c']).unwrap();
         assert!(!c2.is_jointly_surjective());
 
         // Empty middle is vacuously surjective
-        let c3 = Cospan::<char>::new(vec![], vec![], vec![]);
+        let c3 = Cospan::<char>::new(vec![], vec![], vec![]).unwrap();
         assert!(c3.is_jointly_surjective());
 
         // Middle index appears in both legs — still surjective
-        let c4 = Cospan::new(vec![0], vec![0], vec!['a']);
+        let c4 = Cospan::new(vec![0], vec![0], vec!['a']).unwrap();
         assert!(c4.is_jointly_surjective());
     }
 }

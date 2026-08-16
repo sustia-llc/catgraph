@@ -17,8 +17,8 @@ use catgraph::span::Span;
 fn make_composable_pair(n: usize) -> (Span<()>, Span<()>) {
     let labels = vec![(); n];
     let middle: Vec<(usize, usize)> = (0..n).map(|i| (i, i)).collect();
-    let a = Span::new(labels.clone(), labels.clone(), middle.clone());
-    let b = Span::new(labels.clone(), labels, middle);
+    let a = Span::new(labels.clone(), labels.clone(), middle.clone()).unwrap();
+    let b = Span::new(labels.clone(), labels, middle).unwrap();
     (a, b)
 }
 

@@ -35,7 +35,7 @@ fn named_cospan_predicate_above_threshold() {
     let right_names: Vec<i32> = (n as i32..2 * n as i32).collect();
 
     let nc: NamedCospan<char, i32, i32> =
-        NamedCospan::new(left, right, middle, left_names, right_names);
+        NamedCospan::new(left, right, middle, left_names, right_names).unwrap();
 
     // Find all even-named nodes (should hit the parallel path)
     let found = nc.find_nodes_by_name_predicate(|n| n % 2 == 0, |n| n % 2 == 0, false);

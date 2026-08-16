@@ -22,13 +22,16 @@ fn basic_construction() {
     //
     // This diagram has no inner circles (empty left side)
     // and 3 ports on the outer circle connected to 2 middle nodes.
-    let wd: WiringDiagram<bool, (), usize> = WiringDiagram::new(NamedCospan::new(
-        vec![],                                          // left -> middle (no inner circles)
-        vec![0, 1, 0],                                   // right -> middle
-        vec![true, false],                               // middle node types
-        vec![],                                          // left names (empty)
-        vec![(Dir::In, 0), (Dir::Out, 1), (Dir::In, 2)], // right names
-    ));
+    let wd: WiringDiagram<bool, (), usize> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![],                                          // left -> middle (no inner circles)
+            vec![0, 1, 0],                                   // right -> middle
+            vec![true, false],                               // middle node types
+            vec![],                                          // left names (empty)
+            vec![(Dir::In, 0), (Dir::Out, 1), (Dir::In, 2)], // right names
+        )
+        .unwrap(),
+    );
 
     println!("no-inner-circle diagram:");
     println!("  middle types = [true, false]");
@@ -37,20 +40,23 @@ fn basic_construction() {
     println!("  port 1 connects to middle node 1 (type false)");
 
     // A diagram with inner circles
-    let wd2: WiringDiagram<char, i32, usize> = WiringDiagram::new(NamedCospan::new(
-        vec![0, 0, 1],  // left -> middle
-        vec![0, 1],     // right -> middle
-        vec!['a', 'b'], // middle node types
-        vec![
-            (Dir::In, 1, 10),  // inner circle 1, port 10
-            (Dir::Out, 1, 20), // inner circle 1, port 20
-            (Dir::In, 2, 30),  // inner circle 2, port 30
-        ],
-        vec![
-            (Dir::Out, 0), // outer port 0
-            (Dir::In, 1),  // outer port 1
-        ],
-    ));
+    let wd2: WiringDiagram<char, i32, usize> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![0, 0, 1],  // left -> middle
+            vec![0, 1],     // right -> middle
+            vec!['a', 'b'], // middle node types
+            vec![
+                (Dir::In, 1, 10),  // inner circle 1, port 10
+                (Dir::Out, 1, 20), // inner circle 1, port 20
+                (Dir::In, 2, 30),  // inner circle 2, port 30
+            ],
+            vec![
+                (Dir::Out, 0), // outer port 0
+                (Dir::In, 1),  // outer port 1
+            ],
+        )
+        .unwrap(),
+    );
 
     println!("\ndiagram with 2 inner circles:");
     println!("  inner circle 1: ports 10(In), 20(Out) -> both to middle 'a'");
@@ -84,13 +90,16 @@ fn boundary_manipulation() {
     println!("=== Boundary Manipulation ===\n");
 
     // Start with a simple diagram
-    let mut wd: WiringDiagram<bool, (), usize> = WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0, 1, 2],
-        vec![true, true, false],
-        vec![],
-        vec![(Dir::In, 0), (Dir::Out, 1), (Dir::In, 2)],
-    ));
+    let mut wd: WiringDiagram<bool, (), usize> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0, 1, 2],
+            vec![true, true, false],
+            vec![],
+            vec![(Dir::In, 0), (Dir::Out, 1), (Dir::In, 2)],
+        )
+        .unwrap(),
+    );
 
     // Add an unconnected boundary node on the right (outer) side
     println!("before add: 3 right ports");
@@ -130,13 +139,16 @@ fn boundary_manipulation() {
 fn toggle_orientation() {
     println!("=== Orientation Toggling ===\n");
 
-    let mut wd: WiringDiagram<bool, i32, usize> = WiringDiagram::new(NamedCospan::new(
-        vec![0, 1],
-        vec![0],
-        vec![true, false],
-        vec![(Dir::In, 1, 10), (Dir::Out, 2, 20)],
-        vec![(Dir::In, 0)],
-    ));
+    let mut wd: WiringDiagram<bool, i32, usize> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![0, 1],
+            vec![0],
+            vec![true, false],
+            vec![(Dir::In, 1, 10), (Dir::Out, 2, 20)],
+            vec![(Dir::In, 0)],
+        )
+        .unwrap(),
+    );
 
     println!("before toggle:");
     println!("  left  = In(1,10), Out(2,20)");
@@ -153,13 +165,16 @@ fn toggle_orientation() {
     println!("  right = Out(0)  (In flipped to Out)");
 
     // Undirected stays unchanged through toggle
-    let mut wd2: WiringDiagram<bool, (), usize> = WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0],
-        vec![true],
-        vec![],
-        vec![(Dir::Undirected, 0)],
-    ));
+    let mut wd2: WiringDiagram<bool, (), usize> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0],
+            vec![true],
+            vec![],
+            vec![(Dir::Undirected, 0)],
+        )
+        .unwrap(),
+    );
     wd2.toggle_orientation(false);
     println!("\nUndirected after toggle  = Undirected (unchanged)");
 
@@ -178,13 +193,16 @@ fn toggle_orientation() {
 fn label_mapping() {
     println!("=== Label Mapping ===\n");
 
-    let wd: WiringDiagram<bool, (), usize> = WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0, 1],
-        vec![true, false],
-        vec![],
-        vec![(Dir::In, 0), (Dir::Out, 1)],
-    ));
+    let wd: WiringDiagram<bool, (), usize> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0, 1],
+            vec![true, false],
+            vec![],
+            vec![(Dir::In, 0), (Dir::Out, 1)],
+        )
+        .unwrap(),
+    );
 
     // Map labels from bool to &str
     let mapped: WiringDiagram<&str, (), usize> = wd.map(|b| if b { "high" } else { "low" });
@@ -222,14 +240,16 @@ fn operadic_substitution() {
         .map(|(orient, name)| (orient.flipped(), 0, *name))
         .collect();
 
-    let mut outer: WiringDiagram<bool, CircleName, WireName> =
-        WiringDiagram::new(NamedCospan::new(
+    let mut outer: WiringDiagram<bool, CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
             vec![0, 0, 1],     // left -> middle
             vec![0],           // right -> middle
             vec![true, false], // middle types
             outer_left_names,
             vec![(Dir::Out, 0)],
-        ));
+        )
+        .unwrap(),
+    );
 
     println!("outer diagram:");
     println!("  inner circle 0: 3 ports -> 2 middles");
@@ -238,13 +258,16 @@ fn operadic_substitution() {
     // Build inner diagram (no further inner circles)
     // 3 ports on outer matching the outer's inner circle:
     //   In(0) -> middle 0 (true), Out(1) -> middle 0 (true), In(2) -> middle 1 (false)
-    let inner: WiringDiagram<bool, CircleName, WireName> = WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0, 0, 1],
-        vec![true, false],
-        vec![],
-        inner_right_names,
-    ));
+    let inner: WiringDiagram<bool, CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0, 0, 1],
+            vec![true, false],
+            vec![],
+            inner_right_names,
+        )
+        .unwrap(),
+    );
 
     println!("inner diagram:");
     println!("  no inner circles");
@@ -259,15 +282,17 @@ fn operadic_substitution() {
 
     // Failed substitution: non-existent circle
     let inner2: WiringDiagram<bool, CircleName, WireName> =
-        WiringDiagram::new(NamedCospan::new(vec![], vec![], vec![], vec![], vec![]));
-    let mut target: WiringDiagram<bool, CircleName, WireName> =
-        WiringDiagram::new(NamedCospan::new(
+        WiringDiagram::new(NamedCospan::new(vec![], vec![], vec![], vec![], vec![]).unwrap());
+    let mut target: WiringDiagram<bool, CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
             vec![0],
             vec![0],
             vec![true],
             vec![(Dir::In, 1, 0)],
             vec![(Dir::Out, 0)],
-        ));
+        )
+        .unwrap(),
+    );
     // Substituting circle 99 which doesn't exist
     let result2 = target.operadic_substitution(99, inner2);
     println!("\nnon-existent circle sub  = {:?}", result2.is_ok());
@@ -298,13 +323,16 @@ fn multi_circle_substitution() {
         (Dir::Undirected, 'c'),
     ];
 
-    let mut outer: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(NamedCospan::new(
-        vec![0, 1, 1, 2], // left -> middle
-        vec![0, 1, 2],    // right -> middle
-        vec![(); 3],      // untyped middle nodes
-        outer_left_names,
-        outer_right_names,
-    ));
+    let mut outer: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![0, 1, 1, 2], // left -> middle
+            vec![0, 1, 2],    // right -> middle
+            vec![(); 3],      // untyped middle nodes
+            outer_left_names,
+            outer_right_names,
+        )
+        .unwrap(),
+    );
 
     println!("outer: 2 inner circles, 3 outer ports");
     println!("  circle 1: ports r,s");
@@ -312,26 +340,32 @@ fn multi_circle_substitution() {
     println!("  outer: ports a,b,c");
 
     // First substitution: replace circle 1
-    let inner1: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0, 0],
-        vec![()],
-        vec![],
-        vec![(Dir::Undirected, 'r'), (Dir::Undirected, 's')],
-    ));
+    let inner1: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0, 0],
+            vec![()],
+            vec![],
+            vec![(Dir::Undirected, 'r'), (Dir::Undirected, 's')],
+        )
+        .unwrap(),
+    );
 
     let result1 = outer.operadic_substitution(1, inner1);
     println!("\nsubstitute into circle 1 = {:?}", result1.is_ok());
     println!("  circle 1 removed, its ports r,s now connected through inner");
 
     // Second substitution: replace circle 2
-    let inner2: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(NamedCospan::new(
-        vec![],
-        vec![0, 1],
-        vec![(); 2],
-        vec![],
-        vec![(Dir::Undirected, 'u'), (Dir::Undirected, 'v')],
-    ));
+    let inner2: WiringDiagram<(), CircleName, WireName> = WiringDiagram::new(
+        NamedCospan::new(
+            vec![],
+            vec![0, 1],
+            vec![(); 2],
+            vec![],
+            vec![(Dir::Undirected, 'u'), (Dir::Undirected, 'v')],
+        )
+        .unwrap(),
+    );
 
     let result2 = outer.operadic_substitution(2, inner2);
     println!("substitute into circle 2 = {:?}", result2.is_ok());

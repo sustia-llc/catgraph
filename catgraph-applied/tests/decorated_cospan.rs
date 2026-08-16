@@ -59,7 +59,7 @@ fn t2_1_circuit_edgeset_series_composition() {
     // After pushout, the right boundary of c1 and left boundary of c2
     // identify into a single shared vertex; the two edges must be
     // relabelled into the 3-vertex apex as [(0, 1), (1, 2)].
-    let c1 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]);
+    let c1 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]).unwrap();
     let circ1 = DecoratedCospan::<usize, Circuit>::new(
         c1,
         EdgeSet {
@@ -68,7 +68,7 @@ fn t2_1_circuit_edgeset_series_composition() {
         },
     );
 
-    let c2 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]);
+    let c2 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]).unwrap();
     let circ2 = DecoratedCospan::<usize, Circuit>::new(
         c2,
         EdgeSet {
@@ -110,9 +110,9 @@ fn t2_2_trivial_pushforward_is_unit() {
     // only possible value for `LocalTrivial::Apex`. The non-vacuous
     // verification of pushforward wiring lives in T2.1 (the Circuit
     // EdgeSet test).
-    let c1 = Cospan::<usize>::new(vec![0], vec![0], vec![0]);
+    let c1 = Cospan::<usize>::new(vec![0], vec![0], vec![0]).unwrap();
     let d1 = DecoratedCospan::<usize, LocalTrivial>::new(c1, ());
-    let c2 = Cospan::<usize>::new(vec![0], vec![0], vec![0]);
+    let c2 = Cospan::<usize>::new(vec![0], vec![0], vec![0]).unwrap();
     let d2 = DecoratedCospan::<usize, LocalTrivial>::new(c2, ());
     let composed = d1.compose(&d2).unwrap();
     assert_eq!(composed.decoration, ());
@@ -147,7 +147,7 @@ fn t2_3_decorated_cospan_pushforward_through_quotient() {
     // for any valid quotient:
     //   (1) the four edges are preserved (no edges dropped or invented),
     //   (2) every edge endpoint indexes a valid apex vertex.
-    let c1 = Cospan::<char>::new(vec![0], vec![1, 2], vec!['x', 'y', 'y']);
+    let c1 = Cospan::<char>::new(vec![0], vec![1, 2], vec!['x', 'y', 'y']).unwrap();
     let circ1 = DecoratedCospan::<char, Circuit>::new(
         c1,
         EdgeSet {
@@ -156,7 +156,7 @@ fn t2_3_decorated_cospan_pushforward_through_quotient() {
         },
     );
 
-    let c2 = Cospan::<char>::new(vec![0, 1], vec![2], vec!['y', 'y', 'z']);
+    let c2 = Cospan::<char>::new(vec![0, 1], vec![2], vec!['y', 'y', 'z']).unwrap();
     let circ2 = DecoratedCospan::<char, Circuit>::new(
         c2,
         EdgeSet {
@@ -205,11 +205,11 @@ fn t2_4_petri_decoration_collapsed_quotient_preserves_transition_count() {
     use catgraph_applied::petri_net::{PetriDecoration, Transition};
     use rust_decimal::Decimal;
 
-    let c1 = Cospan::<char>::new(vec![0], vec![0], vec!['p']);
+    let c1 = Cospan::<char>::new(vec![0], vec![0], vec!['p']).unwrap();
     let t1 = Transition::new(vec![(0, Decimal::ONE)], vec![]);
     let d1 = DecoratedCospan::<char, PetriDecoration<char>>::new(c1, vec![t1]);
 
-    let c2 = Cospan::<char>::new(vec![0], vec![0], vec!['p']);
+    let c2 = Cospan::<char>::new(vec![0], vec![0], vec!['p']).unwrap();
     let t2 = Transition::new(vec![], vec![(0, Decimal::ONE)]);
     let d2 = DecoratedCospan::<char, PetriDecoration<char>>::new(c2, vec![t2]);
 

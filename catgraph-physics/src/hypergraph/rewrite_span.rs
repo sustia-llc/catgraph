@@ -84,7 +84,10 @@ impl RewriteRule {
         let left_labels: Vec<u32> = left_sorted.iter().map(|&v| v as u32).collect();
         let right_labels: Vec<u32> = right_sorted.iter().map(|&v| v as u32).collect();
 
-        Span::new(left_labels, right_labels, middle)
+        // Correct by construction: `preserved` is the intersection of the two
+        // variable sets, so each pair is in bounds on both sides and both labels
+        // are the same variable ID.
+        Span::new_unchecked(left_labels, right_labels, middle)
     }
 
     /// Builds the full `RewriteSpan` (L ← K → R) with explicit kernel hypergraph.
@@ -131,6 +134,18 @@ impl RewriteSpan {
     /// Uses the `left_map` and `right_map` morphisms to build the span's
     /// middle pairs, mapping kernel elements to their positions in L and R.
     /// Labels are vertex IDs (as `u32`).
+    ///
+    /// # Precondition
+    ///
+    /// A span's middle pair links two boundary elements carrying the **same**
+    /// label, and the labels here are vertex IDs — so a kernel vertex must have
+    /// the same ID under `left_map` and `right_map`. That holds for every
+    /// `RewriteSpan` this crate builds ([`RewriteRule::to_rewrite_span`] uses
+    /// identity morphisms), but [`RewriteSpan`]'s fields are public, so a
+    /// caller-assembled value can break it. The span is therefore built with
+    /// [`Span::new_unchecked`], which keeps the `debug_assert!`-only check this
+    /// method has always had rather than adding a release-build panic to a
+    /// shape the type permits.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     #[must_use]
     pub fn to_span(&self) -> Span<u32> {
@@ -164,7 +179,9 @@ impl RewriteSpan {
 
         let left_labels: Vec<u32> = left_verts.iter().map(|&v| v as u32).collect();
         let right_labels: Vec<u32> = right_verts.iter().map(|&v| v as u32).collect();
-        Span::new(left_labels, right_labels, middle)
+        // Bounds hold by construction (`left_index` / `right_index` lookups);
+        // label agreement is the documented precondition above.
+        Span::new_unchecked(left_labels, right_labels, middle)
     }
 }
 
@@ -292,7 +309,7 @@ mod tests {
         ];
 
         for rule in &rules {
-            // to_span() calls Span::new() which calls assert_valid()
+            // to_span() calls Span::new_unchecked() which calls assert_valid()
             let span = rule.to_span();
             assert!(
                 !span.left().is_empty() || !span.right().is_empty(),

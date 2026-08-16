@@ -42,9 +42,9 @@
 //!     fn pushforward(d: u32, _: &[usize]) -> u32 { d }
 //! }
 //!
-//! let c1 = Cospan::<char>::new(vec![0], vec![0], vec!['a']);
+//! let c1 = Cospan::<char>::new(vec![0], vec![0], vec!['a']).unwrap();
 //! let d1 = DecoratedCospan::<char, Tally>::new(c1, 3);
-//! let c2 = Cospan::<char>::new(vec![0], vec![0], vec!['b']);
+//! let c2 = Cospan::<char>::new(vec![0], vec![0], vec!['b']).unwrap();
 //! let d2 = DecoratedCospan::<char, Tally>::new(c2, 5);
 //! let mut prod = d1;
 //! prod.monoidal(d2);
@@ -345,7 +345,7 @@ mod tests {
     #[test]
     fn trivial_decoration_sanity() {
         // Build a small char-labelled cospan: left=[0], right=[1], middle=['a','b'].
-        let cospan = Cospan::<char>::new(vec![0], vec![1], vec!['a', 'b']);
+        let cospan = Cospan::<char>::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
         // `Trivial::empty(2)` returns `()`; bind explicitly so clippy's
         // `unit_arg` lint sees an intentional unit decoration rather than a
         // function call whose only return is `()`.
@@ -393,12 +393,12 @@ mod tests {
         use catgraph::category::Composable;
 
         // c1: domain = ['a'], codomain = ['b']. Middle has two elements.
-        let c1 = Cospan::<char>::new(vec![0], vec![1], vec!['a', 'b']);
+        let c1 = Cospan::<char>::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
         let d1 = DecoratedCospan::<char, Counter>::new(c1, 3);
 
         // c2: domain = ['b'], codomain = ['b']. Must share the 'b'
         // interface with c1.codomain() for pushout composition to succeed.
-        let c2 = Cospan::<char>::new(vec![0], vec![0], vec!['b']);
+        let c2 = Cospan::<char>::new(vec![0], vec![0], vec!['b']).unwrap();
         let d2 = DecoratedCospan::<char, Counter>::new(c2, 5);
 
         let composed = d1
@@ -482,10 +482,10 @@ mod tests {
     fn counter_monoidal_combines_decorations() {
         use catgraph::monoidal::Monoidal;
 
-        let c1 = Cospan::<char>::new(vec![0], vec![0], vec!['a']);
+        let c1 = Cospan::<char>::new(vec![0], vec![0], vec!['a']).unwrap();
         let d1 = DecoratedCospan::<char, Counter>::new(c1, 2);
 
-        let c2 = Cospan::<char>::new(vec![0], vec![0], vec!['b']);
+        let c2 = Cospan::<char>::new(vec![0], vec![0], vec!['b']).unwrap();
         let d2 = DecoratedCospan::<char, Counter>::new(c2, 7);
 
         let mut prod = d1;

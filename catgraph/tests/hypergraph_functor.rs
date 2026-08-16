@@ -165,7 +165,7 @@ fn relabeling_roundtrip_invertible() {
     let forward = RelabelingFunctor::new(char_to_u32);
     let backward = RelabelingFunctor::new(|n: u32| char::from_u32(n).unwrap());
 
-    let original = Cospan::new(vec![0, 0], vec![0, 1], vec!['a', 'b']);
+    let original = Cospan::new(vec![0, 0], vec![0, 1], vec!['a', 'b']).unwrap();
     let there = forward.map_mor(&original).unwrap();
     let back = backward.map_mor(&there).unwrap();
 
@@ -317,7 +317,7 @@ fn ctf_multi_type_cospan() {
 
 #[test]
 fn ctf_asymmetric_cospan() {
-    let split3 = Cospan::new(vec![0], vec![0, 0, 0], vec!['a']);
+    let split3 = Cospan::new(vec![0], vec![0, 0, 0], vec!['a']).unwrap();
     let f = CospanToFrobeniusFunctor::<String>::new();
     let mapped: FM = f.map_mor(&split3).unwrap();
     assert_eq!(mapped.domain(), vec!['a']);

@@ -25,17 +25,17 @@ use catgraph::{
 /// Right boundary [b,c] maps to middle nodes [1,2].
 /// Middle labels: ['a','b','c'].
 fn cospan_f() -> Cospan<char> {
-    Cospan::new(vec![0, 1], vec![1, 2], vec!['a', 'b', 'c'])
+    Cospan::new(vec![0, 1], vec![1, 2], vec!['a', 'b', 'c']).unwrap()
 }
 
 /// Cospan g: {b,c} -> {c,d} with a merge in the middle.
 fn cospan_g() -> Cospan<char> {
-    Cospan::new(vec![0, 1], vec![1, 2], vec!['b', 'c', 'd'])
+    Cospan::new(vec![0, 1], vec![1, 2], vec!['b', 'c', 'd']).unwrap()
 }
 
 /// Cospan h: {c,d} -> {d,e}.
 fn cospan_h() -> Cospan<char> {
-    Cospan::new(vec![0, 1], vec![1, 2], vec!['c', 'd', 'e'])
+    Cospan::new(vec![0, 1], vec![1, 2], vec!['c', 'd', 'e']).unwrap()
 }
 
 /// Span f: {a,b} <- S -> {b,c} where S links matching boundary elements.
@@ -45,19 +45,19 @@ fn span_f() -> Span<char> {
     // We need left[i] == right[j] for pair (i,j).
     // left = ['a','b'], right = ['a','b'] -- both boundaries typed the same.
     // Pair (0,0): left[0]='a'==right[0]='a', (1,1): left[1]='b'==right[1]='b'.
-    Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)])
+    Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]).unwrap()
 }
 
 /// Span g: {a,b} <- S -> {a,b}.
 fn span_g() -> Span<char> {
     // A non-trivial span: pairs (0,1) and (1,0) -- swap.
     // left[0]='a'==right[1]='a', left[1]='b'==right[0]='b'.
-    Span::new(vec!['a', 'b'], vec!['b', 'a'], vec![(0, 1), (1, 0)])
+    Span::new(vec!['a', 'b'], vec!['b', 'a'], vec![(0, 1), (1, 0)]).unwrap()
 }
 
 /// Span h: {b,a} <- S -> {b,a} (identity-like).
 fn span_h() -> Span<char> {
-    Span::new(vec!['b', 'a'], vec!['b', 'a'], vec![(0, 0), (1, 1)])
+    Span::new(vec!['b', 'a'], vec!['b', 'a'], vec![(0, 0), (1, 1)]).unwrap()
 }
 
 /// Namer: char -> (String, String) for left/right port names.
@@ -76,6 +76,7 @@ fn named_cospan_f() -> NamedCospan<char, String, String> {
         vec!["Lx".into(), "Ly".into()],
         vec!["Rx".into(), "Ry".into()],
     )
+    .unwrap()
 }
 
 fn named_cospan_g() -> NamedCospan<char, String, String> {
@@ -86,6 +87,7 @@ fn named_cospan_g() -> NamedCospan<char, String, String> {
         vec!["Gx".into(), "Gy".into()],
         vec!["Hx".into(), "Hy".into()],
     )
+    .unwrap()
 }
 
 fn named_cospan_h() -> NamedCospan<char, String, String> {
@@ -96,6 +98,7 @@ fn named_cospan_h() -> NamedCospan<char, String, String> {
         vec!["Hx".into(), "Hy".into()],
         vec!["Jx".into(), "Jy".into()],
     )
+    .unwrap()
 }
 
 // ===========================================================================
@@ -335,7 +338,7 @@ fn cospan_empty_left_identity() {
 
     // A morphism with empty domain, non-empty codomain:
     // left = [] (no domain), right = [0] (one codomain node), middle = ['x'].
-    let f = Cospan::new(vec![], vec![0], vec!['x']);
+    let f = Cospan::new(vec![], vec![0], vec!['x']).unwrap();
 
     let result = empty.compose(&f).expect("empty;f");
     assert!(result.left_to_middle().is_empty());
@@ -346,7 +349,7 @@ fn cospan_empty_left_identity() {
 #[test]
 fn cospan_empty_right_identity() {
     // Morphism with non-empty domain, empty codomain, composed with empty.
-    let f = Cospan::new(vec![0], vec![], vec!['y']);
+    let f = Cospan::new(vec![0], vec![], vec!['y']).unwrap();
     let empty: Cospan<char> = Cospan::empty();
 
     let result = f.compose(&empty).expect("f;empty");
@@ -380,7 +383,7 @@ fn cospan_large_boundary_compose() {
     assert_eq!(result.middle().len(), n as usize);
 
     // Now build a non-trivial large cospan: all boundary nodes merge to one middle node.
-    let merge_all = Cospan::new(vec![0; n as usize], vec![0; n as usize], vec![0u32]);
+    let merge_all = Cospan::new(vec![0; n as usize], vec![0; n as usize], vec![0u32]).unwrap();
     // This has domain = [0,0,...,0] (n copies) and codomain = [0,0,...,0].
     // compose(merge_all, merge_all) should succeed.
     let merged = merge_all.compose(&merge_all).expect("merge;merge");

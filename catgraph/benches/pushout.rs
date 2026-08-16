@@ -24,8 +24,8 @@ use catgraph::cospan::Cospan;
 fn make_composable_pair(n: usize) -> (Cospan<()>, Cospan<()>) {
     let indices: Vec<usize> = (0..n).collect();
     let middle = vec![(); n];
-    let a = Cospan::new(indices.clone(), indices.clone(), middle.clone());
-    let b = Cospan::new(indices.clone(), indices, middle);
+    let a = Cospan::new(indices.clone(), indices.clone(), middle.clone()).unwrap();
+    let b = Cospan::new(indices.clone(), indices, middle).unwrap();
     (a, b)
 }
 

@@ -164,7 +164,9 @@ where
             let mut target = Vec::with_capacity(total);
             target.extend_from_slice(&input[*m..]);
             target.extend_from_slice(&input[..*m]);
-            Ok((Cospan::new(left, right, input.to_vec()), target))
+            // Correct by construction: both legs range over `0..total` and
+            // `expect_len` has already pinned `input.len() == total`.
+            Ok((Cospan::new_unchecked(left, right, input.to_vec()), target))
         }
         PropExpr::Generator(g) => {
             let color = match g {
@@ -188,7 +190,9 @@ where
             //   μ_c: 2 → 1 ← 1   η_c: 0 → 1 ← 1   δ_c: 1 → 1 ← 2   ε_c: 1 → 1 ← 0
             let left = vec![0; g.source()];
             let right = vec![0; g.target()];
-            Ok((Cospan::new(left, right, vec![color]), target))
+            // Correct by construction: every leg entry is the literal `0` and
+            // the apex is the single vertex `color`.
+            Ok((Cospan::new_unchecked(left, right, vec![color]), target))
         }
         // f ; g — pushout composition, over words that meet by construction.
         PropExpr::Compose(f, g) => {

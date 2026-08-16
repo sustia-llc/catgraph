@@ -20,7 +20,7 @@ fn construction() {
     // A cospan with 2 left (domain) nodes, 1 right (codomain) node, 3 middle nodes.
     // left[0] -> middle[0], left[1] -> middle[1]
     // right[0] -> middle[2]
-    let c = Cospan::new(vec![0, 1], vec![2], vec!['a', 'b', 'c']);
+    let c = Cospan::new(vec![0, 1], vec![2], vec!['a', 'b', 'c']).unwrap();
     println!("left_to_middle   = {:?}", c.left_to_middle());
     println!("right_to_middle  = {:?}", c.right_to_middle());
     println!("middle           = {:?}", c.middle());
@@ -32,7 +32,7 @@ fn construction() {
     println!("\nempty cospan: is_empty = {}", empty.is_empty());
 
     // Both domain nodes map to the same middle node (wire merging)
-    let merged = Cospan::new(vec![0, 0], vec![0], vec!['x']);
+    let merged = Cospan::new(vec![0, 0], vec![0], vec!['x']).unwrap();
     println!(
         "\nmerged: left_to_middle = {:?}, middle = {:?}",
         merged.left_to_middle(),
@@ -63,8 +63,8 @@ fn category_traits() {
     println!("  codomain = {:?}", id.codomain());
 
     // composable check
-    let f = Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'b']);
-    let g = Cospan::new(vec![0, 1], vec![0], vec!['a', 'b']);
+    let f = Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'b']).unwrap();
+    let g = Cospan::new(vec![0, 1], vec![0], vec!['a', 'b']).unwrap();
     println!(
         "\nf.domain = {:?}, f.codomain = {:?}",
         f.domain(),
@@ -88,8 +88,8 @@ fn composition() {
 
     // f: {a,b} -> {a,b}  (identity-like)
     // g: {a,b} -> {a}    (merge two into one)
-    let f = Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'b']);
-    let g = Cospan::new(vec![0, 0], vec![0], vec!['a']);
+    let f = Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'b']).unwrap();
+    let g = Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap();
 
     // f.codomain() = ['a','b'], g.domain() = ['a','a'] — mismatch!
     println!(
@@ -100,8 +100,8 @@ fn composition() {
     println!("f.compose(&g) = {:?}", f.compose(&g));
 
     // Composable pair: matching interface
-    let h = Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'b']);
-    let k = Cospan::new(vec![0, 1], vec![0], vec!['a', 'b']);
+    let h = Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'b']).unwrap();
+    let k = Cospan::new(vec![0, 1], vec![0], vec!['a', 'b']).unwrap();
     println!(
         "\nh.codomain = {:?}, k.domain = {:?}",
         h.codomain(),
@@ -131,8 +131,8 @@ fn composition() {
 fn monoidal_product() {
     println!("=== Monoidal Product (Tensor) ===\n");
 
-    let mut a = Cospan::new(vec![0], vec![0], vec!['x']);
-    let b = Cospan::new(vec![0], vec![0], vec!['y']);
+    let mut a = Cospan::new(vec![0], vec![0], vec!['x']).unwrap();
+    let b = Cospan::new(vec![0], vec![0], vec!['y']).unwrap();
 
     println!("a: middle = {:?}, domain = {:?}", a.middle(), a.domain());
     println!("b: middle = {:?}, domain = {:?}", b.middle(), b.domain());
@@ -177,7 +177,7 @@ fn permutation_morphisms() {
 fn mutation() {
     println!("=== Mutation ===\n");
 
-    let mut c = Cospan::new(vec![0, 1], vec![1], vec!['a', 'b']);
+    let mut c = Cospan::new(vec![0, 1], vec![1], vec!['a', 'b']).unwrap();
     println!(
         "initial: left = {:?}, right = {:?}, middle = {:?}",
         c.left_to_middle(),
@@ -221,7 +221,7 @@ fn mutation() {
 fn map_demo() {
     println!("=== Map ===\n");
 
-    let c = Cospan::new(vec![0, 1], vec![0], vec!['a', 'b']);
+    let c = Cospan::new(vec![0, 1], vec![0], vec!['a', 'b']).unwrap();
 
     // Map lambda labels
     let mapped = c.map(|ch| ch.to_ascii_uppercase());

@@ -17,19 +17,19 @@ use permutations::Permutation;
 /// Build a small non-trivial cospan: domain `[a,b]`, codomain `[b,c]`,
 /// middle `[a,b,c]` with left=`[0,1]`, right=`[1,2]`.
 fn sample_cospan_abc() -> Cospan<char> {
-    Cospan::new(vec![0, 1], vec![1, 2], vec!['a', 'b', 'c'])
+    Cospan::new(vec![0, 1], vec![1, 2], vec!['a', 'b', 'c']).unwrap()
 }
 
 /// Build a second non-trivial cospan: domain `[x]`, codomain `[x,y]`,
 /// middle `[x,y]` with left=`[0]`, right=`[0,1]`.
 fn sample_cospan_xy() -> Cospan<char> {
-    Cospan::new(vec![0], vec![0, 1], vec!['x', 'y'])
+    Cospan::new(vec![0], vec![0, 1], vec!['x', 'y']).unwrap()
 }
 
 /// Build a third small cospan: domain `[p,q]`, codomain `[p]`,
 /// middle `[p,q]` with left=`[0,1]`, right=`[0]`.
 fn sample_cospan_pq() -> Cospan<char> {
-    Cospan::new(vec![0, 1], vec![0], vec!['p', 'q'])
+    Cospan::new(vec![0, 1], vec![0], vec!['p', 'q']).unwrap()
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +201,7 @@ fn span_tensor_combines_middle_pairs() {
 
     // A non-identity span to tensor with.
     // s3: left=['x','y'], right=['y','x'], middle=[(0,1),(1,0)] (swap relation).
-    let s3 = Span::new(vec!['x', 'y'], vec!['y', 'x'], vec![(0, 1), (1, 0)]);
+    let s3 = Span::new(vec!['x', 'y'], vec!['y', 'x'], vec![(0, 1), (1, 0)]).unwrap();
 
     let mut s1_s3 = s1;
     s1_s3.monoidal(s3);

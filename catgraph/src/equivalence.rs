@@ -72,7 +72,9 @@ where
     // Z part: m+k' → m+n+k'
     right.extend(m + n..m + n + k);
 
-    Cospan::new(left, right, middle)
+    // Correct by construction: every index pushed above is derived from the
+    // `m`/`n`/`k` slice lengths that also determine `middle.len() == m + n + k`.
+    Cospan::new_unchecked(left, right, middle)
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +154,9 @@ where
         // Cup cospan: ∅ → X⊕X, middle = X, right = [0,..,n-1, 0,..,n-1]
         let right: Vec<usize> = (0..n).chain(0..n).collect();
         let middle: Vec<Lambda> = on_this.to_vec();
-        let cup_s = Cospan::new(vec![], right, middle);
+        // Correct by construction: `right` is `(0..n) ++ (0..n)` against an
+        // n-element apex.
+        let cup_s = Cospan::new_unchecked(vec![], right, middle);
 
         let element = algebra
             .map_cospan(&cup_s, &algebra.unit())
@@ -249,7 +253,8 @@ where
     ///
     /// Structural morphism from the cospan `∅ → [z]`.
     pub fn unit_in(algebra: Arc<A>, z: Lambda) -> Self {
-        let s = Cospan::new(vec![], vec![0], vec![z]);
+        // Correct by construction: literal leg into a literal one-vertex apex.
+        let s = Cospan::new_unchecked(vec![], vec![0], vec![z]);
         Self::structural_from_cospan(&algebra, &s, vec![], vec![z])
     }
 
@@ -257,7 +262,8 @@ where
     ///
     /// Structural morphism from the cospan `∅ → [z]` with swapped domain/codomain.
     pub fn counit_in(algebra: Arc<A>, z: Lambda) -> Self {
-        let s = Cospan::new(vec![], vec![0], vec![z]);
+        // Correct by construction: literal leg into a literal one-vertex apex.
+        let s = Cospan::new_unchecked(vec![], vec![0], vec![z]);
         Self::structural_from_cospan(&algebra, &s, vec![z], vec![])
     }
 
@@ -266,7 +272,8 @@ where
     /// Structural morphism from the cospan `∅ → [z,z,z]` with all three
     /// right-leg indices mapped to 0 (merge).
     pub fn multiplication_in(algebra: Arc<A>, z: Lambda) -> Self {
-        let s = Cospan::new(vec![], vec![0, 0, 0], vec![z, z, z]);
+        // Correct by construction: literal leg into a literal three-vertex apex.
+        let s = Cospan::new_unchecked(vec![], vec![0, 0, 0], vec![z, z, z]);
         Self::structural_from_cospan(&algebra, &s, vec![z, z], vec![z])
     }
 
@@ -275,7 +282,8 @@ where
     /// Structural morphism from the cospan `∅ → [z,z,z]` with all three
     /// right-leg indices mapped to 0 (split).
     pub fn comultiplication_in(algebra: Arc<A>, z: Lambda) -> Self {
-        let s = Cospan::new(vec![], vec![0, 0, 0], vec![z, z, z]);
+        // Correct by construction: literal leg into a literal three-vertex apex.
+        let s = Cospan::new_unchecked(vec![], vec![0, 0, 0], vec![z, z, z]);
         Self::structural_from_cospan(&algebra, &s, vec![z], vec![z, z])
     }
 }
@@ -338,7 +346,10 @@ where
                 .copied()
                 .collect();
 
-            let interchange = Cospan::new(left, right, middle);
+            // Correct by construction: every index pushed into `left` is below
+            // `total`, `right` is `0..total`, and the apex has exactly `total`
+            // vertices (`wl + yl + xl + zl`).
+            let interchange = Cospan::new_unchecked(left, right, middle);
             self.element = self
                 .algebra
                 .map_cospan(&interchange, &combined)
@@ -415,7 +426,9 @@ where
             .collect();
         right.extend(permuted_right);
 
-        let s = Cospan::new(vec![], right, middle);
+        // Correct by construction: `right` is `(0..n)` followed by `n + j` for
+        // `j` in `0..n`, and the apex is `domain ++ codomain`, i.e. `2n` vertices.
+        let s = Cospan::new_unchecked(vec![], right, middle);
         Ok(Self::structural_from_cospan(&algebra, &s, domain, codomain))
     }
 }
@@ -583,8 +596,8 @@ mod tests {
     #[test]
     fn compose_types() {
         let alg = part_algebra();
-        let s_ab = Cospan::new(vec![], vec![0, 1], vec!['a', 'b']);
-        let s_bc = Cospan::new(vec![], vec![0, 1], vec!['b', 'c']);
+        let s_ab = Cospan::new(vec![], vec![0, 1], vec!['a', 'b']).unwrap();
+        let s_bc = Cospan::new(vec![], vec![0, 1], vec!['b', 'c']).unwrap();
         let f = PartMorph::new(
             Arc::clone(&alg),
             structural_elem(&alg, &s_ab),
@@ -605,8 +618,8 @@ mod tests {
     #[test]
     fn compose_mismatched_fails() {
         let alg = part_algebra();
-        let s_ab = Cospan::new(vec![], vec![0, 1], vec!['a', 'b']);
-        let s_cd = Cospan::new(vec![], vec![0, 1], vec!['c', 'd']);
+        let s_ab = Cospan::new(vec![], vec![0, 1], vec!['a', 'b']).unwrap();
+        let s_cd = Cospan::new(vec![], vec![0, 1], vec!['c', 'd']).unwrap();
         let f = PartMorph::new(
             Arc::clone(&alg),
             structural_elem(&alg, &s_ab),

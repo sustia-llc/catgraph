@@ -20,8 +20,8 @@ fn tensor_product() {
     println!("=== Tensor Product (Monoidal) ===\n");
 
     // Two simple cospans: f: [a] -> [b] and g: [c] -> [d]
-    let f = Cospan::new(vec![0], vec![1], vec!['a', 'b']);
-    let g = Cospan::new(vec![0], vec![1], vec!['c', 'd']);
+    let f = Cospan::new(vec![0], vec![1], vec!['a', 'b']).unwrap();
+    let g = Cospan::new(vec![0], vec![1], vec!['c', 'd']).unwrap();
 
     println!("f: domain={:?}, codomain={:?}", f.domain(), f.codomain());
     println!("g: domain={:?}, codomain={:?}", g.domain(), g.codomain());
@@ -150,9 +150,9 @@ fn permute_side() {
 fn tensor_associativity() {
     println!("=== Tensor Associativity ===\n");
 
-    let a = Cospan::new(vec![0], vec![0], vec!['a']);
-    let b = Cospan::new(vec![0], vec![0], vec!['b']);
-    let c = Cospan::new(vec![0], vec![0], vec!['c']);
+    let a = Cospan::new(vec![0], vec![0], vec!['a']).unwrap();
+    let b = Cospan::new(vec![0], vec![0], vec!['b']).unwrap();
+    let c = Cospan::new(vec![0], vec![0], vec!['c']).unwrap();
 
     // (a ⊗ b) ⊗ c
     let mut ab = a.clone();

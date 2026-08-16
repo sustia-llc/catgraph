@@ -29,22 +29,22 @@ fn id_ab() -> Cospan<char> {
 /// Cospan f: {a,b} -> {b,c} with merge in the middle.
 /// left=[0,1], right=[1,2], middle=['a','b','c'].
 fn cospan_f() -> Cospan<char> {
-    Cospan::new(vec![0, 1], vec![1, 2], vec!['a', 'b', 'c'])
+    Cospan::new(vec![0, 1], vec![1, 2], vec!['a', 'b', 'c']).unwrap()
 }
 
 /// Cospan g: {b,c} -> {c,d}.
 fn cospan_g() -> Cospan<char> {
-    Cospan::new(vec![0, 1], vec![1, 2], vec!['b', 'c', 'd'])
+    Cospan::new(vec![0, 1], vec![1, 2], vec!['b', 'c', 'd']).unwrap()
 }
 
 /// Span f: left=['a','b'], right=['a','b'], pairs=[(0,0),(1,1)].
 fn span_f() -> Span<char> {
-    Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)])
+    Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0), (1, 1)]).unwrap()
 }
 
 /// Span g: swap — left=['a','b'], right=['b','a'], pairs=[(0,1),(1,0)].
 fn span_g() -> Span<char> {
-    Span::new(vec!['a', 'b'], vec!['b', 'a'], vec![(0, 1), (1, 0)])
+    Span::new(vec!['a', 'b'], vec!['b', 'a'], vec![(0, 1), (1, 0)]).unwrap()
 }
 
 // ===========================================================================
@@ -110,7 +110,7 @@ fn cospan_delete_boundary_then_compose() {
 fn cospan_connect_pair_same_type_verify_map_to_same() {
     // Cospan with 3 middle nodes all labeled 'x'. Left=[0,1], right=[2].
     // Connect left[0] (->mid 0) and left[1] (->mid 1): both label 'x', merge works.
-    let mut c = Cospan::new(vec![0, 1], vec![2], vec!['x', 'x', 'x']);
+    let mut c = Cospan::new(vec![0, 1], vec![2], vec!['x', 'x', 'x']).unwrap();
     assert!(!c.map_to_same(Left(0), Left(1)));
 
     c.connect_pair(Left(0), Left(1));
@@ -124,7 +124,7 @@ fn cospan_connect_pair_same_type_verify_map_to_same() {
 #[test]
 fn cospan_connect_pair_different_type_no_change() {
     // Middle nodes with different labels: merging should produce no change.
-    let mut c = Cospan::new(vec![0, 1], vec![2], vec!['x', 'y', 'x']);
+    let mut c = Cospan::new(vec![0, 1], vec![2], vec!['x', 'y', 'x']).unwrap();
     let middle_before = c.middle().len();
 
     c.connect_pair(Left(0), Left(1)); // 'x' vs 'y' — no merge
@@ -233,18 +233,18 @@ fn cospan_chain_of_mutations_then_compose() {
 #[test]
 fn cospan_map_to_same_cross_boundary() {
     // Left[0] -> mid 0, Right[0] -> mid 0: same middle node.
-    let c = Cospan::new(vec![0], vec![0], vec!['x']);
+    let c = Cospan::new(vec![0], vec![0], vec!['x']).unwrap();
     assert!(c.map_to_same(Left(0), Right(0)));
 
     // Left[0] -> mid 0, Right[0] -> mid 1: different middle nodes.
-    let c2 = Cospan::new(vec![0], vec![1], vec!['x', 'x']);
+    let c2 = Cospan::new(vec![0], vec![1], vec!['x', 'x']).unwrap();
     assert!(!c2.map_to_same(Left(0), Right(0)));
 }
 
 #[test]
 fn cospan_delete_last_vs_non_last_boundary() {
     // Cospan with 3 left boundaries: left=[0,1,2], right=[0], middle=['a','b','c'].
-    let mut c = Cospan::new(vec![0, 1, 2], vec![0], vec!['a', 'b', 'c']);
+    let mut c = Cospan::new(vec![0, 1, 2], vec![0], vec!['a', 'b', 'c']).unwrap();
 
     // Delete last left boundary (index 2): simple pop, no swap.
     c.delete_boundary_node(Left(2));
@@ -329,7 +329,7 @@ fn span_add_middle_valid_matching_types() {
     // left=['a','b'], right=['a','b']. Add middle pair (0,1) — left[0]='a', right[1]='b'.
     // Wait: 'a' != 'b', so this should fail. Let's use matching types.
     // Add middle pair (0,0): left[0]='a' == right[0]='a'. Valid.
-    let mut s = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![]);
+    let mut s = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![]).unwrap();
     let result = s.add_middle((0, 0));
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), 0);
@@ -344,7 +344,7 @@ fn span_add_middle_valid_matching_types() {
 
 #[test]
 fn span_add_middle_type_mismatch_returns_error() {
-    let mut s = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![]);
+    let mut s = Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![]).unwrap();
     // Add middle pair (0,1): left[0]='a' != right[1]='b'. Should fail.
     let result = s.add_middle((0, 1));
     assert!(result.is_err());
@@ -379,7 +379,8 @@ fn span_middle_to_left_right_projections() {
         vec!['t', 't', 't'],
         vec!['t', 't', 't'],
         vec![(0, 2), (1, 0), (2, 1)],
-    );
+    )
+    .unwrap();
     assert_eq!(s2.middle_to_left(), vec![0, 1, 2]);
     assert_eq!(s2.middle_to_right(), vec![2, 0, 1]);
 }
@@ -406,7 +407,7 @@ fn span_add_boundary_then_dagger() {
 #[test]
 fn span_multiple_mutations_then_compose_with_identity() {
     // Build a span from scratch with mutations.
-    let mut s = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]);
+    let mut s = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]).unwrap();
 
     // Extend domain.
     s.add_boundary_node(Left('b'));

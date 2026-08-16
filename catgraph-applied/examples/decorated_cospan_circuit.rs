@@ -50,7 +50,7 @@ impl Decoration for Circuit {
 
 fn main() {
     // Parallel composition — no pushforward needed (apex is disjoint union).
-    let c1 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]);
+    let c1 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]).unwrap();
     let circ1 = DecoratedCospan::<usize, Circuit>::new(
         c1,
         EdgeSet {
@@ -58,7 +58,7 @@ fn main() {
             edges: vec![(0, 1)],
         },
     );
-    let c2 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]);
+    let c2 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]).unwrap();
     let circ2 = DecoratedCospan::<usize, Circuit>::new(
         c2,
         EdgeSet {
@@ -75,7 +75,7 @@ fn main() {
     );
 
     // Series composition — pushforward glues the shared boundary vertex.
-    let c3 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]);
+    let c3 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]).unwrap();
     let circ3 = DecoratedCospan::<usize, Circuit>::new(
         c3,
         EdgeSet {
@@ -83,7 +83,7 @@ fn main() {
             edges: vec![(0, 1)],
         },
     );
-    let c4 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]);
+    let c4 = Cospan::<usize>::new(vec![0], vec![1], vec![0, 0]).unwrap();
     let circ4 = DecoratedCospan::<usize, Circuit>::new(
         c4,
         EdgeSet {

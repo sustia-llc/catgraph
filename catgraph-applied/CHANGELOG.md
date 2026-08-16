@@ -13,6 +13,36 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **`PetriNet::new` is now a validated constructor returning
+  `Result<Self, CatgraphError>`; the previous infallible body moved to
+  `PetriNet::new_unchecked`**
+  ([#256](https://github.com/sustia-llc/catgraph/issues/256)). `new` now refuses
+  a net whose `pre` or `post` arcs reference a place index at or beyond
+  `places.len()`, reporting `CatgraphError::PetriNet` with the transition index,
+  the side, and the offending index.
+
+  This replaces an earlier attempt in this same window that instead made
+  `transition_as_cospan` `.expect()` on the newly checked `Cospan::new`. The
+  code review caught that as a regression rather than a fix: `PetriNet::new` was
+  public and validated nothing, so
+  `PetriNet::new(vec!['a'], vec![Transition::new(vec![(5, w)], vec![])])`
+  followed by `transition_as_cospan(0)` turned ordinary caller data into a
+  **release-build process abort**, where before it returned a (structurally
+  invalid) cospan. Validating at the boundary that admits the data makes the
+  invariant real instead of asserting one that nothing established;
+  `transition_as_cospan` is now correct by construction and uses
+  `Cospan::new_unchecked`.
+
+- **`WiringDiagram` construction sites follow core's `NamedCospan::new`, which
+  now returns `Result`** ([#256](https://github.com/sustia-llc/catgraph/issues/256)).
+  No change to this crate's own API — every `NamedCospan::new` call in
+  `catgraph-applied` lives in `#[cfg(test)]`, `tests/`, `examples/` or
+  `benches/`, and each gained a `.unwrap()`. Users copying the
+  `wiring_diagram` / `operad_algebra_circ` examples need the same `.unwrap()`
+  (or `?`) after upgrading.
+
 ### Added
 
 - **`FaithfulnessReport::matrix_buckets`** — the number of distinct matrix
