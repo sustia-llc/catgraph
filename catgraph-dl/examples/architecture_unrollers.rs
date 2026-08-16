@@ -15,20 +15,17 @@
 //! makes `unroll` invariant under the negation action — Geometric Deep Learning
 //! recovered at the architecture level.
 //!
-//! `RecursiveNn::unroll` is the one fallible unroller: it recurses over the
-//! tree, so it pre-flights the [`catgraph_dl::depth`] guard and returns
-//! [`DepthError`] for a tree deeper than
-//! [`MAX_TREE_DEPTH`](catgraph_dl::depth::MAX_TREE_DEPTH) (issue #231). This
-//! example's trees are depth 3, so `?` never fires — it is here to show the
-//! shape callers write.
+//! All five unrollers are **infallible**. `RecursiveNn::unroll` was briefly the
+//! exception — it recursed over the tree, so between issues #231 and #200 it
+//! pre-flighted the [`catgraph_dl::depth`] guard and returned a `DepthError`.
+//! Its walk is an explicit heap worklist now, so no tree is too deep for it.
 //!
 //! Run with `cargo run -p catgraph-dl --example architecture_unrollers`.
 
-use catgraph_dl::DepthError;
 use catgraph_dl::architectures::{FoldingRnn, MealyCell, MooreCell, RecursiveNn, UnfoldingRnn};
 use catgraph_dl::free_monad::tree_endo::BinaryTree;
 
-fn main() -> Result<(), DepthError> {
+fn main() {
     // ---- FoldingRnn: right-fold a list (algebra on `1 + A × −`) ----------
     //
     // cell_0(p) = p (the seed), cell_1((p, a, s)) = a + s + p (bias-added sum).
@@ -52,7 +49,7 @@ fn main() -> Result<(), DepthError> {
         BinaryTree::node(BinaryTree::leaf(1_u8), BinaryTree::leaf(2_u8)),
         BinaryTree::leaf(3_u8),
     );
-    assert_eq!(RecursiveNn::unroll(&tree_net, tree)?, 5);
+    assert_eq!(RecursiveNn::unroll(&tree_net, tree), 5);
     println!("RecursiveNn: node-count unroll(Node(Node(L,L),L)) = 5");
 
     // ---- UnfoldingRnn: state-driven unfold (coalgebra) ------------------
@@ -122,5 +119,4 @@ fn main() -> Result<(), DepthError> {
     );
 
     println!("architecture_unrollers: all assertions passed");
-    Ok(())
 }

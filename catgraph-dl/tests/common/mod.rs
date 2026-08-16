@@ -39,15 +39,41 @@ use catgraph_dl::{
 
 use proptest::prelude::*;
 
+/// The spine depth every #200 regression test uses: deep enough that each
+/// *recursive* carrier operation aborts a 2 MiB Rust test thread, and therefore
+/// deep enough that an iterative one completing is evidence.
+///
+/// **32 768**, 128× the retired `MAX_TREE_DEPTH` ceiling. The thresholds were
+/// measured on this tree by reverting each impl in turn and bisecting, on a
+/// default (2 MiB) test thread in a debug build:
+///
+/// | recursive operation | deepest that survived | shallowest that aborted |
+/// |---|---|---|
+/// | compiler drop glue (`BinaryTree`, `Free`, `Cofree`) | 8 192 | 16 384 |
+/// | `Debug` (`BinaryTree`, and the carriers via the witness) | 4 096 | 8 192 |
+///
+/// Drop glue has the smallest frames and so is the hardest to overflow; 32 768
+/// clears it by ~2.7×, and clears every other operation by more. Note this is
+/// **8× the historical 4 096 figure** in `catgraph_dl::depth::MAX_TREE_DEPTH`'s
+/// rustdoc: that one was measured on criterion's 8 MiB *main* thread, and a
+/// test thread gets a quarter of that.
+///
+/// These tests deliberately run on the default test thread. Spawning a
+/// fat-stacked thread would make them pass under the very implementation they
+/// exist to reject.
+pub const DEEP: usize = 32768;
+
 /// A left caterpillar `BinaryTree<u8>` of structural depth `depth` (`depth ≥ 1`)
 /// — every internal node has a leaf as its right child, so the tree has `depth`
 /// leaves and its longest root-to-leaf path is `depth` long. The degenerate
-/// shape the #231 recursion guard exists for.
+/// shape [#200] is about.
 ///
 /// Built **iteratively**, from the leaf upward: a recursive builder would blow
-/// the stack constructing the very fixture meant to prove the guard catches
-/// deep input. (Its `Drop` still recurses — see the `depth` module's "Scope"
-/// note — so callers keep `depth` well inside the measured-safe 4 096.)
+/// the stack constructing the very fixture meant to prove the carriers survive
+/// deep input. Since #200 the carrier's own `Drop`/`Clone`/`==`/`{:?}` are
+/// iterative too, so there is no longer a depth ceiling on holding one.
+///
+/// [#200]: https://github.com/sustia-llc/catgraph/issues/200
 pub fn spine_tree(depth: usize) -> BinaryTree<u8> {
     assert!(depth >= 1, "a BinaryTree has at least one node");
     let mut acc = BinaryTree::leaf(0_u8);
@@ -58,18 +84,15 @@ pub fn spine_tree(depth: usize) -> BinaryTree<u8> {
 }
 
 /// The [`spine_tree`] shape built directly in the `Free<TreeEndo<u8>,
-/// Infallible>` encoding.
-///
-/// Needed because the over-limit case cannot be produced by
-/// `tree_to_free_mnd` — that helper is itself guarded, and refuses exactly the
-/// input this fixture supplies. Iterative for the same reason as
-/// [`spine_tree`].
+/// Infallible>` encoding, cell by cell rather than through the bijection —
+/// so a test can pin the `Free` side without assuming the bijection works.
+/// Iterative for the same reason as [`spine_tree`].
 pub fn spine_free_mnd(depth: usize) -> Free<TreeEndo<u8>, Infallible> {
     assert!(depth >= 1, "a Free spine has at least one cell");
-    let leaf = || Free::Suspend(Either::Left(0_u8));
+    let leaf = || Free::suspend(Either::Left(0_u8));
     let mut acc = leaf();
     for _ in 1..depth {
-        acc = Free::Suspend(Either::Right((Box::new(acc), Box::new(leaf()))));
+        acc = Free::suspend(Either::Right((Box::new(acc), Box::new(leaf()))));
     }
     acc
 }
@@ -195,20 +218,38 @@ where
 ///   since the law is an iff.
 /// - `fmap` coherence: `decompose(F::fmap(fx, f)) == (shape, contents.map(f))`
 ///   — shape fixed, contents mapped in position order.
+/// - Borrow coherence (law 4, #200): `contents(&fx)` yields references to
+///   exactly the values `decompose(fx)` yields, in the same order. This is the
+///   law the carriers' iterative `==` and `{:?}` rest on — the borrowing walk
+///   must see the same slots the consuming one does.
 ///
 /// Abbott–Altenkirch–Ghani 2003, via CDL. `f` is a pure morphism.
+///
+/// `F::Shape: PartialEq + Debug` is a **helper-side** bound: the trait itself
+/// leaves `Shape` unbounded since v0.14.0, so a label-carrying shape does not
+/// force those bounds onto every `Free<F, _>` walk.
 pub fn assert_container_laws<F>(fx: F::Type<i32>)
 where
     F: Container,
     F::Type<i32>: Clone + PartialEq + core::fmt::Debug,
-    F::Shape: Clone,
+    F::Shape: Clone + PartialEq + core::fmt::Debug,
 {
     let f = |v: i32| v.wrapping_add(1);
+
+    // Borrow coherence: the borrowing split must agree with the consuming one,
+    // value for value and in position order. Checked *before* `decompose`
+    // consumes the sample.
+    let borrowed: Vec<i32> = F::contents(&fx).into_iter().copied().collect();
 
     // One decompose serves every probe below. `Shape: Clone` is a helper-side
     // bound only (all shipped shapes are `Clone`), not a `Container`
     // requirement.
     let (shape, contents) = F::decompose(fx.clone());
+
+    assert_eq!(
+        borrowed, contents,
+        "container borrow coherence: contents(&fx) matches decompose(fx) in position order"
+    );
 
     // Arity coherence (decompose length).
     let arity = F::arity(&shape);
@@ -516,19 +557,43 @@ impl<Tag> Functor<Self> for UnitEndo<Tag> {
 }
 
 // Capability impls so `Cofree<UnitEndo<Tag>, Z>` (and `Free`) get opt-in
-// `Eq`/`Debug`: the functor hole is the unit `()`, whose own `==`/`Debug` are
-// total. Used by `free_monad_bijections::cofree_cmnd_smoke`.
+// `Eq`/`Debug`: the functor hole is the unit `()`, which is all shape and no
+// content. Used by `free_monad_bijections::cofree_cmnd_smoke`.
 impl<Tag> EqFunctor for UnitEndo<Tag> {
-    fn eq_type<T: PartialEq>(a: &(), b: &()) -> bool {
-        a == b
+    fn eq_shape<T>(_a: &(), _b: &()) -> bool {
+        // One shape only.
+        true
     }
 }
 
 impl<Tag> DebugFunctor for UnitEndo<Tag> {
-    fn fmt_type<T: core::fmt::Debug>(
+    fn fmt_shape<T>(
         fa: &(),
         f: &mut core::fmt::Formatter<'_>,
+        _contents: &[&dyn core::fmt::Debug],
     ) -> core::fmt::Result {
         core::fmt::Debug::fmt(fa, f)
+    }
+}
+
+/// Container presentation of the constant functor `X ↦ 1`: one shape, arity 0.
+/// Needed since #200 because the carriers' `==` / `{:?}` bound on `Container`.
+impl<Tag> Container for UnitEndo<Tag> {
+    type Shape = ();
+
+    fn arity((): &Self::Shape) -> usize {
+        0
+    }
+
+    fn decompose<X>((): ()) -> ((), Vec<X>) {
+        ((), Vec::new())
+    }
+
+    fn recompose<X>((): (), contents: Vec<X>) -> Option<()> {
+        contents.is_empty().then_some(())
+    }
+
+    fn contents<X>((): &()) -> Vec<&X> {
+        Vec::new()
     }
 }

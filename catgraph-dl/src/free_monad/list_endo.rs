@@ -20,7 +20,10 @@
 //!
 //! - [`free_mnd_to_vec`] — destruct: walk down the cons-cells, collecting
 //!   the `A` values; when the terminator `Pure(z)` is reached, return
-//!   `(items, z)`.
+//!   `(items, z)`. Cells are read through
+//!   [`Free::into_view`](crate::free_monad::Free::into_view) — the carrier's
+//!   variants moved behind an accessor in the v0.14.0 window (issue
+//!   [#200](https://github.com/sustia-llc/catgraph/issues/200)).
 //! - [`vec_to_free_mnd`] — construct: build the cons-cell tower right-to-
 //!   left, with the supplied `terminator` at the deepest `Pure`.
 //!
@@ -40,7 +43,7 @@
 use core::marker::PhantomData;
 
 use crate::container::Container;
-use crate::endofunctor::{DebugFunctor, EqFunctor, Free, Functor, HKT};
+use crate::endofunctor::{DebugFunctor, EqFunctor, Free, FreeView, Functor, HKT};
 
 /// The endofunctor `1 + A × −` for a fixed alphabet `A`.
 ///
@@ -76,33 +79,44 @@ impl<A> Functor<Self> for ListEndo<A> {
     }
 }
 
-// Opt-in structural equality for `Free<ListEndo<A>, Z>` (and `Cofree`): route
-// the comparison of the functor hole `Option<(A, T)>` through `Option`/tuple's
-// own `==`. Bounded `A: PartialEq` so the label participates; `T: PartialEq`
-// comes from the trait method.
+// Opt-in structural equality for `Free<ListEndo<A>, Z>` (and `Cofree`): compare
+// the *shape* of the functor hole `Option<(A, T)>` — which summand, and the
+// cons label — leaving the single recursive slot to the carrier's worklist.
+// Bounded `A: PartialEq`; the slot needs no bound at all here.
 impl<A: PartialEq> EqFunctor for ListEndo<A> {
-    fn eq_type<T: PartialEq>(a: &Option<(A, T)>, b: &Option<(A, T)>) -> bool {
-        a == b
+    fn eq_shape<T>(a: &Option<(A, T)>, b: &Option<(A, T)>) -> bool {
+        match (a, b) {
+            (None, None) => true,
+            (Some((x, _)), Some((y, _))) => x == y,
+            _ => false,
+        }
     }
 }
 
-// Opt-in `Debug` for `Free<ListEndo<A>, Z>`: delegate the functor hole to
-// `Option<(A, T)>`'s own `Debug`. Bounded `A: Debug`.
+// Opt-in `Debug` for `Free<ListEndo<A>, Z>`: reproduce `Option<(A, T)>`'s own
+// derived shape (`None` / `Some((a, t))`) with the recursive slot supplied
+// pre-rendered. Bounded `A: Debug`.
 impl<A: core::fmt::Debug> DebugFunctor for ListEndo<A> {
-    fn fmt_type<T: core::fmt::Debug>(
+    fn fmt_shape<T>(
         fa: &Option<(A, T)>,
         f: &mut core::fmt::Formatter<'_>,
+        contents: &[&dyn core::fmt::Debug],
     ) -> core::fmt::Result {
-        core::fmt::Debug::fmt(fa, f)
+        match (fa, contents) {
+            (None, _) => f.write_str("None"),
+            (Some((a, _)), [rest]) => f.debug_tuple("Some").field(&(a, rest)).finish(),
+            // Unreachable for contents taken from `fa` (arity 1); a formatting
+            // error rather than a panic if a caller ever supplied otherwise.
+            (Some(_), _) => Err(core::fmt::Error),
+        }
     }
 }
 
 /// Container presentation of `1 + A × −` (Abbott–Altenkirch–Ghani 2003, via
 /// CDL). Shapes are `Option<A>`: the unit summand `None` (a `Nil` cell, arity
 /// 0) and the product summand `Some(a)` (a `Cons` cell carrying its label `a`,
-/// arity 1 — the single recursive slot). `A: PartialEq + Debug` so the shape
-/// carries into the machine-checked container laws.
-impl<A: PartialEq + core::fmt::Debug> Container for ListEndo<A> {
+/// arity 1 — the single recursive slot).
+impl<A> Container for ListEndo<A> {
     type Shape = Option<A>;
 
     fn arity(shape: &Self::Shape) -> usize {
@@ -131,6 +145,13 @@ impl<A: PartialEq + core::fmt::Debug> Container for ListEndo<A> {
             }
         }
     }
+
+    fn contents<X>(fx: &Option<(A, X)>) -> Vec<&X> {
+        match fx {
+            None => Vec::new(),
+            Some((_, x)) => vec![x],
+        }
+    }
 }
 
 /// Destruct a `Free<ListEndo<A>, Z>` into its `Vec<A>` payload and
@@ -150,7 +171,7 @@ impl<A: PartialEq + core::fmt::Debug> Container for ListEndo<A> {
 /// Panics if a `Suspend(None)` cell is encountered with no `Pure(z)`
 /// terminator above it. Such a value is non-canonical — the encoding
 /// produced by [`vec_to_free_mnd`] always terminates with
-/// `Free::Pure(z)`. A user constructing `Free::Suspend(None)` directly
+/// [`Free::pure`]. A user constructing `Free::suspend(None)` directly
 /// has produced a value with no `Z` payload to return; we surface that as
 /// a panic with a diagnostic rather than fabricate a value.
 #[must_use]
@@ -158,11 +179,11 @@ pub fn free_mnd_to_vec<A, Z>(input: Free<ListEndo<A>, Z>) -> (Vec<A>, Z) {
     let mut items: Vec<A> = Vec::new();
     let mut current = input;
     loop {
-        match current {
-            Free::Pure(z) => return (items, z),
+        match current.into_view() {
+            FreeView::Pure(z) => return (items, z),
             // The recursion is boxed *inside* the functor hole, so the node is
             // `Option<(A, Box<Free<…>>)>` — no outer `Box` to deref.
-            Free::Suspend(node) => match node {
+            FreeView::Suspend(node) => match node {
                 None => {
                     // `1` summand: a `Nil`-shaped cell with no terminator
                     // payload. By construction the `Free` type forces a
@@ -174,8 +195,8 @@ pub fn free_mnd_to_vec<A, Z>(input: Free<ListEndo<A>, Z>) -> (Vec<A>, Z) {
                     panic!(
                         "free_mnd_to_vec: encountered bare ListEndo `None` Suspend without \
                          a terminator; non-canonical Free value. The canonical encoding \
-                         (produced by vec_to_free_mnd) terminates with Free::Pure(z), \
-                         not Free::Suspend(None)."
+                         (produced by vec_to_free_mnd) terminates with Free::pure(z), \
+                         not Free::suspend(None)."
                     );
                 }
                 Some((a, rest)) => {
@@ -198,14 +219,14 @@ pub fn free_mnd_to_vec<A, Z>(input: Free<ListEndo<A>, Z>) -> (Vec<A>, Z) {
 /// ```ignore
 /// // Empty list with `()` terminator → `Pure(())`.
 /// let empty = vec_to_free_mnd::<u32, ()>(Vec::new(), ());
-/// assert!(matches!(empty, Free::Pure(())));
+/// assert!(matches!(empty.as_view(), FreeView::Pure(())));
 /// ```
 #[must_use]
 pub fn vec_to_free_mnd<A, Z>(items: Vec<A>, terminator: Z) -> Free<ListEndo<A>, Z> {
-    let mut acc: Free<ListEndo<A>, Z> = Free::Pure(terminator);
+    let mut acc: Free<ListEndo<A>, Z> = Free::pure(terminator);
     for a in items.into_iter().rev() {
         // Box the recursive slot *inside* the `Option` hole.
-        acc = Free::Suspend(Some((a, Box::new(acc))));
+        acc = Free::suspend(Some((a, Box::new(acc))));
     }
     acc
 }

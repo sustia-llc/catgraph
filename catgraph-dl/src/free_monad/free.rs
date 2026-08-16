@@ -13,27 +13,36 @@
 use core::fmt;
 use core::marker::PhantomData;
 
-use crate::endofunctor::{DebugFunctor, EqFunctor, Functor, HKT, Pure};
+use crate::container::Container;
+use crate::endofunctor::{DebugFunctor, EndoWitness, EqFunctor, HKT, Pure};
 
-/// The free monad on the operation functor `F`: `Pure(a) | Suspend(F(Free))`.
+use super::{DebugTuple, Rendered, render};
+
+/// The message on every `expect` guarding the transient empty cell.
 ///
-/// CDL Proposition B.18. A *program* is a tree of `F`-shaped operation nodes
-/// terminated by pure leaves; a *handler* is an `F`-algebra that folds the tree
-/// into a result — [`fold`](Free::fold), the CDL Remark 2.13 catamorphism.
+/// [`Free`]'s cell is `None` only *between* the moment [`Free::into_view`] or
+/// [`Free::drop`] takes it and the moment the husk is discarded — never while a
+/// value is observable. Any `expect` on it is discharged by that invariant.
+const CELL: &str = "invariant: a live Free always holds its cell; it is emptied \
+                    only by into_view/drop, which discard the husk immediately";
+
+/// One cell of the free monad on the operation functor `F`: `Pure(a)` or
+/// `Suspend(F(Free))`.
+///
+/// CDL Proposition B.18. This is the shape [`Free`] used to *be*, and it is
+/// still how a caller reads one: [`Free::into_view`] hands it over by value and
+/// [`Free::as_view`] by reference, so `match` remains the carrier's surface.
+/// What changed in the v0.14.0 window is that the shape is no longer the
+/// carrier itself — see [`Free`] for why.
 ///
 /// The recursion indirection sits **inside** the functor hole
 /// (`Suspend(F::Type<Box<Free<F, A>>>)`), not around the applied functor, so a
-/// carrier value costs exactly one `Box` per recursive hole.
-///
-/// `F` is an [`HKT`] witness; the recursion-consuming [`fold`](Free::fold)
-/// additionally needs its [`Functor`] instance. Variants are public — pattern
-/// matching *is* the carrier's surface, as it is for
-/// [`BinaryTree`](crate::free_monad::tree_endo::BinaryTree) (to which the
-/// [`TreeEndo`](crate::free_monad::tree_endo::TreeEndo) instantiation — and
-/// only that one — is isomorphic, CDL Example B.20).
-pub enum Free<F, A>
+/// carrier value costs exactly one `Box` per recursive hole. Dropping a
+/// `FreeView` therefore drops `Box<Free<F, A>>` values, and *their* `Drop` is
+/// iterative — one level of nesting here, none below it.
+pub enum FreeView<F, A>
 where
-    F: HKT,
+    F: EndoWitness,
 {
     /// A pure value — the leaf, and the monadic unit `η`.
     Pure(A),
@@ -41,9 +50,155 @@ where
     Suspend(F::Type<Box<Free<F, A>>>),
 }
 
+/// The free monad on the operation functor `F`: `Pure(a) | Suspend(F(Free))`.
+///
+/// CDL Proposition B.18. A *program* is a tree of `F`-shaped operation nodes
+/// terminated by pure leaves; a *handler* is an `F`-algebra that folds the tree
+/// into a result — [`fold`](Free::fold), the CDL Remark 2.13 catamorphism.
+///
+/// # Why a struct with a private cell (v0.14.0, issue [#200])
+///
+/// `Free` used to *be* the two-variant enum now called [`FreeView`], and its
+/// drop glue was the compiler's: a `Box` chain per recursive hole, dropped by
+/// recursion. A spine deep enough overflowed the stack **while dying** — an
+/// abort, uncatchable, and reachable even from a value some guard had just
+/// rejected. Fixing that needs a hand-written [`Drop`], and a hand-written
+/// `Drop` forbids moving out of the value (`error[E0509]`), which is precisely
+/// what a public-variant `match` does at every construction and consumer site.
+///
+/// So the variants moved behind an accessor. Construct with
+/// [`pure`](Free::pure) / [`suspend`](Free::suspend) (or `From<FreeView<..>>`),
+/// consume with [`into_view`](Free::into_view), inspect with
+/// [`as_view`](Free::as_view). The cell is an `Option` purely so `Drop` and
+/// `into_view` can take it without `unsafe` — the crate is
+/// `#![forbid(unsafe_code)]` — and it is `Some` for every observable value.
+///
+/// # What is iterative now
+///
+/// [`fold`](Free::fold), [`Drop`], [`PartialEq`] and [`Debug`] all walk the
+/// spine with an explicit heap worklist, so none of them can overflow on a
+/// degenerate spine. `fold`, `==` and `{:?}` reach the recursive slots through
+/// the [`Container`] capability, which is why they carry that bound.
+///
+/// `F` is an [`EndoWitness`] — the object map plus `fmap`, the latter being how
+/// [`Drop`] dismantles a cell without needing `Container`.
+///
+/// [#200]: https://github.com/sustia-llc/catgraph/issues/200
+pub struct Free<F, A>
+where
+    F: EndoWitness,
+{
+    /// `Some` for every observable value; see [`CELL`].
+    cell: Option<FreeView<F, A>>,
+}
+
 impl<F, A> Free<F, A>
 where
-    F: HKT + Functor<F>,
+    F: EndoWitness,
+{
+    /// Wrap a cell as a carrier value. The inverse of
+    /// [`into_view`](Self::into_view).
+    #[must_use]
+    #[inline]
+    pub fn from_view(view: FreeView<F, A>) -> Self {
+        Self { cell: Some(view) }
+    }
+
+    /// The monadic unit `η`: a pure leaf. Replaces the former `Free::Pure(a)`
+    /// constructor.
+    #[must_use]
+    #[inline]
+    pub fn pure(value: A) -> Self {
+        Self::from_view(FreeView::Pure(value))
+    }
+
+    /// An operation node over an `F`-structure of sub-programs. Replaces the
+    /// former `Free::Suspend(fx)` constructor.
+    #[must_use]
+    #[inline]
+    pub fn suspend(node: F::Type<Box<Free<F, A>>>) -> Self {
+        Self::from_view(FreeView::Suspend(node))
+    }
+
+    /// Consume the carrier and hand back its cell, for a by-value `match`.
+    /// Replaces the former `match free { Free::Pure(a) => .., .. }`.
+    #[must_use]
+    #[inline]
+    pub fn into_view(mut self) -> FreeView<F, A> {
+        self.cell.take().expect(CELL)
+    }
+
+    /// Borrow the cell, for a by-reference `match`. Match ergonomics bind the
+    /// payloads by reference, so `match free.as_view() { FreeView::Pure(a) => …
+    /// }` gives `a : &A`.
+    #[must_use]
+    #[inline]
+    pub fn as_view(&self) -> &FreeView<F, A> {
+        self.cell.as_ref().expect(CELL)
+    }
+}
+
+impl<F, A> From<FreeView<F, A>> for Free<F, A>
+where
+    F: EndoWitness,
+{
+    #[inline]
+    fn from(view: FreeView<F, A>) -> Self {
+        Self::from_view(view)
+    }
+}
+
+/// Iterative drop glue: a deep spine dies on the heap, never on the stack.
+///
+/// Each popped cell hands its recursive slots to the worklist and its labels to
+/// the ordinary drop of `F::Type<()>` — the shape with every slot already
+/// emptied. The `Box<Free<..>>` husks handed to the closure have had their own
+/// cell taken, so their `Drop` is a no-op and the recursion stops one level
+/// down, every time.
+///
+/// This is the half of issue [#200](https://github.com/sustia-llc/catgraph/issues/200)
+/// that the #231 pre-flight guard could not reach: a guard that *rejects* a
+/// too-deep value by value still had to drop it.
+impl<F, A> Drop for Free<F, A>
+where
+    F: EndoWitness,
+{
+    fn drop(&mut self) {
+        let Some(view) = self.cell.take() else {
+            return;
+        };
+        let mut pending = vec![view];
+        while let Some(view) = pending.pop() {
+            if let FreeView::Suspend(node) = view {
+                // The mapped-to-`()` shape keeps the witness's own labels and
+                // drops them here; the slots are moved into `pending` first.
+                let _shape: F::Type<()> = F::fmap(node, |mut boxed: Box<Free<F, A>>| {
+                    if let Some(child) = boxed.cell.take() {
+                        pending.push(child);
+                    }
+                });
+            }
+        }
+    }
+}
+
+/// One step of the explicit-worklist [`Free::fold`].
+///
+/// A local `enum` inside the method body cannot name the method's generics, so
+/// it lives here, private to the module.
+enum FoldStep<F, A>
+where
+    F: Container,
+{
+    /// Take this sub-program apart.
+    Descend(Free<F, A>),
+    /// Its children are all folded: pop `arity` results and apply the algebra.
+    Assemble(F::Shape, usize),
+}
+
+impl<F, A> Free<F, A>
+where
+    F: EndoWitness,
 {
     /// Interpret the program with a handler: `pure_case` for leaves and an
     /// `algebra : F::Type<X> → X` for operation nodes.
@@ -52,62 +207,179 @@ where
     /// Remark 2.13's algebra-hom unroller, and the "handler" of the
     /// algebraic-effect reading.
     ///
-    /// Recurses over the spine, so a caller holding a programmatically-built
-    /// carrier should pre-flight [`crate::depth::free_mnd_depth`] (see that
-    /// module's **Scope** section).
+    /// # Iterative since v0.14.0 (issue [#200])
+    ///
+    /// The walk is an explicit heap worklist, so **no spine is too deep**: the
+    /// former recursive body overflowed the stack on a degenerate caterpillar,
+    /// which is what the #231 pre-flight guard existed to bound. The bound this
+    /// costs is [`Container`]: heapifying a walk over a *generic* witness needs
+    /// `decompose`/`recompose` to pull the recursive slots out and put the
+    /// folded results back — `fmap` alone cannot, because rebuilding
+    /// `F::Type<X>` from already-folded children *is* the recursive step.
+    ///
+    /// Children are folded in position order, left to right, matching the order
+    /// the recursive body's `fmap` visited them.
+    ///
+    /// [#200]: https://github.com/sustia-llc/catgraph/issues/200
     pub fn fold<X, P, Alg>(self, pure_case: &P, algebra: &Alg) -> X
     where
+        F: Container,
         P: Fn(A) -> X,
         Alg: Fn(F::Type<X>) -> X,
     {
-        match self {
-            Free::Pure(a) => pure_case(a),
-            Free::Suspend(fa) => algebra(F::fmap(fa, |boxed: Box<Free<F, A>>| {
-                (*boxed).fold(pure_case, algebra)
-            })),
+        let mut work: Vec<FoldStep<F, A>> = vec![FoldStep::Descend(self)];
+        let mut done: Vec<X> = Vec::new();
+        while let Some(step) = work.pop() {
+            match step {
+                FoldStep::Descend(node) => match node.into_view() {
+                    FreeView::Pure(a) => done.push(pure_case(a)),
+                    FreeView::Suspend(fa) => {
+                        let (shape, children) = F::decompose(fa);
+                        work.push(FoldStep::Assemble(shape, children.len()));
+                        // Pushed in reverse so the first position is popped
+                        // first and results land in position order.
+                        for child in children.into_iter().rev() {
+                            work.push(FoldStep::Descend(*child));
+                        }
+                    }
+                },
+                FoldStep::Assemble(shape, arity) => {
+                    let contents = done.split_off(done.len() - arity);
+                    // `arity` came from the same `decompose` that produced
+                    // `shape`, so container law 2 makes `recompose` total here.
+                    let fx = F::recompose(shape, contents).expect(
+                        "invariant: recompose is given the exact arity decompose reported \
+                         for this shape (Container law 2)",
+                    );
+                    done.push(algebra(fx));
+                }
+            }
         }
+        done.pop()
+            .expect("invariant: the walk pushes exactly one result for the root")
     }
 }
 
 // Opt-in `PartialEq`/`Debug` route through the witness capability traits —
 // `crate::endofunctor::EqFunctor` is the canonical statement of why a
 // `#[derive]` (or any projection-bound hand impl) would overflow the trait
-// solver (`error[E0275]`). No `Eq` marker: `eq_type` is only PartialEq-strength
+// solver (`error[E0275]`). No `Eq` marker: `eq_shape` is only PartialEq-strength
 // over the witness's own label slots (see `EqFunctor`'s law note), so claiming
 // total equivalence would be false for float-labelled witnesses.
+//
+// Both are explicit-worklist walks over the spine (#200). The capability
+// supplies the *shape* half — labels and constructor — and `Container::contents`
+// supplies the recursive slots the worklist queues, which is why both impls
+// bound on `Container` as well.
 
-/// Structural equality: equal leaves, or equal operation nodes compared through
-/// the functor's `eq_type`.
+/// Structural equality: equal leaves, or operation nodes whose shapes agree
+/// (through the functor's `eq_shape`) and whose contents agree pairwise.
+///
+/// Iterative: the content pairs go on a heap worklist, so comparing two deep
+/// spines cannot overflow.
 impl<F, A> PartialEq for Free<F, A>
 where
-    F: EqFunctor,
+    F: EqFunctor + Container,
     A: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Free::Pure(a), Free::Pure(b)) => a == b,
-            (Free::Suspend(x), Free::Suspend(y)) => F::eq_type(x, y),
-            _ => false,
+        let mut work: Vec<(&Self, &Self)> = vec![(self, other)];
+        while let Some((left, right)) = work.pop() {
+            match (left.as_view(), right.as_view()) {
+                (FreeView::Pure(a), FreeView::Pure(b)) => {
+                    if a != b {
+                        return false;
+                    }
+                }
+                (FreeView::Suspend(x), FreeView::Suspend(y)) => {
+                    if !F::eq_shape(x, y) {
+                        return false;
+                    }
+                    let (xs, ys) = (F::contents(x), F::contents(y));
+                    // Equal shapes have equal arity for a lawful container;
+                    // checked rather than trusted.
+                    if xs.len() != ys.len() {
+                        return false;
+                    }
+                    for (cx, cy) in xs.into_iter().zip(ys) {
+                        work.push((cx.as_ref(), cy.as_ref()));
+                    }
+                }
+                _ => return false,
+            }
         }
+        true
     }
 }
 
 /// `Debug` mirrors the derive shape (`Pure(..)` / `Suspend(..)`), formatting the
-/// operation node through the functor's `fmt_type`.
+/// operation node through the functor's `fmt_shape`.
+///
+/// Iterative: each cell is rendered bottom-up from its children's already-
+/// rendered text, so a deep spine cannot overflow. The cost of that inversion
+/// is that the text of every level is materialised — linear in the total output
+/// for `{:?}`, and quadratic in the depth for `{:#?}`, whose per-level
+/// re-indentation touches every line again. Neither aborts; prefer `{:?}` when
+/// dumping a suspect spine.
 impl<F, A> fmt::Debug for Free<F, A>
 where
-    F: DebugFunctor,
+    F: DebugFunctor + Container,
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Free::Pure(a) => f.debug_tuple("Pure").field(a).finish(),
-            Free::Suspend(x) => f
-                .debug_tuple("Suspend")
-                .field(&super::FmtType::<F, _>(x))
-                .finish(),
+        f.write_str(&render_cells(self, f.alternate()))
+    }
+}
+
+/// One step of the explicit-worklist [`Debug`] rendering (see [`FoldStep`] for
+/// why it is not a local `enum`).
+enum RenderStep<'a, F, A>
+where
+    F: EndoWitness,
+{
+    /// Render this cell once its children are rendered.
+    Visit(&'a Free<F, A>),
+    /// Its `arity` children are rendered: pop them and render this node.
+    Assemble(&'a F::Type<Box<Free<F, A>>>, usize),
+}
+
+/// Render `root` bottom-up, so no stack frame is spent per level of spine.
+fn render_cells<F, A>(root: &Free<F, A>, alternate: bool) -> String
+where
+    F: DebugFunctor + Container,
+    A: fmt::Debug,
+{
+    let mut work: Vec<RenderStep<'_, F, A>> = vec![RenderStep::Visit(root)];
+    let mut done: Vec<String> = Vec::new();
+    while let Some(step) = work.pop() {
+        match step {
+            RenderStep::Visit(node) => match node.as_view() {
+                FreeView::Pure(a) => done.push(render(alternate, &DebugTuple("Pure", a))),
+                FreeView::Suspend(fa) => {
+                    let children = F::contents(fa);
+                    work.push(RenderStep::Assemble(fa, children.len()));
+                    for child in children.into_iter().rev() {
+                        work.push(RenderStep::Visit(child.as_ref()));
+                    }
+                }
+            },
+            RenderStep::Assemble(fa, arity) => {
+                let rendered: Vec<Rendered> = done
+                    .split_off(done.len() - arity)
+                    .into_iter()
+                    .map(Rendered)
+                    .collect();
+                let slots: Vec<&dyn fmt::Debug> =
+                    rendered.iter().map(|r| r as &dyn fmt::Debug).collect();
+                done.push(render(
+                    alternate,
+                    &DebugTuple("Suspend", &super::FmtShape::<F, _>(fa, &slots)),
+                ));
+            }
         }
     }
+    done.pop()
+        .expect("invariant: the walk pushes exactly one rendering for the root")
 }
 
 /// The [`HKT`] witness for the free monad over the operation functor `F`.
@@ -116,17 +388,66 @@ pub struct FreeWitness<F>(PhantomData<F>);
 
 impl<F> HKT for FreeWitness<F>
 where
-    F: HKT,
+    F: EndoWitness,
 {
     type Type<T> = Free<F, T>;
 }
 
 impl<F> Pure<FreeWitness<F>> for FreeWitness<F>
 where
-    F: HKT,
+    F: EndoWitness,
 {
     #[inline]
     fn pure<T>(value: T) -> Free<F, T> {
-        Free::Pure(value)
+        Free::pure(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::endofunctor::{Either, OptionWitness};
+    use crate::free_monad::tree_endo::TreeEndo;
+
+    /// The iterative `Debug` must render exactly what the pre-#200 recursive one
+    /// did: `Pure(..)` / `Suspend(..)` around the witness's own shape, in both
+    /// the compact and the pretty form. Nothing else compares the carriers'
+    /// output against a fixed string at more than one level of nesting.
+    #[test]
+    fn debug_reproduces_the_pre_reshape_shape() {
+        type F = TreeEndo<u8>;
+        let leaf = || Free::<F, u8>::suspend(Either::Left(7_u8));
+        assert_eq!(format!("{:?}", leaf()), "Suspend(Left(7))");
+
+        let node: Free<F, u8> = Free::suspend(Either::Right((Box::new(leaf()), Box::new(leaf()))));
+        assert_eq!(
+            format!("{node:?}"),
+            "Suspend(Right((Suspend(Left(7)), Suspend(Left(7)))))"
+        );
+
+        // The `Pure` arm, and the pretty form's compounding indentation.
+        let pure: Free<OptionWitness, u8> = Free::pure(3);
+        assert_eq!(format!("{pure:?}"), "Pure(3)");
+        assert_eq!(format!("{pure:#?}"), "Pure(\n    3,\n)");
+
+        let cons: Free<OptionWitness, u8> = Free::suspend(Some(Box::new(Free::pure(3_u8))));
+        assert_eq!(format!("{cons:?}"), "Suspend(Some(Pure(3)))");
+        assert_eq!(
+            format!("{cons:#?}"),
+            "Suspend(\n    Some(\n        Pure(\n            3,\n        ),\n    ),\n)"
+        );
+    }
+
+    /// The `Option` cell must not cost a word: `FreeView`'s discriminant has
+    /// spare values, so the niche optimisation makes the wrapper free. A
+    /// regression here would mean the private-representation reshape (#200)
+    /// silently widened every carrier value.
+    #[test]
+    fn the_option_cell_is_niche_optimised() {
+        assert_eq!(
+            core::mem::size_of::<Free<OptionWitness, u64>>(),
+            core::mem::size_of::<FreeView<OptionWitness, u64>>(),
+            "wrapping the cell in Option must be free"
+        );
     }
 }

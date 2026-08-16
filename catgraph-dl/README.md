@@ -119,34 +119,37 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
   ([#222](https://github.com/sustia-llc/catgraph/issues/222)), keeping shape
   parity with the haft carriers adopted at
   [#93](https://github.com/sustia-llc/catgraph/issues/93) (the box sits inside
-  the functor hole: `Suspend(F::Type<Box>)`).
+  the functor hole: `Suspend(F::Type<Box>)`). Since
+  [#200](https://github.com/sustia-llc/catgraph/issues/200) `Free` holds that
+  shape behind a private cell and hands it out as **`FreeView`** — build with
+  `Free::pure` / `Free::suspend`, read with `into_view()` / `as_view()`.
 - **`ListEndo<A>`** with `vec_to_free_mnd` / `free_mnd_to_vec` — the list
   bijection witness (CDL Example B.19).
-- **`TreeEndo<A>`** + the **`BinaryTree<A>`** carrier with `tree_to_free_mnd` /
-  `free_mnd_to_tree` — the tree bijection witness (CDL Example B.20). Both walk
-  the carrier recursively, so both are **fallible**: they pre-flight the `depth`
-  guard below and return `DepthError` rather than risk a stack overflow
-  ([#231](https://github.com/sustia-llc/catgraph/issues/231)). The list helpers
-  are loops and stay infallible.
+- **`TreeEndo<A>`** + the **`BinaryTree<A>`** carrier (shape behind
+  **`TreeView`**, same reshape) with `tree_to_free_mnd` / `free_mnd_to_tree` —
+  the tree bijection witness (CDL Example B.20). Both are **infallible at any
+  depth**: their walks are explicit heap worklists, as are `Free::fold`,
+  `Cofree::unfold`, the carriers' `Drop`/`PartialEq`/`Debug`, and `BinaryTree`'s
+  `Clone` (#200). Between
+  [#231](https://github.com/sustia-llc/catgraph/issues/231) and #200 they were
+  fallible, pre-flighting the `depth` guard and returning `DepthError` rather
+  than risking a stack overflow.
 
-### `depth` / `errors` — the pre-flight recursion guard (#231)
+### `depth` / `errors` — an opt-in recursion guard for *callers* (#231, #200)
 
-- **`MAX_TREE_DEPTH = 256`**, the ceiling the crate's three tree-recursive
-  entries (`tree_to_free_mnd`, `free_mnd_to_tree`, `RecursiveNn::unroll`) check
-  before walking. Equal to `catgraph-syntax`'s `MAX_TERM_DEPTH`
-  ([#99](https://github.com/sustia-llc/catgraph/issues/99)), so the workspace has
-  one recursion ceiling.
 - **`tree_depth` / `free_mnd_depth`** — *iterative* depth measures (explicit
-  worklist), so reporting that a carrier is too deep never overflows on the way
-  to the report. **`guard_tree_depth` / `guard_free_mnd_depth`** are the checks;
-  **`DepthError::TreeDepthExceeded { depth, limit }`** the rejection.
-- Engineering, not a CDL surface: the guard rejects inputs that would abort the
-  process and changes nothing about the ones it accepts. It covers this crate's
-  own entries only — direct `Free::fold` / `Cofree::unfold` calls and the
-  carriers' recursive drop glue stay unguarded; since
-  [#222](https://github.com/sustia-llc/catgraph/issues/222) the carriers are
-  crate-owned, so every remaining item is fixable in-tree, tracked in
-  [#200](https://github.com/sustia-llc/catgraph/issues/200).
+  worklist), so measuring an arbitrarily deep carrier never overflows.
+- **`MAX_TREE_DEPTH = 256`** and **`guard_tree_depth` / `guard_free_mnd_depth`**
+  — a ready-made ceiling and its checks, with
+  **`DepthError::TreeDepthExceeded { depth, limit }`** the rejection. Equal to
+  `catgraph-syntax`'s `MAX_TERM_DEPTH`
+  ([#99](https://github.com/sustia-llc/catgraph/issues/99)), so the workspace has
+  one recursion ceiling by convention.
+- Engineering, not a CDL surface — and **opt-in since #200**: no entry in this
+  crate calls the guard, because no walk in this crate recurses. It is published
+  for a caller whose *own* code walks these carriers recursively (a hand-written
+  `match` walk, a `fold` algebra that recurses, a serializer). The `guard_*`
+  helpers borrow, so a rejected value stays yours.
 
 ### `architectures` — (co)algebra-as-architecture catalogue (CDL Appendix I / J)
 
@@ -164,9 +167,10 @@ behavioural tests only, with final-coalgebra equivalence tracked in
 | `MealyCell` (full RNN) | `Para(I → O × −)` coalgebra |
 | `MooreCell` | `Para(O × (I → −))` coalgebra |
 
-`RecursiveNn::unroll` is the only depth-recursive unroller of the five, so it is
-the only fallible one — it pre-flights the `depth` guard (#231). The other four
-are folds and `from_fn` state machines.
+All five unrollers are infallible. `RecursiveNn::unroll` was the only
+depth-recursive one and therefore the only fallible one between #231 and #200;
+its walk is an explicit heap worklist now. The other four are folds and
+`from_fn` state machines and never recursed.
 
 ### `endofunctor` — the shared functor substrate
 
@@ -205,11 +209,18 @@ are folds and `from_fn` state machines.
 ### `container` — polynomial-functor shape/position presentation (Abbott–Altenkirch–Ghani 2003, via CDL)
 
 - **`Container`** — equips an endofunctor witness with a `Shape` set, a per-shape
-  `arity`, and a `decompose` / `recompose` pair witnessing
-  `F(X) ≅ Σ_{s} X^{arity(s)}` in the finitary (`Vec`-of-contents) presentation.
+  `arity`, a `decompose` / `recompose` pair witnessing
+  `F(X) ≅ Σ_{s} X^{arity(s)}` in the finitary (`Vec`-of-contents) presentation,
+  and `contents`, the borrowing half of `decompose`.
   `ListEndo<A>` (`Shape = Option<A>`), `TreeEndo<A>` (`Shape = Either<A, ()>`),
-  and `GroupActionEndo<G>` (`Shape = G`) are the shipped instances; the
-  round-trip, arity-coherence, and `fmap`-coherence laws are machine-checked.
+  `GroupActionEndo<G>` (`Shape = G`) and `OptionWitness` (`Shape = bool`) are the
+  shipped instances; the round-trip, arity-coherence, `fmap`-coherence and
+  borrow-coherence laws are machine-checked.
+- It is also load-bearing for the carriers: `Free::fold`, `Cofree::unfold` and
+  the carriers' `==` / `{:?}` bound on it, because pulling a generic witness's
+  recursion slots out and putting results back is exactly what an
+  explicit-worklist walk needs and what `fmap` alone cannot do
+  ([#200](https://github.com/sustia-llc/catgraph/issues/200)).
 
 ### `hopf_fibration` (private)
 

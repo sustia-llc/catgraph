@@ -15,8 +15,8 @@
 //! Both carriers are **crate-owned** (also reachable through
 //! [`crate::endofunctor`], the substrate seam):
 //!
-//! - [`Free<F, A>`] — the inductive enum `Pure(A) | Suspend(F::Type<Box<Free>>)`.
-//!   The free monad `FreeMnd(F)(A)`.
+//! - [`Free<F, A>`] — the inductive `Pure(A) | Suspend(F::Type<Box<Free>>)`,
+//!   read through [`FreeView`]. The free monad `FreeMnd(F)(A)`.
 //! - [`Cofree<F, A>`] — the record `head :< F::Type<Box<Cofree>>`. The cofree
 //!   comonad `CofreeCmnd(F)(A)`.
 //!
@@ -54,27 +54,28 @@
 //! `catgraph_dl::free_monad::tree_endo::*` for downstream consumers, so the
 //! crate root surface stays focused on the categorical primitives.
 //!
-//! ## Recursion depth — what is guarded and what is not (#231 / #200)
+//! ## Recursion depth — closed, not bounded (#231 → #200)
 //!
-//! The tree carrier nests through `Box`, so every walk of it recurses, and a
-//! deep enough spine overflows the stack — an **abort**, not a catchable error.
-//! The two tree bijection helpers
-//! ([`tree_endo::tree_to_free_mnd`] / [`tree_endo::free_mnd_to_tree`]) therefore
-//! pre-flight [`crate::depth`]'s
-//! [`MAX_TREE_DEPTH`](crate::depth::MAX_TREE_DEPTH) and return
-//! [`DepthError`](crate::errors::DepthError) rather than recursing
-//! (issue [#231](https://github.com/sustia-llc/catgraph/issues/231), option 2 of
-//! [#200](https://github.com/sustia-llc/catgraph/issues/200)). The list helpers
-//! need no guard: they are loops.
+//! The tree carrier nests through `Box`, so a *recursive* walk of a deep enough
+//! spine overflows the stack — an **abort**, not a catchable error. #231
+//! bounded that with a pre-flight guard at this crate's three walker entries;
+//! [#200] closed it outright in the v0.14.0 window by making the walks
+//! themselves iterative.
 //!
-//! **The guard covers this crate's walker entries only.** Direct [`Free::fold`]
-//! / [`Cofree::unfold`] calls, the recursive drop glue of the `Box`-nested
-//! carriers (including a value the guard just *rejected*), the carriers' own
-//! capability-routed `==` / `{:?}` (they recurse over the spine too), and
-//! [`BinaryTree`](tree_endo::BinaryTree)'s derived `Clone`/`PartialEq`/`Debug`
-//! all still recurse unguarded — [`crate::depth`]'s **Scope** section is the
-//! canonical account of that residual surface, and [#200] stays open as its
-//! tracker.
+//! Everything that touches a spine is now an explicit heap worklist:
+//! [`Free::fold`], [`Cofree::unfold`], the two tree bijection helpers
+//! ([`tree_endo::tree_to_free_mnd`] / [`tree_endo::free_mnd_to_tree`], now
+//! **infallible** again), `RecursiveNn::unroll`, all three carriers' `Drop`,
+//! their `PartialEq` and `Debug`, and
+//! [`BinaryTree`](tree_endo::BinaryTree)'s `Clone`. The list helpers never
+//! needed it: they were already loops.
+//!
+//! The visible costs are the reshapes that a hand-written `Drop` forces —
+//! [`Free`] and [`BinaryTree`](tree_endo::BinaryTree) hold their cell privately
+//! and are matched through [`FreeView`] / [`tree_endo::TreeView`] rather than
+//! through public variants — and a [`Container`](crate::container::Container) bound on the
+//! recursion schemes, `==` and `{:?}`. [`crate::depth`] survives as a
+//! caller-facing measure and opt-in guard, for callers whose own code recurses.
 //!
 //! ## Equality / Debug (opt-in, via capability traits)
 //!
@@ -82,10 +83,12 @@
 //! derive would gate on the GAT projection `F::Type<Box<…>>` and overflow the
 //! trait solver, `error[E0275]`). Instead the instances are opt-in and route
 //! through the operation functor's
-//! [`EqFunctor::eq_type`](crate::endofunctor::EqFunctor::eq_type) /
-//! [`DebugFunctor::fmt_type`]
-//! capability. `ListEndo` / `TreeEndo` implement them next to their
-//! `HKT`/`Functor` impls (bounded `A: PartialEq` / `A: Debug`), as does the stock
+//! [`EqFunctor::eq_shape`](crate::endofunctor::EqFunctor::eq_shape) /
+//! [`DebugFunctor::fmt_shape`]
+//! capability, which decides the *shape* — constructor and labels — while the
+//! carrier walks the recursion slots itself. `ListEndo` / `TreeEndo` implement
+//! them next to their `HKT`/`Functor` impls (bounded `A: PartialEq` /
+//! `A: Debug`), as does the stock
 //! [`OptionWitness`](crate::endofunctor::OptionWitness). There is no `Eq`
 //! marker on either carrier: the capability is PartialEq-strength over the
 //! witness's own label slots (see
@@ -94,13 +97,15 @@
 //!
 //! ## Deliberate minimality of the carrier surface (#76 → #93 → #222)
 //!
-//! The carriers ship the recursion schemes and nothing else: [`Free`] is its two
-//! variants plus [`fold`](Free::fold); [`Cofree`] is
+//! The carriers ship the recursion schemes and nothing else: [`Free`] is its
+//! two cell shapes — reached through
+//! [`pure`](Free::pure)/[`suspend`](Free::suspend)/[`into_view`](Free::into_view)/[`as_view`](Free::as_view)
+//! since #200 — plus [`fold`](Free::fold); [`Cofree`] is
 //! [`new`](Cofree::new)/[`head`](Cofree::head)/[`tail`](Cofree::tail)/[`into_parts`](Cofree::into_parts)
 //! plus [`unfold`](Cofree::unfold); both get opt-in `PartialEq`/`Debug`. There
-//! is no `bind`/`map`/`lift` on `Free` (nor the `Free::pure` inherent — the
-//! unit is the public `Pure` variant, or
-//! [`FreeWitness`]'s [`Pure`](crate::endofunctor::Pure) impl), no
+//! is no `bind`/`map`/`lift` on `Free` (the unit is
+//! [`Free::pure`](Free::pure), which is also what
+//! [`FreeWitness`]'s [`Pure`](crate::endofunctor::Pure) impl calls), no
 //! `extract`/`extend`/`duplicate`/`CoMonad` on `Cofree`, no
 //! [`Functor`] impl on [`CofreeWitness`] (it existed upstream only as
 //! `CoMonad`'s supertrait), no `Monad` impl on
@@ -131,7 +136,7 @@ pub mod list_endo;
 pub mod tree_endo;
 
 pub use cofree::{Cofree, CofreeWitness};
-pub use free::{Free, FreeWitness};
+pub use free::{Free, FreeView, FreeWitness};
 
 // The endofunctor witnesses live in `crate::endofunctor`, the substrate seam
 // (issue #12); surfaced here so this module's consumers can name the bound the
@@ -142,18 +147,78 @@ use core::fmt;
 
 use crate::endofunctor::DebugFunctor;
 
-/// Formats an `F::Type<T>` through the witness's `fmt_type` — lets the carrier
-/// `Debug` impls hand a GAT projection to `debug_tuple`/`debug_struct` (which
-/// take `&dyn Debug`) without the projection bound whose E0275 hazard
-/// [`crate::endofunctor::EqFunctor`] documents.
-struct FmtType<'a, F: HKT, T>(&'a F::Type<T>);
+// ---------------------------------------------------------------------------
+// Shared `Debug` scaffolding for the iterative carrier renderings (#200)
+// ---------------------------------------------------------------------------
+//
+// The carriers render a spine **bottom-up**: each cell's text is built from its
+// children's already-built text, so no stack frame is spent per level. That
+// inverts the usual `Debug` flow — the witness is handed pre-rendered contents
+// rather than values to recurse into — and these three shims are what make the
+// inversion reuse `core::fmt`'s own machinery, so `{:?}` and `{:#?}` stay
+// byte-identical to the derive-shaped output they replaced. In particular a
+// pre-rendered multi-line string written through `debug_tuple`'s alternate-mode
+// pad adapter is re-indented line by line, exactly as a nested `{:#?}` would be.
 
-impl<F, T> fmt::Debug for FmtType<'_, F, T>
+/// Writes an already-rendered fragment verbatim, so it can be handed to
+/// `debug_tuple`/`debug_struct` as a field.
+pub(crate) struct Rendered(pub(crate) String);
+
+impl fmt::Debug for Rendered {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Renders `value` to a `String`, preserving the caller's alternate flag.
+pub(crate) fn render(alternate: bool, value: &dyn fmt::Debug) -> String {
+    if alternate {
+        format!("{value:#?}")
+    } else {
+        format!("{value:?}")
+    }
+}
+
+/// A one-field tuple-struct rendering: `Name(field)`, and the pretty form under
+/// `{:#?}`. Exists so the carriers get `core::fmt`'s exact layout without
+/// needing a `Formatter` of their own.
+pub(crate) struct DebugTuple<'a, T: ?Sized>(pub(crate) &'static str, pub(crate) &'a T);
+
+impl<T: fmt::Debug + ?Sized> fmt::Debug for DebugTuple<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple(self.0).field(&self.1).finish()
+    }
+}
+
+/// An `n`-field tuple-struct rendering: `Name(f0, f1, …)`, and the pretty form
+/// under `{:#?}`. The `n`-ary sibling of [`DebugTuple`], for a carrier whose
+/// fields are already erased to `&dyn Debug`.
+pub(crate) struct DebugFields<'a>(pub(crate) &'static str, pub(crate) &'a [&'a dyn fmt::Debug]);
+
+impl fmt::Debug for DebugFields<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut tuple = f.debug_tuple(self.0);
+        for field in self.1 {
+            tuple.field(field);
+        }
+        tuple.finish()
+    }
+}
+
+/// Formats an `F::Type<T>` through the witness's `fmt_shape`, with the
+/// recursion slots supplied pre-rendered — the seam that keeps the carrier's
+/// `Debug` off the stack, and that avoids the projection bound whose E0275
+/// hazard [`crate::endofunctor::EqFunctor`] documents.
+pub(crate) struct FmtShape<'a, F: HKT, T>(
+    pub(crate) &'a F::Type<T>,
+    pub(crate) &'a [&'a dyn fmt::Debug],
+);
+
+impl<F, T> fmt::Debug for FmtShape<'_, F, T>
 where
     F: DebugFunctor,
-    T: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        F::fmt_type(self.0, f)
+        F::fmt_shape(self.0, f, self.1)
     }
 }

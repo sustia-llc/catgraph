@@ -11,6 +11,7 @@
 
 use core::fmt;
 
+use crate::container::Container;
 use crate::endofunctor::{DebugFunctor, EqFunctor, Functor, HKT, Pure};
 
 /// Zero-sized witness for the `Option<T>` type constructor.
@@ -46,14 +47,65 @@ impl Pure<Self> for OptionWitness {
 }
 
 impl EqFunctor for OptionWitness {
-    fn eq_type<T: PartialEq>(a: &Option<T>, b: &Option<T>) -> bool {
-        a == b
+    fn eq_shape<T>(a: &Option<T>, b: &Option<T>) -> bool {
+        // No label of its own: the shape is just which summand.
+        a.is_some() == b.is_some()
     }
 }
 
 impl DebugFunctor for OptionWitness {
-    fn fmt_type<T: fmt::Debug>(fa: &Option<T>, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(fa, f)
+    fn fmt_shape<T>(
+        fa: &Option<T>,
+        f: &mut fmt::Formatter<'_>,
+        contents: &[&dyn fmt::Debug],
+    ) -> fmt::Result {
+        match (fa, contents) {
+            (None, _) => f.write_str("None"),
+            (Some(_), [inner]) => f.debug_tuple("Some").field(inner).finish(),
+            // Unreachable for contents taken from `fa` (arity 1); a formatting
+            // error rather than a panic if a caller ever supplied otherwise.
+            (Some(_), _) => Err(fmt::Error),
+        }
+    }
+}
+
+/// Container presentation of `1 + −` (Abbott–Altenkirch–Ghani 2003, via CDL).
+/// Shapes are the two summands, carried as a `bool` (`is_some`): `false` is the
+/// unit summand (arity 0) and `true` the singleton (arity 1 — the one recursive
+/// slot).
+///
+/// Added in the v0.14.0 window because
+/// [`Cofree::unfold`](crate::free_monad::Cofree::unfold) became an
+/// explicit-worklist walk over [`Container`] (issue
+/// [#200](https://github.com/sustia-llc/catgraph/issues/200)): without this
+/// impl the bounded-stream carrier `Cofree<OptionWitness, O>` — the whole
+/// reason this witness exists — would have lost its generator.
+impl Container for OptionWitness {
+    type Shape = bool;
+
+    fn arity(shape: &Self::Shape) -> usize {
+        usize::from(*shape)
+    }
+
+    fn decompose<X>(fx: Option<X>) -> (Self::Shape, Vec<X>) {
+        match fx {
+            None => (false, Vec::new()),
+            Some(x) => (true, vec![x]),
+        }
+    }
+
+    fn recompose<X>(shape: Self::Shape, contents: Vec<X>) -> Option<Option<X>> {
+        if shape {
+            // Arity 1: `TryFrom<Vec<X>> for [X; 1]` rejects any other length.
+            let [x] = <[X; 1]>::try_from(contents).ok()?;
+            Some(Some(x))
+        } else {
+            contents.is_empty().then_some(None)
+        }
+    }
+
+    fn contents<X>(fx: &Option<X>) -> Vec<&X> {
+        fx.as_ref().into_iter().collect()
     }
 }
 
