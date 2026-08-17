@@ -34,7 +34,10 @@ and `ContentKey` under the opt-in `serde` feature, #249/#255), carried no
 magnitude-facing change.
 Workspace-wide versioning supersedes the pre-reboot per-crate lineage; the full
 BV 2025 / Leinster 2013 / LS 2017 / Leinster 2008 math stack was migrated intact
-onto the DeepCausality substrate in reboot Phase 3 (#8).
+in reboot Phase 3 (#8). That migration landed on the then-current DeepCausality
+substrate, which has since been divested entirely (#218, completed at #222) —
+the algebraic layer under this crate is catgraph's own, and no
+`deep_causality_*` crate remains anywhere in the dependency graph.
 
 ## What
 
@@ -192,8 +195,10 @@ primitives (Leinster 2013 §1.1 / Def 2.1.2 / Prop 2.1.3), the Prop 3.14
 magnitude-homology Euler-characteristic identity (LS 2017 §3 chain complex +
 custom Storjohann §7 SNF over `MatR<Q>`), and Leinster 2008 Cor 1.5 integer-exact
 Möbius (`mobius_function_via_chains_exact` over `PosetCategory<N>` + multi-prime
-CRT SNF lift) — was migrated intact onto the DeepCausality substrate in **reboot
-Phase 3** (#8). Workspace-wide releases since:
+CRT SNF lift) — was migrated intact in **reboot Phase 3** (#8), onto what was
+then the DeepCausality substrate. That substrate is gone: #218 (completed at
+#222) made the whole algebraic layer catgraph's own, `Rig`/`Zero`/`One`
+included. The math above did not move with it. Workspace-wide releases since:
 
 - ✅ **`v0.1.0`** (2026-07-01, #19–#23): BTV 2021 Yoneda semantic embedding
   (`yoneda` — representable copresheaf `L(x, −)` + asymmetric semantic

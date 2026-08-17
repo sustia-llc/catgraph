@@ -8,10 +8,11 @@ applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions
 > have landed. The algebraic substrate is entirely catgraph's own (#218,
 > completed at #222) — the `Rig` semiring and its `Zero` / `One` identities
 > live in `catgraph-applied`, the endofunctor / `Free` / `Cofree` substrate in
-> `catgraph-dl`, and the value-level Arrow algebra in `catgraph-syntax` (the
-> latter two derived from `deep_causality_haft` 0.4.2, MIT; notice in
-> `THIRD-PARTY.md` and the defining files) — with zero external algebraic
-> dependencies and `nalgebra`
+> `catgraph-dl`, and the value-level Arrow algebra in `catgraph-syntax`. No
+> `deep_causality_*` crate is a dependency anywhere (CI-guarded); the API shape
+> of the latter two originated as a port from `deep_causality_haft` 0.4.2, whose
+> MIT notice is therefore retained in `THIRD-PARTY.md` and the defining files.
+> Zero external algebraic dependencies, with `nalgebra`
 > kept optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.14.0)
 > and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, the Arrow
 > presentation frontend, #5): the S1–S5 milestone surface is **complete**
