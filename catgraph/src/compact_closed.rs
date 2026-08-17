@@ -173,7 +173,7 @@ where
     // Apply deinterleave to get [] → [z₁,...,zₙ,z₁,...,zₙ] (tensor)
     let paired_types: Vec<Lambda> = types.iter().flat_map(|&z| [z, z]).collect();
     let perm = deinterleave_permutation(n);
-    let shuffle = FrobeniusMorphism::from_permutation(perm, &paired_types, true)
+    let shuffle = FrobeniusMorphism::from_permutation_on_domain(perm, &paired_types)
         .expect("deinterleave permutation is valid for paired types");
     result
         .compose(shuffle)
@@ -208,7 +208,7 @@ where
     let tensor_types: Vec<Lambda> = types.iter().chain(types.iter()).copied().collect();
     // Interleave: inverse of deinterleave, maps tensor → paired
     let perm = deinterleave_permutation(n).inv();
-    let unshuffle = FrobeniusMorphism::from_permutation(perm, &tensor_types, true)
+    let unshuffle = FrobeniusMorphism::from_permutation_on_domain(perm, &tensor_types)
         .expect("interleave permutation is valid for tensor types");
     let mut result = unshuffle;
     result

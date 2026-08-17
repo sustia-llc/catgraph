@@ -256,6 +256,46 @@ impl<G: PropSignature> PropExpr<G> {
     pub fn arities_fit(&self) -> bool {
         self.checked_arities().is_some()
     }
+
+    /// The braiding network shared by both #258 constructors.
+    ///
+    /// Split out of the trait impl rather than duplicated, so that
+    /// `from_permutation_on_domain` and `from_permutation_on_codomain` cannot
+    /// drift apart on a carrier where they are required to coincide. See
+    /// [`SymmetricMonoidalMorphism::from_permutation_on_domain`] for the
+    /// convention and the S-functor square.
+    fn braiding_expr(p: &Permutation, arity: usize) -> Result<Self, CatgraphError> {
+        let n = arity;
+        if p.len() != n {
+            return Err(CatgraphError::Composition {
+                message: format!(
+                    "PropExpr::from_permutation: permutation has len {} but {n} types provided",
+                    p.len(),
+                ),
+            });
+        }
+        // Input-indexed: the wire at position i is routed to position perm[i].
+        let perm: Vec<usize> = (0..n).map(|i| p.apply(i)).collect();
+        let mut expr = PropExpr::Identity(n);
+        for t in adjacent_swaps(&perm) {
+            // A swap at t exchanges positions t and t+1 of an n-element array,
+            // so t + 1 < n and the right-hand identity has width n - t - 2 ≥ 0.
+            // Both subtractions are `checked_` so that a future change to
+            // `adjacent_swaps` can only surface as a loud panic on a stated
+            // invariant, never as a wrapped (release) or differently-panicking
+            // (debug) width — the arithmetic itself cannot be slipped past.
+            let right = n
+                .checked_sub(t)
+                .and_then(|rest| rest.checked_sub(2))
+                .expect("invariant: adjacent_swaps only emits t with t + 1 < n, so t + 2 <= n");
+            let layer = Free::<G>::tensor(
+                Free::<G>::tensor(Free::identity(t), Free::braid(1, 1)),
+                Free::identity(right),
+            );
+            expr = Free::<G>::compose(expr, layer)?;
+        }
+        Ok(expr)
+    }
 }
 
 /// Marker type for the *prop itself* (the category). Values of `Prop<G>` are
@@ -425,23 +465,46 @@ impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
     ///
     /// `types` contributes only its length: objects of a prop are natural
     /// numbers (encoded `Vec<()>`), so there is no color to place on one side
-    /// or the other. `types_as_on_domain` is accordingly ignored, matching
-    /// every single-sorted impl in this crate ([`MatR`](crate::mat::MatR),
-    /// [`MatKron`](crate::mat_kron::MatKron)); the result is an endomorphism
-    /// of `n`, so both sides carry the same object either way.
+    /// or the other. The two #258 constructors —
+    /// [`from_permutation_on_domain`](SymmetricMonoidalMorphism::from_permutation_on_domain)
+    /// and
+    /// [`from_permutation_on_codomain`](SymmetricMonoidalMorphism::from_permutation_on_codomain)
+    /// — therefore return the same morphism, and both route through this
+    /// helper. Same story on every single-sorted carrier in this crate
+    /// ([`MatR`](crate::mat::MatR), [`MatKron`](crate::mat_kron::MatKron)).
     ///
-    /// **This is not the whole workspace's convention, and the difference is a
-    /// direction, not an arity.** The core crate's cospan family *honours* the
-    /// flag as an inversion — `Cospan::from_permutation` computes
-    /// `if types_as_on_domain { p.inv() } else { p }` so that
-    /// `from(p₁) ; from(p₂) = from(p₁ ; p₂)` (`catgraph/src/cospan.rs:501`), and
-    /// `Span` and `FrobeniusMorphism` follow it. So generic code calling
-    /// `M::from_permutation(p, types, true)` gets `p` on `PropExpr`/`MatR` and
-    /// `p⁻¹` on `Cospan`/`Corel`. Ignoring the flag here is forced rather than
-    /// chosen: `MatR` ignores it, and the two must agree for the `S`-functor
-    /// square `sfg_to_mat(from_permutation(p)) = MatR::from_permutation(p)` to
-    /// hold — which the exhaustive oracle checks. Do not "fix" this impl to
-    /// honour the flag without moving `MatR` with it.
+    /// **This is the whole workspace's convention.** The wiring built here —
+    /// domain wire `i` routed to codomain wire `p.apply(i)` — is the one
+    /// `Cospan`, `Span`, `Corel` and `FrobeniusMorphism` build too.
+    ///
+    /// ⚠ The pre-#258 version of this comment said the opposite: that
+    /// `M::from_permutation(p, types, true)` gave "`p` on `PropExpr`/`MatR` and
+    /// `p⁻¹` on `Cospan`/`Corel`". That was **wrong**, and worth recording
+    /// because it is an easy mistake to re-make. It read the `p.inv()` in
+    /// `Cospan`'s builder as the realized permutation, but that `p.inv()` is
+    /// the cospan's *right leg index vector*: connectivity in a cospan runs
+    /// through the apex, so domain `i` meets codomain `k` when
+    /// `left[i] == right[k]`, i.e. when `k == p.apply(i)`. The inversion in the
+    /// leg is what keeps the wiring un-inverted. Independent check on
+    /// `p = rotation_left(3, 1)` over `['A','B','C']`: `Cospan`'s codomain is
+    /// `['C','A','B']`, so the label at domain position 0 (`'A'`) sits at
+    /// codomain position 1 — and `p.apply(0) == 1`.
+    ///
+    /// So the `S`-functor square
+    /// `sfg_to_mat(from_permutation_*(p)) == MatR::from_permutation_*(p)`
+    /// (F&S Thm 5.53) holds on **both** named methods, and it holds because
+    /// both carriers agree with the cospan family rather than by deviating
+    /// together. The exhaustive `n = 3` / `n = 4` oracle in `tests/prop.rs`
+    /// checks it against a literal hand-written matrix on the `MatR` side, so a
+    /// symmetric drift cannot pass it.
+    ///
+    /// **Construction cost.** Those layers are `O(n²)` *deep*, not merely
+    /// `O(n²)` many: the result is a left-nested `Compose` spine, and every
+    /// consumer walks it recursively (`sfg_to_mat`, `content_of`'s builder, and
+    /// the derived `Drop`/`PartialEq`/`Hash`). A few hundred wires is enough to
+    /// overflow a default stack. This is the same shape `permutation_sfg`
+    /// already produces, and bounding arity magnitude remains the caller's
+    /// obligation ([#197](https://github.com/sustia-llc/catgraph/issues/197)).
     ///
     /// [`SignalFlowGraph`]: crate::sfg::SignalFlowGraph
     /// [#252]: https://github.com/sustia-llc/catgraph/issues/252
@@ -454,41 +517,20 @@ impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
     /// [`CatgraphError::CompositionSizeMismatch`], but every layer is built at
     /// width `n` against a running term of width `n`, so it cannot occur; the
     /// `?` mirrors `permutation_sfg`.
-    fn from_permutation(
-        p: Permutation,
-        types: &[()],
-        _types_as_on_domain: bool,
-    ) -> Result<Self, CatgraphError> {
-        let n = types.len();
-        if p.len() != n {
-            return Err(CatgraphError::Composition {
-                message: format!(
-                    "PropExpr::from_permutation: permutation has len {} but {n} types provided",
-                    p.len(),
-                ),
-            });
-        }
-        // Input-indexed: the wire at position i is routed to position perm[i].
-        let perm: Vec<usize> = (0..n).map(|i| p.apply(i)).collect();
-        let mut expr = PropExpr::Identity(n);
-        for t in adjacent_swaps(&perm) {
-            // A swap at t exchanges positions t and t+1 of an n-element array,
-            // so t + 1 < n and the right-hand identity has width n - t - 2 ≥ 0.
-            // Both subtractions are `checked_` so that a future change to
-            // `adjacent_swaps` can only surface as a loud panic on a stated
-            // invariant, never as a wrapped (release) or differently-panicking
-            // (debug) width — the arithmetic itself cannot be slipped past.
-            let right = n
-                .checked_sub(t)
-                .and_then(|rest| rest.checked_sub(2))
-                .expect("invariant: adjacent_swaps only emits t with t + 1 < n, so t + 2 <= n");
-            let layer = Free::<G>::tensor(
-                Free::<G>::tensor(Free::identity(t), Free::braid(1, 1)),
-                Free::identity(right),
-            );
-            expr = Free::<G>::compose(expr, layer)?;
-        }
-        Ok(expr)
+    fn from_permutation_on_domain(p: Permutation, types: &[()]) -> Result<Self, CatgraphError> {
+        Self::braiding_expr(&p, types.len())
+    }
+
+    /// The same morphism as
+    /// [`from_permutation_on_domain`](SymmetricMonoidalMorphism::from_permutation_on_domain)
+    /// — see there for why the two coincide on a single-sorted carrier, and for
+    /// the S-functor square.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::Composition`] if `p.len() != types.len()`.
+    fn from_permutation_on_codomain(p: Permutation, types: &[()]) -> Result<Self, CatgraphError> {
+        Self::braiding_expr(&p, types.len())
     }
 
     /// Permute the wires on one side of `self`, in place: postcompose a
@@ -507,11 +549,11 @@ impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
     /// `S(f).matmul(S(g))`, so `Compose(_, b)` is right-multiplication by `b`
     /// and `Compose(b, _)` is left-multiplication by it. With
     /// `P = MatR::permutation_matrix(p)` — exactly what
-    /// [`from_permutation`](SymmetricMonoidalMorphism::from_permutation)
+    /// [`from_permutation_on_domain`](SymmetricMonoidalMorphism::from_permutation_on_domain)
     /// realizes under `S` — that reads:
     ///
-    /// - **codomain:** `self ; from_permutation(p)` (`self · P`)
-    /// - **domain:** `from_permutation(p.inv()) ; self` (`Pᵀ · self`)
+    /// - **codomain:** `self ; from_permutation_on_domain(p)` (`self · P`)
+    /// - **domain:** `from_permutation_on_domain(p.inv()) ; self` (`Pᵀ · self`)
     ///
     /// The domain side takes `p.inv()` because `Pᵀ = P⁻¹` for a permutation
     /// matrix, and `permutation_matrix` is the *only* thing this impl can
@@ -521,20 +563,18 @@ impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
     /// are the same matrix. **The two sides are therefore not symmetric**, and
     /// passing `p` on both would silently transpose one of them.
     ///
-    /// The inversion is applied to the *permutation*, never to
-    /// `types_as_on_domain`:
-    /// [`from_permutation`](SymmetricMonoidalMorphism::from_permutation)
-    /// deliberately ignores that flag so that it agrees with `MatR`, and the
-    /// `S`-functor square depends on that agreement. A constant is passed for
-    /// it below to keep the flag visibly inert.
+    /// The inversion is applied to the *permutation*, and since #258 that is
+    /// the only place it could go: the direction flag is gone, and the two
+    /// named constructors coincide on this single-sorted carrier, so neither
+    /// of them can produce `p⁻¹` from `p`.
     ///
     /// # Cost
     ///
     /// One
-    /// [`from_permutation`](SymmetricMonoidalMorphism::from_permutation)
+    /// [`from_permutation_on_domain`](SymmetricMonoidalMorphism::from_permutation_on_domain)
     /// network per call: `O(n²)` braid layers for `n` wires on the permuted
     /// side. Those layers are `O(n²)` **deep**, not merely `O(n²)` many — the
-    /// same spine hazard `from_permutation` documents, since the layers form a
+    /// same spine hazard that constructor documents, since the layers form a
     /// left-nested `Compose` spine that every consumer walks recursively
     /// (`sfg_to_mat`, `content_of`'s builder, and the derived `Drop` /
     /// `PartialEq` / `Hash`). A few hundred wires is enough to overflow a
@@ -573,16 +613,18 @@ impl<G: PropSignature> SymmetricMonoidalMorphism<()> for PropExpr<G> {
             return;
         }
         // Codomain side postcomposes `P`; domain side precomposes `Pᵀ = P⁻¹`,
-        // which is `from_permutation(p.inv())` — see the doc comment. The
-        // inversion has to be spelled out here: `from_permutation` ignores
-        // `types_as_on_domain`, so a constant is passed for it.
+        // which is `from_permutation_on_domain(p.inv())` — see the doc comment.
+        // The inversion has to be spelled out here: the two named constructors
+        // coincide on this carrier, so neither of them supplies it.
         let perm = if of_codomain { p.clone() } else { p.inv() };
         let types = as_object(n);
         let braid: PropExpr<G> =
-            <Self as SymmetricMonoidalMorphism<()>>::from_permutation(perm, &types, false).expect(
-                "invariant: from_permutation's only error is a p.len() != types.len() mismatch, \
-                 and p.len() == n == types.len() was just checked (p.inv() preserves length)",
-            );
+            <Self as SymmetricMonoidalMorphism<()>>::from_permutation_on_domain(perm, &types)
+                .expect(
+                    "invariant: from_permutation_on_domain's only error is a \
+                     p.len() != types.len() mismatch, and p.len() == n == types.len() was just \
+                     checked (p.inv() preserves length)",
+                );
         let old = std::mem::replace(self, PropExpr::Identity(0));
         *self = if of_codomain {
             PropExpr::Compose(Box::new(old), Box::new(braid))

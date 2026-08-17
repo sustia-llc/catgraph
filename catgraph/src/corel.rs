@@ -343,13 +343,20 @@ impl<Lambda> crate::monoidal::SymmetricMonoidalMorphism<Lambda> for Corel<Lambda
 where
     Lambda: Sized + Eq + Copy + Debug,
 {
-    fn from_permutation(
+    fn from_permutation_on_domain(
         p: permutations::Permutation,
         types: &[Lambda],
-        types_as_on_domain: bool,
     ) -> Result<Self, CatgraphError> {
-        // Cospan::from_permutation on an n-element set produces a jointly-surjective cospan.
-        Cospan::<Lambda>::from_permutation(p, types, types_as_on_domain).map(Self::new_unchecked)
+        // Cospan's permutation builders on an n-element set produce a
+        // jointly-surjective cospan, so the Corel invariant holds by construction.
+        Cospan::<Lambda>::from_permutation_on_domain(p, types).map(Self::new_unchecked)
+    }
+
+    fn from_permutation_on_codomain(
+        p: permutations::Permutation,
+        types: &[Lambda],
+    ) -> Result<Self, CatgraphError> {
+        Cospan::<Lambda>::from_permutation_on_codomain(p, types).map(Self::new_unchecked)
     }
 
     fn permute_side(&mut self, p: &permutations::Permutation, of_codomain: bool) {

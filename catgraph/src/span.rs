@@ -382,44 +382,104 @@ impl<Lambda> SymmetricMonoidalMorphism<Lambda> for Span<Lambda>
 where
     Lambda: Sized + Eq + Copy + Debug,
 {
+    /// Splices the braiding for `p` onto the codomain or the braiding for `p⁻¹`
+    /// onto the domain — see the trait's contract.
+    ///
+    /// A `Span` carries its wiring and its labels in *different* fields, which
+    /// is what makes this the one impl that could be — and was — incoherent
+    /// with itself. The apex pairs are the wiring, so moving the wire at slot
+    /// `i` to slot `p.apply(i)` is `*v = p.apply(*v)` on the relevant
+    /// component. `left`/`right` are label *words*, and a label has to travel
+    /// with its wire, so the same move reads `new[k] == old[p.inv().apply(k)]`
+    /// on them: `in_place_permute(word, &p.inv())`. The two are inverse to each
+    /// other by construction, which is exactly the identity
+    /// [`assert_valid`](Span::assert_valid) checks.
+    ///
+    /// ⚠ **Breaking at #258.** This used to apply `p` to *both*, which is not
+    /// two conventions but a broken span: the pair said the wire had moved one
+    /// way and the word said its label had moved the other, so
+    /// `Span::identity(&['a','b','c']).permute_side(&rotation_left(3,1), true)`
+    /// wired domain `'a'` to a codomain slot labelled `'c'`. Since workstream A
+    /// moved `assert_valid` inside a `debug_assert!`, a release build accepted
+    /// it silently.
     fn permute_side(&mut self, p: &permutations::Permutation, of_codomain: bool) {
+        let p_inv = p.inv();
         if of_codomain {
             self.is_right_id = false;
-            in_place_permute(&mut self.right, p);
+            in_place_permute(&mut self.right, &p_inv);
             self.middle.iter_mut().for_each(|(_, v2)| {
                 *v2 = p.apply(*v2);
             });
         } else {
             self.is_left_id = false;
-            in_place_permute(&mut self.left, p);
+            in_place_permute(&mut self.left, &p_inv);
             self.middle.iter_mut().for_each(|(v1, _)| {
                 *v1 = p.apply(*v1);
             });
         }
     }
 
-    fn from_permutation(
+    /// `domain() == types`, `codomain()[k] == types[p.inv().apply(k)]`.
+    ///
+    /// Apex element `idx` links domain wire `idx` to codomain wire
+    /// `p.apply(idx)` — the wiring the trait specifies.
+    fn from_permutation_on_domain(
         p: permutations::Permutation,
         types: &[Lambda],
-        types_as_on_domain: bool,
     ) -> Result<Self, CatgraphError> {
-        if types_as_on_domain {
-            Ok(Self {
-                left: types.to_vec(),
-                middle: (0..types.len()).map(|idx| (idx, p.apply(idx))).collect(),
-                right: p.inv().permute(types),
-                is_left_id: true,
-                is_right_id: false,
-            })
-        } else {
-            Ok(Self {
-                left: p.inv().permute(types),
-                middle: (0..types.len()).map(|idx| (p.apply(idx), idx)).collect(),
-                right: types.to_vec(),
-                is_left_id: false,
-                is_right_id: true,
-            })
+        if p.len() != types.len() {
+            return Err(CatgraphError::CompositionSizeMismatch {
+                expected: types.len(),
+                actual: p.len(),
+            });
         }
+        Ok(Self {
+            left: types.to_vec(),
+            middle: (0..types.len()).map(|idx| (idx, p.apply(idx))).collect(),
+            right: p.inv().permute(types),
+            is_left_id: true,
+            is_right_id: false,
+        })
+    }
+
+    /// `codomain() == types`, `domain()[i] == types[p.apply(i)]`.
+    ///
+    /// # ⚠ Behaviour change at #258
+    ///
+    /// The pre-#258 `from_permutation(p, types, /* types_as_on_domain */ false)`
+    /// built `left: p.inv().permute(types)` with apex pairs
+    /// `(p.apply(idx), idx)`, i.e. it linked domain wire `j` to codomain wire
+    /// `p.inv().apply(j)`. That realized **`p⁻¹`**, not `p`, and put the domain
+    /// labels in the matching inverted order — so it disagreed with
+    /// [`Cospan::from_permutation_on_codomain`](crate::cospan::Cospan) on both
+    /// the wiring *and* the domain object for every non-involutive `p`. The
+    /// `types_as_on_domain = true` branch was always correct; only this one
+    /// drifted, and the two in-crate tests covering it asserted only
+    /// `codomain()`, `domain().len()`, and label agreement across the apex —
+    /// all of which an inverted wiring satisfies.
+    ///
+    /// The identity flags moved with the wiring, and for the same reason: they
+    /// describe the two *apex leg maps*, not the label vectors. The apex pairs
+    /// are now `(idx, p.apply(idx))`, so the left leg is the identity map and
+    /// the right leg is `p` — the mirror image of what the old pairs
+    /// `(p.apply(idx), idx)` gave.
+    fn from_permutation_on_codomain(
+        p: permutations::Permutation,
+        types: &[Lambda],
+    ) -> Result<Self, CatgraphError> {
+        if p.len() != types.len() {
+            return Err(CatgraphError::CompositionSizeMismatch {
+                expected: types.len(),
+                actual: p.len(),
+            });
+        }
+        Ok(Self {
+            left: p.permute(types),
+            middle: (0..types.len()).map(|idx| (idx, p.apply(idx))).collect(),
+            right: types.to_vec(),
+            is_left_id: true,
+            is_right_id: false,
+        })
     }
 }
 
@@ -1148,7 +1208,7 @@ mod test {
 
         let types = vec!['a', 'b', 'c'];
         let id_perm = Permutation::identity(3);
-        let span = Span::from_permutation(id_perm, &types, true).unwrap();
+        let span = Span::from_permutation_on_domain(id_perm, &types).unwrap();
 
         assert_eq!(span.domain(), types);
         assert_eq!(span.codomain(), types);
@@ -1164,7 +1224,7 @@ mod test {
 
         let types = vec!['x', 'y'];
         let id_perm = Permutation::identity(2);
-        let span = Span::from_permutation(id_perm, &types, false).unwrap();
+        let span = Span::from_permutation_on_codomain(id_perm, &types).unwrap();
 
         assert_eq!(span.domain(), types);
         assert_eq!(span.codomain(), types);
@@ -1172,6 +1232,13 @@ mod test {
         assert_eq!(span.middle_to_right(), vec![0, 1]);
     }
 
+    /// `on_domain` on a hand-computed fixture — every field, not just the
+    /// `types` side.
+    ///
+    /// `rotation_left(3, 1)` has `p(i) = (i+1) % 3` and `p⁻¹(k) = (k+2) % 3`,
+    /// so with `types` on the domain the contract forces
+    /// `codomain[k] = types[p⁻¹(k)] = ['c','a','b']` and the apex must link
+    /// domain wire `i` to codomain wire `p(i)`.
     #[test]
     fn span_from_permutation_rotation_domain() {
         use crate::monoidal::SymmetricMonoidalMorphism;
@@ -1179,20 +1246,25 @@ mod test {
 
         let types = vec!['a', 'b', 'c'];
         let rot = Permutation::rotation_left(3, 1);
-        let span = Span::from_permutation(rot, &types, true).unwrap();
+        let span = Span::from_permutation_on_domain(rot, &types).unwrap();
 
-        // types_as_on_domain=true: left=types, right=permuted types
         assert_eq!(span.domain(), vec!['a', 'b', 'c']);
-        // rotation_left(3,1) sends 0->1, 1->2, 2->0
-        // permute(types) reorders types by where each index maps
-        assert_eq!(span.codomain().len(), 3);
-        // middle maps each idx to rot.apply(idx)
+        assert_eq!(span.codomain(), vec!['c', 'a', 'b']);
+        // Wiring, spelled out: apex pair k links domain k to codomain (k+1)%3.
+        assert_eq!(span.middle_pairs(), &[(0, 1), (1, 2), (2, 0)]);
         for (left_idx, right_idx) in span.middle.iter().copied() {
-            // Types must match across the middle
             assert_eq!(span.left[left_idx], span.right[right_idx]);
         }
     }
 
+    /// `on_codomain` on the same fixture — the #258 regression pin.
+    ///
+    /// With `types` on the codomain the contract forces
+    /// `domain[i] = types[p(i)] = ['b','c','a']`, and the wiring is still
+    /// `i ↦ p(i)`. The pre-#258 body produced `domain = ['c','a','b']` and
+    /// pairs `[(1,0),(2,1),(0,2)]`, i.e. it realized `p⁻¹`. Both of the old
+    /// assertions here — `codomain()` and label agreement across the apex —
+    /// are satisfied by that wrong answer, which is why it survived.
     #[test]
     fn span_from_permutation_rotation_codomain() {
         use crate::monoidal::SymmetricMonoidalMorphism;
@@ -1200,14 +1272,48 @@ mod test {
 
         let types = vec!['a', 'b', 'c'];
         let rot = Permutation::rotation_left(3, 1);
-        let span = Span::from_permutation(rot, &types, false).unwrap();
+        let span = Span::from_permutation_on_codomain(rot, &types).unwrap();
 
-        // types_as_on_domain=false: right=types, left=permuted types
         assert_eq!(span.codomain(), vec!['a', 'b', 'c']);
-        assert_eq!(span.domain().len(), 3);
-        // middle maps (rot.apply(idx), idx)
+        assert_eq!(
+            span.domain(),
+            vec!['b', 'c', 'a'],
+            "domain[i] must be types[p(i)]; the pre-#258 body gave types[p.inv()(i)]"
+        );
+        assert_eq!(
+            span.middle_pairs(),
+            &[(0, 1), (1, 2), (2, 0)],
+            "wiring must be i -> p(i); the pre-#258 body wired i -> p.inv()(i)"
+        );
         for (left_idx, right_idx) in span.middle.iter().copied() {
             assert_eq!(span.left[left_idx], span.right[right_idx]);
+        }
+    }
+
+    /// Both constructors of #258 build the *same* underlying span, differing
+    /// only in the labels — so relabelling one gives the other exactly.
+    ///
+    /// Anchored independently of either body: `p.permute(types)` is computed
+    /// here, and the two sides come from two different functions.
+    #[test]
+    fn span_from_permutation_relabelling_law() {
+        use crate::monoidal::SymmetricMonoidalMorphism;
+        use crate::utils::rand_perm;
+        use rand::SeedableRng;
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0x258);
+        for n in 2..7usize {
+            let types: Vec<usize> = (0..n).map(|i| i + 500).collect();
+            let p = rand_perm(n, n * 2, &mut rng);
+            let on_cod = Span::from_permutation_on_codomain(p.clone(), &types).unwrap();
+            let on_dom = Span::from_permutation_on_domain(p.clone(), &p.permute(&types)).unwrap();
+            assert_eq!(on_cod.domain(), on_dom.domain(), "n={n} p={p:?}");
+            assert_eq!(on_cod.codomain(), on_dom.codomain(), "n={n} p={p:?}");
+            assert_eq!(
+                on_cod.middle_pairs(),
+                on_dom.middle_pairs(),
+                "n={n} p={p:?}"
+            );
         }
     }
 }

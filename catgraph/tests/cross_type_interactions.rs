@@ -157,8 +157,8 @@ fn cospan_from_permutation_structure() {
     // Permutation (0->1, 1->2, 2->0): a 3-cycle (rotation left by 1).
     let p = Permutation::rotation_left(3, 1);
 
-    // types_as_on_domain = true: left is identity, right is permuted.
-    let c_dom = Cospan::<char>::from_permutation(p.clone(), types, true).unwrap();
+    // `types` on the domain: left is identity, right is permuted.
+    let c_dom = Cospan::<char>::from_permutation_on_domain(p.clone(), types).unwrap();
 
     // Middle should equal the types (the shared set).
     assert_eq!(c_dom.middle(), types, "middle should equal the type labels");
@@ -167,7 +167,7 @@ fn cospan_from_permutation_structure() {
     assert_eq!(
         c_dom.left_to_middle(),
         &[0, 1, 2],
-        "left leg should be identity when types_as_on_domain=true"
+        "left leg should be identity for from_permutation_on_domain"
     );
     assert!(
         c_dom.is_left_identity(),
@@ -189,12 +189,12 @@ fn cospan_from_permutation_structure() {
     // right = [2, 0, 1] => middle[2]='C', middle[0]='A', middle[1]='B'
     assert_eq!(c_dom.codomain(), vec!['C', 'A', 'B']);
 
-    // types_as_on_domain = false: right is identity, left is permuted.
-    let c_cod = Cospan::<char>::from_permutation(p, types, false).unwrap();
+    // `types` on the codomain: right is identity, left is permuted.
+    let c_cod = Cospan::<char>::from_permutation_on_codomain(p, types).unwrap();
     assert_eq!(
         c_cod.right_to_middle(),
         &[0, 1, 2],
-        "right leg should be identity when types_as_on_domain=false"
+        "right leg should be identity for from_permutation_on_codomain"
     );
     assert!(
         c_cod.is_right_identity(),

@@ -785,11 +785,37 @@ where
     Lambda: Eq + Copy + Debug + Send + Sync,
     BlackBoxLabel: Eq + Clone + Send + Sync,
 {
+    /// Postcomposes the braiding for `p`, or precomposes the braiding for
+    /// `p⁻¹` — see the trait's contract.
+    ///
+    /// The domain branch gets `p⁻¹` without naming it. `hflip` is the
+    /// contravariant involution `(-)ᵒᵖ`, and a braiding's opposite is its
+    /// inverse (`β(p)ᵒᵖ == β(p⁻¹)`), so
+    /// `((selfᵒᵖ ; β(p))ᵒᵖ == β(p)ᵒᵖ ; self == β(p⁻¹) ; self`.
+    ///
+    /// ⚠ **Breaking at #258.** The codomain branch used to postcompose
+    /// `from_permutation_on_domain(p.inv(), ..)`, i.e. `β(p⁻¹)` — the inverse
+    /// of what the trait specifies, matching the `Cospan` family's inverted
+    /// convention rather than `MatR`'s. The `hflip` sandwich then inherited it
+    /// on the domain side, so both branches moved together and no
+    /// within-carrier test could see it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `p.len()` does not match the permuted side's arity.
     fn permute_side(&mut self, p: &permutations::Permutation, of_codomain: bool) {
         if of_codomain {
             assert_eq!(p.len(), self.codomain().len());
-            let p_frob = Self::from_permutation(p.inv(), &self.codomain(), true).unwrap();
-            self.compose(p_frob).unwrap();
+            // The `assert_eq!` above pins `p.len() == self.codomain().len()`,
+            // so the constructor's only failure mode is unreachable. Before
+            // #258 that failure mode was an `assert_eq!` inside the callee
+            // rather than an `Err`, so the `.unwrap()` here was documenting
+            // nothing; now it has to say which invariant retires it.
+            let p_frob = Self::from_permutation_on_domain(p.clone(), &self.codomain())
+                .expect("invariant: p.len() == codomain().len() was just asserted");
+            self.compose(p_frob).expect(
+                "invariant: the braiding is built on self.codomain(), so the interfaces match",
+            );
         } else {
             self.hflip(&identity);
             self.permute_side(p, true);
@@ -797,15 +823,17 @@ where
         }
     }
 
-    fn from_permutation(
+    /// `domain() == types`, `codomain() == p.inv().permute(types)` — asserted at
+    /// the end of the body, which is where the direction is actually pinned.
+    fn from_permutation_on_domain(
         p: permutations::Permutation,
         types: &[Lambda],
-        types_as_on_domain: bool,
     ) -> Result<Self, CatgraphError> {
-        if !types_as_on_domain {
-            let mut answer = Self::from_permutation(p.inv(), types, true)?;
-            answer.hflip(&identity);
-            return Ok(answer);
+        if p.len() != types.len() {
+            return Err(CatgraphError::CompositionSizeMismatch {
+                expected: types.len(),
+                actual: p.len(),
+            });
         }
 
         if p == Permutation::identity(p.len()) {
@@ -856,13 +884,30 @@ where
                 .monoidal(FrobeniusOperation::Identity(types_now[p_remaining.len() - 1]).into());
         }
         first_layer.compose(second_layer).unwrap();
-        let remaining = Self::from_permutation(p_remaining, &types_now, true)?;
+        let remaining = Self::from_permutation_on_domain(p_remaining, &types_now)?;
         first_layer.compose(remaining).unwrap();
         assert_eq!(first_layer.domain(), types);
         let mut types_after_all_p = types.to_vec();
         in_place_permute(&mut types_after_all_p, &p.inv());
         assert_eq!(first_layer.codomain(), types_after_all_p);
         Ok(first_layer)
+    }
+
+    /// `codomain() == types`, `domain() == p.permute(types)`.
+    ///
+    /// Realized as the horizontal flip of
+    /// [`from_permutation_on_domain`](Self::from_permutation_on_domain) applied
+    /// to `p.inv()`: flipping exchanges the two boundaries, so the labels that
+    /// were forced onto the codomain land on the domain, and inverting `p`
+    /// first cancels the inversion the flip introduces. The wiring that comes
+    /// out is `i ↦ p.apply(i)`, the same one `on_domain` builds.
+    fn from_permutation_on_codomain(
+        p: permutations::Permutation,
+        types: &[Lambda],
+    ) -> Result<Self, CatgraphError> {
+        let mut answer = Self::from_permutation_on_domain(p.inv(), types)?;
+        answer.hflip(&identity);
+        Ok(answer)
     }
 }
 
@@ -932,7 +977,8 @@ where
     BlackBoxLabel: Eq + Clone + Send + Sync,
 {
     let (perm_part, surj_part, inj_part) = v.get_parts();
-    let mut answer = FrobeniusMorphism::from_permutation(perm_part.clone(), source_types, true)?;
+    let mut answer =
+        FrobeniusMorphism::from_permutation_on_domain(perm_part.clone(), source_types)?;
 
     let mut surj_part_frob = FrobeniusMorphism::<Lambda, BlackBoxLabel>::new();
     let mut after_perm_number = 0;
@@ -1108,41 +1154,31 @@ mod test {
         let between = Uniform::<usize>::try_from(2..n_max).unwrap();
         let mut rng = StdRng::seed_from_u64(3003);
         let my_n = between.sample(&mut rng);
-        let types_as_on_source = true;
         let domain_types = (0..my_n).map(|idx| idx + 100).collect::<Vec<usize>>();
         let p1 = rand_perm(my_n, my_n * 2, &mut rng);
-        let frob_p1 = FrobeniusMorphism::<usize, ()>::from_permutation(
-            p1.clone(),
-            &domain_types,
-            types_as_on_source,
-        )
-        .unwrap();
+        let frob_p1 =
+            FrobeniusMorphism::<usize, ()>::from_permutation_on_domain(p1.clone(), &domain_types)
+                .unwrap();
         let mut frob_prod = frob_p1.clone();
         assert_eq!(frob_prod.domain(), domain_types);
         let mut types_after_this_layer = domain_types.clone();
         in_place_permute(&mut types_after_this_layer, &p1.inv());
         assert_eq!(frob_prod.codomain(), types_after_this_layer);
         let p2 = rand_perm(my_n, my_n * 2, &mut rng);
-        let frob_p2 = FrobeniusMorphism::from_permutation(
-            p2.clone(),
-            &frob_p1.codomain(),
-            types_as_on_source,
-        )
-        .unwrap();
+        let frob_p2 =
+            FrobeniusMorphism::from_permutation_on_domain(p2.clone(), &frob_p1.codomain()).unwrap();
         frob_prod.compose(frob_p2).unwrap();
         in_place_permute(&mut types_after_this_layer, &p2.inv());
         assert_eq!(frob_prod.domain(), domain_types);
         assert_eq!(frob_prod.codomain(), types_after_this_layer);
-        // Exercise the types_as_on_source = false branch.
-        // from_permutation(p3, T, false) produces domain = p3(T), codomain = T.
-        // We build such a morphism independently and verify its invariants, then
-        // use its own domain to chain onto frob_prod through a tailored bridge.
+        // Exercise `from_permutation_on_codomain`, which produces
+        // domain = p3(T), codomain = T. Build one independently and verify its
+        // invariants, then chain onto frob_prod through a tailored bridge.
         let p3 = rand_perm(my_n, my_n * 2, &mut rng);
         let codomain_of_prod = frob_prod.codomain().clone();
-        let frob_p3_targeting_t = FrobeniusMorphism::<usize, ()>::from_permutation(
+        let frob_p3_targeting_t = FrobeniusMorphism::<usize, ()>::from_permutation_on_codomain(
             p3.clone(),
             &codomain_of_prod,
-            false, // types_as_on_source = false → codomain = codomain_of_prod
         )
         .unwrap();
         let mut expected_p3_domain = codomain_of_prod.clone();
@@ -1150,10 +1186,12 @@ mod test {
         assert_eq!(frob_p3_targeting_t.domain(), expected_p3_domain);
         assert_eq!(frob_p3_targeting_t.codomain(), codomain_of_prod);
         // To compose frob_prod with a permutation of codomain_of_prod, use the
-        // types_as_on_source = true variant (domain = codomain_of_prod, codomain = p3.inv(...)).
-        let frob_p3 =
-            FrobeniusMorphism::<usize, ()>::from_permutation(p3.clone(), &codomain_of_prod, true)
-                .unwrap();
+        // on-domain variant (domain = codomain_of_prod, codomain = p3.inv(...)).
+        let frob_p3 = FrobeniusMorphism::<usize, ()>::from_permutation_on_domain(
+            p3.clone(),
+            &codomain_of_prod,
+        )
+        .unwrap();
         assert_eq!(frob_p3.domain(), codomain_of_prod);
         frob_prod.compose(frob_p3).unwrap();
         let mut expected_codomain = codomain_of_prod.clone();
@@ -1183,25 +1221,29 @@ mod test {
             for trial in 0..30 {
                 let p = rand_perm(n, n * 2, &mut rng);
                 let fp_dom: FrobeniusMorphism<usize, ()> =
-                    FrobeniusMorphism::from_permutation(p.clone(), &types, true).unwrap();
+                    FrobeniusMorphism::from_permutation_on_domain(p.clone(), &types).unwrap();
                 let mut expected_cod = types.clone();
                 in_place_permute(&mut expected_cod, &p.inv());
-                assert_eq!(fp_dom.domain(), types, "n={n} trial {trial} TRUE dom");
+                assert_eq!(fp_dom.domain(), types, "n={n} trial {trial} on_domain dom");
                 assert_eq!(
                     fp_dom.codomain(),
                     expected_cod,
-                    "n={n} trial {trial} TRUE cod"
+                    "n={n} trial {trial} on_domain cod"
                 );
 
                 let fp_cod: FrobeniusMorphism<usize, ()> =
-                    FrobeniusMorphism::from_permutation(p.clone(), &types, false).unwrap();
+                    FrobeniusMorphism::from_permutation_on_codomain(p.clone(), &types).unwrap();
                 let mut expected_dom = types.clone();
                 in_place_permute(&mut expected_dom, &p);
-                assert_eq!(fp_cod.codomain(), types, "n={n} trial {trial} FALSE cod");
+                assert_eq!(
+                    fp_cod.codomain(),
+                    types,
+                    "n={n} trial {trial} on_codomain cod"
+                );
                 assert_eq!(
                     fp_cod.domain(),
                     expected_dom,
-                    "n={n} trial {trial} FALSE dom"
+                    "n={n} trial {trial} on_codomain dom"
                 );
             }
         }
@@ -1221,11 +1263,11 @@ mod test {
                 let p1 = rand_perm(n, n * 2, &mut rng);
                 let p2 = rand_perm(n, n * 2, &mut rng);
                 let mut f1: FrobeniusMorphism<usize, ()> =
-                    FrobeniusMorphism::from_permutation(p1.clone(), &types, true).unwrap();
+                    FrobeniusMorphism::from_permutation_on_domain(p1.clone(), &types).unwrap();
                 let mut mid = types.clone();
                 in_place_permute(&mut mid, &p1.inv());
                 let f2: FrobeniusMorphism<usize, ()> =
-                    FrobeniusMorphism::from_permutation(p2.clone(), &mid, true).unwrap();
+                    FrobeniusMorphism::from_permutation_on_domain(p2.clone(), &mid).unwrap();
                 f1.compose(f2)
                     .unwrap_or_else(|e| panic!("n={n} trial {trial} compose: {e:?}"));
                 let mut end = mid.clone();
@@ -1271,13 +1313,18 @@ mod test {
         }
     }
 
-    /// Algebraic verification of `FrobeniusMorphism::permute_side`.
+    /// Algebraic verification of `FrobeniusMorphism::permute_side` against the
+    /// trait's contract: the wire at slot `i` of the permuted side moves to
+    /// slot `p.apply(i)`, so the side's *word* becomes
+    /// `p.inv().permute(old_word)` — on both sides.
     ///
-    /// Reference: `Cospan::permute_side` uses `in_place_permute` directly
-    /// on the leg arrays, which is known correct (tested in `wiring_diagram`).
-    /// Here we verify that `FrobeniusMorphism` matches the same contract:
-    ///   - `permute_side(p, true)` → codomain becomes `p.permute(old_codomain)`
-    ///   - `permute_side(p, false)` → domain becomes `p.permute(old_domain)`
+    /// ⚠ These assertions used to read `p.permute(old_word)`, which pinned the
+    /// pre-#258 inverted convention. A word-level assertion does separate `p`
+    /// from `p⁻¹` when the labels are distinct, but it cannot see the wiring
+    /// underneath — `Span` had the right words over inverted pairs — and it
+    /// cannot separate the codomain rule from the domain rule, since both
+    /// relabel by `p.inv().permute`. The wiring is pinned across carriers in
+    /// `catgraph-applied/tests/braiding_cross_carrier.rs`.
     #[test]
     fn frobenius_permute_side_codomain_with_swap() {
         use crate::category::HasIdentity;
@@ -1289,7 +1336,7 @@ mod test {
         let swap = Permutation::transposition(2, 0, 1);
         morph.permute_side(&swap, true);
         assert_eq!(morph.domain(), vec!['a', 'b']);
-        assert_eq!(morph.codomain(), swap.permute(&types));
+        assert_eq!(morph.codomain(), swap.inv().permute(&types));
     }
 
     #[test]
@@ -1302,7 +1349,7 @@ mod test {
         let mut morph: FrobeniusMorphism<char, ()> = FrobeniusMorphism::identity(&types);
         let swap = Permutation::transposition(2, 0, 1);
         morph.permute_side(&swap, false);
-        assert_eq!(morph.domain(), swap.permute(&types));
+        assert_eq!(morph.domain(), swap.inv().permute(&types));
         assert_eq!(morph.codomain(), vec!['a', 'b']);
     }
 
@@ -1318,8 +1365,10 @@ mod test {
         let mut morph: FrobeniusMorphism<char, ()> = FrobeniusMorphism::identity(&types);
         morph.permute_side(&rotation, true);
         assert_eq!(morph.domain(), vec!['a', 'b', 'c']);
-        // p.permute([a,b,c])[i] = [a,b,c][p(i)] → [b, c, a]
-        assert_eq!(morph.codomain(), rotation.permute(&types));
+        // The wire at slot i moves to slot p(i), so 'a' ends at slot 1, 'b' at
+        // 2, 'c' at 0: ['c', 'a', 'b'] == p.inv().permute([a,b,c]).
+        assert_eq!(morph.codomain(), vec!['c', 'a', 'b']);
+        assert_eq!(morph.codomain(), rotation.inv().permute(&types));
     }
 
     #[test]
@@ -1332,7 +1381,8 @@ mod test {
         let rotation = Permutation::rotation_left(3, 1);
         let mut morph: FrobeniusMorphism<char, ()> = FrobeniusMorphism::identity(&types);
         morph.permute_side(&rotation, false);
-        assert_eq!(morph.domain(), rotation.permute(&types));
+        assert_eq!(morph.domain(), vec!['c', 'a', 'b']);
+        assert_eq!(morph.domain(), rotation.inv().permute(&types));
         assert_eq!(morph.codomain(), vec!['a', 'b', 'c']);
     }
 
@@ -1360,8 +1410,8 @@ mod test {
             );
             assert_eq!(
                 morph_cod.codomain(),
-                p.permute(&types),
-                "codomain = p.permute(types) for n={n}, p={p:?}"
+                p.inv().permute(&types),
+                "codomain = p.inv().permute(types) for n={n}, p={p:?}"
             );
 
             // domain case
@@ -1369,8 +1419,8 @@ mod test {
             morph_dom.permute_side(&p, false);
             assert_eq!(
                 morph_dom.domain(),
-                p.permute(&types),
-                "domain = p.permute(types) for n={n}, p={p:?}"
+                p.inv().permute(&types),
+                "domain = p.inv().permute(types) for n={n}, p={p:?}"
             );
             assert_eq!(
                 morph_dom.codomain(),
@@ -1380,11 +1430,16 @@ mod test {
         }
     }
 
-    /// Composing two morphisms around a permutation: verify type-correctness.
-    /// f : [a,b,c] → [a,b,c], then `permute_side(p`, true) gives f' : [a,b,c] → p.permute([a,b,c]).
-    /// g = `from_permutation(p.inv()`, p.permute(types), true) should compose with f'.
+    /// The conjugation law, which is the check that separates the domain rule
+    /// from the codomain rule.
+    ///
+    /// `permute_side(p, false)` splices `β(p⁻¹)`, not `β(p)`, so permuting
+    /// **both** sides of an identity by the same `p` must give back an identity
+    /// — `β(p⁻¹) ; id ; β(p) == β(p⁻¹ ; p) == id` — on the relabelled word.
+    /// Under the swapped reading it is `β(p) ; β(p) == β(p²)`, whose domain and
+    /// codomain differ for `p = rotation_left(4, 1)`, so this fails loudly.
     #[test]
-    fn frobenius_permute_side_compose_roundtrip() {
+    fn frobenius_permute_side_conjugation_is_the_identity() {
         use crate::category::HasIdentity;
         use crate::monoidal::SymmetricMonoidalMorphism;
         use permutations::Permutation;
@@ -1395,15 +1450,34 @@ mod test {
         let mut morph: FrobeniusMorphism<i32, ()> = FrobeniusMorphism::identity(&types);
         morph.permute_side(&p, true);
         let permuted_cod = morph.codomain();
-        assert_eq!(permuted_cod, p.permute(&types));
+        // The wire at slot i moves to slot p(i), so 10 lands at 1, 20 at 2,
+        // 30 at 3, 40 at 0.
+        assert_eq!(permuted_cod, vec![40, 10, 20, 30]);
+        assert_eq!(permuted_cod, p.inv().permute(&types));
+        assert_eq!(
+            morph.domain(),
+            types,
+            "codomain permute leaves domain alone"
+        );
 
-        // Build the inverse permutation morphism to compose back
-        let inv_morph: FrobeniusMorphism<i32, ()> =
-            FrobeniusMorphism::from_permutation(p.clone(), &permuted_cod, true).unwrap();
-        assert_eq!(inv_morph.domain(), permuted_cod);
-        let compose_result = morph.compose(inv_morph);
+        morph.permute_side(&p, false);
+        assert_eq!(
+            morph.domain(),
+            permuted_cod,
+            "conjugating an identity relabels both sides the same way"
+        );
+        assert_eq!(morph.codomain(), permuted_cod);
         assert!(
-            compose_result.is_ok(),
+            morph == FrobeniusMorphism::<i32, ()>::identity(&permuted_cod),
+            "β(p⁻¹) ; id ; β(p) must simplify back to the identity"
+        );
+
+        // And it still composes with a braiding built on its own codomain.
+        let next: FrobeniusMorphism<i32, ()> =
+            FrobeniusMorphism::from_permutation_on_domain(p.clone(), &permuted_cod).unwrap();
+        assert_eq!(next.domain(), permuted_cod);
+        assert!(
+            morph.compose(next).is_ok(),
             "composition after permute_side should type-check"
         );
     }

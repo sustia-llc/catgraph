@@ -69,7 +69,7 @@ fn braiding() {
 
     // Transposition: swap first two elements
     let swap_01 = Permutation::transposition(3, 0, 1);
-    let braiding = Cospan::from_permutation(swap_01, &types, true).unwrap();
+    let braiding = Cospan::from_permutation_on_domain(swap_01, &types).unwrap();
     println!(
         "swap(0,1): domain={:?}, codomain={:?}",
         braiding.domain(),
@@ -78,7 +78,7 @@ fn braiding() {
 
     // Cyclic rotation: (0 1 2) -> (1 2 0)
     let rotation = Permutation::rotation_left(3, 1);
-    let rot_cospan = Cospan::from_permutation(rotation, &types, true).unwrap();
+    let rot_cospan = Cospan::from_permutation_on_domain(rotation, &types).unwrap();
     println!(
         "rotate_left(1): domain={:?}, codomain={:?}",
         rot_cospan.domain(),
@@ -87,7 +87,7 @@ fn braiding() {
 
     // Identity permutation gives identity cospan
     let id_perm = Permutation::identity(3);
-    let id_cospan = Cospan::from_permutation(id_perm, &types, true).unwrap();
+    let id_cospan = Cospan::from_permutation_on_domain(id_perm, &types).unwrap();
     println!(
         "identity perm: domain={:?}, codomain={:?}",
         id_cospan.domain(),
@@ -96,8 +96,8 @@ fn braiding() {
 
     // Composing a permutation with its inverse yields identity-like result
     let p = Permutation::transposition(3, 0, 2);
-    let cospan_p = Cospan::from_permutation(p.clone(), &types, true).unwrap();
-    let cospan_p_inv = Cospan::from_permutation(p.inv(), &types, false).unwrap();
+    let cospan_p = Cospan::from_permutation_on_domain(p.clone(), &types).unwrap();
+    let cospan_p_inv = Cospan::from_permutation_on_codomain(p.inv(), &types).unwrap();
     let composed = cospan_p.compose(&cospan_p_inv).unwrap();
     println!(
         "p ; p_inv: domain={:?}, codomain={:?}",

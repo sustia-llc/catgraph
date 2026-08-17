@@ -158,8 +158,8 @@ fn permutation_morphisms() {
     let swap = Permutation::rotation_left(2, 1);
     let types = ['a', 'b'];
 
-    // types_as_on_domain = true: domain has given order, codomain is permuted
-    let perm_cospan = Cospan::from_permutation(swap, &types, true).unwrap();
+    // `types` labels the domain, so the codomain is the permuted word.
+    let perm_cospan = Cospan::from_permutation_on_domain(swap, &types).unwrap();
     println!("swap permutation (types on domain):");
     println!("  domain   = {:?}", perm_cospan.domain());
     println!("  codomain = {:?}", perm_cospan.codomain());

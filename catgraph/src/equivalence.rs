@@ -371,28 +371,149 @@ where
     A::Elem: Clone,
     Lambda: Eq + Copy + Debug,
 {
-    /// Permute domain or codomain labels.
+    /// Splices the braiding for `p` onto the codomain, or the braiding for
+    /// `p⁻¹` onto the domain — see the trait's contract.
+    ///
+    /// The **element** is the morphism here; `domain`/`codomain` are only the
+    /// words naming its interface. So permuting a side means pushing the
+    /// element through the relabelling cospan that moves the chosen block's
+    /// wire `i` to slot `p.apply(i)` and leaves the other block alone:
+    ///
+    /// ```text
+    /// s : (X ⊕ Y) → (X' ⊕ Y')    apex = X ⊕ Y, left leg = id, right leg = the move
+    /// ```
+    ///
+    /// `A(s)` is then the functorial action of that cospan, exactly as
+    /// [`Monoidal::monoidal`] uses an interchange cospan. On an identity this
+    /// composes to
+    /// [`from_permutation_on_domain`](Self::from_permutation_on_domain)'s own
+    /// element, which is what
+    /// `catgraph-applied/tests/braiding_cross_carrier.rs` pins.
+    ///
+    /// ⚠ **Fixed at #258; BREAKING.** The old body permuted the label word and
+    /// left `element` untouched, so the morphism advertised a permuted boundary
+    /// while still pairing domain wire `i` with the *old* codomain slot;
+    /// [`compose`](Composable::compose) then fed that stale element through
+    /// `comp_cospan` built from the new labels and produced a wrong composite.
+    /// The word it produced was inverted relative to the contract as well
+    /// (`p.permute` where the contract asks for `p.inv().permute`).
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool) {
+        let m = self.domain.len();
+        let n = self.codomain.len();
+        if p.len() != if of_codomain { n } else { m } {
+            // Defensive no-op: the trait signature is non-fallible, so a
+            // length mismatch — a caller bug — leaves `self` unchanged, as on
+            // `MatR` and `PropExpr`.
+            return;
+        }
+        let p_inv = p.inv();
+
+        // Apex = the current interface `X ⊕ Y`, left leg the identity, so this
+        // cospan is a pure relabelling. Its right leg sends the *new* slot `k`
+        // of the permuted block to the apex vertex carrying the wire that used
+        // to sit at slot `p.inv().apply(k)`; the untouched block passes through.
+        let right: Vec<usize> = if of_codomain {
+            (0..m).chain((0..n).map(|k| m + p_inv.apply(k))).collect()
+        } else {
+            (0..m).map(|i| p_inv.apply(i)).chain(m..m + n).collect()
+        };
+        let middle: Vec<Lambda> = self
+            .domain
+            .iter()
+            .chain(self.codomain.iter())
+            .copied()
+            .collect();
+
+        // Correct by construction: the apex has `m + n` vertices, the left leg
+        // is `0..m + n`, and every index in `right` is below `m + n`.
+        let relabel = Cospan::new_unchecked((0..m + n).collect(), right, middle);
+        self.element = self
+            .algebra
+            .map_cospan(&relabel, &self.element)
+            .expect("relabelling cospan over the element's own interface is structurally valid");
+
         let side = if of_codomain {
             &mut self.codomain
         } else {
             &mut self.domain
         };
-        let permuted: Vec<Lambda> = p.permute(side);
+        let permuted: Vec<Lambda> = p_inv.permute(side);
         *side = permuted;
     }
 
-    /// Construct a morphism that applies permutation `p` to typed tensor factors.
+    /// `domain() == types`, `codomain()[k] == types[p.inv().apply(k)]`.
     ///
     /// Requires `A: Default` to create an algebra instance.
+    ///
+    /// # ⚠ Behaviour change at #258
+    ///
+    /// The pre-#258 `from_permutation` was wrong in two independent ways, and
+    /// nothing caught either because no test in the workspace exercised this
+    /// impl at all — it was reachable only through the generic trait, and every
+    /// caller of the trait used a cospan or matrix carrier.
+    ///
+    /// 1. **The labels were inverted.** It set the non-`types` side to
+    ///    `p.permute(types)` where the whole cospan family uses
+    ///    `p.inv().permute(types)`, so on `p = rotation_left(3, 1)` over
+    ///    `['A','B','C']` it reported a codomain of `['B','C','A']` where
+    ///    [`Cospan`] reports `['C','A','B']`.
+    /// 2. **The element was not a braiding at all.** The structural cospan was
+    ///    built over an apex of `2n` vertices — `domain ++ codomain` — with a
+    ///    *bijective* right leg, so no domain wire shared an apex vertex with
+    ///    any codomain wire and the resulting element was the all-singletons
+    ///    partition. A braiding must merge domain wire `i` with codomain wire
+    ///    `p.apply(i)` on **one** apex vertex, exactly as
+    ///    [`identity_in`](Self::identity_in) does with `(0..n) ++ (0..n)` over
+    ///    an `n`-vertex apex. The clinching evidence is that
+    ///    `from_permutation(Permutation::identity(n), ..)` did **not** equal
+    ///    `identity(..)`, which no symmetric monoidal category permits.
+    ///
+    /// Both are fixed here: the apex is `types` (`n` vertices) and the right
+    /// leg is `(0..n) ++ (p.inv().apply(0..n))`, which degenerates to
+    /// `identity_in`'s `(0..n) ++ (0..n)` exactly when `p` is the identity.
     ///
     /// # Errors
     ///
     /// Returns [`CatgraphError`] if the permutation size does not match the `types` length.
-    fn from_permutation(
+    fn from_permutation_on_domain(p: Permutation, types: &[Lambda]) -> Result<Self, CatgraphError> {
+        if p.len() != types.len() {
+            return Err(CatgraphError::CompositionSizeMismatch {
+                expected: types.len(),
+                actual: p.len(),
+            });
+        }
+        let algebra = Arc::new(A::default());
+        let n = types.len();
+        let domain = types.to_vec();
+        // Hoisted: `inv()` allocates a `Vec` and inverts in O(n), so calling it
+        // inside the `map` closure below would do that once per element.
+        let p_inv = p.inv();
+        let codomain: Vec<Lambda> = p_inv.permute(types);
+
+        // Apex = the domain word. Domain wire `i` sits on apex vertex `i`;
+        // codomain wire `k` sits on apex vertex `p.inv().apply(k)`, so the two
+        // meet exactly when `k == p.apply(i)`. Labels agree by construction:
+        // `apex[p.inv().apply(k)] == types[p.inv().apply(k)] == codomain[k]`.
+        let right: Vec<usize> = (0..n).chain((0..n).map(|k| p_inv.apply(k))).collect();
+
+        // Correct by construction: every index in `right` is below `n`, the
+        // apex has `n` vertices, and `right.len() == 2n == |domain ⊕ codomain|`.
+        let s = Cospan::new_unchecked(vec![], right, domain.clone());
+        Ok(Self::structural_from_cospan(&algebra, &s, domain, codomain))
+    }
+
+    /// `codomain() == types`, `domain()[i] == types[p.apply(i)]`.
+    ///
+    /// Mirror of [`from_permutation_on_domain`](Self::from_permutation_on_domain);
+    /// see that method for the #258 behaviour change, which applies equally to
+    /// what used to be the `types_as_on_domain = false` branch.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError`] if the permutation size does not match the `types` length.
+    fn from_permutation_on_codomain(
         p: Permutation,
         types: &[Lambda],
-        types_as_on_domain: bool,
     ) -> Result<Self, CatgraphError> {
         if p.len() != types.len() {
             return Err(CatgraphError::CompositionSizeMismatch {
@@ -401,34 +522,16 @@ where
             });
         }
         let algebra = Arc::new(A::default());
-        let permuted: Vec<Lambda> = p.permute(types);
-        let (domain, codomain) = if types_as_on_domain {
-            (types.to_vec(), permuted)
-        } else {
-            (permuted, types.to_vec())
-        };
-
-        // Build a permutation cospan: domain ⊕ codomain, middle = domain ⊕ codomain,
-        // left = identity on domain part + permutation on codomain part
         let n = types.len();
-        let middle: Vec<Lambda> = domain.iter().chain(codomain.iter()).copied().collect();
+        let domain: Vec<Lambda> = p.permute(types);
+        let codomain = types.to_vec();
 
-        // The element is A(s)(unit) where s is the cup cospan that pairs
-        // domain[i] with codomain[i]. For a permutation morphism, we pair
-        // domain[i] with codomain[p(i)].
-        let mut right: Vec<usize> = (0..n).collect();
-        let p_inv = p.inv();
-        let permuted_right: Vec<usize> = (0..n)
-            .map(|i| {
-                let j = p_inv.permute(&(0..n).collect::<Vec<_>>())[i];
-                n + j
-            })
-            .collect();
-        right.extend(permuted_right);
+        // Apex = the codomain word. Domain wire `i` sits on apex vertex
+        // `p.apply(i)`, codomain wire `k` on apex vertex `k`.
+        let right: Vec<usize> = (0..n).map(|i| p.apply(i)).chain(0..n).collect();
 
-        // Correct by construction: `right` is `(0..n)` followed by `n + j` for
-        // `j` in `0..n`, and the apex is `domain ++ codomain`, i.e. `2n` vertices.
-        let s = Cospan::new_unchecked(vec![], right, middle);
+        // Correct by construction: same argument as `from_permutation_on_domain`.
+        let s = Cospan::new_unchecked(vec![], right, codomain.clone());
         Ok(Self::structural_from_cospan(&algebra, &s, domain, codomain))
     }
 }

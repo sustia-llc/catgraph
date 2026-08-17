@@ -543,14 +543,34 @@ impl Composable<usize> for Decomposition {
 impl MonoidalMorphism<usize> for Decomposition {}
 
 impl SymmetricMonoidalDiscreteMorphism<usize> for Decomposition {
+    /// Postcomposes the braiding for `p`, or precomposes the braiding for
+    /// `p⁻¹` — see the trait's contract. As a function `f`, that is `p ∘ f`
+    /// and `f ∘ p⁻¹` respectively.
+    ///
+    /// The domain branch does not build a `Decomposition` for the braiding at
+    /// all: `f = inj ∘ surj ∘ perm`, so precomposing a permutation only touches
+    /// the leading `perm` factor, and `a * b` in the `permutations` crate is
+    /// diagrammatic (`(a * b).apply(i) == b.apply(a.apply(i))`), which makes
+    /// `p.inv() * perm` exactly `perm ∘ p⁻¹`.
+    ///
+    /// ⚠ **Breaking at #258.** Both branches were inverted relative to the
+    /// contract — `f ∘ p` on the domain and `p⁻¹ ∘ f` on the codomain — which
+    /// matched the `Cospan` family's own inverted convention (this method's
+    /// test doc said so outright) rather than `MatR`'s. Both traits' impls now
+    /// agree, so a `Decomposition` and a `Cospan` permuted by the same `p`
+    /// move the same wires the same way.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `p.len()` does not match the permuted side's cardinality.
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool) {
         #[allow(clippy::if_not_else)]
         if !of_codomain {
             assert_eq!(p.len(), self.domain());
-            self.permutation_part = p * self.permutation_part.clone();
+            self.permutation_part = p.inv() * self.permutation_part.clone();
         } else {
             assert_eq!(p.len(), self.codomain());
-            let p_decompose = Self::from_permutation(p.inv(), p.len(), true);
+            let p_decompose = Self::from_permutation(p.clone(), p.len());
             let new_self = self
                 .compose(&p_decompose)
                 .expect("permute_side: codomain match guarantees valid composition");
@@ -558,7 +578,14 @@ impl SymmetricMonoidalDiscreteMorphism<usize> for Decomposition {
         }
     }
 
-    fn from_permutation(p: Permutation, perm_len: usize, _: bool) -> Self {
+    /// The braiding routing wire `i` to wire `p.apply(i)` on a `perm_len`-element
+    /// set: the permutation part is `p` and both order-preserving parts are
+    /// identities, so `apply(i) == p.apply(i)`.
+    ///
+    /// Domain and codomain are both `perm_len`, and neither carries labels, so
+    /// there is no on-domain / on-codomain distinction to draw — see the trait
+    /// rustdoc.
+    fn from_permutation(p: Permutation, perm_len: usize) -> Self {
         assert_eq!(p.len(), perm_len);
         Self {
             permutation_part: p,
@@ -924,7 +951,7 @@ mod test {
             cur_perm.permute(&[0, 1, 1, 1, 2, 3, 4, 7, 8, 9, 11]),
             cur_test
         );
-        let decomp = Decomposition::from_permutation(cur_perm.clone(), cur_test.len(), true);
+        let decomp = Decomposition::from_permutation(cur_perm.clone(), cur_test.len());
         for idx in 0..cur_test.len() {
             let after_decomp = decomp.apply(idx);
             let after_cur_perm = cur_perm.apply(idx);
@@ -938,7 +965,7 @@ mod test {
         assert_eq!(cur_test, exp_sorted);
         assert_eq!(cur_perm, exp_perm);
         assert_eq!(cur_perm.permute(&[1, 0]), cur_test);
-        let decomp = Decomposition::from_permutation(cur_perm.clone(), cur_test.len(), true);
+        let decomp = Decomposition::from_permutation(cur_perm.clone(), cur_test.len());
         for idx in 0..cur_test.len() {
             let after_decomp = decomp.apply(idx);
             let after_cur_perm = cur_perm.apply(idx);
@@ -952,7 +979,7 @@ mod test {
         assert_eq!(cur_test, exp_sorted);
         assert_eq!(cur_perm, exp_perm);
         assert_eq!(cur_perm.permute(&[2, 1, 0]), cur_test);
-        let decomp = Decomposition::from_permutation(cur_perm.clone(), cur_test.len(), true);
+        let decomp = Decomposition::from_permutation(cur_perm.clone(), cur_test.len());
         for idx in 0..cur_test.len() {
             let after_decomp = decomp.apply(idx);
             let after_cur_perm = cur_perm.apply(idx);
@@ -966,7 +993,7 @@ mod test {
         assert_eq!(cur_test, exp_sorted);
         assert_eq!(cur_perm, exp_perm);
         assert_eq!(cur_perm.permute(&[2, 0, 1]), cur_test);
-        let decomp = Decomposition::from_permutation(cur_perm.clone(), cur_test.len(), true);
+        let decomp = Decomposition::from_permutation(cur_perm.clone(), cur_test.len());
         for idx in 0..cur_test.len() {
             let after_decomp = decomp.apply(idx);
             let after_cur_perm = cur_perm.apply(idx);
@@ -980,7 +1007,7 @@ mod test {
         assert_eq!(cur_test, exp_sorted);
         assert_eq!(cur_perm, exp_perm);
         assert_eq!(cur_perm.permute(&[2, 0, 0, 1, 1]), cur_test);
-        let decomp = Decomposition::from_permutation(cur_perm.clone(), cur_test.len(), true);
+        let decomp = Decomposition::from_permutation(cur_perm.clone(), cur_test.len());
         for idx in 0..cur_test.len() {
             let after_decomp = decomp.apply(idx);
             let after_cur_perm = cur_perm.apply(idx);
@@ -1105,13 +1132,16 @@ mod test {
         }
     }
 
-    /// Algebraic verification of `Decomposition::permute_side`.
+    /// Algebraic verification of `Decomposition::permute_side` against the
+    /// contract on `SymmetricMonoidalDiscreteMorphism` — the wire at slot `i`
+    /// of the permuted side moves to slot `p.apply(i)`:
+    ///   - `permute_side(p, true)` → the function becomes `p ∘ f`
+    ///   - `permute_side(p, false)` → the function becomes `f ∘ p.inv()`
     ///
-    /// The contract (matching `Cospan::permute_side` semantics) is:
-    ///   - `permute_side(p, true)` → the function becomes `p.inv() ∘ f`
-    ///     (codomain ports are reordered by p)
-    ///   - `permute_side(p, false)` → the function becomes `f ∘ p`
-    ///     (domain ports are reordered by p, so new input i was old input p(i))
+    /// ⚠ Both read the other way round before #258 (`p.inv() ∘ f` and `f ∘ p`),
+    /// matching `Cospan`'s then-inverted convention — this doc comment said so
+    /// in as many words. `Cospan` moved onto `MatR`'s convention and this
+    /// followed, so the two traits now agree.
     #[test]
     fn decomposition_permute_side_domain_identity() {
         use crate::category::HasIdentity;
@@ -1123,11 +1153,11 @@ mod test {
         let rotation = Permutation::rotation_left(3, 1); // [1, 2, 0]
         decomp.permute_side(&rotation, false);
 
-        // After domain permutation, new function g(i) = f(p(i)) = p(i)
-        // g(0) = rotation(0) = 1, g(1) = rotation(1) = 2, g(2) = rotation(2) = 0
-        assert_eq!(decomp.apply(0), 1);
-        assert_eq!(decomp.apply(1), 2);
-        assert_eq!(decomp.apply(2), 0);
+        // After domain permutation, g(i) = f(p.inv()(i)) = p.inv()(i)
+        // p.inv() = [2, 0, 1]: g(0) = 2, g(1) = 0, g(2) = 1
+        assert_eq!(decomp.apply(0), 2);
+        assert_eq!(decomp.apply(1), 0);
+        assert_eq!(decomp.apply(2), 1);
     }
 
     #[test]
@@ -1141,12 +1171,11 @@ mod test {
         let rotation = Permutation::rotation_left(3, 1); // [1, 2, 0]: 0→1, 1→2, 2→0
         decomp.permute_side(&rotation, true);
 
-        // After codomain permutation, new function g(i) = p.inv()(f(i)) = p.inv()(i)
-        // p.inv() = [2, 0, 1]: 0→2, 1→0, 2→1
-        // g(0) = 2, g(1) = 0, g(2) = 1
-        assert_eq!(decomp.apply(0), 2);
-        assert_eq!(decomp.apply(1), 0);
-        assert_eq!(decomp.apply(2), 1);
+        // After codomain permutation, new function g(i) = p(f(i)) = p(i)
+        // g(0) = 1, g(1) = 2, g(2) = 0
+        assert_eq!(decomp.apply(0), 1);
+        assert_eq!(decomp.apply(1), 2);
+        assert_eq!(decomp.apply(2), 0);
         assert_eq!(decomp.codomain(), 3);
     }
 
@@ -1168,12 +1197,34 @@ mod test {
         let swap = Permutation::transposition(2, 0, 1);
         decomp.permute_side(&swap, true);
 
-        // After codomain permutation with swap, g(i) = swap.inv()(f(i)) = swap(f(i))
-        // (swap is its own inverse)
+        // After codomain permutation, g(i) = swap(f(i)).
         // g(0) = swap(0) = 1, g(1) = swap(0) = 1, g(2) = swap(1) = 0
         assert_eq!(decomp.apply(0), 1);
         assert_eq!(decomp.apply(1), 1);
         assert_eq!(decomp.apply(2), 0);
+    }
+
+    /// The conjugation law, which is the check that separates the domain rule
+    /// from the codomain rule: `permute_side(p, false)` splices `β(p⁻¹)`, so
+    /// permuting **both** sides of an identity by the same `p` gives the
+    /// identity back. Under the swapped reading it gives `p ∘ p`, which for a
+    /// 3-cycle is `[2, 0, 1]`, not `[0, 1, 2]`.
+    #[test]
+    fn decomposition_permute_side_conjugation_is_the_identity() {
+        use crate::category::HasIdentity;
+        use crate::finset::Decomposition;
+        use crate::monoidal::SymmetricMonoidalDiscreteMorphism;
+        use permutations::Permutation;
+
+        let rotation = Permutation::rotation_left(3, 1);
+        let mut decomp = Decomposition::identity(&3);
+        decomp.permute_side(&rotation, true);
+        decomp.permute_side(&rotation, false);
+        assert_eq!(
+            (0..3).map(|i| decomp.apply(i)).collect::<Vec<_>>(),
+            vec![0, 1, 2],
+            "β(p.inv()) ; id ; β(p) must be the identity, not β(p²)"
+        );
     }
 
     /// Verify with random permutations that `permute_side` matches the algebraic contract.
@@ -1193,16 +1244,17 @@ mod test {
                 .map(|_| Uniform::<usize>::try_from(0..n).unwrap().sample(&mut rng))
                 .collect();
 
-            // Domain case: g(i) = f(p(i))
+            // Domain case: g(i) = f(p.inv()(i))
+            let p_dom_inv = p_dom.inv();
             let mut decomp_dom = Decomposition::try_from((original_map.clone(), 0)).unwrap();
             decomp_dom.permute_side(&p_dom, false);
             for i in 0..n {
                 assert_eq!(
                     decomp_dom.apply(i),
-                    original_map[p_dom.apply(i)],
-                    "domain permute: g({i}) should be f(p({i})) = f({}) = {}",
-                    p_dom.apply(i),
-                    original_map[p_dom.apply(i)]
+                    original_map[p_dom_inv.apply(i)],
+                    "domain permute: g({i}) should be f(p.inv()({i})) = f({}) = {}",
+                    p_dom_inv.apply(i),
+                    original_map[p_dom_inv.apply(i)]
                 );
             }
 
@@ -1214,14 +1266,13 @@ mod test {
             let cod_size = decomp_cod.codomain();
             assert_eq!(cod_size, n);
             let p_cod = rand_perm(cod_size, cod_size * 2, &mut rng);
-            let p_cod_inv = p_cod.inv();
             decomp_cod.permute_side(&p_cod, true);
             for (i, &expected) in surj_map.iter().enumerate().take(n) {
                 assert_eq!(
                     decomp_cod.apply(i),
-                    p_cod_inv.apply(expected),
-                    "codomain permute: g({i}) should be p_inv(f({i})) = p_inv({expected}) = {}",
-                    p_cod_inv.apply(expected),
+                    p_cod.apply(expected),
+                    "codomain permute: g({i}) should be p(f({i})) = p({expected}) = {}",
+                    p_cod.apply(expected),
                 );
             }
         }
