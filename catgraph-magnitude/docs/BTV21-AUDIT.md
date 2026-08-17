@@ -6,15 +6,15 @@
 > **Provenance:** ported 2026-07-21 from the archived `tsondru/catgraph-coalition`
 > `docs/BTV21-AUDIT.md`, then re-expressed against what `catgraph-magnitude`
 > actually shipped in #19–#23 (Yoneda / determinism / semantic clustering /
-> coalition) plus the corpus-MLE constructor landing on branch
-> `feat/53-btv21-salvage` (#53). The legacy audit tracked a coalition crate that
+> coalition) plus the corpus-MLE constructor (landed in PR #144, v0.4.0; #53).
+> The legacy audit tracked a coalition crate that
 > no longer exists; every status row here is re-verified against the migrated
 > tree, and every paper claim against the cached v2 text — not transcribed.
 > **Companion:** [`BV25-AUDIT.md`](BV25-AUDIT.md) — Bradley–Vigneaux 2025 magnitude
 > audit; BTV 2021 is BV25's syntax/semantics precursor (the `-ln π` embedding and
 > `[0,1]` enrichment are shared).
 > **Tracking issue:** [#53](https://github.com/sustia-llc/catgraph/issues/53)
-> (salvage the un-re-expressed BTV21 surfaces).
+> (salvage — CLOSED; all three items shipped by v0.5.0).
 >
 > **Section map** (paper's own numbering — the legacy audit drifted here; see the
 > corrections at the end): §1 Introduction (§1.1 Compositionality, §1.2 Why
@@ -113,7 +113,7 @@ equalities*, verified at v2 lines 504–510).
 | Item | Status | Location | Notes |
 |---|---|---|---|
 | Def 4 — `L(x,y) = π(y\|x)` syntax category (BYO-LM transition table) | ✅ | `lm_category::LmCategory`, `weighted_cospan::WeightedCospan` | The transition table *is* `L(x,y)`; `WeightedCospan` carries per-edge `[0,1]` weights. |
-| Def 4 — corpus-MLE constructor (prefix-state MLE `π(p·t\|p) = N(p·t)/N(p)`, full-history prefix trie — *not* an order-1 bigram model) | ✅ | `lm_category::LmCategory::from_traces` | **Lands in this change** ([#53](https://github.com/sustia-llc/catgraph/issues/53) item 1): closes the "where do the probabilities come from" gap for real text fixtures. Anti-target from the legacy round-3 verdict carried: BTV21 has *no* production-rule taxonomy — do not invent a terminal/non-terminal split. |
+| Def 4 — corpus-MLE constructor (prefix-state MLE `π(p·t\|p) = N(p·t)/N(p)`, full-history prefix trie — *not* an order-1 bigram model) | ✅ | `lm_category::LmCategory::from_traces` | **Shipped at v0.4.0** (PR #144, [#53](https://github.com/sustia-llc/catgraph/issues/53) item 1 — issue closed): closes the "where do the probabilities come from" gap for real text fixtures. Anti-target from the legacy round-3 verdict carried: BTV21 has *no* production-rule taxonomy — do not invent a terminal/non-terminal split. |
 | Eq 8 — chain-rule equality `π(z\|y)·π(y\|x) = π(z\|x)` | ✅ | `lm_category::LmCategory::from_traces` (prefix-tree tables) | Holds by construction **on the tree-shaped tables `from_traces` produces** (unique path ⇒ `-ln` additivity is exact, and the count MLE telescopes: `N(z)/N(y)·N(y)/N(x) = N(z)/N(x)`). On general BYO-LM tables `enriched_space` computes a *max-probability-path* relaxation (its rustdoc's DAG-with-rejoin caveat), so Eq 8 is a bound, not an equality, there. |
 
 ### §3 Enriched copresheaves
@@ -163,8 +163,8 @@ demonstrates Def 8 end-to-end, including the enriched composition inequality
 
 ### §4 Weighted products and coproducts
 
-§4.1 Def 9 (weighted limit/colimit, Eq 13–16); §4.2 Def 10 + Eq 17–19 + Lemma 4
-(weighted product `min{fc/w₁, gc/w₂, 1}`); §4.3 Def 11 + Theorem 3 + Eq 20
+§4.1 Def 9 (weighted limit/colimit, Eq 13–16); §4.2 Def 10 + Theorem 2 + Eq 17–19 + Lemma 4
+(weighted product `min{fc/w₁, gc/w₂, 1}` — the min formula is Theorem 2's statement); §4.3 Def 11 + Theorem 3 + Eq 20
 (weighted coproduct `max{w₁·fc, w₂·gc}`); §4.4 Def 12 + Lemma 5 + Def 13 +
 Theorem 4 + Eq 21 (enriched implication `[f,g]`, `x ⇒ y`). None re-expressed in
 `catgraph-magnitude`; the weighted (co)limit calculus is folded into
@@ -173,7 +173,7 @@ Theorem 4 + Eq 21 (enriched implication `[f,g]`, `x ⇒ y`). None re-expressed i
 | Item | Status | Location | Notes |
 |---|---|---|---|
 | §4.1 Def 9 — V-weighted limit / colimit (Eq 13–16) | ⏭️ | — | [#36](https://github.com/sustia-llc/catgraph/issues/36). |
-| §4.2 Def 10 + Eq 17–19 + Lemma 4 — weighted product on representables `min{fc/w₁, gc/w₂, 1}` | ⏭️ | — | [#36](https://github.com/sustia-llc/catgraph/issues/36). (The legacy cited a "Theorem 2" here — no such theorem exists; see corrections.) |
+| §4.2 Def 10 + Theorem 2 (+ Eq 18–19, Lemma 4) — weighted product on representables `min{fc/w₁, gc/w₂, 1}` | ⏭️ | — | [#36](https://github.com/sustia-llc/catgraph/issues/36). |
 | §4.3 Def 11 + Theorem 3 + Eq 20 — weighted coproduct `max{w₁·fc, w₂·gc}` | ⏭️ | — | [#36](https://github.com/sustia-llc/catgraph/issues/36). |
 | §4.4 Def 12 + Lemma 5 + Def 13 + Theorem 4 + Eq 21 — enriched implication `[f,g]`, `x ⇒ y` | ⏭️ | — | Research track; the entailment surface has no consumer yet. |
 
@@ -224,10 +224,13 @@ scope changes:
 1. **Section drift — Def 4 / Eq 8.** The legacy header and §2.2 body cited "§3 Def
    4" and "§3 Eq 8". Both are in **§2.2** (paper v2 lines 493–510); Def 8 (the
    semantic category L̂) is the §3.2 result. Corrected throughout.
-2. **Phantom "Theorem 2".** The legacy §4.2 row cited "Definition 10 + Theorem 2"
-   for the weighted product. **There is no Theorem 2 in the paper** — the weighted
-   product is Def 10 + Eq 17–19 (+ Lemma 4). The only numbered §4 theorems are
-   Theorem 3 (coproduct) and Theorem 4 (implication). Corrected.
+2. **"Phantom Theorem 2" — RETRACTED.** An earlier revision of this audit claimed
+   there is no Theorem 2 in the paper. **Theorem 2 EXISTS** in arXiv:2106.07890v2
+   §4.2, immediately after Def 10: "The weighted limit (w1,f)×(w2,g): L → [0,1]
+   is given by c ↦ min{fc/w1, gc/w2, 1}." The pdftotext extraction wraps the head
+   as "Theorem\n2." (txt:841-842), defeating a naive `rg`; the legacy
+   "Definition 10 + Theorem 2" citation was right, and Eq (17) is a proof step,
+   not the statement.
 3. **Phantom "§1.4" (already fixed upstream).** `weighted_cospan.rs:12` once cited
    a non-existent "§1.4" for the `−ln` embedding; PR #120 re-anchored it to
    **§5**, matching the paper (the `−ln` metric interpretation is §5, v2 lines

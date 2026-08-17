@@ -29,9 +29,13 @@ entirely — applied's published edge is `rand_core` alone, #239). The
 intervening `v0.2.1`, `v0.3.0`, and `v0.8.0` tags, `v0.12.0` (2026-08-15: core +
 applied only — the match-site surface and `Presentation::rewrite_depth()` #250,
 the `SymmetricMonoidalMorphism` fixes #252, and `CospanCanon::classes` #254),
-and the current `v0.13.0` (2026-08-15: applied only — persistable rewrite traces
-and `ContentKey` under the opt-in `serde` feature, #249/#255), carried no
-magnitude-facing change.
+`v0.13.0` (2026-08-15: applied only — persistable rewrite traces
+and `ContentKey` under the opt-in `serde` feature, #249/#255), `v0.14.0`
+(2026-08-16: core validated constructors #256/#261 — `Cospan::new` now
+fallible; this crate's lib call site moved to `new_unchecked`, tests/example
+unwrap the checked `new`, no magnitude surface change), and the current
+`v0.15.0` (2026-08-16: core/applied braiding split #258 + dl carriers #200),
+carried no magnitude-facing change.
 Workspace-wide versioning supersedes the pre-reboot per-crate lineage; the full
 BV 2025 / Leinster 2013 / LS 2017 / Leinster 2008 math stack was migrated intact
 in reboot Phase 3 (#8). That migration landed on the then-current DeepCausality
@@ -68,7 +72,7 @@ Four anchor verifications must pass for any tag:
    hand-computed 4-state LM.
 2. **BV 2025 Rem 3.11 Shannon recovery** — `d/dt Mag|_{t=1} = Σ H(p_x)` by central finite difference
    (`h = 1e-4`) to `~6e-10`.
-3. **Leinster 2013 Prop 2.1.3 chain-sum equivalence** — `mobius_function_via_chains::<F64Rig>(space) ≈ mobius_function::<F64Rig>(space)` to `1e-9` on hand-built 4-state scattered fixture + proptest n=2-5.
+3. **Leinster 2013 Prop 2.1.3 chain-sum equivalence** — `mobius_function_via_chains::<F64Rig>(space) ≈ mobius_function::<F64Rig>(space)` to `1e-9` relative (proptest n=2-5) and `1e-8` relative on the hand-built 4-state boundary fixture (#169).
 4. **BV 2025 Prop 3.14 magnitude-homology Euler-char identity** — `chain_complex::euler_char_identity_at(space, t, max_degree)` returns `(via_homology, via_magnitude)` agreeing within an analytical residual bound `|Δ| ≤ n · r^(max_deg+1) / (1−r) + 1e-9` where `r = (n−1) · exp(−d_min_scaled)`. 5 fixtures pass (release suite ~31s).
 
 Two integer-exact Möbius cross-checks (Leinster 2008 Cor 1.5) ship alongside,
@@ -138,7 +142,7 @@ The workspace `v0.1.0` (2026-07-01) semantic + determinism + coalition layer ove
 | `tsallis_entropy(p, t)` | BV 2025 Prop 3.10 / Tsallis 1988 | Shannon special case at `\|t−1\| < 1e-6` |
 | `WeightedCospan<Λ, Q>` | F&S 2019 §1 + BV 2025 §3 | Cospan with per-edge rig weights |
 | `LawvereMetricSpace<T>` (re-export) | Lawvere 1973 | Asymmetric metric space |
-| `Rig`, `Ring`, `ZAlgebra`, `Z`, `BoolRig`, `UnitInterval`, `Tropical`, `F64Rig` | F&S 2018 §5.3.1 + Bourbaki *Algèbre* Ch. I §8 | Re-exports + `Ring` super-trait + `ZAlgebra` integer-exact bound (renamed from `Integer`) |
+| `Rig`, `Ring`, `ZAlgebra`, `Z`, `Zero`, `One`, `BoolRig`, `UnitInterval`, `Tropical`, `F64Rig` | F&S 2018 §5.3.1 + Bourbaki *Algèbre* Ch. I §8 | Re-exports + `Ring` super-trait + `ZAlgebra` integer-exact bound (renamed from `Integer`) (#219) |
 | `TSALLIS_SHANNON_EPS` | numerical | Special-case threshold `1e-6` |
 
 ## Algebraic scoping

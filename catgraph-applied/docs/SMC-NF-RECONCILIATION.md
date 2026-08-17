@@ -2243,3 +2243,5 @@ never needs rewriting at all — it is quotiented away by `C` itself.
 > inherits `nf`'s choice only at readback — which is now `display`'s readback
 > (the 2026-07-30 note), re-checked at every use against the state it came from.
 > No pin moved.
+
+> **Status (2026-08-15, #249/#250/#255):** the engine's surface hardened without touching this section's claims — match-site enumeration and `apply_at` are public (#250; caller-supplied sites re-verified by an index-positional content fingerprint), and `RewriteStep`/`RewriteOutcome`/`ContentKey` serialize behind the `serde` feature (#249/#255; a deserialized trace is checked by `replay`, not trusted — and the naive `ContentKey` derive would have erased monochromatic colors, fixed via an explicit Untyped/Typed tag before shipping). No behaviour change, no pin moved.

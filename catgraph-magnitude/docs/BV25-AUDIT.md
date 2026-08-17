@@ -19,7 +19,7 @@
 > Gimperlein–Goffeng–Louca, *The Magnitude and Spectral Geometry*,
 > [arXiv:2201.11363v3](https://arxiv.org/abs/2201.11363).
 >
-> **Note on scope:** BV 2025 is anchored in §2 (enriched categories of language models) and §3 (magnitude via Tsallis q-entropy). Only §2 Defs/Eqs that materialize as runtime types and §3 Props that constitute the BV 2025 acceptance gate are tracked here. Categorical foundations (§1, §4) live in `catgraph-applied`'s `enriched.rs` + `lawvere_metric.rs` and are audited by [`catgraph-applied/docs/FS18-AUDIT.md`](../../catgraph-applied/docs/FS18-AUDIT.md).
+> **Note on scope:** BV 2025 is anchored in §2 (enriched categories of language models) and §3 (magnitude via Tsallis q-entropy). Only §2 Defs/Eqs that materialize as runtime types and §3 Props that constitute the BV 2025 acceptance gate are tracked here. Categorical foundations (§1, §4) live in `catgraph-applied`'s `enriched.rs` + `lawvere_metric.rs` and are audited by [`catgraph-applied/docs/FS18-AUDIT.md`](../../catgraph-applied/docs/FS18-AUDIT.md). Post-reconciliation extension layers sit outside the item tables but anchor the same papers — `f64-fast` (#165) re-implements Eq (7) (Definition 3.1; applied in the §3.5 main results) / Leinster 2013 Lemma 1.1.4 numerically (three-witness agreement pinned in `tests/magnitude_f64.rs`); the coalition reporting/typed layers (#153, #211) rest on Lemma 1.1.4, Leinster 2013 §1.3 / Prop 1.4.3 / Prop 2.3.6, Leinster 2008 Prop 2.8, marked as extensions in rustdoc.
 >
 > **Relationship to catgraph core audit:** The Lawvere metric / `-ln π` embedding (§2.5–2.7) is implemented in `catgraph-applied::lawvere_metric` and consumed here via `WeightedCospan::into_metric_space`. See [`catgraph/docs/FS19-AUDIT.md`](../../catgraph/docs/FS19-AUDIT.md) for the cospan substrate underlying `WeightedCospan`.
 >
@@ -40,7 +40,7 @@
 | §2 LM as enriched category | 5 | 0 | 0 | 2 | 3 | 10 |
 | §2.1 scatteredness predicate | 1 | 0 | 0 | 0 | 0 | 1 |
 | §3 Magnitude via Tsallis | 8 | 0 | 0 | 3 | 0 | 11 |
-| §3.5 Möbius / chain-sum | 2 | 0 | 0 | 0 | 0 | 2 |
+| §3.1 Möbius / chain-sum (Eq (7); applied in §3.5) | 2 | 0 | 0 | 0 | 0 | 2 |
 | §3.14 Magnitude homology | 1 | 0 | 0 | 0 | 0 | 1 |
 | §4 Bounds + asymptotics | 3 | 0 | 0 | 2 | 0 | 5 |
 | **TOTAL** | **22** | **0** | **0** | **7** | **3** | **32** |
@@ -72,10 +72,10 @@
 | §2.7 `HomMap<O, V>` finite realization | 🔗 | `catgraph-applied::enriched::HomMap` | Finite materialization used by `LmCategory::magnitude`. |
 | §2.8 Probability cospan over alphabet | ✅ | `weighted_cospan::WeightedCospan<Λ, Q>` | v0.1.0 newtype over `catgraph::Cospan<Λ>` carrying per-edge rig weights. Type aliases `ProbCospan<Λ>` / `TropCospan<Λ>`. |
 | §2.9 Probability → distance via `-ln π` | ✅ | `WeightedCospan::into_metric_space` (`Q = UnitInterval`) | v0.1.0 specialization. v0.1.1 adds `into_validated_metric_space` with full O(n³) triangle-inequality scan. |
-| §2.10–2.17 Prefix-extension semantics | ✅ | `lm_category::LmCategory` | Materialized BYO-LM transition table. Forward BFS multiplies edge probabilities along directed paths; `d(x, y) = -ln π(y\|x)` recorded per Eq 6. |
+| §2.10–2.17 Prefix-extension semantics | ✅ | `lm_category::LmCategory` | Materialized BYO-LM transition table. Forward BFS multiplies edge probabilities along directed paths per Eq 6; `d(x, y) = -ln π(y\|x)` recorded (the `d` definition itself is unnumbered §2.17 prose). |
 | Identity axiom `d(x, x) = 0` | ✅ | `LmCategory::magnitude` (internal) | Enforced before Möbius inversion. `LawvereMetricSpace::hom` diagonal default also returns `Tropical::one()` at `a == b`. |
 | §2.17 Acyclicity hypothesis | ✅ | `LmCategory::add_transition` (v0.1.1) | v0.1.1 rejects non-trivial self-loops (`from == to && prob > 0.0`) at insert time. Cycle-via-path forbidden by BV 2025 §3 acyclicity hypothesis but not detected ahead of `magnitude(t)` (BFS cap surfaces it). |
-| Prop 2.9 (p.8): every autoregressive LM determines a probability mass function `π(−\|x)` on the terminating states `T(x)` | ➖ | `LmCategory` input contract + `tests/bv_2025_acceptance.rs` fixtures | Justification result (why `π` deserves to be called a probability, incl. `⊥`/`†` and the cutoff — the paper flags it as novel vs BTV22/GV24). No computational content to implement: in the BYO-LM crate the pmf property is the *input contract* — `add_transition` documents that row normalization is NOT validated at insert; the acceptance fixtures assert `p_x` is a true pmf per test. |
+| Prop 2.9 (p.9): every autoregressive LM determines a probability mass function `π(−\|x)` on the terminating states `T(x)` | ➖ | `LmCategory` input contract + `tests/bv_2025_acceptance.rs` fixtures | Justification result (why `π` deserves to be called a probability, incl. `⊥`/`†` and the cutoff — the paper flags it as novel vs BTV22/GV24). No computational content to implement: in the BYO-LM crate the pmf property is the *input contract* — `add_transition` documents that row normalization is NOT validated at insert; the acceptance fixtures assert `p_x` is a true pmf per test. |
 
 ### §2.1 Scatteredness (anchored at Leinster 2013 Def 2.1.2; convergence precondition for chain-sum Möbius)
 
@@ -91,13 +91,13 @@
 | Rem 3.11 Shannon recovery as `t → 1` | ✅ | `magnitude::tsallis_entropy` + acceptance test | Acceptance residual `~6.46e-10` by central FD `h = 1e-4` on 4-state LM. |
 | Prop 3.10 closed form `Mag(tM) = (t-1)·Σ H_t(p_x) + #(T(⊥))` | ✅ | `tests/bv_2025_acceptance.rs` | v0.1.0 acceptance residual `0e0` (exact `f64`) at `t ∈ {0.5, 1.5, 2.0, 5.0}` on hand-computed 4-state tree (`A = {a}, N = 1`; `#T(⊥) = 2`). |
 | Acyclicity hypothesis (tree-shaped prefix poset) | ➖ | `LmCategory` runtime contract | Fixture rebuilt from cyclic to a 4-state acyclic prefix poset. **Note:** acyclicity is a *prose* standing hypothesis in BV25 §3, not a numbered result — "3.4" is the *Example* that an initial object gives magnitude 1, a different statement. Marked N/A as a hypothesis (not an implementable item); its runtime enforcement is audited at the §2.17 row above. |
-| §3.5 Eq 7 magnitude as Möbius sum `Mag = Σᵢⱼ μ[i][j]` | ✅ | `magnitude::magnitude::<Q>(space, t)` | Builds t-scaled zeta, Möbius-inverts, sums every entry. Algebraic surface `Q: Ring + Div + From<f64>`. |
-| §3.5 Möbius inversion `ζ·μ = I` | ✅ | `magnitude::mobius_function::<Q>(space)` | Gaussian elimination on `[ζ \| I]` augmented matrix. `Err(CatgraphError::Composition)` on singular zeta. v0.1.0 limit ~1000 states (O(n³)). |
-| §3.5 Chain-sum Möbius (Leinster 2013 Prop 2.1.3) | ✅ | `mobius_chains::mobius_function_via_chains` | v0.2.0. Implemented as the von-Neumann series `μ = Σ (−1)ᵏ Mᵏ` with `M = ζ − I` (algebraically identical to Prop 2.1.3's chain-sum-of-ζ-products by Mᵏ[a][b] = chain-sum at length k). O(K · n³) matrix-power accumulation with adaptive K = ⌈log(τ) / log(r)⌉, τ = 1e-13, capped at K_MAX = 200. Bound `Q: Ring + From<f64>` (no `Div` needed). Acceptance: chain-sum agrees with v0.1.x `mobius_function` to 1e-9 on hand-built 4-state + proptest n=2-5. Returns `Err` on non-scattered or near-boundary (r ≥ 0.94) input — caller falls back to `mobius_function`. |
+| Eq (7) (Def 3.1; applied in §3.5) magnitude as Möbius sum `Mag = Σᵢⱼ μ[i][j]` | ✅ | `magnitude::magnitude::<Q>(space, t)` | Builds t-scaled zeta, Möbius-inverts, sums every entry. Algebraic surface `Q: Ring + Div + From<f64>`. |
+| Def 3.1 Möbius inversion `ζ·μ = I` | ✅ | `magnitude::mobius_function::<Q>(space)` | Gaussian elimination on `[ζ \| I]` augmented matrix. `Err(CatgraphError::Composition)` on singular zeta. v0.1.0 limit ~1000 states (O(n³)). |
+| §3.5 Chain-sum Möbius (Leinster 2013 Prop 2.1.3) | ✅ | `mobius_chains::mobius_function_via_chains` | v0.2.0. Implemented as the von-Neumann series `μ = Σ (−1)ᵏ Mᵏ` with `M = ζ − I` (algebraically identical to Prop 2.1.3's chain-sum-of-ζ-products by Mᵏ[a][b] = chain-sum at length k). O(K · n³) matrix-power accumulation with adaptive K = ⌈log(τ) / log(r)⌉, τ = 1e-13, capped at K_MAX = 200. Bound `Q: Ring + From<f64>` (no `Div` needed). Acceptance (re-speced by #169, v0.9.0): 1e-9 RELATIVE on the converged regime (proptest n=2–5, worst 9.99e-14) and a documented 1e-8 relative on the hand-built 4-state boundary fixture (measured 1.08e-9 rel; the old 1e-9 absolute bound passed only because entries are < 1). Returns `Err` on non-scattered or near-boundary (r ≥ 0.94) input — caller falls back to `mobius_function`. |
 | §3.6 Numerical scoping `TSALLIS_SHANNON_EPS = 1e-6` | ✅ | `lib.rs` | Public constant; threshold for special-case branch and lower bound on Rem 3.11 finite-difference step. |
-| Prop 3.6 (p.14): `ζ_t` is invertible for all `t > 0`; closed form Eq (8) `ζ_t⁻¹(x,y) = Σ_k Σ_{nondeg. paths} (−1)^k Π π^t` via the formal expansion Eq (9) `Σ_k (−1)^k (ζ_t − δ)^k` | ✅ | `magnitude::mobius_function` + `mobius_chains::mobius_function_via_chains` | The chain-sum implementation *is* Eq (9): the von-Neumann series `μ = Σ (−1)^k M^k`, `M = ζ − I`, with `M^k` counting nondegenerate paths (see the §3.5 chain-sum row, where the same surface carries the Leinster 2013 Prop 2.1.3 anchor). Invertibility: `mobius_function` (Gaussian elimination) errors on singular ζ — unreachable for `t > 0` on the acyclic prefix poset per this Prop. |
-| Cor 3.8 (p.15): factorization `ζ_t⁻¹(x,y) = π(y\|x)^t · ζ_L⁻¹(x,y)` | ➖ | — | Proof-layer simplification (via Philip Hall / Leinster 2008 Cor 1.5). The crate computes `ζ_t⁻¹` directly (dense + chain-sum) and separately ships the integer poset Möbius `ζ_L⁻¹` (the Leinster 2008 Cor 1.5 surface below); the factorization itself is not a runtime surface. Its consequence is covered exactly by the Prop 3.10 acceptance gate (`0e0` residual). |
-| Cor 3.9 (p.16): explicit `ζ_t⁻¹` — `−π(y\|x)^t` on one-step extensions `y ∈ L_x^{(1)}`, `1` on the diagonal, `0` otherwise | ➖ | — | Proof-layer step feeding the Prop 3.10 proof. Not asserted entry-wise in tests; verified indirectly and exactly through Prop 3.10 (`0e0` residual at `t ∈ {0.5, 1.5, 2.0, 5.0}` — the identity's consequence, `Mag = (t−1)ΣH_t + #T(⊥)`, holds to machine exactness). |
+| Prop 3.6 (p.15): `ζ_t` is invertible for all `t > 0`; closed form Eq (8) `ζ_t⁻¹(x,y) = Σ_k Σ_{nondeg. paths} (−1)^k Π π^t` via the formal expansion Eq (9) `Σ_k (−1)^k (ζ_t − δ)^k` | ✅ | `magnitude::mobius_function` + `mobius_chains::mobius_function_via_chains` | The chain-sum implementation *is* Eq (9): the von-Neumann series `μ = Σ (−1)^k M^k`, `M = ζ − I`, with `M^k` counting nondegenerate paths (see the §3.5 chain-sum row, where the same surface carries the Leinster 2013 Prop 2.1.3 anchor). Invertibility: `mobius_function` (Gaussian elimination) errors on singular ζ — unreachable for `t > 0` on the acyclic prefix poset per this Prop. |
+| Cor 3.8 (p.16): factorization `ζ_t⁻¹(x,y) = π(y\|x)^t · ζ_L⁻¹(x,y)` | ➖ | — | Proof-layer simplification (via Philip Hall / Leinster 2008 Cor 1.5). The crate computes `ζ_t⁻¹` directly (dense + chain-sum) and separately ships the integer poset Möbius `ζ_L⁻¹` (the Leinster 2008 Cor 1.5 surface below); the factorization itself is not a runtime surface. Its consequence is covered exactly by the Prop 3.10 acceptance gate (`0e0` residual). |
+| Cor 3.9 (p.17): explicit `ζ_t⁻¹` — `−π(y\|x)^t` on one-step extensions `y ∈ L_x^{(1)}`, `1` on the diagonal, `0` otherwise | ➖ | — | Proof-layer step feeding the Prop 3.10 proof. Not asserted entry-wise in tests; verified indirectly and exactly through Prop 3.10 (`0e0` residual at `t ∈ {0.5, 1.5, 2.0, 5.0}` — the identity's consequence, `Mag = (t−1)ΣH_t + #T(⊥)`, holds to machine exactness). |
 
 ### §3.14 Magnitude homology Euler-characteristic identity
 
@@ -140,7 +140,7 @@ Both v0.1.x acceptance verifications live in `tests/bv_2025_acceptance.rs` and p
 | 100 | ~11 ms |
 | 1000 | ~11 s |
 
-O(n³) Gaussian elimination dominates above n ≈ 100. 1000-state is the practical limit for the v0.1.x dense-matrix Möbius implementation; v0.2.0 chain-sum Möbius would lift this for sparse / `Tropical` regimes.
+O(n³) Gaussian elimination dominates above n ≈ 100. 1000-state is the practical limit for the v0.1.x dense-matrix Möbius implementation; chain-sum shipped at v0.2.0 (declines near-boundary input); the opt-in `f64-fast` route (#165, v0.6.0; one Cholesky/LBLT factorization) is the shipped fast numeric path for symmetric ζ; Tropical-valued magnitude stays out of scope per the section below.
 
 ---
 
@@ -181,7 +181,7 @@ O(n³) Gaussian elimination dominates above n ≈ 100. 1000-state is the practic
 
 **Paper:** `μ(a, b) = Σ_{n≥0} (−1)^n · #{nondegenerate n-paths from a to b}`.
 
-**Implementation** (`mobius_chains.rs:444-518`): `μ = Σ_{k=0}^K (−1)^k M^k`, where `M = ζ − I`.
+**Implementation** (`mobius_chains.rs::mobius_function_via_chains_exact`, currently lines 447-521): `μ = Σ_{k=0}^K (−1)^k M^k`, where `M = ζ − I`.
 
 The two are equivalent **as matrices** because `(M^k)[i][j]` counts walks of length `k` in the non-identity arrow graph (composition law of matrix multiplication on adjacency matrices), and "walks in the non-identity arrow graph" is exactly Leinster's "nondegenerate paths" — Leinster's `nondegenerate` (no `f_i` is an identity, §1 paragraph after Lemma 1.3) coincides with "no edge in the path is a diagonal-zeta self-loop" because the diagonal of `M = ζ − I` is forced to `0` on the identity-only-endo restriction. The `k = 0` term contributes the identity matrix (empty paths exist only at `a = b`). Conclusion: the matrix-power realisation is the entry-wise Cor 1.5 formula, paper-faithful.
 

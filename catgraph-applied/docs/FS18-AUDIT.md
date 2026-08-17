@@ -55,7 +55,7 @@
 | Ex 4.49: (Set, {1}, ×) monoidal structure | ➖ | — | motivational example |
 | Exercise 4.50: wiring diagram for monoidal composition | ✅ | catgraph-applied::wiring_diagram | `WiringDiagram` implements `Composable` + `Monoidal` for exactly this diagram interpretation |
 | Rough Def 4.51: V-category (enriched in SMC) | ✅ | catgraph-applied::enriched | See enriched-category rows below. |
-| V-enriched category | ✅ | catgraph-applied::enriched::EnrichedCategory | Trait over `V: Rig`. F&S §1.1, §2.4; CTFP Ch 28. |
+| V-enriched category | ✅ | catgraph-applied::enriched::EnrichedCategory | Trait over `V: Rig`. F&S §2.3 Def 2.46, §2.4; CTFP Ch 28. |
 | Lawvere metric space | ✅ | catgraph-applied::lawvere_metric::LawvereMetricSpace | Concrete impl over `Tropical`. Triangle-inequality verifier + `-ln π` embedding from `UnitInterval`. |
 | HomMap finite realization | ✅ | catgraph-applied::enriched::HomMap | Concrete trait realization. Used for testing + the catgraph-magnitude LmCategory construction (sibling crate). |
 
@@ -88,7 +88,7 @@
 
 | Item | Status | Location | Notes |
 |---|---|---|---|
-| Def 5.36: rig (semiring) | ✅ | catgraph-applied::rig | `Rig` trait (blanket impl over `Zero` + `One` + Add + Mul, all three catgraph-native and defined in `rig.rs`; `Rig` is a semiring, never anyone else's `Ring`) + 4 concrete instances: `BoolRig` (∨,∧), `UnitInterval` ([0,1] Viterbi), `Tropical` ([0,∞], min, +), `F64Rig`. `verify_rig_axioms` + `BaseChange<UnitInterval>` for `Tropical`. |
+| Def 5.36: rig (semiring) | ✅ | catgraph-applied::rig | `Rig` trait (blanket impl over `Zero` + `One` + Add + Mul, all three catgraph-native and defined in `rig.rs`; `Rig` is a semiring, never anyone else's `Ring`) + 5 concrete instances: `BoolRig` (∨,∧), `UnitInterval` ([0,1] Viterbi), `Tropical` ([0,∞], min, +), `F64Rig`, `Checked<T>` (opt-in poison-on-overflow wrapper, #88/#171); `z::Z` (BigInt) also satisfies the blanket `Rig`. `verify_rig_axioms` + `BaseChange<UnitInterval>` for `Tropical`. |
 | Def 5.45: SFG_R = Free(G_R) (signal flow graphs as free prop) | ✅ | catgraph-applied::sfg | `SignalFlowGraph<R>` with 5 primitive generators from Eq 5.52 (Copy 1→2, Discard 1→0, Add 2→1, Zero 0→1, Scalar(r) 1→1) plus derived `copy_n`/`discard_n`. |
 | Def 5.50: Mat(R) prop of R-matrices | ✅ | catgraph-applied::mat | `MatR<R>` pure-rig matrix prop. F&S convention: morphism m→n is m×n matrix. Composable/Monoidal/SymmetricMonoidalMorphism over any `Rig`; block_diagonal tensor. `mat_f64` nalgebra bridge behind opt-in `f64-rig` feature. |
 | Thm 5.53: prop functor S: SFG_R → Mat(R) | ✅ | catgraph-applied::sfg_to_mat | `sfg_to_mat` structural recursion over `PropExpr<SfgGenerator<R>>`; generator table matches Eq 5.52 exactly. Functoriality (S(f∘g) = S(f)·S(g), S(f⊗g) = S(f)⊕S(g)) verified on all 4 rigs via 13 integration tests. |
@@ -135,7 +135,7 @@
 |---|---|---|---|
 | Rough Def 6.68: symmetric monoidal functor (F, φ) | ➖ | — | theoretical; catgraph uses `HypergraphFunctor` |
 | Def 6.75: F-decorated cospan | ✅ | catgraph-applied::decorated_cospan | `Decoration` trait + generic `DecoratedCospan<Lambda, D>` struct. `PetriDecoration` specializes to Petri nets; `Circuit` example specializes to EdgeSet on apex vertices. |
-| Thm 6.77: Cospan_F is a hypergraph category | ✅ | catgraph-applied::decorated_cospan + petri_net | `impl HypergraphCategory<Lambda> for DecoratedCospan<Lambda, D>` realizes the theorem generically (any `D: Decoration`). `impl HypergraphCategory<Lambda> for PetriNet<Lambda>` specializes via `from_cospan`. |
+| Thm 6.77: Cospan_F is a hypergraph category | ✅ | catgraph-applied::decorated_cospan + petri_net | `impl HypergraphCategory<Lambda> for DecoratedCospan<Lambda, D>` realizes the theorem generically (any `D: Decoration`). `impl HypergraphCategory<Lambda> for PetriNet<Lambda>` specializes via `from_cospan`. ⚠ #272 (open): `PetriNet`'s braiding is lossy — `from_decorated_cospan` discards both leg maps and `domain()`/`codomain()` rebuild from transitions, so a pure braiding has empty boundaries; the SMC half of the Thm 6.77 structure is not observable on `PetriNet` until #272 resolves (see `tests/braiding_cross_carrier.rs`). |
 | Exercise 6.79–6.86: Circ functor, decorated cospan composition for circuits | ✅ | catgraph-applied::decorated_cospan + examples/decorated_cospan_circuit.rs | Parallel and series composition both demonstrated; series composition uses `Cospan::compose_with_quotient` + `D::pushforward` to coequalize the shared boundary vertex. |
 | Exercise 6.88: closed circuits via η;x;ε composition | ❌ | — | no closed-circuit construction |
 | Petri net cospan bridge (pre/post arc weights as left/right legs) | ✅ | catgraph-applied::petri_net | `from_cospan`, `transition_as_cospan` — multiplicity-weighted cospan bridge. `fire`, `enabled`, `reachable` for state-space exploration. |
@@ -217,13 +217,13 @@ The **#57-a1 re-pin is a drop, and it narrows the conflation without removing it
 
 What was **forced** is a statement about the relation, not the count: the content relation *contains* the NF relation it replaced (`nf` preserves content, §4.3 Lemma 4.2), so the relation only grew and no previously provable equality became unprovable. The count was at that time a **greedy-partition statistic over a non-transitive `eq_mod`** (`Scalar(false)` ~ `Discard ; Zero` ~ `Discard ⊗ Zero` while `Scalar(false)` ≁ `Discard ⊗ Zero`; 10 490 ordered violating triples measured on a 120-expression pool of parallel `1 → 1` arrows, zero `None` verdicts), and over a non-transitive relation the greedy class count is not a function of the relation at all, so enlargement carried no monotonicity theorem — the #57-a1 direction was **empirical**: all four rigs fell. **#189 closed that hole**: the bucket partition is now the connected components of the same `Some(true)` edge set, which *is* a function of the relation, and a relation that only grows can only gain edges and so only merge components — the counts are now monotone-down under relation growth. The switch was a one-off re-baseline in its own right (952 → 748, 1397 → 1114, 1974 → 1594, 1969 → 1590): every greedy class sits inside one component, so components are coarser-or-equal and all four rigs had to fall, with `eq_mod`, `nf` and the presentation all unchanged. Containment is pinned as a test over 2000 unrelated pairs (`tests/content_equality_corpus.rs`), though it only bites where `nf` agrees; the direct Lemma 4.2 check is `nf_preserves_content_across_the_corpus` in the same file. Note the metric's blind spot, unchanged: merges happen only *within* a matrix bucket, so these counts cannot witness a false equality across buckets — soundness rests on that file's negative controls and on `thm_5_60_soundness_*`.
 
-The related C2 interchange gap (**#14**) is now **closed**: `topological_layer_order` (Step 4(c)) plus mixed-layer braid isolation and identity-width-refined naturality canonicalize interchange, and the `interchange` proptest is un-ignored and gating. One narrow follow-up remains — mid-layer zero-source (η) scheduling — recorded as an ignored known-gap test.
+The related C2 interchange gap (**#14**) is now **closed**: `topological_layer_order` (Step 4(c)) plus mixed-layer braid isolation and identity-width-refined naturality canonicalize interchange, and the `interchange` proptest is un-ignored and gating. The mid-layer zero-source (η) scheduling follow-up is closed too (#55): `interchange_zero_source_eta` (`tests/smc_nf_completeness.rs`) runs as a plain gating test.
 
 ---
 
-## Cross-paper reconciliation: both F&S papers × all three workspace crates
+## Cross-paper reconciliation: both F&S papers × the three crates mapped here (core, applied, physics)
 
-This section maps every catgraph workspace module to its paper provenance (or lack thereof). Two papers are tracked:
+This section maps every module of the three crates covered here (core, applied, physics) to its paper provenance (or lack thereof). Two papers are tracked:
 
 - **[FS19]** = Fong & Spivak, *Hypergraph Categories* (arXiv:1806.08304v3, 2019) — tracked by [`catgraph/docs/FS19-AUDIT.md`](../../catgraph/docs/FS19-AUDIT.md)
 - **[FS18]** = Fong & Spivak, *Seven Sketches in Compositionality* (arXiv:1803.05316v3, 2018) — tracked by this document
@@ -256,7 +256,7 @@ This section maps every catgraph workspace module to its paper provenance (or la
 | `linear_combination.rs` | — | §5.3.1 (rig infrastructure) | — | Free R-module R[T]. Provides the coefficient algebra that [FS18] §5.3 presupposes. Not a formal item in either paper — it's algebraic infrastructure. |
 | `e1_operad.rs` | — | §6.5 Rough Def 6.91 | May [May72], Boardman-Vogt [BV73] | Little-intervals operad. [FS18] §6.5 defines operads abstractly; the *specific* E₁ operad is from the algebraic topology literature. |
 | `e2_operad.rs` | — | §6.5 Rough Def 6.91 | May [May72], Boardman-Vogt [BV73] | Little-disks operad. Same: abstract operad definition from [FS18], specific E₂ construction from homotopy theory. |
-| `rig.rs` | — | §5.3.1 Def 5.36 | none (blanket) | `Rig` trait + BoolRig, UnitInterval, Tropical, F64Rig. `Zero`/`One` are catgraph-native, defined in the same module (#219). |
+| `rig.rs` | — | §5.3.1 Def 5.36 | none (blanket) | `Rig` trait + BoolRig, UnitInterval, Tropical, F64Rig, `Checked<T>` (#88/#171); `z::Z` satisfies the blanket impl. `Zero`/`One` are catgraph-native, defined in the same module (#219). |
 | `mat_kron.rs` | §2.3 Ex 2.16 | — | Kissinger 2015 (FdVect HC) | `MatKron<R>` Kronecker-tensor **genuine hypergraph category** over a rig; Hadamard SCFM (μ/δ/η/ε) as inherent generators on native `Monoidal`/`Composable`/`SymmetricMonoidalMorphism`; speciality δ;μ=id (n=2,3,5). |
 | `trace.rs` | §3.1 | — | — | Partial trace `Tr_X(f)` built from the `mat_kron` cup/cap generators (strict Kronecker; no associators). |
 | `prop/presentation/mod.rs` | — | §5.2 Def 5.33 | — | `Presentation<G>` with 9-rule SMC canonical form + user equations; `NormalizeEngine` selector (Structural / CongruenceClosure) + `eq_mod_functorial<F>` method. File split out of a single `prop/presentation.rs` when the CC backend landed. |
@@ -268,9 +268,13 @@ This section maps every catgraph workspace module to its paper provenance (or la
 | `prop/presentation/smc_nf.rs` | — | §5.2 Def 5.2/5.25 (SMC coherence) | Joyal-Street 1991 Part I, Selinger 2011 | Layer 1 string-diagram normal form — canonicalizes PropExpr up to SMC coherence (associator, unitors, interchange, braid naturality, σ²=id). |
 | `prop/presentation/functorial.rs` | — | §5.4 Thm 5.60 (decision) | Baez-Erbele 2015 (fields); Wadsley–Woods arXiv:1505.00048 (commutative rigs, cf. BE15 §6) | `CompleteFunctor<G>` trait + `MatrixNFFunctor<R>` concrete instance wrapping `sfg_to_mat` as a complete-by-theorem decision procedure for Mat(R). |
 | `mat_f64.rs` (feature `f64-rig`) | — | §5.3 Def 5.50 bridge | nalgebra | `mat_to_nalgebra`/`mat_from_nalgebra` + det + inverse for F64Rig. |
-| `enriched.rs` | — | §1.1, §2.4, Rough Def 4.51 | CTFP Ch 28 | `EnrichedCategory<V: Rig>` trait + `HomMap<O, V>` finite realization. Object-safe for the `catgraph-magnitude` LmCategory. |
-| `lawvere_metric.rs` | — | §1.3–1.4 pedagogical anchor | Lawvere 1973, CTFP §28.5 | `LawvereMetricSpace<T>` over `Tropical` + triangle-inequality verifier + `-ln π` embedding from `UnitInterval`. |
+| `enriched.rs` | — | §2.3 Def 2.46, §2.4, Rough Def 4.51 | CTFP Ch 28 | `EnrichedCategory<V: Rig>` trait + `HomMap<O, V>` finite realization. Object-safe for the `catgraph-magnitude` LmCategory. |
+| `lawvere_metric.rs` | — | §2.3.3 Def 2.53 (pedagogical anchor) | Lawvere 1973, CTFP §28.5 | `LawvereMetricSpace<T>` over `Tropical` + triangle-inequality verifier + `-ln π` embedding from `UnitInterval`. |
 | `prop/presentation/kb.rs` | — | §5.2 Def 5.33 (CC backend) | Downey-Sethi-Tarjan 1980 | Congruence-closure decision procedure (signature-table variant) — default `eq_mod` backend via `NormalizeEngine::CongruenceClosure`. |
+| `prop/colored.rs` | Def 3.9 (OF(Λ)) | §5.2 Def 5.25 (single-Λ degeneration) | — | #79 — `ColoredExpr`, worded `PropSignature`, `eq_colored`. |
+| `prop/presentation/content.rs` | — | — | BGKSZ 1602.06771v2 §3 Prop 3.4 + Thm 3.12 | #57 a1/#255 — `content_of`/`content_eq`/`canonical_key`/`ContentKey`. |
+| `prop/presentation/display.rs` | — | — | BGKSZ 1602.06771v2 §3 (readback) | #187 — `canonical_display`. |
+| `prop/presentation/rewrite.rs` | — | — | BGKSZ 1602.06771v2 §5 Thm 5.6 (convex-DPO) | #214/#249/#250 — `RewriteRule`/`MatchSite`/`match_sites`/`apply_at`/`replay`; fuel-bounded, per-step soundness only. |
 
 ### catgraph-physics  — no F&S provenance
 
@@ -288,7 +292,7 @@ This section maps every catgraph workspace module to its paper provenance (or la
 | `multiway/curvature.rs` | — | — | Ollivier [Oll09] | Ollivier-Ricci curvature on graphs |
 | `multiway/wasserstein.rs` | — | — | Villani [Vil03] | Wasserstein-1 optimal transport |
 | `multiway/branchial_spectrum.rs` | — | — | spectral graph theory | Laplacian eigendecomposition (nalgebra) |
-| `multiway/branchial_analysis.rs` | — | — | rustworkx-core algorithms | Coloring, k-core, articulation points |
+| `multiway/branchial_analysis.rs` | — | — | rustworkx-core algorithms (incl. katz_centrality) | Coloring, k-core, articulation points, Katz + betweenness centrality (#161 — Katz, not eigenvector: undefined on a step-graded DAG) |
 
 **catgraph-physics uses catgraph core types** (`Composable`, `Cospan`, `Span`) as categorical bridges, but its mathematical content is entirely from the Wolfram model / discrete differential geometry literature — neither F&S paper.
 
@@ -302,6 +306,7 @@ This section maps every catgraph workspace module to its paper provenance (or la
 | `temperley_lieb.rs` | `dagger` (adjoint / vertical reflection) | dagger-category structure, not F&S |
 | `temperley_lieb.rs` | `non_crossing` detection | TL-specific, not F&S |
 | `e1_operad.rs` | `go_to_monoid` homomorphism | algebraic topology, not F&S |
+| `e1_operad.rs` | `E1::random` (seeded generator over `rand_core`) | catgraph design (#141/#239), not F&S |
 | `e1_operad.rs` | `coalesce_boxes` (inverse substitution) | catgraph design |
 | `e2_operad.rs` | `from_e1_config` (E₁ → E₂ embedding) | standard embedding, not F&S |
 | `petri_net.rs` | BFS reachability analysis | Petri net theory [Murata89], not F&S |
@@ -337,7 +342,7 @@ hom-objects live in a monoidal base `V` (e.g. `[0,1]`, `[0,∞]`, a tropical
 semiring, or a more general rig) — is implemented one level up:
 
 - **Compute layer:** [`catgraph-magnitude`](../../catgraph-magnitude), the
-  sibling workspace crate. Provides `Rig`/`Ring`,
+  sibling workspace crate. Provides its own `Ring` and re-exports catgraph-applied's `Rig`/`Zero`/`One` (#219),
   `WeightedCospan<Q>`, `LawvereMetricSpace<T>`, `LmCategory`, and the
   `magnitude(t)` functional. Anchored to [BV25] (arXiv:2501.06662v2).
 - **Application layer:** the coalition layer lives in the downstream private
