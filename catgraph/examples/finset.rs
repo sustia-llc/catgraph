@@ -267,7 +267,7 @@ fn epi_mono_factorization() {
 
     // SymmetricMonoidalDiscreteMorphism: from_permutation
     let p = Permutation::transposition(3, 0, 2);
-    let perm_decomp = Decomposition::from_permutation(p, 3, true);
+    let perm_decomp = Decomposition::from_permutation(p, 3);
     println!(
         "\nfrom_permutation swap(0,2): domain={}, codomain={}",
         perm_decomp.domain(),

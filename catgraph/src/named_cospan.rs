@@ -203,58 +203,106 @@ where
         }
     }
 
-    /// Build a named cospan from a permutation, deriving port names from `prenames`.
+    /// Build a named cospan from a permutation, with `types` and `prenames`
+    /// labelling the **domain**.
     ///
-    /// When `types_as_on_domain` is true, `types` and `prenames` order follows the domain side;
-    /// the codomain side is reordered by the permutation (and vice versa for false).
+    /// The named counterpart of
+    /// [`Cospan::from_permutation_on_domain`](crate::cospan::Cospan::from_permutation_on_domain):
+    /// the left port names follow `prenames` as given, and the right port names
+    /// are reordered by `p.inv()`, matching how the codomain *labels* are
+    /// reordered.
     ///
-    /// # Panics
+    /// # #258
     ///
-    /// Panics if `types.len() != prenames.len()`.
+    /// This and [`from_permutation_extra_data_on_codomain`](Self::from_permutation_extra_data_on_codomain)
+    /// replace a single `from_permutation_extra_data(.., types_as_on_domain: bool, ..)`.
+    /// The bool left for the same reason it left the trait, and the return type
+    /// became fallible in the same move: the old body reached the callee's
+    /// length check through an `.unwrap()` in production code, and there is no
+    /// precondition here that makes `p.len() == types.len()` unreachable —
+    /// `p` and `types` are independent caller arguments. So this propagates
+    /// with `?` rather than asserting an invariant it does not have.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::CompositionSizeMismatch`] if `p`, `types` and
+    /// `prenames` do not all have the same length. `prenames` is checked first,
+    /// then `p` against `types` by the cospan builder.
     #[allow(clippy::needless_pass_by_value)]
-    pub fn from_permutation_extra_data<T, F>(
+    pub fn from_permutation_extra_data_on_domain<T, F>(
         p: Permutation,
         types: &[Lambda],
-        types_as_on_domain: bool,
         prenames: &[T],
         prename_to_name: F,
-    ) -> Self
+    ) -> Result<Self, CatgraphError>
     where
         T: Clone,
         F: Fn(T) -> (LeftPortName, RightPortName),
     {
-        assert_eq!(types.len(), prenames.len());
-        let cospan = Cospan::from_permutation(p.clone(), types, types_as_on_domain).unwrap();
-        let (left_names, right_names) = if types_as_on_domain {
-            (
-                prenames
-                    .iter()
-                    .map(|pre| prename_to_name(pre.clone()).0)
-                    .collect(),
-                p.inv()
-                    .permute(prenames)
-                    .iter()
-                    .map(|pre| prename_to_name(pre.clone()).1)
-                    .collect(),
-            )
-        } else {
-            (
-                p.permute(prenames)
-                    .iter()
-                    .map(|pre| prename_to_name(pre.clone()).0)
-                    .collect(),
-                prenames
-                    .iter()
-                    .map(|pre| prename_to_name(pre.clone()).1)
-                    .collect(),
-            )
-        };
-
-        Self {
-            cospan,
-            left_names,
-            right_names,
+        if types.len() != prenames.len() {
+            return Err(CatgraphError::CompositionSizeMismatch {
+                expected: types.len(),
+                actual: prenames.len(),
+            });
         }
+        let cospan = Cospan::from_permutation_on_domain(p.clone(), types)?;
+        Ok(Self {
+            cospan,
+            left_names: prenames
+                .iter()
+                .map(|pre| prename_to_name(pre.clone()).0)
+                .collect(),
+            right_names: p
+                .inv()
+                .permute(prenames)
+                .iter()
+                .map(|pre| prename_to_name(pre.clone()).1)
+                .collect(),
+        })
+    }
+
+    /// Build a named cospan from a permutation, with `types` and `prenames`
+    /// labelling the **codomain**.
+    ///
+    /// The named counterpart of
+    /// [`Cospan::from_permutation_on_codomain`](crate::cospan::Cospan::from_permutation_on_codomain):
+    /// the right port names follow `prenames` as given, and the left port names
+    /// are reordered by `p`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::CompositionSizeMismatch`] if `p`, `types` and
+    /// `prenames` do not all have the same length.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn from_permutation_extra_data_on_codomain<T, F>(
+        p: Permutation,
+        types: &[Lambda],
+        prenames: &[T],
+        prename_to_name: F,
+    ) -> Result<Self, CatgraphError>
+    where
+        T: Clone,
+        F: Fn(T) -> (LeftPortName, RightPortName),
+    {
+        if types.len() != prenames.len() {
+            return Err(CatgraphError::CompositionSizeMismatch {
+                expected: types.len(),
+                actual: prenames.len(),
+            });
+        }
+        let cospan = Cospan::from_permutation_on_codomain(p.clone(), types)?;
+        Ok(Self {
+            cospan,
+            left_names: p
+                .permute(prenames)
+                .iter()
+                .map(|pre| prename_to_name(pre.clone()).0)
+                .collect(),
+            right_names: prenames
+                .iter()
+                .map(|pre| prename_to_name(pre.clone()).1)
+                .collect(),
+        })
     }
 
     /// Add a named boundary node targeting an existing middle index. Side determined by `new_name`.
@@ -625,22 +673,57 @@ where
     LeftPortName: Eq + Clone,
     RightPortName: Eq + Clone,
 {
+    /// Delegates to [`Cospan::permute_side`] and carries the port names with
+    /// their wires.
+    ///
+    /// A name word travels exactly as a label word does, so it takes the same
+    /// `p.inv()` [`Cospan`] applies to the leg — see the trait's contract.
+    ///
+    /// ⚠ **Breaking at #258**, with `Cospan`: both the leg and the names used
+    /// to move by `p`, realizing `β(p⁻¹)`.
     fn permute_side(&mut self, p: &Permutation, of_right_leg: bool) {
+        let p_inv = p.inv();
         if of_right_leg {
-            in_place_permute(&mut self.right_names, p);
+            in_place_permute(&mut self.right_names, &p_inv);
         } else {
-            in_place_permute(&mut self.left_names, p);
+            in_place_permute(&mut self.left_names, &p_inv);
         }
         self.cospan.permute_side(p, of_right_leg);
     }
 
-    fn from_permutation(
+    /// Always fails: a named cospan cannot be built from a permutation alone.
+    ///
+    /// Port names are not derivable from `types`, so there is no honest value
+    /// to return. This stays a loud, unconditional failure — the direction
+    /// split of #258 does not make it satisfiable, it only makes the redirect
+    /// name the matching direction.
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`CatgraphError::Composition`], directing the caller to
+    /// [`NamedCospan::from_permutation_extra_data_on_domain`].
+    fn from_permutation_on_domain(
         _p: Permutation,
         _types: &[Lambda],
-        _types_as_on_domain: bool,
     ) -> Result<Self, CatgraphError> {
         Err(CatgraphError::Composition {
-            message: "NamedCospan::from_permutation requires port name data; use from_permutation_extra_data instead".to_string(),
+            message: "NamedCospan::from_permutation_on_domain requires port name data; use from_permutation_extra_data_on_domain instead".to_string(),
+        })
+    }
+
+    /// Always fails, for the same reason as
+    /// [`from_permutation_on_domain`](Self::from_permutation_on_domain).
+    ///
+    /// # Errors
+    ///
+    /// Always returns [`CatgraphError::Composition`], directing the caller to
+    /// [`NamedCospan::from_permutation_extra_data_on_codomain`].
+    fn from_permutation_on_codomain(
+        _p: Permutation,
+        _types: &[Lambda],
+    ) -> Result<Self, CatgraphError> {
+        Err(CatgraphError::Composition {
+            message: "NamedCospan::from_permutation_on_codomain requires port name data; use from_permutation_extra_data_on_codomain instead".to_string(),
         })
     }
 }
@@ -1185,21 +1268,20 @@ mod test {
             Blue,
         }
         let full_types: Vec<Color> = vec![Color::Red, Color::Green, Color::Blue];
-        let type_names_on_source = true;
-        let cospan = NamedCospan::<Color, Color, Color>::from_permutation_extra_data(
+        let cospan = NamedCospan::<Color, Color, Color>::from_permutation_extra_data_on_domain(
             Permutation::rotation_left(3, 1),
             &full_types,
-            type_names_on_source,
             &full_types,
             |z| (z, z),
-        );
-        let cospan_2 = NamedCospan::<Color, Color, Color>::from_permutation_extra_data(
+        )
+        .unwrap();
+        let cospan_2 = NamedCospan::<Color, Color, Color>::from_permutation_extra_data_on_domain(
             Permutation::rotation_left(3, 2),
             &[Color::Blue, Color::Red, Color::Green],
-            type_names_on_source,
             &[Color::Green, Color::Blue, Color::Red],
             |z| (z, z),
-        );
+        )
+        .unwrap();
         let mid_interface_1 = cospan.codomain();
         let mid_interface_2 = cospan_2.domain();
         let comp = cospan.compose(&cospan_2);
@@ -1217,21 +1299,20 @@ mod test {
             }
         }
 
-        let type_names_on_source = false;
-        let cospan = NamedCospan::<Color, Color, Color>::from_permutation_extra_data(
+        let cospan = NamedCospan::<Color, Color, Color>::from_permutation_extra_data_on_codomain(
             Permutation::rotation_left(3, 1),
             &full_types,
-            type_names_on_source,
             &full_types,
             |z| (z, z),
-        );
-        let cospan_2 = NamedCospan::<Color, Color, Color>::from_permutation_extra_data(
+        )
+        .unwrap();
+        let cospan_2 = NamedCospan::<Color, Color, Color>::from_permutation_extra_data_on_codomain(
             Permutation::rotation_left(3, 2),
             &[Color::Green, Color::Blue, Color::Red],
-            type_names_on_source,
             &[Color::Green, Color::Blue, Color::Red],
             |z| (z, z),
-        );
+        )
+        .unwrap();
         let mid_interface_1 = cospan.codomain();
         let mid_interface_2 = cospan_2.domain();
         let comp = cospan.compose(&cospan_2);
@@ -1265,33 +1346,32 @@ mod test {
 
         for trial_num in 0..20 {
             let types_as_on_source = trial_num % 2 == 0;
+            let build = |p: permutations::Permutation| {
+                let types = (0..n).map(|_| ()).collect::<Vec<_>>();
+                let prenames = (0..n).collect::<Vec<usize>>();
+                if types_as_on_source {
+                    NamedCospan::from_permutation_extra_data_on_domain(p, &types, &prenames, |_| {
+                        ((), ())
+                    })
+                } else {
+                    NamedCospan::from_permutation_extra_data_on_codomain(
+                        p,
+                        &types,
+                        &prenames,
+                        |_| ((), ()),
+                    )
+                }
+                .unwrap()
+            };
             let p1 = rand_perm(n, n * 2, &mut rng);
             let p2 = rand_perm(n, n * 2, &mut rng);
             let prod = p1.clone() * p2.clone();
-            let cospan_p1 = NamedCospan::from_permutation_extra_data(
-                p1,
-                &(0..n).map(|_| ()).collect::<Vec<_>>(),
-                types_as_on_source,
-                &(0..n).collect::<Vec<usize>>(),
-                |_| ((), ()),
-            );
-            let cospan_p2 = NamedCospan::from_permutation_extra_data(
-                p2,
-                &(0..n).map(|_| ()).collect::<Vec<_>>(),
-                types_as_on_source,
-                &(0..n).collect::<Vec<_>>(),
-                |_| ((), ()),
-            );
+            let cospan_p1 = build(p1);
+            let cospan_p2 = build(p2);
             let cospan_prod = cospan_p1.compose(&cospan_p2);
             match cospan_prod {
                 Ok(real_res) => {
-                    let expected_res = NamedCospan::from_permutation_extra_data(
-                        prod,
-                        &(0..n).map(|_| ()).collect::<Vec<_>>(),
-                        types_as_on_source,
-                        &(0..n).collect::<Vec<usize>>(),
-                        |_| ((), ()),
-                    );
+                    let expected_res = build(prod);
                     assert_eq!(real_res.domain(), expected_res.domain());
                     assert_eq!(real_res.codomain(), expected_res.codomain());
                     assert_eq!(real_res.left_names, expected_res.left_names);

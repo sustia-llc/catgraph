@@ -216,7 +216,7 @@ fn from_permutation_demo() {
     let swap = Permutation::transposition(3, 0, 2);
     let types = ['a', 'b', 'c'];
     let perm_morph: FrobeniusMorphism<char, ()> =
-        FrobeniusMorphism::from_permutation(swap, &types, true).unwrap();
+        FrobeniusMorphism::from_permutation_on_domain(swap, &types).unwrap();
     println!(
         "swap(0,2): depth={}, domain={:?} -> codomain={:?}",
         perm_morph.depth(),
@@ -227,7 +227,7 @@ fn from_permutation_demo() {
     // Identity permutation
     let id_perm = Permutation::identity(3);
     let id_morph: FrobeniusMorphism<char, ()> =
-        FrobeniusMorphism::from_permutation(id_perm, &types, true).unwrap();
+        FrobeniusMorphism::from_permutation_on_domain(id_perm, &types).unwrap();
     println!(
         "identity(3): depth={}, domain={:?} -> codomain={:?}",
         id_morph.depth(),
@@ -239,7 +239,7 @@ fn from_permutation_demo() {
     let rot = Permutation::rotation_left(4, 1);
     let types4 = ['a', 'b', 'c', 'd'];
     let rot_morph: FrobeniusMorphism<char, ()> =
-        FrobeniusMorphism::from_permutation(rot, &types4, true).unwrap();
+        FrobeniusMorphism::from_permutation_on_domain(rot, &types4).unwrap();
     println!(
         "rotate_left(1): depth={}, domain={:?} -> codomain={:?}",
         rot_morph.depth(),

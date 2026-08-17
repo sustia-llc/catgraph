@@ -227,16 +227,18 @@ where
 
 /// Symmetric monoidal structure (braiding / permutation of tensor factors).
 ///
-/// [`SymmetricMonoidalMorphism`] exposes two methods: [`permute_side`] mutates
-/// the morphism by pre/post-composing with a permutation of one leg, and
-/// [`from_permutation`] constructs a pure-braiding morphism from a permutation
-/// on a typed tensor word. In both cases the apex cardinality is unchanged —
-/// permutations re-label leg targets, not apex nodes — so the decoration is
-/// carried through unmodified (`permute_side`) or initialised to the empty
-/// decoration on an apex of size `types.len()` (`from_permutation`).
+/// [`SymmetricMonoidalMorphism`] exposes three methods: [`permute_side`]
+/// mutates the morphism by pre/post-composing with a permutation of one leg,
+/// while [`from_permutation_on_domain`] and [`from_permutation_on_codomain`]
+/// construct a pure-braiding morphism from a permutation on a typed tensor
+/// word. In every case the apex cardinality is unchanged — permutations
+/// re-label leg targets, not apex nodes — so the decoration is carried through
+/// unmodified (`permute_side`) or initialised to the empty decoration on an
+/// apex of size `types.len()` (the two constructors).
 ///
 /// [`permute_side`]: SymmetricMonoidalMorphism::permute_side
-/// [`from_permutation`]: SymmetricMonoidalMorphism::from_permutation
+/// [`from_permutation_on_domain`]: SymmetricMonoidalMorphism::from_permutation_on_domain
+/// [`from_permutation_on_codomain`]: SymmetricMonoidalMorphism::from_permutation_on_codomain
 impl<Lambda, D> SymmetricMonoidalMorphism<Lambda> for DecoratedCospan<Lambda, D>
 where
     Lambda: Eq + Copy + Debug,
@@ -246,15 +248,20 @@ where
         self.cospan.permute_side(p, of_codomain);
     }
 
-    fn from_permutation(
-        p: Permutation,
-        types: &[Lambda],
-        types_as_on_domain: bool,
-    ) -> Result<Self, CatgraphError> {
-        let cospan = Cospan::from_permutation(p, types, types_as_on_domain)?;
+    fn from_permutation_on_domain(p: Permutation, types: &[Lambda]) -> Result<Self, CatgraphError> {
         Ok(Self {
             decoration: D::empty(types.len()),
-            cospan,
+            cospan: Cospan::from_permutation_on_domain(p, types)?,
+        })
+    }
+
+    fn from_permutation_on_codomain(
+        p: Permutation,
+        types: &[Lambda],
+    ) -> Result<Self, CatgraphError> {
+        Ok(Self {
+            decoration: D::empty(types.len()),
+            cospan: Cospan::from_permutation_on_codomain(p, types)?,
         })
     }
 }
@@ -470,8 +477,8 @@ mod tests {
 
         // Swap of two wires: permutation (0 1).
         let swap = Permutation::transposition(2, 0, 1);
-        let braid =
-            DecoratedCospan::<char, Counter>::from_permutation(swap, &['a', 'b'], true).unwrap();
+        let braid = DecoratedCospan::<char, Counter>::from_permutation_on_domain(swap, &['a', 'b'])
+            .unwrap();
         // domain/codomain labels are carried through — for a swap on ['a','b']
         // the codomain label sequence is the permuted one.
         assert_eq!(braid.cospan.domain(), vec!['a', 'b']);

@@ -260,13 +260,17 @@ impl<R: Rig> MonoidalMorphism<Vec<()>> for MatKron<R> {}
 // Both the permutation-matrix construction and the pre/post-multiply logic are
 // identical to `MatR`'s (composition is matmul for both carriers), so these
 // delegate to the inner `MatR` rather than duplicating that machinery.
+// Like `MatR`, `MatKron`'s objects are `Vec<()>`, so the two #258 constructors
+// have no label to place and coincide. Both delegate to `MatR`'s, which is also
+// what makes the two carriers agree on the braiding by construction rather than
+// by a duplicated convention that could drift.
 impl<R: Rig> SymmetricMonoidalMorphism<()> for MatKron<R> {
-    fn from_permutation(
-        p: Permutation,
-        _types: &[()],
-        _types_as_on_domain: bool,
-    ) -> Result<Self, CatgraphError> {
-        Ok(Self(MatR::permutation_matrix(&p)))
+    fn from_permutation_on_domain(p: Permutation, types: &[()]) -> Result<Self, CatgraphError> {
+        MatR::from_permutation_on_domain(p, types).map(Self)
+    }
+
+    fn from_permutation_on_codomain(p: Permutation, types: &[()]) -> Result<Self, CatgraphError> {
+        MatR::from_permutation_on_codomain(p, types).map(Self)
     }
 
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool) {

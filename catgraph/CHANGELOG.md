@@ -6,6 +6,225 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **`SymmetricMonoidalMorphism::from_permutation(p, types, types_as_on_domain: bool)`
+  is replaced by two named methods**
+  ([#258](https://github.com/sustia-llc/catgraph/issues/258)):
+  `from_permutation_on_domain(p, types)` and
+  `from_permutation_on_codomain(p, types)`. The `bool` leaves the trait
+  entirely.
+
+  Both build the same wiring — domain wire `i` to codomain wire `p.apply(i)` —
+  and differ only in which boundary `types` labels: `on_domain` gives
+  `domain() == types` and `codomain()[k] == types[p.inv().apply(k)]`;
+  `on_codomain` gives `codomain() == types` and `domain()[i] == types[p.apply(i)]`.
+
+  Migration is mechanical: `from_permutation(p, t, true)` →
+  `from_permutation_on_domain(p, t)`, `from_permutation(p, t, false)` →
+  `from_permutation_on_codomain(p, t)`.
+
+  The reason for two names rather than a documented flag is that a `bool` is a
+  parameter on which an implementation can be silently inverted. Three of the
+  workspace's implementations had drifted onto three different conventions, and
+  no test could see it: within one carrier an inverted braiding is still a
+  perfectly consistent braiding, and nothing exercised one permutation across
+  two carriers. Two names make the wrong direction unrepresentable at the call
+  site, and force every implementation to state which direction it realizes.
+
+- **`SymmetricMonoidalDiscreteMorphism::from_permutation` loses its `bool` and
+  keeps one constructor** ([#258]). Its object is a bare cardinality, so there
+  is no label to place on either boundary and the sibling trait's two
+  constructors would collapse to the same function of the same two arguments.
+  `Decomposition::from_permutation(p, n)` is the whole surface.
+
+- **`Span::from_permutation_on_codomain` realizes `p`, where the old
+  `types_as_on_domain = false` branch realized `p⁻¹`** ([#258]). This is a
+  behaviour change, not a rename. The old body built `left: p.inv().permute(types)`
+  with apex pairs `(p.apply(idx), idx)`, wiring domain `j` to codomain
+  `p.inv().apply(j)` — disagreeing with `Cospan` on both the wiring and the
+  domain object for every non-involutive `p`. On `rotation_left(3, 1)` over
+  `['a','b','c']` it reported a domain of `['c','a','b']` where `Cospan` reports
+  `['b','c','a']`. The `types_as_on_domain = true` branch was always correct.
+  The two in-crate tests covering the wrong branch asserted only `codomain()`,
+  `domain().len()` and label agreement across the apex, every one of which an
+  inverted wiring satisfies; they now pin the full contract.
+
+  The cached identity flags moved with the wiring and for the same reason —
+  they describe the apex leg maps, not the label vectors — so
+  `is_left_identity()` / `is_right_identity()` on the result are swapped
+  relative to the old branch.
+
+- **`CospanAlgebraMorphism`'s permutation constructors were not braidings at
+  all, and now are** ([#258]). Two independent defects, neither observable
+  before this release because nothing in the workspace exercised this impl:
+  it was reachable only through the generic trait, and every caller of the
+  trait used a cospan or matrix carrier.
+
+  1. The labels were inverted: the non-`types` side was `p.permute(types)`
+     where the cospan family uses `p.inv().permute(types)`.
+  2. The structural cospan was built over a `2n`-vertex apex (`domain ++
+     codomain`) with a *bijective* right leg, so no domain wire shared an apex
+     vertex with any codomain wire and the element was the all-singletons
+     partition. A braiding must merge domain wire `i` with codomain wire
+     `p.apply(i)` on one vertex, as `identity_in` already does with
+     `(0..n) ++ (0..n)` over an `n`-vertex apex.
+
+  The clinching evidence for (2) is that
+  `from_permutation(Permutation::identity(n), ..)` did not equal `identity(..)`,
+  which no symmetric monoidal category permits. Both are fixed; the apex is now
+  `n` vertices and the right leg degenerates to `identity_in`'s exactly when `p`
+  is the identity.
+
+- **`NamedCospan::from_permutation_extra_data` splits the same way and is now
+  fallible**: `from_permutation_extra_data_on_domain` /
+  `..._on_codomain`, each returning `Result<Self, CatgraphError>` ([#258]).
+  The old body reached `Cospan::from_permutation` through an `.unwrap()` in
+  production code. There is no precondition making that unreachable — `p`,
+  `types` and `prenames` are independent caller arguments — so it propagates
+  with `?` rather than asserting an invariant it does not have. The
+  `assert_eq!(types.len(), prenames.len())` became a
+  `CatgraphError::CompositionSizeMismatch` for the same reason.
+
+- **Arity mismatch is an `Err` on every permutation constructor, not a panic**
+  ([#258]). The trait's `# Errors` clause always promised this, and no
+  implementation honoured it: `Cospan` used `assert_eq!`, while `Span` and
+  `FrobeniusMorphism` had no check at all and indexed out of bounds inside the
+  `permutations` crate. `Corel`, `DecoratedCospan`, `PetriNet` and
+  `NamedCospan` inherit the fix by delegation.
+
+- **`NamedCospan`'s `SymmetricMonoidalMorphism` constructors still fail
+  unconditionally**, now naming the matching replacement
+  (`from_permutation_extra_data_on_domain` / `..._on_codomain`) rather than the
+  retired single method ([#258]). Port names are not derivable from `types`, so
+  there is no honest value to return; the split does not make it satisfiable.
+
+- **`permute_side` splices `β(p)` on the codomain and `β(p⁻¹)` on the domain on
+  every carrier; `Cospan`, `Corel`, `NamedCospan`, `Span`, `FrobeniusMorphism`,
+  `CospanAlgebraMorphism` and `Decomposition` all realized the inverse before**
+  ([#258]). The constructors' split left `permute_side` — the other method of
+  the same trait — carrying exactly the defect the split removed, and the
+  measurement is one line:
+
+  | carrier | `identity(types).permute_side(rotation_left(3,1), true)` |
+  |---|---|
+  | `Cospan` / `Corel` / `NamedCospan` / `DecoratedCospan` (before) | `[2, 0, 1]` = `β(p⁻¹)` |
+  | `FrobeniusMorphism` (before) | `β(p⁻¹)` |
+  | `MatR` / `MatKron` / `PropExpr` (unchanged) | `[1, 2, 0]` = `β(p)` |
+
+  The contract is now stated once, on the trait's `permute_side` rustdoc where
+  every implementor sees it, in the same shape the constructors already use:
+  **the wire at slot `i` of the permuted side moves to slot `p.apply(i)`**, i.e.
+  `self ; from_permutation_on_domain(p, &self.codomain())` on the codomain and
+  `from_permutation_on_codomain(p.inv(), &self.domain()) ; self` on the domain.
+  The matrix carriers were already right and did not move.
+
+  ⚠ **The two sides are not symmetric, and the domain side is the half that is
+  easy to get wrong.** Pre-composition puts the braiding's *codomain* against
+  `self`, so the braiding routes the **new** domain slot `j` to the **old** slot
+  `β(j)` — which forces `β = p⁻¹`. The check that sees a swap here is
+  conjugation: `β(p⁻¹) ; id ; β(p) == β(p⁻¹ ; p) == id`, where the symmetric
+  reading gives `β(p²)`.
+
+  **Migration.** Callers that were passing `p` and want the old behaviour pass
+  `p.inv()`. Callers pairing `permute_side` with
+  `catgraph::utils::necessary_permutation` need `p.inv()`, because that helper
+  answers "which old slot supplies each new slot" while `permute_side` asks
+  "where does the wire at slot `i` go" — `catgraph-applied`'s
+  `WiringDiagram::operadic_substitution` is the one production call site in the
+  workspace and was adapted this way. Single-sorted carriers (`MatR`,
+  `MatKron`, `PropExpr`) are unaffected either way.
+
+  On `Decomposition` (the discrete trait) the same change reads `p ∘ f` on the
+  codomain and `f ∘ p⁻¹` on the domain, where it used to be `p⁻¹ ∘ f` and
+  `f ∘ p`. Its own test doc said it was "matching `Cospan::permute_side`
+  semantics", which is why it moved with `Cospan` rather than being left
+  behind — the design record for #258 warned that the split had to cover both
+  traits "or the same foot-gun survives one trait over".
+
+  `PetriNet::permute_side` is **not** part of this change: it permutes
+  `self.transitions`, so its `p` is sized by the transition count rather than by
+  a boundary arity, and it is documented as such.
+
+### Fixed
+
+- **`Span::permute_side` was incoherent with itself and produced an invalid
+  span** ([#258]). A `Span` keeps its wiring in `middle` (apex pairs) and its
+  labels in `left`/`right` (words) — the opposite shape from `Cospan`, whose
+  legs *are* the wiring. The body moved each apex pair by `p.apply` **and**
+  permuted the word by `p`; those two must be mutually inverse. So
+  `Span::identity(&['a','b','c']).permute_side(&rotation_left(3,1), true)` gave
+  domain `['a','b','c']`, codomain `['b','c','a']` and pairs
+  `[(0,1),(1,2),(2,0)]` — wiring domain `'a'` to a codomain slot labelled `'c'`,
+  which `Span::assert_valid` rejects ("left and right linked … but their lambda
+  types didn't match").
+
+  ⚠ This was **release-silent**: `assert_valid` is `debug_assert!`-only since
+  workstream A, so a release build accepted the malformed span. The word is now
+  permuted by `p.inv()`, which both restores the invariant and lands `Span` on
+  the contract above.
+
+- **`CospanAlgebraMorphism::permute_side` left `self.element` stale** ([#258]).
+  It permuted the two label words and nothing else. The element is the morphism
+  — it is what carries the wiring — so after `permute_side(p, true)` the value
+  advertised a permuted codomain word while still pairing domain wire `i` with
+  the *old* codomain slot, and `compose` then fed that stale element through
+  `comp_cospan` built from the *new* labels and produced a wrong composite. It
+  now pushes the element through the relabelling cospan
+  `(X ⊕ Y) → (X' ⊕ Y')` — apex `X ⊕ Y`, identity left leg — exactly as
+  `Monoidal::monoidal` uses an interchange cospan, and gains the same defensive
+  length no-op `MatR` and `PropExpr` have.
+
+- **`CospanAlgebraMorphism`'s permutation constructor was O(n²)** ([#258]).
+  `p.inv()` was already hoisted; the cost was `p_inv.permute(&(0..n).collect())`
+  *inside* the per-index closure — a `Vec` allocation and a full permute for
+  every index, to read one element out of the result. Replaced by a direct
+  `p_inv.apply(k)`, making the constructor O(n).
+
+  (An earlier draft of this entry blamed a missing hoist of `p.inv()`. That was
+  wrong — the hoist was already there on `main`, and the expression it quoted as
+  the defect was the *new* code. Corrected here rather than silently, because a
+  maintainer following the old wording would go hunting a bug that never
+  existed.)
+
+- **A documentation claim that inverted the whole convention** ([#258]).
+  `PropExpr::from_permutation`'s rustdoc stated that generic code calling
+  `M::from_permutation(p, types, true)` got "`p` on `PropExpr`/`MatR` and `p⁻¹`
+  on `Cospan`/`Corel`". That is false. It read the `p.inv()` in `Cospan`'s
+  builder as the realized permutation, but that `p.inv()` is the cospan's right
+  *leg index vector*; connectivity runs through the apex, so domain `i` meets
+  codomain `k` when `left[i] == right[k]`, i.e. when `k == p.apply(i)`. The
+  inversion in the leg is what keeps the wiring un-inverted. Every carrier in
+  the workspace realizes `p`. The claim is corrected in place and the
+  correction recorded, because it is an easy mistake to re-make.
+
+### Added
+
+- **A cross-carrier braiding test** (`catgraph-applied/tests/braiding_cross_carrier.rs`,
+  [#258]) — the deliverable the issue asks for and the thing whose absence let
+  three conventions coexist. It drives every permutation of `n = 3` and `n = 4`
+  through both constructors of every implementation of both traits, plus
+  `Decomposition` via `from_decomposition`. No assertion compares two carriers
+  to each other (a symmetric drift would keep that green); each is compared
+  against a reference computed directly from `p`, and that reference is itself
+  pinned against hand-written values — the cospan's legs and labels, and
+  `MatR`'s entries written out in full.
+
+- **`permute_side` coverage in the same file** ([#258]) — its absence is why the
+  inverted convention survived the constructor sweep. Four tests, same
+  discipline: a hand anchor (`Cospan` legs, `Span` pairs, `MatR` entries,
+  `Decomposition`'s permutation part, all written out for
+  `rotation_left(3, 1)`); `permute_side` on an identity matched against the
+  constructor it must equal, on both sides, for every permutation of `n = 3` and
+  `n = 4`; the composite law `β(q).permute_side(p, true) == β(q ; p)` over every
+  *ordered pair* of permutations at both arities, which the identity sweep
+  cannot see; and the conjugation law, which is the only assertion that
+  separates the domain rule from the codomain rule.
+
+  `NamedCospan` is included — the risk there is names desynchronising from
+  legs — and `PetriNet` is excluded, for the reason its constructors are
+  ([#272](https://github.com/sustia-llc/catgraph/issues/272)).
+
 ## [workspace-v0.14.0] - 2026-08-16
 
 ### Fixed — from the #256/#261 code review

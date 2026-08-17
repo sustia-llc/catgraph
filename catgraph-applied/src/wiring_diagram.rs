@@ -198,7 +198,11 @@ where
                 .collect::<Vec<_>>(),
         )
         .map_err(|message| CatgraphError::Operadic { message })?;
-        internal_other.0.permute_side(&p, true);
+        // `necessary_permutation` returns the `q` with `q.permute(names) ==
+        // target`, i.e. it answers "which old slot supplies each new slot".
+        // `permute_side` asks the opposite question — "where does the wire at
+        // slot `i` go" (#258) — so the adapter between them is `q.inv()`.
+        internal_other.0.permute_side(&p.inv(), true);
 
         self.0 = internal_other
             .0
@@ -349,11 +353,18 @@ mod test {
         let p = Permutation::try_from(&y).unwrap();
         example_outer.0.permute_side(&p, false);
         example_outer.0.assert_valid_nohash(false);
-        assert_eq!(*example_outer.0.left_names(), p.permute(&outer_left_names));
+        // #258: `permute_side(p, _)` moves the wire at slot `i` to slot
+        // `p.apply(i)`, so the word it leaves behind is `p.inv().permute(old)`.
+        // These three read `p.permute(old)` before that change.
+        let p_inv = p.inv();
+        assert_eq!(
+            *example_outer.0.left_names(),
+            p_inv.permute(&outer_left_names)
+        );
         assert_eq!(*example_outer.0.right_names(), vec![(Dir::Out, 0)]);
         assert_eq!(
             example_outer.0.domain(),
-            p.permute(&[true, true, false, false, true, false])
+            p_inv.permute(&[true, true, false, false, true, false])
         );
         assert_eq!(*example_outer.0.codomain(), vec![true]);
 
@@ -445,10 +456,15 @@ mod test {
         example_outer.0.permute_side(&p2, true);
         example_outer.0.assert_valid_nohash(false);
 
-        assert_eq!(*example_outer.0.left_names(), p1.permute(&outer_left_names));
+        // #258: the word left behind is `p.inv().permute(old)`; these read
+        // `p.permute(old)` before that change.
+        assert_eq!(
+            *example_outer.0.left_names(),
+            p1.inv().permute(&outer_left_names)
+        );
         assert_eq!(
             *example_outer.0.right_names(),
-            p2.permute(&outer_right_names)
+            p2.inv().permute(&outer_right_names)
         );
         assert_eq!(example_outer.0.domain(), vec![(); 9]);
         assert_eq!(example_outer.0.codomain(), vec![(); 5]);

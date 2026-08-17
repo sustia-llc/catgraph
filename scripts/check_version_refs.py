@@ -18,7 +18,14 @@ hand; this recomputes the invariant set instead:
      version-bearing like (3), it was simply the one such site the guard did
      not cover, and "updated correctly this time" is not a mechanism.
 
-Run from the repo root, or pass the root as argv[1].
+Defaults to the tree this script lives in; pass a different root as argv[1].
+
+The default was cwd until 2026-08-16, which made the guard silently validate
+whatever tree it was *invoked from* rather than the one it belongs to. Running
+a git worktree's copy from the main checkout therefore reported on the main
+checkout — a false green that says nothing about the tree under test, with no
+indication anything was wrong. `check_audit_counts.py` was already
+`__file__`-relative; this matches it.
 """
 
 import pathlib
@@ -27,7 +34,8 @@ import sys
 
 
 def main() -> int:
-    root = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else pathlib.Path(".")
+    default_root = pathlib.Path(__file__).resolve().parent.parent
+    root = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else default_root
     errors = []
 
     workspace = (root / "Cargo.toml").read_text(encoding="utf-8")

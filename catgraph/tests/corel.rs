@@ -80,10 +80,9 @@ fn ccr_rejects_shape_mismatch() {
 
 #[test]
 fn symmetric_braiding_preserves_surjectivity() {
-    let braid = Corel::<char>::from_permutation(
+    let braid = Corel::<char>::from_permutation_on_domain(
         permutations::Permutation::transposition(2, 0, 1),
         &['a', 'b'],
-        true,
     )
     .unwrap();
     assert!(braid.as_cospan().is_jointly_surjective());

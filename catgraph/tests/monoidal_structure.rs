@@ -98,8 +98,8 @@ fn permutation_cospan_compose() {
     // p2 = transposition(3,0,2): swap 0<->2
     let p2 = Permutation::transposition(3, 0, 2);
 
-    let c1 = Cospan::from_permutation(p1.clone(), &types, true).unwrap();
-    let c2 = Cospan::from_permutation(p2.clone(), &types, true).unwrap();
+    let c1 = Cospan::from_permutation_on_domain(p1.clone(), &types).unwrap();
+    let c2 = Cospan::from_permutation_on_domain(p2.clone(), &types).unwrap();
 
     // With uniform labels, any two permutation cospans are composable.
     assert!(c1.composable(&c2).is_ok(), "c1;c2 should be composable");
@@ -108,7 +108,7 @@ fn permutation_cospan_compose() {
 
     // The combined permutation p1*p2.
     let p12 = p1 * p2;
-    let expected = Cospan::from_permutation(p12, &types, true).unwrap();
+    let expected = Cospan::from_permutation_on_domain(p12, &types).unwrap();
 
     // Domain and codomain must match the composed permutation.
     assert_eq!(composed.domain(), expected.domain(), "domain after compose");
@@ -143,7 +143,7 @@ fn symmetric_braiding_involutive() {
 
     // The swap permutation on 2 elements: (0 1).
     let swap = Permutation::transposition(2, 0, 1);
-    let sigma = Cospan::from_permutation(swap.clone(), &types, true).unwrap();
+    let sigma = Cospan::from_permutation_on_domain(swap.clone(), &types).unwrap();
 
     // sigma ; sigma should give identity (the braiding is an involution).
     assert!(
@@ -244,18 +244,26 @@ fn permute_side_reorders_domain() {
     let rot = Permutation::rotation_left(3, 1);
     c.permute_side(&rot, false);
 
-    // After permuting the domain, the left leg is reordered.
-    // The domain labels should reflect the permutation.
-    let new_domain = c.domain();
-    assert_eq!(new_domain.len(), 3, "domain size unchanged");
-
-    // The left_to_middle array has been permuted, so domain wires now
-    // map to different middle nodes than before.
-    assert_ne!(
+    // #258: `permute_side` moves the wire at slot `i` to slot `p.apply(i)`, so
+    // 'a' lands at slot 1, 'b' at 2 and 'c' at 0 — the leg vector becomes
+    // `old ∘ p.inv()`, i.e. `[2, 0, 1]`, and the word `['c', 'a', 'b']`.
+    //
+    // ⚠ Before #258 the whole check here was `assert_ne!(left_to_middle,
+    // [0,1,2])` plus a length assertion, both of which hold for *either*
+    // direction and for `p.inv()` as readily as for `p`. That is why this file
+    // stayed green while `Cospan` sat on the inverted convention.
+    assert_eq!(
         c.left_to_middle(),
-        &[0, 1, 2],
-        "left leg should no longer be identity"
+        &[2, 0, 1],
+        "left leg is old ∘ p.inv(); {:?} would be the inverted convention",
+        [1, 2, 0]
     );
+    assert_eq!(
+        c.domain(),
+        vec!['c', 'a', 'b'],
+        "the wire at slot i moves to slot p(i)"
+    );
+    assert_eq!(c.domain(), rot.inv().permute(&types));
     assert!(
         !c.is_left_identity(),
         "left identity flag should be cleared"

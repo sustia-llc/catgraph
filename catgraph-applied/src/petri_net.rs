@@ -828,6 +828,19 @@ where
     /// interface compatibility but has no side-specific effect. The place
     /// set and arc contents are unchanged.
     ///
+    /// ⚠ **This is a documented deviation from the trait's contract**
+    /// ([`SymmetricMonoidalMorphism::permute_side`]), which specifies that the
+    /// wire at slot `i` of the *permuted boundary* moves to slot `p.apply(i)`.
+    /// `p` here is sized by the transition count, not by a boundary arity, and
+    /// the boundary words are derived rather than stored. So this carrier was
+    /// deliberately left alone when the other implementations moved onto that
+    /// contract at [#258], and it cannot participate in the cross-carrier
+    /// wiring sweep — the same unobservability
+    /// [#272](https://github.com/sustia-llc/catgraph/issues/272) records for
+    /// its constructors.
+    ///
+    /// [#258]: https://github.com/sustia-llc/catgraph/issues/258
+    ///
     /// If `p.len()` does not match `self.transitions.len()`, the call is a
     /// no-op — this preserves the trait's panic-free contract. Callers
     /// routing through [`SymmetricMonoidalMorphism`] should size `p` to the
@@ -840,24 +853,39 @@ where
         in_place_permute(&mut self.transitions, p);
     }
 
-    /// Construct a pure-braiding `PetriNet` from a permutation on tensor factors.
+    /// Construct a pure-braiding `PetriNet` from a permutation, with `types`
+    /// labelling the domain.
     ///
-    /// Delegates to [`DecoratedCospan::from_permutation`] with the empty
+    /// Delegates to [`DecoratedCospan`]'s constructor with the empty
     /// [`PetriDecoration`] and rebuilds via [`PetriNet::from_decorated_cospan`].
     ///
     /// # Errors
     ///
     /// Returns [`CatgraphError`] if the permutation size does not match
-    /// `types.len()` (forwarded from [`Cospan::from_permutation`]).
-    fn from_permutation(
+    /// `types.len()` (forwarded from [`Cospan`]).
+    fn from_permutation_on_domain(p: Permutation, types: &[Lambda]) -> Result<Self, CatgraphError> {
+        let dec =
+            <DecoratedCospan<Lambda, PetriDecoration<Lambda>> as SymmetricMonoidalMorphism<
+                Lambda,
+            >>::from_permutation_on_domain(p, types)?;
+        Ok(PetriNet::from_decorated_cospan(dec))
+    }
+
+    /// As [`from_permutation_on_domain`](SymmetricMonoidalMorphism::from_permutation_on_domain),
+    /// with `types` labelling the codomain instead.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError`] if the permutation size does not match
+    /// `types.len()` (forwarded from [`Cospan`]).
+    fn from_permutation_on_codomain(
         p: Permutation,
         types: &[Lambda],
-        types_as_on_domain: bool,
     ) -> Result<Self, CatgraphError> {
         let dec =
             <DecoratedCospan<Lambda, PetriDecoration<Lambda>> as SymmetricMonoidalMorphism<
                 Lambda,
-            >>::from_permutation(p, types, types_as_on_domain)?;
+            >>::from_permutation_on_codomain(p, types)?;
         Ok(PetriNet::from_decorated_cospan(dec))
     }
 }

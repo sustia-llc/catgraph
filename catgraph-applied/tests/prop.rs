@@ -174,8 +174,14 @@ fn from_permutation_validates_length() {
     let p = Permutation::transposition(2, 0, 1);
     let types: Vec<()> = vec![(); 3]; // len mismatch on purpose
     let r: Result<PropExpr<Sig>, _> =
-        <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation(p, &types, true);
+        <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation_on_domain(
+            p.clone(),
+            &types,
+        );
     assert!(r.is_err());
+    let r2: Result<PropExpr<Sig>, _> =
+        <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation_on_codomain(p, &types);
+    assert!(r2.is_err());
 }
 
 // ---- #252: `from_permutation` faithfully realizes the permutation ----------
@@ -187,22 +193,24 @@ fn from_permutation_validates_length() {
 // #252 the body returned `Identity(n)` for every permutation, so every one of
 // these comparisons would have collapsed to the identity matrix.
 
-/// Build `from_permutation(p)` over the SFG signature and push it through `S`.
+/// Build the braiding for `p` over the SFG signature and push it through `S`.
 ///
 /// Also pins the two crate-wide conventions the rustdoc states: the arities are
-/// `n → n`, and `types_as_on_domain` is ignored (both flag values agree).
+/// `n → n`, and the #258 constructors coincide on this single-sorted carrier
+/// (objects are `Vec<()>`, so there is no label to place on either side).
 fn realized_matrix(p: &Permutation) -> MatR<F64Rig> {
+    type Sfg = PropExpr<SfgGenerator<F64Rig>>;
     let types: Vec<()> = vec![(); p.len()];
-    let build = |on_domain: bool| {
-        <PropExpr<SfgGenerator<F64Rig>> as SymmetricMonoidalMorphism<()>>::from_permutation(
-            p.clone(),
-            &types,
-            on_domain,
-        )
-        .unwrap()
-    };
-    let expr = build(true);
-    assert_eq!(expr, build(false), "types_as_on_domain must not matter");
+    let expr =
+        <Sfg as SymmetricMonoidalMorphism<()>>::from_permutation_on_domain(p.clone(), &types)
+            .unwrap();
+    let on_cod =
+        <Sfg as SymmetricMonoidalMorphism<()>>::from_permutation_on_codomain(p.clone(), &types)
+            .unwrap();
+    assert_eq!(
+        expr, on_cod,
+        "single-sorted carrier: the two #258 constructors must coincide"
+    );
     assert_eq!(expr.source(), p.len(), "braiding is an endomorphism of n");
     assert_eq!(expr.target(), p.len(), "braiding is an endomorphism of n");
     sfg_to_mat(&SignalFlowGraph::from_prop_expr(expr)).unwrap()
@@ -241,12 +249,12 @@ fn from_permutation_identity_is_identity_expr() {
     // No swaps to perform, at every width — including the two degenerate ones.
     for n in [0usize, 1, 2, 5] {
         let types: Vec<()> = vec![(); n];
-        let e: PropExpr<Sig> = <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation(
-            Permutation::identity(n),
-            &types,
-            true,
-        )
-        .unwrap();
+        let e: PropExpr<Sig> =
+            <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation_on_domain(
+                Permutation::identity(n),
+                &types,
+            )
+            .unwrap();
         assert_eq!(e, PropExpr::Identity(n), "identity perm on {n} wires");
     }
     // …and the oracle agrees it is the identity matrix.
@@ -300,12 +308,12 @@ fn from_permutation_is_not_identity_for_non_identity_perm() {
     // The exact #252 defect: a correct-length non-identity permutation used to
     // come back as `Identity(n)`.
     let types2: Vec<()> = vec![(); 2];
-    let swap: PropExpr<Sig> = <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation(
-        Permutation::transposition(2, 0, 1),
-        &types2,
-        true,
-    )
-    .unwrap();
+    let swap: PropExpr<Sig> =
+        <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation_on_domain(
+            Permutation::transposition(2, 0, 1),
+            &types2,
+        )
+        .unwrap();
     assert_ne!(swap, PropExpr::Identity(2));
     // One braid layer `id_0 ⊗ σ ⊗ id_0`, composed onto the `id_2` seed.
     let expected = Free::compose(
@@ -319,12 +327,12 @@ fn from_permutation_is_not_identity_for_non_identity_perm() {
     assert_eq!(swap, expected);
 
     let types4: Vec<()> = vec![(); 4];
-    let cycle: PropExpr<Sig> = <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation(
-        Permutation::try_from(vec![1, 2, 0, 3]).unwrap(),
-        &types4,
-        true,
-    )
-    .unwrap();
+    let cycle: PropExpr<Sig> =
+        <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation_on_domain(
+            Permutation::try_from(vec![1, 2, 0, 3]).unwrap(),
+            &types4,
+        )
+        .unwrap();
     assert_ne!(cycle, PropExpr::Identity(4));
     assert_eq!(cycle.source(), 4);
     assert_eq!(cycle.target(), 4);
@@ -433,7 +441,7 @@ fn permute_side_splices_p_on_the_codomain_and_p_inv_on_the_domain() {
     let p = Permutation::try_from(vec![1, 2, 0]).expect("valid permutation");
     let types: Vec<()> = vec![(); 3];
     let braid = |q: Permutation| -> PropExpr<Sig> {
-        <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation(q, &types, false)
+        <PropExpr<Sig> as SymmetricMonoidalMorphism<()>>::from_permutation_on_domain(q, &types)
             .expect("length matches")
     };
     let forward = braid(p.clone());
@@ -448,7 +456,7 @@ fn permute_side_splices_p_on_the_codomain_and_p_inv_on_the_domain() {
     assert_eq!(
         cod,
         PropExpr::Compose(Box::new(base.clone()), Box::new(forward)),
-        "codomain side postcomposes from_permutation(p)"
+        "codomain side postcomposes from_permutation_on_domain(p)"
     );
 
     let mut dom = base.clone();
@@ -456,7 +464,7 @@ fn permute_side_splices_p_on_the_codomain_and_p_inv_on_the_domain() {
     assert_eq!(
         dom,
         PropExpr::Compose(Box::new(inverse), Box::new(base.clone())),
-        "domain side precomposes from_permutation(p.inv()) — P^T = P^-1"
+        "domain side precomposes from_permutation_on_domain(p.inv()) — P^T = P^-1"
     );
 }
 

@@ -13,6 +13,102 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **Every `SymmetricMonoidalMorphism::from_permutation` implementation in this
+  crate splits into `from_permutation_on_domain` /
+  `from_permutation_on_codomain`**
+  ([#258](https://github.com/sustia-llc/catgraph/issues/258)), following the
+  core trait. Affected: `MatR`, `MatKron`, `PropExpr`, `DecoratedCospan` and
+  `PetriNet`. Migration is mechanical: `(p, t, true)` → `_on_domain(p, t)`,
+  `(p, t, false)` → `_on_codomain(p, t)`.
+
+  `MatR`, `MatKron` and `PropExpr` are **single-sorted** — their objects are
+  `Vec<()>`, bare arities carrying no colour — so the two constructors return
+  the same morphism. That is the trait contract collapsing on a carrier with no
+  labels to place, not these impls opting out of it. The old `_types_as_on_domain`
+  parameter being ignored was correct for exactly this reason.
+
+- **Arity mismatch is an `Err` on `MatR` and `MatKron` too.** Both previously
+  ignored `types` entirely, so `from_permutation(p, &[], _)` handed back an
+  `n × n` matrix. They now check `p.len() == types.len()` like `PropExpr`
+  already did, which is what the trait's `# Errors` clause promises and what the
+  S-functor square needs the two carriers to agree on. `DecoratedCospan` and
+  `PetriNet` inherit `Cospan`'s new `Err` (it used to `assert_eq!`).
+
+- **`permute_side` changes convention on `DecoratedCospan`** ([#258]), by
+  delegation to `Cospan` — see catgraph's CHANGELOG for the contract and the
+  migration. `MatR`, `MatKron` and `PropExpr` were already on it and **do not
+  move**: the codomain side is `self · P`, the domain side `Pᵀ · self`, which is
+  `self ; β(p)` and `β(p⁻¹) ; self`. `PetriNet::permute_side` is untouched — it
+  permutes `self.transitions`, so its `p` is sized by the transition count, not
+  by a boundary arity.
+
+- **`WiringDiagram::operadic_substitution` now passes `p.inv()` to
+  `permute_side`** ([#258]). This is the workspace's only production call site
+  of `permute_side`, and it pairs the method with
+  `catgraph::utils::necessary_permutation`, which answers the *opposite*
+  question: `necessary_permutation(a, b)` returns the `q` with
+  `q.permute(a) == b` — "which old slot supplies each new slot" — while
+  `permute_side` asks "where does the wire at slot `i` go". The adapter between
+  them is an inversion, and it now appears explicitly at the call site instead
+  of being hidden in `Cospan`'s convention. Behaviour of
+  `operadic_substitution` itself is unchanged.
+
+### Fixed
+
+- **`PropExpr::from_permutation`'s rustdoc claimed the workspace had two
+  opposing conventions; it has one** ([#258]). The old text said generic code
+  got "`p` on `PropExpr`/`MatR` and `p⁻¹` on `Cospan`/`Corel`", reading the
+  `p.inv()` in `Cospan`'s builder as the realized permutation. That `p.inv()` is
+  the right *leg index vector*: connectivity in a cospan runs through the apex,
+  so domain `i` meets codomain `k` when `left[i] == right[k]`, i.e. when
+  `k == p.apply(i)` — the same input-indexed wiring `permutation_matrix` builds.
+  Checked on `rotation_left(3, 1)` over `['A','B','C']`: `Cospan`'s codomain is
+  `['C','A','B']`, so the label at domain position 0 sits at codomain position
+  1, and `p.apply(0) == 1`.
+
+  Consequently the **S-functor square (F&S Thm 5.53) holds on both named
+  methods**, and it holds because both carriers agree with the cospan family
+  rather than by deviating together. The exhaustive `n = 3` / `n = 4` oracle in
+  `tests/prop.rs` is unchanged in substance — it still compares
+  `sfg_to_mat(braiding)` against `MatR::permutation_matrix(p)`, a construction
+  the split does not touch — and now additionally asserts that the two
+  constructors coincide on this carrier.
+
+### Added
+
+- **`tests/braiding_cross_carrier.rs`** ([#258]) — the cross-carrier test the
+  issue asks for. It lives in this crate because it needs both the core
+  carriers (`Cospan`, `Span`, `Corel`, `FrobeniusMorphism`,
+  `CospanAlgebraMorphism`, `Decomposition`) and this crate's (`MatR`,
+  `MatKron`, `PropExpr`, `DecoratedCospan`, `PetriNet`). Every permutation of
+  `n = 3` and `n = 4`, both constructors, each carrier checked against a
+  reference derived from `p` and anchored to hand-written values — never against
+  another carrier, which a symmetric drift would pass.
+
+  ⚠ This entry read "all eleven implementations", which overstated the sweep in
+  two ways and is corrected here rather than edited away. `NamedCospan` is not
+  in the **constructor** sweep — it *cannot* satisfy the constructors, and a
+  dedicated test in the same file asserts that it refuses them, naming the
+  `from_permutation_extra_data_*` replacements. It **is** in the `permute_side`
+  sweep, where its port-name/leg synchronisation is genuinely pinned; core's
+  CHANGELOG describes that half. `PetriNet` is in it only as an
+  arity/apex check, because its wiring is unobservable (below). The
+  arity-mismatch sweep was narrower still: it drove `Cospan`, `Span` and `Corel`
+  through both constructors but the other six through `on_domain` only, so a
+  missing length check in any `on_codomain` body would have passed. It now
+  drives both constructors on every carrier.
+
+  One finding it records rather than fixes: **`PetriNet`'s braiding is lossy**.
+  `from_decorated_cospan` keeps only the apex as places and the decoration as
+  transitions, discarding both leg maps, and `PetriNet::domain`/`codomain`
+  rebuild their words from the transitions — of which a pure braiding has none.
+  So a braiding `PetriNet` has empty boundaries and the permutation is not
+  observable on it at all. That is pre-existing and orthogonal to #258, but it
+  means `PetriNet` cannot participate in the wiring sweep; the test pins what is
+  actually true (the apex word survives, there are no transitions) and says why.
+
 ## [workspace-v0.14.0] - 2026-08-16
 
 ### Changed — BREAKING

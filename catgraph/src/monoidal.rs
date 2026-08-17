@@ -445,33 +445,190 @@ use permutations::Permutation;
 
 /// Symmetric monoidal morphism: supports pre/post-composition with permutations.
 ///
-/// `types` is the typed tensor factors; `types_as_on_domain` controls which side is permuted.
+/// # The braiding contract (#258)
+///
+/// Both constructors build the **same underlying wiring**: the pure braiding
+/// that routes domain wire `i` to codomain wire `p.apply(i)`. They differ only
+/// in *which boundary the caller's `types` slice labels*, which is the only
+/// free choice a permutation braiding actually has — the other boundary's
+/// labels are then forced:
+///
+/// | constructor | `domain()` | `codomain()` |
+/// |---|---|---|
+/// | [`from_permutation_on_domain`](Self::from_permutation_on_domain) | `types` | `types[p.inv().apply(k)]` |
+/// | [`from_permutation_on_codomain`](Self::from_permutation_on_codomain) | `types[p.apply(i)]` | `types` |
+///
+/// The two are related by relabelling, which is a cheap cross-check any impl
+/// can be held to:
+///
+/// ```text
+/// from_permutation_on_codomain(p, types)
+///     == from_permutation_on_domain(p, &p.permute(types))
+/// ```
+///
+/// For single-sorted carriers — those whose objects are bare arities, i.e.
+/// `T = ()` — there is no label to place on either side, so the two methods
+/// necessarily return the *same* morphism. That is a consequence of the
+/// contract, not an exemption from it.
+///
+/// ## Why two names rather than a `bool`
+///
+/// These replace a single `from_permutation(p, types, types_as_on_domain: bool)`.
+/// A `bool` is a parameter on which an implementation can be silently inverted:
+/// three of the workspace's implementations had drifted onto three different
+/// conventions and no test could see it, because nothing exercised the same
+/// permutation across two carriers. Two names make the wrong direction
+/// unrepresentable at the call site.
 #[allow(clippy::module_name_repetitions)]
 pub trait SymmetricMonoidalMorphism<T: Eq> {
-    /// Pre- or post-composes this morphism with permutation `p`.
+    /// Pre- or post-composes this morphism with the braiding realizing `p`,
+    /// in place.
+    ///
+    /// # The contract
+    ///
+    /// **The wire currently at position `i` of the chosen side moves to
+    /// position `p.apply(i)`.** Written as composition — `;` read left to
+    /// right, so `f ; g` applies `f` first — that is:
+    ///
+    /// | `of_codomain` | equals |
+    /// |---|---|
+    /// | `true` | <code>self ; from_permutation_on_domain(p, &self.codomain())</code> |
+    /// | `false` | <code>from_permutation_on_codomain(p.inv(), &self.domain()) ; self</code> |
+    ///
+    /// ⚠ **The two sides are not symmetric.** The codomain side splices the
+    /// braiding for `p`; the domain side splices the braiding for `p⁻¹`. That
+    /// is forced by the geometry, not a convention: post-composition puts the
+    /// braiding's *domain* against `self`, so its wiring `i ↦ p.apply(i)`
+    /// already moves codomain wire `i` to slot `p.apply(i)`. Pre-composition
+    /// puts the braiding's *codomain* against `self`, and a braiding `β` there
+    /// routes the **new** domain slot `j` to the **old** domain slot
+    /// `β.apply(j)` — so `β` must be `p⁻¹` for old slot `i` to land at new slot
+    /// `p.apply(i)`. Passing `p` on both sides transposes one of them, and
+    /// nothing within a single carrier can see it: an inverted braiding is
+    /// still a perfectly consistent braiding.
+    ///
+    /// The cheap check that *does* see it is conjugation — permuting **both**
+    /// sides of an identity by the same `p` must give the identity back, since
+    /// `β(p⁻¹) ; id ; β(p) == β(p⁻¹ ; p) == id`. Under the swapped reading it
+    /// gives `β(p²)`, which is the identity only when `p` is an involution.
+    ///
+    /// Note that the *labels* relabel the same way on both sides — the chosen
+    /// side's word becomes `p.inv().permute(old)` — so an assertion on the word
+    /// cannot separate the codomain rule from the domain rule, and (as `Span`
+    /// demonstrated) a word can be right over an inverted wiring. Assertions
+    /// that pin this method must reach the wiring.
+    ///
+    /// # Known deviation
+    ///
+    /// `catgraph_applied::petri_net::PetriNet` does **not** implement this
+    /// contract: its `p` is sized by the transition count rather than by a
+    /// boundary arity, and it permutes `self.transitions` on either value of
+    /// the flag. See its own rustdoc; a pure braiding `PetriNet` has no
+    /// observable wiring at all
+    /// ([#272](https://github.com/sustia-llc/catgraph/issues/272)).
+    ///
+    /// # Length
+    ///
+    /// `p.len()` must equal the permuted side's arity. The signature is
+    /// non-fallible, so behaviour on a mismatch is implementation-defined: a
+    /// defensive no-op on `MatR` / `MatKron` / `PropExpr` / `PetriNet` and on
+    /// [`CospanAlgebraMorphism`](crate::equivalence::CospanAlgebraMorphism), a
+    /// panic on [`FrobeniusMorphism`](crate::frobenius::FrobeniusMorphism),
+    /// and unspecified on the [`Cospan`](crate::cospan::Cospan) family, which
+    /// indexes its legs directly.
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool);
-    /// Constructs a morphism that applies permutation `p` to typed tensor factors.
+
+    /// Builds the pure braiding routing domain wire `i` to codomain wire
+    /// `p.apply(i)`, with `types` labelling the **domain**.
+    ///
+    /// So `domain() == types` and `codomain()[k] == types[p.inv().apply(k)]`.
     ///
     /// # Errors
     ///
     /// Returns [`CatgraphError`] if the permutation size does not match the `types` length.
-    fn from_permutation(
-        p: Permutation,
-        types: &[T],
-        types_as_on_domain: bool,
-    ) -> Result<Self, CatgraphError>
+    fn from_permutation_on_domain(p: Permutation, types: &[T]) -> Result<Self, CatgraphError>
+    where
+        Self: Sized;
+
+    /// Builds the pure braiding routing domain wire `i` to codomain wire
+    /// `p.apply(i)`, with `types` labelling the **codomain**.
+    ///
+    /// So `codomain() == types` and `domain()[i] == types[p.apply(i)]`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError`] if the permutation size does not match the `types` length.
+    fn from_permutation_on_codomain(p: Permutation, types: &[T]) -> Result<Self, CatgraphError>
     where
         Self: Sized;
 }
 
 /// Like [`SymmetricMonoidalMorphism`] but for the discrete category (`FinSet`),
 /// where objects are `usize` cardinalities rather than typed tensor factor slices.
+///
+/// # Why this trait has *one* constructor and not two (#258)
+///
+/// [`SymmetricMonoidalMorphism`] splits its constructor in two because its
+/// object is a *labelled* tensor word, so the caller's slice has to say which
+/// boundary it labels. This trait's object is a bare cardinality: both
+/// boundaries of a permutation braiding are the same `usize`, and there are no
+/// labels to place on either. Applying the sibling trait's contract here
+/// collapses it — `on_domain` and `on_codomain` would be the same function of
+/// the same two arguments — so the split would add a name without adding a
+/// distinction, and a caller choosing between two identical methods learns
+/// nothing from the choice.
+///
+/// ⚠ This is *not* inferred from [`Decomposition`](crate::finset::Decomposition)
+/// having ignored the old `types_as_on_domain` flag; that would be circular.
+/// It is inferred from the contract above, and `Decomposition`'s own
+/// `permute_side` corroborates it: `permute_side` needs the braiding for
+/// `p.inv()`, and it gets it by inverting the *permutation* at the call site
+/// (`from_permutation(p.inv(), ..)`) rather than by flipping the flag —
+/// because flipping the flag never produced an inverse in the first place.
 #[allow(clippy::module_name_repetitions)]
 pub trait SymmetricMonoidalDiscreteMorphism<T: Eq> {
-    /// Pre- or post-composes this morphism with permutation `p`.
+    /// Pre- or post-composes this morphism with the braiding realizing `p`,
+    /// in place.
+    ///
+    /// The contract is
+    /// [`SymmetricMonoidalMorphism::permute_side`]'s, transported to the
+    /// unlabelled setting — **the wire at position `i` of the chosen side
+    /// moves to position `p.apply(i)`** — with the single constructor standing
+    /// in for both named ones:
+    ///
+    /// | `of_codomain` | equals |
+    /// |---|---|
+    /// | `true` | `self ; from_permutation(p, self.codomain())` |
+    /// | `false` | `from_permutation(p.inv(), self.domain()) ; self` |
+    ///
+    /// Read as a function `f: [n] → [m]` (which is what the discrete category's
+    /// morphisms are), that is `p ∘ f` on the codomain side and `f ∘ p⁻¹` on
+    /// the domain side. The asymmetry is the same one the sibling trait
+    /// documents, and for the same reason.
+    ///
+    /// # Length
+    ///
+    /// ⚠ **This trait signals an arity mismatch by panicking, where every
+    /// constructor on the sibling trait returns `Err`.** Both methods here are
+    /// infallible by signature — the discrete category's object is a bare
+    /// `usize`, so there is no `types` slice whose length could disagree, and
+    /// the only mismatch possible is `p.len()` against the morphism's own
+    /// arity. The sole implementation,
+    /// [`Decomposition`](crate::finset::Decomposition), asserts it: on
+    /// `permute_side` against `domain()` / `codomain()` as selected, and on
+    /// `from_permutation` against `types`.
+    ///
+    /// Do not read the sibling trait's `Err` contract across to this one.
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool);
-    /// Constructs a morphism from a permutation on a set of the given size.
-    fn from_permutation(p: Permutation, types: T, types_as_on_domain: bool) -> Self;
+    /// Constructs the braiding routing wire `i` to wire `p.apply(i)` on a set
+    /// of the given size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `p.len() != types`. See the trait's `# Length` note for why
+    /// this panics rather than returning `Err` like the sibling trait's
+    /// constructors.
+    fn from_permutation(p: Permutation, types: T) -> Self;
 }
 
 #[cfg(test)]

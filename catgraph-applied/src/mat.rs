@@ -151,6 +151,25 @@ impl<R: Rig> MatR<R> {
         }
     }
 
+    /// [`permutation_matrix`](Self::permutation_matrix) with the arity check the
+    /// [`SymmetricMonoidalMorphism`](catgraph::monoidal::SymmetricMonoidalMorphism)
+    /// contract promises.
+    ///
+    /// Shared by both #258 constructors, which are the same function here.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::CompositionSizeMismatch`] if `p.len() != arity`.
+    fn braiding_matrix(p: &Permutation, arity: usize) -> Result<Self, CatgraphError> {
+        if p.len() != arity {
+            return Err(CatgraphError::CompositionSizeMismatch {
+                expected: arity,
+                actual: p.len(),
+            });
+        }
+        Ok(Self::permutation_matrix(p))
+    }
+
     #[must_use]
     pub fn rows(&self) -> usize {
         self.rows
@@ -383,13 +402,26 @@ impl<R: Rig> Monoidal for MatR<R> {
 
 impl<R: Rig> MonoidalMorphism<Vec<()>> for MatR<R> {}
 
+// `MatR`'s objects are `Vec<()>` — bare arities carrying no colour — so the two
+// #258 constructors have no label to place on either side and are necessarily
+// the same morphism. That is the trait contract collapsing on a single-sorted
+// carrier, not this impl opting out of it: `permutation_matrix(p)` has
+// `entries[i][p.apply(i)] = 1`, i.e. row = domain wire, column = codomain wire,
+// which is exactly the `i ↦ p.apply(i)` wiring the trait specifies and the same
+// one `Cospan` realizes.
+//
+// ⚠ The pre-#258 rustdoc on `PropExpr::from_permutation` claimed the opposite —
+// that generic code got "`p` on `PropExpr`/`MatR` and `p⁻¹` on `Cospan`/`Corel`".
+// That read `Cospan`'s `p.inv()` off its *leg index vector*; connectivity in a
+// cospan runs through the apex, and that read inverts. Both carriers realize
+// `p`, which is why the S-functor square holds on both named methods.
 impl<R: Rig> SymmetricMonoidalMorphism<()> for MatR<R> {
-    fn from_permutation(
-        p: Permutation,
-        _types: &[()],
-        _types_as_on_domain: bool,
-    ) -> Result<Self, CatgraphError> {
-        Ok(Self::permutation_matrix(&p))
+    fn from_permutation_on_domain(p: Permutation, types: &[()]) -> Result<Self, CatgraphError> {
+        Self::braiding_matrix(&p, types.len())
+    }
+
+    fn from_permutation_on_codomain(p: Permutation, types: &[()]) -> Result<Self, CatgraphError> {
+        Self::braiding_matrix(&p, types.len())
     }
 
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool) {

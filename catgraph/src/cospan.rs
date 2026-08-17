@@ -541,6 +541,23 @@ impl<Lambda> SymmetricMonoidalMorphism<Lambda> for Cospan<Lambda>
 where
     Lambda: Eq + Sized + Copy + Debug,
 {
+    /// Splices the braiding for `p` onto the right leg (`of_right_leg`) or the
+    /// braiding for `p⁻¹` onto the left leg — see the trait's contract.
+    ///
+    /// A leg vector is a function `slot ↦ apex vertex`, so moving the wire at
+    /// slot `i` to slot `p.apply(i)` is post-composition of that function with
+    /// `p⁻¹`: `new[k] == old[p.inv().apply(k)]`, which is exactly
+    /// `in_place_permute(leg, &p.inv())`. The same expression serves both legs
+    /// because the asymmetry the trait documents lives in the *wiring*, not in
+    /// the relabelling — for `of_right_leg = false` this leg vector is the
+    /// composite's, i.e. `old ∘ p⁻¹`, which is what precomposing `β(p⁻¹)`
+    /// produces.
+    ///
+    /// ⚠ **Breaking at #258.** This used to pass `p` rather than `p.inv()`, so
+    /// it realized `β(p⁻¹)` on the codomain where `MatR`/`PropExpr` realize
+    /// `β(p)`. Nothing saw it: no test drove one permutation through two
+    /// carriers, and within `Cospan` an inverted braiding is still a
+    /// consistent braiding.
     fn permute_side(&mut self, p: &Permutation, of_right_leg: bool) {
         in_place_permute(
             if of_right_leg {
@@ -550,39 +567,67 @@ where
                 self.is_left_id = false;
                 &mut self.left
             },
-            p,
+            &p.inv(),
         );
     }
 
-    fn from_permutation(
+    /// `domain() == types`, `codomain()[k] == types[p.inv().apply(k)]`.
+    ///
+    /// The apex is `types` itself and the left leg is the identity, so a
+    /// domain wire `i` sits on apex vertex `i`; the right leg is
+    /// `p.inv().permute(0..n)`, so codomain wire `k` sits on apex vertex
+    /// `p.inv().apply(k)`. Domain `i` and codomain `k` therefore meet exactly
+    /// when `k == p.apply(i)` — the wiring the trait specifies. The inverse in
+    /// the *leg vector* is what makes the wiring non-inverted; reading `p.inv()`
+    /// off this line as "this impl realizes `p⁻¹`" is the mistake #258 was
+    /// filed about.
+    ///
+    /// The same placement is what makes `from(p₁) ; from(p₂) == from(p₁ ; p₂)`
+    /// hold, with `;` cospan composition on the left and permutation
+    /// composition on the right.
+    fn from_permutation_on_domain(p: Permutation, types: &[Lambda]) -> Result<Self, CatgraphError> {
+        let num_types = types.len();
+        if p.len() != num_types {
+            return Err(CatgraphError::CompositionSizeMismatch {
+                expected: num_types,
+                actual: p.len(),
+            });
+        }
+        let id_temp = (0..num_types).collect::<Vec<usize>>();
+        Ok(Self {
+            left: id_temp.clone(),
+            right: p.inv().permute(&id_temp),
+            middle: types.to_vec(),
+            is_left_id: true,
+            is_right_id: false,
+        })
+    }
+
+    /// `codomain() == types`, `domain()[i] == types[p.apply(i)]`.
+    ///
+    /// Mirror of [`from_permutation_on_domain`](Self::from_permutation_on_domain):
+    /// the right leg is the identity and the left leg is `p.permute(0..n)`, so
+    /// domain wire `i` sits on apex vertex `p.apply(i)` and codomain wire `k`
+    /// on apex vertex `k` — again meeting exactly when `k == p.apply(i)`.
+    fn from_permutation_on_codomain(
         p: Permutation,
         types: &[Lambda],
-        types_as_on_domain: bool,
     ) -> Result<Self, CatgraphError> {
         let num_types = types.len();
-        assert_eq!(p.len(), num_types);
-        let id_temp = (0..num_types).collect::<Vec<usize>>();
-        // inverses placed so that from(p1);from(p2) = from(p1;p2)
-        //  left ; is cospan composition
-        //  right ; is composition of permutation functions
-        let p_underlying = if types_as_on_domain { p.inv() } else { p }.permute(&id_temp);
-        if types_as_on_domain {
-            Ok(Self {
-                left: (0..num_types).collect(),
-                right: p_underlying,
-                middle: types.to_vec(),
-                is_left_id: true,
-                is_right_id: false,
-            })
-        } else {
-            Ok(Self {
-                left: p_underlying,
-                right: (0..num_types).collect(),
-                middle: types.to_vec(),
-                is_left_id: false,
-                is_right_id: true,
-            })
+        if p.len() != num_types {
+            return Err(CatgraphError::CompositionSizeMismatch {
+                expected: num_types,
+                actual: p.len(),
+            });
         }
+        let id_temp = (0..num_types).collect::<Vec<usize>>();
+        Ok(Self {
+            left: p.permute(&id_temp),
+            right: id_temp,
+            middle: types.to_vec(),
+            is_left_id: false,
+            is_right_id: true,
+        })
     }
 }
 
@@ -884,17 +929,14 @@ mod test {
             Green,
             Blue,
         }
-        let type_names_on_source = true;
-        let cospan = Cospan::<Color>::from_permutation(
+        let cospan = Cospan::<Color>::from_permutation_on_domain(
             Permutation::rotation_left(3, 1),
             &[Color::Red, Color::Green, Color::Blue],
-            type_names_on_source,
         )
         .unwrap();
-        let cospan_2 = Cospan::<Color>::from_permutation(
+        let cospan_2 = Cospan::<Color>::from_permutation_on_domain(
             Permutation::rotation_left(3, 2),
             &[Color::Blue, Color::Red, Color::Green],
-            type_names_on_source,
         )
         .unwrap();
         let mid_interface_1 = cospan.codomain();
@@ -913,17 +955,14 @@ mod test {
                 );
             }
         }
-        let type_names_on_source = false;
-        let cospan = Cospan::<Color>::from_permutation(
+        let cospan = Cospan::<Color>::from_permutation_on_codomain(
             Permutation::rotation_left(3, 1),
             &[Color::Red, Color::Green, Color::Blue],
-            type_names_on_source,
         )
         .unwrap();
-        let cospan_2 = Cospan::<Color>::from_permutation(
+        let cospan_2 = Cospan::<Color>::from_permutation_on_codomain(
             Permutation::rotation_left(3, 2),
             &[Color::Green, Color::Blue, Color::Red],
-            type_names_on_source,
         )
         .unwrap();
         let mid_interface_1 = cospan.codomain();
@@ -1145,23 +1184,20 @@ mod test {
         let between = Uniform::<usize>::try_from(2..n_max).unwrap();
         let mut rng = StdRng::seed_from_u64(789);
         let n = between.sample(&mut rng);
-        let types_as_on_source = true;
         let p1 = rand_perm(n, n * 2, &mut rng);
         let p2 = rand_perm(n, n * 2, &mut rng);
         let prod = p1.clone() * p2.clone();
         let domain_types = (0..n).map(|idx| idx + 100).collect::<Vec<usize>>();
         let mut types_at_this_stage = domain_types.clone();
-        let cospan_p1 =
-            Cospan::from_permutation(p1.clone(), &domain_types, types_as_on_source).unwrap();
+        let cospan_p1 = Cospan::from_permutation_on_domain(p1.clone(), &domain_types).unwrap();
         in_place_permute(&mut types_at_this_stage, &p1.inv());
         let cospan_p2 =
-            Cospan::from_permutation(p2.clone(), &types_at_this_stage, types_as_on_source).unwrap();
+            Cospan::from_permutation_on_domain(p2.clone(), &types_at_this_stage).unwrap();
         in_place_permute(&mut types_at_this_stage, &p2.inv());
         let cospan_prod = cospan_p1.compose(&cospan_p2);
         match cospan_prod {
             Ok(real_res) => {
-                let expected_res =
-                    Cospan::from_permutation(prod, &domain_types, types_as_on_source).unwrap();
+                let expected_res = Cospan::from_permutation_on_domain(prod, &domain_types).unwrap();
                 assert_eq!(real_res.left, expected_res.left);
                 assert_eq!(real_res.right, expected_res.right);
                 assert_eq!(real_res.middle, expected_res.middle);
@@ -1172,7 +1208,6 @@ mod test {
                 panic!("Could not compose simple example\n{e:?}")
             }
         }
-        let types_as_on_source = false;
         let domain_types = (0..n).map(|idx| idx + 10).collect::<Vec<usize>>();
         let p1 = rand_perm(n, n * 2, &mut rng);
         let p2 = rand_perm(n, n * 2, &mut rng);
@@ -1180,17 +1215,15 @@ mod test {
         let mut types_at_this_stage = domain_types.clone();
         in_place_permute(&mut types_at_this_stage, &p1.inv());
         let cospan_p1 =
-            Cospan::from_permutation(p1.clone(), &types_at_this_stage.clone(), types_as_on_source)
-                .unwrap();
+            Cospan::from_permutation_on_codomain(p1.clone(), &types_at_this_stage.clone()).unwrap();
         in_place_permute(&mut types_at_this_stage, &p2.inv());
         let cospan_p2 =
-            Cospan::from_permutation(p2.clone(), &types_at_this_stage, types_as_on_source).unwrap();
+            Cospan::from_permutation_on_codomain(p2.clone(), &types_at_this_stage).unwrap();
         let cospan_prod = cospan_p1.compose(&cospan_p2);
         match cospan_prod {
             Ok(real_res) => {
                 let expected_res =
-                    Cospan::from_permutation(prod, &types_at_this_stage, types_as_on_source)
-                        .unwrap();
+                    Cospan::from_permutation_on_codomain(prod, &types_at_this_stage).unwrap();
                 assert_eq!(real_res.left, expected_res.left);
                 assert_eq!(real_res.right, expected_res.right);
                 assert_eq!(real_res.middle, expected_res.middle);
