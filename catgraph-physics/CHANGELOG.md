@@ -425,7 +425,7 @@ Branchial analysis toolkit — additive capabilities for `BranchialGraph`.
 - Gauge Wilson-loop fix: `record_transition(from, to, holonomy)` for explicit inter-site gauge links (was erroneously recording self-loops).
 - Multiway APIs exposed for downstream consumers in `irreducible`: `ConfluenceDiamond`, `confluence_diamonds()`, `parallel_independent_events(node_id)`, `events_commute(a, b)`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...HEAD
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0
 [workspace-v0.9.0]: https://github.com/sustia-llc/catgraph/compare/v0.8.0...v0.9.0
 [workspace-v0.4.0]: https://github.com/sustia-llc/catgraph/compare/v0.1.0...v0.4.0

@@ -9,7 +9,7 @@ Anchored to:
 - [Leinster, *The Euler characteristic of a category* (2008)](https://arxiv.org/abs/math/0610260) — Cor 1.5 integer-exact Möbius for finite circuit-free categories.
 - [Bradley, Terilla & Vlassopoulos, *An enriched category theory of language* (2021)](https://arxiv.org/abs/2106.07890) — representable copresheaf semantics (Yoneda embedding) + asymmetric semantic internal hom (Lemma 2 Eq 11 / §5 metric).
 
-**Status:** workspace version `0.14.0`. Released as workspace tags `v0.1.0`
+**Status:** workspace version `0.15.0`. Released as workspace tags `v0.1.0`
 (2026-07-01: semantic + determinism + coalition layer, #19–#23), `v0.1.1`
 (ULP-tolerant triangle-inequality checks, #29/#30), `v0.2.0` (2026-07-02:
 incremental coalition magnitude for the decision hot path, #31/PR #32), and

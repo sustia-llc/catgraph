@@ -6,6 +6,8 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+## [workspace-v0.15.0] - 2026-08-16
+
 ### Changed — BREAKING
 
 - **`SymmetricMonoidalMorphism::from_permutation(p, types, types_as_on_domain: bool)`
@@ -642,7 +644,8 @@ substrate (numeric backends kept optional).
   §3.3 io/ff factorization, the global Grothendieck form, LinRel examples) are
   catalogued in [`docs/FS19-AUDIT.md`](docs/FS19-AUDIT.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...HEAD
+[workspace-v0.15.0]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...v0.15.0
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0
 [workspace-v0.12.0]: https://github.com/sustia-llc/catgraph/compare/v0.11.0...v0.12.0
 [workspace-v0.10.0]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...v0.10.0
