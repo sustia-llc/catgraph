@@ -208,7 +208,8 @@ module). The ten names, their paths, and their constructors are unchanged from
 that era, with one deliberate cut: the re-export era's trait additionally
 *provided* `left`/`right`/`choice`/`fanin` methods, which the owned trait
 omits — the module's *Deliberate minimality* section records the cut, and its
-*Historical note* records the never-re-exported surfaces. All ten names are
-live public API, law-tested in `tests/arrow_laws.rs`; the Arrow surface is
+*Historical note* records the never-re-exported surfaces. All ten names, plus
+the owned `ThenFn` alias added at #222 (the 11th public name), are live
+public API, law-tested in `tests/arrow_laws.rs`; the Arrow surface is
 first exercised by the S5 `Traced` builder
 ([typed builder](#typed-builder-s5) above).
