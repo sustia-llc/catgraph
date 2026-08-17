@@ -605,9 +605,29 @@ pub trait SymmetricMonoidalDiscreteMorphism<T: Eq> {
     /// morphisms are), that is `p ∘ f` on the codomain side and `f ∘ p⁻¹` on
     /// the domain side. The asymmetry is the same one the sibling trait
     /// documents, and for the same reason.
+    ///
+    /// # Length
+    ///
+    /// ⚠ **This trait signals an arity mismatch by panicking, where every
+    /// constructor on the sibling trait returns `Err`.** Both methods here are
+    /// infallible by signature — the discrete category's object is a bare
+    /// `usize`, so there is no `types` slice whose length could disagree, and
+    /// the only mismatch possible is `p.len()` against the morphism's own
+    /// arity. The sole implementation,
+    /// [`Decomposition`](crate::finset::Decomposition), asserts it: on
+    /// `permute_side` against `domain()` / `codomain()` as selected, and on
+    /// `from_permutation` against `types`.
+    ///
+    /// Do not read the sibling trait's `Err` contract across to this one.
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool);
     /// Constructs the braiding routing wire `i` to wire `p.apply(i)` on a set
     /// of the given size.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `p.len() != types`. See the trait's `# Length` note for why
+    /// this panics rather than returning `Err` like the sibling trait's
+    /// constructors.
     fn from_permutation(p: Permutation, types: T) -> Self;
 }
 

@@ -89,8 +89,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
   ⚠ This entry read "all eleven implementations", which overstated the sweep in
   two ways and is corrected here rather than edited away. `NamedCospan` is not
-  in it — it *cannot* satisfy the constructors and has its own test asserting
-  that it refuses them — and `PetriNet` is in it only as an
+  in the **constructor** sweep — it *cannot* satisfy the constructors, and a
+  dedicated test in the same file asserts that it refuses them, naming the
+  `from_permutation_extra_data_*` replacements. It **is** in the `permute_side`
+  sweep, where its port-name/leg synchronisation is genuinely pinned; core's
+  CHANGELOG describes that half. `PetriNet` is in it only as an
   arity/apex check, because its wiring is unobservable (below). The
   arity-mismatch sweep was narrower still: it drove `Cospan`, `Span` and `Corel`
   through both constructors but the other six through `on_domain` only, so a

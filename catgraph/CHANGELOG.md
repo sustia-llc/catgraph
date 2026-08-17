@@ -175,11 +175,17 @@ All notable changes to `catgraph` are documented here. The format follows
   `Monoidal::monoidal` uses an interchange cospan, and gains the same defensive
   length no-op `MatR` and `PropExpr` have.
 
-- **`CospanAlgebraMorphism::from_permutation_on_domain` recomputed `p.inv()`
-  once per element** ([#258]) inside `(0..n).map(|k| p.inv().apply(k))` — a
-  `Vec` allocation and an O(n) inversion per index, when the value was already
-  needed one line earlier. Hoisted; the constructor is now O(n) rather than
-  O(n²).
+- **`CospanAlgebraMorphism`'s permutation constructor was O(n²)** ([#258]).
+  `p.inv()` was already hoisted; the cost was `p_inv.permute(&(0..n).collect())`
+  *inside* the per-index closure — a `Vec` allocation and a full permute for
+  every index, to read one element out of the result. Replaced by a direct
+  `p_inv.apply(k)`, making the constructor O(n).
+
+  (An earlier draft of this entry blamed a missing hoist of `p.inv()`. That was
+  wrong — the hoist was already there on `main`, and the expression it quoted as
+  the defect was the *new* code. Corrected here rather than silently, because a
+  maintainer following the old wording would go hunting a bug that never
+  existed.)
 
 - **A documentation claim that inverted the whole convention** ([#258]).
   `PropExpr::from_permutation`'s rustdoc stated that generic code calling

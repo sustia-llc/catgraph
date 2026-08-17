@@ -802,7 +802,13 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if `p.len()` does not match the permuted side's arity.
+    /// Panics if `p.len()` does not match the permuted side's arity. **`self`
+    /// is not modified before that check on either branch** — the domain branch
+    /// validates up front rather than inheriting the codomain branch's check
+    /// through its recursive call, because the `hflip` sandwich would otherwise
+    /// have already flipped `self` when the panic escaped. A caller holding the
+    /// `&mut` across a caught unwind would then see the morphism silently
+    /// replaced by its opposite.
     fn permute_side(&mut self, p: &permutations::Permutation, of_codomain: bool) {
         if of_codomain {
             assert_eq!(p.len(), self.codomain().len());
@@ -817,6 +823,10 @@ where
                 "invariant: the braiding is built on self.codomain(), so the interfaces match",
             );
         } else {
+            // Up front, NOT inherited from the recursive call below: `hflip`
+            // mutates `self`, so a check reached only after it would leave a
+            // flipped morphism behind on a wrong-length `p`.
+            assert_eq!(p.len(), self.domain().len());
             self.hflip(&identity);
             self.permute_side(p, true);
             self.hflip(&identity);
