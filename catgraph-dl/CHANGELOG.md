@@ -65,6 +65,31 @@ All notable changes to this crate are documented here. Format follows
     `Either<A, ()>`) no longer forces those bounds onto every `Free<F, _>` walk.
     The law helper asks for them where it needs them. `Container` also gained
     one required method, `contents`, the borrowing half of `decompose` (law 4).
+  - **A borrowed payload must now be declared *before* the carrier that holds
+    it.** A hand-written `Drop` without `#[may_dangle]` makes dropck require
+    every lifetime parameter to strictly outlive the value, so
+    `BinaryTree<&'a T>`, `Free<F, &'a T>` and `Cofree<F, &'a T>` all reject a
+    binding order that used to compile:
+
+    ```rust,ignore
+    let tree;                                    // dropped last…
+    let payload = String::from("x");             // …but this dies first
+    tree = BinaryTree::leaf(payload.as_str());   // error[E0597]
+    ```
+
+    The fix is to swap the two bindings so the payload outlives the carrier.
+    Worth calling out because the compiler's message (`` `payload` does not
+    live long enough … when `tree` is dropped and runs the Drop code ``) names
+    the borrow rather than the ordering. Owned payloads are unaffected. Pinned
+    by `compile_fail,E0597` doctests on all three carriers.
+  - **A witness whose `DebugFunctor::fmt_shape` never writes a recursion slot
+    into the `Formatter` it was handed is now an error**, not a silently
+    truncated rendering. Such a slot has no measurable position, so the child
+    and its whole subtree used to disappear from the output while `{:?}`
+    returned `Ok` — the one out-of-contract path in this crate that failed
+    silently. Write each `contents` entry into `f` (`.field(inner)` and
+    friends), never into a buffer of your own; the shipped witnesses already
+    do, so this affects out-of-tree witnesses only.
 
   Cost, re-measured with `benches/free_cofree_shapes.rs`: the walks moved onto
   the heap, so they allocate there. `list construct` is unchanged (`1·n`, zero
@@ -76,9 +101,7 @@ All notable changes to this crate are documented here. Format follows
 
   Not breaking, and unchanged: `Cofree::new` / `head` / `tail` / `into_parts`
   keep their signatures (the cell moved behind an `Option`, so `into_parts` can
-  still move both fields out under a manual `Drop`); `Debug` output is
-  byte-identical to the derived/previous text in both `{:?}` and `{:#?}`, pinned
-  against plain `#[derive(Debug)]` twins of all three carriers.
+  still move both fields out under a manual `Drop`).
 
   `Debug` renders **top-down and streaming**: each cell's shape is laid out once
   into a small scratch buffer and its segments written straight to the caller's
@@ -88,6 +111,24 @@ All notable changes to this crate are documented here. Format follows
   quadratic in the depth of a spine. Neither aborts, which the derive did, and
   neither panics on an inner `Debug` that returns `Err`: the error propagates,
   as `DebugFunctor::fmt_shape` documents.
+
+  **`Debug` output is byte-identical to the derived/previous text under the
+  default spec, `{:#?}`, `{:.N?}` and `{:N?}` — and *not* under fill,
+  alignment, the sign/zero-pad flags or `{:x?}` / `{:X?}`.** The scratch buffer
+  is written by a *fresh* `Formatter`, and stable Rust cannot build one from
+  another's options (`fmt::FormattingOptions` + `Formatter::new` are unstable —
+  `formatting_options`, rust-lang/rust#118117), so the spec is re-expressed in
+  the scratch `write!`'s own format string. `alternate` is a distinct literal
+  string, `precision` and `width` go through the dynamic `{:.p$?}` / `{:w$?}`
+  forms; fill and alignment can only be spelled literally, and the debug-hex
+  flags have no stable accessor to be read from in the first place. A dropped
+  flag renders as if it were absent, so a carrier under `{:+?}` or `{:x?}`
+  prints what it prints under `{:?}` where a derive would honour the flag, and
+  `{:*>12?}` applies the width but not the fill. Both halves are pinned against
+  plain `#[derive(Debug)]` twins of all three carriers — the carried specs by
+  `every_carrier_debug_is_byte_identical_to_a_derived_twin` (at an `f64`
+  payload, the only one that can see `precision` go missing), the dropped ones
+  by `dropped_format_specs_render_as_if_the_flag_were_absent`.
 
   Node sizes, measured (x86-64). The private cell is an `Option` so `Drop` and
   the by-value accessors can *take* it without `unsafe`, and that wrapper is
@@ -145,12 +186,14 @@ All notable changes to this crate are documented here. Format follows
   `Either<A, (X, X)>`, so `Container for TreeEndo` still reports arity 2), and
   `TreeEndo`'s two-slot `Container`/`EqFunctor`/`DebugFunctor` behaviour.
 
-  **`Debug` output is byte-identical**, on both `BinaryTree` and `TreeView`
-  itself: `Node` still renders as a **two-field** tuple variant,
+  **`Debug` output is unchanged by this reshape**, on both `BinaryTree` and
+  `TreeView` itself: `Node` still renders as a **two-field** tuple variant,
   `Node(<left>, <right>)`, in `{:?}` and `{:#?}` alike. `TreeView`'s `Debug` is
   hand-written for exactly that reason — a derive on the boxed pair would print
   `Node((<left>, <right>))`. Pinned by the existing derived-twin oracle and by a
-  new view-level test.
+  new view-level test. (The format-spec caveat in the entry above applies to
+  `TreeView` too, transitively: its subtrees are rendered by `BinaryTree`'s
+  streaming `Debug`.)
 
 - **`depth` is an opt-in, caller-facing measure.** `MAX_TREE_DEPTH`,
   `guard_tree_depth`, `guard_free_mnd_depth`, `tree_depth`, `free_mnd_depth` and

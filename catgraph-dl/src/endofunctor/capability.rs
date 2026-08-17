@@ -92,6 +92,25 @@ pub trait DebugFunctor: HKT {
     /// format the `T` values themselves. That inversion is what keeps the
     /// carriers' `{:?}` off the stack for a deep spine.
     ///
+    /// # Contract: write each entry into `f`, not into a buffer of your own
+    ///
+    /// An entry of `contents` is **not** a finished string; it is a probe the
+    /// carrier measures. Its position in `f`'s output is what tells the carrier
+    /// where to splice the real (arbitrarily deep) child in, so it must be
+    /// written into the `Formatter` this method was handed —
+    /// `f.debug_tuple("Some").field(inner)` and friends do exactly that.
+    ///
+    /// A witness that renders an entry somewhere else instead — say
+    /// `f.write_str(&format!("Some({inner:?})"))` — leaves no position to
+    /// splice at, and the child and its whole subtree would silently vanish
+    /// from the output. The carriers **reject** that: the render fails with
+    /// [`fmt::Error`] rather than returning a truncated `Ok`.
+    ///
+    /// The one shape that cannot be caught is a witness that never touches an
+    /// entry at all: an unmeasured position is indistinguishable from one the
+    /// witness deliberately elided, so such a slot is simply absent from the
+    /// output. Render every entry, once.
+    ///
     /// # Errors
     ///
     /// Returns [`fmt::Error`] if the underlying writer fails. A witness may
@@ -104,7 +123,16 @@ pub trait DebugFunctor: HKT {
     /// than panicking, and likewise for a payload whose `Debug` legitimately
     /// fails: their renderer lays each cell out with `write!` into a `String`
     /// sink, never `format!` (which panics when a formatting impl returns
-    /// `Err`).
+    /// `Err`). For the same reason the contract breach above is reported by the
+    /// carrier rather than by an `Err` from the probe itself — a witness using
+    /// `format!` would turn that into a panic.
+    ///
+    /// # Format spec
+    ///
+    /// `f` carries the caller's `alternate`, `precision` and `width`; fill,
+    /// alignment, the sign/zero-pad flags and `{:x?}`/`{:X?}` are **not**
+    /// carried across the carriers' scratch pass. See
+    /// [`crate::free_monad`]'s rendering note.
     fn fmt_shape<T>(
         fa: &Self::Type<T>,
         f: &mut fmt::Formatter<'_>,

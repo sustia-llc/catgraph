@@ -105,6 +105,67 @@
 //! [`EqFunctor`](crate::endofunctor::EqFunctor)'s law note), so a carrier-level
 //! `Eq` would be false for float-labelled witnesses.
 //!
+//! ### What a carrier's `Debug` does with your format spec
+//!
+//! Since #200 a carrier renders itself by laying each cell's shape out into a
+//! scratch buffer and streaming the pieces, rather than by handing the caller's
+//! `Formatter` down the spine. A scratch buffer is written by a *fresh*
+//! formatter, and stable Rust has no way to build one from another's options
+//! (`fmt::FormattingOptions` + `Formatter::new` are unstable —
+//! `formatting_options`, rust-lang/rust#118117), so the spec is re-expressed in
+//! the scratch `write!`'s own format string. Only what a format string can
+//! express *dynamically* survives:
+//!
+//! | Spec | Carried? |
+//! |---|---|
+//! | `{:#?}` (alternate) | **yes** |
+//! | `{:.2?}` (precision) | **yes** — via `{:.p$?}` |
+//! | `{:12?}` (width) | **yes** — via `{:w$?}` |
+//! | `{:*>12?}` (fill, alignment) | no |
+//! | `{:+?}`, `{:08?}` (sign, zero-pad) | no |
+//! | `{:x?}` / `{:X?}` (debug hex) | no — and not even *readable* on stable |
+//!
+//! A dropped flag renders as if it were absent, so a carrier under `{:+?}` or
+//! `{:x?}` prints what it prints under `{:?}`, where a `#[derive(Debug)]` type
+//! of the same shape would honour it. `{:*>12?}` is the mixed case: the width
+//! is applied, the fill and alignment are not. This is the one respect in which
+//! a carrier's rendering is *not* byte-identical to a derive, and it is pinned
+//! as deliberate — see the unit tests
+//! `every_carrier_debug_is_byte_identical_to_a_derived_twin` and
+//! `dropped_format_specs_render_as_if_the_flag_were_absent`.
+//!
+//! ## A manual `Drop` tightens dropck (v0.14.0, #200)
+//!
+//! All three carriers hand-write [`Drop`] so a deep spine dies on the heap.
+//! A type with a `Drop` impl and no `#[may_dangle]` makes the borrow checker
+//! require every lifetime in it to **strictly outlive** the value, because the
+//! drop glue could observe borrowed data. So a borrowed payload must outlive
+//! the carrier, which for two locals in the same scope means declaring the
+//! payload **first**:
+//!
+//! ```compile_fail,E0597
+//! use catgraph_dl::free_monad::tree_endo::BinaryTree;
+//! // `tree` is declared first, so it is dropped last — and its `Drop` would
+//! // run after `payload` is gone. `error[E0597]: `payload` does not live long
+//! // enough`.
+//! let tree;
+//! let payload = String::from("x");
+//! tree = BinaryTree::leaf(payload.as_str());
+//! # let _ = &tree;
+//! ```
+//!
+//! ```
+//! use catgraph_dl::free_monad::tree_endo::BinaryTree;
+//! // The fix is the declaration order: the payload outlives the carrier.
+//! let payload = String::from("x");
+//! let tree = BinaryTree::leaf(payload.as_str());
+//! # let _ = &tree;
+//! ```
+//!
+//! The same holds for `Free<F, &'a T>` and `Cofree<F, &'a T>`. Owned payloads
+//! are unaffected. The compiler's message names the borrow, not the ordering,
+//! so it is worth recognising.
+//!
 //! ## Deliberate minimality of the carrier surface (#76 → #93 → #222)
 //!
 //! The carriers ship the recursion schemes and nothing else: [`Free`] is its
@@ -176,7 +237,8 @@ use crate::endofunctor::DebugFunctor;
 // rewrite keeps the output byte-identical — pinned by `debug_reproduces_*` and,
 // more sharply, by `every_carrier_debug_is_byte_identical_to_a_derived_twin`,
 // which diffs each carrier against a plain `#[derive(Debug)]` type of the same
-// shape — and drops the cost to the linear one the docs always claimed.
+// shape, at every format spec a scratch pass can carry — and drops the cost to
+// the linear one the docs always claimed.
 //
 // Byte-identity comes from never re-implementing `core::fmt`'s layout: a
 // cell's shape is still rendered by `debug_tuple`/`debug_struct`, alternate
@@ -186,6 +248,53 @@ use crate::endofunctor::DebugFunctor;
 // `{:#?}` the indentation is itself Θ(depth) per line, so the pretty output of
 // a caterpillar is inherently quadratic *in characters*; writing it is linear
 // in that output.
+//
+// The format spec is the one place the reconstruction is *partial*, because a
+// scratch pass cannot inherit the caller's `Formatter` wholesale — see
+// [`Spec`], which is the exact statement of what survives and what does not.
+
+/// The part of a caller's format spec a scratch pass can carry.
+///
+/// A cell's shape is laid out into a scratch buffer by `write!`, so it is
+/// formatted by a *fresh* `Formatter` rather than the caller's. Constructing one
+/// with the caller's options wholesale needs `fmt::FormattingOptions` +
+/// `Formatter::new`, both still unstable (`formatting_options`,
+/// rust-lang/rust#118117), so the spec is instead re-expressed in the scratch
+/// `write!`'s own format string. Only what a format string can say
+/// *dynamically* can be carried:
+///
+/// - **`alternate`** (`{:#?}`) — a distinct literal format string.
+/// - **`precision`** (`{:.2?}`) — `{:.p$?}`, the dynamic-precision form.
+/// - **`width`** (`{:12?}`) — `{:w$?}`, the dynamic-width form.
+///
+/// **Fill, alignment and the sign/zero-pad flags are dropped**, because a
+/// format string can only spell them literally (`{:*>12?}`, `{:+?}`, `{:08?}`)
+/// and the fill character is an arbitrary `char`. The `{:x?}` / `{:X?}`
+/// debug-hex flags are dropped too, and for a stronger reason: `Formatter` has
+/// no stable accessor for them, so they cannot even be *read* off the caller.
+/// A carrier rendered under one of those specs prints as if the flag were
+/// absent, where a `#[derive(Debug)]` type of the same shape would honour it.
+/// The divergence is deliberate and pinned; see
+/// `every_carrier_debug_is_byte_identical_to_a_derived_twin`, which asserts the
+/// three carried specs agree with the derive *and* records the dropped ones as
+/// known divergence.
+#[derive(Clone, Copy)]
+struct Spec {
+    alternate: bool,
+    width: Option<usize>,
+    precision: Option<usize>,
+}
+
+impl Spec {
+    /// Read the carryable part of the spec off the caller's formatter.
+    fn of(f: &fmt::Formatter<'_>) -> Self {
+        Self {
+            alternate: f.alternate(),
+            width: f.width(),
+            precision: f.precision(),
+        }
+    }
+}
 
 /// Formats an `F::Type<T>` through the witness's `fmt_shape`, with the
 /// recursion slots supplied as probes — the seam that keeps the carrier's
@@ -241,6 +350,11 @@ impl<N: DebugNode + ?Sized> fmt::Debug for Cell<'_, N> {
 struct Capture {
     text: RefCell<String>,
     holes: RefCell<Vec<Hole>>,
+    /// Set by a [`Probe`] whose own writes did not land in `text` — the
+    /// out-of-contract witness [`frame`] turns into `Err(fmt::Error)`. See
+    /// [`Probe::fmt`] for why the probe records the fact instead of returning
+    /// the error itself.
+    lost_hole: RefCell<bool>,
 }
 
 /// Where one recursion slot's rendering goes, in the enclosing cell's text.
@@ -296,9 +410,21 @@ impl fmt::Debug for Probe<'_> {
         // mean anything. They do whenever `fmt_shape` writes the content
         // position into the `f` it was handed, which is its contract; a witness
         // that renders one into a buffer of its own instead leaves the buffer
-        // untouched here, and the hole is dropped rather than spliced at a
-        // meaningless offset.
+        // untouched here, so there is no offset to splice at and the child would
+        // simply vanish from the output.
+        //
+        // That is out of contract, and every other such path in this crate
+        // returns `fmt::Error` for it (`OptionWitness` / `ListEndo` / `TreeEndo`
+        // on an arity mismatch, `BinaryTree::fmt_cell` likewise). So does this
+        // one — but by *recording* the fact rather than returning it, for two
+        // reasons. A witness that renders a hole with `format!` would **panic**
+        // on an `Err` returned from here, which is exactly the failure mode the
+        // renderer exists to avoid; and a witness that swallows the error would
+        // turn the whole thing back into a silent omission. Poisoning the
+        // capture is immune to both: `frame` reads it after the layout pass and
+        // fails there, whatever the shape did with this call's return value.
         if after_break <= start || resume <= after_break {
+            *self.capture.lost_hole.borrow_mut() = true;
             return Ok(());
         }
 
@@ -326,7 +452,10 @@ struct Frame<'a, N: ?Sized> {
 }
 
 /// Lay out one node's shape and hand back the frame that streams it.
-fn frame<'a, N>(node: &'a N, indent: usize, alternate: bool) -> Result<Frame<'a, N>, fmt::Error>
+///
+/// The scratch pass re-expresses as much of the caller's format spec as a
+/// format string can carry — see [`Spec`] for what that is and what it is not.
+fn frame<'a, N>(node: &'a N, indent: usize, spec: Spec) -> Result<Frame<'a, N>, fmt::Error>
 where
     N: DebugNode + ?Sized,
 {
@@ -342,10 +471,25 @@ where
 
     let cell = Cell(node, &holes);
     let mut sink = Sink(&capture);
-    if alternate {
-        write!(sink, "{cell:#?}")?;
-    } else {
-        write!(sink, "{cell:?}")?;
+    // Eight literal format strings, because `#`, `.p$` and `w$` can only be
+    // spelled in the string itself — `p` and `w` are ordinary named arguments,
+    // so only the *values* are dynamic.
+    match (spec.alternate, spec.width, spec.precision) {
+        (false, None, None) => write!(sink, "{cell:?}"),
+        (false, None, Some(p)) => write!(sink, "{cell:.p$?}"),
+        (false, Some(w), None) => write!(sink, "{cell:w$?}"),
+        (false, Some(w), Some(p)) => write!(sink, "{cell:w$.p$?}"),
+        (true, None, None) => write!(sink, "{cell:#?}"),
+        (true, None, Some(p)) => write!(sink, "{cell:#.p$?}"),
+        (true, Some(w), None) => write!(sink, "{cell:#w$?}"),
+        (true, Some(w), Some(p)) => write!(sink, "{cell:#w$.p$?}"),
+    }?;
+
+    // A hole the shape declined to write into the `Formatter` it was handed
+    // cannot be spliced anywhere, so the child would silently vanish. Fail
+    // instead — see `Probe::fmt`.
+    if capture.lost_hole.take() {
+        return Err(fmt::Error);
     }
 
     Ok(Frame {
@@ -409,16 +553,30 @@ enum Step<'a, N: ?Sized> {
 /// — and no stack frame is spent per level, so no spine is too deep. The
 /// explicit stack holds one small scratch buffer per *ancestor*, not one per
 /// node.
+///
+/// # Format spec
+///
+/// `alternate`, `precision` and `width` are carried down to every cell;
+/// fill, alignment, the sign/zero-pad flags and `{:x?}`/`{:X?}` are **not**.
+/// [`Spec`] states why, and what the visible difference from a
+/// `#[derive(Debug)]` type of the same shape is.
+///
+/// # Errors
+///
+/// Propagates any `fmt::Error` from the sink, from a payload's own `Debug`, or
+/// from a witness's [`DebugFunctor::fmt_shape`] — including the out-of-contract
+/// case where `fmt_shape` never writes a recursion slot into the `Formatter` it
+/// was handed, which would otherwise drop that whole subtree from the output.
 pub(crate) fn write_debug<N>(root: &N, f: &mut fmt::Formatter<'_>) -> fmt::Result
 where
     N: DebugNode + ?Sized,
 {
-    let alternate = f.alternate();
+    let spec = Spec::of(f);
     let mut out = Indenter {
         out: f,
         on_newline: false,
     };
-    let mut stack: Vec<Frame<'_, N>> = vec![frame(root, 0, alternate)?];
+    let mut stack: Vec<Frame<'_, N>> = vec![frame(root, 0, spec)?];
 
     while let Some(top) = stack.last_mut() {
         let step = match top.holes.get(top.next).copied() {
@@ -437,7 +595,7 @@ where
             }
         };
         match step {
-            Step::Descend(child, indent) => stack.push(frame(child, indent, alternate)?),
+            Step::Descend(child, indent) => stack.push(frame(child, indent, spec)?),
             Step::Stay => (),
             Step::Done => {
                 stack.pop();
@@ -450,7 +608,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::{Cofree, Free, FreeView};
-    use crate::endofunctor::{Either, OptionWitness};
+    use crate::container::Container;
+    use crate::endofunctor::{DebugFunctor, Either, Functor, HKT, OptionWitness};
     use crate::free_monad::tree_endo::{BinaryTree, TreeEndo, TreeView};
     use core::fmt;
     use core::fmt::Write as _;
@@ -464,10 +623,13 @@ mod tests {
     /// against hand-typed strings at two or three levels. These types put the
     /// real derive back within reach: same variant/field names, same nesting,
     /// so `format!` on a carrier and on its twin must agree character for
-    /// character at any depth, in both `{:?}` and `{:#?}`.
+    /// character at any depth, under every format spec the renderer carries.
     ///
     /// Each twin is named for the carrier it mirrors, because a derived
-    /// `Debug` prints the type's own name.
+    /// `Debug` prints the type's own name. Each is **generic in its payload**,
+    /// so the same shapes can be built over a `f64` — the payload whose own
+    /// `Debug` honours `precision` and `width`, and so the only one that can
+    /// tell whether the renderer carried the caller's format spec down.
     mod mirror {
         // Every field here is read by the derived `Debug` and nothing else,
         // which dead-code analysis deliberately does not count.
@@ -476,32 +638,40 @@ mod tests {
         use crate::endofunctor::Either;
 
         #[derive(Debug)]
-        pub enum BinaryTree {
-            Leaf(u8),
-            Node(Box<BinaryTree>, Box<BinaryTree>),
+        pub enum BinaryTree<A> {
+            Leaf(A),
+            Node(Box<BinaryTree<A>>, Box<BinaryTree<A>>),
         }
 
+        /// `TreeEndo<A>`'s functor hole at the `Free` twin — the alias exists
+        /// only to keep `clippy::type_complexity` quiet; a `#[derive(Debug)]`
+        /// renders the value, so it does not touch the output.
+        type FreeHole<A> = Either<A, (Box<Free<A>>, Box<Free<A>>)>;
+
         #[derive(Debug)]
-        pub enum Free {
-            Pure(u8),
-            Suspend(Either<u8, (Box<Free>, Box<Free>)>),
+        pub enum Free<A> {
+            Pure(A),
+            Suspend(FreeHole<A>),
         }
 
         pub mod stream {
             #[derive(Debug)]
-            pub struct Cofree {
-                pub head: u32,
-                pub tail: Option<Box<Cofree>>,
+            pub struct Cofree<A> {
+                pub head: A,
+                pub tail: Option<Box<Cofree<A>>>,
             }
         }
 
         pub mod branching {
             use crate::endofunctor::Either;
 
+            /// As `super::FreeHole`, and for the same reason.
+            type CofreeHole<L, H> = Either<L, (Box<Cofree<L, H>>, Box<Cofree<L, H>>)>;
+
             #[derive(Debug)]
-            pub struct Cofree {
-                pub head: u32,
-                pub tail: Either<u8, (Box<Cofree>, Box<Cofree>)>,
+            pub struct Cofree<L, H> {
+                pub head: H,
+                pub tail: CofreeHole<L, H>,
             }
         }
     }
@@ -513,15 +683,21 @@ mod tests {
     /// coincidence.
     const SHAPE: u8 = 12;
 
-    fn tree_pair(depth: u8) -> (BinaryTree<u8>, mirror::BinaryTree) {
+    fn tree_pair<A: From<u8>>(depth: u8) -> (BinaryTree<A>, mirror::BinaryTree<A>) {
         if depth == 0 {
-            return (BinaryTree::leaf(0), mirror::BinaryTree::Leaf(0));
+            return (
+                BinaryTree::leaf(A::from(0)),
+                mirror::BinaryTree::Leaf(A::from(0)),
+            );
         }
         let (left, left_m) = tree_pair(depth - 1);
         let (right, right_m) = if depth.is_multiple_of(3) {
             tree_pair(depth - 1)
         } else {
-            (BinaryTree::leaf(depth), mirror::BinaryTree::Leaf(depth))
+            (
+                BinaryTree::leaf(A::from(depth)),
+                mirror::BinaryTree::Leaf(A::from(depth)),
+            )
         };
         (
             BinaryTree::node(left, right),
@@ -529,15 +705,15 @@ mod tests {
         )
     }
 
-    fn free_pair(depth: u8) -> (Free<TreeEndo<u8>, u8>, mirror::Free) {
+    fn free_pair<A: From<u8>>(depth: u8) -> (Free<TreeEndo<A>, A>, mirror::Free<A>) {
         if depth == 0 {
             // Both leaf arms: `Pure` (the `Z` slot) and `Suspend(Left(_))`.
-            return (Free::pure(0), mirror::Free::Pure(0));
+            return (Free::pure(A::from(0)), mirror::Free::Pure(A::from(0)));
         }
         if depth == 1 {
             return (
-                Free::suspend(Either::Left(1)),
-                mirror::Free::Suspend(Either::Left(1)),
+                Free::suspend(Either::Left(A::from(1))),
+                mirror::Free::Suspend(Either::Left(A::from(1))),
             );
         }
         let (left, left_m) = free_pair(depth - 1);
@@ -545,8 +721,8 @@ mod tests {
             free_pair(depth - 2)
         } else {
             (
-                Free::suspend(Either::Left(depth)),
-                mirror::Free::Suspend(Either::Left(depth)),
+                Free::suspend(Either::Left(A::from(depth))),
+                mirror::Free::Suspend(Either::Left(A::from(depth))),
             )
         };
         (
@@ -555,29 +731,31 @@ mod tests {
         )
     }
 
-    fn stream_pair(len: u32) -> (Cofree<OptionWitness, u32>, mirror::stream::Cofree) {
-        let mut carrier = Cofree::new(0, None);
+    fn stream_pair<A: From<u8>>(len: u8) -> (Cofree<OptionWitness, A>, mirror::stream::Cofree<A>) {
+        let mut carrier = Cofree::new(A::from(0), None);
         let mut twin = mirror::stream::Cofree {
-            head: 0,
+            head: A::from(0),
             tail: None,
         };
         for step in 1..=len {
-            carrier = Cofree::new(step, Some(Box::new(carrier)));
+            carrier = Cofree::new(A::from(step), Some(Box::new(carrier)));
             twin = mirror::stream::Cofree {
-                head: step,
+                head: A::from(step),
                 tail: Some(Box::new(twin)),
             };
         }
         (carrier, twin)
     }
 
-    fn branching_pair(depth: u8) -> (Cofree<TreeEndo<u8>, u32>, mirror::branching::Cofree) {
+    fn branching_pair<L: From<u8>, H: From<u8>>(
+        depth: u8,
+    ) -> (Cofree<TreeEndo<L>, H>, mirror::branching::Cofree<L, H>) {
         if depth == 0 {
             return (
-                Cofree::new(0, Either::Left(0)),
+                Cofree::new(H::from(0), Either::Left(L::from(0))),
                 mirror::branching::Cofree {
-                    head: 0,
-                    tail: Either::Left(0),
+                    head: H::from(0),
+                    tail: Either::Left(L::from(0)),
                 },
             );
         }
@@ -586,29 +764,65 @@ mod tests {
             branching_pair(depth - 1)
         } else {
             (
-                Cofree::new(u32::from(depth), Either::Left(depth)),
+                Cofree::new(H::from(depth), Either::Left(L::from(depth))),
                 mirror::branching::Cofree {
-                    head: u32::from(depth),
-                    tail: Either::Left(depth),
+                    head: H::from(depth),
+                    tail: Either::Left(L::from(depth)),
                 },
             )
         };
         (
             Cofree::new(
-                u32::from(depth),
+                H::from(depth),
                 Either::Right((Box::new(left), Box::new(right))),
             ),
             mirror::branching::Cofree {
-                head: u32::from(depth),
+                head: H::from(depth),
                 tail: Either::Right((Box::new(left_m), Box::new(right_m))),
             },
         )
     }
 
+    /// Assert a carrier and its derived twin agree **character for character**
+    /// across every format spec the renderer claims to carry.
+    ///
+    /// The default `{:?}` / `{:#?}` pair is the shape guard; the four
+    /// spec-bearing forms are the [`Spec`](super::Spec) guard, and only bite on
+    /// a payload whose own `Debug` honours `precision` / `width` — hence the
+    /// `f64` instantiations at the call sites. `width` bites on integers too.
+    macro_rules! assert_agrees_at_every_carried_spec {
+        ($carrier:expr, $twin:expr, $what:expr) => {{
+            let (live, twin, what) = (&$carrier, &$twin, $what);
+            assert_eq!(format!("{live:?}"), format!("{twin:?}"), "{what} {{:?}}");
+            assert_eq!(format!("{live:#?}"), format!("{twin:#?}"), "{what} {{:#?}}");
+            assert_eq!(
+                format!("{live:.2?}"),
+                format!("{twin:.2?}"),
+                "{what} {{:.2?}} — precision must reach every payload"
+            );
+            assert_eq!(
+                format!("{live:#.2?}"),
+                format!("{twin:#.2?}"),
+                "{what} {{:#.2?}} — precision must survive the pretty form too"
+            );
+            assert_eq!(
+                format!("{live:12?}"),
+                format!("{twin:12?}"),
+                "{what} {{:12?}} — width must reach every payload"
+            );
+            assert_eq!(
+                format!("{live:#12?}"),
+                format!("{twin:#12?}"),
+                "{what} {{:#12?}} — width must survive the pretty form too"
+            );
+        }};
+    }
+
     /// Every carrier's `Debug` must be **character-for-character** what
-    /// `#[derive(Debug)]` produces for the same shape — in both `{:?}` and
-    /// `{:#?}`, at a depth where the pretty form's indentation has compounded
-    /// many times over.
+    /// `#[derive(Debug)]` produces for the same shape — under every format spec
+    /// the renderer claims to carry (`{:?}`, `{:#?}`, `{:.2?}`, `{:#.2?}`,
+    /// `{:12?}`, `{:#12?}`), at a depth where the pretty form's indentation has
+    /// compounded many times over.
     ///
     /// This is the guard on the rendering itself. The renderer lays each cell
     /// out into a scratch buffer with its recursion slots stood in for by
@@ -618,52 +832,134 @@ mod tests {
     /// hole inherits, when a newline forces padding on the next line) is a
     /// place a byte could go missing. The derive is the only oracle that
     /// notices.
+    ///
+    /// # Why the spec-bearing forms, and why `f64`
+    ///
+    /// The scratch buffer is written by a *fresh* `Formatter`, so the caller's
+    /// format spec reaches a cell only if the renderer puts it back — see
+    /// [`Spec`](super::Spec). Exercising the default spec alone cannot see
+    /// that: `alternate` was carried from the start, and every other flag was
+    /// silently dropped while this oracle passed. It takes a payload whose own
+    /// `Debug` *honours* the flag to notice, which for `precision` means a
+    /// float — hence the `f64` instantiation of every pair below.
+    /// (`width` is honoured by integers too, so it is checked at both.)
+    ///
+    /// The specs that are **not** carried are the sibling test's business,
+    /// `dropped_format_specs_render_as_if_the_flag_were_absent`.
     #[test]
     fn every_carrier_debug_is_byte_identical_to_a_derived_twin() {
-        let (tree, tree_m) = tree_pair(SHAPE);
-        assert_eq!(
-            format!("{tree:?}"),
-            format!("{tree_m:?}"),
-            "BinaryTree {{:?}}"
-        );
-        assert_eq!(
-            format!("{tree:#?}"),
-            format!("{tree_m:#?}"),
-            "BinaryTree {{:#?}}"
-        );
+        // Integer payloads: the shape guard, plus `width`.
+        let (tree, tree_m) = tree_pair::<u8>(SHAPE);
+        assert_agrees_at_every_carried_spec!(tree, tree_m, "BinaryTree<u8>");
 
-        let (free, free_m) = free_pair(SHAPE);
-        assert_eq!(format!("{free:?}"), format!("{free_m:?}"), "Free {{:?}}");
-        assert_eq!(format!("{free:#?}"), format!("{free_m:#?}"), "Free {{:#?}}");
+        let (free, free_m) = free_pair::<u8>(SHAPE);
+        assert_agrees_at_every_carried_spec!(free, free_m, "Free<TreeEndo<u8>, u8>");
 
-        let (stream, stream_m) = stream_pair(u32::from(SHAPE) * 4);
-        assert_eq!(
-            format!("{stream:?}"),
-            format!("{stream_m:?}"),
-            "Cofree over OptionWitness {{:?}}"
-        );
-        assert_eq!(
-            format!("{stream:#?}"),
-            format!("{stream_m:#?}"),
-            "Cofree over OptionWitness {{:#?}}"
-        );
+        let (stream, stream_m) = stream_pair::<u32>(SHAPE * 4);
+        assert_agrees_at_every_carried_spec!(stream, stream_m, "Cofree<OptionWitness, u32>");
 
-        let (branching, branching_m) = branching_pair(SHAPE);
-        assert_eq!(
-            format!("{branching:?}"),
-            format!("{branching_m:?}"),
-            "Cofree over TreeEndo {{:?}}"
-        );
-        assert_eq!(
-            format!("{branching:#?}"),
-            format!("{branching_m:#?}"),
-            "Cofree over TreeEndo {{:#?}}"
+        let (branching, branching_m) = branching_pair::<u8, u32>(SHAPE);
+        assert_agrees_at_every_carried_spec!(branching, branching_m, "Cofree<TreeEndo<u8>, u32>");
+
+        // Float payloads: the same four shapes, at the only payload that can
+        // see `precision` go missing.
+        let (tree_f, tree_fm) = tree_pair::<f64>(SHAPE);
+        assert_agrees_at_every_carried_spec!(tree_f, tree_fm, "BinaryTree<f64>");
+
+        let (free_f, free_fm) = free_pair::<f64>(SHAPE);
+        assert_agrees_at_every_carried_spec!(free_f, free_fm, "Free<TreeEndo<f64>, f64>");
+
+        let (stream_f, stream_fm) = stream_pair::<f64>(SHAPE * 4);
+        assert_agrees_at_every_carried_spec!(stream_f, stream_fm, "Cofree<OptionWitness, f64>");
+
+        let (branching_f, branching_fm) = branching_pair::<f64, f64>(SHAPE);
+        assert_agrees_at_every_carried_spec!(
+            branching_f,
+            branching_fm,
+            "Cofree<TreeEndo<f64>, f64>"
         );
 
         // The pretty forms really are the compounding case, not a rerun of the
         // compact one: at this depth they are many times longer and multi-line.
         assert!(format!("{tree:#?}").len() > 8 * format!("{tree:?}").len());
         assert!(format!("{branching:#?}").lines().count() > 100);
+
+        // …and the spec-bearing forms really are a different rendering, not a
+        // rerun of the default one. Without this, every `{:.2?}` assertion
+        // above would hold vacuously the moment precision stopped propagating
+        // on *both* sides — which is exactly how the default-spec-only version
+        // of this oracle passed through a regression.
+        assert_ne!(
+            format!("{tree_f:.2?}"),
+            format!("{tree_f:?}"),
+            "the f64 payload must actually render differently under {{:.2?}}"
+        );
+        assert_ne!(
+            format!("{tree:12?}"),
+            format!("{tree:?}"),
+            "the u8 payload must actually render differently under {{:12?}}"
+        );
+    }
+
+    /// The specs the renderer does **not** carry render as if the flag were
+    /// absent — a deliberate, documented divergence from the derive, not an
+    /// accident.
+    ///
+    /// A cell's shape is laid out by a `write!` into a scratch buffer, so the
+    /// spec has to be re-expressed in that `write!`'s own format string.
+    /// `alternate`, `precision` and `width` can be (the last two through
+    /// `{:.p$?}` / `{:w$?}`); fill, alignment and the sign/zero-pad flags can
+    /// only be spelled literally, and `{:x?}` / `{:X?}` cannot even be *read*
+    /// off a `Formatter` on stable. See [`Spec`](super::Spec).
+    ///
+    /// Each assertion is the exact positive claim — "renders as the same value
+    /// with the flag absent" — rather than a bare `assert_ne!` against the
+    /// twin, which would also pass if the carrier started producing garbage.
+    /// The twin comparisons at the end are the anti-vacuity guard: they show
+    /// the flag is one a `#[derive(Debug)]` of the same shape really does
+    /// honour, so this is divergence and not a payload that ignores it anyway.
+    #[test]
+    fn dropped_format_specs_render_as_if_the_flag_were_absent() {
+        let (tree, tree_m) = tree_pair::<f64>(4);
+        // At this depth the leaf labels run past 9, so the hex rendering really
+        // is a different string (`Leaf(c)` for 12, not `Leaf(12)`).
+        let (hex, hex_m) = tree_pair::<u8>(SHAPE);
+
+        // Fill and alignment: dropped. Width is not, so `{:*>12?}` renders at
+        // width 12 with the default fill and the payload's default alignment.
+        assert_eq!(
+            format!("{tree:*>12?}"),
+            format!("{tree:12?}"),
+            "fill is dropped; width is carried"
+        );
+        // Alignment separately, because `f64` is right-aligned by default —
+        // `{:*>12?}` alone would still pass if only the fill were dropped.
+        assert_eq!(
+            format!("{tree:<12?}"),
+            format!("{tree:12?}"),
+            "alignment is dropped; width is carried"
+        );
+        // The sign flags: dropped.
+        assert_eq!(format!("{tree:+?}"), format!("{tree:?}"), "`+` is dropped");
+        // Zero-padding: dropped (again, the width itself is carried).
+        assert_eq!(
+            format!("{tree:012?}"),
+            format!("{tree:12?}"),
+            "`0` is dropped; width is carried"
+        );
+        // The debug-hex flags: dropped, and unreadable on stable.
+        assert_eq!(
+            format!("{hex:x?}"),
+            format!("{hex:?}"),
+            "`x?` is dropped — `Formatter` has no stable accessor for it"
+        );
+
+        // Anti-vacuity: the derive honours every one of them.
+        assert_ne!(format!("{tree_m:*>12?}"), format!("{tree_m:12?}"));
+        assert_ne!(format!("{tree_m:<12?}"), format!("{tree_m:12?}"));
+        assert_ne!(format!("{tree_m:+?}"), format!("{tree_m:?}"));
+        assert_ne!(format!("{tree_m:012?}"), format!("{tree_m:12?}"));
+        assert_ne!(format!("{hex_m:x?}"), format!("{hex_m:?}"));
     }
 
     /// A payload whose `Debug` legitimately fails.
@@ -709,6 +1005,133 @@ mod tests {
             write!(sink, "{cofree:?}").is_err(),
             "Cofree must surface the head's fmt::Error"
         );
+    }
+
+    /// A witness that renders a recursion slot into a buffer of **its own**
+    /// instead of into the `Formatter` it was handed — the out-of-contract
+    /// shape [`DebugFunctor::fmt_shape`](crate::endofunctor::DebugFunctor::fmt_shape)
+    /// now names explicitly.
+    ///
+    /// Its object map is `Option`, so it is `OptionWitness` in every respect
+    /// but `fmt_shape`. Two deliberate details make the pin sharp:
+    ///
+    /// - it writes the hole with `write!` into a `String`, **not** `format!` —
+    ///   `format!` panics on an `Err` from a formatting impl, and a panic is
+    ///   not what is being pinned;
+    /// - it **swallows** that write's result. A witness that propagated would
+    ///   surface an error the moment the probe returned one, so the test would
+    ///   pass even if the renderer itself stayed silent. Swallowing leaves the
+    ///   renderer as the only thing that can fail — which is the claim.
+    struct StrayWitness;
+
+    impl HKT for StrayWitness {
+        type Type<T> = Option<T>;
+    }
+
+    impl Functor<Self> for StrayWitness {
+        fn fmap<A, B, Func>(m_a: Option<A>, f: Func) -> Option<B>
+        where
+            Func: FnMut(A) -> B,
+        {
+            m_a.map(f)
+        }
+    }
+
+    impl Container for StrayWitness {
+        type Shape = bool;
+
+        fn arity(shape: &bool) -> usize {
+            usize::from(*shape)
+        }
+
+        fn decompose<X>(fx: Option<X>) -> (bool, Vec<X>) {
+            match fx {
+                None => (false, Vec::new()),
+                Some(x) => (true, vec![x]),
+            }
+        }
+
+        fn recompose<X>(shape: bool, contents: Vec<X>) -> Option<Option<X>> {
+            if shape {
+                let [x] = <[X; 1]>::try_from(contents).ok()?;
+                Some(Some(x))
+            } else {
+                contents.is_empty().then_some(None)
+            }
+        }
+
+        fn contents<X>(fx: &Option<X>) -> Vec<&X> {
+            fx.as_ref().into_iter().collect()
+        }
+    }
+
+    impl DebugFunctor for StrayWitness {
+        fn fmt_shape<T>(
+            fa: &Option<T>,
+            f: &mut fmt::Formatter<'_>,
+            contents: &[&dyn fmt::Debug],
+        ) -> fmt::Result {
+            match (fa, contents) {
+                (None, _) => f.write_str("None"),
+                (Some(_), [inner]) => {
+                    let mut stray = String::new();
+                    // Both halves of the misbehaviour: a private sink, and the
+                    // result thrown away.
+                    let _ = write!(stray, "Some({inner:?})");
+                    f.write_str(&stray)
+                }
+                (Some(_), _) => Err(fmt::Error),
+            }
+        }
+    }
+
+    /// A witness that never writes a recursion slot into the `Formatter` it was
+    /// handed must produce an **error**, not a silently truncated rendering.
+    ///
+    /// The renderer stands each slot in for by a probe whose own writes are
+    /// measured to find the splice offsets. If those writes land somewhere
+    /// else, there is no offset to splice at — so the child, and its whole
+    /// subtree, simply do not appear. That used to return `Ok(())`, which made
+    /// it the one out-of-contract path in this crate that failed *silently*:
+    /// `OptionWitness` / `ListEndo` / `TreeEndo` on an arity mismatch, and
+    /// `BinaryTree::fmt_cell` likewise, all return `fmt::Error`.
+    ///
+    /// Measured with the guard reverted, this printed
+    /// `Cofree { head: 1, tail: Some(\n\0) }` and returned `Ok`: the child
+    /// `Cofree { head: 2, tail: None }` is gone, and the probe's own tracer
+    /// bytes have leaked into public output in its place.
+    #[test]
+    fn a_witness_that_never_writes_its_hole_errors_rather_than_dropping_the_child() {
+        let mut sink = String::new();
+
+        let stream: Cofree<StrayWitness, u8> = Cofree::new(1, Some(Box::new(Cofree::new(2, None))));
+        let result = write!(sink, "{stream:?}");
+        assert!(
+            result.is_err(),
+            "Cofree must reject a witness that renders its hole elsewhere; \
+             got Ok with {sink:?}"
+        );
+
+        let free: Free<StrayWitness, u8> = Free::suspend(Some(Box::new(Free::pure(2))));
+        let mut free_sink = String::new();
+        let free_result = write!(free_sink, "{free:?}");
+        assert!(
+            free_result.is_err(),
+            "Free must reject it too; got Ok with {free_sink:?}"
+        );
+
+        // The pretty form is the same renderer and the same failure.
+        let mut pretty = String::new();
+        assert!(write!(pretty, "{stream:#?}").is_err(), "…in {{:#?}} too");
+
+        // Only the holes are affected: a cell with no recursion slot never
+        // builds a probe, so this witness renders a leaf exactly as
+        // `OptionWitness` does. Without this the test would also pass if the
+        // renderer simply errored on every value.
+        let leaf: Cofree<StrayWitness, u8> = Cofree::new(3, None);
+        let mut leaf_sink = String::new();
+        write!(leaf_sink, "{leaf:?}").expect("a slot-free cell has no hole to lose");
+        assert_eq!(leaf_sink, "Cofree { head: 3, tail: None }");
     }
 
     /// The private cell must never cost more than **one machine word**, and for

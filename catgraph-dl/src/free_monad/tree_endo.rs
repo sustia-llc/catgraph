@@ -244,7 +244,10 @@ pub enum TreeView<A> {
 /// Deriving on the boxed pair would print the pair as one field —
 /// `Node((<left>, <right>))` — a silent change to public output. The subtrees'
 /// own `Debug` is [`BinaryTree`]'s iterative one, so this stays one level of
-/// nesting deep however deep the trees are.
+/// nesting deep however deep the trees are — and inherits its format-spec
+/// caveat: alternate, precision and width reach the leaves; fill, alignment,
+/// the sign/zero-pad flags and `{:x?}` do not. See
+/// [the module's rendering note](crate::free_monad#what-a-carriers-debug-does-with-your-format-spec).
 impl<A: fmt::Debug> fmt::Debug for TreeView<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -279,6 +282,32 @@ impl<A: fmt::Debug> fmt::Debug for TreeView<A> {
 /// The cell is an `Option` so `Drop` and `into_view` can take it without
 /// `unsafe` (the crate is `#![forbid(unsafe_code)]`), and it is `Some` for every
 /// observable value.
+///
+/// ## …and it tightens dropck for a borrowed payload
+///
+/// A manual `Drop` without `#[may_dangle]` makes the borrow checker require
+/// every lifetime in the type to **strictly outlive** the value. A
+/// `BinaryTree<&'a T>` therefore has to be declared *after* what it borrows:
+///
+/// ```compile_fail,E0597
+/// # use catgraph_dl::free_monad::tree_endo::BinaryTree;
+/// let tree;                                    // dropped last…
+/// let payload = String::from("x");             // …but this dies first
+/// tree = BinaryTree::leaf(payload.as_str());   // error[E0597]
+/// # let _ = &tree;
+/// ```
+///
+/// ```
+/// # use catgraph_dl::free_monad::tree_endo::BinaryTree;
+/// let payload = String::from("x");             // outlives the carrier
+/// let tree = BinaryTree::leaf(payload.as_str());
+/// # let _ = &tree;
+/// ```
+///
+/// Owned payloads are unaffected, and so is every other use. The compiler's
+/// message names the borrow rather than the declaration order, which is why it
+/// is worth stating here; the same applies to [`Free`] and
+/// [`Cofree`](crate::free_monad::Cofree).
 ///
 /// [#200]: https://github.com/sustia-llc/catgraph/issues/200
 pub struct BinaryTree<A> {
@@ -423,12 +452,23 @@ impl<A: PartialEq> PartialEq for BinaryTree<A> {
 impl<A: Eq> Eq for BinaryTree<A> {}
 
 /// Iterative, streaming `Debug` — byte-identical to the derived output it
-/// replaced.
+/// replaced, for every format spec it carries (see below).
 ///
 /// Every byte of the output is written exactly once, so `{:?}` is Θ(total
 /// output). `{:#?}` is Θ(total output) too, but a pretty rendering indents every
 /// line by its nesting depth, so *that* output is quadratic in the depth of a
 /// caterpillar. Neither aborts on a degenerate spine, which the derive did.
+///
+/// # Format spec
+///
+/// Byte-identity to the derive holds for the default spec and for
+/// **alternate, precision and width**, which are carried down to every leaf.
+/// Fill, alignment, the sign/zero-pad flags and `{:x?}` / `{:X?}` are
+/// **dropped**: a cell is laid out by a fresh formatter over a scratch buffer,
+/// and only what a format string can express dynamically survives that. So
+/// `{:.2?}` and `{:12?}` agree with the derive character for character, while
+/// `{:+?}` and `{:x?}` render as `{:?}` does. See
+/// [the module's rendering note](crate::free_monad#what-a-carriers-debug-does-with-your-format-spec).
 impl<A: fmt::Debug> fmt::Debug for BinaryTree<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         super::write_debug(self, f)

@@ -89,6 +89,32 @@ where
 /// `F` is an [`EndoWitness`] — the object map plus `fmap`, the latter being how
 /// [`Drop`] dismantles a cell without needing `Container`.
 ///
+/// # The manual `Drop` tightens dropck for a borrowed payload
+///
+/// A `Drop` impl without `#[may_dangle]` makes the borrow checker require every
+/// lifetime in the type to **strictly outlive** the value, so a
+/// `Free<F, &'a T>` has to be declared *after* what it borrows:
+///
+/// ```compile_fail,E0597
+/// # use catgraph_dl::endofunctor::OptionWitness;
+/// # use catgraph_dl::free_monad::Free;
+/// let free: Free<OptionWitness, &str>;         // dropped last…
+/// let payload = String::from("x");             // …but this dies first
+/// free = Free::pure(payload.as_str());         // error[E0597]
+/// # let _ = &free;
+/// ```
+///
+/// ```
+/// # use catgraph_dl::endofunctor::OptionWitness;
+/// # use catgraph_dl::free_monad::Free;
+/// let payload = String::from("x");             // outlives the carrier
+/// let free: Free<OptionWitness, &str> = Free::pure(payload.as_str());
+/// # let _ = &free;
+/// ```
+///
+/// Owned payloads are unaffected. The compiler's message names the borrow
+/// rather than the declaration order, which is why it is worth stating here.
+///
 /// [#200]: https://github.com/sustia-llc/catgraph/issues/200
 pub struct Free<F, A>
 where
@@ -327,6 +353,16 @@ where
 /// Θ(total output) for `{:?}`. `{:#?}` is Θ(total output) too, but that output is
 /// itself quadratic in the depth of a spine, because a pretty rendering indents
 /// every line by its nesting depth.
+///
+/// # Format spec
+///
+/// A cell is laid out by a *fresh* formatter over a scratch buffer, so only the
+/// part of the caller's spec that can be re-expressed in a format string is
+/// carried: **alternate, precision and width**. Fill, alignment, the
+/// sign/zero-pad flags and `{:x?}` / `{:X?}` are **dropped** — a carrier under
+/// one of those renders as if the flag were absent, where a `#[derive(Debug)]`
+/// type of the same shape would honour it. See
+/// [the module's rendering note](crate::free_monad#what-a-carriers-debug-does-with-your-format-spec).
 impl<F, A> fmt::Debug for Free<F, A>
 where
     F: DebugFunctor + Container,

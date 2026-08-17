@@ -93,6 +93,34 @@ where
 /// `crate::free_monad::tests::the_private_cell_costs_at_most_one_word`, which
 /// measures `Cofree` against `CofreeCell` directly.
 ///
+/// ## The manual `Drop` also tightens dropck for a borrowed payload
+///
+/// A `Drop` impl without `#[may_dangle]` makes the borrow checker require every
+/// lifetime in the type to **strictly outlive** the value, so a
+/// `Cofree<F, &'a T>` has to be declared *after* what it borrows:
+///
+/// ```compile_fail,E0597
+/// # use catgraph_dl::endofunctor::OptionWitness;
+/// # use catgraph_dl::free_monad::Cofree;
+/// let cofree: Cofree<OptionWitness, &str>;     // dropped last…
+/// let payload = String::from("x");             // …but this dies first
+/// cofree = Cofree::new(payload.as_str(), None); // error[E0597]
+/// # let _ = &cofree;
+/// ```
+///
+/// ```
+/// # use catgraph_dl::endofunctor::OptionWitness;
+/// # use catgraph_dl::free_monad::Cofree;
+/// let payload = String::from("x");             // outlives the carrier
+/// let cofree: Cofree<OptionWitness, &str> = Cofree::new(payload.as_str(), None);
+/// # let _ = &cofree;
+/// ```
+///
+/// Owned payloads are unaffected. The compiler's message names the borrow
+/// rather than the declaration order, which is why it is worth stating here;
+/// the same applies to [`Free`](crate::free_monad::Free) and
+/// [`BinaryTree`](crate::free_monad::tree_endo::BinaryTree).
+///
 /// # Finiteness
 ///
 /// In pure theory `Cofree` is coinductive (infinite). In strict Rust it is
@@ -305,6 +333,14 @@ where
 /// written once, so `{:?}` is Θ(total output) and cannot overflow. `{:#?}` is
 /// Θ(total output) too — but a pretty rendering indents every line by its
 /// nesting depth, so that output is itself quadratic in the depth of a spine.
+///
+/// # Format spec
+///
+/// **Alternate, precision and width are carried; fill, alignment, the
+/// sign/zero-pad flags and `{:x?}` / `{:X?}` are dropped** — a cell is laid out
+/// by a fresh formatter over a scratch buffer, and only what a format string
+/// can express dynamically survives that. See
+/// [the module's rendering note](crate::free_monad#what-a-carriers-debug-does-with-your-format-spec).
 impl<F, A> fmt::Debug for Cofree<F, A>
 where
     F: DebugFunctor + Container,

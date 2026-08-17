@@ -138,6 +138,16 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
   [#231](https://github.com/sustia-llc/catgraph/issues/231) and #200 they were
   fallible, pre-flighting the `depth` guard and returning `DepthError` rather
   than risking a stack overflow.
+- **Two consequences of the #200 reshape worth knowing before you hit them.**
+  (a) A carrier's `Debug` lays each cell out through a scratch buffer, so it
+  carries the caller's `alternate`, `precision` and `width` down to every
+  payload but **drops** fill, alignment, the sign/zero-pad flags and
+  `{:x?}` / `{:X?}` — stable Rust cannot build a `Formatter` from another's
+  options. Under a dropped flag a carrier renders as if it were absent, where a
+  `#[derive(Debug)]` type of the same shape would honour it. (b) The manual
+  `Drop` tightens dropck: a carrier over a **borrowed** payload must be declared
+  *after* what it borrows, or you get `error[E0597]`. Both are written up in the
+  `free_monad` module docs, with runnable examples.
 
 ### `depth` / `errors` — an opt-in recursion guard for *callers* (#231, #200)
 
