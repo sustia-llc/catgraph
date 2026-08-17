@@ -87,16 +87,22 @@ it has no paper anchor to link. Registering them would fake traceability.
 | `architecture_unrollers::gdl_recovery_via_z2_invariant_folding` | CDL Example 2.6 | GDL recovery: Z2-invariant fold |
 | `free_monad_bijections::*` | CDL Example B.19/B.20, Prop B.18 | owned `Free`/`Cofree` ↔ concrete-carrier bijections |
 
-> **Not law tests (#231):** `free_monad_bijections::tree_bijection_depth_guard`
-> and `architecture_unrollers::recursive_nn_depth_guard` are the `MAX_TREE_DEPTH`
-> recursion guard's boundary tests, so the `free_monad_bijections::*` glob above
-> reaches one of them. They carry **no paper anchor** and get no row of their own:
-> a depth check is engineering, not a CDL statement. It is also non-interfering —
-> the guard is a pre-flight rejection of carriers that would abort the process,
-> and every carrier it accepts is transformed exactly as before, so the Example
-> B.19/B.20 and Remark 2.13 witnesses above are untouched. The residual recursion
-> the guard cannot reach is tracked in
-> [#200](https://github.com/sustia-llc/catgraph/issues/200).
+> **Not law tests (#231 → #200):**
+> `free_monad_bijections::opt_in_depth_guard_boundary`,
+> `free_monad_bijections::deep_spine_survives_every_carrier_operation` and
+> `architecture_unrollers::recursive_nn_unroll_survives_a_deep_spine` are the
+> recursion-depth tests, so the `free_monad_bijections::*` glob above reaches
+> two of them. They carry **no paper anchor** and get no row of their own:
+> stack discipline is engineering, not a CDL statement. It is also
+> non-interfering — the carrier walks became explicit heap worklists at #200,
+> computing exactly what the recursive ones computed (the deep-spine tests pin
+> closed-form values, and the shallow oracle comparisons above are unchanged),
+> so the Example B.19/B.20 and Remark 2.13 witnesses are untouched.
+> `MAX_TREE_DEPTH` and its guard survive as an **opt-in** service for callers
+> who recurse themselves; nothing in the crate calls them, which is what
+> `opt_in_depth_guard_boundary` asserts alongside the boundary itself.
+> [#200](https://github.com/sustia-llc/catgraph/issues/200) is closed by that
+> window.
 
 > **Anchor correction (#64):** the coalgebra-direction dual of Remark 2.13 is
 > **Remark H.6** ("streams are a terminal object in the category of

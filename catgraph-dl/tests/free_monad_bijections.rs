@@ -22,22 +22,32 @@
 //!    round-trip via the `Free<TreeEndo, Infallible>` encoding.
 //! 5. `cofree_cmnd_smoke` — `Cofree<TrivialEndo, u32>` constructs and
 //!    `head()` is accessible. Compile-time + runtime sanity for the dual.
-//! 6. `tree_bijection_depth_guard` — both helpers accept a carrier at
-//!    `MAX_TREE_DEPTH` and reject one cell deeper (issue #231). Engineering,
-//!    not a CDL law: the guard rejects inputs that would abort the process and
-//!    leaves accepted ones untouched.
+//! 6. `opt_in_depth_guard_boundary` — `catgraph_dl::depth`'s guard, which is a
+//!    caller-facing service since #200 rather than something the bijection
+//!    helpers call, accepts a carrier at `MAX_TREE_DEPTH` and rejects one cell
+//!    deeper. Engineering, not a CDL law.
+//! 7. `deep_spine_survives_every_carrier_operation` — the #200 regression pin.
+//!    A `common::DEEP`-deep caterpillar (**32 768** — 128× the retired
+//!    `MAX_TREE_DEPTH`, 4× the deepest spine a recursive walk survived on a
+//!    2 MiB test thread and 2× the shallowest that aborted; see `DEEP`'s own
+//!    docs for the bisected table) is constructed, embedded, projected back,
+//!    folded, cloned, compared, formatted and dropped, on all three carriers.
+//!    Every one of those aborted before the carriers' walks became iterative.
 
 #![allow(clippy::float_cmp, clippy::single_match_else)]
 
 mod common;
 
 use catgraph_dl::DepthError;
-use catgraph_dl::depth::{MAX_TREE_DEPTH, free_mnd_depth, tree_depth};
-use catgraph_dl::free_monad::list_endo::{free_mnd_to_vec, vec_to_free_mnd};
-use catgraph_dl::free_monad::tree_endo::{BinaryTree, free_mnd_to_tree, tree_to_free_mnd};
-use catgraph_dl::free_monad::{Cofree, Free};
+use catgraph_dl::depth::{MAX_TREE_DEPTH, free_mnd_depth, guard_tree_depth, tree_depth};
+use catgraph_dl::free_monad::list_endo::{ListEndo, free_mnd_to_vec, vec_to_free_mnd};
+use catgraph_dl::free_monad::tree_endo::{
+    BinaryTree, TreeEndo, free_mnd_to_tree, tree_to_free_mnd,
+};
+use catgraph_dl::free_monad::{Cofree, Free, FreeView};
+use catgraph_dl::{Container, Either};
 
-use common::{UnitEndo, spine_free_mnd, spine_tree};
+use common::{DEEP, UnitEndo, spine_free_mnd, spine_tree};
 
 use proptest::prelude::*;
 
@@ -67,31 +77,28 @@ proptest! {
 }
 
 /// CDL Example B.19 corner case. Empty list with `()` terminator is
-/// canonically `Free::Pure(())` — no `Suspend` cells.
+/// canonically `Free::pure(())` — no `Suspend` cells.
 #[test]
 fn empty_list_is_pure_unit() {
-    let f: Free<catgraph_dl::free_monad::list_endo::ListEndo<u32>, ()> =
-        vec_to_free_mnd(Vec::new(), ());
-    match f {
-        Free::Pure(()) => (),
-        Free::Suspend(_) => panic!("empty Vec must encode to Free::Pure(()), not Suspend"),
+    let f: Free<ListEndo<u32>, ()> = vec_to_free_mnd(Vec::new(), ());
+    match f.as_view() {
+        FreeView::Pure(()) => (),
+        FreeView::Suspend(_) => panic!("empty Vec must encode to Free::pure(()), not Suspend"),
     }
 
     // And the round-trip from Pure(()) gives back (vec![], ()).
-    let pure_unit: Free<catgraph_dl::free_monad::list_endo::ListEndo<u32>, ()> = Free::Pure(());
+    let pure_unit: Free<ListEndo<u32>, ()> = Free::pure(());
     let (items, ()) = free_mnd_to_vec(pure_unit);
     assert!(items.is_empty(), "Pure(()) must decode to empty Vec");
 }
 
 /// CDL Example B.19. The explicit cons-cell tower for `[1, 2]` written by
-/// hand using `Free::Suspend` constructors must decode to `vec![1, 2]`.
+/// hand using `Free::suspend` must decode to `vec![1, 2]`.
 #[test]
 fn cons_cell_explicit_structure_round_trips() {
-    use catgraph_dl::free_monad::list_endo::ListEndo;
-
-    // Free::Suspend(Some((1, Box(Free::Suspend(Some((2, Box(Free::Pure(())))))))))
-    let inner: Free<ListEndo<u32>, ()> = Free::Suspend(Some((2_u32, Box::new(Free::Pure(())))));
-    let outer: Free<ListEndo<u32>, ()> = Free::Suspend(Some((1_u32, Box::new(inner))));
+    // Free::suspend(Some((1, Box(Free::suspend(Some((2, Box(Free::pure(())))))))))
+    let inner: Free<ListEndo<u32>, ()> = Free::suspend(Some((2_u32, Box::new(Free::pure(())))));
+    let outer: Free<ListEndo<u32>, ()> = Free::suspend(Some((1_u32, Box::new(inner))));
 
     let (items, ()) = free_mnd_to_vec(outer);
     assert_eq!(items, vec![1_u32, 2_u32]);
@@ -109,15 +116,15 @@ fn cons_cell_explicit_structure_round_trips() {
 fn tree_round_trip_examples() {
     // Case 1: a single leaf.
     let leaf = BinaryTree::leaf(7_u32);
-    let f1 = tree_to_free_mnd(leaf.clone()).unwrap();
-    let back1 = free_mnd_to_tree(f1).unwrap();
+    let f1 = tree_to_free_mnd(leaf.clone());
+    let back1 = free_mnd_to_tree(f1);
     assert_eq!(back1, leaf);
 
     // Case 2: a single internal node with two leaves —
     //     Node(Leaf(1), Leaf(2)).
     let node = BinaryTree::node(BinaryTree::leaf(1_u32), BinaryTree::leaf(2_u32));
-    let f2 = tree_to_free_mnd(node.clone()).unwrap();
-    let back2 = free_mnd_to_tree(f2).unwrap();
+    let f2 = tree_to_free_mnd(node.clone());
+    let back2 = free_mnd_to_tree(f2);
     assert_eq!(back2, node);
 
     // Case 3: a depth-3 tree — Node(Node(Leaf(1), Leaf(2)),
@@ -129,58 +136,229 @@ fn tree_round_trip_examples() {
             BinaryTree::node(BinaryTree::leaf(4_u32), BinaryTree::leaf(5_u32)),
         ),
     );
-    let f3 = tree_to_free_mnd(deep.clone()).unwrap();
-    let back3 = free_mnd_to_tree(f3).unwrap();
+    let f3 = tree_to_free_mnd(deep.clone());
+    let back3 = free_mnd_to_tree(f3);
     assert_eq!(back3, deep);
 }
 
-/// Issue #231 — the pre-flight recursion guard on both tree bijection helpers.
+/// Issue #231's guard, in its post-#200 role: an **opt-in** service the
+/// bijection helpers no longer call.
 ///
-/// Not a CDL law: a depth check is engineering, and the paper's Example B.20 iso
-/// is unaffected for every carrier the guard accepts. What is asserted is the
-/// boundary in both directions, for both helpers:
+/// Not a CDL law — a depth check is engineering. What is asserted is the
+/// boundary, and the fact that the helpers themselves are indifferent to it:
 ///
-/// - a left caterpillar at exactly [`MAX_TREE_DEPTH`] round-trips, and the
-///   bijection **preserves depth** (so a `Free` produced by `tree_to_free_mnd`
-///   always clears `free_mnd_to_tree`'s guard);
-/// - one cell deeper is refused with
-///   [`DepthError::TreeDepthExceeded`] carrying the exact `{ depth, limit }`.
+/// - a left caterpillar at exactly [`MAX_TREE_DEPTH`] passes the guard, and the
+///   bijection **preserves depth** (`tree_depth` and `free_mnd_depth` agree);
+/// - one cell deeper is refused with [`DepthError::TreeDepthExceeded`] carrying
+///   the exact `{ depth, limit }` — while the same over-limit carrier still
+///   round-trips through the (now infallible) helpers, which is the difference
+///   #200 made.
 ///
-/// The over-limit `Free` is built directly by `spine_free_mnd` — it cannot come
-/// from `tree_to_free_mnd`, which refuses to produce it. Both fixtures stay
-/// ~16× (depth 257 vs 4 096) inside the pre-guard measured-safe depth, so
-/// their own recursive drop glue is not at risk.
+/// `guard_tree_depth` borrows, so the rejected value is still usable afterwards
+/// — the rejection-path drop hazard #231 had to document is gone.
 #[test]
-fn tree_bijection_depth_guard() {
+fn opt_in_depth_guard_boundary() {
     // --- at the limit: accepted, and depth-preserving --------------------
     let at_limit = spine_tree(MAX_TREE_DEPTH);
     assert_eq!(tree_depth(&at_limit), MAX_TREE_DEPTH);
+    assert!(guard_tree_depth(&at_limit).is_ok());
 
-    let encoded = tree_to_free_mnd(at_limit.clone()).expect("a tree at the limit is accepted");
+    let encoded = tree_to_free_mnd(at_limit.clone());
     assert_eq!(
         free_mnd_depth(&encoded),
         MAX_TREE_DEPTH,
         "the B.20 bijection preserves structural depth"
     );
-    let decoded = free_mnd_to_tree(encoded).expect("a spine at the limit is accepted");
+    let decoded = free_mnd_to_tree(encoded);
     assert_eq!(decoded, at_limit, "round trip survives at the limit");
 
-    // --- one deeper: rejected, with the measured depth -------------------
+    // --- one deeper: the guard rejects, the helpers do not ---------------
     let over = MAX_TREE_DEPTH + 1;
-    match tree_to_free_mnd(spine_tree(over)) {
+    let too_deep = spine_tree(over);
+    match guard_tree_depth(&too_deep) {
         Err(DepthError::TreeDepthExceeded { depth, limit }) => {
             assert_eq!(depth, over);
             assert_eq!(limit, MAX_TREE_DEPTH);
         }
-        other => panic!("tree_to_free_mnd: expected TreeDepthExceeded, got {other:?}"),
+        other => panic!("guard_tree_depth: expected TreeDepthExceeded, got {other:?}"),
     }
-    match free_mnd_to_tree(spine_free_mnd(over)) {
-        Err(DepthError::TreeDepthExceeded { depth, limit }) => {
-            assert_eq!(depth, over);
-            assert_eq!(limit, MAX_TREE_DEPTH);
+    // The guard borrowed, so `too_deep` is still ours — and the helper takes it
+    // happily, because it no longer recurses.
+    assert_eq!(
+        free_mnd_to_tree(tree_to_free_mnd(too_deep)),
+        spine_tree(over),
+        "an over-limit carrier still round-trips: the helpers are infallible since #200"
+    );
+    assert_eq!(free_mnd_depth(&spine_free_mnd(over)), over);
+}
+
+/// **The #200 regression pin.** Every carrier operation over a spine deep enough
+/// to have aborted the process before the walks became iterative.
+///
+/// The fixture is a `common::DEEP` (32 768) left caterpillar — 128× the retired
+/// `MAX_TREE_DEPTH`, and comfortably past every measured abort threshold (see
+/// `DEEP`'s own docs for the bisected table: recursive drop glue survives 8 192
+/// and aborts at 16 384; recursive `Debug` survives 4 096 and aborts at 8 192).
+/// So each operation below is a stack overflow under the previous
+/// implementation and a plain value here; the test deliberately runs on the
+/// default 2 MiB test thread, since a fat-stacked thread would erase exactly
+/// the margin it exists to pin.
+///
+/// A stack overflow aborts the whole harness rather than failing an assertion,
+/// so the *failing* direction shows up as "test binary died / SIGSEGV", never a
+/// red assertion. The *passing* direction therefore asserts real values —
+/// depths, node counts, fold results, structural equality, rendered text —
+/// rather than merely reaching the end of the function. In particular the
+/// `Cofree` half asserts the **whole grown spine** (its depth and node count,
+/// a full-depth `==` against an identically grown twin, an `!=` whose only
+/// witness is at the bottom, and a `{:?}` node count): an `unfold` that
+/// stopped after one level would satisfy a root-shaped check.
+#[test]
+fn deep_spine_survives_every_carrier_operation() {
+    // Construction, and the two depth measures (already iterative pre-#200).
+    let tree = spine_tree(DEEP);
+    assert_eq!(tree_depth(&tree), DEEP);
+
+    // `Clone` — derived and recursive before #200.
+    let cloned = tree.clone();
+    assert_eq!(tree_depth(&cloned), DEEP);
+
+    // `PartialEq` — likewise.
+    assert_eq!(
+        tree, cloned,
+        "a deep caterpillar compares equal to its clone"
+    );
+    assert_ne!(
+        tree,
+        spine_tree(DEEP - 1),
+        "and unequal to a caterpillar one shorter"
+    );
+
+    // `Debug` — likewise. Pin the shape, not just the fact that it returned:
+    // `DEEP` leaves means `DEEP - 1` `Node(`s and `DEEP` `Leaf(`s.
+    let shown = format!("{tree:?}");
+    assert_eq!(shown.matches("Node(").count(), DEEP - 1);
+    assert_eq!(shown.matches("Leaf(").count(), DEEP);
+
+    // The bijection, both directions — recursive and `Result`-returning before.
+    let encoded = tree_to_free_mnd(cloned);
+    assert_eq!(free_mnd_depth(&encoded), DEEP);
+
+    // The carriers' own `==` and `{:?}`, on the `Free` side.
+    assert_eq!(
+        encoded,
+        spine_free_mnd(DEEP),
+        "the embedded spine equals the hand-built one"
+    );
+    assert_eq!(
+        format!("{encoded:?}").matches("Suspend(").count(),
+        2 * DEEP - 1
+    );
+
+    // `Free::fold` — the catamorphism, recursive before #200. Count the leaves.
+    let leaves: usize = spine_free_mnd(DEEP).fold(
+        // `Infallible` has no values; the `Pure` arm is statically unreachable.
+        &|z: core::convert::Infallible| match z {},
+        &|node: Either<u8, (usize, usize)>| match node {
+            Either::Left(_) => 1,
+            Either::Right((l, r)) => l + r,
+        },
+    );
+    assert_eq!(leaves, DEEP, "the caterpillar has DEEP leaves");
+
+    // Back to the tree carrier, and structural equality with the original.
+    let decoded = free_mnd_to_tree(encoded);
+    assert_eq!(decoded, tree, "the B.20 round trip survives at depth DEEP");
+
+    // `Cofree::unfold` — the anamorphism, recursive before #200, and the one
+    // carrier entry that never had a guard in front of it at all. Grow the same
+    // caterpillar shape on the `Cofree` side.
+    //
+    // Asserted on the *whole* spine, not on the root: an `unfold` that stopped
+    // after one level would satisfy any shallow shape check.
+    let labelled: Cofree<TreeEndo<u8>, usize> = Cofree::unfold(DEEP, &|n: usize| {
+        if n <= 1 {
+            (n, Either::Left(0_u8))
+        } else {
+            (n, Either::Right((n - 1, 1)))
         }
-        other => panic!("free_mnd_to_tree: expected TreeDepthExceeded, got {other:?}"),
+    });
+    assert_eq!(*labelled.head(), DEEP);
+    assert_eq!(
+        TreeEndo::<u8>::contents(labelled.tail()).len(),
+        2,
+        "the root of the grown spine is a node"
+    );
+    assert_eq!(
+        cofree_shape(&labelled),
+        (DEEP, 2 * DEEP - 1),
+        "unfold grew the full caterpillar: DEEP levels, 2·DEEP−1 nodes"
+    );
+
+    // `Cofree`'s own `==` and `{:?}` at depth — recursive through the witness
+    // before #200, and untested at depth until now. A constant label makes the
+    // comparison walk the entire spine instead of stopping at the root.
+    let flat = |n: usize| {
+        if n == 0 {
+            (0_usize, Either::Left(0_u8))
+        } else {
+            (0_usize, Either::Right((n - 1, 0)))
+        }
+    };
+    let grown: Cofree<TreeEndo<u8>, usize> = Cofree::unfold(DEEP, &flat);
+    assert_eq!(cofree_shape(&grown), (DEEP + 1, 2 * DEEP + 1));
+    // `assert!` rather than `assert_eq!`/`assert_ne!`: a failure here would
+    // otherwise `Debug`-dump ~1.5 MB per side, which tells a reader nothing.
+    assert!(
+        grown == Cofree::unfold(DEEP, &flat),
+        "two identically grown deep spines must compare equal — a full-depth `==` walk"
+    );
+    assert!(
+        grown != Cofree::unfold(DEEP - 1, &flat),
+        "…and unequal to one that bottoms out a level sooner: every label agrees, \
+         so the mismatch is only reachable at the bottom"
+    );
+    let shown = format!("{grown:?}");
+    assert_eq!(
+        shown.matches("Cofree {").count(),
+        2 * DEEP + 1,
+        "`{{:?}}` renders every node of the deep spine"
+    );
+    assert!(
+        shown.starts_with("Cofree { head: 0, tail: Right((Cofree {"),
+        "unexpected head of the rendering: {:?}",
+        &shown[..64.min(shown.len())]
+    );
+    assert!(
+        shown.ends_with("Cofree { head: 0, tail: Left(0) })) }"),
+        "unexpected tail of the rendering: {:?}",
+        &shown[shown.len().saturating_sub(64)..]
+    );
+
+    // Finally: drop. Each of these was a recursive `Box`-chain drop before #200
+    // — the residual no pre-flight guard could reach, because rejecting a
+    // by-value input did not save that input's own drop.
+    drop(labelled);
+    drop(grown);
+    drop(decoded);
+    drop(tree);
+}
+
+/// The structural `(depth, node count)` of a `Cofree<TreeEndo<u8>, _>` spine.
+///
+/// Iterative, like every fixture helper here: a recursive measure would abort
+/// on exactly the values it exists to measure.
+fn cofree_shape<A>(root: &Cofree<TreeEndo<u8>, A>) -> (usize, usize) {
+    let mut work = vec![(root, 1_usize)];
+    let (mut deepest, mut nodes) = (0_usize, 0_usize);
+    while let Some((node, depth)) = work.pop() {
+        deepest = deepest.max(depth);
+        nodes += 1;
+        for child in TreeEndo::<u8>::contents(node.tail()) {
+            work.push((child.as_ref(), depth + 1));
+        }
     }
+    (deepest, nodes)
 }
 
 /// A trivial endofunctor with `Type<X> = ()` — collapses to "no recursive

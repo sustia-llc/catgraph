@@ -170,9 +170,8 @@ impl<G: Group> Monad<Self> for GroupActionEndo<G> {
 
 /// Container presentation of `G × −` (Abbott–Altenkirch–Ghani 2003, via CDL).
 /// There is a single position shape per group element: `Shape = G`, and every
-/// shape has arity 1 (the single `X` slot). `G: PartialEq + Debug` so the shape
-/// carries into the machine-checked container laws.
-impl<G: PartialEq + core::fmt::Debug> Container for GroupActionEndo<G> {
+/// shape has arity 1 (the single `X` slot).
+impl<G> Container for GroupActionEndo<G> {
     type Shape = G;
 
     fn arity(_shape: &Self::Shape) -> usize {
@@ -188,6 +187,10 @@ impl<G: PartialEq + core::fmt::Debug> Container for GroupActionEndo<G> {
         // Arity 1: `TryFrom<Vec<X>> for [X; 1]` rejects any other length.
         let [x] = <[X; 1]>::try_from(contents).ok()?;
         Some((shape, x))
+    }
+
+    fn contents<X>(fx: &(G, X)) -> Vec<&X> {
+        vec![&fx.1]
     }
 }
 

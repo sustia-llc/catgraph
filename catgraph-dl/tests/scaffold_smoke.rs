@@ -103,9 +103,10 @@ fn monad_algebra_constructs() {
 #[test]
 fn free_monad_witnesses_construct() {
     // FreeMnd(1 + A × −) ≅ List in CDL Example B.19. `Free` has no `new()`; the
-    // monadic unit is `Free::Pure`.
-    let _free: Free<ListEndo<u8>, ()> = Free::Pure(());
-    let _free_tree: Free<TreeEndo<u8>, ()> = Free::Pure(());
+    // monadic unit is `Free::pure` (the `Pure` *variant* moved behind
+    // `FreeView` at #200).
+    let _free: Free<ListEndo<u8>, ()> = Free::pure(());
+    let _free_tree: Free<TreeEndo<u8>, ()> = Free::pure(());
 
     // `Cofree::new` takes `(head, tail)`. For the smoke test we use the trivial
     // `Type<X> = ()` projections of the stream/Mealy endofunctors so `tail = ()`

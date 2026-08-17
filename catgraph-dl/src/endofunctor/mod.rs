@@ -72,22 +72,29 @@
 //! | `1 + A × −` | [`crate::free_monad::list_endo::ListEndo<A>`] | `Option<(A, X)>` |
 //! | `A + (−)²` | [`crate::free_monad::tree_endo::TreeEndo<A>`] | [`Either<A, (X, X)>`] |
 //! | `G × −` | [`crate::algebra::GroupActionEndo<G>`] | `(G, X)` |
+//! | `1 + −` | [`OptionWitness`] | `Option<X>` |
 //!
-//! # Unguarded recursion across this seam (#231 / #200)
+//! # Recursion across this seam is gone (#231 → #200, closed at v0.14.0)
 //!
-//! [`Free::fold`] and [`Cofree::unfold`] recurse with nothing in front of them,
-//! as does the carriers' drop glue. That residual is now **crate-owned** —
-//! iterative rewrites and a hand-written `Drop` are writable in-tree — but #222
-//! is a port, not a fix: the carriers are transcribed faithfully, recursion and
-//! all, and the guard-at-the-walker-entries posture of
-//! [#231](https://github.com/sustia-llc/catgraph/issues/231) stands unchanged.
-//! [`crate::depth`]'s **Scope** section is the canonical account of the whole
-//! residual surface and
-//! [#200](https://github.com/sustia-llc/catgraph/issues/200) stays open as its
-//! tracker, now carrying the fix design. Callers driving the carrier methods on
-//! programmatically-generated data can pre-flight
-//! [`crate::depth::free_mnd_depth`] themselves — noting the measured value's own
-//! eventual drop is part of the residual.
+//! [`Free::fold`] and [`Cofree::unfold`] used to recurse with nothing in front
+//! of them, as did the carriers' compiler-generated drop glue and their
+//! capability-routed `==` / `{:?}`. #231 bounded what it could reach with a
+//! pre-flight guard at the crate's three walker entries; #200's remaining
+//! surface — everything reachable *without* going through those entries — is
+//! closed at v0.14.0 by rewriting the walks themselves. Every carrier operation
+//! is now an explicit heap worklist, so no spine is too deep, and
+//! [`crate::depth`] is a caller-facing measure rather than a guard the crate
+//! relies on.
+//!
+//! Two capability consequences are visible from this seam:
+//!
+//! - [`EqFunctor`] and [`DebugFunctor`] are **shape-level**: `eq_shape` /
+//!   `fmt_shape` decide the constructor and labels and leave the recursion
+//!   slots to the carrier's worklist. Their payload-recursing predecessors
+//!   (`eq_type` / the two-argument `fmt_type`) are gone.
+//! - The recursion schemes, `==` and `{:?}` bound on
+//!   [`Container`](crate::container::Container), the only capability that can
+//!   pull a generic witness's recursion slots out and put results back.
 //!
 //! # Co-design note (#41)
 //!
@@ -114,8 +121,8 @@ pub use option_witness::OptionWitness;
 // Compatibility mirror: the recursive carriers are defined and documented in
 // `crate::free_monad` (the CDL Proposition B.18 module); they are surfaced
 // here only so the rest of the crate keeps importing the whole substrate from
-// one seam.
-pub use crate::free_monad::{Cofree, CofreeWitness, Free, FreeWitness};
+// one seam. `FreeView` joins them since #200 — it is how a `Free` is matched.
+pub use crate::free_monad::{Cofree, CofreeWitness, Free, FreeView, FreeWitness};
 
 // The natural-iso law helpers. `doc(hidden)` because they are test support, not
 // part of the crate's documented surface — but `pub`, because integration tests

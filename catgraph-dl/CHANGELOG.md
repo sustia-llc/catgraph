@@ -13,6 +13,197 @@ All notable changes to this crate are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: every carrier walk is iterative; the three guarded entries are
+  infallible again** ([#200](https://github.com/sustia-llc/catgraph/issues/200),
+  closing it). `Free::fold`, `Cofree::unfold`, both tree bijection helpers,
+  `RecursiveNn::unroll`, all three carriers' `Drop`, their `PartialEq` and
+  `Debug`, and `BinaryTree`'s `Clone` walk their spine with an **explicit heap
+  worklist**. None can overflow the stack at any depth. #231's pre-flight guard
+  bounded the failure mode at three entries; this removes it, including the half
+  no guard could reach — a value the guard *rejected* was still dropped by
+  value, and the drop glue recursed.
+
+  What breaks, and the migration:
+  - **`Free`'s variants moved behind an accessor.** A hand-written `Drop` is
+    what makes drop iterative, and it forbids moving out of the value
+    (`error[E0509]`) — which a public-variant by-value `match` does. `Free` is
+    now a struct over a private cell; the two shapes live on the new public
+    `FreeView` enum (`Pure` / `Suspend`, re-exported at the crate root and
+    through `endofunctor`).
+    - `Free::Pure(a)` → `Free::pure(a)`; `Free::Suspend(fx)` →
+      `Free::suspend(fx)`; `Free::from_view(v)` / `From<FreeView<..>>` wrap a
+      cell directly.
+    - `match free { Free::Pure(a) => … }` → `match free.into_view() {
+      FreeView::Pure(a) => … }` (by value) or `match free.as_view() { … }` (by
+      reference — match ergonomics bind the payloads by reference).
+  - **`BinaryTree` takes the same reshape**, for the same reason, with the same
+    shape: `BinaryTree::leaf` / `BinaryTree::node` (both already existed) build,
+    the new public `TreeView` enum (`Leaf` / `Node`) is what `into_view()` /
+    `as_view()` hand back, and `from_view` wraps.
+  - **`Free::fold`, `Cofree::unfold`, and the carriers' `PartialEq`/`Debug` gain
+    a `Container` bound.** Heapifying a walk over a *generic* witness needs
+    `decompose`/`recompose` to pull the recursion slots out and put results
+    back; `fmap` cannot, because rebuilding `F::Type<X>` from already-computed
+    children *is* the recursive step. Every in-tree witness satisfies it —
+    `OptionWitness` gained a `Container` impl in this window precisely so
+    `Cofree<OptionWitness, O>`, the bounded-stream carrier, would keep `unfold`.
+  - **`tree_to_free_mnd`, `free_mnd_to_tree` and `RecursiveNn::unroll` drop their
+    `Result`.** They return `Free<TreeEndo<A>, Infallible>`, `BinaryTree<A>` and
+    `S` again, as before #231. Delete the `?` / `.unwrap()` at call sites.
+  - **`EqFunctor` / `DebugFunctor` are shape-level.** `eq_type<T: PartialEq>` is
+    replaced by `eq_shape<T>`, which compares constructor and labels and
+    **ignores** the contents; `fmt_type(fa, f)` is replaced by
+    `fmt_shape(fa, f, contents)`, which formats with the contents supplied
+    already-rendered, in position order. The carrier pairs and renders the
+    recursion slots itself, on its worklist — the previous signatures let the
+    recursion run *inside* the witness, where the carrier could not heapify it.
+    Witness authors reimplement two small methods; callers are unaffected.
+  - **`Container::Shape` lost its `PartialEq + Debug` bound**, so a
+    label-carrying shape (`ListEndo<A>`'s `Option<A>`, `TreeEndo<A>`'s
+    `Either<A, ()>`) no longer forces those bounds onto every `Free<F, _>` walk.
+    The law helper asks for them where it needs them. `Container` also gained
+    one required method, `contents`, the borrowing half of `decompose` (law 4).
+  - **A borrowed payload must now be declared *before* the carrier that holds
+    it.** A hand-written `Drop` without `#[may_dangle]` makes dropck require
+    every lifetime parameter to strictly outlive the value, so
+    `BinaryTree<&'a T>`, `Free<F, &'a T>` and `Cofree<F, &'a T>` all reject a
+    binding order that used to compile:
+
+    ```rust,ignore
+    let tree;                                    // dropped last…
+    let payload = String::from("x");             // …but this dies first
+    tree = BinaryTree::leaf(payload.as_str());   // error[E0597]
+    ```
+
+    The fix is to swap the two bindings so the payload outlives the carrier.
+    Worth calling out because the compiler's message (`` `payload` does not
+    live long enough … when `tree` is dropped and runs the Drop code ``) names
+    the borrow rather than the ordering. Owned payloads are unaffected. Pinned
+    by `compile_fail,E0597` doctests on all three carriers.
+  - **A witness whose `DebugFunctor::fmt_shape` never writes a recursion slot
+    into the `Formatter` it was handed is now an error**, not a silently
+    truncated rendering. Such a slot has no measurable position, so the child
+    and its whole subtree used to disappear from the output while `{:?}`
+    returned `Ok` — the one out-of-contract path in this crate that failed
+    silently. Write each `contents` entry into `f` (`.field(inner)` and
+    friends), never into a buffer of your own; the shipped witnesses already
+    do, so this affects out-of-tree witnesses only.
+
+  Cost, re-measured with `benches/free_cofree_shapes.rs`: the walks moved onto
+  the heap, so they allocate there. `list construct` is unchanged (`1·n`, zero
+  `realloc`); every other carrier row now pays a growing worklist `Vec`, and
+  `fold`/`unfold` pay two allocations per node with children (`decompose`'s
+  contents `Vec` and the results `split_off`). `Free::fold` used to allocate
+  nothing and now reads `2·n + 2` on lists / `2·(L − 1) + 2` on trees. The
+  bench's "zero `realloc`s anywhere" headline is retired with it.
+
+  Not breaking, and unchanged: `Cofree::new` / `head` / `tail` / `into_parts`
+  keep their signatures (the cell moved behind an `Option`, so `into_parts` can
+  still move both fields out under a manual `Drop`).
+
+  `Debug` renders **top-down and streaming**: each cell's shape is laid out once
+  into a small scratch buffer and its segments written straight to the caller's
+  formatter, so every byte of the output is written exactly once and `{:?}` is
+  Θ(total output). `{:#?}` is Θ(total output) too — but a pretty rendering
+  indents every line by its nesting depth, so *that output* is inherently
+  quadratic in the depth of a spine. Neither aborts, which the derive did, and
+  neither panics on an inner `Debug` that returns `Err`: the error propagates,
+  as `DebugFunctor::fmt_shape` documents.
+
+  **`Debug` output is byte-identical to the derived/previous text under the
+  default spec, `{:#?}`, `{:.N?}` and `{:N?}` — and *not* under fill,
+  alignment, the sign/zero-pad flags or `{:x?}` / `{:X?}`.** The scratch buffer
+  is written by a *fresh* `Formatter`, and stable Rust cannot build one from
+  another's options (`fmt::FormattingOptions` + `Formatter::new` are unstable —
+  `formatting_options`, rust-lang/rust#118117), so the spec is re-expressed in
+  the scratch `write!`'s own format string. `alternate` is a distinct literal
+  string, `precision` and `width` go through the dynamic `{:.p$?}` / `{:w$?}`
+  forms; fill and alignment can only be spelled literally, and the debug-hex
+  flags have no stable accessor to be read from in the first place. A dropped
+  flag renders as if it were absent, so a carrier under `{:+?}` or `{:x?}`
+  prints what it prints under `{:?}` where a derive would honour the flag, and
+  `{:*>12?}` applies the width but not the fill. Both halves are pinned against
+  plain `#[derive(Debug)]` twins of all three carriers — the carried specs by
+  `every_carrier_debug_is_byte_identical_to_a_derived_twin` (at an `f64`
+  payload, the only one that can see `precision` go missing), the dropped ones
+  by `dropped_format_specs_render_as_if_the_flag_were_absent`.
+
+  Node sizes, measured (x86-64). The private cell is an `Option` so `Drop` and
+  the by-value accessors can *take* it without `unsafe`, and that wrapper is
+  free only where the cell's discriminant has spare values: `Free` pays nothing
+  (`Free<OptionWitness, u64>` = 16 = `FreeView<OptionWitness, u64>`;
+  `Free<TreeEndo<u8>, u8>` = 24 = its view), `BinaryTree` pays nothing either
+  since the boxed-pair `TreeView::Node` below (`BinaryTree<u8>` =
+  `BinaryTree<f64>` = 16 = their views), and `Cofree` pays **one word** —
+  `Cofree<OptionWitness, u32>` = `Cofree<OptionWitness, f64>` = 24 over a
+  16-byte cell (was 16), `Cofree<TreeEndo<u8>, f64>` = 32 over a 24-byte cell
+  (was 24). `Cofree`'s word is not reclaimable: its cell is a *struct*, so it
+  has no discriminant of its own to leave spare, and its only candidate niche
+  lives inside `F::Type<…>` — the witness's type, which `Cofree` does not own;
+  `mem::replace` cannot help either, needing an inhabitant of the cell type that
+  cannot be built without an `A`. That is an accepted cost, written up on
+  `Cofree`. Every size above is pinned by a unit test, `Cofree` against its real
+  cell type.
+
+- **`TreeView::Node` holds one boxed pair, halving `BinaryTree`'s allocations
+  and reclaiming its extra word**
+  ([#200](https://github.com/sustia-llc/catgraph/issues/200) follow-up). The
+  variant is now `Node(Box<(BinaryTree<A>, BinaryTree<A>)>)` rather than
+  `Node(Box<BinaryTree<A>>, Box<BinaryTree<A>>)`.
+
+  - **Allocations halve**: an internal node costs **one** `Box`, so a tree of
+    `L` leaves allocates `L − 1` boxes instead of `2·(L − 1)`. Measured with
+    `benches/free_cofree_shapes.rs`: the tree `construct` rows, whose window
+    frees the source `BinaryTree`, drop from 128 / 2 048 / 8 192 `dealloc`s to
+    65 / 1 025 / 4 097 at `L` = 64 / 1 024 / 4 096, on both the balanced and the
+    caterpillar shape. (Their `alloc` column is unchanged — it counts the `Free`
+    side, which still boxes per hole.)
+  - **`BinaryTree<A>` narrows from 24 to 16 bytes**, equal to its view. Two
+    `Box`es let the compiler niche `TreeView`'s discriminant into the first
+    one's null, leaving the view with no spare value and the `Option`-wrapped
+    cell costing a full word. One `Box` plus a `Leaf(A)` payload that cannot be
+    packed into a pointer niche gives the view a real tag byte with 254 spare
+    discriminants, and `Option` niches into it for free. This supersedes the
+    "that word is not reclaimable" claim in the entry above, which was true only
+    of the shapes considered at the time.
+  - **Per-hole boxing is now a `Free`/`Cofree` property, not a crate-wide one.**
+    Those two carriers keep it because their recursive slots live inside an
+    arbitrary witness's `F::Type<…>` — there is nowhere else to put the
+    indirection — and because `FreeView`'s tag always had spare discriminants,
+    so nothing was there to reclaim. `Cofree` has **no** analogue of this move
+    by construction: its cell is a struct with no discriminant of its own, so
+    its extra word stands as an accepted cost. The asymmetry is documented on
+    `TreeView`, on `Cofree`, and in the `free_monad` module docs.
+
+  **Breaking for anyone matching the variant by hand**:
+  `TreeView::Node(left, right)` → `TreeView::Node(children)` with
+  `&children.0` / `&children.1` (or `let (left, right) = *children;` by value).
+  `BinaryTree::leaf` / `BinaryTree::node` / `into_view` / `as_view` /
+  `from_view` are unchanged, as are `tree_to_free_mnd` / `free_mnd_to_tree`,
+  `Free<TreeEndo<A>, _>` (untouched — `TreeEndo::Type<X>` is still
+  `Either<A, (X, X)>`, so `Container for TreeEndo` still reports arity 2), and
+  `TreeEndo`'s two-slot `Container`/`EqFunctor`/`DebugFunctor` behaviour.
+
+  **`Debug` output is unchanged by this reshape**, on both `BinaryTree` and
+  `TreeView` itself: `Node` still renders as a **two-field** tuple variant,
+  `Node(<left>, <right>)`, in `{:?}` and `{:#?}` alike. `TreeView`'s `Debug` is
+  hand-written for exactly that reason — a derive on the boxed pair would print
+  `Node((<left>, <right>))`. Pinned by the existing derived-twin oracle and by a
+  new view-level test. (The format-spec caveat in the entry above applies to
+  `TreeView` too, transitively: its subtrees are rendered by `BinaryTree`'s
+  streaming `Debug`.)
+
+- **`depth` is an opt-in, caller-facing measure.** `MAX_TREE_DEPTH`,
+  `guard_tree_depth`, `guard_free_mnd_depth`, `tree_depth`, `free_mnd_depth` and
+  `DepthError` all stay published, but **nothing in the crate calls them any
+  more** — there is no crate-owned recursion left to guard. They remain for a
+  caller whose *own* code walks these carriers recursively, which is the residual
+  use #231's own review anticipated. `DepthError` is consequently returned by no
+  entry; `guard_*` borrow, so the rejection-path drop hazard #231 had to document
+  is gone with it.
+
 ## [workspace-v0.11.0] - 2026-08-10
 
 ### Changed

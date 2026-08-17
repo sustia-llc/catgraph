@@ -15,33 +15,36 @@
 //! bijections with their obvious carriers, and folds an [`FAlgebra`] over a free
 //! monad (a *catamorphism*) — the operation the architecture unrollers generalise.
 //!
-//! The **tree** bijection is fallible: both directions recurse, so they
-//! pre-flight the [`catgraph_dl::depth`] guard and return [`DepthError`] for a
-//! carrier deeper than [`MAX_TREE_DEPTH`](catgraph_dl::depth::MAX_TREE_DEPTH)
-//! (issue #231). The list bijection is a loop and stays infallible.
+//! Both bijections are **infallible at any depth**: every walk in the crate is
+//! an explicit heap worklist since issue #200, and the carriers' own drop glue
+//! is iterative too, so nothing here can overflow the stack. (Between #231 and
+//! #200 the tree direction returned a `DepthError`; `catgraph_dl::depth` is now
+//! an opt-in measure for callers who recurse themselves.)
 //!
 //! Run with `cargo run -p catgraph-dl --example free_monad_basics`.
 
-use catgraph_dl::DepthError;
 use catgraph_dl::algebra::FAlgebra;
+use catgraph_dl::depth::{MAX_TREE_DEPTH, tree_depth};
 use catgraph_dl::endofunctor::OptionWitness;
 use catgraph_dl::free_monad::list_endo::{ListEndo, free_mnd_to_vec, vec_to_free_mnd};
 use catgraph_dl::free_monad::tree_endo::{BinaryTree, free_mnd_to_tree, tree_to_free_mnd};
 use catgraph_dl::free_monad::{Cofree, Free};
 
-fn main() -> Result<(), DepthError> {
+fn main() {
     // ---- 1. The list free monad `FreeMnd(1 + A × −)` --------------------
     //
     // `Pure(z)` is the terminator; `Suspend(Some((a, Box(rest))))` is a cons cell
     // (the recursion is boxed inside the functor hole). The empty list is
-    // exactly `Pure(())`.
-    let empty: Free<ListEndo<u32>, ()> = Free::Pure(());
+    // exactly `Pure(())`. Cells are built with `Free::pure` / `Free::suspend`
+    // and read back with `into_view()` — the variants live on `FreeView` since
+    // the carrier grew a hand-written iterative `Drop` (#200).
+    let empty: Free<ListEndo<u32>, ()> = Free::pure(());
     let (items, ()) = free_mnd_to_vec(empty);
     assert!(items.is_empty());
 
     // Build `[1, 2]` as an explicit cons tower and decode it.
-    let inner: Free<ListEndo<u32>, ()> = Free::Suspend(Some((2_u32, Box::new(Free::Pure(())))));
-    let tower: Free<ListEndo<u32>, ()> = Free::Suspend(Some((1_u32, Box::new(inner))));
+    let inner: Free<ListEndo<u32>, ()> = Free::suspend(Some((2_u32, Box::new(Free::pure(())))));
+    let tower: Free<ListEndo<u32>, ()> = Free::suspend(Some((1_u32, Box::new(inner))));
     let (decoded, ()) = free_mnd_to_vec(tower);
     assert_eq!(decoded, vec![1_u32, 2]);
 
@@ -60,10 +63,15 @@ fn main() -> Result<(), DepthError> {
         BinaryTree::node(BinaryTree::leaf(1_u32), BinaryTree::leaf(2_u32)),
         BinaryTree::leaf(3_u32),
     );
-    // Depth 3 — comfortably inside `MAX_TREE_DEPTH`, so neither `?` fires.
-    let back = free_mnd_to_tree(tree_to_free_mnd(tree.clone())?)?;
+    let back = free_mnd_to_tree(tree_to_free_mnd(tree.clone()));
     assert_eq!(back, tree);
     println!("tree free monad: BinaryTree ⇄ Free<TreeEndo> bijection round-trips");
+
+    // The bijection has no depth limit of its own. `catgraph_dl::depth` is the
+    // opt-in measure a *caller* uses when its own walk recurses; here it just
+    // reports the shape.
+    assert_eq!(tree_depth(&tree), 3);
+    assert!(tree_depth(&tree) <= MAX_TREE_DEPTH);
 
     // ---- 3. The dual: cofree comonad (a bounded stream prefix) ----------
     //
@@ -101,7 +109,6 @@ fn main() -> Result<(), DepthError> {
     println!("algebra fold: sum-algebra catamorphism over [10, 20, 12] = {total}");
 
     println!("free_monad_basics: all assertions passed");
-    Ok(())
 }
 
 /// Fold a `Free<ListEndo<i64>, ()>` cons tower through an `FAlgebra`'s

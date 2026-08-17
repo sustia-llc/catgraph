@@ -67,16 +67,18 @@
 //!   a polynomial endofunctor `⟦S ◁ P⟧(X) = Σ_{s} X^{P(s)}`
 //!   (Abbott–Altenkirch–Ghani 2003, via CDL), finitary (`Vec`-of-contents)
 //!   presentation. Issue #41.
-//! - [`depth`] — the pre-flight recursion guard. Iterative depth measures for
-//!   the tree carriers ([`depth::tree_depth`] / [`depth::free_mnd_depth`]) and
-//!   the [`depth::MAX_TREE_DEPTH`] ceiling the crate's three tree-recursive
-//!   entries check before walking. Engineering, not a CDL surface: it rejects
-//!   inputs that would abort the process, and changes nothing about the ones it
-//!   accepts. Issue [#231](https://github.com/sustia-llc/catgraph/issues/231);
-//!   residual recursion the guard cannot reach is tracked in
-//!   [#200](https://github.com/sustia-llc/catgraph/issues/200).
-//! - [`errors`] — [`errors::DepthError`], the guard's rejection. The crate's
-//!   only error type.
+//! - [`depth`] — iterative depth measures for the tree carriers
+//!   ([`depth::tree_depth`] / [`depth::free_mnd_depth`]) plus the
+//!   [`depth::MAX_TREE_DEPTH`] ceiling and its two `guard_*` helpers.
+//!   Engineering, not a CDL surface, and **opt-in since v0.14.0**: the crate's
+//!   own walks became explicit heap worklists
+//!   ([#200](https://github.com/sustia-llc/catgraph/issues/200)), so nothing
+//!   here is called on their behalf and the three formerly-guarded entries are
+//!   infallible again. The guard remains published for callers whose *own* code
+//!   walks these carriers recursively
+//!   (issue [#231](https://github.com/sustia-llc/catgraph/issues/231)).
+//! - [`errors`] — [`errors::DepthError`], the opt-in guard's rejection. The
+//!   crate's only error type.
 //! - `hopf_fibration` (private) — namespace stub for Dudzik's carry-operation
 //!   conjecture. Pre-publication research; not in CDL ICML 2024. Not part
 //!   of the public surface. See ⚠️ CAREFUL section below for the 2026-05-06
@@ -174,8 +176,8 @@ pub mod para;
 // path is removed (breaking; issue #12), as are `NoConstraint` / `Satisfies`
 // (breaking; issue #222 — the object map carries no constraint slot).
 pub use endofunctor::{
-    Cofree, CofreeWitness, DebugFunctor, Either, EndoWitness, EqFunctor, Free, FreeWitness,
-    Functor, HKT, Monad, NaturalIso, Pure,
+    Cofree, CofreeWitness, DebugFunctor, Either, EndoWitness, EqFunctor, Free, FreeView,
+    FreeWitness, Functor, HKT, Monad, NaturalIso, Pure,
 };
 
 // The first-class natural-transformation / pointed-endofunctor / container
