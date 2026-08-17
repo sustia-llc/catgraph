@@ -16,8 +16,6 @@ use core::marker::PhantomData;
 use crate::container::Container;
 use crate::endofunctor::{DebugFunctor, EndoWitness, EqFunctor, HKT};
 
-use super::{Rendered, render};
-
 /// The message on every `expect` guarding the transient empty cell — the dual
 /// of `free.rs`'s. [`Cofree`]'s cell is `None` only between
 /// [`Cofree::into_parts`]/[`Cofree::drop`] taking it and the husk being
@@ -27,11 +25,16 @@ const CELL: &str = "invariant: a live Cofree always holds its cell; it is emptie
 
 /// The label-and-children pair a [`Cofree`] node carries.
 ///
-/// Private: the shape is an invariant of the carrier, not a place to edit —
+/// Not public: the shape is an invariant of the carrier, not a place to edit —
 /// the accessors below are the surface. It is a distinct type only so
 /// [`Cofree`] can hold it behind an `Option` and hand it out whole; see
 /// [`Cofree`] for why that indirection exists.
-struct CofreeCell<F, A>
+///
+/// `pub(super)` — with its fields still private — solely so
+/// `crate::free_monad`'s size pin can name the cell it measures `Cofree`
+/// against, rather than a hand-written stand-in that could drift from it. The
+/// enclosing `cofree` module is itself private, so nothing escapes the crate.
+pub(super) struct CofreeCell<F, A>
 where
     F: EndoWitness,
 {
@@ -63,6 +66,32 @@ where
 /// out. Taking the cell out of an `Option` is the `unsafe`-free way to do both
 /// (the crate is `#![forbid(unsafe_code)]`). [`into_parts`](Cofree::into_parts)'
 /// signature is unchanged; the cell is `Some` for every observable value.
+///
+/// ## The extra word is a known, accepted cost
+///
+/// That `Option` costs `Cofree` **one machine word** over its cell, at every
+/// instantiation measured (`Cofree<OptionWitness, u32>` = 24 over a 16-byte
+/// cell; `Cofree<TreeEndo<u8>, f64>` = 32 over a 24-byte cell). Its two sibling
+/// carriers pay nothing: [`Free`](crate::free_monad::Free)'s cell is an enum
+/// whose tag always had spare discriminants, and
+/// [`BinaryTree`](crate::free_monad::tree_endo::BinaryTree)'s view was
+/// *reshaped* to have one — `TreeView::Node` boxes its subtree **pair**, which
+/// both halves the tree's allocation count and gives the view a real tag byte
+/// for `Option` to niche into.
+///
+/// **There is no analogue of that move here, by construction.** `CofreeCell` is
+/// a struct: it has no discriminant of its own to widen or leave spare, and its
+/// only candidate niche lives inside `F::Type<Box<Cofree<F, A>>>` — the
+/// *witness's* type, which `Cofree` neither owns nor may reshape. (For the
+/// shipped witnesses that niche is spent already: `Option<Box<…>>` consumes the
+/// null pointer for `None`, and `Either<A, (Box<…>, Box<…>)>` consumes it for
+/// `Left`.) Nor is the word reclaimable by `mem::replace`, which would need an
+/// inhabitant of the cell type, and there is none without an `A`.
+///
+/// So this is a recorded cost with a reason, not an oversight — please do not
+/// re-open it without a new mechanism. The relation is pinned by
+/// `crate::free_monad::tests::the_private_cell_costs_at_most_one_word`, which
+/// measures `Cofree` against `CofreeCell` directly.
 ///
 /// # Finiteness
 ///
@@ -271,93 +300,41 @@ where
 /// `Debug` mirrors the derive shape (`Cofree { head, tail }`), formatting the
 /// `F`-structure through the functor's `fmt_shape`.
 ///
-/// Iterative, with the same cost note as
-/// [`Free`](crate::free_monad::Free)'s `Debug`: every level's text is
-/// materialised, so `{:?}` is linear in the total output and `{:#?}` is
-/// quadratic in the depth. Neither aborts.
+/// Iterative and streaming, with the same cost note as
+/// [`Free`](crate::free_monad::Free)'s `Debug`: every byte of the output is
+/// written once, so `{:?}` is Θ(total output) and cannot overflow. `{:#?}` is
+/// Θ(total output) too — but a pretty rendering indents every line by its
+/// nesting depth, so that output is itself quadratic in the depth of a spine.
 impl<F, A> fmt::Debug for Cofree<F, A>
 where
     F: DebugFunctor + Container,
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&render_nodes(self, f.alternate()))
+        super::write_debug(self, f)
     }
 }
 
-/// One step of the explicit-worklist [`Debug`] rendering.
-enum RenderStep<'a, F, A>
-where
-    F: EndoWitness,
-{
-    /// Render this node once its children are rendered.
-    Visit(&'a Cofree<F, A>),
-    /// Its `arity` children are rendered: pop them and render this node.
-    Assemble(&'a A, &'a F::Type<Box<Cofree<F, A>>>, usize),
-}
-
-/// A whole `Cofree` node's rendering, given its children pre-rendered.
-struct NodeRepr<'a, F, A>
-where
-    F: EndoWitness,
-{
-    head: &'a A,
-    tail: &'a F::Type<Box<Cofree<F, A>>>,
-    slots: &'a [&'a dyn fmt::Debug],
-}
-
-impl<F, A> fmt::Debug for NodeRepr<'_, F, A>
-where
-    F: DebugFunctor + EndoWitness,
-    A: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Cofree")
-            .field("head", self.head)
-            .field("tail", &super::FmtShape::<F, _>(self.tail, self.slots))
-            .finish()
-    }
-}
-
-/// Render `root` bottom-up, so no stack frame is spent per level of spine.
-fn render_nodes<F, A>(root: &Cofree<F, A>, alternate: bool) -> String
+/// The shape of one node, for the shared streaming renderer: the `head` label
+/// plus the witness's own contents as the recursion slots.
+impl<F, A> super::DebugNode for Cofree<F, A>
 where
     F: DebugFunctor + Container,
     A: fmt::Debug,
 {
-    let mut work: Vec<RenderStep<'_, F, A>> = vec![RenderStep::Visit(root)];
-    let mut done: Vec<String> = Vec::new();
-    while let Some(step) = work.pop() {
-        match step {
-            RenderStep::Visit(node) => {
-                let tail = node.tail();
-                let children = F::contents(tail);
-                work.push(RenderStep::Assemble(node.head(), tail, children.len()));
-                for child in children.into_iter().rev() {
-                    work.push(RenderStep::Visit(child.as_ref()));
-                }
-            }
-            RenderStep::Assemble(head, tail, arity) => {
-                let rendered: Vec<Rendered> = done
-                    .split_off(done.len() - arity)
-                    .into_iter()
-                    .map(Rendered)
-                    .collect();
-                let slots: Vec<&dyn fmt::Debug> =
-                    rendered.iter().map(|r| r as &dyn fmt::Debug).collect();
-                done.push(render(
-                    alternate,
-                    &NodeRepr::<F, A> {
-                        head,
-                        tail,
-                        slots: &slots,
-                    },
-                ));
-            }
-        }
+    fn slots(&self) -> Vec<&Self> {
+        F::contents(self.tail())
+            .into_iter()
+            .map(|c| c.as_ref())
+            .collect()
     }
-    done.pop()
-        .expect("invariant: the walk pushes exactly one rendering for the root")
+
+    fn fmt_cell(&self, f: &mut fmt::Formatter<'_>, holes: &[&dyn fmt::Debug]) -> fmt::Result {
+        f.debug_struct("Cofree")
+            .field("head", self.head())
+            .field("tail", &super::FmtShape::<F, _>(self.tail(), holes))
+            .finish()
+    }
 }
 
 /// The [`HKT`] witness for the cofree comonad over the functor `F` (dual of

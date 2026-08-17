@@ -27,9 +27,28 @@ project), used under the MIT license:
 > FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 > IN THE SOFTWARE.
 
+## What is derived, precisely
+
+**The API shape and the design**, not the current implementations. What
+originated with haft and survives here: the carrier shapes (`Pure | Suspend`
+with the box inside the functor hole; `head :< tail`), the witness tower and its
+GAT-based HKT emulation, the `fold` / `unfold` / `new` / `head` / `tail` /
+`into_parts` signatures, and the opt-in capability-trait mechanism that works
+around `E0275`.
+
+**The bodies are catgraph's own**, and increasingly so. `catgraph-syntax`'s
+Arrow algebra has *defined* rather than re-exported its surface since
+[#222](https://github.com/sustia-llc/catgraph/issues/222). In `catgraph-dl`,
+[#200](https://github.com/sustia-llc/catgraph/issues/200) replaced every
+recursive walk with an explicit worklist, moved `Free`/`BinaryTree` behind a
+private representation, made the capability traits shape-level, and reshaped
+`TreeView::Node`. The notice is retained because the derivation is real and MIT
+requires it to travel with derived work — **not** because any
+`deep_causality_*` crate is a dependency. None is, anywhere in the graph, and
+CI enforces that.
+
 The derived files (each also carries the notice in its license header; the
-substrate was brought in-tree at
-[#222](https://github.com/sustia-llc/catgraph/issues/222)). Provenance note:
+substrate was brought in-tree at #222). Provenance note:
 0.4.2 is the crates.io release, tag `deep_causality_haft-v0.4.2`, commit
 `aeff6549e` in the DeepCausality repository — its `main` branch read 0.4.1 at
 divestment time (deepcausality-rs/deep_causality#720).

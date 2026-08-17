@@ -78,9 +78,79 @@ All notable changes to this crate are documented here. Format follows
   keep their signatures (the cell moved behind an `Option`, so `into_parts` can
   still move both fields out under a manual `Drop`); `Debug` output is
   byte-identical to the derived/previous text in both `{:?}` and `{:#?}`, pinned
-  by unit tests. `Debug` now materialises each level's text, so `{:?}` costs the
-  total output and `{:#?}` costs that times the depth — neither aborts, which
-  the derive did.
+  against plain `#[derive(Debug)]` twins of all three carriers.
+
+  `Debug` renders **top-down and streaming**: each cell's shape is laid out once
+  into a small scratch buffer and its segments written straight to the caller's
+  formatter, so every byte of the output is written exactly once and `{:?}` is
+  Θ(total output). `{:#?}` is Θ(total output) too — but a pretty rendering
+  indents every line by its nesting depth, so *that output* is inherently
+  quadratic in the depth of a spine. Neither aborts, which the derive did, and
+  neither panics on an inner `Debug` that returns `Err`: the error propagates,
+  as `DebugFunctor::fmt_shape` documents.
+
+  Node sizes, measured (x86-64). The private cell is an `Option` so `Drop` and
+  the by-value accessors can *take* it without `unsafe`, and that wrapper is
+  free only where the cell's discriminant has spare values: `Free` pays nothing
+  (`Free<OptionWitness, u64>` = 16 = `FreeView<OptionWitness, u64>`;
+  `Free<TreeEndo<u8>, u8>` = 24 = its view), `BinaryTree` pays nothing either
+  since the boxed-pair `TreeView::Node` below (`BinaryTree<u8>` =
+  `BinaryTree<f64>` = 16 = their views), and `Cofree` pays **one word** —
+  `Cofree<OptionWitness, u32>` = `Cofree<OptionWitness, f64>` = 24 over a
+  16-byte cell (was 16), `Cofree<TreeEndo<u8>, f64>` = 32 over a 24-byte cell
+  (was 24). `Cofree`'s word is not reclaimable: its cell is a *struct*, so it
+  has no discriminant of its own to leave spare, and its only candidate niche
+  lives inside `F::Type<…>` — the witness's type, which `Cofree` does not own;
+  `mem::replace` cannot help either, needing an inhabitant of the cell type that
+  cannot be built without an `A`. That is an accepted cost, written up on
+  `Cofree`. Every size above is pinned by a unit test, `Cofree` against its real
+  cell type.
+
+- **`TreeView::Node` holds one boxed pair, halving `BinaryTree`'s allocations
+  and reclaiming its extra word**
+  ([#200](https://github.com/sustia-llc/catgraph/issues/200) follow-up). The
+  variant is now `Node(Box<(BinaryTree<A>, BinaryTree<A>)>)` rather than
+  `Node(Box<BinaryTree<A>>, Box<BinaryTree<A>>)`.
+
+  - **Allocations halve**: an internal node costs **one** `Box`, so a tree of
+    `L` leaves allocates `L − 1` boxes instead of `2·(L − 1)`. Measured with
+    `benches/free_cofree_shapes.rs`: the tree `construct` rows, whose window
+    frees the source `BinaryTree`, drop from 128 / 2 048 / 8 192 `dealloc`s to
+    65 / 1 025 / 4 097 at `L` = 64 / 1 024 / 4 096, on both the balanced and the
+    caterpillar shape. (Their `alloc` column is unchanged — it counts the `Free`
+    side, which still boxes per hole.)
+  - **`BinaryTree<A>` narrows from 24 to 16 bytes**, equal to its view. Two
+    `Box`es let the compiler niche `TreeView`'s discriminant into the first
+    one's null, leaving the view with no spare value and the `Option`-wrapped
+    cell costing a full word. One `Box` plus a `Leaf(A)` payload that cannot be
+    packed into a pointer niche gives the view a real tag byte with 254 spare
+    discriminants, and `Option` niches into it for free. This supersedes the
+    "that word is not reclaimable" claim in the entry above, which was true only
+    of the shapes considered at the time.
+  - **Per-hole boxing is now a `Free`/`Cofree` property, not a crate-wide one.**
+    Those two carriers keep it because their recursive slots live inside an
+    arbitrary witness's `F::Type<…>` — there is nowhere else to put the
+    indirection — and because `FreeView`'s tag always had spare discriminants,
+    so nothing was there to reclaim. `Cofree` has **no** analogue of this move
+    by construction: its cell is a struct with no discriminant of its own, so
+    its extra word stands as an accepted cost. The asymmetry is documented on
+    `TreeView`, on `Cofree`, and in the `free_monad` module docs.
+
+  **Breaking for anyone matching the variant by hand**:
+  `TreeView::Node(left, right)` → `TreeView::Node(children)` with
+  `&children.0` / `&children.1` (or `let (left, right) = *children;` by value).
+  `BinaryTree::leaf` / `BinaryTree::node` / `into_view` / `as_view` /
+  `from_view` are unchanged, as are `tree_to_free_mnd` / `free_mnd_to_tree`,
+  `Free<TreeEndo<A>, _>` (untouched — `TreeEndo::Type<X>` is still
+  `Either<A, (X, X)>`, so `Container for TreeEndo` still reports arity 2), and
+  `TreeEndo`'s two-slot `Container`/`EqFunctor`/`DebugFunctor` behaviour.
+
+  **`Debug` output is byte-identical**, on both `BinaryTree` and `TreeView`
+  itself: `Node` still renders as a **two-field** tuple variant,
+  `Node(<left>, <right>)`, in `{:?}` and `{:#?}` alike. `TreeView`'s `Debug` is
+  hand-written for exactly that reason — a derive on the boxed pair would print
+  `Node((<left>, <right>))`. Pinned by the existing derived-twin oracle and by a
+  new view-level test.
 
 - **`depth` is an opt-in, caller-facing measure.** `MAX_TREE_DEPTH`,
   `guard_tree_depth`, `guard_free_mnd_depth`, `tree_depth`, `free_mnd_depth` and

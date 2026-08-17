@@ -112,13 +112,14 @@ where
             match step {
                 UnrollStep::Descend(tree) => match tree.into_view() {
                     TreeView::Leaf(_a) => done.push((cell.cell_0)(cell.parameter.clone())),
-                    TreeView::Node(left, right) => {
+                    TreeView::Node(children) => {
+                        let (left, right) = *children;
                         // Taken before the descent, exactly as the recursive
                         // body did.
-                        let leftmost = leftmost_leaf(left.as_ref());
+                        let leftmost = leftmost_leaf(&left);
                         work.push(UnrollStep::Combine(leftmost));
-                        work.push(UnrollStep::Descend(*right));
-                        work.push(UnrollStep::Descend(*left));
+                        work.push(UnrollStep::Descend(right));
+                        work.push(UnrollStep::Descend(left));
                     }
                 },
                 UnrollStep::Combine(a) => {
@@ -151,7 +152,7 @@ const ASSEMBLE: &str = "invariant: a Combine step is pushed only after its two s
 ///
 /// Helper for [`RecursiveNn::unroll`] — the four-arg `cell_1((p, a, l, r))`
 /// shape needs an `A` value at internal-node combination, but the
-/// [`BinaryTree::Node`] variant carries no internal-node payload. The
+/// [`TreeView::Node`] variant carries no internal-node payload. The
 /// convention here is to re-use the leftmost leaf's payload as the
 /// branching `a`. Tests pass payload-agnostic cells so this choice does
 /// not bias the acceptance harness.
@@ -160,7 +161,7 @@ fn leftmost_leaf<A: Clone>(tree: &BinaryTree<A>) -> A {
     loop {
         match current.as_view() {
             TreeView::Leaf(a) => return a.clone(),
-            TreeView::Node(left, _right) => current = left.as_ref(),
+            TreeView::Node(children) => current = &children.0,
         }
     }
 }

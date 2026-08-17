@@ -16,8 +16,6 @@ use core::marker::PhantomData;
 use crate::container::Container;
 use crate::endofunctor::{DebugFunctor, EndoWitness, EqFunctor, HKT, Pure};
 
-use super::{DebugTuple, Rendered, render};
-
 /// The message on every `expect` guarding the transient empty cell.
 ///
 /// [`Free`]'s cell is `None` only *between* the moment [`Free::into_view`] or
@@ -37,9 +35,17 @@ const CELL: &str = "invariant: a live Free always holds its cell; it is emptied 
 ///
 /// The recursion indirection sits **inside** the functor hole
 /// (`Suspend(F::Type<Box<Free<F, A>>>)`), not around the applied functor, so a
-/// carrier value costs exactly one `Box` per recursive hole. Dropping a
+/// `Free` value costs exactly one `Box` per recursive hole. Dropping a
 /// `FreeView` therefore drops `Box<Free<F, A>>` values, and *their* `Drop` is
 /// iterative — one level of nesting here, none below it.
+///
+/// That is a property of *this* carrier, not a crate-wide rule: the slots sit
+/// inside an arbitrary witness's `F::Type<…>`, so there is nowhere else to put
+/// the indirection. The concrete
+/// [`BinaryTree`](crate::free_monad::tree_endo::BinaryTree), which owns its
+/// two-slot shape, boxes the subtree *pair* instead and so pays one `Box` per
+/// internal node — see
+/// [`TreeView`](crate::free_monad::tree_endo::TreeView) for the asymmetry.
 pub enum FreeView<F, A>
 where
     F: EndoWitness,
@@ -315,71 +321,45 @@ where
 /// `Debug` mirrors the derive shape (`Pure(..)` / `Suspend(..)`), formatting the
 /// operation node through the functor's `fmt_shape`.
 ///
-/// Iterative: each cell is rendered bottom-up from its children's already-
-/// rendered text, so a deep spine cannot overflow. The cost of that inversion
-/// is that the text of every level is materialised — linear in the total output
-/// for `{:?}`, and quadratic in the depth for `{:#?}`, whose per-level
-/// re-indentation touches every line again. Neither aborts; prefer `{:?}` when
-/// dumping a suspect spine.
+/// Iterative and streaming: each cell's own shape is laid out once and written
+/// straight to the formatter, with the children visited on an explicit stack, so
+/// a deep spine can neither overflow nor cost more than the output it produces —
+/// Θ(total output) for `{:?}`. `{:#?}` is Θ(total output) too, but that output is
+/// itself quadratic in the depth of a spine, because a pretty rendering indents
+/// every line by its nesting depth.
 impl<F, A> fmt::Debug for Free<F, A>
 where
     F: DebugFunctor + Container,
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&render_cells(self, f.alternate()))
+        super::write_debug(self, f)
     }
 }
 
-/// One step of the explicit-worklist [`Debug`] rendering (see [`FoldStep`] for
-/// why it is not a local `enum`).
-enum RenderStep<'a, F, A>
-where
-    F: EndoWitness,
-{
-    /// Render this cell once its children are rendered.
-    Visit(&'a Free<F, A>),
-    /// Its `arity` children are rendered: pop them and render this node.
-    Assemble(&'a F::Type<Box<Free<F, A>>>, usize),
-}
-
-/// Render `root` bottom-up, so no stack frame is spent per level of spine.
-fn render_cells<F, A>(root: &Free<F, A>, alternate: bool) -> String
+/// The shape of one cell, for the shared streaming renderer: `Pure(a)` has no
+/// recursion slot, `Suspend(fa)` has the witness's own contents.
+impl<F, A> super::DebugNode for Free<F, A>
 where
     F: DebugFunctor + Container,
     A: fmt::Debug,
 {
-    let mut work: Vec<RenderStep<'_, F, A>> = vec![RenderStep::Visit(root)];
-    let mut done: Vec<String> = Vec::new();
-    while let Some(step) = work.pop() {
-        match step {
-            RenderStep::Visit(node) => match node.as_view() {
-                FreeView::Pure(a) => done.push(render(alternate, &DebugTuple("Pure", a))),
-                FreeView::Suspend(fa) => {
-                    let children = F::contents(fa);
-                    work.push(RenderStep::Assemble(fa, children.len()));
-                    for child in children.into_iter().rev() {
-                        work.push(RenderStep::Visit(child.as_ref()));
-                    }
-                }
-            },
-            RenderStep::Assemble(fa, arity) => {
-                let rendered: Vec<Rendered> = done
-                    .split_off(done.len() - arity)
-                    .into_iter()
-                    .map(Rendered)
-                    .collect();
-                let slots: Vec<&dyn fmt::Debug> =
-                    rendered.iter().map(|r| r as &dyn fmt::Debug).collect();
-                done.push(render(
-                    alternate,
-                    &DebugTuple("Suspend", &super::FmtShape::<F, _>(fa, &slots)),
-                ));
-            }
+    fn slots(&self) -> Vec<&Self> {
+        match self.as_view() {
+            FreeView::Pure(_) => Vec::new(),
+            FreeView::Suspend(fa) => F::contents(fa).into_iter().map(|c| c.as_ref()).collect(),
         }
     }
-    done.pop()
-        .expect("invariant: the walk pushes exactly one rendering for the root")
+
+    fn fmt_cell(&self, f: &mut fmt::Formatter<'_>, holes: &[&dyn fmt::Debug]) -> fmt::Result {
+        match self.as_view() {
+            FreeView::Pure(a) => f.debug_tuple("Pure").field(a).finish(),
+            FreeView::Suspend(fa) => f
+                .debug_tuple("Suspend")
+                .field(&super::FmtShape::<F, _>(fa, holes))
+                .finish(),
+        }
+    }
 }
 
 /// The [`HKT`] witness for the free monad over the operation functor `F`.
@@ -438,16 +418,9 @@ mod tests {
         );
     }
 
-    /// The `Option` cell must not cost a word: `FreeView`'s discriminant has
-    /// spare values, so the niche optimisation makes the wrapper free. A
-    /// regression here would mean the private-representation reshape (#200)
-    /// silently widened every carrier value.
-    #[test]
-    fn the_option_cell_is_niche_optimised() {
-        assert_eq!(
-            core::mem::size_of::<Free<OptionWitness, u64>>(),
-            core::mem::size_of::<FreeView<OptionWitness, u64>>(),
-            "wrapping the cell in Option must be free"
-        );
-    }
+    // The cell's size is pinned for **every** carrier by
+    // `crate::free_monad::tests::the_private_cell_costs_at_most_one_word`,
+    // which supersedes the single-instantiation check that used to live here:
+    // `Free<OptionWitness, u64>` is the one place the `Option` wrapper is free,
+    // so asserting only it passed while two carriers were 50 % wider.
 }

@@ -27,11 +27,12 @@
 //!    helpers call, accepts a carrier at `MAX_TREE_DEPTH` and rejects one cell
 //!    deeper. Engineering, not a CDL law.
 //! 7. `deep_spine_survives_every_carrier_operation` — the #200 regression pin.
-//!    A `common::DEEP`-deep caterpillar (4 096, sixteen times the old ceiling
-//!    and ~2× what a 2 MiB test thread can recurse through) is constructed,
-//!    embedded, projected back, folded, cloned, compared, formatted and
-//!    dropped. Every one of those aborted before the carriers' walks became
-//!    iterative.
+//!    A `common::DEEP`-deep caterpillar (**32 768** — 128× the retired
+//!    `MAX_TREE_DEPTH`, 4× the deepest spine a recursive walk survived on a
+//!    2 MiB test thread and 2× the shallowest that aborted; see `DEEP`'s own
+//!    docs for the bisected table) is constructed, embedded, projected back,
+//!    folded, cloned, compared, formatted and dropped, on all three carriers.
+//!    Every one of those aborted before the carriers' walks became iterative.
 
 #![allow(clippy::float_cmp, clippy::single_match_else)]
 
@@ -206,8 +207,12 @@ fn opt_in_depth_guard_boundary() {
 /// A stack overflow aborts the whole harness rather than failing an assertion,
 /// so the *failing* direction shows up as "test binary died / SIGSEGV", never a
 /// red assertion. The *passing* direction therefore asserts real values —
-/// depths, fold results, structural equality, formatted length — rather than
-/// merely reaching the end of the function.
+/// depths, node counts, fold results, structural equality, rendered text —
+/// rather than merely reaching the end of the function. In particular the
+/// `Cofree` half asserts the **whole grown spine** (its depth and node count,
+/// a full-depth `==` against an identically grown twin, an `!=` whose only
+/// witness is at the bottom, and a `{:?}` node count): an `unfold` that
+/// stopped after one level would satisfy a root-shaped check.
 #[test]
 fn deep_spine_survives_every_carrier_operation() {
     // Construction, and the two depth measures (already iterative pre-#200).
@@ -267,27 +272,93 @@ fn deep_spine_survives_every_carrier_operation() {
 
     // `Cofree::unfold` — the anamorphism, recursive before #200, and the one
     // carrier entry that never had a guard in front of it at all. Grow the same
-    // caterpillar shape on the `Cofree` side, then let it drop.
-    let grown: Cofree<TreeEndo<u8>, usize> = Cofree::unfold(DEEP, &|n: usize| {
+    // caterpillar shape on the `Cofree` side.
+    //
+    // Asserted on the *whole* spine, not on the root: an `unfold` that stopped
+    // after one level would satisfy any shallow shape check.
+    let labelled: Cofree<TreeEndo<u8>, usize> = Cofree::unfold(DEEP, &|n: usize| {
         if n <= 1 {
             (n, Either::Left(0_u8))
         } else {
             (n, Either::Right((n - 1, 1)))
         }
     });
-    assert_eq!(*grown.head(), DEEP);
+    assert_eq!(*labelled.head(), DEEP);
     assert_eq!(
-        TreeEndo::<u8>::contents(grown.tail()).len(),
+        TreeEndo::<u8>::contents(labelled.tail()).len(),
         2,
         "the root of the grown spine is a node"
+    );
+    assert_eq!(
+        cofree_shape(&labelled),
+        (DEEP, 2 * DEEP - 1),
+        "unfold grew the full caterpillar: DEEP levels, 2·DEEP−1 nodes"
+    );
+
+    // `Cofree`'s own `==` and `{:?}` at depth — recursive through the witness
+    // before #200, and untested at depth until now. A constant label makes the
+    // comparison walk the entire spine instead of stopping at the root.
+    let flat = |n: usize| {
+        if n == 0 {
+            (0_usize, Either::Left(0_u8))
+        } else {
+            (0_usize, Either::Right((n - 1, 0)))
+        }
+    };
+    let grown: Cofree<TreeEndo<u8>, usize> = Cofree::unfold(DEEP, &flat);
+    assert_eq!(cofree_shape(&grown), (DEEP + 1, 2 * DEEP + 1));
+    // `assert!` rather than `assert_eq!`/`assert_ne!`: a failure here would
+    // otherwise `Debug`-dump ~1.5 MB per side, which tells a reader nothing.
+    assert!(
+        grown == Cofree::unfold(DEEP, &flat),
+        "two identically grown deep spines must compare equal — a full-depth `==` walk"
+    );
+    assert!(
+        grown != Cofree::unfold(DEEP - 1, &flat),
+        "…and unequal to one that bottoms out a level sooner: every label agrees, \
+         so the mismatch is only reachable at the bottom"
+    );
+    let shown = format!("{grown:?}");
+    assert_eq!(
+        shown.matches("Cofree {").count(),
+        2 * DEEP + 1,
+        "`{{:?}}` renders every node of the deep spine"
+    );
+    assert!(
+        shown.starts_with("Cofree { head: 0, tail: Right((Cofree {"),
+        "unexpected head of the rendering: {:?}",
+        &shown[..64.min(shown.len())]
+    );
+    assert!(
+        shown.ends_with("Cofree { head: 0, tail: Left(0) })) }"),
+        "unexpected tail of the rendering: {:?}",
+        &shown[shown.len().saturating_sub(64)..]
     );
 
     // Finally: drop. Each of these was a recursive `Box`-chain drop before #200
     // — the residual no pre-flight guard could reach, because rejecting a
     // by-value input did not save that input's own drop.
+    drop(labelled);
     drop(grown);
     drop(decoded);
     drop(tree);
+}
+
+/// The structural `(depth, node count)` of a `Cofree<TreeEndo<u8>, _>` spine.
+///
+/// Iterative, like every fixture helper here: a recursive measure would abort
+/// on exactly the values it exists to measure.
+fn cofree_shape<A>(root: &Cofree<TreeEndo<u8>, A>) -> (usize, usize) {
+    let mut work = vec![(root, 1_usize)];
+    let (mut deepest, mut nodes) = (0_usize, 0_usize);
+    while let Some((node, depth)) = work.pop() {
+        deepest = deepest.max(depth);
+        nodes += 1;
+        for child in TreeEndo::<u8>::contents(node.tail()) {
+            work.push((child.as_ref(), depth + 1));
+        }
+    }
+    (deepest, nodes)
 }
 
 /// A trivial endofunctor with `Type<X> = ()` — collapses to "no recursive

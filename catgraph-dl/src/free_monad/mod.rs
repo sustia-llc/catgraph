@@ -22,7 +22,17 @@
 //!
 //! Note the **box placement**: the recursion indirection sits *inside* the
 //! functor hole (`Suspend(F::Type<Box<Free<F, A>>>)`, `tail : F::Type<Box<Cofree<
-//! F, A>>>`), so a carrier value costs exactly one `Box` per recursive hole.
+//! F, A>>>`), so a **carrier** value costs exactly one `Box` per recursive hole.
+//!
+//! That property is stated of [`Free`] and [`Cofree`] and holds for them only.
+//! The concrete tree carrier [`BinaryTree`](tree_endo::BinaryTree) deliberately
+//! breaks it: its cell's node variant boxes the subtree **pair**, so it costs
+//! one `Box` per internal *node* — half the allocations, and a view whose spare
+//! tag values make the private cell free rather than a word wide. It can do that
+//! because it owns a concrete two-slot shape; `Free`/`Cofree` cannot, because
+//! the slots live inside an arbitrary witness's `F::Type<…>`. The asymmetry, and
+//! why [`Cofree`] has no analogous move at all, are written up on
+//! [`tree_endo::TreeView`] and [`Cofree`] respectively.
 //!
 //! Specialisations of interest (CDL Example B.19, B.20):
 //! - `FreeMnd(1 + A × −)` → `List_{−+1}(A)` (lists of `A` with last
@@ -143,7 +153,8 @@ pub use free::{Free, FreeView, FreeWitness};
 // bijection helpers below are written against.
 pub use crate::endofunctor::{EndoWitness, Functor, HKT};
 
-use core::fmt;
+use core::cell::RefCell;
+use core::fmt::{self, Write as _};
 
 use crate::endofunctor::DebugFunctor;
 
@@ -151,62 +162,33 @@ use crate::endofunctor::DebugFunctor;
 // Shared `Debug` scaffolding for the iterative carrier renderings (#200)
 // ---------------------------------------------------------------------------
 //
-// The carriers render a spine **bottom-up**: each cell's text is built from its
-// children's already-built text, so no stack frame is spent per level. That
-// inverts the usual `Debug` flow — the witness is handed pre-rendered contents
-// rather than values to recurse into — and these three shims are what make the
-// inversion reuse `core::fmt`'s own machinery, so `{:?}` and `{:#?}` stay
-// byte-identical to the derive-shaped output they replaced. In particular a
-// pre-rendered multi-line string written through `debug_tuple`'s alternate-mode
-// pad adapter is re-indented line by line, exactly as a nested `{:#?}` would be.
-
-/// Writes an already-rendered fragment verbatim, so it can be handed to
-/// `debug_tuple`/`debug_struct` as a field.
-pub(crate) struct Rendered(pub(crate) String);
-
-impl fmt::Debug for Rendered {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-/// Renders `value` to a `String`, preserving the caller's alternate flag.
-pub(crate) fn render(alternate: bool, value: &dyn fmt::Debug) -> String {
-    if alternate {
-        format!("{value:#?}")
-    } else {
-        format!("{value:?}")
-    }
-}
-
-/// A one-field tuple-struct rendering: `Name(field)`, and the pretty form under
-/// `{:#?}`. Exists so the carriers get `core::fmt`'s exact layout without
-/// needing a `Formatter` of their own.
-pub(crate) struct DebugTuple<'a, T: ?Sized>(pub(crate) &'static str, pub(crate) &'a T);
-
-impl<T: fmt::Debug + ?Sized> fmt::Debug for DebugTuple<'_, T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple(self.0).field(&self.1).finish()
-    }
-}
-
-/// An `n`-field tuple-struct rendering: `Name(f0, f1, …)`, and the pretty form
-/// under `{:#?}`. The `n`-ary sibling of [`DebugTuple`], for a carrier whose
-/// fields are already erased to `&dyn Debug`.
-pub(crate) struct DebugFields<'a>(pub(crate) &'static str, pub(crate) &'a [&'a dyn fmt::Debug]);
-
-impl fmt::Debug for DebugFields<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut tuple = f.debug_tuple(self.0);
-        for field in self.1 {
-            tuple.field(field);
-        }
-        tuple.finish()
-    }
-}
+// A carrier renders **top-down and streaming**: each cell's own shape is laid
+// out once, into a small scratch buffer, with its recursion slots stood in for
+// by probes; the segments between the probes are then written straight to the
+// caller's `Formatter` while the children are visited on an explicit stack. No
+// child's text is ever copied into a parent's, so the cost is the size of the
+// output and nothing more, and no stack frame is spent per level of spine.
+//
+// The first version of this (#200 as merged) rendered **bottom-up** instead —
+// `format!` per cell, each parent copying its children's finished text — which
+// is Θ(Σ_v |subtree text|), quadratic in the depth of a spine even in compact
+// mode: a 32 768-deep `BinaryTree<u8>` took ~2 s to print (now 0.02 s). The
+// rewrite keeps the output byte-identical — pinned by `debug_reproduces_*` and,
+// more sharply, by `every_carrier_debug_is_byte_identical_to_a_derived_twin`,
+// which diffs each carrier against a plain `#[derive(Debug)]` type of the same
+// shape — and drops the cost to the linear one the docs always claimed.
+//
+// Byte-identity comes from never re-implementing `core::fmt`'s layout: a
+// cell's shape is still rendered by `debug_tuple`/`debug_struct`, alternate
+// flag and all. The one thing this module *does* reproduce is `PadAdapter`'s
+// per-line indentation, because a child's text is written to the real
+// formatter rather than through the parent's builder — see [`Indenter`]. Under
+// `{:#?}` the indentation is itself Θ(depth) per line, so the pretty output of
+// a caterpillar is inherently quadratic *in characters*; writing it is linear
+// in that output.
 
 /// Formats an `F::Type<T>` through the witness's `fmt_shape`, with the
-/// recursion slots supplied pre-rendered — the seam that keeps the carrier's
+/// recursion slots supplied as probes — the seam that keeps the carrier's
 /// `Debug` off the stack, and that avoids the projection bound whose E0275
 /// hazard [`crate::endofunctor::EqFunctor`] documents.
 pub(crate) struct FmtShape<'a, F: HKT, T>(
@@ -220,5 +202,623 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         F::fmt_shape(self.0, f, self.1)
+    }
+}
+
+/// One node of a carrier, as the shared renderer sees it: a shape that can be
+/// laid out on its own, plus the recursion slots that shape leaves holes for.
+///
+/// Implemented by [`Free`], [`Cofree`] and
+/// [`BinaryTree`](tree_endo::BinaryTree); [`write_debug`] is the whole reason
+/// it exists.
+pub(crate) trait DebugNode {
+    /// This node's recursion slots, in position order — the same order
+    /// [`fmt_cell`](Self::fmt_cell) consumes its `holes`.
+    fn slots(&self) -> Vec<&Self>;
+
+    /// Lay out this node's own shape, writing `holes[i]` wherever slot `i`'s
+    /// rendering belongs. `holes` has one entry per [`slots`](Self::slots)
+    /// entry.
+    fn fmt_cell(&self, f: &mut fmt::Formatter<'_>, holes: &[&dyn fmt::Debug]) -> fmt::Result;
+}
+
+/// [`DebugNode::fmt_cell`] as a `Debug` value, so it can be laid out by
+/// `write!` and land in [`Capture`]'s buffer.
+struct Cell<'a, N: ?Sized>(&'a N, &'a [&'a dyn fmt::Debug]);
+
+impl<N: DebugNode + ?Sized> fmt::Debug for Cell<'_, N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt_cell(f, self.1)
+    }
+}
+
+/// Where one cell's shape is laid out, and where its probes record themselves.
+///
+/// Interior mutability is forced by `Debug::fmt(&self, …)`: a [`Probe`] has to
+/// read the buffer it is being written into. The crate is
+/// `#![forbid(unsafe_code)]`, so that is a [`RefCell`], never a raw pointer.
+#[derive(Default)]
+struct Capture {
+    text: RefCell<String>,
+    holes: RefCell<Vec<Hole>>,
+}
+
+/// Where one recursion slot's rendering goes, in the enclosing cell's text.
+///
+/// The text up to `cut` is written before the child and the text from `resume`
+/// on is written after it; the bytes between are the probe's own tracer and are
+/// dropped. `indent` is the per-line padding `core::fmt`'s pretty builders would
+/// have added to the child's text, recovered by measurement rather than
+/// re-derived.
+#[derive(Clone, Copy)]
+struct Hole {
+    slot: usize,
+    cut: usize,
+    resume: usize,
+    indent: usize,
+}
+
+/// The sink a cell's shape is laid out into.
+struct Sink<'a>(&'a Capture);
+
+impl fmt::Write for Sink<'_> {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.0.text.borrow_mut().push_str(s);
+        Ok(())
+    }
+}
+
+/// The single byte a [`Probe`] leaves behind to make the enclosing builder's
+/// indentation observable. It is always cut back out; it never reaches output.
+const TRACER: &str = "\0";
+
+/// Stands in for one recursion slot while its parent's shape is laid out.
+///
+/// Writing `"\n" + TRACER` — rather than nothing — is what makes the
+/// surrounding pad adapters *show* their indentation: whatever they insert
+/// between the newline and the tracer is exactly what they would insert before
+/// every line of the real child. Measuring it beats re-deriving it, since the
+/// nesting depth is the witness's business, not the carrier's.
+struct Probe<'a> {
+    slot: usize,
+    capture: &'a Capture,
+}
+
+impl fmt::Debug for Probe<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let start = self.capture.text.borrow().len();
+        f.write_str("\n")?;
+        let after_break = self.capture.text.borrow().len();
+        f.write_str(TRACER)?;
+        let resume = self.capture.text.borrow().len();
+
+        // Both writes have to have landed in *this* buffer for the offsets to
+        // mean anything. They do whenever `fmt_shape` writes the content
+        // position into the `f` it was handed, which is its contract; a witness
+        // that renders one into a buffer of its own instead leaves the buffer
+        // untouched here, and the hole is dropped rather than spliced at a
+        // meaningless offset.
+        if after_break <= start || resume <= after_break {
+            return Ok(());
+        }
+
+        self.capture.holes.borrow_mut().push(Hole {
+            slot: self.slot,
+            // The newline just written is the last byte before `after_break`,
+            // and the child's text starts exactly where it sits.
+            cut: after_break - 1,
+            resume,
+            // …with the padding that followed it repeated on every later line.
+            indent: resume - after_break - TRACER.len(),
+        });
+        Ok(())
+    }
+}
+
+/// One node's laid-out shape plus the slots still to be spliced into it.
+struct Frame<'a, N: ?Sized> {
+    text: String,
+    holes: Vec<Hole>,
+    slots: Vec<&'a N>,
+    next: usize,
+    cursor: usize,
+    indent: usize,
+}
+
+/// Lay out one node's shape and hand back the frame that streams it.
+fn frame<'a, N>(node: &'a N, indent: usize, alternate: bool) -> Result<Frame<'a, N>, fmt::Error>
+where
+    N: DebugNode + ?Sized,
+{
+    let slots = node.slots();
+    let capture = Capture::default();
+    let probes: Vec<Probe<'_>> = (0..slots.len())
+        .map(|slot| Probe {
+            slot,
+            capture: &capture,
+        })
+        .collect();
+    let holes: Vec<&dyn fmt::Debug> = probes.iter().map(|p| p as &dyn fmt::Debug).collect();
+
+    let cell = Cell(node, &holes);
+    let mut sink = Sink(&capture);
+    if alternate {
+        write!(sink, "{cell:#?}")?;
+    } else {
+        write!(sink, "{cell:?}")?;
+    }
+
+    Ok(Frame {
+        text: capture.text.take(),
+        holes: capture.holes.take(),
+        slots,
+        next: 0,
+        cursor: 0,
+        indent,
+    })
+}
+
+/// Reproduces `core::fmt`'s `PadAdapter`: `indent` spaces before the content of
+/// every line after a newline, and nothing before the first.
+///
+/// A child's text goes straight to the caller's formatter instead of through
+/// its parent's `debug_tuple` builder, so the padding those nested builders
+/// would have applied is re-applied here — additively, exactly as nested pad
+/// adapters compose.
+struct Indenter<'a, 'b> {
+    out: &'a mut fmt::Formatter<'b>,
+    on_newline: bool,
+}
+
+impl Indenter<'_, '_> {
+    fn write(&mut self, indent: usize, s: &str) -> fmt::Result {
+        for line in s.split_inclusive('\n') {
+            if self.on_newline {
+                self.pad(indent)?;
+            }
+            self.on_newline = line.ends_with('\n');
+            self.out.write_str(line)?;
+        }
+        Ok(())
+    }
+
+    fn pad(&mut self, mut spaces: usize) -> fmt::Result {
+        const CHUNK: &str = "                                                                ";
+        while spaces > 0 {
+            let take = spaces.min(CHUNK.len());
+            self.out.write_str(&CHUNK[..take])?;
+            spaces -= take;
+        }
+        Ok(())
+    }
+}
+
+/// What to do after writing one segment of a frame.
+enum Step<'a, N: ?Sized> {
+    /// Descend into a slot, at the given inherited indentation.
+    Descend(&'a N, usize),
+    /// The shape declined to write this slot; stay on the frame.
+    Stay,
+    /// The frame is fully written.
+    Done,
+}
+
+/// Write `root`'s `Debug` rendering to `f`, streaming and iteratively.
+///
+/// Every byte of the output is written exactly once, so the cost is Θ(output)
+/// — and no stack frame is spent per level, so no spine is too deep. The
+/// explicit stack holds one small scratch buffer per *ancestor*, not one per
+/// node.
+pub(crate) fn write_debug<N>(root: &N, f: &mut fmt::Formatter<'_>) -> fmt::Result
+where
+    N: DebugNode + ?Sized,
+{
+    let alternate = f.alternate();
+    let mut out = Indenter {
+        out: f,
+        on_newline: false,
+    };
+    let mut stack: Vec<Frame<'_, N>> = vec![frame(root, 0, alternate)?];
+
+    while let Some(top) = stack.last_mut() {
+        let step = match top.holes.get(top.next).copied() {
+            Some(hole) => {
+                out.write(top.indent, &top.text[top.cursor..hole.cut])?;
+                top.cursor = hole.resume;
+                top.next += 1;
+                match top.slots.get(hole.slot) {
+                    Some(&child) => Step::Descend(child, top.indent + hole.indent),
+                    None => Step::Stay,
+                }
+            }
+            None => {
+                out.write(top.indent, &top.text[top.cursor..])?;
+                Step::Done
+            }
+        };
+        match step {
+            Step::Descend(child, indent) => stack.push(frame(child, indent, alternate)?),
+            Step::Stay => (),
+            Step::Done => {
+                stack.pop();
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Cofree, Free, FreeView};
+    use crate::endofunctor::{Either, OptionWitness};
+    use crate::free_monad::tree_endo::{BinaryTree, TreeEndo, TreeView};
+    use core::fmt;
+    use core::fmt::Write as _;
+
+    /// Plain `#[derive(Debug)]` twins of the three carriers, used as the
+    /// **oracle** for their hand-written renderings.
+    ///
+    /// The carriers cannot derive `Debug` (the GAT projection overflows the
+    /// trait solver — see `EqFunctor`), and since #200 they do not even walk
+    /// recursively, so "byte-identical to the derive" had been pinned only
+    /// against hand-typed strings at two or three levels. These types put the
+    /// real derive back within reach: same variant/field names, same nesting,
+    /// so `format!` on a carrier and on its twin must agree character for
+    /// character at any depth, in both `{:?}` and `{:#?}`.
+    ///
+    /// Each twin is named for the carrier it mirrors, because a derived
+    /// `Debug` prints the type's own name.
+    mod mirror {
+        // Every field here is read by the derived `Debug` and nothing else,
+        // which dead-code analysis deliberately does not count.
+        #![allow(dead_code)]
+
+        use crate::endofunctor::Either;
+
+        #[derive(Debug)]
+        pub enum BinaryTree {
+            Leaf(u8),
+            Node(Box<BinaryTree>, Box<BinaryTree>),
+        }
+
+        #[derive(Debug)]
+        pub enum Free {
+            Pure(u8),
+            Suspend(Either<u8, (Box<Free>, Box<Free>)>),
+        }
+
+        pub mod stream {
+            #[derive(Debug)]
+            pub struct Cofree {
+                pub head: u32,
+                pub tail: Option<Box<Cofree>>,
+            }
+        }
+
+        pub mod branching {
+            use crate::endofunctor::Either;
+
+            #[derive(Debug)]
+            pub struct Cofree {
+                pub head: u32,
+                pub tail: Either<u8, (Box<Cofree>, Box<Cofree>)>,
+            }
+        }
+    }
+
+    /// The shape every twin pair below is built to: a left caterpillar that
+    /// branches on every third level, so the layout is exercised with nesting
+    /// on both sides and at several depths at once. Payloads are the level
+    /// number, so a mis-ordered slot shows up as a wrong number rather than a
+    /// coincidence.
+    const SHAPE: u8 = 12;
+
+    fn tree_pair(depth: u8) -> (BinaryTree<u8>, mirror::BinaryTree) {
+        if depth == 0 {
+            return (BinaryTree::leaf(0), mirror::BinaryTree::Leaf(0));
+        }
+        let (left, left_m) = tree_pair(depth - 1);
+        let (right, right_m) = if depth.is_multiple_of(3) {
+            tree_pair(depth - 1)
+        } else {
+            (BinaryTree::leaf(depth), mirror::BinaryTree::Leaf(depth))
+        };
+        (
+            BinaryTree::node(left, right),
+            mirror::BinaryTree::Node(Box::new(left_m), Box::new(right_m)),
+        )
+    }
+
+    fn free_pair(depth: u8) -> (Free<TreeEndo<u8>, u8>, mirror::Free) {
+        if depth == 0 {
+            // Both leaf arms: `Pure` (the `Z` slot) and `Suspend(Left(_))`.
+            return (Free::pure(0), mirror::Free::Pure(0));
+        }
+        if depth == 1 {
+            return (
+                Free::suspend(Either::Left(1)),
+                mirror::Free::Suspend(Either::Left(1)),
+            );
+        }
+        let (left, left_m) = free_pair(depth - 1);
+        let (right, right_m) = if depth.is_multiple_of(3) {
+            free_pair(depth - 2)
+        } else {
+            (
+                Free::suspend(Either::Left(depth)),
+                mirror::Free::Suspend(Either::Left(depth)),
+            )
+        };
+        (
+            Free::suspend(Either::Right((Box::new(left), Box::new(right)))),
+            mirror::Free::Suspend(Either::Right((Box::new(left_m), Box::new(right_m)))),
+        )
+    }
+
+    fn stream_pair(len: u32) -> (Cofree<OptionWitness, u32>, mirror::stream::Cofree) {
+        let mut carrier = Cofree::new(0, None);
+        let mut twin = mirror::stream::Cofree {
+            head: 0,
+            tail: None,
+        };
+        for step in 1..=len {
+            carrier = Cofree::new(step, Some(Box::new(carrier)));
+            twin = mirror::stream::Cofree {
+                head: step,
+                tail: Some(Box::new(twin)),
+            };
+        }
+        (carrier, twin)
+    }
+
+    fn branching_pair(depth: u8) -> (Cofree<TreeEndo<u8>, u32>, mirror::branching::Cofree) {
+        if depth == 0 {
+            return (
+                Cofree::new(0, Either::Left(0)),
+                mirror::branching::Cofree {
+                    head: 0,
+                    tail: Either::Left(0),
+                },
+            );
+        }
+        let (left, left_m) = branching_pair(depth - 1);
+        let (right, right_m) = if depth.is_multiple_of(3) {
+            branching_pair(depth - 1)
+        } else {
+            (
+                Cofree::new(u32::from(depth), Either::Left(depth)),
+                mirror::branching::Cofree {
+                    head: u32::from(depth),
+                    tail: Either::Left(depth),
+                },
+            )
+        };
+        (
+            Cofree::new(
+                u32::from(depth),
+                Either::Right((Box::new(left), Box::new(right))),
+            ),
+            mirror::branching::Cofree {
+                head: u32::from(depth),
+                tail: Either::Right((Box::new(left_m), Box::new(right_m))),
+            },
+        )
+    }
+
+    /// Every carrier's `Debug` must be **character-for-character** what
+    /// `#[derive(Debug)]` produces for the same shape — in both `{:?}` and
+    /// `{:#?}`, at a depth where the pretty form's indentation has compounded
+    /// many times over.
+    ///
+    /// This is the guard on the rendering itself. The renderer lays each cell
+    /// out into a scratch buffer with its recursion slots stood in for by
+    /// probes, then streams the segments to the caller's formatter with the
+    /// indentation `core::fmt`'s pad adapters would have applied — so *every*
+    /// part of that reconstruction (where a segment is cut, how much padding a
+    /// hole inherits, when a newline forces padding on the next line) is a
+    /// place a byte could go missing. The derive is the only oracle that
+    /// notices.
+    #[test]
+    fn every_carrier_debug_is_byte_identical_to_a_derived_twin() {
+        let (tree, tree_m) = tree_pair(SHAPE);
+        assert_eq!(
+            format!("{tree:?}"),
+            format!("{tree_m:?}"),
+            "BinaryTree {{:?}}"
+        );
+        assert_eq!(
+            format!("{tree:#?}"),
+            format!("{tree_m:#?}"),
+            "BinaryTree {{:#?}}"
+        );
+
+        let (free, free_m) = free_pair(SHAPE);
+        assert_eq!(format!("{free:?}"), format!("{free_m:?}"), "Free {{:?}}");
+        assert_eq!(format!("{free:#?}"), format!("{free_m:#?}"), "Free {{:#?}}");
+
+        let (stream, stream_m) = stream_pair(u32::from(SHAPE) * 4);
+        assert_eq!(
+            format!("{stream:?}"),
+            format!("{stream_m:?}"),
+            "Cofree over OptionWitness {{:?}}"
+        );
+        assert_eq!(
+            format!("{stream:#?}"),
+            format!("{stream_m:#?}"),
+            "Cofree over OptionWitness {{:#?}}"
+        );
+
+        let (branching, branching_m) = branching_pair(SHAPE);
+        assert_eq!(
+            format!("{branching:?}"),
+            format!("{branching_m:?}"),
+            "Cofree over TreeEndo {{:?}}"
+        );
+        assert_eq!(
+            format!("{branching:#?}"),
+            format!("{branching_m:#?}"),
+            "Cofree over TreeEndo {{:#?}}"
+        );
+
+        // The pretty forms really are the compounding case, not a rerun of the
+        // compact one: at this depth they are many times longer and multi-line.
+        assert!(format!("{tree:#?}").len() > 8 * format!("{tree:?}").len());
+        assert!(format!("{branching:#?}").lines().count() > 100);
+    }
+
+    /// A payload whose `Debug` legitimately fails.
+    struct Grumpy;
+
+    impl fmt::Debug for Grumpy {
+        fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            Err(fmt::Error)
+        }
+    }
+
+    /// A failing inner `Debug` must **propagate** out of the carrier, not
+    /// panic.
+    ///
+    /// [`DebugFunctor::fmt_shape`](crate::endofunctor::DebugFunctor::fmt_shape)
+    /// documents returning "a formatting error rather than a panic", and a
+    /// payload `A` whose own `Debug` returns `Err` used to propagate out of the
+    /// derive. Rendering a cell with `format!` broke both — `format!` panics
+    /// when a formatting impl returns `Err`. The streaming renderer lays cells
+    /// out with `write!` into a `String` sink and propagates instead.
+    #[test]
+    fn a_failing_inner_debug_propagates_rather_than_panicking() {
+        let mut sink = String::new();
+
+        let tree = BinaryTree::node(BinaryTree::leaf(Grumpy), BinaryTree::leaf(Grumpy));
+        assert!(
+            write!(sink, "{tree:?}").is_err(),
+            "BinaryTree must surface the payload's fmt::Error"
+        );
+
+        let free: Free<TreeEndo<Grumpy>, u8> = Free::suspend(Either::Right((
+            Box::new(Free::suspend(Either::Left(Grumpy))),
+            Box::new(Free::pure(1)),
+        )));
+        assert!(
+            write!(sink, "{free:?}").is_err(),
+            "Free must surface the witness label's fmt::Error"
+        );
+
+        let cofree: Cofree<OptionWitness, Grumpy> =
+            Cofree::new(Grumpy, Some(Box::new(Cofree::new(Grumpy, None))));
+        assert!(
+            write!(sink, "{cofree:?}").is_err(),
+            "Cofree must surface the head's fmt::Error"
+        );
+    }
+
+    /// The private cell must never cost more than **one machine word**, and for
+    /// two of the three carriers not even that.
+    ///
+    /// The #200 reshape put every carrier's shape behind an `Option`-wrapped
+    /// private cell so `Drop` and the by-value accessors can *take* it without
+    /// `unsafe`. Whether that wrapper is free depends on whether the cell has a
+    /// spare discriminant to niche into:
+    ///
+    /// - **[`Free`] pays nothing**, at either witness. [`FreeView`]'s `Suspend`
+    ///   payload is the opaque projection `F::Type<…>`, so its discriminant is a
+    ///   real tag with values to spare, and always was — nothing about it was
+    ///   widened for the `Option`.
+    /// - **[`BinaryTree`] pays nothing either, since the boxed-pair reshape.**
+    ///   While `TreeView::Node` held *two* `Box`es the compiler niched the
+    ///   view's discriminant into the first one's null, leaving no spare value,
+    ///   and the wrapper cost a full word (`BinaryTree<u8>` was 24 over a
+    ///   16-byte view). `Node` now holds one `Box<(BinaryTree, BinaryTree)>`, so
+    ///   the view carries a real tag byte with 254 spare discriminants and the
+    ///   `Option` niches straight into it: carrier and view are the same size.
+    ///   The same change halves the tree's allocation count — see [`TreeView`].
+    /// - **[`Cofree`] pays exactly one word**, at every instantiation, and that
+    ///   is accepted rather than outstanding. `CofreeCell` is a *struct*: it has
+    ///   no discriminant of its own, and its only candidate niche lives inside
+    ///   `F::Type<…>`, the witness's type, which `Cofree` does not own. The full
+    ///   argument — including why `mem::replace` cannot help either — is on
+    ///   [`Cofree`] itself.
+    ///
+    /// So the numbers below are the floor for each carrier, not an accident, and
+    /// they are pinned exactly: an earlier version of this test asserted only
+    /// the one instantiation where the wrapper happens to be free, and so passed
+    /// while two carriers were 50 % wider.
+    #[test]
+    fn the_private_cell_costs_at_most_one_word() {
+        use super::cofree::CofreeCell;
+        use core::mem::size_of;
+
+        // `Free`: the wrapper is free at every instantiation — the property the
+        // original test checked, kept and widened.
+        assert_eq!(
+            size_of::<Free<OptionWitness, u64>>(),
+            size_of::<FreeView<OptionWitness, u64>>(),
+            "Free's Option cell must niche into FreeView's tag"
+        );
+        assert_eq!(
+            size_of::<Free<TreeEndo<u8>, u8>>(),
+            size_of::<FreeView<TreeEndo<u8>, u8>>(),
+            "…at the branching witness too"
+        );
+
+        // `BinaryTree`: free as well, since `TreeView::Node` became one boxed
+        // pair. A regression to the two-`Box` shape re-spends the view's niche
+        // and puts the word back.
+        assert_eq!(
+            size_of::<BinaryTree<u8>>(),
+            size_of::<TreeView<u8>>(),
+            "BinaryTree's Option cell must niche into TreeView's tag"
+        );
+        assert_eq!(
+            size_of::<BinaryTree<f64>>(),
+            size_of::<TreeView<f64>>(),
+            "…for a wider payload too"
+        );
+
+        // `Cofree`: exactly one word over its cell — no more, and no less to be
+        // had without a mechanism the carrier does not have (see `Cofree`).
+        assert_eq!(
+            size_of::<Cofree<OptionWitness, u32>>(),
+            size_of::<CofreeCell<OptionWitness, u32>>() + size_of::<usize>(),
+            "Cofree costs exactly one word over its cell"
+        );
+        assert_eq!(
+            size_of::<Cofree<OptionWitness, f64>>(),
+            size_of::<CofreeCell<OptionWitness, f64>>() + size_of::<usize>(),
+            "…for a wider label too"
+        );
+        assert_eq!(
+            size_of::<Cofree<TreeEndo<u8>, f64>>(),
+            size_of::<CofreeCell<TreeEndo<u8>, f64>>() + size_of::<usize>(),
+            "…and at the branching witness"
+        );
+        assert_eq!(
+            size_of::<Cofree<TreeEndo<u8>, usize>>(),
+            size_of::<CofreeCell<TreeEndo<u8>, usize>>() + size_of::<usize>(),
+            "…there too, for a wider label"
+        );
+
+        // The exact 64-bit layout of every carrier the reshape touched. A
+        // 32-bit host has a different (still at-most-one-word) answer, so the
+        // byte counts are gated while the relations above are not.
+        #[cfg(target_pointer_width = "64")]
+        {
+            assert_eq!(size_of::<Free<OptionWitness, u64>>(), 16);
+            assert_eq!(size_of::<FreeView<OptionWitness, u64>>(), 16);
+            assert_eq!(size_of::<Free<TreeEndo<u8>, u8>>(), 24);
+            assert_eq!(size_of::<FreeView<TreeEndo<u8>, u8>>(), 24);
+            // 16, not the 24 the two-`Box` `TreeView::Node` measured.
+            assert_eq!(size_of::<BinaryTree<u8>>(), 16);
+            assert_eq!(size_of::<TreeView<u8>>(), 16);
+            assert_eq!(size_of::<BinaryTree<f64>>(), 16);
+            assert_eq!(size_of::<TreeView<f64>>(), 16);
+            assert_eq!(size_of::<Cofree<OptionWitness, u32>>(), 24);
+            assert_eq!(size_of::<CofreeCell<OptionWitness, u32>>(), 16);
+            assert_eq!(size_of::<Cofree<OptionWitness, f64>>(), 24);
+            assert_eq!(size_of::<CofreeCell<OptionWitness, f64>>(), 16);
+            assert_eq!(size_of::<Cofree<TreeEndo<u8>, f64>>(), 32);
+            assert_eq!(size_of::<CofreeCell<TreeEndo<u8>, f64>>(), 24);
+            assert_eq!(size_of::<Cofree<TreeEndo<u8>, usize>>(), 32);
+            assert_eq!(size_of::<CofreeCell<TreeEndo<u8>, usize>>(), 24);
+        }
     }
 }

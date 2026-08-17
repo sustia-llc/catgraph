@@ -99,6 +99,12 @@ pub trait DebugFunctor: HKT {
     /// arity — an unreachable state for a caller that took `contents` from the
     /// same value, and a formatting error rather than a panic if it ever
     /// happened.
+    ///
+    /// The carriers **propagate** that error out of their own `Debug` rather
+    /// than panicking, and likewise for a payload whose `Debug` legitimately
+    /// fails: their renderer lays each cell out with `write!` into a `String`
+    /// sink, never `format!` (which panics when a formatting impl returns
+    /// `Err`).
     fn fmt_shape<T>(
         fa: &Self::Type<T>,
         f: &mut fmt::Formatter<'_>,

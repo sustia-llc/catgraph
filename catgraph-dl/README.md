@@ -127,8 +127,12 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
   bijection witness (CDL Example B.19).
 - **`TreeEndo<A>`** + the **`BinaryTree<A>`** carrier (shape behind
   **`TreeView`**, same reshape) with `tree_to_free_mnd` / `free_mnd_to_tree` —
-  the tree bijection witness (CDL Example B.20). Both are **infallible at any
-  depth**: their walks are explicit heap worklists, as are `Free::fold`,
+  the tree bijection witness (CDL Example B.20). `TreeView::Node` holds its two
+  subtrees as **one boxed pair**, so this carrier costs one `Box` per internal
+  *node* rather than per hole — half the allocations, and a private cell that
+  costs nothing (`BinaryTree<u8>` = `TreeView<u8>` = 16 B on x86-64). `Free` and
+  `Cofree` keep the per-hole placement, which their generic witness forces.
+  Both bijection helpers are **infallible at any depth**: their walks are explicit heap worklists, as are `Free::fold`,
   `Cofree::unfold`, the carriers' `Drop`/`PartialEq`/`Debug`, and `BinaryTree`'s
   `Clone` (#200). Between
   [#231](https://github.com/sustia-llc/catgraph/issues/231) and #200 they were

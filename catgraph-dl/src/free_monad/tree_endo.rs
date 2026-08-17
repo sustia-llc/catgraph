@@ -55,8 +55,6 @@ use core::marker::PhantomData;
 use crate::container::Container;
 use crate::endofunctor::{DebugFunctor, Either, EqFunctor, Free, FreeView, Functor, HKT};
 
-use super::{DebugFields, Rendered, render};
-
 /// The message on every `expect` guarding [`BinaryTree`]'s transient empty
 /// cell — the same invariant `Free`/`Cofree` state.
 const CELL: &str = "invariant: a live BinaryTree always holds its cell; it is emptied \
@@ -180,8 +178,8 @@ impl<A> Container for TreeEndo<A> {
     }
 }
 
-/// One cell of a [`BinaryTree<A>`]: a labelled leaf, or an internal node with
-/// left and right subtrees.
+/// One cell of a [`BinaryTree<A>`]: a labelled leaf, or an internal node
+/// holding its left and right subtrees as one boxed pair.
 ///
 /// This is the shape [`BinaryTree`] used to *be*; it is still how a caller
 /// reads one, through [`BinaryTree::into_view`] (by value) and
@@ -189,15 +187,75 @@ impl<A> Container for TreeEndo<A> {
 /// is no longer the carrier itself.
 ///
 /// `Box` indirection on `Node` is required by the standard recursive-type
-/// finite-size discipline. Dropping a `TreeView` drops two
-/// `Box<BinaryTree<A>>` values, and *their* `Drop` is iterative — one level of
-/// nesting here, none below it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// finite-size discipline. Dropping a `TreeView` drops one
+/// `Box<(BinaryTree<A>, BinaryTree<A>)>`, and the two carriers inside it have
+/// iterative `Drop` — one level of nesting here, none below it.
+///
+/// # One `Box` per internal *node* — the deliberate asymmetry with `Free`
+///
+/// [`crate::free_monad`]'s module docs state the box-placement property of the
+/// two *carriers*: `Free<F, A>` and `Cofree<F, A>` cost exactly **one `Box` per
+/// recursive hole**, because the indirection sits inside the functor hole
+/// (`Suspend(F::Type<Box<Free<F, A>>>)`). `BinaryTree` deliberately does **not**
+/// follow that rule: `Node` boxes the *pair*, so an internal node costs **one
+/// allocation, not two**, and a whole tree allocates `L − 1` boxes for `L`
+/// leaves rather than `2·(L − 1)`.
+///
+/// The two differ because of where each type's spare discriminants live, not
+/// because one shape is tidier:
+///
+/// - **`TreeView` is an enum whose niche was spent on its own tag.** With two
+///   `Box` fields, the compiler niched `TreeView`'s discriminant into the first
+///   `Box`'s null — a 16-byte view with *no* spare value left, so the
+///   `Option`-wrapped cell [`BinaryTree`] needs for its hand-written `Drop`
+///   cost a full extra word (24 vs 16). Boxing the pair leaves a single pointer
+///   field and a `Leaf(A)` payload that cannot be packed into a pointer niche,
+///   so the view carries a real **tag byte** with 254 spare discriminants —
+///   and `Option` niches straight into it. `BinaryTree<A>` and `TreeView<A>`
+///   are now the same size.
+/// - **[`Free`]'s tag has spare discriminants and was never widened.**
+///   `FreeView`'s `Suspend` payload is the opaque projection `F::Type<…>`, so
+///   its discriminant was always a real tag with room to spare and `Option`
+///   was already free there. There is no word to reclaim, so `Free` keeps the
+///   per-hole property — and with it the ability to place the indirection
+///   *inside* an arbitrary witness's hole, which is the whole point of the
+///   encoding.
+/// - **[`Cofree`](crate::free_monad::Cofree) has no analogue at all**, by
+///   construction: its cell is a *struct*, so it has no discriminant of its
+///   own, and its only candidate niche lives inside `F::Type<…>` — the
+///   witness's type, which `Cofree` does not own. Its extra word is a known,
+///   accepted cost, recorded on the carrier itself.
+///
+/// The `Debug` rendering is unaffected: `Node` still prints as a **two-field**
+/// tuple variant, `Node(<left>, <right>)`, exactly as the two-`Box` shape did.
+/// That is why this type's `Debug` is hand-written rather than derived — a
+/// derive on the boxed pair would print `Node((<left>, <right>))`.
+#[derive(Clone, PartialEq, Eq)]
 pub enum TreeView<A> {
     /// A leaf labelled by `A`.
     Leaf(A),
-    /// An internal node with left and right subtrees.
-    Node(Box<BinaryTree<A>>, Box<BinaryTree<A>>),
+    /// An internal node with left and right subtrees, boxed as one pair.
+    Node(Box<(BinaryTree<A>, BinaryTree<A>)>),
+}
+
+/// Byte-identical to the `#[derive(Debug)]` this type carried while `Node` held
+/// two separate boxes: a **two-field** tuple variant, `Node(<left>, <right>)`.
+///
+/// Deriving on the boxed pair would print the pair as one field —
+/// `Node((<left>, <right>))` — a silent change to public output. The subtrees'
+/// own `Debug` is [`BinaryTree`]'s iterative one, so this stays one level of
+/// nesting deep however deep the trees are.
+impl<A: fmt::Debug> fmt::Debug for TreeView<A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TreeView::Leaf(a) => f.debug_tuple("Leaf").field(a).finish(),
+            TreeView::Node(children) => f
+                .debug_tuple("Node")
+                .field(&children.0)
+                .field(&children.1)
+                .finish(),
+        }
+    }
 }
 
 /// Carrier type for binary trees with leaves in `A`.
@@ -244,11 +302,12 @@ impl<A> BinaryTree<A> {
         Self::from_view(TreeView::Leaf(a))
     }
 
-    /// Build an internal node by boxing the supplied subtrees.
+    /// Build an internal node by boxing the supplied subtrees as one pair —
+    /// **one** allocation per internal node, not two (see [`TreeView`]).
     #[must_use]
     #[inline]
     pub fn node(left: Self, right: Self) -> Self {
-        Self::from_view(TreeView::Node(Box::new(left), Box::new(right)))
+        Self::from_view(TreeView::Node(Box::new((left, right))))
     }
 
     /// Consume the tree and hand back its cell, for a by-value `match`.
@@ -289,7 +348,11 @@ impl<A> Drop for BinaryTree<A> {
         let mut pending = vec![view];
         while let Some(view) = pending.pop() {
             // `Leaf(a)` drops its label here; a node hands its children over.
-            if let TreeView::Node(mut left, mut right) = view {
+            if let TreeView::Node(children) = view {
+                // Move the pair out of its `Box` — the allocation dies here and
+                // the two husks below have their cells taken, so their own
+                // `Drop` is a no-op and the recursion stops one level down.
+                let (mut left, mut right) = *children;
                 if let Some(child) = left.cell.take() {
                     pending.push(child);
                 }
@@ -318,10 +381,10 @@ impl<A: Clone> Clone for BinaryTree<A> {
             match step {
                 CloneStep::Visit(tree) => match tree.as_view() {
                     TreeView::Leaf(a) => done.push(BinaryTree::leaf(a.clone())),
-                    TreeView::Node(left, right) => {
+                    TreeView::Node(children) => {
                         work.push(CloneStep::Assemble);
-                        work.push(CloneStep::Visit(right.as_ref()));
-                        work.push(CloneStep::Visit(left.as_ref()));
+                        work.push(CloneStep::Visit(&children.1));
+                        work.push(CloneStep::Visit(&children.0));
                     }
                 },
                 CloneStep::Assemble => {
@@ -346,9 +409,9 @@ impl<A: PartialEq> PartialEq for BinaryTree<A> {
                         return false;
                     }
                 }
-                (TreeView::Node(l1, r1), TreeView::Node(l2, r2)) => {
-                    work.push((l1.as_ref(), l2.as_ref()));
-                    work.push((r1.as_ref(), r2.as_ref()));
+                (TreeView::Node(a), TreeView::Node(b)) => {
+                    work.push((&a.0, &b.0));
+                    work.push((&a.1, &b.1));
                 }
                 _ => return false,
             }
@@ -359,51 +422,40 @@ impl<A: PartialEq> PartialEq for BinaryTree<A> {
 
 impl<A: Eq> Eq for BinaryTree<A> {}
 
-/// One step of the iterative [`Debug`] rendering.
-enum RenderStep<'a, A> {
-    /// Render this subtree once its children are rendered.
-    Visit(&'a BinaryTree<A>),
-    /// Its two children are rendered: pop them and render the node.
-    Assemble,
-}
-
-/// Iterative `Debug`, byte-identical to the derived output it replaced.
+/// Iterative, streaming `Debug` — byte-identical to the derived output it
+/// replaced.
 ///
-/// Every level's text is materialised bottom-up, so `{:?}` costs the total
-/// output and `{:#?}` costs that times the depth (its per-level re-indentation
-/// touches every line again). Neither aborts on a degenerate spine, which the
-/// derive did.
+/// Every byte of the output is written exactly once, so `{:?}` is Θ(total
+/// output). `{:#?}` is Θ(total output) too, but a pretty rendering indents every
+/// line by its nesting depth, so *that* output is quadratic in the depth of a
+/// caterpillar. Neither aborts on a degenerate spine, which the derive did.
 impl<A: fmt::Debug> fmt::Debug for BinaryTree<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let alternate = f.alternate();
-        let mut work: Vec<RenderStep<'_, A>> = vec![RenderStep::Visit(self)];
-        let mut done: Vec<String> = Vec::new();
-        while let Some(step) = work.pop() {
-            match step {
-                RenderStep::Visit(tree) => match tree.as_view() {
-                    TreeView::Leaf(a) => {
-                        done.push(render(
-                            alternate,
-                            &DebugFields("Leaf", &[a as &dyn fmt::Debug]),
-                        ));
-                    }
-                    TreeView::Node(left, right) => {
-                        work.push(RenderStep::Assemble);
-                        work.push(RenderStep::Visit(right.as_ref()));
-                        work.push(RenderStep::Visit(left.as_ref()));
-                    }
-                },
-                RenderStep::Assemble => {
-                    let right = Rendered(done.pop().expect(ASSEMBLE));
-                    let left = Rendered(done.pop().expect(ASSEMBLE));
-                    done.push(render(
-                        alternate,
-                        &DebugFields("Node", &[&left as &dyn fmt::Debug, &right]),
-                    ));
-                }
-            }
+        super::write_debug(self, f)
+    }
+}
+
+/// The shape of one cell, for the shared streaming renderer: `Leaf(a)` has no
+/// recursion slot, `Node` has **two** — the boxed pair is an allocation detail,
+/// not a slot, so the rendering stays the two-field `Node(<left>, <right>)`.
+impl<A: fmt::Debug> super::DebugNode for BinaryTree<A> {
+    fn slots(&self) -> Vec<&Self> {
+        match self.as_view() {
+            TreeView::Leaf(_) => Vec::new(),
+            TreeView::Node(children) => vec![&children.0, &children.1],
         }
-        f.write_str(&done.pop().expect(ROOT))
+    }
+
+    fn fmt_cell(&self, f: &mut fmt::Formatter<'_>, holes: &[&dyn fmt::Debug]) -> fmt::Result {
+        match (self.as_view(), holes) {
+            (TreeView::Leaf(a), _) => f.debug_tuple("Leaf").field(a).finish(),
+            (TreeView::Node(..), [left, right]) => {
+                f.debug_tuple("Node").field(left).field(right).finish()
+            }
+            // Unreachable: `holes` always has one entry per `slots` entry, and a
+            // node has exactly two. A formatting error rather than a panic.
+            (TreeView::Node(..), _) => Err(fmt::Error),
+        }
     }
 }
 
@@ -446,10 +498,11 @@ pub fn tree_to_free_mnd<A>(tree: BinaryTree<A>) -> Free<TreeEndo<A>, Infallible>
         match step {
             BijectionStep::Descend(tree) => match tree.into_view() {
                 TreeView::Leaf(a) => done.push(Free::suspend(Either::Left(a))),
-                TreeView::Node(left, right) => {
+                TreeView::Node(children) => {
+                    let (left, right) = *children;
                     work.push(BijectionStep::Assemble);
-                    work.push(BijectionStep::Descend(*right));
-                    work.push(BijectionStep::Descend(*left));
+                    work.push(BijectionStep::Descend(right));
+                    work.push(BijectionStep::Descend(left));
                 }
             },
             BijectionStep::Assemble => {
@@ -554,13 +607,44 @@ mod tests {
     fn views_round_trip() {
         let tree = BinaryTree::node(BinaryTree::leaf(1_u8), BinaryTree::leaf(2_u8));
         match tree.as_view() {
-            TreeView::Node(left, right) => {
-                assert_eq!(**left, BinaryTree::leaf(1_u8));
-                assert_eq!(**right, BinaryTree::leaf(2_u8));
+            TreeView::Node(children) => {
+                assert_eq!(children.0, BinaryTree::leaf(1_u8));
+                assert_eq!(children.1, BinaryTree::leaf(2_u8));
             }
             TreeView::Leaf(_) => panic!("a node must view as Node"),
         }
         let rebuilt = BinaryTree::from_view(tree.clone().into_view());
         assert_eq!(rebuilt, tree);
+    }
+
+    /// [`TreeView`]'s **own** `Debug` is public output too, and it must keep
+    /// printing `Node` as a **two-field** tuple variant now that the variant
+    /// holds one boxed pair.
+    ///
+    /// This is the pin on the hand-written impl that replaced the derive: a
+    /// `#[derive(Debug)]` on `Node(Box<(BinaryTree<A>, BinaryTree<A>)>)` renders
+    /// the pair as a single field — `Node((Leaf(1), Leaf(2)))`, one extra paren
+    /// pair — which would have been a silent regression in both the compact and
+    /// the pretty form. `BinaryTree`'s own rendering is pinned separately (see
+    /// `debug_reproduces_the_derived_shape` above and the derived-twin oracle in
+    /// the parent module); this asserts the *view* agrees with it character for
+    /// character, which is what it did before the reshape.
+    #[test]
+    fn the_view_debug_keeps_two_fields_on_node() {
+        let tree = BinaryTree::node(BinaryTree::leaf(1_u8), BinaryTree::leaf(2_u8));
+        let view = tree.as_view();
+
+        assert_eq!(format!("{view:?}"), "Node(Leaf(1), Leaf(2))");
+        assert_eq!(
+            format!("{view:#?}"),
+            "Node(\n    Leaf(\n        1,\n    ),\n    Leaf(\n        2,\n    ),\n)"
+        );
+
+        // The leaf arm, and agreement with the carrier's own rendering — the
+        // property that held while `TreeView` still derived `Debug`.
+        assert_eq!(format!("{:?}", tree.as_view()), format!("{tree:?}"));
+        assert_eq!(format!("{:#?}", tree.as_view()), format!("{tree:#?}"));
+        let leaf = BinaryTree::leaf(9_u8);
+        assert_eq!(format!("{:?}", leaf.as_view()), "Leaf(9)");
     }
 }

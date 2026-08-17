@@ -23,6 +23,14 @@
 //! | [`ListEndo<A>`] | `Option<(A, X)>` | 1 (`Some`), 0 (`None`) |
 //! | [`TreeEndo<A>`] | `Either<A, (X, X)>` | 2 (`Right`), 0 (`Left`) |
 //!
+//! That is a statement about `Free` and `Cofree`, the two witness-generic
+//! carriers benched here. The concrete [`BinaryTree`] does **not** follow it:
+//! its cell boxes the subtree *pair*, so it allocates one `Box` per internal
+//! node — `L − 1` for `L` leaves, half what the `Free` encoding of the same
+//! shape costs. `BinaryTree` appears below only as the *source* the tree
+//! `construct` rows consume, so that halving shows up in those rows'
+//! `dealloc` column, not their `alloc` column.
+//!
 //! ## Finding: `TreeEndo`'s leaf ratio is not a free parameter
 //!
 //! The issue's shape axis names a "branch-dense (few `Left(A)` leaves)" case and
@@ -187,8 +195,18 @@
 //!   are **not** a clean like-for-like against the other two: the bijection
 //!   helpers *consume* their input, so the construct window also pays to free
 //!   the source — one `Vec` buffer on lists, but the source `BinaryTree`'s own
-//!   `2·(L − 1)` boxes on trees, a teardown of the same order as the
-//!   construction itself.
+//!   boxes on trees, a teardown of the same order as the construction itself.
+//!
+//!   **Amended 2026-08-16 (the boxed-pair `TreeView::Node`).** That source
+//!   teardown was `2·(L − 1)` boxes while `TreeView::Node` held two of them; it
+//!   is `L − 1` now that the node holds one boxed pair. The tree `construct`
+//!   rows' `dealloc` column halves accordingly — 128 → 65, 2 048 → 1 025,
+//!   8 192 → 4 097 at `L` = 64 / 1 024 / 4 096, on both shapes (the `+2` is the
+//!   walk's two worklist `Vec`s). Their `alloc` column is unchanged: it counts
+//!   the `Free` side, whose two-hole encoding this did not touch. `bytes` falls
+//!   a little too (`tree_spine` at 4 096: 589 800 → 458 752), because the
+//!   worklist's element type embeds a `BinaryTree`, which the same reshape
+//!   narrowed from 24 B to 16 B.
 //! - **`Cofree::unfold` is the dearest carrier op on trees** (~16.5–17.0
 //!   Melem/s) — it allocates *and* calls the coalgebra at every node. On lists
 //!   it now runs *faster* than construction (~35.6 vs ~30.1 Melem/s), which is

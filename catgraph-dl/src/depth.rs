@@ -127,7 +127,7 @@ fn depth_by<'a, T>(root: &'a T, children: impl Fn(&'a T) -> Option<(&'a T, &'a T
 pub fn tree_depth<A>(tree: &BinaryTree<A>) -> usize {
     depth_by(tree, |node| match node.as_view() {
         TreeView::Leaf(_) => None,
-        TreeView::Node(left, right) => Some((left.as_ref(), right.as_ref())),
+        TreeView::Node(children) => Some((&children.0, &children.1)),
     })
 }
 
