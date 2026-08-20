@@ -6,6 +6,56 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`cospan_algebra::frobenius_to_cospan`** — the semantics direction of the
+  Fong-Spivak Prop 3.8 correspondence, inverse in spirit to the existing
+  `cospan_to_frobenius` ([#284](https://github.com/sustia-llc/catgraph/issues/284)).
+  It interprets a `FrobeniusMorphism<Lambda, _>` in `Cospan<Lambda>` layer by
+  layer, and errors (`CatgraphError::Interpret`) on an `UnSpecifiedBox`, which
+  has no image in the free hypergraph category.
+
+  This is the *observable* the compact-closed suite was missing.
+  `FrobeniusMorphism`'s derived `Eq` compares layer vectors and composition only
+  applies a local `two_layer_simplify`, so equal diagrams routinely differ
+  syntactically and no equality on `FM` could state §3.1's propositions.
+  Composing with `Cospan::canonical_form` gives the semantic one: equality up to
+  apex isomorphism, which by Prop 3.8 *is* equality under the special
+  commutative Frobenius axioms.
+
+### Fixed — tests
+
+- **The `compact_closed` suite asserted only interfaces** ([#284]). Audit
+  phase 1 measured that replacing `unname` with discard-inputs/create-outputs
+  junk left 44/44 green, and that a `compose_names_direct` discarding `f̂` and
+  `ĝ` for bare units did too; `assert_compose_names_equivalent`'s doc promised a
+  structural cross-check its body never performed (it compared codomains). The
+  suite now carries content pins routed through `frobenius_to_cospan` +
+  `canonical_form`: cup/cap against a hand-built bent identity, both Eq. (13)
+  snakes against `id_X`, `name`/`unname` against leg-bending computed directly on
+  the cospan, Prop 3.3 against `name(f;g)`, Prop 3.4's explicit-comp helper
+  against `f` itself, and the `id ⊗ cap ⊗ id` comp factor against
+  `equivalence::comp_cospan`, an independently written implementation. Each was
+  falsified by reverting the corresponding production line.
+
+### Known discrepancy — scalars (bubbles)
+
+- **Neither direction of the Prop 3.8 correspondence preserves scalars**, from
+  two independent causes, each localised by disabling it and re-measuring
+  ([#284]; pinned as-is by
+  `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions`, not
+  endorsed):
+  1. `cospan_to_frobenius`'s identity fast path fires on *every* `0 → 0` cospan
+     (`domain == codomain`, both legs empty), so one bubble and two bubbles
+     produce the same term even though their canonical forms differ.
+  2. `FrobeniusLayer::two_layer_simplify` rule 3 cancels `η(z);ε(z)` — the
+     **extra-special** axiom. `Cospan` is the theory of *special* commutative
+     Frobenius monoids and keeps bubbles (`cospan_canon`'s module docs say so
+     explicitly); `Corel` is the extra-special quotient that discards them.
+
+  Correcting either sends that pin red, at which point the two exclusions its
+  neighbours document can be lifted.
+
 ## [workspace-v0.15.0] - 2026-08-16
 
 ### Changed — BREAKING

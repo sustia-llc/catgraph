@@ -107,7 +107,9 @@ where
 // NameAlgebra (§4.1: A_H(x) = H(I, P(x)))
 // ---------------------------------------------------------------------------
 
-use crate::frobenius::{FrobeniusMorphism, from_decomposition};
+use crate::frobenius::{
+    FrobeniusMorphism, FrobeniusOperation, from_decomposition, special_frobenius_morphism,
+};
 
 /// The name cospan-algebra: `A_H(x) = H(I, P(x))` — named morphisms.
 ///
@@ -305,6 +307,138 @@ where
     Ok(result)
 }
 
+/// Interpret a single Frobenius generator as a `Cospan<Lambda>`.
+///
+/// The four Frobenius generators and the identity come straight from
+/// [`HypergraphCategory`](crate::hypergraph_category::HypergraphCategory); the
+/// braiding `σ: [z, w] → [w, z]` is the two-vertex apex whose right leg is the
+/// transposition. `Spider(z, d1, d2)` is interpreted by recursing on the
+/// generator decomposition [`special_frobenius_morphism`] gives it, so the
+/// spider's semantics here are *by definition* the crate's own, not a second
+/// guess at them.
+fn generator_to_cospan<Lambda, BlackBoxLabel>(
+    op: &FrobeniusOperation<Lambda, BlackBoxLabel>,
+) -> Result<Cospan<Lambda>, CatgraphError>
+where
+    Lambda: Eq + Copy + Debug + Send + Sync,
+    BlackBoxLabel: Eq + Clone + Send + Sync,
+{
+    use crate::hypergraph_category::HypergraphCategory;
+
+    Ok(match op {
+        FrobeniusOperation::Unit(z) => Cospan::unit(*z),
+        FrobeniusOperation::Counit(z) => Cospan::counit(*z),
+        FrobeniusOperation::Multiplication(z) => Cospan::multiplication(*z),
+        FrobeniusOperation::Comultiplication(z) => Cospan::comultiplication(*z),
+        FrobeniusOperation::Identity(z) => Cospan::identity(&vec![*z]),
+        // σ: [z, w] → [w, z]. Correct by construction: both legs are
+        // permutations of `0..2` and the apex has exactly two vertices.
+        FrobeniusOperation::SymmetricBraiding(z, w) => {
+            Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![*z, *w])
+        }
+        FrobeniusOperation::Spider(z, d1, d2) => frobenius_to_cospan(
+            &special_frobenius_morphism::<Lambda, BlackBoxLabel>(*d1, *d2, *z),
+        )?,
+        FrobeniusOperation::UnSpecifiedBox(_, srcs, tgts) => {
+            return Err(CatgraphError::Interpret {
+                context: format!(
+                    "frobenius_to_cospan has no interpretation for a black box \
+                     ({} in, {} out): Cospan is the free hypergraph category on \
+                     the generators alone",
+                    srcs.len(),
+                    tgts.len()
+                ),
+            });
+        }
+    })
+}
+
+/// Interpret a `FrobeniusMorphism<Lambda, _>` as a `Cospan<Lambda>` — the
+/// semantics direction of the Fong-Spivak Prop 3.8 correspondence, inverse in
+/// spirit to [`cospan_to_frobenius`].
+///
+/// Each layer is the monoidal product of its blocks' generator cospans, and the
+/// layers are composed in order. Because `Cospan` is the theory of **special**
+/// commutative Frobenius monoids (F&S 2019 Prop 3.8), two Frobenius terms are
+/// equal under the SCFM axioms exactly when their images here are isomorphic —
+/// which [`Cospan::canonical_form`](crate::cospan_canon::CospanCanon) decides.
+/// That makes this the semantic equality test for string diagrams whose
+/// syntactic layer representation is not normalised: `FrobeniusMorphism`'s
+/// derived `Eq` compares layers, and composition only applies a local
+/// `two_layer_simplify`, so equal diagrams routinely differ syntactically.
+///
+/// # Examples
+///
+/// Two syntactically different terms, equal under the Frobenius axioms:
+///
+/// ```
+/// use catgraph::category::ComposableMutating;
+/// use catgraph::cospan_algebra::frobenius_to_cospan;
+/// use catgraph::frobenius::{FrobeniusMorphism, FrobeniusOperation};
+///
+/// type FM = FrobeniusMorphism<char, String>;
+///
+/// // μ ; δ, spelled out …
+/// let mut spelled: FM = FrobeniusOperation::Multiplication('a').into();
+/// spelled.compose(FrobeniusOperation::Comultiplication('a').into()).unwrap();
+/// // … and the same map as a single 2-to-2 spider.
+/// let spider: FM = FrobeniusOperation::Spider('a', 2, 2).into();
+///
+/// assert_eq!(
+///     frobenius_to_cospan(&spelled).unwrap().canonical_form(),
+///     frobenius_to_cospan(&spider).unwrap().canonical_form(),
+/// );
+/// ```
+///
+/// # Errors
+///
+/// - [`CatgraphError::Interpret`] if the morphism contains an
+///   `UnSpecifiedBox`: a black box has no interpretation in the free
+///   hypergraph category. Pass it through
+///   [`MorphismSystem`](crate::frobenius::MorphismSystem) first if it needs one.
+/// - [`CatgraphError::Interpret`] if a layer has no blocks but a non-empty
+///   interface (a malformed morphism). A block-free layer whose interface is
+///   empty is `id_I` and is interpreted, not rejected — that is how
+///   `FrobeniusMorphism::identity(&vec![])` is represented.
+/// - Any [`CatgraphError`] from the underlying cospan composition.
+pub fn frobenius_to_cospan<Lambda, BlackBoxLabel>(
+    morphism: &FrobeniusMorphism<Lambda, BlackBoxLabel>,
+) -> Result<Cospan<Lambda>, CatgraphError>
+where
+    Lambda: Eq + Copy + Debug + Send + Sync,
+    BlackBoxLabel: Eq + Clone + Send + Sync,
+{
+    use crate::category::ComposableMutating;
+
+    let mut answer = Cospan::identity(&ComposableMutating::domain(morphism));
+    for layer in &morphism.layers {
+        // A block-free layer is `id_I`, which is how `FrobeniusMorphism::identity`
+        // represents the identity on the empty type list — legal, and the unit of
+        // the fold below. A block-free layer with a *non-empty* interface is
+        // malformed, and says so rather than silently contributing `id_I`.
+        let mut current = match layer.blocks.first() {
+            Some(first) => generator_to_cospan(&first.op)?,
+            None => {
+                if !layer.left_type.is_empty() || !layer.right_type.is_empty() {
+                    return Err(CatgraphError::Interpret {
+                        context: format!(
+                            "block-free FrobeniusMorphism layer with a {}→{} interface",
+                            layer.left_type.len(),
+                            layer.right_type.len()
+                        ),
+                    });
+                }
+                Cospan::identity(&Vec::new())
+            }
+        };
+        for block in layer.blocks.iter().skip(1) {
+            current.monoidal(generator_to_cospan(&block.op)?);
+        }
+        answer = answer.compose(&current)?;
+    }
+    Ok(answer)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -425,5 +559,218 @@ mod tests {
         let morph: FM = cospan_to_frobenius(&split).unwrap();
         assert_eq!(morph.domain(), vec!['a']);
         assert_eq!(morph.codomain(), vec!['a', 'a']);
+    }
+
+    // --- frobenius_to_cospan (#284) ---
+
+    /// Every generator lands on the cospan `HypergraphCategory` names for it.
+    ///
+    /// **Space:** the four Frobenius generators, the identity on one and two
+    /// wires, and the braiding — i.e. every `FrobeniusOperation` variant except
+    /// `Spider` (covered below) and `UnSpecifiedBox` (rejected, below). One
+    /// label pair `('a', 'b')` only.
+    #[test]
+    fn frobenius_to_cospan_sends_generators_to_generators() {
+        use crate::hypergraph_category::HypergraphCategory;
+
+        let cases: Vec<(&str, FM, Cospan<char>)> = vec![
+            (
+                "eta",
+                FrobeniusOperation::Unit('a').into(),
+                Cospan::unit('a'),
+            ),
+            (
+                "epsilon",
+                FrobeniusOperation::Counit('a').into(),
+                Cospan::counit('a'),
+            ),
+            (
+                "mu",
+                FrobeniusOperation::Multiplication('a').into(),
+                Cospan::multiplication('a'),
+            ),
+            (
+                "delta",
+                FrobeniusOperation::Comultiplication('a').into(),
+                Cospan::comultiplication('a'),
+            ),
+            (
+                "id_a",
+                FrobeniusOperation::Identity('a').into(),
+                Cospan::identity(&vec!['a']),
+            ),
+            (
+                "braid",
+                FrobeniusOperation::SymmetricBraiding('a', 'b').into(),
+                Cospan::new(vec![0, 1], vec![1, 0], vec!['a', 'b']).unwrap(),
+            ),
+        ];
+        for (label, term, expected) in cases {
+            let got = frobenius_to_cospan(&term).unwrap();
+            assert_eq!(
+                got.canonical_form(),
+                expected.canonical_form(),
+                "{label}: got apex {} / {:?}, expected apex {} / {:?}",
+                got.middle().len(),
+                got.canonical_form().classes(),
+                expected.middle().len(),
+                expected.canonical_form().classes(),
+            );
+        }
+    }
+
+    /// Prop 3.8 as a round trip: `cospan → frobenius → cospan` returns the
+    /// cospan you started with, up to apex isomorphism.
+    ///
+    /// This is what makes [`frobenius_to_cospan`] usable as a *semantic oracle*
+    /// (see `tests/compact_closed.rs`): it is checked against
+    /// [`cospan_to_frobenius`], written independently in this module, rather
+    /// than against itself.
+    ///
+    /// **Space:** the seven **scalar-free** cospans below, over `{'a','b'}` —
+    /// identities, all four generators, and a merge-and-pass. Cospans carrying a
+    /// bubble are deliberately *excluded*: scalars do not survive the trip. That
+    /// exclusion is not a gap left silent — it is measured, with both of its
+    /// separate causes, in `scalar_bubbles_are_lost_in_both_directions` below.
+    /// The converse round trip (`frobenius → cospan → frobenius`) is *not* claimed:
+    /// it cannot hold on the nose, since many layer vectors share one cospan.
+    #[test]
+    fn cospan_frobenius_cospan_round_trips() {
+        use crate::hypergraph_category::HypergraphCategory;
+
+        let cases: Vec<(&str, Cospan<char>)> = vec![
+            ("id_ab", Cospan::identity(&vec!['a', 'b'])),
+            ("id_empty", Cospan::identity(&vec![])),
+            ("eta", Cospan::unit('a')),
+            ("epsilon", Cospan::counit('a')),
+            ("mu", Cospan::multiplication('a')),
+            ("delta", Cospan::comultiplication('a')),
+            (
+                "merge_and_pass",
+                Cospan::new(vec![0, 0], vec![0, 1], vec!['a', 'a']).unwrap(),
+            ),
+        ];
+        for (label, cospan) in cases {
+            let term: FM = cospan_to_frobenius(&cospan).unwrap();
+            let back = frobenius_to_cospan(&term).unwrap();
+            assert_eq!(
+                back.canonical_form(),
+                cospan.canonical_form(),
+                "{label}: round trip gave apex {} (scalars {}), started from apex {} (scalars {})",
+                back.canonical_form().apex_len(),
+                back.canonical_form().scalar_count(),
+                cospan.canonical_form().apex_len(),
+                cospan.canonical_form().scalar_count(),
+            );
+        }
+    }
+
+    /// Spiders go through the crate's own generator decomposition, so an
+    /// `(m, n)` spider is one apex vertex joining all `m + n` boundary wires.
+    ///
+    /// **Space:** `(m, n)` for `m, n <= 3` **except `(0, 0)`**, label `'a'` only.
+    /// `(0, 0)` is the bubble, which the layer simplifier cancels — measured in
+    /// `scalar_bubbles_are_lost_in_both_directions` rather than quietly skipped.
+    #[test]
+    fn frobenius_to_cospan_spiders_are_single_apex_vertices() {
+        for m in 0..=3usize {
+            for n in 0..=3usize {
+                if m == 0 && n == 0 {
+                    continue;
+                }
+                let spider: FM = FrobeniusOperation::Spider('a', m, n).into();
+                let canon = frobenius_to_cospan(&spider).unwrap().canonical_form();
+                assert_eq!(canon.dom_len(), m, "spider({m},{n}) domain");
+                assert_eq!(canon.cod_len(), n, "spider({m},{n}) codomain");
+                assert_eq!(
+                    canon.apex_len(),
+                    1,
+                    "spider({m},{n}) should be one apex vertex, got {} ({:?})",
+                    canon.apex_len(),
+                    canon.classes()
+                );
+                assert_eq!(canon.scalar_count(), 0, "spider({m},{n}) scalar count");
+            }
+        }
+    }
+
+    /// ⚠ **Measured discrepancy, pinned as-is, not endorsed.**
+    ///
+    /// `Cospan` is the theory of **special**, not extra-special, commutative
+    /// Frobenius monoids: the closed bubble `η # ε` is a genuine `0 → 0`
+    /// non-identity and `k` bubbles are distinguished from `k-1` (see
+    /// [`cospan_canon`](crate::cospan_canon)'s module docs). Neither direction of
+    /// the Prop 3.8 correspondence preserves that today, and the two losses have
+    /// **different causes** — established by disabling each in turn:
+    ///
+    /// 1. **`cospan_to_frobenius`'s identity fast path.** Any `0 → 0` cospan has
+    ///    `domain == codomain` and both legs empty, so the fast path returns
+    ///    `id_I` — one bubble and two bubbles produce the *same* term, though
+    ///    their canonical forms differ (`apex_len` 1 vs 2). Disabling
+    ///    `two_layer_simplify`'s rule 3 does not change this half, which is what
+    ///    localises it here rather than in the simplifier.
+    /// 2. **`two_layer_simplify` rule 3.** It cancels `η(z);ε(z)` outright
+    ///    ("scalar loop") — the *extra-special* axiom. `Spider('a', 0, 0)`
+    ///    decomposes to `η;ε` and so interprets to `apex_len() == 0`; with rule 3
+    ///    disabled it interprets to `apex_len() == 1` instead, which is what
+    ///    localises this half to the simplifier.
+    ///
+    /// The pin exists so both are *visible and testable*: correcting either sends
+    /// this test red and lets the corresponding exclusion above be lifted. It is
+    /// not a claim that the current behaviour is right.
+    #[test]
+    fn scalar_bubbles_are_lost_in_both_directions() {
+        let one_bubble = Cospan::new(vec![], vec![], vec!['a']).unwrap();
+        let two_bubbles = Cospan::new(vec![], vec![], vec!['a', 'a']).unwrap();
+        assert_eq!(one_bubble.canonical_form().scalar_count(), 1);
+        assert_eq!(two_bubbles.canonical_form().scalar_count(), 2);
+        assert_ne!(
+            one_bubble.canonical_form(),
+            two_bubbles.canonical_form(),
+            "as cospans, one bubble and two are different morphisms"
+        );
+
+        // Cause 1: the identity fast path collapses both to id_I.
+        let one_term: FM = cospan_to_frobenius(&one_bubble).unwrap();
+        let two_term: FM = cospan_to_frobenius(&two_bubbles).unwrap();
+        assert!(
+            one_term == two_term,
+            "the identity fast path maps every 0→0 cospan to the same term \
+             (depths {} and {})",
+            one_term.depth(),
+            two_term.depth()
+        );
+        for (label, term) in [("one_bubble", &one_term), ("two_bubbles", &two_term)] {
+            let back = frobenius_to_cospan(term).unwrap().canonical_form();
+            assert_eq!(
+                back.apex_len(),
+                0,
+                "{label}: round trip gave apex {}, the cospan had 1 or 2",
+                back.apex_len()
+            );
+        }
+
+        // Cause 2: rule 3 cancels η;ε, so the (0,0) spider has no apex vertex.
+        let spider_0_0: FM = FrobeniusOperation::Spider('a', 0, 0).into();
+        let spider_canon = frobenius_to_cospan(&spider_0_0).unwrap().canonical_form();
+        assert_eq!(
+            spider_canon.apex_len(),
+            0,
+            "Spider(0,0) gave apex {}, the cospan bubble has 1",
+            spider_canon.apex_len()
+        );
+    }
+
+    /// A black box has no image in the free hypergraph category, and says so
+    /// rather than inventing one.
+    #[test]
+    fn frobenius_to_cospan_rejects_black_boxes() {
+        let boxed: FM =
+            FrobeniusOperation::UnSpecifiedBox("f".to_string(), vec!['a'], vec!['b']).into();
+        let err = frobenius_to_cospan(&boxed).unwrap_err();
+        assert!(
+            matches!(err, CatgraphError::Interpret { .. }),
+            "expected Interpret, got {err:?}"
+        );
     }
 }

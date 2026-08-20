@@ -9,11 +9,170 @@ use catgraph::{
         cap, cap_single, cap_tensor, compose_names, compose_names_direct, compose_names_via_unname,
         cup, cup_single, cup_tensor, name, unname,
     },
+    cospan::Cospan,
+    cospan_algebra::frobenius_to_cospan,
+    cospan_canon::CospanCanon,
+    equivalence::comp_cospan,
     frobenius::{Frobenius, FrobeniusMorphism, FrobeniusOperation},
     monoidal::Monoidal,
 };
 
 type FM = FrobeniusMorphism<char, String>;
+
+// ---------------------------------------------------------------------------
+// Semantic comparison (the content pins below all route through this)
+// ---------------------------------------------------------------------------
+//
+// `FrobeniusMorphism` derives `Eq` on its *layer vector*, and composition only
+// applies a local `two_layer_simplify`, so equal string diagrams routinely
+// differ syntactically — `==` on `FM` is sound but far too fine to state the
+// compact-closed laws with. `frobenius_to_cospan` sends a term to its image in
+// `Cospan`, the theory of special commutative Frobenius monoids (F&S 2019
+// Prop 3.8), and `canonical_form` decides isomorphism there. So
+// `canon(a) == canon(b)` iff `a` and `b` are equal under the SCFM axioms —
+// exactly the equality every proposition in §3.1 is stated up to.
+
+/// The semantic image of a Frobenius term: its cospan up to apex isomorphism.
+fn canon(m: &FM) -> CospanCanon<char> {
+    frobenius_to_cospan(m)
+        .expect("the terms in this file carry no black boxes")
+        .canonical_form()
+}
+
+/// A one-line digest of a canonical form, for failure messages: boundary sizes,
+/// apex size, scalar (bubble) count.
+fn digest(c: &CospanCanon<char>) -> String {
+    format!(
+        "{}→{} apex={} scalars={}",
+        c.dom_len(),
+        c.cod_len(),
+        c.apex_len(),
+        c.scalar_count()
+    )
+}
+
+/// Assert two Frobenius terms are equal as morphisms of `Cospan`, reporting the
+/// measured shape of both sides on failure.
+fn assert_same_cospan(got: &FM, want: &FM, what: &str) {
+    let (g, w) = (canon(got), canon(want));
+    assert_eq!(
+        g,
+        w,
+        "{what}: got {} vs want {}\n  got classes:  {:?}\n  want classes: {:?}",
+        digest(&g),
+        digest(&w),
+        g.classes(),
+        w.classes()
+    );
+}
+
+/// Assert a Frobenius term's image is a given hand-built cospan, reporting the
+/// measured shape of both sides on failure.
+fn assert_image_is(got: &FM, want: &Cospan<char>, what: &str) {
+    let (g, w) = (canon(got), want.canonical_form());
+    assert_eq!(
+        g,
+        w,
+        "{what}: got {} vs want {}\n  got classes:  {:?}\n  want classes: {:?}",
+        digest(&g),
+        digest(&w),
+        g.classes(),
+        w.classes()
+    );
+}
+
+/// The sample terms every content pin below ranges over, as
+/// `(label, f, domain, codomain)`.
+///
+/// Ten terms: both identities, all four Frobenius generators, the braiding, two
+/// two-layer composites, and one spider. This is the *whole* space these pins
+/// quantify over — they are not statements about arbitrary morphisms, and in
+/// particular no term here carries a black box or a label other than `'a'`/`'b'`.
+fn samples() -> Vec<(&'static str, FM, Vec<char>, Vec<char>)> {
+    let braid: FM = FrobeniusOperation::SymmetricBraiding('a', 'b').into();
+
+    let mut delta_mu: FM = FrobeniusOperation::Comultiplication('a').into();
+    delta_mu
+        .compose(FrobeniusOperation::Multiplication('a').into())
+        .expect("δ;μ interfaces match");
+
+    let mut mu_delta: FM = FrobeniusOperation::Multiplication('a').into();
+    mu_delta
+        .compose(FrobeniusOperation::Comultiplication('a').into())
+        .expect("μ;δ interfaces match");
+
+    vec![
+        ("id_a", FM::identity(&vec!['a']), vec!['a'], vec!['a']),
+        (
+            "id_ab",
+            FM::identity(&vec!['a', 'b']),
+            vec!['a', 'b'],
+            vec!['a', 'b'],
+        ),
+        (
+            "mu",
+            FrobeniusOperation::Multiplication('a').into(),
+            vec!['a', 'a'],
+            vec!['a'],
+        ),
+        (
+            "delta",
+            FrobeniusOperation::Comultiplication('a').into(),
+            vec!['a'],
+            vec!['a', 'a'],
+        ),
+        (
+            "eta",
+            FrobeniusOperation::Unit('a').into(),
+            vec![],
+            vec!['a'],
+        ),
+        (
+            "epsilon",
+            FrobeniusOperation::Counit('a').into(),
+            vec!['a'],
+            vec![],
+        ),
+        ("braid_ab", braid, vec!['a', 'b'], vec!['b', 'a']),
+        ("delta_then_mu", delta_mu, vec!['a'], vec!['a']),
+        ("mu_then_delta", mu_delta, vec!['a', 'a'], vec!['a', 'a']),
+        (
+            "spider_2_3",
+            FrobeniusOperation::Spider('a', 2, 3).into(),
+            vec!['a', 'a'],
+            vec!['a', 'a', 'a'],
+        ),
+    ]
+}
+
+/// Bend a cospan's left leg round to the right: `X → A ← Y` becomes
+/// `I → A ← X ⊕ Y`.
+///
+/// This is the compact-closed *name* computed directly on the cospan, without
+/// going through cup/cap — the independent reference `name` is checked against.
+fn bend_left_leg(c: &Cospan<char>) -> Cospan<char> {
+    let mut right = c.left_to_middle().to_vec();
+    right.extend_from_slice(c.right_to_middle());
+    Cospan::new(vec![], right, c.middle().to_vec())
+        .expect("legs are copied from a valid cospan, so they stay in the apex")
+}
+
+/// The inverse of [`bend_left_leg`]: split `I → A ← X ⊕ Y` at `x_len` back into
+/// `X → A ← Y`. The independent reference `unname` is checked against.
+fn unbend_right_leg(c: &Cospan<char>, x_len: usize) -> Cospan<char> {
+    assert!(
+        c.left_to_middle().is_empty(),
+        "unbend expects a name (domain I), got a {}-wide domain",
+        c.left_to_middle().len()
+    );
+    let right = c.right_to_middle();
+    Cospan::new(
+        right[..x_len].to_vec(),
+        right[x_len..].to_vec(),
+        c.middle().to_vec(),
+    )
+    .expect("legs are copied from a valid cospan, so they stay in the apex")
+}
 
 // ---------------------------------------------------------------------------
 // §3.1 Prop 3.1: cup = η;δ, cap = μ;ε
@@ -378,6 +537,10 @@ fn recovery_from_name() {
 /// This exercises the paper's formula structurally rather than going through the
 /// `unname` helper, so a regression in either `name` or the comp cospan would
 /// surface here even if `unname` is defined to short-circuit.
+///
+/// Since #284 the final assertion compares the *content* — the image in `Cospan`
+/// up to apex isomorphism — not just `f`'s domain and codomain, which the
+/// discard-inputs/create-outputs junk the audit substituted also reproduced.
 fn prop_3_4_recover_via_explicit_comp(f: &FM, x: &[char], y: &[char]) {
     let f_hat = name(f).unwrap();
     assert!(f_hat.domain().is_empty(), "f̂ must have domain I");
@@ -402,9 +565,10 @@ fn prop_3_4_recover_via_explicit_comp(f: &FM, x: &[char], y: &[char]) {
     // (id_X ⊗ f̂) ; comp^X_{∅,Y}
     lhs.compose(comp).expect("Prop 3.4 interfaces align");
 
-    // Result must be f: X → Y.
+    // Result must be f: X → Y — same interface *and* same morphism.
     assert_eq!(lhs.domain(), f.domain());
     assert_eq!(lhs.codomain(), f.codomain());
+    assert_same_cospan(&lhs, f, "Prop 3.4: (id_X ⊗ f̂) ; comp != f");
 }
 
 #[test]
@@ -456,14 +620,15 @@ fn compose_names_rejects_nonempty_domain() {
 // Prop 3.3 literal formula: compose_names_direct vs compose_names_via_unname
 // ---------------------------------------------------------------------------
 
-/// Assert both `compose_names` implementations agree on domain/codomain for
-/// a given `(f, g)` pair.
+/// Assert both `compose_names` implementations agree *as morphisms* for a given
+/// `(f, g)` pair, and that both equal `name(f;g)`.
 ///
 /// `compose_names_direct` implements Prop 3.3's literal formula
 /// `(f̂ ⊗ ĝ) ; comp^Y_{X,Z}`. `compose_names_via_unname` factors through the
 /// name bijection as `name(unname(f̂); unname(ĝ))`. They are mathematically
-/// equal, so both the domain/codomain and the structural layer representation
-/// must match after simplification.
+/// equal, so their images in `Cospan` must be isomorphic — not merely their
+/// codomains, which is all this helper compared before #284. Gutting either
+/// leg (the audit gutted the direct one) leaves every codomain unchanged.
 fn assert_compose_names_equivalent(f: &FM, g: &FM, x_len: usize, y_len: usize) {
     let f_hat = name(f).unwrap();
     let g_hat = name(g).unwrap();
@@ -476,6 +641,8 @@ fn assert_compose_names_equivalent(f: &FM, g: &FM, x_len: usize, y_len: usize) {
         via.codomain(),
         "codomain mismatch between direct and via_unname"
     );
+    assert_same_cospan(&direct, &via, "compose_names_direct vs via_unname");
+
     let mut fg = f.clone();
     fg.compose(g.clone()).unwrap();
     let expected = name(&fg).unwrap();
@@ -483,6 +650,11 @@ fn assert_compose_names_equivalent(f: &FM, g: &FM, x_len: usize, y_len: usize) {
         direct.codomain(),
         expected.codomain(),
         "compose_names_direct codomain disagrees with name(f;g)"
+    );
+    assert_same_cospan(
+        &direct,
+        &expected,
+        "compose_names_direct vs name(f;g) (Prop 3.3)",
     );
 }
 
@@ -541,4 +713,304 @@ fn compose_names_direct_rejects_mismatched_y() {
     assert!(compose_names_direct(&f_raw, &g_raw, 1, 1).is_err());
     // Silence unused warning for f.
     let _ = f;
+}
+
+// ---------------------------------------------------------------------------
+// Content pins (#284 / WI-C02)
+//
+// Everything above this line asserts domain/codomain (and, in a few places,
+// `depth() >= 1`). That is a type-level check: the audit measured that
+// replacing `unname` with discard-inputs/create-outputs junk, and
+// `compose_names_direct` with one that drops f̂ and ĝ for bare units, both left
+// all 44 tests green. The pins below compare the *content* — the image in
+// `Cospan` up to apex isomorphism, which is SCFM-equality (F&S 2019 Prop 3.8)
+// — against references built without the function under test.
+// ---------------------------------------------------------------------------
+
+/// `cup_tensor`/`cap_tensor` are the bent identity, not merely a morphism of the
+/// right shape.
+///
+/// Reference: the cospan whose apex *is* `X` and whose one non-empty leg is
+/// `[0..n] ++ [0..n]` — built by hand, with no call to cup/cap. A `cup` that
+/// created `2n` unconnected vertices instead of `n` shared ones has the same
+/// domain and codomain and is caught only here.
+///
+/// **Space:** `X` of length 0–3 over the two labels below, i.e. the `n <= 1`
+/// short-circuit and the deinterleave-permutation path for `n = 2, 3`. Nothing
+/// is claimed for longer `X` or for other label sets.
+#[test]
+fn cup_cap_tensor_are_the_bent_identity() {
+    for types in [
+        vec![],
+        vec!['a'],
+        vec!['a', 'b'],
+        vec!['a', 'a'],
+        vec!['a', 'b', 'a'],
+    ] {
+        let n = types.len();
+        let doubled: Vec<usize> = (0..n).chain(0..n).collect();
+
+        let cup_ref = Cospan::new(vec![], doubled.clone(), types.clone())
+            .expect("both legs index the apex by construction");
+        assert_image_is(
+            &cup_tensor::<char, String>(&types),
+            &cup_ref,
+            &format!("cup_tensor({types:?})"),
+        );
+
+        let cap_ref = Cospan::new(doubled, vec![], types.clone())
+            .expect("both legs index the apex by construction");
+        assert_image_is(
+            &cap_tensor::<char, String>(&types),
+            &cap_ref,
+            &format!("cap_tensor({types:?})"),
+        );
+    }
+}
+
+/// Eq. (13): both snakes really are `id_X`, with no leftover bubble.
+///
+/// The existing `zigzag_*` tests assert only that the snake is an endomorphism
+/// of `X`; so is the constant-`ε;η` map, and so is `id_X ⊗ (a bubble)`. Here the
+/// snake's cospan must equal `id_X`'s on the nose: same apex size (so no scalar
+/// is left dangling) and the same wire-for-wire connectivity.
+///
+/// **Space:** `X` of length 0–3 over `{'a','b'}`, both snake orientations.
+/// Specialness itself (`δ;μ = id`) is pinned in `frobenius_laws.rs`; this test
+/// claims only that the two zigzags reduce.
+#[test]
+fn zigzag_snakes_reduce_to_the_identity() {
+    for types in [
+        vec!['a'],
+        vec!['a', 'b'],
+        vec!['a', 'a'],
+        vec!['a', 'b', 'a'],
+    ] {
+        let id: FM = FM::identity(&types);
+
+        // (cup_X ⊗ id_X) ; (id_X ⊗ cap_X)
+        let mut right_snake: FM = cup_tensor(&types);
+        right_snake.monoidal(FM::identity(&types));
+        let mut second: FM = FM::identity(&types);
+        second.monoidal(cap_tensor(&types));
+        right_snake
+            .compose(second)
+            .expect("zigzag interfaces align");
+        assert_same_cospan(
+            &right_snake,
+            &id,
+            &format!("right snake on {types:?} is not id"),
+        );
+
+        // (id_X ⊗ cup_X) ; (cap_X ⊗ id_X)
+        let mut left_snake: FM = FM::identity(&types);
+        left_snake.monoidal(cup_tensor(&types));
+        let mut second: FM = cap_tensor(&types);
+        second.monoidal(FM::identity(&types));
+        left_snake.compose(second).expect("zigzag interfaces align");
+        assert_same_cospan(
+            &left_snake,
+            &id,
+            &format!("left snake on {types:?} is not id"),
+        );
+    }
+}
+
+/// Prop 3.2, forward: `name(f)` bends `f`'s left leg round to the right.
+///
+/// Reference: [`bend_left_leg`] applied to `f`'s own cospan — the compact-closed
+/// name computed on the cospan side, touching neither `cup_tensor` nor `name`.
+/// Equality of the two says `name` transports `f` intact; a `name` that dropped
+/// `f` would keep the codomain `X ⊗ Y` and fail only here.
+///
+/// **Space:** the ten [`samples`], each with its own `X`.
+#[test]
+fn name_bends_the_left_leg() {
+    for (label, f, _x, _y) in samples() {
+        let image = frobenius_to_cospan(&f).expect("no black boxes");
+        let reference = bend_left_leg(&image);
+        assert_image_is(
+            &name(&f).expect("name of a well-formed morphism"),
+            &reference,
+            &format!("name({label})"),
+        );
+    }
+}
+
+/// Prop 3.2, backward: `unname(ĝ, |X|)` unbends the right leg at `|X|`.
+///
+/// Reference: [`unbend_right_leg`] on `ĝ`'s own cospan. This is the pin the
+/// audit's first measurement needs — `unname` replaced by
+/// discard-inputs/create-outputs junk keeps every domain/codomain in the file
+/// and is caught here, because the junk's apex has `|X| + |Y|` singleton
+/// vertices where the real one has `f`'s.
+///
+/// **Space:** the names of the ten [`samples`]. Names of morphisms that are not
+/// themselves in the image of `name` are not exercised.
+#[test]
+fn unname_unbends_the_right_leg() {
+    for (label, f, x, _y) in samples() {
+        let f_hat = name(&f).expect("name of a well-formed morphism");
+        let hat_image = frobenius_to_cospan(&f_hat).expect("no black boxes");
+        let reference = unbend_right_leg(&hat_image, x.len());
+        assert_image_is(
+            &unname(&f_hat, x.len()).expect("unname of a name"),
+            &reference,
+            &format!("unname(name({label}), {})", x.len()),
+        );
+    }
+}
+
+/// Prop 3.2 as a bijection: `unname(name(f), |X|) = f`, by content.
+///
+/// The existing `unname_name_roundtrip_*` tests compare domain and codomain,
+/// which the identity-shaped junk also satisfies. This compares the cospans.
+///
+/// **Space:** the ten [`samples`]. Round-tripping the other way
+/// (`name(unname(ĝ))`) is covered for names only, in the test above.
+#[test]
+fn name_unname_roundtrip_preserves_content() {
+    for (label, f, x, _y) in samples() {
+        let f_hat = name(&f).expect("name of a well-formed morphism");
+        let recovered = unname(&f_hat, x.len()).expect("unname of a name");
+        assert_same_cospan(&recovered, &f, &format!("roundtrip on {label}"));
+    }
+}
+
+/// Prop 3.3: `(f̂ ⊗ ĝ) ; comp^Y_{X,Z} = (f;g)^`, by content.
+///
+/// This is the pin the audit's second measurement needs: a
+/// `compose_names_direct` that discards f̂ and ĝ and returns bare units has the
+/// right codomain `X ⊗ Z` and passes every pre-existing assertion. Here the
+/// result must be `name(f;g)` as a cospan — apex, connectivity and all.
+///
+/// **Space:** the nine composable pairs below, over the labels `'a'`/`'b'`,
+/// including one pair whose `X` is empty and one spider pair.
+#[test]
+fn compose_names_direct_is_the_name_of_the_composite() {
+    for (label, f, g, x_len, y_len) in composable_pairs() {
+        let f_hat = name(&f).expect("name of f");
+        let g_hat = name(&g).expect("name of g");
+        let via_prop_3_3 =
+            compose_names_direct(&f_hat, &g_hat, x_len, y_len).expect("Prop 3.3 formula");
+
+        let mut fg = f.clone();
+        fg.compose(g.clone()).expect("f;g interfaces align");
+        let expected = name(&fg).expect("name of f;g");
+
+        assert_same_cospan(
+            &via_prop_3_3,
+            &expected,
+            &format!("compose_names_direct != name(f;g) for {label}"),
+        );
+    }
+}
+
+/// Ex. 3.5 / Eq. (14): the comp cospan `compact_closed` builds out of
+/// `id ⊗ cap ⊗ id` is the one [`comp_cospan`] builds out of index arithmetic.
+///
+/// Two independent implementations in two modules that never call each other —
+/// this is the cross-check that keeps `compose_names_direct`'s middle factor
+/// honest even if every name-level test were satisfied by a coincidence.
+///
+/// **Space:** the eight `(X, Y, Z)` shapes below, with `|Y|` from 0 to 3 — so
+/// both the `n <= 1` short-circuit and the permutation path inside `cap_tensor`
+/// are covered. Labels are `'a'`/`'b'`/`'c'` only.
+#[test]
+fn frobenius_comp_matches_comp_cospan() {
+    let shapes: [(Vec<char>, Vec<char>, Vec<char>); 8] = [
+        (vec![], vec![], vec![]),
+        (vec!['a'], vec![], vec!['c']),
+        (vec![], vec!['b'], vec![]),
+        (vec!['a'], vec!['b'], vec!['c']),
+        (vec!['a'], vec!['b', 'b'], vec!['c']),
+        (vec!['a', 'a'], vec!['b', 'c'], vec![]),
+        (vec![], vec!['b', 'c', 'b'], vec!['c']),
+        (vec!['a', 'b'], vec!['b', 'c', 'a'], vec!['c', 'a']),
+    ];
+    for (x, y, z) in shapes {
+        let mut comp: FM = FM::identity(&x);
+        comp.monoidal(cap_tensor(&y));
+        comp.monoidal(FM::identity(&z));
+        assert_image_is(
+            &comp,
+            &comp_cospan(&x, &y, &z),
+            &format!("id ⊗ cap_{y:?} ⊗ id vs comp_cospan({x:?}, {y:?}, {z:?})"),
+        );
+    }
+}
+
+/// The `(f, g, x_len, y_len)` pairs the Prop 3.3 pins range over. `x_len` is
+/// `|dom f|` and `y_len` is `|cod f| = |dom g|`, the two splits Prop 3.3 needs.
+fn composable_pairs() -> Vec<(&'static str, FM, FM, usize, usize)> {
+    let mut delta_mu: FM = FrobeniusOperation::Comultiplication('a').into();
+    delta_mu
+        .compose(FrobeniusOperation::Multiplication('a').into())
+        .expect("δ;μ interfaces match");
+
+    vec![
+        (
+            "id;id",
+            FM::identity(&vec!['a']),
+            FM::identity(&vec!['a']),
+            1,
+            1,
+        ),
+        (
+            "id_ab;id_ab",
+            FM::identity(&vec!['a', 'b']),
+            FM::identity(&vec!['a', 'b']),
+            2,
+            2,
+        ),
+        (
+            "delta;mu",
+            FrobeniusOperation::Comultiplication('a').into(),
+            FrobeniusOperation::Multiplication('a').into(),
+            1,
+            2,
+        ),
+        (
+            "mu;delta",
+            FrobeniusOperation::Multiplication('a').into(),
+            FrobeniusOperation::Comultiplication('a').into(),
+            2,
+            1,
+        ),
+        (
+            "eta;id",
+            FrobeniusOperation::Unit('a').into(),
+            FM::identity(&vec!['a']),
+            0,
+            1,
+        ),
+        (
+            "mu;epsilon",
+            FrobeniusOperation::Multiplication('a').into(),
+            FrobeniusOperation::Counit('a').into(),
+            2,
+            1,
+        ),
+        (
+            "braid;braid",
+            FrobeniusOperation::SymmetricBraiding('a', 'b').into(),
+            FrobeniusOperation::SymmetricBraiding('b', 'a').into(),
+            2,
+            2,
+        ),
+        (
+            "delta_mu;delta",
+            delta_mu,
+            FrobeniusOperation::Comultiplication('a').into(),
+            1,
+            1,
+        ),
+        (
+            "spider_2_3;spider_3_1",
+            FrobeniusOperation::Spider('a', 2, 3).into(),
+            FrobeniusOperation::Spider('a', 3, 1).into(),
+            2,
+            3,
+        ),
+    ]
 }
