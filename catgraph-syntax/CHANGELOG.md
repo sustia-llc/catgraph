@@ -7,6 +7,23 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Documentation
+
+- **The unqualified "free hypergraph category" phrasing is retired from this
+  crate's own claims too**
+  ([#277](https://github.com/sustia-llc/catgraph/issues/277)). #277 scoped the
+  freeness claims in `catgraph`'s `hypergraph_category` module to the deferred
+  `Set ⇄ Hyp` adjunction, but three sites here made the same bare claim about
+  **catgraph-syntax's own artifacts** rather than citing the paper's theorem
+  about `Cospan_Λ`: the `frobenius` module banner, `hypergraph_presentation`'s
+  doc, and `README.md`'s Frobenius-layer section (plus the `lib.rs` tour line).
+  They now say what the code builds — a **presentation** of the hypergraph
+  theory on the palette, i.e. the free *prop* on `FrobeniusOr<G>` modulo the
+  SCFM equations at every colour — and the module docs spell out the
+  distinction. The Thm 3.14 citations in the anchor list, `to_mat_kron`'s
+  uniqueness argument and `docs/ANCHORS.md` are statements *about the paper* and
+  are unchanged. Prose only; no API change.
+
 ## [workspace-v0.14.0] - 2026-08-16
 
 ### Documentation

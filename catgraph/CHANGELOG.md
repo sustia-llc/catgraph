@@ -22,19 +22,52 @@ All notable changes to `catgraph` are documented here. The format follows
   `tests/frobenius_axioms.rs::frobenius_structural_equality_decides_nothing_here`),
   so nothing in the crate could decide a Frobenius equation on that carrier.
   Composing `f` then `g` in `FrobeniusMorphism` and interpreting is *not* the
-  same as interpreting each and composing in `Cospan`, in exactly one case: the
-  normalizer's unit/counit rule deletes an `η` feeding an `ε`, which is the
-  extra-special axiom, and `Cospan` keeps that bubble. Both halves are pinned.
+  same as interpreting each and composing in `Cospan` when the normalizer's
+  unit/counit rule deletes an `η` feeding an `ε` — the extra-special axiom,
+  which `Cospan` keeps as a bubble. Both halves are pinned. That is the only
+  *known* divergence, not a proof there is one; see the Rule 4 fix below, which
+  was a second one.
 
-- **`tests/frobenius_axioms.rs`** (14 tests) — the Def 2.5 equations built on
-  both sides and decided, for all four carriers that implement
-  `HypergraphCategory` (#283). Riders for the zigzag identities and for the
-  braiding being a genuine crossing: a disconnected cup and an identity
-  braiding each leave every one of the nine equations intact.
+- **`tests/frobenius_axioms.rs`** (16 tests) — the Def 2.5 equations built on
+  both sides and decided, for the four carriers this crate defines (#283).
+  Riders for the zigzag identities and for the braiding being a genuine
+  crossing: a disconnected cup and an identity braiding each leave every one of
+  the nine equations intact.
+
+  Four *named* carriers over **three** decision paths, and the file now says so:
+  `Corel` is a transparent newtype whose row recomputes `Cospan`'s
+  (`corel_recomputes_the_cospan_battery` measures it; the `Corel`-specific claim
+  is `corel_battery_composites_stay_jointly_surjective`). Nor is it every
+  implementor — `catgraph-applied`'s `PetriNet` and `DecoratedCospan` also
+  implement `HypergraphCategory` and have no Def 2.5 pin anywhere.
+
+- **`Debug` on `FrobeniusMorphism` and `FrobeniusOperation`** (#283). `PartialEq`
+  on `FrobeniusMorphism` compares presentations, so a failed comparison was only
+  ever reportable as `depth()`; the derive makes the whole presentation
+  printable. Purely additive.
 
 - **`tests/corel.rs::composites_induce_the_expected_partition`** — `Corel`
   composites are pinned by their whole class structure, not only by the joint
   surjectivity `Corel::new` checks and every wrong composite also satisfies (#283).
+
+### Fixed
+
+- **The Frobenius normalizer no longer fuses two spiders that share no wire**
+  (#283). `two_layer_simplify`'s Rule 4 matched `Spider(z, m, n)` against
+  `Spider(z, n, k)` with no lower bound on `n`, so `Spider(z, 2, 0)` followed by
+  `Spider(z, 0, 2)` — a sink and a source, two *disconnected* components —
+  collapsed into `Spider(z, 2, 2)`. Measured: the presented composite then
+  interpreted to one apex class where the semantics has two, i.e. the sink's
+  inputs and the source's outputs were wired together. Reachable from the public
+  API (`FrobeniusOperation` and its `From` impl are both `pub`), and the whole
+  workspace was green with it present. Rule 4 now requires `n >= 1`, pinned by
+  `tests/frobenius_axioms.rs::spider_fusion_needs_a_wire_between_the_two_spiders`.
+
+  Same function, same root cause: the `target_side_placement → block` lookup
+  keyed zero-output blocks too, and those do not advance the placement, so
+  several of them shared one key and `HashMap::insert` kept an arbitrary one.
+  Blocks with no outputs are now excluded, which makes the remaining keys
+  strictly increasing and therefore unique.
 
 ### Changed
 
@@ -58,8 +91,16 @@ All notable changes to `catgraph` are documented here. The format follows
   `frobenius_law_lhs_arities`, which builds one side of a different equation),
   `special_frobenius`, `zigzag_via_trait` and `frobenius_morphism_special` in
   `src/hypergraph_category.rs`, plus the H_Part trio in `tests/equivalence.rs`.
-  All of them stayed green under a non-merging μ together with a non-splitting
-  δ. Test names only; no API change.
+  Test names only; no API change.
+
+  Each half needed its own mutant, because they exercise different code. All
+  **19** tests in the src mod stayed green under a non-merging μ together with a
+  non-splitting δ on `Cospan`'s `HypergraphCategory` impl — which the new battery
+  catches on three carriers. The H_Part trio never touches that impl (it builds
+  from `PartMorph::multiplication_in`/`comultiplication_in`), so its mutant is
+  `multiplication_in`'s right leg `[0, 0, 0]` → `[0, 1, 0]`: the trio stays
+  green, while `cospan_algebra_morphism_battery`, the bubble ledger and the
+  zigzag rider all go red.
 
 ## [workspace-v0.15.0] - 2026-08-16
 

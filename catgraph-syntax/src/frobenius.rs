@@ -1,7 +1,20 @@
-//! The Frobenius layer (Phase S4): the free hypergraph category on a colour
-//! palette `Λ` as a **sum over** a user signature, plus the spider calculus, the
-//! special commutative Frobenius monoid (SCFM) equations, and a sound semantic
-//! checker into [`MatKron(R)`](catgraph_applied::mat_kron::MatKron).
+//! The Frobenius layer (Phase S4): a **presentation** of the hypergraph theory
+//! on a colour palette `Λ`, built as a **sum over** a user signature, plus the
+//! spider calculus, the special commutative Frobenius monoid (SCFM) equations,
+//! and a sound semantic checker into
+//! [`MatKron(R)`](catgraph_applied::mat_kron::MatKron).
+//!
+//! ## "Free" here is F&S 2018 Thm 5.60, not F&S 2019 Thm 3.14
+//!
+//! What this module builds is the free **prop** on `FrobeniusOr<G>` quotiented
+//! by the SCFM equations at every colour — a presentation by generators and
+//! relations. It is *not* a witness that the result is the free **hypergraph
+//! category** on `Λ` in the sense of Thm 3.14, whose content is an adjunction
+//! `Set ⇄ Hyp` that nothing in this workspace constructs (catgraph's
+//! `hypergraph_category` module docs and `catgraph/docs/FS19-AUDIT.md` record
+//! that deferral). Thm 3.14 appears below as a *citation of the paper's theorem
+//! about `Cospan_Λ`* — the thing that makes the per-colour extension in
+//! [`to_mat_kron`] unique — never as a property this crate has checked.
 //!
 //! # The load-bearing shape: a sum type, not a second AST
 //!
@@ -554,9 +567,13 @@ where
     ]
 }
 
-/// Build a [`Presentation`] of the free hypergraph category on the palette
-/// `colors` over `G`: lift each user equation via [`lift_user`], then add the
-/// nine [`scfm_equations`] **at every colour** (`E_frob`).
+/// Build a [`Presentation`] of the hypergraph theory on the palette `colors`
+/// over `G`: lift each user equation via [`lift_user`], then add the nine
+/// [`scfm_equations`] **at every colour** (`E_frob`).
+///
+/// "Presentation of", not "the free hypergraph category on": this is the free
+/// prop on `FrobeniusOr<G>` modulo those equations. Thm 3.14's freeness is an
+/// adjunction `Set ⇄ Hyp` that is deferred workspace-wide — see the module docs.
 ///
 /// Seeding per colour is F&S 2019 **Lemma 3.10**: on an objectwise-free category
 /// it suffices to give a Frobenius structure to each `l ∈ Λ`, and that induces a

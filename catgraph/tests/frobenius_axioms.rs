@@ -1,7 +1,8 @@
 //! The Def 2.5 special-commutative-Frobenius equations, built on **both** sides
-//! and decided, for every carrier that claims
+//! and decided, for the four
 //! [`HypergraphCategory`](catgraph::hypergraph_category::HypergraphCategory)
-//! (Fong-Spivak 2019 Def 2.12, whose Frobenius requirement *is* Def 2.5).
+//! carriers this crate defines (Fong-Spivak 2019 Def 2.12, whose Frobenius
+//! requirement *is* Def 2.5).
 //!
 //! # What this battery ranges over, and what it does not
 //!
@@ -14,6 +15,29 @@
 //! over any equation outside Def 2.5 — a carrier can pass every test here and
 //! still get a 4-input spider or a heterogeneous braiding wrong.
 //!
+//! **The carrier limit.** "Four carriers" is four *named* carriers, not every
+//! implementor. Six types implement `HypergraphCategory` in this workspace: the
+//! four below plus `catgraph_applied::petri_net::PetriNet` and
+//! `catgraph_applied::decorated_cospan::DecoratedCospan`, neither of which is
+//! decided here or anywhere else — the only Def 2.5 equation pins in
+//! `catgraph-applied` are for `MatKron`. That gap is not hypothetical for
+//! `PetriNet`: `catgraph-applied/tests/braiding_cross_carrier.rs` already
+//! records it as the carrier whose `permute_side` discards both leg maps, so it
+//! is the last one a reader should assume this file covers.
+//!
+//! **The carrier count is three decision paths, not four.** `Corel` is a
+//! transparent newtype over `Cospan` and delegates everything the battery
+//! touches, so its row recomputes the `Cospan` row — measured in
+//! [`corel_recomputes_the_cospan_battery`], not asserted. A mutant that reddens
+//! both has been caught once, not twice. Nor are the remaining three fully
+//! disjoint: `frobenius_to_cospan` interprets each generator *as* the
+//! corresponding `Cospan` generator, so the `FrobeniusMorphism` row shares that
+//! half of its path with the `Cospan` row and contributes its own composition
+//! and normalizer on top. Measured with a non-merging μ and a non-splitting δ
+//! on `Cospan`'s `HypergraphCategory` impl: `Cospan`, `Corel` and
+//! `FrobeniusMorphism` all go red, `CospanAlgebraMorphism` — which builds its
+//! generators from its own literal cospans — stays green.
+//!
 //! Two riders sit beside the eleven because the eleven cannot see them:
 //! [`zigzag_identities_per_carrier`] (a cup that never composed leaves every
 //! Def 2.5 equation intact) and [`braiding_is_a_genuine_crossing_per_carrier`]
@@ -23,8 +47,12 @@
 //!
 //! # Why each carrier is decided the way it is
 //!
-//! - [`Cospan`] and [`Corel`] — [`Cospan::canonical_form`], the complete
-//!   invariant for parallel-cospan equality, on the nose.
+//! - [`Cospan`] — [`Cospan::canonical_form`], the complete invariant for
+//!   parallel-cospan equality, on the nose.
+//! - [`Corel`] — the *same* computation, reached through the newtype's
+//!   delegation. Its own contribution is
+//!   [`corel_battery_composites_stay_jointly_surjective`], the one claim
+//!   `Cospan` cannot make.
 //! - [`CospanAlgebraMorphism`] over [`PartitionAlgebra`] — the same, **after
 //!   discarding scalar (bubble) classes**, because five of the eleven fail on
 //!   the nose: `multiplication_in` and `comultiplication_in` build their
@@ -304,17 +332,69 @@ fn cospan_battery_creates_no_scalars() {
     }
 }
 
+/// The eleven on `Corel`, which is **not** an independent verdict.
+///
+/// See [`corel_recomputes_the_cospan_battery`]: `Corel` delegates every
+/// operation the battery uses, and its key is the wrapped `Cospan`'s key, so
+/// this test cannot go red unless [`cospan_battery`] does. It stays because the
+/// delegation is what makes that true, and a `Corel` that stopped delegating
+/// should be caught here rather than assumed. The `Corel`-specific content of
+/// this file is [`corel_battery_composites_stay_jointly_surjective`].
 #[test]
 fn corel_battery() {
     run::<Corel<char>>();
+}
+
+/// Measured: the `Corel` row of the battery is the `Cospan` row, key for key.
+///
+/// `Corel<Lambda>` is a transparent newtype. `unit` / `counit` /
+/// `multiplication` / `comultiplication` / `cup` / `cap` are
+/// `new_unchecked(Cospan::…)`, `identity` / `compose` / `monoidal` /
+/// `from_permutation_on_domain` delegate to the wrapped value, and
+/// [`Carrier::key`] is `self.as_cospan().canonical_form()` — the same function
+/// `Cospan`'s key calls. So "eleven equations on four carriers" is really
+/// eleven on **three** decision paths, and counting `corel_battery` and
+/// `cospan_battery` as two independent reds under one mutant double-counts one
+/// computation.
+///
+/// Written to go red if that ever stops being true, which is the only way it
+/// could become news: a `Corel` that overrides any of those operations makes
+/// the row independent and this test is where that shows up.
+#[test]
+fn corel_recomputes_the_cospan_battery() {
+    let cospans = equations::<Cospan<char>>(Z);
+    let corels = equations::<Corel<char>>(Z);
+    assert_eq!(
+        cospans.len(),
+        corels.len(),
+        "the two tables disagree in size"
+    );
+
+    for ((name, cospan_lhs, cospan_rhs), (_, corel_lhs, corel_rhs)) in
+        cospans.into_iter().zip(corels)
+    {
+        assert_eq!(
+            corel_lhs.key(),
+            cospan_lhs.key(),
+            "{name}: the Corel lhs stopped being the Cospan lhs, so the Corel row is now an \
+             independent verdict and the audit doc may stop calling it a recomputation"
+        );
+        assert_eq!(
+            corel_rhs.key(),
+            cospan_rhs.key(),
+            "{name}: the Corel rhs stopped being the Cospan rhs"
+        );
+    }
 }
 
 /// Every composite in the battery stays a corelation — jointly surjective — so
 /// the `Corel` row is decided on genuine `Corel` values and not on wrappers that
 /// `Corel::new` would have rejected.
 ///
-/// `Corel::compose` and `Corel::monoidal` both go through `new_unchecked`, so
-/// nothing else in the crate would notice if a composite left the subcategory.
+/// This is the one assertion in the file that `Cospan` cannot make, and so the
+/// one that earns `Corel` a row: `Corel::compose` and `Corel::monoidal` both go
+/// through `new_unchecked`, so nothing else in the crate would notice if a
+/// composite left the subcategory.
 #[test]
 fn corel_battery_composites_stay_jointly_surjective() {
     for (name, lhs, rhs) in equations::<Corel<char>>(Z) {
@@ -424,8 +504,8 @@ fn frobenius_structural_equality_decides_nothing_here() {
     );
 }
 
-/// The one place [`frobenius_to_cospan`] does not commute with
-/// `FrobeniusMorphism`'s own composition, pinned with both values.
+/// One place [`frobenius_to_cospan`] does not commute with `FrobeniusMorphism`'s
+/// own composition, pinned with both values.
 ///
 /// `two_layer_simplify`'s unit/counit rule deletes an `η` feeding an `ε`, which
 /// is the *extra*-special axiom `η # ε = id_I`. `Cospan` is the theory of the
@@ -434,8 +514,10 @@ fn frobenius_structural_equality_decides_nothing_here() {
 /// two interpretations composed in `Cospan` give **1**, all of it a scalar.
 ///
 /// Narrow by construction: this is the `η # ε` pattern at one wire type, not a
-/// survey of everything `two_layer_simplify` does. The other three rules are
-/// sound for the special theory and the battery above exercises them.
+/// survey of everything `two_layer_simplify` does — and "the only divergence"
+/// is a claim this test cannot make. It was in fact false when this file was
+/// written: see [`spider_fusion_needs_a_wire_between_the_two_spiders`], which
+/// covers a second one, in the spider-fusion rule, that changed *connectivity*.
 #[test]
 fn frobenius_scalar_loop_is_erased_before_interpretation() {
     let eta = FrobeniusMorphism::<char, String>::unit(Z);
@@ -468,6 +550,78 @@ fn frobenius_scalar_loop_is_erased_before_interpretation() {
     assert_ne!(
         after_fm_compose, semantic,
         "the two routes agree now, so the documented non-commutation is stale"
+    );
+}
+
+/// The normalizer's spider-fusion rule must not fuse across **zero** wires.
+///
+/// `Spider(z, m, n) ; Spider(z, n, k) = Spider(z, m, k)` is the spider theorem,
+/// and it fuses the two spiders *along the n wires that join them*. At `n = 0`
+/// there are no such wires: `Spider(z, 2, 0) ; Spider(z, 0, 2)` is the monoidal
+/// product of a sink and a source, two components with nothing between them.
+/// Fusing it to `Spider(z, 2, 2)` connects them — a change of **connectivity**,
+/// not of a scalar, and reachable from the public API (`FrobeniusOperation` and
+/// its `From` impl are both `pub`).
+///
+/// Rule 4 carries an `n >= 1` guard for exactly this, and the whole workspace
+/// stayed green without it, which is why this test exists rather than a remark.
+///
+/// The oracle is the semantics: interpret each factor and compose in `Cospan`,
+/// versus interpret the presented composite. Both are named below, so a failure
+/// says which side moved.
+///
+/// Scope: one wire type, the arities `(2, 0)` and `(0, 2)`. It says nothing
+/// about the rule at `n >= 1`, which `frobenius_laws.rs::spider_fusion` pins.
+#[test]
+fn spider_fusion_needs_a_wire_between_the_two_spiders() {
+    use catgraph::frobenius::FrobeniusOperation;
+    type Fm = FrobeniusMorphism<char, String>;
+
+    let sink: Fm = FrobeniusOperation::Spider(Z, 2, 0).into();
+    let source: Fm = FrobeniusOperation::Spider(Z, 0, 2).into();
+
+    let mut presented = sink.clone();
+    ComposableMutating::compose(&mut presented, source.clone())
+        .expect("[z, z] -> [] then [] -> [z, z] is composable");
+
+    let after_fm_compose = frobenius_to_cospan(&presented)
+        .expect("no black boxes here")
+        .canonical_form();
+    let semantic = Composable::compose(
+        &frobenius_to_cospan(&sink).expect("no black boxes here"),
+        &frobenius_to_cospan(&source).expect("no black boxes here"),
+    )
+    .expect("the two generator cospans compose")
+    .canonical_form();
+
+    // Two disjoint classes: {dom [0, 1], cod []} and {dom [], cod [0, 1]}.
+    assert_eq!(
+        semantic.classes().len(),
+        2,
+        "Cospan stopped keeping the sink and the source apart; got {semantic:?}"
+    );
+
+    // The connectivity claim goes first, so that reverting the guard fails
+    // *here* — on the semantics — and not merely on the presentation shape.
+    // Measured with the guard removed: the presented composite becomes the
+    // single block `Spider('z', 2, 2)` and interprets to ONE class,
+    // {dom [0, 1], cod [0, 1]}, against the semantics' two.
+    assert_eq!(
+        after_fm_compose,
+        semantic,
+        "FrobeniusMorphism::compose fused two spiders that share no wire. The presented \
+         composite interprets to {} apex class(es) where the semantics has {}; one class means \
+         the sink's inputs and the source's outputs were wired together. Presentation: \
+         {presented:?}",
+        after_fm_compose.classes().len(),
+        semantic.classes().len()
+    );
+
+    // And the presentation itself: the two components stay two layers.
+    assert_eq!(
+        presented.depth(),
+        2,
+        "the sink and the source fused into one block. Presentation: {presented:?}"
     );
 }
 

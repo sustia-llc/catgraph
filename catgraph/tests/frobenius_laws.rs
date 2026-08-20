@@ -106,9 +106,9 @@ fn spider_fusion() {
     // Note: Spider(z,2,1) and Multiplication(z) are distinct enum variants,
     // so structural equality is checked against a Spider, not Multiplication.
     let expected_fused: FM = FrobeniusOperation::Spider('z', 2, 1).into();
-    assert!(
-        fused == expected_fused,
-        "Spider(z,2,3);Spider(z,3,1) should fuse to Spider(z,2,1)"
+    assert_eq!(
+        fused, expected_fused,
+        "Spider(z,2,3);Spider(z,3,1) should fuse to the single block Spider(z,2,1)"
     );
 
     // Also verify Spider(z,1,3);Spider(z,3,4) -> Spider(z,1,4)
@@ -121,28 +121,39 @@ fn spider_fusion() {
 
     // The oracle for Rule 4 is the *single fused block*, not
     // `special_frobenius_morphism(1, 4, 'z')`: the factory builds an equivalent
-    // spider out of generators (a δ tree, depth 3 here), so comparing against it
-    // could only ever be an arity check — which is what this assertion used to
-    // be, and which stays green if the fusion rule is deleted outright.
+    // spider out of generators (a balanced δ tree — one δ, then two δ side by
+    // side, so depth 2), so comparing against it could only ever be an arity
+    // check — which is what this assertion used to be, and which stays green if
+    // the fusion rule is deleted outright.
     let expected_fused_2: FM = FrobeniusOperation::Spider('z', 1, 4).into();
-    assert!(
-        fused_2 == expected_fused_2,
-        "Spider(z,1,3);Spider(z,3,4) should fuse to the single block Spider(z,1,4), got depth {}",
-        fused_2.depth()
+    assert_eq!(
+        fused_2, expected_fused_2,
+        "Spider(z,1,3);Spider(z,3,4) should fuse to the single block Spider(z,1,4)"
     );
     assert_eq!(
         fused_2.depth(),
         1,
-        "a fused spider is one block in one layer"
+        "a fused spider is one block in one layer; got the presentation {fused_2:?}"
     );
 
     // The factory's spider is the *same morphism* but not the same
     // presentation, and that gap is the reason for the block oracle above.
+    //
+    // `via_factory != fused_2` alone would be satisfied by any difference at
+    // all, garbage included, so the shape is named: a δ tree of depth 2 over
+    // the same domain and codomain (measured — the doc here used to say 3). If
+    // the factory ever returns the single block, all three of these move
+    // together.
     let via_factory: FM = special_frobenius_morphism(1, 4, 'z');
     assert_eq!(via_factory.domain(), fused_2.domain());
     assert_eq!(via_factory.codomain(), fused_2.codomain());
-    assert!(
-        via_factory != fused_2,
+    assert_eq!(
+        via_factory.depth(),
+        2,
+        "special_frobenius_morphism(1, 4, ..) changed shape; it built {via_factory:?}"
+    );
+    assert_ne!(
+        via_factory, fused_2,
         "special_frobenius_morphism(1, 4, ..) now returns a single Spider block; if that is \
          deliberate it is the better oracle and this test should use it"
     );

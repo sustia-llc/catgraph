@@ -49,17 +49,25 @@ fn named_cospan_predicate_above_threshold() {
     assert_eq!(right_count, 150);
 }
 
-/// `FrobeniusMorphism` with 128+ blocks via monoidal product (`with_min_len(64)`).
+/// `FrobeniusMorphism` `hflip` on a layer rayon genuinely subdivides.
 ///
-/// `special_frobenius_morphism(m, 1, wire_type)` for large m builds layers via
-/// recursive monoidal product. Calling `hflip` (through `from_permutation` or
-/// direct `special_frobenius_morphism` with m < n) runs the parallel arm, which
-/// rayon actually subdivides once a layer reaches ≥ 128 blocks (`with_min_len(64)`
-/// splits only at length ≥ 2·min).
+/// `special_frobenius_morphism(m, 1, wire_type)` for large m builds a binary μ
+/// tree: `m/2` blocks in the first layer, then `m/4`, and so on. Calling `hflip`
+/// (through `from_permutation` or a direct `special_frobenius_morphism` with
+/// m < n) runs the parallel arm, which rayon actually subdivides once a layer
+/// reaches ≥ 128 blocks — `with_min_len(64)` splits only at length ≥ 2·min.
+///
+/// # The arity, and why it is 256 and not 128
+///
+/// The widest layer of `special_frobenius_morphism(m, 1, _)` holds `m/2` blocks,
+/// so **m = 256** is the first power of two whose widest layer (128) is one
+/// rayon subdivides. At m = 128 the widest layer is 64 blocks, exactly
+/// `PARALLEL_BLOCK_THRESHOLD` and half of what `with_min_len` needs — this test
+/// used to run at 128 and never reached the arm it is named for.
 ///
 /// # What this asserts, and what it used to
 ///
-/// The composition below is a **real** one: `(1 → 128) ; (128 → 1)`, checked
+/// The composition below is a **real** one: `(1 → 256) ; (256 → 1)`, checked
 /// against the identity wire through [`frobenius_to_cospan`]. It replaces a
 /// `composed.monoidal(FrobeniusMorphism::identity(&vec![]))` — a tensor with the
 /// empty identity, i.e. a no-op on the value and no composition at all. That
@@ -67,27 +75,40 @@ fn named_cospan_predicate_above_threshold() {
 /// complete no-op, while 24 tests in eight other binaries went red.
 ///
 /// The first two assertions alone would catch that mutant (a no-op `hflip`
-/// leaves a `[a; 128] → [a]` word where `[a] → [a; 128]` is claimed). The
-/// interpretation check is the one that reaches the *wiring*: a `hflip` that
-/// swapped the interfaces but mangled block order would keep the words.
+/// leaves a `[a; 256] → [a]` word where `[a] → [a; 256]` is claimed). The
+/// interpretation check adds that the fold denotes the *identity wire* — one
+/// connected component on one input and one output — rather than merely having
+/// the right interfaces.
 ///
-/// Scope: one wire type, the single arity pair (1, 128) that puts a layer over
-/// the rayon threshold. It is a correctness check on the above-threshold arm,
-/// not a survey of `hflip`.
+/// What it does **not** add, measured rather than assumed: block order. A
+/// `hflip` rebuilt with each layer's blocks reversed (placements recomputed, so
+/// the layer stays well-formed) leaves this test green at 256, because every
+/// layer of `special_frobenius_morphism(m, 1, 'a')` is homogeneous — all
+/// `Multiplication`, and all `Comultiplication` after the flip — so on this
+/// input the block order carries no information at all. The same mutant is
+/// caught by `frobenius_layer_hflip_matches_sequential_reference` in
+/// `src/frobenius/operations.rs`, which compares against a sequential reference
+/// over a *heterogeneous* layer (`wide_frobenius_layer`); block-order
+/// sensitivity lives there, not here.
+///
+/// Scope: one wire type, the single arity pair (1, 256). It is a correctness
+/// check on the above-threshold arm, not a survey of `hflip`.
 #[test]
 fn frobenius_hflip_above_threshold() {
-    // Build a large morphism: 128 inputs → 1 output
-    // This recursively builds layers with 128+ identity blocks that get hflipped.
-    let morph: FrobeniusMorphism<char, String> = special_frobenius_morphism(128, 1, 'a');
-    assert_eq!(morph.domain(), vec!['a'; 128]);
+    // 256 inputs → 1 output: the widest layer is 128 μ blocks, which is the
+    // first width `with_min_len(64)` subdivides.
+    const WIDTH: usize = 256;
+
+    let morph: FrobeniusMorphism<char, String> = special_frobenius_morphism(WIDTH, 1, 'a');
+    assert_eq!(morph.domain(), vec!['a'; WIDTH]);
     assert_eq!(morph.codomain(), vec!['a']);
 
-    // Now trigger hflip by building 1 → 128 (internally calls hflip on 128→1)
-    let morph_flipped: FrobeniusMorphism<char, String> = special_frobenius_morphism(1, 128, 'a');
+    // Now trigger hflip by building 1 → 256 (internally calls hflip on 256→1)
+    let morph_flipped: FrobeniusMorphism<char, String> = special_frobenius_morphism(1, WIDTH, 'a');
     assert_eq!(morph_flipped.domain(), vec!['a']);
-    assert_eq!(morph_flipped.codomain(), vec!['a'; 128]);
+    assert_eq!(morph_flipped.codomain(), vec!['a'; WIDTH]);
 
-    // Compose for real: (1 → 128) ; (128 → 1), a connected diagram on one input
+    // Compose for real: (1 → 256) ; (256 → 1), a connected diagram on one input
     // and one output, which by the spider theorem is the identity wire.
     let mut composed = morph_flipped;
     ComposableMutating::compose(&mut composed, morph).unwrap();
@@ -100,6 +121,6 @@ fn frobenius_hflip_above_threshold() {
         frobenius_to_cospan(&identity_wire)
             .unwrap()
             .canonical_form(),
-        "the 1 → 128 → 1 fold does not denote the identity wire"
+        "the 1 → 256 → 1 fold does not denote the identity wire"
     );
 }
