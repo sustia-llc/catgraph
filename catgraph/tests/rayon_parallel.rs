@@ -15,9 +15,8 @@
 //! same split in `catgraph-applied`.
 
 use catgraph::{
-    category::HasIdentity,
-    frobenius::{FrobeniusMorphism, special_frobenius_morphism},
-    monoidal::Monoidal,
+    category::ComposableMutating,
+    frobenius::{FrobeniusMorphism, frobenius_to_cospan, special_frobenius_morphism},
     named_cospan::NamedCospan,
 };
 use either::Either::{Left, Right};
@@ -57,19 +56,50 @@ fn named_cospan_predicate_above_threshold() {
 /// direct `special_frobenius_morphism` with m < n) runs the parallel arm, which
 /// rayon actually subdivides once a layer reaches ≥ 128 blocks (`with_min_len(64)`
 /// splits only at length ≥ 2·min).
+///
+/// # What this asserts, and what it used to
+///
+/// The composition below is a **real** one: `(1 → 128) ; (128 → 1)`, checked
+/// against the identity wire through [`frobenius_to_cospan`]. It replaces a
+/// `composed.monoidal(FrobeniusMorphism::identity(&vec![]))` — a tensor with the
+/// empty identity, i.e. a no-op on the value and no composition at all. That
+/// version, plus the two `depth() > 0` checks, stayed green with `hflip` made a
+/// complete no-op, while 24 tests in eight other binaries went red.
+///
+/// The first two assertions alone would catch that mutant (a no-op `hflip`
+/// leaves a `[a; 128] → [a]` word where `[a] → [a; 128]` is claimed). The
+/// interpretation check is the one that reaches the *wiring*: a `hflip` that
+/// swapped the interfaces but mangled block order would keep the words.
+///
+/// Scope: one wire type, the single arity pair (1, 128) that puts a layer over
+/// the rayon threshold. It is a correctness check on the above-threshold arm,
+/// not a survey of `hflip`.
 #[test]
 fn frobenius_hflip_above_threshold() {
     // Build a large morphism: 128 inputs → 1 output
     // This recursively builds layers with 128+ identity blocks that get hflipped.
     let morph: FrobeniusMorphism<char, String> = special_frobenius_morphism(128, 1, 'a');
-    assert!(morph.depth() > 0);
+    assert_eq!(morph.domain(), vec!['a'; 128]);
+    assert_eq!(morph.codomain(), vec!['a']);
 
     // Now trigger hflip by building 1 → 128 (internally calls hflip on 128→1)
     let morph_flipped: FrobeniusMorphism<char, String> = special_frobenius_morphism(1, 128, 'a');
-    assert!(morph_flipped.depth() > 0);
+    assert_eq!(morph_flipped.domain(), vec!['a']);
+    assert_eq!(morph_flipped.codomain(), vec!['a'; 128]);
 
-    // Compose: (1 → 128) then (128 → 1) should produce a valid 1 → 1 morphism
-    let mut composed = morph_flipped.clone();
-    composed.monoidal(FrobeniusMorphism::identity(&vec![]));
-    assert!(composed.depth() > 0);
+    // Compose for real: (1 → 128) ; (128 → 1), a connected diagram on one input
+    // and one output, which by the spider theorem is the identity wire.
+    let mut composed = morph_flipped;
+    ComposableMutating::compose(&mut composed, morph).unwrap();
+    assert_eq!(composed.domain(), vec!['a']);
+    assert_eq!(composed.codomain(), vec!['a']);
+
+    let identity_wire: FrobeniusMorphism<char, String> = special_frobenius_morphism(1, 1, 'a');
+    assert_eq!(
+        frobenius_to_cospan(&composed).unwrap().canonical_form(),
+        frobenius_to_cospan(&identity_wire)
+            .unwrap()
+            .canonical_form(),
+        "the 1 → 128 → 1 fold does not denote the identity wire"
+    );
 }

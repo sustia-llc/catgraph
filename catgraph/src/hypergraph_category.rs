@@ -11,8 +11,19 @@
 //!
 //! ## Implementations
 //!
-//! - [`Cospan<Lambda>`](crate::cospan::Cospan) — the free hypergraph category on `Λ`
-//!   (Thm 3.14; freeness adjunction deferred — see `docs/FS19-AUDIT.md`, #79)
+//! - [`Cospan<Lambda>`](crate::cospan::Cospan) — the hypergraph category that
+//!   Thm 3.14 identifies as the **free** one on `Λ`
+//!
+//! ## The freeness in Thm 3.14 is not witnessed here
+//!
+//! Thm 3.14's content is an adjunction `Set ⇄ Hyp` — a unit, a counit and the
+//! two triangle identities. None of that is constructed in catgraph: the
+//! cross-`Λ` functor `Cospan_-` it is stated over (Prop 2.1, Eq 9) is itself
+//! ❌ DEFERRED, and `docs/FS19-AUDIT.md` marks Thm 3.14 ❌ under
+//! `universal-property-API`. So every mention of "free" in this module names
+//! the paper's theorem about `Cospan_Λ`, never a property this crate has
+//! checked. What *is* checked is that `Cospan<Lambda>` satisfies Def 2.12 —
+//! `tests/frobenius_axioms.rs` decides all eleven Def 2.5 equations on it.
 
 use std::fmt::Debug;
 
@@ -34,7 +45,9 @@ use crate::{
 /// These satisfy the 9 Frobenius axioms (associativity, unitality, commutativity,
 /// co-versions of each, the Frobenius law, and specialness).
 ///
-/// In catgraph, `Cospan<Lambda>` is the canonical (free) hypergraph category.
+/// In catgraph, `Cospan<Lambda>` is the canonical hypergraph category. Thm 3.14
+/// calls it the *free* one on `Λ`; that adjunction is deferred rather than
+/// witnessed — see the [module documentation](self).
 pub trait HypergraphCategory<Lambda: Eq + Copy + Debug>:
     SymmetricMonoidalMorphism<Lambda> + HasIdentity<Vec<Lambda>> + Monoidal + Sized
 {
@@ -66,7 +79,8 @@ pub trait HypergraphCategory<Lambda: Eq + Copy + Debug>:
 }
 
 // ---------------------------------------------------------------------------
-// Cospan<Lambda> is the free hypergraph category (Thm 3.14)
+// Cospan<Lambda> as a hypergraph category — Thm 3.14's carrier, without the
+// freeness adjunction Thm 3.14 is about (see the module docs).
 // ---------------------------------------------------------------------------
 
 use crate::cospan::Cospan;
@@ -207,11 +221,21 @@ mod tests {
         assert!(cap.codomain().is_empty());
     }
 
-    // --- Frobenius axioms (spot checks) ---
+    // --- Frobenius axiom ARITIES (not the equations) ---
+    //
+    // ⚠ Every test below asserts a domain and a codomain and stops there. They
+    // are named for the axioms they *shape-check*, and they stayed 19/19 green
+    // under a non-merging μ together with a non-splitting δ (#283) — a
+    // type-correct mutation that makes every one of these composites the wrong
+    // morphism. `frobenius_law_lhs_arities` does not even build the second side
+    // of its equation.
+    //
+    // The equations themselves — both sides, decided — live in
+    // `tests/frobenius_axioms.rs`. Do not read anything here as a law pin.
 
-    /// Unitality: η;μ = id (left unit law via composition)
+    /// Arity of the left unit law's composite `(η ⊗ id) ; μ`.
     #[test]
-    fn unitality_left() {
+    fn unitality_left_arities() {
         let z = 'x';
         // (η ⊗ id) ; μ should equal id
         let mut eta_id = Cospan::<char>::unit(z);
@@ -223,9 +247,9 @@ mod tests {
         assert_eq!(result.codomain(), vec![z]);
     }
 
-    /// Counitality: δ;ε = id (left counit law)
+    /// Arity of the left counit law's composite `δ ; (ε ⊗ id)`.
     #[test]
-    fn counitality_left() {
+    fn counitality_left_arities() {
         let z = 'x';
         let delta = Cospan::<char>::comultiplication(z);
         let mut eps_id = Cospan::counit(z);
@@ -235,10 +259,10 @@ mod tests {
         assert_eq!(result.codomain(), vec![z]);
     }
 
-    /// Associativity: (μ ⊗ id) ; μ = (id ⊗ μ) ; μ
-    /// Both sides: [z,z,z] → [z]
+    /// Arities of both sides of associativity, `(μ ⊗ id) ; μ` and
+    /// `(id ⊗ μ) ; μ` — built, but never compared to each other.
     #[test]
-    fn associativity() {
+    fn associativity_arities() {
         let z = 'a';
         let mu = || Cospan::<char>::multiplication(z);
         let id = || Cospan::<char>::identity(&vec![z]);
@@ -259,9 +283,9 @@ mod tests {
         assert_eq!(right.codomain(), vec![z]);
     }
 
-    /// Special Frobenius: δ;μ = id
+    /// Arity of the speciality composite `δ ; μ`.
     #[test]
-    fn special_frobenius() {
+    fn special_frobenius_arities() {
         let z = 'a';
         let delta = Cospan::<char>::comultiplication(z);
         let mu = Cospan::multiplication(z);
@@ -270,11 +294,14 @@ mod tests {
         assert_eq!(result.codomain(), vec![z]);
     }
 
-    /// Frobenius law: (μ ⊗ id) ; (id ⊗ δ) = δ ; (id ⊗ μ) ... wait, the
-    /// standard Frobenius law is (μ ⊗ id) ; δ = (id ⊗ δ) ; (μ ⊗ id).
-    /// Both sides: [z,z] → [z,z]. We verify domain/codomain.
+    /// Arity of `(μ ⊗ id) ; (id ⊗ δ)`, a `[z,z,z] → [z,z,z]` composite.
+    ///
+    /// ⚠ This is **not** a side of the Frobenius law, and no second side is
+    /// built. The law relates `[z,z] → [z,z]` morphisms:
+    /// `(δ ⊗ id) ; (id ⊗ μ) = μ ; δ = (id ⊗ δ) ; (μ ⊗ id)`, decided in
+    /// `tests/frobenius_axioms.rs`.
     #[test]
-    fn frobenius_law() {
+    fn frobenius_law_lhs_arities() {
         let z = 'a';
         // Left: (μ ⊗ id) ; (id ⊗ δ)
         let mut mu_id = Cospan::<char>::multiplication(z);
@@ -289,8 +316,10 @@ mod tests {
 
     // --- Zigzag via HypergraphCategory ---
 
+    /// Arity of the left snake `(cup ⊗ id) ; (id ⊗ cap)`; the snake *equation*
+    /// is `zigzag_identities_per_carrier` in `tests/frobenius_axioms.rs`.
     #[test]
-    fn zigzag_via_trait() {
+    fn zigzag_via_trait_arities() {
         let z = 'z';
         let cup = Cospan::<char>::cup(z).unwrap();
         let cap = Cospan::<char>::cap(z).unwrap();
@@ -353,9 +382,14 @@ mod tests {
         assert!(cap.codomain().is_empty());
     }
 
-    /// Special Frobenius: δ;μ = id (domain/codomain check)
+    /// Arity of `δ ; μ` on `FrobeniusMorphism`.
+    ///
+    /// The equation `δ ; μ = id` does **not** hold for this carrier under
+    /// structural equality at all — its normalizer has no fusion rule for the
+    /// lettered generators — so it is decided through `frobenius_to_cospan` in
+    /// `tests/frobenius_axioms.rs`, not here.
     #[test]
-    fn frobenius_morphism_special() {
+    fn frobenius_morphism_special_arities() {
         use crate::category::ComposableMutating;
         let mut delta = FM::comultiplication('a');
         let mu = FM::multiplication('a');

@@ -86,7 +86,6 @@ where
 ///
 /// A morphism `X → Y` in `H_A` is an element of `A(X ⊕ Y)`.
 /// Composition uses the comp cospan (Eq. 32), identity uses the cup cospan (Eq. 33).
-#[derive(Clone)]
 pub struct CospanAlgebraMorphism<A, Lambda>
 where
     A: CospanAlgebra<Lambda>,
@@ -96,6 +95,28 @@ where
     element: A::Elem,
     domain: Vec<Lambda>,
     codomain: Vec<Lambda>,
+}
+
+/// Hand-written rather than derived: the algebra is held behind an [`Arc`], so
+/// cloning a morphism never clones `A` and must not demand `A: Clone`. The
+/// derived impl asked for exactly that, which put every zero-sized algebra —
+/// [`PartitionAlgebra`](crate::cospan_algebra::PartitionAlgebra) included —
+/// outside `Clone` for no reason and kept this carrier out of any test written
+/// against a `Clone` bound.
+impl<A, Lambda> Clone for CospanAlgebraMorphism<A, Lambda>
+where
+    A: CospanAlgebra<Lambda>,
+    A::Elem: Clone,
+    Lambda: Eq + Copy + Debug,
+{
+    fn clone(&self) -> Self {
+        Self {
+            algebra: Arc::clone(&self.algebra),
+            element: self.element.clone(),
+            domain: self.domain.clone(),
+            codomain: self.codomain.clone(),
+        }
+    }
 }
 
 impl<A, Lambda> CospanAlgebraMorphism<A, Lambda>

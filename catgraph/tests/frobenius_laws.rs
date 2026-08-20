@@ -119,10 +119,33 @@ fn spider_fusion() {
     assert_eq!(fused_2.domain(), vec!['z']);
     assert_eq!(fused_2.codomain(), vec!['z', 'z', 'z', 'z']);
 
-    // Compare with special_frobenius_morphism(1,4,z) which builds the same thing
-    let expected: FM = special_frobenius_morphism(1, 4, 'z');
-    assert_eq!(fused_2.domain(), expected.domain());
-    assert_eq!(fused_2.codomain(), expected.codomain());
+    // The oracle for Rule 4 is the *single fused block*, not
+    // `special_frobenius_morphism(1, 4, 'z')`: the factory builds an equivalent
+    // spider out of generators (a δ tree, depth 3 here), so comparing against it
+    // could only ever be an arity check — which is what this assertion used to
+    // be, and which stays green if the fusion rule is deleted outright.
+    let expected_fused_2: FM = FrobeniusOperation::Spider('z', 1, 4).into();
+    assert!(
+        fused_2 == expected_fused_2,
+        "Spider(z,1,3);Spider(z,3,4) should fuse to the single block Spider(z,1,4), got depth {}",
+        fused_2.depth()
+    );
+    assert_eq!(
+        fused_2.depth(),
+        1,
+        "a fused spider is one block in one layer"
+    );
+
+    // The factory's spider is the *same morphism* but not the same
+    // presentation, and that gap is the reason for the block oracle above.
+    let via_factory: FM = special_frobenius_morphism(1, 4, 'z');
+    assert_eq!(via_factory.domain(), fused_2.domain());
+    assert_eq!(via_factory.codomain(), fused_2.codomain());
+    assert!(
+        via_factory != fused_2,
+        "special_frobenius_morphism(1, 4, ..) now returns a single Spider block; if that is \
+         deliberate it is the better oracle and this test should use it"
+    );
 }
 
 // ---------------------------------------------------------------------------

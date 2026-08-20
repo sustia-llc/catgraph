@@ -6,6 +6,61 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`frobenius::frobenius_to_cospan`** — interpret a `FrobeniusMorphism` as the
+  `Cospan` it denotes, the semantics half of the Prop 3.8 correspondence whose
+  syntax half `cospan_algebra::cospan_to_frobenius` already covered
+  ([#283](https://github.com/sustia-llc/catgraph/issues/283)). Each layer is the
+  monoidal product of its blocks' generator cospans and the morphism is the
+  pushout composite of its layers; an `UnSpecifiedBox` denotes nothing and is
+  rejected with a `CatgraphError::Composition` naming its arities.
+
+  This exists because `FrobeniusMorphism`'s `PartialEq` compares
+  *presentations*: it separates both sides of **all eleven** Def 2.5 equations
+  (measured, and pinned as a count in
+  `tests/frobenius_axioms.rs::frobenius_structural_equality_decides_nothing_here`),
+  so nothing in the crate could decide a Frobenius equation on that carrier.
+  Composing `f` then `g` in `FrobeniusMorphism` and interpreting is *not* the
+  same as interpreting each and composing in `Cospan`, in exactly one case: the
+  normalizer's unit/counit rule deletes an `η` feeding an `ε`, which is the
+  extra-special axiom, and `Cospan` keeps that bubble. Both halves are pinned.
+
+- **`tests/frobenius_axioms.rs`** (14 tests) — the Def 2.5 equations built on
+  both sides and decided, for all four carriers that implement
+  `HypergraphCategory` (#283). Riders for the zigzag identities and for the
+  braiding being a genuine crossing: a disconnected cup and an identity
+  braiding each leave every one of the nine equations intact.
+
+- **`tests/corel.rs::composites_induce_the_expected_partition`** — `Corel`
+  composites are pinned by their whole class structure, not only by the joint
+  surjectivity `Corel::new` checks and every wrong composite also satisfies (#283).
+
+### Changed
+
+- **`CospanAlgebraMorphism`'s `Clone` is hand-written and no longer requires
+  `A: Clone`** (#283). The algebra is held behind an `Arc`, so cloning never
+  clones it; the derived bound put every zero-sized algebra —
+  `PartitionAlgebra` included — outside `Clone`. Strictly a loosening: every
+  call that compiled before still compiles.
+
+- **The Thm 3.14 freeness claims in `hypergraph_category.rs` are scoped to the
+  deferral** ([#277](https://github.com/sustia-llc/catgraph/issues/277)). The
+  trait doc and the impl banner asserted "the free hypergraph category" bare,
+  while `docs/FS19-AUDIT.md` marks Thm 3.14 ❌ DEFERRED and nothing constructs
+  the `Set ⇄ Hyp` adjunction. The module doc's own caveat also cited
+  [#79](https://github.com/sustia-llc/catgraph/issues/79), closed since
+  2026-07-27; it now cites the audit doc. Prose only.
+
+- **The arity-only Frobenius tests are renamed to say so** (#283):
+  `unitality_left` → `unitality_left_arities` and similarly for
+  `counitality_left`, `associativity`, `frobenius_law` (→
+  `frobenius_law_lhs_arities`, which builds one side of a different equation),
+  `special_frobenius`, `zigzag_via_trait` and `frobenius_morphism_special` in
+  `src/hypergraph_category.rs`, plus the H_Part trio in `tests/equivalence.rs`.
+  All of them stayed green under a non-merging μ together with a non-splitting
+  δ. Test names only; no API change.
+
 ## [workspace-v0.15.0] - 2026-08-16
 
 ### Changed — BREAKING
