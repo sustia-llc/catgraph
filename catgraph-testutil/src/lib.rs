@@ -17,14 +17,19 @@
 //! - [`strategy`] — shared `proptest` float strategies covering the wide
 //!   dynamic ranges and near-cancellation pairs the workspace's uniform-
 //!   magnitude strategies never reached (#169).
+//! - [`all_perms`] and [`all_perm_indices`] — exhaustive `Sₙ` enumeration for
+//!   the `#258` braiding sweeps; replaced two private copies in
+//!   `catgraph-applied/tests` once `catgraph/tests` needed it too (#286).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 mod approx;
+mod perm;
 pub mod strategy;
 
 pub use approx::approx_rel;
+pub use perm::{all_perm_indices, all_perms};
 
 /// The LCG multiplier — the 64-bit constant from the PCG family / Knuth MMIX
 /// lineage (also used by `pcg64`). Shared by every stream this type produces.

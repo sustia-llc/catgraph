@@ -37,6 +37,7 @@ use catgraph_applied::prop::PropExpr;
 use catgraph_applied::rig::{F64Rig, One, Rig, Zero};
 use catgraph_applied::sfg::{SfgGenerator, SignalFlowGraph};
 use catgraph_applied::sfg_to_mat::sfg_to_mat;
+use catgraph_testutil::all_perms;
 use permutations::Permutation;
 
 type Sfg = PropExpr<SfgGenerator<F64Rig>>;
@@ -52,27 +53,6 @@ fn reference_wiring(p: &Permutation) -> Vec<usize> {
 fn labels(n: usize) -> Vec<char> {
     (0..n)
         .map(|i| char::from(b'A' + u8::try_from(i).expect("n < 26 in these fixtures")))
-        .collect()
-}
-
-/// Every permutation of `0..n`, each exactly once.
-fn all_perms(n: usize) -> Vec<Permutation> {
-    fn go(cur: &mut Vec<usize>, k: usize, out: &mut Vec<Vec<usize>>) {
-        if k == cur.len() {
-            out.push(cur.clone());
-            return;
-        }
-        for i in k..cur.len() {
-            cur.swap(k, i);
-            go(cur, k + 1, out);
-            cur.swap(k, i);
-        }
-    }
-    let mut cur: Vec<usize> = (0..n).collect();
-    let mut out = Vec::new();
-    go(&mut cur, 0, &mut out);
-    out.into_iter()
-        .map(|v| Permutation::try_from(v).expect("permutation of 0..n"))
         .collect()
 }
 

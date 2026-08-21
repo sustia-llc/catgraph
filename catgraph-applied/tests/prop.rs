@@ -8,6 +8,7 @@ use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
 use catgraph_applied::rig::F64Rig;
 use catgraph_applied::sfg::{SfgGenerator, SignalFlowGraph};
 use catgraph_applied::sfg_to_mat::sfg_to_mat;
+use catgraph_testutil::all_perm_indices;
 use permutations::Permutation;
 use std::borrow::Cow;
 
@@ -225,25 +226,6 @@ fn assert_realizes(p: &Permutation) {
     );
 }
 
-/// Every permutation of `0..n`, each exactly once (Heap-style prefix swaps).
-fn all_perms(n: usize) -> Vec<Vec<usize>> {
-    fn go(cur: &mut Vec<usize>, k: usize, out: &mut Vec<Vec<usize>>) {
-        if k == cur.len() {
-            out.push(cur.clone());
-            return;
-        }
-        for i in k..cur.len() {
-            cur.swap(k, i);
-            go(cur, k + 1, out);
-            cur.swap(k, i);
-        }
-    }
-    let mut cur: Vec<usize> = (0..n).collect();
-    let mut out = Vec::new();
-    go(&mut cur, 0, &mut out);
-    out
-}
-
 #[test]
 fn from_permutation_identity_is_identity_expr() {
     // No swaps to perform, at every width — including the two degenerate ones.
@@ -286,16 +268,25 @@ fn from_permutation_realizes_named_shapes() {
 fn from_permutation_exhaustive_oracle_n3_and_n4() {
     // 6 + 24 cases: the assertion that actually pins faithfulness.
     for (n, expected) in [(3usize, 6usize), (4, 24)] {
-        let perms = all_perms(n);
-        // `all_perms` is a test helper, so "exhaustive" is a claim about it, not
-        // a fact. Pin `n!` and distinctness here: a helper that silently yielded
-        // fewer would leave the sweep below covering less than its name says
-        // while still passing.
-        assert_eq!(perms.len(), expected, "all_perms({n}) must yield {n}!");
+        let perms = all_perm_indices(n);
+        // `all_perm_indices` is a test helper, so "exhaustive" is a claim about
+        // it, not a fact. Pin `n!` and distinctness here as well as in
+        // `catgraph-testutil`'s own tests: a helper that silently yielded fewer
+        // would leave the sweep below covering less than its name says while
+        // still passing.
+        assert_eq!(
+            perms.len(),
+            expected,
+            "all_perm_indices({n}) must yield {n}!"
+        );
         let mut distinct = perms.clone();
         distinct.sort_unstable();
         distinct.dedup();
-        assert_eq!(distinct.len(), expected, "all_perms({n}) must not repeat");
+        assert_eq!(
+            distinct.len(),
+            expected,
+            "all_perm_indices({n}) must not repeat"
+        );
 
         for v in perms {
             assert_realizes(&Permutation::try_from(v).unwrap());
@@ -401,8 +392,8 @@ fn check_permute_side_square(n: usize) -> usize {
     );
 
     let mut checked = 0usize;
-    for v in all_perms(n) {
-        let p = Permutation::try_from(v).expect("all_perms yields valid permutations");
+    for v in all_perm_indices(n) {
+        let p = Permutation::try_from(v).expect("all_perm_indices yields valid permutations");
         for of_codomain in [false, true] {
             let mut expr = f.as_prop_expr().clone();
             expr.permute_side(&p, of_codomain);

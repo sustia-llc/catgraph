@@ -11,6 +11,37 @@ version history.
 
 ### Added
 
+- **`all_perms` + `all_perm_indices`**
+  ([#286](https://github.com/sustia-llc/catgraph/issues/286)): exhaustive `Sₙ`
+  enumeration by prefix swaps, the generator every #258 braiding sweep runs on.
+  It existed as two private copies on `main` — `catgraph-applied`'s
+  `tests/braiding_cross_carrier.rs` and `tests/prop.rs` — and #286's new core
+  sweeps needed it too; rather than write it a third and fourth time it moved
+  here, which is exactly the duplication class #33 opened this crate for.
+
+  Two entry points because the call sites want different things:
+  `all_perm_indices` yields raw `Vec<usize>` one-line notations, which sort and
+  dedup (`permutations::Permutation` is neither `Ord` nor `Hash`) so a caller can
+  pin distinctness of the enumeration itself; `all_perms` yields `Permutation`
+  values ready to feed a constructor. This crate's own tests pin `n!` and
+  distinctness for `n ≤ 5`, that every entry is a bijection of `0..n`, and that
+  the two views are **index-aligned** (checked at `n ∈ {3, 4}`, the only `n` any
+  consuming sweep runs) — `all_perms(n)[k]` is the permutation whose one-line
+  notation is `all_perm_indices(n)[k]`, asserted through `all_perms` itself.
+  Alignment is the only contract a caller mixing the views depends on; a drift
+  in `all_perms` cannot flip a consuming sweep's convention (each sweep derives
+  its reference from the same `p` it feeds the constructor, and `Sₙ` is closed
+  under inversion), so this pin is the only place such a drift is visible —
+  falsified by mapping `all_perms` through `.inv()`: RED at `all_perms(3)[3]`,
+  `[2, 0, 1]` where `all_perm_indices(3)[3]` is `[1, 2, 0]`
+  (16 passed, 1 failed), with all 66 test binaries of
+  `cargo test -p catgraph -p catgraph-applied --tests` staying green.
+- **`permutations` dependency**
+  ([#286](https://github.com/sustia-llc/catgraph/issues/286)) — required by
+  `all_perms` above, and free on the same grounds as `proptest` below: dev-only
+  and unpublished, never in a published crate's `[dependencies]` (#33). This
+  crate has no `catgraph` edge and must not grow one — its dedup targets are its
+  dev-dependants.
 - **`approx_rel` + `assert_approx_rel!`**
   ([#169](https://github.com/sustia-llc/catgraph/issues/169)): relative-plus-
   absolute float comparison, `|a − b| <= max(abs, rel · max(|a|, |b|))`. The

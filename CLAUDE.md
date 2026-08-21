@@ -22,9 +22,10 @@ catgraph (F&S core) ─▶ catgraph-applied ─▶ catgraph-magnitude
 ```
 
 `catgraph-testutil` is a seventh workspace member: a **dev-only, unpublished**
-(`publish = false`) crate of shared test/bench helpers (currently a deterministic
-LCG), pulled in only via `[dev-dependencies]` — never a published crate's
-`[dependencies]` (#33).
+(`publish = false`) crate of shared test/bench helpers (a deterministic LCG for
+seeded fixtures, relative float comparison, shared proptest float strategies,
+and exhaustive permutation enumeration), pulled in only via
+`[dev-dependencies]` — never a published crate's `[dependencies]` (#33).
 
 **Zero external algebraic dependencies** (#218, completed at #222): the whole
 substrate is catgraph-owned. catgraph-dl defines the endofunctor witness tower

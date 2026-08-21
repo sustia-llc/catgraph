@@ -29,6 +29,10 @@ thiserror.workspace = true
 union-find.workspace = true
 
 [dev-dependencies]
+# `all_perms` — the exhaustive `Sₙ` enumeration the #258 braiding sweeps run on,
+# shared with `catgraph-applied`'s cross-carrier oracle rather than copied (#286,
+# #33). Dev-only and unpublished: never a `[dependencies]` entry here.
+catgraph-testutil.workspace = true
 criterion.workspace = true
 proptest.workspace = true
 # `std`/`std_rng` re-added on this dev-only edge: the workspace `rand` entry is

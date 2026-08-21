@@ -1,6 +1,6 @@
 [package]
 name = "catgraph-testutil"
-description = "Dev-only test/bench helpers for the catgraph workspace (unpublished). Currently a shared deterministic LCG used by seeded fixtures."
+description = "Dev-only test/bench helpers for the catgraph workspace (unpublished): a deterministic LCG for seeded fixtures, relative float comparison, shared proptest float strategies, and exhaustive permutation enumeration."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,3 +16,8 @@ publish = false
 # crate never appears in a published crate's `[dependencies]` (#33). Needed for
 # the shared float strategies in `strategy` (#169).
 proptest.workspace = true
+# Same reasoning: dev-only, so this edge never reaches a published graph. Needed
+# for `perm::all_perms`, the exhaustive `Sₙ` enumeration the #258 braiding
+# sweeps in `catgraph` and `catgraph-applied` share (#286). This crate has no
+# `catgraph` edge and must not grow one — the dedup targets are dev-dependants.
+permutations.workspace = true
