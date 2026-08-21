@@ -15,13 +15,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
-- **clippy 1.98 compatibility.** Two sites tripped lints new in clippy 1.98,
-  which `-D warnings` turns into hard errors: `clippy::chunks_exact_to_as_chunks`
-  on the `sub_ints.chunks_exact(2)` pairing in `E1::random`
-  (`src/e1_operad.rs`), now `as_chunks::<2>().0.iter()`; and
-  `clippy::manual_slice_fill` on the row-zeroing loop in
-  `tests/mat_mutable_api.rs`, now `fill(F64Rig(0.0))`. Both are the rewrites
-  the lints themselves prescribe. No behaviour change.
+- **clippy 1.98 compatibility**
+  ([#340](https://github.com/sustia-llc/catgraph/issues/340)). Two sites tripped
+  clippy 1.98 lints that `-D warnings` turns into hard errors:
+  `clippy::chunks_exact_to_as_chunks` (new in 1.98) on the
+  `sub_ints.chunks_exact(2)` pairing in `E1::random` (`src/e1_operad.rs`), now
+  `as_chunks::<2>().0.iter()`; and `clippy::manual_slice_fill` (older, but 1.98
+  widened its detection to `for` loops over `&mut [T; N]`, rust-clippy #16926)
+  on the row-zeroing loop in `tests/mat_mutable_api.rs`, now
+  `fill(F64Rig(0.0))`. Both are the rewrites the lints themselves prescribe —
+  though clippy's own `help:` for `manual_slice_fill` is malformed (it keeps a
+  leading `&mut`, yielding `&mut ()`), so `--fix` would not have produced this.
+  No behaviour change.
 
 ## [workspace-v0.15.0] - 2026-08-16
 
