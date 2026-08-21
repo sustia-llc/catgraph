@@ -147,9 +147,8 @@ All notable changes to `catgraph` are documented here. The format follows
   layer fold; its six arms other than `Spider` and `UnSpecifiedBox`, the
   hand-built braiding literal included, are byte-identical to the survivor's,
   so a type-correct convention error applied to both copies cannot be compared
-  away here
-  (measured: flipping the braiding leg in both still reddens the pin, but via
-  the fold's label check on a mixed-label σ, not a comparison; the
+  away here (measured: flipping the braiding leg in both still reddens the pin,
+  but via the fold's label check on a mixed-label σ, not a comparison; the
   same-label case is held by the `from_permutation_on_domain`-built tests in
   `tests/frobenius_axioms.rs` — two red under E, of 15 crate-wide). The space:
   the ten `tests/compact_closed.rs::samples()`, the thirty-six
