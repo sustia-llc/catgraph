@@ -103,8 +103,9 @@ where
 /// `depth`/`domain`/`codomain` cannot tell a connectivity-only regression from
 /// a fixture drift (`σ_{a,a}` and `id_{a,a}` print identically), so the message
 /// also renders each side's `frobenius_to_cospan(..).canonical_form()` — equal
-/// up to apex isomorphism exactly when the two presentations denote the same
-/// cospan.
+/// up to apex isomorphism when the two presentations denote the same cospan,
+/// away from scalars (`frobenius_to_cospan` is neither sound nor complete on
+/// bubbles — see its docs; a spelled `η;ε` and `identity([])` render alike).
 #[allow(dead_code)]
 pub fn assert_frobenius_eq_msg<L, BL>(
     a: &FrobeniusMorphism<L, BL>,

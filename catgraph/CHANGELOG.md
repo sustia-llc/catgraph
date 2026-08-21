@@ -313,7 +313,12 @@ All notable changes to `catgraph` are documented here. The format follows
   `ctf_disconnected_cospan_is_the_tensor_not_a_spider` (including a
   uniform-label witness whose boundary is byte-identical to the spider it must
   not equal), `ctf_functoriality_composition_content`, and content assertions
-  on `F(id)`, `F(η)`, `F(ε)`, `F(μ)`, `F(δ)`.
+  on `F(id)`, `F(η)`, `F(ε)`, `F(μ)`, `F(δ)`. Because
+  `special_frobenius_morphism` is not independent of the code under test
+  (`from_decomposition` builds each surjection block with it),
+  `ctf_single_apex_cospan_round_trips_up_to_canonical_form` round-trips the 24
+  non-bubble grid cells through `frobenius_to_cospan` + `canonical_form` and
+  asserts the `(0,0)` bubble loss separately.
 - Leg-by-leg Prop 4.6 and Lemma 4.9 witnesses ([#285]). The Prop 4.6 proptests
   ran on a uniform-label generator with an injective leg, under which a wrong
   leg is invisible; `arb_mixed_part_element` now emits two apex classes sharing
@@ -322,7 +327,9 @@ All notable changes to `catgraph` are documented here. The format follows
   `μ ; δ`.
 - `tests/common::assert_frobenius_eq_msg` / `frobenius_shape` — `FrobeniusMorphism`
   has `PartialEq` but no `Debug`, so `assert_eq!` is unavailable; these report
-  `depth`/`domain`/`codomain` on failure.
+  `depth`/`domain`/`codomain` on failure, and the assertion also renders each
+  side's `frobenius_to_cospan(..).canonical_form()`, since the three shape
+  fields cannot tell a connectivity-only regression from a fixture drift.
 
 ## [workspace-v0.15.0] - 2026-08-16
 

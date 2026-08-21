@@ -180,8 +180,8 @@ fn relabeling_roundtrip_invertible() {
 // layer-by-layer presentation equality), not just the boundary types — see
 // `assert_frobenius_eq_msg`. Boundary-only versions could not see
 // connectivity: under a merge-everything-into-one-spider implementation of the
-// functor (#285) every uniform-label one of them stayed green, and the
-// mixed-label ones went red only for their boundary labels.
+// functor (#285) all four stayed green (each uses one label); the three
+// mixed-label tests further down went red for their labels, not their wiring.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -404,8 +404,9 @@ fn ctf_asymmetric_cospan() {
 /// and no multi-label cospan. The reference side is
 /// `special_frobenius_morphism`, which is **not** independent of the code
 /// under test: `from_decomposition` builds each surjection block by calling
-/// it, and for `m ≥ n`, `n ≠ 1` it is literally `sfm(m,1) ; sfm(1,n)` — the
-/// same shape the general route composes. A defect inside
+/// it, and outside the base cases (`(1,0)` is `Counit` itself) it is, for
+/// `m ≥ n`, `n ≠ 1`, literally `sfm(m,1) ; sfm(1,n)` — the same shape the
+/// general route composes. A defect inside
 /// `special_frobenius_morphism` is therefore invisible here; what this pin
 /// does see is the guard regression below, and
 /// `ctf_single_apex_cospan_round_trips_up_to_canonical_form` is the
@@ -436,9 +437,12 @@ fn ctf_single_apex_cospan_is_the_spider() {
 }
 
 /// `sfm`-independent companion to the grid pin: interpret `F(c)` back into
-/// `Cospan` through `frobenius_to_cospan` (a layer-by-layer interpreter that
-/// never calls `special_frobenius_morphism`) and compare canonical forms with
-/// the original.
+/// `Cospan` through `frobenius_to_cospan` and compare canonical forms with the
+/// original. `frobenius_to_cospan`'s only `special_frobenius_morphism` call
+/// sits in the `Spider` arm of its generator interpreter, which
+/// `cospan_to_frobenius`'s image never reaches — no production path emits a
+/// `Spider` block except rule 4 fusing two existing ones — so on this input
+/// space the reference side shares no code with `special_frobenius_morphism`.
 ///
 /// Scope of the claim: the 24 single-apex cospans `(m, n) ∈ {0,…,4}² \ (0,0)`
 /// over `'a'`. `(0,0)` is excluded and asserted separately: the bubble is lost
