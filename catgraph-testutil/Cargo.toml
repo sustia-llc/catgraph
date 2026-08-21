@@ -16,3 +16,8 @@ publish = false
 # crate never appears in a published crate's `[dependencies]` (#33). Needed for
 # the shared float strategies in `strategy` (#169).
 proptest.workspace = true
+# Same reasoning: dev-only, so this edge never reaches a published graph. Needed
+# for `perm::all_perms`, the exhaustive `Sₙ` enumeration the #258 braiding
+# sweeps in `catgraph` and `catgraph-applied` share (#286). This crate has no
+# `catgraph` edge and must not grow one — the dedup targets are dev-dependants.
+permutations.workspace = true

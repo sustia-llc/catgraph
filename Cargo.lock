@@ -227,6 +227,7 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 name = "catgraph"
 version = "0.15.0"
 dependencies = [
+ "catgraph-testutil",
  "criterion",
  "either",
  "env_logger",
@@ -321,6 +322,7 @@ dependencies = [
 name = "catgraph-testutil"
 version = "0.15.0"
 dependencies = [
+ "permutations",
  "proptest",
 ]
 

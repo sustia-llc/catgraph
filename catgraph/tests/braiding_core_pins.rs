@@ -16,10 +16,12 @@
 //! catgraph-applied` went red on exactly 4 tests, all in
 //! `braiding_cross_carrier.rs`. A downstream test restructure would therefore
 //! have zeroed core's coverage of its own type without a single red light in
-//! core. With this file present the same mutation turns 4 core tests red
-//! (`hand_written_reference_and_cam_element` reports the element's apex classes
-//! as `A:[0,5] B:[1,3] C:[2,4]` where the contract requires
-//! `A:[0,4] B:[1,5] C:[2,3]`).
+//! core. With this file present the same mutation turns 4 core tests red:
+//! [`hand_written_reference_and_cam_element`] fails first on the codomain word
+//! (`['B','C','A']` where the contract requires `['C','A','B']`), and
+//! [`permute_side_pins_on_the_core_carriers`] reports the mutated constructor's
+//! apex classes as `A:[0,5] B:[1,3] C:[2,4]` against the contract form
+//! `A:[0,4] B:[1,5] C:[2,3]` that `permute_side` itself still produces.
 //!
 //! # What is checked, and against what
 //!
@@ -44,14 +46,17 @@
 //! `BlackBoxLabel = ()` only. Per-test docstrings narrow this further and are
 //! the authority where they differ.
 
+mod common;
+use common::cospan_wiring;
+
 use catgraph::category::{Composable, ComposableMutating, HasIdentity};
-use catgraph::cospan::Cospan;
 use catgraph::cospan_algebra::{PartitionAlgebra, frobenius_to_cospan};
 use catgraph::cospan_canon::{ApexClass, CospanCanon};
 use catgraph::equivalence::CospanAlgebraMorphism;
 use catgraph::frobenius::FrobeniusMorphism;
 use catgraph::monoidal::SymmetricMonoidalMorphism;
 use catgraph::named_cospan::NamedCospan;
+use catgraph_testutil::all_perms;
 use permutations::Permutation;
 
 type Cam = CospanAlgebraMorphism<PartitionAlgebra, char>;
@@ -79,40 +84,6 @@ fn labels(n: usize) -> Vec<char> {
 fn names(n: usize) -> Vec<char> {
     (0..n)
         .map(|i| char::from(b'a' + u8::try_from(i).expect("n < 26 in these fixtures")))
-        .collect()
-}
-
-/// Every permutation of `0..n`, each exactly once.
-fn all_perms(n: usize) -> Vec<Permutation> {
-    fn go(cur: &mut Vec<usize>, k: usize, out: &mut Vec<Vec<usize>>) {
-        if k == cur.len() {
-            out.push(cur.clone());
-            return;
-        }
-        for i in k..cur.len() {
-            cur.swap(k, i);
-            go(cur, k + 1, out);
-            cur.swap(k, i);
-        }
-    }
-    let mut cur: Vec<usize> = (0..n).collect();
-    let mut out = Vec::new();
-    go(&mut cur, 0, &mut out);
-    out.into_iter()
-        .map(|v| Permutation::try_from(v).expect("permutation of 0..n"))
-        .collect()
-}
-
-/// Domain wire `i` and codomain wire `k` meet when they land on the same apex
-/// vertex, i.e. `left[i] == right[k]`.
-fn cospan_wiring(c: &Cospan<char>) -> Vec<usize> {
-    let (l, r) = (c.left_to_middle(), c.right_to_middle());
-    l.iter()
-        .map(|li| {
-            r.iter()
-                .position(|rk| rk == li)
-                .expect("a braiding cospan links every domain wire to a codomain wire")
-        })
         .collect()
 }
 
@@ -601,9 +572,14 @@ fn permute_side_pins_on_the_core_carriers() {
 /// `FrobeniusMorphism`, over **all 36 ordered pairs of `S₃`** with distinct
 /// labels.
 ///
-/// The composite is compared against `reference_wiring(&(p1 * p2))`, computed
-/// from the two permutations directly — not against a third call to the
-/// constructor under test, which would cancel a symmetric drift.
+/// The load-bearing assertion is the **wiring**: the composite is compared
+/// against `reference_wiring(&(p1 * p2))`, computed from the two permutations
+/// directly rather than from the constructor under test, so a drift affecting
+/// both sides alike cannot cancel. The element-level
+/// `canonical_form() == from_permutation_on_domain(p1 * p2, …)` assertion below
+/// it *does* call that constructor a third time, and so is a self-consistency
+/// check (a composite must land where the direct construction does) riding on
+/// the reference-based wiring check — not an independent oracle.
 ///
 /// # The space this claim ranges over
 ///

@@ -4,7 +4,7 @@
 //! symmetric braiding involutivity, span tensor product, and `permute_side`.
 
 mod common;
-use common::{assert_cospan_eq_msg as assert_cospan_eq, assert_cospan_shape};
+use common::{assert_cospan_eq_msg as assert_cospan_eq, assert_cospan_shape, cospan_wiring};
 
 use catgraph::{
     category::{Composable, HasIdentity},
@@ -12,6 +12,7 @@ use catgraph::{
     monoidal::{Monoidal, SymmetricMonoidalMorphism},
     span::Span,
 };
+use catgraph_testutil::all_perms;
 use permutations::Permutation;
 
 /// Build a small non-trivial cospan: domain `[a,b]`, codomain `[b,c]`,
@@ -85,40 +86,6 @@ fn tensor_unit_cospan() {
 // ---------------------------------------------------------------------------
 // 3. Permutation cospan compose: β(p₁) ; β(p₂) == β(p₁ ; p₂)
 // ---------------------------------------------------------------------------
-
-/// Domain wire `i` and codomain wire `k` meet when they land on the same apex
-/// vertex, i.e. `left[i] == right[k]`.
-fn cospan_wiring(c: &Cospan<char>) -> Vec<usize> {
-    let (l, r) = (c.left_to_middle(), c.right_to_middle());
-    l.iter()
-        .map(|li| {
-            r.iter()
-                .position(|rk| rk == li)
-                .expect("a braiding cospan links every domain wire to a codomain wire")
-        })
-        .collect()
-}
-
-/// Every permutation of `0..n`, each exactly once.
-fn all_perms(n: usize) -> Vec<Permutation> {
-    fn go(cur: &mut Vec<usize>, k: usize, out: &mut Vec<Vec<usize>>) {
-        if k == cur.len() {
-            out.push(cur.clone());
-            return;
-        }
-        for i in k..cur.len() {
-            cur.swap(k, i);
-            go(cur, k + 1, out);
-            cur.swap(k, i);
-        }
-    }
-    let mut cur: Vec<usize> = (0..n).collect();
-    let mut out = Vec::new();
-    go(&mut cur, 0, &mut out);
-    out.into_iter()
-        .map(|v| Permutation::try_from(v).expect("permutation of 0..n"))
-        .collect()
-}
 
 /// `β(p₁) ; β(p₂) == β(p₁ ; p₂)`, over **all 36 ordered pairs of `S₃`** with
 /// **distinct** labels.

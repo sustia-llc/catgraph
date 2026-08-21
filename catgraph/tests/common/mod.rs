@@ -56,6 +56,29 @@ pub fn assert_cospan_eq_msg<L: Eq + Copy + std::fmt::Debug>(
     assert_eq!(a.middle(), b.middle(), "{msg}: middle mismatch");
 }
 
+/// The braiding **wiring** a cospan realizes: domain wire `i` and codomain wire
+/// `k` meet when they land on the same apex vertex, i.e. `left[i] == right[k]`.
+///
+/// The pushout numbers the apex however it likes, so comparing leg vectors
+/// cannot say *which* permutation a braiding realizes; this pairing can, and it
+/// is what the #258 direction contract is stated in terms of (#286).
+///
+/// # Panics
+///
+/// If some domain wire lands on an apex vertex no codomain wire reaches — i.e.
+/// the cospan is not a braiding. Callers pass braidings.
+#[allow(dead_code)]
+pub fn cospan_wiring<L: Eq + Copy + std::fmt::Debug>(c: &Cospan<L>) -> Vec<usize> {
+    let (l, r) = (c.left_to_middle(), c.right_to_middle());
+    l.iter()
+        .map(|li| {
+            r.iter()
+                .position(|rk| rk == li)
+                .expect("a braiding cospan links every domain wire to a codomain wire")
+        })
+        .collect()
+}
+
 #[allow(dead_code)]
 pub fn assert_cospan_shape<L: Eq + Copy + std::fmt::Debug>(
     a: &Cospan<L>,

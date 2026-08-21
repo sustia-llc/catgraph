@@ -28,6 +28,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   leading `&mut`, yielding `&mut ()`), so `--fix` would not have produced this.
   No behaviour change.
 
+### Fixed — tests
+
+- **The exhaustive-permutation helper this crate's tests carried twice moved to
+  `catgraph-testutil`** ([#286](https://github.com/sustia-llc/catgraph/issues/286)).
+  `tests/braiding_cross_carrier.rs` and `tests/prop.rs` each had a private
+  `all_perms`; #286 needed the same generator in `catgraph/tests`, so rather than
+  make it four copies it landed in the workspace's dedup crate (#33) as
+  `all_perms` / `all_perm_indices`. Test-internal only — no library surface
+  moves, and `prop.rs` keeps its own `n!`-and-distinctness assertions on top of
+  the ones `catgraph-testutil` now runs itself.
+
 ## [workspace-v0.15.0] - 2026-08-16
 
 ### Changed — BREAKING

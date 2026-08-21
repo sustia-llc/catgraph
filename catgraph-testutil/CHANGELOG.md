@@ -11,6 +11,29 @@ version history.
 
 ### Added
 
+- **`all_perms` + `all_perm_indices`**
+  ([#286](https://github.com/sustia-llc/catgraph/issues/286)): exhaustive `Sₙ`
+  enumeration by prefix swaps, the generator every #258 braiding sweep runs on.
+  It had drifted into four private copies — `catgraph-applied`'s
+  `tests/braiding_cross_carrier.rs` and `tests/prop.rs`, plus two more added by
+  `catgraph/tests` at #286 — which is exactly the duplication class #33 opened
+  this crate for.
+
+  Two entry points because the call sites want different things:
+  `all_perm_indices` yields raw `Vec<usize>` one-line notations, which sort and
+  dedup (`permutations::Permutation` is neither `Ord` nor `Hash`) so a caller can
+  pin distinctness of the enumeration itself; `all_perms` yields `Permutation`
+  values ready to feed a constructor. This crate's own tests pin `n!` and
+  distinctness for `n ≤ 5`, that every entry is a bijection of `0..n`, and that
+  the `Permutation` view reproduces the one-line notation under `apply` — the
+  last of these is what stops the two views from disagreeing by an inverse and
+  silently flipping the convention every consuming sweep is testing.
+- **`permutations` dependency**
+  ([#286](https://github.com/sustia-llc/catgraph/issues/286)) — required by
+  `all_perms` above, and free on the same grounds as `proptest` below: dev-only
+  and unpublished, never in a published crate's `[dependencies]` (#33). This
+  crate has no `catgraph` edge and must not grow one — its dedup targets are its
+  dev-dependants.
 - **`approx_rel` + `assert_approx_rel!`**
   ([#169](https://github.com/sustia-llc/catgraph/issues/169)): relative-plus-
   absolute float comparison, `|a − b| <= max(abs, rel · max(|a|, |b|))`. The

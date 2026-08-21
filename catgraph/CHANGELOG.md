@@ -133,10 +133,16 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Fixed — tests
 
-- **The #258 braiding contract was pinned only downstream, and the one core test
-  that named permutation composition was vacuous**
-  ([#286](https://github.com/sustia-llc/catgraph/issues/286)). Measured before
-  the fix: inverting the braiding direction in
+- **The #258 braiding contract was pinned only downstream, and the only core
+  *integration* test that named permutation composition was vacuous**
+  ([#286](https://github.com/sustia-llc/catgraph/issues/286)). (Core's lib unit
+  tests `cospan::test::permutation_automatic` and
+  `frobenius::operations::test::from_permutation_compose_probe` name permutation
+  composition too and are **not** vacuous — both use distinct labels, and
+  `permutation_automatic` is one of the four lib tests that go red under the
+  `Cospan` constructor flip in (6) below. The gap was in `tests/`.)
+
+  Measured before the fix: inverting the braiding direction in
   `equivalence::CospanAlgebraMorphism`'s two constructors — `p.inv()` ⇄ `p` in
   both the forced label word and the structural cospan's right leg — left
   `cargo test -p catgraph` **fully green** while `cargo test -p catgraph-applied`
@@ -167,13 +173,30 @@ All notable changes to `catgraph` are documented here. The format follows
   computed from the two permutations directly, and asserts the apex is exactly
   `n` vertices rather than "at least".
 
+  The exhaustive-permutation generator both files run on landed in
+  **`catgraph-testutil`** (`all_perms` / `all_perm_indices`, and a
+  `[dev-dependencies]` edge on this crate) rather than as two more private
+  copies: it already existed twice in `catgraph-applied/tests`, and #33 opened
+  that crate for exactly this. All four copies are retired. The
+  `cospan_wiring` extractor — which needs a `catgraph` type, so it cannot live
+  in `catgraph-testutil` (no `catgraph` edge, by design) — moved to this crate's
+  existing `tests/common/mod.rs` instead of being written twice.
+
   **Falsified six ways.** (1) The `CospanAlgebraMorphism` constructor flip above
-  now reddens 4 core tests, reporting the element's apex classes as
-  `A:[0,5] B:[1,3] C:[2,4]` where the contract requires `A:[0,4] B:[1,5] C:[2,3]`,
-  and the wiring as `[2, 0, 1]` where it must be `[1, 2, 0]`. (2) Dropping the
-  `.inv()` from `FrobeniusMorphism::from_permutation_on_codomain` reddens the new
-  Frobenius *wiring* row (`[2, 0, 1]` vs `[1, 2, 0]`) — also caught by two
-  pre-existing lib tests, so a redundant catch rather than new coverage.
+  now reddens all 4 tests of the new file, and nothing else in core — the 289
+  lib unit tests stay green, which is the gap restated as a measurement.
+  `hand_written_reference_and_cam_element` fails first on the **codomain word**
+  (`['B','C','A']` where the contract requires `['C','A','B']`), never reaching
+  its canonical-form assertion; the apex-class form is what
+  `permute_side_pins_on_the_core_carriers` reports, and there the *mutated
+  constructor* is the expected side — `A:[0,5] B:[1,3] C:[2,4]` — against the
+  contract form `A:[0,4] B:[1,5] C:[2,3]` that `permute_side` itself still
+  builds. `core_carriers_realize_p_on_both_constructors` and
+  `braiding_composition_over_all_s3_pairs` fail on the wiring, `[2, 0, 1]` where
+  it must be `[1, 2, 0]`. (2) Dropping the `.inv()` from
+  `FrobeniusMorphism::from_permutation_on_codomain` reddens the new Frobenius
+  *wiring* row (`[2, 0, 1]` vs `[1, 2, 0]`) — also caught by two pre-existing
+  lib tests, so a redundant catch rather than new coverage.
   (3) Reading the `FrobeniusMorphism::permute_side` domain branch symmetrically
   (`β(p)` where the contract asks for `β(p⁻¹)`) reddens the conjugation row
   (`['B','C','A']` vs `['C','A','B']`) — also redundant, three pre-existing lib
@@ -183,9 +206,14 @@ All notable changes to `catgraph` are documented here. The format follows
   `p.apply` where `CospanAlgebraMorphism::permute_side`'s domain branch builds
   its relabelling leg with `p_inv.apply` likewise reddens **only** the new file
   (`[1, 2, 0]` vs `[2, 0, 1]`). (6) Flipping `Cospan`'s two constructors reddens
-  the rewritten `permutation_cospan_compose` (`[2, 0, 1]` vs `[1, 2, 0]`) — and
-  the **pre-#286 version of that same test was measured green under the identical
-  mutation**, along with all 6 tests in its file.
+  the rewritten `permutation_cospan_compose` (`[2, 0, 1]` vs `[1, 2, 0]`) — also
+  caught by **4 pre-existing lib tests** (`cospan::test::permutation_automatic`,
+  `cospan::test::permutatation_manual_labelled`,
+  `named_cospan::test::permutatation_automatic`,
+  `named_cospan::test::permutatation_manual`), so this is a *vacuity repair*, not
+  new coverage of `Cospan` itself. What it repairs is measured: the **pre-#286
+  version of that same test was green under the identical mutation**, along with
+  all 6 tests in its file.
 
   **The space these claims range over**, stated where the assertions can be
   checked against it: `n ∈ {3, 4}` only (`n ≤ 2` makes every permutation an
