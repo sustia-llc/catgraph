@@ -385,9 +385,10 @@ where
         FrobeniusOperation::UnSpecifiedBox(_, srcs, tgts) => {
             return Err(CatgraphError::Interpret {
                 context: format!(
-                    "frobenius_to_cospan has no interpretation for a black box \
-                     ({} in, {} out): Cospan is the free hypergraph category on \
-                     the generators alone",
+                    "frobenius_to_cospan has no interpretation for an \
+                     UnSpecifiedBox ({} in, {} out): Cospan is the free \
+                     hypergraph category on the generators alone; resolve it \
+                     through a MorphismSystem first",
                     srcs.len(),
                     tgts.len()
                 ),
@@ -399,12 +400,61 @@ where
 /// Interpret a `FrobeniusMorphism<Lambda, _>` as a `Cospan<Lambda>` — inverse
 /// in spirit to [`cospan_to_frobenius`].
 ///
-/// Each layer is the monoidal product of its blocks' generator cospans, and the
-/// layers are composed in order. The `Frobenius`-valued twin of this function is
+/// Each layer is the monoidal product of its blocks' generator cospans, in block
+/// order, and the morphism is the pushout composite of those layers. The
+/// `Frobenius`-valued twin of this function is
 /// [`Frobenius::interpret_frob`](crate::frobenius::Frobenius::interpret_frob),
 /// which has the same shape; `Cospan` is [`Composable`], not
 /// [`ComposableMutating`](crate::category::ComposableMutating), so it cannot
 /// implement `Frobenius` and reuse that body.
+///
+/// It is also re-exported as
+/// [`frobenius::frobenius_to_cospan`](crate::frobenius::frobenius_to_cospan).
+/// That path briefly named a *second* implementation of the same map, added
+/// under #283 on a branch parallel to the one adding this one; #336 unified
+/// them after measuring that they agree over 363 terms while both bodies were
+/// live (383 now, in `frobenius::to_cospan_pin`, where the retired algorithm
+/// lives on as the oracle). ⚠ Two things changed for callers of the
+/// `frobenius::` path: the
+/// bounds now require `Send + Sync`, and an `UnSpecifiedBox` is rejected with
+/// [`CatgraphError::Interpret`] rather than `CatgraphError::Composition`.
+///
+/// # Deciding Def 2.5 equality
+///
+/// Because [`Cospan`] carries no presentation — only the apex quotient — this is
+/// the decision procedure for Def 2.5 equality of two *parallel*
+/// `FrobeniusMorphism`s: compare `frobenius_to_cospan(f)?.canonical_form()` with
+/// `g`'s. `FrobeniusMorphism`'s own `PartialEq` cannot serve there. It compares
+/// **presentations**, and it separates both sides of every one of the eleven
+/// Def 2.5 equations — `tests/frobenius_axioms.rs` measures that, and runs the
+/// battery through this function for the `FrobeniusMorphism` carrier.
+///
+/// ⚠ The equality it decides is Def 2.5's, *not* SCFM's — the two part company on
+/// scalars, for the reasons the next section measures.
+///
+/// # Scalars, and where this does not commute with composition
+///
+/// The interpretation is of the diagram **as presented**. `FrobeniusMorphism`'s
+/// own [`compose`](crate::category::ComposableMutating::compose) runs
+/// `two_layer_simplify`, whose
+/// unit/counit rule deletes an `η` feeding directly into an `ε` — the
+/// *extra*-special move. `Cospan` is the theory of **special** commutative
+/// Frobenius monoids and keeps that bubble as a genuine scalar, so on a term
+/// carrying that pattern the presentation reaching this function has already
+/// lost a bubble the semantics would have kept:
+/// `interp(f # g) != interp(f) # interp(g)`, measured in
+/// `tests/frobenius_axioms.rs::frobenius_scalar_loop_is_erased_before_interpretation`.
+///
+/// That is the only *known* divergence, which is a weaker statement than "the
+/// only one": nothing here proves the normalizer sound, and the claim that the
+/// remaining rules are sound has been wrong before. `Spider(z, m, 0)` followed by
+/// `Spider(z, 0, k)` used to fuse into `Spider(z, m, k)`, wiring two disconnected
+/// components together — a *connectivity* change, strictly worse than a dropped
+/// scalar. Rule 4 now requires `n >= 1` (with a redundant zero-output filter on
+/// the placement lookup), and `spider_fusion_needs_a_wire_between_the_two_spiders`
+/// in the same test file holds the *behaviour* there — the conjunction of the two
+/// defenses, not either alone. Treat divergences as things to be measured one at
+/// a time.
 ///
 /// # What Prop 3.8 does and does not license here
 ///
@@ -471,9 +521,11 @@ where
 /// # Errors
 ///
 /// - [`CatgraphError::Interpret`] if the morphism contains an
-///   `UnSpecifiedBox`: a black box has no interpretation in the free
-///   hypergraph category. Pass it through
+///   [`UnSpecifiedBox`](FrobeniusOperation::UnSpecifiedBox): a black box denotes
+///   nothing in the free hypergraph category. Pass it through
 ///   [`MorphismSystem`](crate::frobenius::MorphismSystem) first if it needs one.
+///   The message names the generator and its arities; both are pinned in
+///   `frobenius::to_cospan_pin::black_boxes_are_rejected_by_both`.
 /// - [`CatgraphError::Interpret`] if a layer has no blocks but a non-empty
 ///   interface (a malformed morphism). A block-free layer whose interface is
 ///   empty is `id_I` and is interpreted, not rejected — that is how
