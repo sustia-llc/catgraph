@@ -1,17 +1,28 @@
-//! Differential pin for the two `frobenius_to_cospan` implementations (#336).
+//! Differential pin for the surviving `frobenius_to_cospan` (#336).
 //!
 //! The audit sweep's G1 merge left the crate with *two* public functions for one
 //! semantics map — `frobenius::frobenius_to_cospan` (G1-T1, #283) and
 //! `cospan_algebra::frobenius_to_cospan` (G1-T2, #284). Each branch was reviewed
-//! against `96cfea7`, so no reviewer could see the other. This module measures
-//! that they compute the same cospan, up to
-//! [`canonical_form`](crate::cospan_canon::CospanCanon), over a space far wider
-//! than the 19 probe samples the issue recorded — *before* either body is
-//! removed.
+//! against `96cfea7`, so no reviewer could see the other. #336 kept the G1-T2
+//! body and made the `frobenius::` path a re-export of it.
 //!
-//! The comparison lives inside the crate because the T1 algorithm walks
+//! The G1-T1 algorithm did not go with it: it lives on here as
+//! [`reference_to_cospan`], an **independent oracle** the survivor is measured
+//! against up to [`canonical_form`](crate::cospan_canon::CospanCanon) over 363
+//! terms — a space far wider than the 19 probe samples the issue recorded. It is
+//! a genuinely different route through the spider generator (one apex vertex,
+//! built directly, versus a recursion into `special_frobenius_morphism`), so the
+//! comparison is not a test restating production's own logic.
+//!
+//! It lives inside the crate because the T1 algorithm walks
 //! `FrobeniusMorphism::layers`, which is `pub(crate)`; an integration test
 //! cannot express it.
+//!
+//! In the commit that introduced this module both implementations were still
+//! live, and `the_reference_copy_is_the_live_g1_t1_implementation` measured the
+//! copy below against the original **byte-identically** over this same space
+//! before the original was deleted. That test went with the body it checked; its
+//! record is in git.
 //!
 //! # Falsification (measured 2026-08-21, each perturbation reverted after)
 //!
@@ -27,8 +38,8 @@
 //! The third is a pure connectivity change with no scalar in sight, so the
 //! green run is not resting on the bubble arm alone. [`black_boxes_are_rejected_by_both`]
 //! goes red when the survivor's variant is switched to
-//! `CatgraphError::Composition`, and `the_reference_copy_is_the_live_g1_t1_implementation`
-//! goes red when the live T1 spider arm is given one apex vertex per output
+//! `CatgraphError::Composition`, and the retired copy-fidelity test went red
+//! when the live T1 spider arm was given one apex vertex per output
 //! (`spider_2_3`: right leg `[0, 0, 0]` vs `[0, 1, 2]`).
 
 use crate::{
@@ -43,13 +54,9 @@ use crate::{
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 use std::fmt::Debug;
 
-// `live_g1_t1_to_cospan` is the G1-T1 implementation, still live in
-// `frobenius::operations` at this commit; `reference_to_cospan` below is a copy
-// of it, and `the_reference_copy_is_the_live_g1_t1_implementation` measures that
-// the copy is faithful, so the copy can outlive the original.
-// `survivor_to_cospan` is the G1-T2 implementation — the one #336 keeps.
-use super::operations::frobenius_to_cospan as live_g1_t1_to_cospan;
-use crate::cospan_algebra::frobenius_to_cospan as survivor_to_cospan;
+// The surviving implementation, reached through the `frobenius::` re-export
+// #336 put in place — so the re-export itself is exercised, not bypassed.
+use super::frobenius_to_cospan as survivor_to_cospan;
 
 type FM = FrobeniusMorphism<char, String>;
 
@@ -80,9 +87,9 @@ const SPACE_SIZE: usize = 63 + RANDOM_TERMS;
 ///   for every `(m, n) != (0, 0)` — a generator decomposition, then a fold. The
 ///   two routes share no code.
 /// - `UnSpecifiedBox` is rejected with [`CatgraphError::Composition`]; the
-///   survivor rejects it with [`CatgraphError::Interpret`]. The error *arm* is
-///   compared here only up to `is_err`; the variant divergence is pinned
-///   separately in [`black_boxes_are_rejected_by_both`].
+///   survivor rejects it with [`CatgraphError::Interpret`]. No term in [`space`]
+///   carries a black box, so the wide pin never reaches this arm; the divergence
+///   is pinned separately in [`black_boxes_are_rejected_by_both`].
 fn reference_generator<Lambda, BlackBoxLabel>(
     op: &FrobeniusOperation<Lambda, BlackBoxLabel>,
 ) -> Result<Cospan<Lambda>, CatgraphError>
@@ -431,58 +438,11 @@ fn space() -> Vec<(String, FM)> {
 // The pin
 // ---------------------------------------------------------------------------
 
-/// The embedded [`reference_to_cospan`] is the live G1-T1 implementation.
+/// The surviving `frobenius_to_cospan` denotes what the G1-T1 algorithm denoted.
 ///
-/// [`reference_to_cospan`] is a copy of `frobenius::operations::frobenius_to_cospan`,
-/// kept so the oracle can outlive the original body. A copy is only an oracle if
-/// it is faithful, so this measures the two **byte-identically** — the three
-/// cospan components, not just the canonical form — over the whole
-/// [`space`]. It is deleted in the same commit as the original body.
-///
-/// **Space:** the 363 terms of [`space`] plus the black box, at
-/// `char`/`String`.
-#[test]
-fn the_reference_copy_is_the_live_g1_t1_implementation() {
-    for (label, term) in &space() {
-        let copy = reference_to_cospan(term)
-            .unwrap_or_else(|e| panic!("{label}: reference copy rejected a plain term: {e}"));
-        let live = live_g1_t1_to_cospan(term)
-            .unwrap_or_else(|e| panic!("{label}: live G1-T1 rejected a plain term: {e}"));
-        assert_eq!(
-            copy.left_to_middle(),
-            live.left_to_middle(),
-            "{label}: left leg differs between the copy and the live G1-T1 body"
-        );
-        assert_eq!(
-            copy.right_to_middle(),
-            live.right_to_middle(),
-            "{label}: right leg differs between the copy and the live G1-T1 body"
-        );
-        assert_eq!(
-            copy.middle(),
-            live.middle(),
-            "{label}: apex differs between the copy and the live G1-T1 body"
-        );
-    }
-
-    let boxed: FM =
-        FrobeniusOperation::UnSpecifiedBox("f".to_string(), vec!['a'], vec!['b', 'b']).into();
-    assert!(
-        matches!(
-            reference_to_cospan(&boxed),
-            Err(CatgraphError::Composition { .. })
-        ) && matches!(
-            live_g1_t1_to_cospan(&boxed),
-            Err(CatgraphError::Composition { .. })
-        ),
-        "the copy and the live G1-T1 body must reject a black box the same way"
-    );
-}
-
-/// The two `frobenius_to_cospan` implementations denote the same cospan.
-///
-/// Compares `cospan_algebra::frobenius_to_cospan` (the G1-T2 survivor) against
-/// [`reference_to_cospan`], the G1-T1 algorithm, up to `canonical_form`.
+/// Compares the survivor — `cospan_algebra::frobenius_to_cospan`, reached
+/// through the `frobenius::` re-export so that path is exercised too — against
+/// [`reference_to_cospan`], the retired G1-T1 algorithm, up to `canonical_form`.
 ///
 /// **Space (363 terms, stated exactly):** the ten
 /// `tests/compact_closed.rs::samples()` terms; the sixteen `(m, n) ≤ 3` spiders
@@ -533,23 +493,28 @@ fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
 
     assert!(
         mismatches.is_empty(),
-        "{} of {} terms disagree between cospan_algebra::frobenius_to_cospan and the retired \
-         frobenius:: (G1-T1) algorithm:\n{}",
+        "{} of {} terms disagree between the surviving frobenius_to_cospan and the retired \
+         G1-T1 algorithm:\n{}",
         mismatches.len(),
         terms.len(),
         mismatches.join("\n"),
     );
 }
 
-/// Both implementations refuse an `UnSpecifiedBox` — but **not with the same
-/// error**, which is the one place a `pub use` cannot bridge them.
+/// Both readings refuse an `UnSpecifiedBox` — but **not with the same error**,
+/// which is the one place a `pub use` could not bridge them.
 ///
-/// G1-T1 returns [`CatgraphError::Composition`] naming the box's arities and the
-/// word `UnSpecifiedBox` (which `tests/frobenius_axioms.rs::frobenius_to_cospan_rejects_black_boxes`
-/// asserts as a substring); G1-T2 returns [`CatgraphError::Interpret`] naming
-/// the arities as `N in, M out` (which `cospan_algebra::tests::frobenius_to_cospan_rejects_black_boxes`
-/// asserts as a variant). Both are measured here so the unification cannot
-/// change either without this going red.
+/// G1-T1 returned [`CatgraphError::Composition`] naming the box's arities and
+/// the word `UnSpecifiedBox`; G1-T2 returns [`CatgraphError::Interpret`] naming
+/// the arities as `N in, M out`. #336 kept the survivor's **variant** — so
+/// `frobenius::` callers now get `Interpret` where they got `Composition`, a
+/// behaviour change recorded in the CHANGELOG — and merged T1's wording into it,
+/// so the message names both the generator and the arities and *both* existing
+/// black-box tests keep their assertions:
+/// `tests/frobenius_axioms.rs::frobenius_to_cospan_rejects_black_boxes` (the
+/// `UnSpecifiedBox` substring) and
+/// `cospan_algebra::tests::frobenius_to_cospan_rejects_black_boxes` (the
+/// `Interpret` variant). This pins all three facts in one place.
 ///
 /// **Space:** one black box, `1 → 2` wires, at `char`/`String`. It says nothing
 /// about a black box nested inside a larger term.
@@ -562,20 +527,21 @@ fn black_boxes_are_rejected_by_both() {
         .expect_err("the G1-T1 reference gives a black box no interpretation");
     assert!(
         matches!(reference, CatgraphError::Composition { .. }),
-        "G1-T1 rejects with Composition; got {reference:?}"
-    );
-    assert!(
-        format!("{reference}").contains("UnSpecifiedBox"),
-        "G1-T1's wording names the generator; got: {reference}"
+        "G1-T1 rejected with Composition; got {reference:?}"
     );
 
     let survivor = survivor_to_cospan(&boxed).expect_err("a black box denotes nothing");
     assert!(
         matches!(survivor, CatgraphError::Interpret { .. }),
-        "G1-T2 rejects with Interpret; got {survivor:?}"
+        "the survivor's documented variant is Interpret; got {survivor:?}"
+    );
+    let rendered = format!("{survivor}");
+    assert!(
+        rendered.contains("UnSpecifiedBox"),
+        "the merged wording keeps G1-T1's name for the generator; got: {rendered}"
     );
     assert!(
-        format!("{survivor}").contains("1 in, 2 out"),
-        "G1-T2's wording names the arities; got: {survivor}"
+        rendered.contains("1 in, 2 out"),
+        "the merged wording keeps G1-T2's arity rendering; got: {rendered}"
     );
 }

@@ -6,6 +6,43 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **`frobenius::frobenius_to_cospan` is now a re-export of
+  `cospan_algebra::frobenius_to_cospan`**
+  ([#336](https://github.com/sustia-llc/catgraph/issues/336)) — one function
+  where the G1
+  merge briefly had two. #283 and #284 landed the Prop 3.8 semantics map
+  independently, on branches each reviewed against `96cfea7`, so neither
+  reviewer could see the other. The `cospan_algebra` body survives (the deeper
+  review record: eight rounds, the bubble semantics, the incomparability
+  analysis) and the `frobenius::operations` body is deleted, along with its
+  private `operation_to_cospan`. Every existing import — `tests/frobenius_axioms.rs`,
+  `tests/rayon_parallel.rs`, `tests/compact_closed.rs`, `tests/common/mod.rs`,
+  `tests/hypergraph_functor.rs` — compiles unchanged.
+
+  Two things a `pub use` could not bridge, so they **change for callers of the
+  `frobenius::` path**:
+
+  - **Bounds narrow.** The surviving function requires `Lambda: Send + Sync` and
+    `BlackBoxLabel: Send + Sync` (it recurses through
+    `special_frobenius_morphism`, which needs them); the retired one did not.
+    A `Copy + Eq + Debug` label that is not `Send` no longer compiles here.
+  - **Error variant changes.** An `UnSpecifiedBox` is now rejected with
+    `CatgraphError::Interpret`, where the `frobenius::` path returned
+    `CatgraphError::Composition`. The two messages were merged rather than one
+    dropped — it now names both the generator (`UnSpecifiedBox`, which
+    `tests/frobenius_axioms.rs` asserts) and the arities (`N in, M out`) — and
+    all three facts are pinned in
+    `frobenius::to_cospan_pin::black_boxes_are_rejected_by_both`.
+
+  The two docstrings were merged into the survivor, keeping every measured
+  claim: the blockwise-tensor/pushout-composite description and the Def 2.5
+  decision-procedure paragraph from #283, the Prop 3.8 licensing and the
+  incomparable-on-scalars analysis with both witnesses from #284. Both test sets
+  stay; neither is weakened. The README's two Feature Map rows for Prop 3.8
+  collapse into one.
+
 ### Added
 
 - **`cospan_algebra::frobenius_to_cospan`** — interprets a
@@ -97,15 +134,17 @@ All notable changes to `catgraph` are documented here. The format follows
 ### Fixed — tests
 
 - **Nothing measured that the crate's two `frobenius_to_cospan` implementations
-  agreed** ([#336](https://github.com/sustia-llc/catgraph/issues/336)). The G1
-  merge left `frobenius::frobenius_to_cospan` (#283)
+  agreed** ([#336]). The G1 merge left `frobenius::frobenius_to_cospan` (#283)
   and `cospan_algebra::frobenius_to_cospan` (#284) both public and both
   computing the Prop 3.8 semantics map; each branch was reviewed against
   `96cfea7`, so no reviewer saw the other, and the only comparison on record was
   a 19-sample throwaway probe. `frobenius::to_cospan_pin` (a `#[cfg(test)]`
   module — the T1 algorithm walks the `pub(crate)` `layers`, so no integration
-  test can express it) now measures the two up to `canonical_form` over **363
-  terms**: the ten `tests/compact_closed.rs::samples()`, the sixteen
+  test can express it) measured the two up to `canonical_form` over **363
+  terms** before either body was removed, and keeps measuring the survivor
+  against the retired algorithm, which lives on there as an independent oracle
+  (a genuinely different route through the spider generator, so this is not a
+  test restating production's own logic). The space: the ten `tests/compact_closed.rs::samples()`, the sixteen
   `(m, n) ≤ 3` spiders including the `(0, 0)` bubble, both sides of all eleven
   Def 2.5 equations, fifteen cup / cap / name / unname terms, and 300
   pseudo-random terms of 1–8 generator steps over two labels. Falsified three

@@ -5,7 +5,6 @@ use crate::errors::CatgraphError;
 use {
     crate::{
         category::{ComposableMutating, HasIdentity},
-        cospan::Cospan,
         finset::Decomposition,
         monoidal::{
             GenericMonoidalMorphism, GenericMonoidalMorphismLayer, Monoidal,
@@ -1091,117 +1090,6 @@ where
         "The provided source and target types did not line up for the given decomposed finite set map"
     );
     Ok(answer)
-}
-
-/// Interpret one generator as the cospan it denotes.
-///
-/// `Spider(z, m, n)` is one apex vertex with `m` domain wires and `n` codomain
-/// wires on it — which at `(m, n) = (0, 0)` is a bubble, exactly the scalar
-/// `η # ε` denotes.
-fn operation_to_cospan<Lambda, BlackBoxLabel>(
-    op: &FrobeniusOperation<Lambda, BlackBoxLabel>,
-) -> Result<Cospan<Lambda>, CatgraphError>
-where
-    Lambda: Eq + Copy + Debug,
-    BlackBoxLabel: Eq + Clone,
-{
-    use crate::hypergraph_category::HypergraphCategory;
-
-    Ok(match op {
-        FrobeniusOperation::Unit(z) => Cospan::unit(*z),
-        FrobeniusOperation::Counit(z) => Cospan::counit(*z),
-        FrobeniusOperation::Multiplication(z) => Cospan::multiplication(*z),
-        FrobeniusOperation::Comultiplication(z) => Cospan::comultiplication(*z),
-        FrobeniusOperation::Identity(z) => Cospan::identity(&vec![*z]),
-        // σ: [z, w] → [w, z]. Two apex vertices; the right leg reads them back
-        // in the other order. Correct by construction: both legs index a
-        // two-vertex apex.
-        FrobeniusOperation::SymmetricBraiding(z, w) => {
-            Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![*z, *w])
-        }
-        // Correct by construction: every leg entry is `0` against a one-vertex apex.
-        FrobeniusOperation::Spider(z, m, n) => {
-            Cospan::new_unchecked(vec![0; *m], vec![0; *n], vec![*z])
-        }
-        FrobeniusOperation::UnSpecifiedBox(_, srcs, tgts) => {
-            return Err(CatgraphError::Composition {
-                message: format!(
-                    "frobenius_to_cospan: an UnSpecifiedBox on {} → {} wires has no cospan \
-                     interpretation; resolve it through a MorphismSystem first",
-                    srcs.len(),
-                    tgts.len()
-                ),
-            });
-        }
-    })
-}
-
-/// Interpret a `FrobeniusMorphism` as the [`Cospan`] it denotes — the semantics
-/// half of the Fong-Spivak Prop 3.8 correspondence that
-/// [`cospan_to_frobenius`](crate::cospan_algebra::cospan_to_frobenius) covers in
-/// the syntax direction.
-///
-/// Each layer is the monoidal product of its blocks' generator cospans, in block
-/// order, and the morphism is the pushout composite of its layers. Because
-/// [`Cospan`] carries no presentation — only the apex quotient — this is the
-/// decision procedure for Def 2.5 equality of two parallel `FrobeniusMorphism`s:
-/// compare `frobenius_to_cospan(f)?.canonical_form()` with `g`'s. `FrobeniusMorphism`'s
-/// own `PartialEq` cannot serve there; it compares *presentations*, and it
-/// separates both sides of every one of the eleven Def 2.5 equations
-/// (`tests/frobenius_axioms.rs` measures that).
-///
-/// # Scalars, and where this does not commute with composition
-///
-/// The interpretation is of the diagram **as presented**. `FrobeniusMorphism`'s
-/// own [`compose`](ComposableMutating::compose) runs `two_layer_simplify`, whose
-/// unit/counit rule deletes an `η` feeding directly into an `ε` — the
-/// *extra*-special move. `Cospan` is the theory of **special** commutative
-/// Frobenius monoids and keeps that bubble as a genuine scalar, so on a term
-/// carrying that pattern the presentation reaching this function has already
-/// lost a bubble that the semantics would have kept:
-/// `interp(f # g) != interp(f) # interp(g)`, measured in
-/// `tests/frobenius_axioms.rs::frobenius_scalar_loop_is_erased_before_interpretation`.
-///
-/// That is the only *known* divergence, which is a weaker statement than "the
-/// only one": nothing here proves the normalizer sound, and the claim that the
-/// remaining rules are sound has been wrong before. `Spider(z, m, 0)` followed
-/// by `Spider(z, 0, k)` used to fuse into `Spider(z, m, k)`, wiring two
-/// disconnected components together — a *connectivity* change, strictly worse
-/// than a dropped scalar. Rule 4 now requires `n >= 1` (with a redundant
-/// zero-output filter on the placement lookup), and
-/// `spider_fusion_needs_a_wire_between_the_two_spiders` in the same test file
-/// holds the *behaviour* there — the conjunction of the two defenses, not
-/// either alone. Treat divergences as things to be measured one at a time.
-///
-/// # Errors
-///
-/// Returns [`CatgraphError::Composition`] if the morphism contains an
-/// [`UnSpecifiedBox`](FrobeniusOperation::UnSpecifiedBox), which denotes nothing
-/// until a [`MorphismSystem`](super::MorphismSystem) resolves it, or if two
-/// adjacent layers fail to compose (which a well-formed morphism cannot do).
-pub fn frobenius_to_cospan<Lambda, BlackBoxLabel>(
-    morphism: &FrobeniusMorphism<Lambda, BlackBoxLabel>,
-) -> Result<Cospan<Lambda>, CatgraphError>
-where
-    Lambda: Eq + Copy + Debug,
-    BlackBoxLabel: Eq + Clone,
-{
-    use crate::category::Composable;
-
-    let mut answer: Option<Cospan<Lambda>> = None;
-    for layer in &morphism.layers {
-        let mut current = Cospan::<Lambda>::empty();
-        for block in &layer.blocks {
-            current.monoidal(operation_to_cospan(&block.op)?);
-        }
-        answer = Some(match answer {
-            None => current,
-            Some(previous) => Composable::compose(&previous, &current)?,
-        });
-    }
-    // A layerless morphism is the identity on the empty word, whose cospan is
-    // the empty cospan — the same value `Cospan::identity(&vec![])` returns.
-    Ok(answer.unwrap_or_else(Cospan::empty))
 }
 
 #[cfg(test)]
