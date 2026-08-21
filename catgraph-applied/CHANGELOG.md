@@ -13,6 +13,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed
+
+- **clippy 1.98 compatibility.** Two sites tripped lints new in clippy 1.98,
+  which `-D warnings` turns into hard errors: `clippy::chunks_exact_to_as_chunks`
+  on the `sub_ints.chunks_exact(2)` pairing in `E1::random`
+  (`src/e1_operad.rs`), now `as_chunks::<2>().0.iter()`; and
+  `clippy::manual_slice_fill` on the row-zeroing loop in
+  `tests/mat_mutable_api.rs`, now `fill(F64Rig(0.0))`. Both are the rewrites
+  the lints themselves prescribe. No behaviour change.
+
 ## [workspace-v0.15.0] - 2026-08-16
 
 ### Changed — BREAKING

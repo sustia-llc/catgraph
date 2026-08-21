@@ -201,7 +201,9 @@ impl E1 {
             }
         };
         let sub_intervals: Vec<(IntervalCoord, IntervalCoord)> = sub_ints
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|chunk| (chunk[0], chunk[1]))
             .collect();
         Self::new(sub_intervals, false).expect(

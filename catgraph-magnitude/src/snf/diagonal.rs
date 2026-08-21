@@ -182,7 +182,7 @@ fn smith_from_diagonal_raw(
         let mut new_blocks: Vec<(Vec<Vec<i64>>, Vec<Vec<i64>>, Vec<Vec<i64>>)> =
             Vec::with_capacity(blocks.len() / 2);
 
-        for pair in blocks.chunks_exact(2) {
+        for pair in blocks.as_chunks::<2>().0 {
             let (u1, v1, a) = &pair[0];
             let (u2, v2, b) = &pair[1];
 
@@ -208,7 +208,7 @@ fn smith_from_diagonal_raw(
     }
 
     blocks.into_iter().next().expect(
-        "smith_from_diagonal_raw: chunks_exact(2) over a power-of-two-sized blocks Vec \
+        "smith_from_diagonal_raw: as_chunks::<2>() over a power-of-two-sized blocks Vec \
          terminates with exactly one element",
     )
 }
