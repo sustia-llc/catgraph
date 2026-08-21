@@ -13,8 +13,9 @@
 //! independence is partial and stated exactly: the spider route (one apex
 //! vertex, built directly, versus a recursion into
 //! `special_frobenius_morphism`) and the layer fold are genuinely different;
-//! the six non-spider generator arms — the hand-built braiding literal
-//! included — are byte-identical to the survivor's, so a type-correct
+//! the six arms other than `Spider` and `UnSpecifiedBox` — the hand-built
+//! braiding literal included — are byte-identical to the survivor's, so a
+//! type-correct
 //! convention error applied to both copies alike cannot be compared away here
 //! (measured; see *What it cannot see* on the pin for exactly what E showed).
 //!
@@ -517,8 +518,8 @@ fn space() -> Vec<(String, FM)> {
 /// *differential* claim about the two interpretation functions, not an absolute
 /// one about the cospan machinery underneath them. A bug in the pushout moves
 /// both sides together and stays green here — `tests/frobenius_axioms.rs` and
-/// `cospan_canon`'s own tests are what hold that. The oracle's six non-spider
-/// generator arms are byte-identical to the survivor's, the braiding's
+/// `cospan_canon`'s own tests are what hold that. The oracle's six arms other
+/// than `Spider` and `UnSpecifiedBox` are byte-identical to the survivor's, the braiding's
 /// hand-written `Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![z, w])`
 /// literal included — it is not a `HypergraphCategory` generator cospan, so a
 /// convention error applied to both copies (the natural shape of a "fix" to two
@@ -532,11 +533,14 @@ fn space() -> Vec<(String, FM)> {
 /// grid plus the Def 2.5 battery (58 terms, the σ-bearing `comm_lhs` /
 /// `cocomm_lhs` among them) has 0 survivor/oracle mismatches, and `σ_zz` is
 /// identity-shaped on both sides. What catches that case is the tests built
-/// through `Cospan::from_permutation_on_domain`, not this pin:
+/// through the `Carrier::swap` default (`from_permutation_on_domain` on each
+/// carrier), not this pin:
 /// `tests/frobenius_axioms.rs::frobenius_to_cospan_agrees_with_the_cospan_generators`
-/// and `braiding_is_a_genuine_crossing_per_carrier` both went red under E on
-/// label `'z'` (a full `--no-fail-fast` run under E reddens 15 tests
-/// crate-wide, eleven of them in `tests/compact_closed.rs`).
+/// compares the FM braiding against `Cospan::from_permutation_on_domain`, and
+/// `braiding_is_a_genuine_crossing_per_carrier` asserts the FM carrier's σ ≠
+/// `id`; both went red under E on label `'z'` (a full `--no-fail-fast` run
+/// under E reddens 15 tests crate-wide, eleven of them in
+/// `tests/compact_closed.rs`).
 #[test]
 fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
     let terms = space();
