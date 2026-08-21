@@ -516,6 +516,30 @@ impl std::fmt::Debug for DebugRel {
 // Rel strategy
 // ---------------------------------------------------------------------------
 
+/// Build the homogeneous `Rel<char>` on `n` elements whose pair set is the
+/// subset of the row-major Cartesian product `0..n × 0..n` that `keep` selects
+/// by flat index.
+///
+/// Uniform label: every node is `'a'`, so all `(i, j)` pairs are
+/// type-compatible. Pairs are distinct by construction, so the span is jointly
+/// injective and `new_unchecked` is safe.
+///
+/// The single construction shared by [`arb_homogeneous_rel`],
+/// [`arb_three_homogeneous_rels`], and
+/// [`rel_predicates_decided_exhaustively_on_small_carriers`] — so the proptest
+/// corpus and the exhaustive corpus contain the *same* relation for a given
+/// mask by construction, not by parallel transcription.
+fn rel_from_selector(n: usize, keep: impl Fn(usize) -> bool) -> Rel<char> {
+    let types: Vec<char> = vec!['a'; n];
+    let pairs: Vec<(usize, usize)> = (0..n)
+        .flat_map(|i| (0..n).map(move |j| (i, j)))
+        .enumerate()
+        .filter(|&(bit, _)| keep(bit))
+        .map(|(_, pair)| pair)
+        .collect();
+    Rel::new_unchecked(Span::new(types.clone(), types, pairs).unwrap())
+}
+
 /// Generate a homogeneous `Rel<char>` on a small type set (1–4 elements).
 ///
 /// All boundary nodes share a single label so every index pair is type-compatible.
@@ -529,18 +553,7 @@ fn arb_homogeneous_rel() -> impl Strategy<Value = DebugRel> {
             let mask = prop::collection::vec(prop::bool::ANY, n_possible);
             (Just(size), mask)
         })
-        .prop_map(|(size, mask)| {
-            // Uniform label: every node is 'a', so all (i, j) pairs are type-compatible.
-            let types: Vec<char> = vec!['a'; size];
-            let pairs: Vec<(usize, usize)> = (0..size)
-                .flat_map(|i| (0..size).map(move |j| (i, j)))
-                .zip(mask.iter())
-                .filter(|&(_, keep)| *keep)
-                .map(|(pair, _)| pair)
-                .collect();
-            let span = Span::new(types.clone(), types, pairs).unwrap();
-            DebugRel(Rel::new_unchecked(span))
-        })
+        .prop_map(|(size, mask)| DebugRel(rel_from_selector(size, |bit| mask[bit])))
 }
 
 /// Generate three homogeneous `Rel<char>` instances on the *same* type set.
@@ -554,18 +567,7 @@ fn arb_three_homogeneous_rels() -> impl Strategy<Value = (DebugRel, DebugRel, De
             (Just(size), mask(), mask(), mask())
         })
         .prop_map(|(size, m1, m2, m3)| {
-            let build = |mask: &[bool]| {
-                let types: Vec<char> = vec!['a'; size];
-                let pairs: Vec<(usize, usize)> = (0..size)
-                    .flat_map(|i| (0..size).map(move |j| (i, j)))
-                    .zip(mask.iter())
-                    .filter(|&(_, keep)| *keep)
-                    .map(|(pair, _)| pair)
-                    .collect();
-                DebugRel(Rel::new_unchecked(
-                    Span::new(types.clone(), types, pairs).unwrap(),
-                ))
-            };
+            let build = |mask: &[bool]| DebugRel(rel_from_selector(size, |bit| mask[bit]));
             (build(&m1), build(&m2), build(&m3))
         })
 }
@@ -688,7 +690,8 @@ proptest! {
 // None of them calls a `Rel` predicate, so a bug shared between a predicate and
 // its oracle would have to be introduced here twice, in two different spellings
 // — and the literature counts in
-// `rel_predicates_decided_exhaustively_on_small_carriers` would still catch it.
+// `rel_predicates_decided_exhaustively_on_small_carriers` would still catch it,
+// so long as the shared bug changed how many relations the predicate accepts.
 // ---------------------------------------------------------------------------
 
 /// `∀i < n. (i, i) ∈ R`.
@@ -725,16 +728,11 @@ fn oracle_transitive(pairs: &HashSet<(usize, usize)>) -> bool {
 
 /// Build the homogeneous `Rel<char>` on `n` elements whose pair set is the
 /// bitmask `mask` over the row-major Cartesian product `0..n × 0..n`.
+///
+/// A `u32`-bitmask view of [`rel_from_selector`], the same construction the
+/// proptest strategies use.
 fn rel_from_mask(n: usize, mask: u32) -> Rel<char> {
-    let types: Vec<char> = vec!['a'; n];
-    let pairs: Vec<(usize, usize)> = (0..n)
-        .flat_map(|i| (0..n).map(move |j| (i, j)))
-        .enumerate()
-        .filter(|&(bit, _)| mask & (1 << bit) != 0)
-        .map(|(_, pair)| pair)
-        .collect();
-    // Distinct pairs by construction, so the span is jointly injective.
-    Rel::new_unchecked(Span::new(types.clone(), types, pairs).unwrap())
+    rel_from_selector(n, |bit| mask & (1 << bit) != 0)
 }
 
 /// Every `Rel` predicate decided against its oracle on **every** relation over
@@ -751,7 +749,9 @@ fn rel_from_mask(n: usize, mask: u32) -> Rel<char> {
 ///    transitive [OEIS A006905] `2, 13, 171`, equivalence = Bell(n) `1, 2, 5`,
 ///    partial order [OEIS A001035] `1, 3, 19`.
 ///
-/// A bug present in both a predicate and its oracle passes (1) and fails (2).
+/// A bug present in both a predicate and its oracle passes (1) and fails (2)
+/// whenever the shared bug changes the acceptance count. A shared bug that
+/// accepted a *different* set of the same cardinality would pass both.
 ///
 /// # What this ranges over
 ///
@@ -833,7 +833,9 @@ fn rel_predicates_decided_exhaustively_on_small_carriers() {
 /// `false` on a relation whose domain and codomain words differ.
 ///
 /// Not decoration: `is_reflexive` / `is_symmetric` / `is_transitive` each
-/// `unwrap()` a `subsumes` that returns `Err` on a boundary mismatch, so
+/// `unwrap()` a `subsumes` — or, for `is_transitive`, the self-composition
+/// `self.0.compose(&self.0)`, which `Span::composable` rejects before
+/// `subsumes` is reached — that returns `Err` on a boundary mismatch, so
 /// dropping the `is_homogeneous() &&` guard from either composite turns this
 /// case from `false` into a panic. The exhaustive test above cannot see it —
 /// every relation it builds is homogeneous by construction.
@@ -1059,10 +1061,10 @@ proptest! {
     /// `canonical_form()` equality **is** apex isomorphism — both directions,
     /// against a brute-force search over `S_apex`.
     ///
-    /// The module's two hand-written iso⇒equal fixtures cover one apex swap on
-    /// `id(2)` each (#287); this ranges over random permutations of apexes up to
-    /// 5 vertices, and over single-leg rewires, which supply the non-isomorphic
-    /// side that a permutation-only generator could never reach.
+    /// The module's one hand-written iso⇒equal fixture covers a single apex
+    /// swap on `id(2)` (#287); this ranges over random permutations of apexes up
+    /// to 5 vertices, and over single-leg rewires, which supply the
+    /// non-isomorphic side that a permutation-only generator could never reach.
     ///
     /// # What this ranges over
     ///

@@ -175,7 +175,7 @@ All notable changes to `catgraph` are documented here. The format follows
      (0 of 256, `cospan_associativity` still green); making the leg
      label-blind reddens the meta-test and `cospan_associativity` together.
 
-  3. **`CospanCanon`'s "equal iff isomorphic" had two hand-written apex swaps
+  3. **`CospanCanon`'s "equal iff isomorphic" had one hand-written apex swap
      and no random coverage** — new `canonical_form_decides_apex_isomorphism`
      asserts that equality of canonical forms **is** apex isomorphism, in both
      directions, against a brute-force search over `S_apex` (the F&S 2019 §3
