@@ -335,11 +335,14 @@ where
     /// keeps the last writer, and blocks are visited in layer order with the
     /// placement taken at append, so the emitting block always came last and
     /// always won; the collision never displaced an emitting block. What the
-    /// filter removes is the one case in which a *non*-emitting block could be
-    /// looked up at all — a placement with no emitting block, i.e. the `n == 0`
-    /// spider match — which is why it is redundant with Rule 4's guard.
-    /// Excluding them also makes the remaining keys strictly increasing, hence
-    /// unique.
+    /// filter removes is the lookup at a placement with no emitting block — the
+    /// trailing one, where only a zero-input `next` block can sit. Of those
+    /// pairings only `Spider(z, m, 0) ; Spider(z, 0, k)` matches a rule (Rule 4
+    /// at `n == 0`); `Counit ; Unit`, `Counit ; Spider(z, 0, k)` and
+    /// `Spider(z, m, 0) ; Unit` fall through unmatched. So the filter's only
+    /// *observable* effect is that `n == 0` spider match, which is why it is
+    /// redundant with Rule 4's guard. Excluding them also makes the remaining
+    /// keys strictly increasing, hence unique.
     pub(crate) fn two_layer_simplify(&mut self, next_layer: &mut Self) -> (bool, bool, bool) {
         // Rule 1: identity check (no mutations needed)
         let self_id = self.is_identity();

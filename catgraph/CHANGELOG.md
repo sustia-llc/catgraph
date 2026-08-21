@@ -74,11 +74,13 @@ All notable changes to `catgraph` are documented here. The format follows
   they shared a key with the emitting block at the same placement.
   `HashMap::insert` keeps the last writer and blocks are visited in layer
   order, so the emitting block always won — the collision never displaced one;
-  what the filter removes is the only case in which a non-emitting block could
-  be looked up at all (a placement with no emitting block, i.e. the `n == 0`
-  spider match), which is why it is redundant with the guard. Blocks with no
-  outputs are now excluded, which also makes the remaining keys strictly
-  increasing and therefore unique.
+  what the filter removes is the lookup at a placement with no emitting block
+  (the trailing one, where only a zero-input next block can sit), and of those
+  pairings only `Spider(z, m, 0) ; Spider(z, 0, k)` matches a rule, so the
+  filter's only observable effect is the `n == 0` spider match — which is why
+  it is redundant with the guard. Blocks with no outputs are now excluded,
+  which also makes the remaining keys strictly increasing and therefore
+  unique.
 
 ### Changed
 
