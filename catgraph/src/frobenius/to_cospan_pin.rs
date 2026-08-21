@@ -9,10 +9,14 @@
 //! The G1-T1 algorithm did not go with it: it lives on here as
 //! [`reference_to_cospan`], an **independent oracle** the survivor is measured
 //! against up to [`canonical_form`](crate::cospan_canon::CospanCanon) over 383
-//! terms — a space far wider than the 19 probe samples the issue recorded. It is
-//! a genuinely different route through the spider generator (one apex vertex,
-//! built directly, versus a recursion into `special_frobenius_morphism`), so the
-//! comparison is not a test restating production's own logic.
+//! terms — a space far wider than the 19 probe samples the issue recorded. The
+//! independence is partial and stated exactly: the spider route (one apex
+//! vertex, built directly, versus a recursion into
+//! `special_frobenius_morphism`) and the layer fold are genuinely different;
+//! the six non-spider generator arms — the hand-built braiding literal
+//! included — are byte-identical to the survivor's, so a convention error
+//! applied to both copies alike is invisible here (see *What it cannot see* on
+//! the pin).
 //!
 //! It lives inside the crate because the T1 algorithm walks
 //! `FrobeniusMorphism::layers`, which is `pub(crate)`; an integration test
@@ -513,7 +517,14 @@ fn space() -> Vec<(String, FM)> {
 /// *differential* claim about the two interpretation functions, not an absolute
 /// one about the cospan machinery underneath them. A bug in the pushout moves
 /// both sides together and stays green here — `tests/frobenius_axioms.rs` and
-/// `cospan_canon`'s own tests are what hold that.
+/// `cospan_canon`'s own tests are what hold that. The oracle's six non-spider
+/// generator arms are byte-identical to the survivor's, the braiding's
+/// hand-written `Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![z, w])`
+/// literal included — it is not a `HypergraphCategory` generator cospan, so a
+/// convention error applied to both copies (the natural shape of a "fix" to two
+/// identical-looking lines) is invisible here; only
+/// `frobenius_to_cospan_agrees_with_the_cospan_generators`, which goes through
+/// `Cospan::from_permutation_on_domain`, catches it.
 #[test]
 fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
     let terms = space();

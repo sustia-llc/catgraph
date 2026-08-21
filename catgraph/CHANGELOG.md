@@ -140,11 +140,15 @@ All notable changes to `catgraph` are documented here. The format follows
   `96cfea7`, so no reviewer saw the other, and the only comparison on record was
   a 19-sample throwaway probe. `frobenius::to_cospan_pin` (a `#[cfg(test)]`
   module — the T1 algorithm walks the `pub(crate)` `layers`, so no integration
-  test can express it) measured the two up to `canonical_form` over **383
-  terms** before either body was removed, and keeps measuring the survivor
-  against the retired algorithm, which lives on there as an independent oracle
-  (a genuinely different route through the spider generator, so this is not a
-  test restating production's own logic). The space: the ten `tests/compact_closed.rs::samples()`, the thirty-six
+  test can express it) measured the two up to `canonical_form` over **363
+  terms** before either body was removed (widened to 383 in the same PR, where
+  the retired algorithm is now the oracle), and keeps measuring the survivor
+  against that retired algorithm — independent on the spider route and the
+  layer fold; its six generator arms, the hand-built braiding literal
+  included, are byte-identical to the survivor's, so a convention error
+  applied to both copies is invisible here and is held by
+  `frobenius_to_cospan_agrees_with_the_cospan_generators` instead. The space:
+  the ten `tests/compact_closed.rs::samples()`, the thirty-six
   `(m, n) ≤ 5` spiders including the `(0, 0)` bubble, both sides of all eleven
   Def 2.5 equations, fifteen cup / cap / name / unname terms, and 300
   pseudo-random terms of **up to 8 extension attempts** over two labels (an
