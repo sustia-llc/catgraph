@@ -144,7 +144,7 @@ All notable changes to `catgraph` are documented here. The format follows
   terms** before either body was removed (widened to 383 in the same PR, where
   the retired algorithm is now the oracle), and keeps measuring the survivor
   against that retired algorithm — independent on the spider route and the
-  layer fold; its six generator arms, the hand-built braiding literal
+  layer fold; its six non-spider generator arms, the hand-built braiding literal
   included, are byte-identical to the survivor's, so a type-correct
   convention error applied to both copies cannot be compared away here
   (measured: flipping the braiding leg in both still reddens the pin, but via

@@ -528,10 +528,15 @@ fn space() -> Vec<(String, FM)> {
 /// fold's label check — the flipped literal is ill-typed on a mixed-label σ
 /// (`[z, w] → [z, w]`), so the term is rejected before any comparison happens.
 /// On a same-label σ the flipped literal is type-correct and both copies agree
-/// on the wrong answer, which only
+/// on the wrong answer — measured under E: this pin restricted to the spider
+/// grid plus the Def 2.5 battery (58 terms, the σ-bearing `comm_lhs` /
+/// `cocomm_lhs` among them) has 0 survivor/oracle mismatches, and `σ_zz` is
+/// identity-shaped on both sides. What catches that case is the tests built
+/// through `Cospan::from_permutation_on_domain`, not this pin:
 /// `tests/frobenius_axioms.rs::frobenius_to_cospan_agrees_with_the_cospan_generators`
-/// — built through `Cospan::from_permutation_on_domain` — catches: under E it
-/// went red exactly there, on label `'z'`.
+/// and `braiding_is_a_genuine_crossing_per_carrier` both went red under E on
+/// label `'z'` (a full `--no-fail-fast` run under E reddens 15 tests
+/// crate-wide, eleven of them in `tests/compact_closed.rs`).
 #[test]
 fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
     let terms = space();

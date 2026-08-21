@@ -14,7 +14,8 @@ mod trait_impl;
 ///
 /// There was briefly a second implementation of this map here, added under #283
 /// while [#284] was adding the `cospan_algebra` one on a parallel branch; #336
-/// unified them after measuring they agree over 383 terms (see the
+/// unified them after measuring they agree over 363 terms while both bodies
+/// were live (383 now, the retired algorithm being the oracle — see the
 /// `to_cospan_pin` test module). ⚠ The surviving function's bounds require
 /// `Send + Sync` on both parameters and it rejects an `UnSpecifiedBox` with
 /// [`CatgraphError::Interpret`](crate::errors::CatgraphError::Interpret) rather
