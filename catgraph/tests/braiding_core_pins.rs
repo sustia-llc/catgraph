@@ -7,8 +7,12 @@
 //! cross-carrier oracle and stays where it is — but three of the rows it
 //! covers are on types defined *here*, in `catgraph`, and had no core-side pin:
 //! [`CospanAlgebraMorphism`], [`FrobeniusMorphism`]'s **wiring**, and
-//! [`NamedCospan`]'s **port-name direction** (its cospan direction was already
-//! pinned through `Cospan`'s lib tests; its names were not).
+//! [`NamedCospan`]'s **port-name direction** (it delegates its cospan to
+//! `Cospan::from_permutation_on_*`, so `cospan::test::permutation_automatic` /
+//! `permutatation_manual_labelled` pin that direction, and
+//! `named_cospan::test::permutatation_automatic` compares a composite's legs;
+//! nothing in core pinned the names — permuting them by `p` instead of `p⁻¹`,
+//! in the constructor or in `permute_side`, reddens only this file).
 //!
 //! The measured consequence (#286): inverting the braiding direction in
 //! `CospanAlgebraMorphism`'s two constructors — `p.inv()` ⇄ `p` in both the
@@ -314,8 +318,10 @@ fn core_carriers_realize_p_on_both_constructors() {
             // alone (labels and leg through `p.inv()`) already fails the
             // `Cam on_codomain` wiring assertion above, measured at n=3
             // p=[1,2,0]: `[2,0,1]` vs `[1,2,0]`, with
-            // `hand_written_reference_and_cam_element` red on its codomain word
-            // too (3 passed, 2 failed); this line is never reached.
+            // `hand_written_reference_and_cam_element` red on the on_codomain
+            // element's domain word (`['C','A','B']` where
+            // `domain[i] = types[p(i)]` requires `['B','C','A']`) — 3 passed,
+            // 2 failed; this line is never reached.
             let relabelled: Vec<char> = p.permute(&types);
             let via_domain = Cam::from_permutation_on_domain(p.clone(), &relabelled).unwrap();
             assert_eq!(

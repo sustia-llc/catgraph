@@ -151,10 +151,15 @@ All notable changes to `catgraph` are documented here. The format follows
   `CospanAlgebraMorphism`, `FrobeniusMorphism`'s **wiring** (the applied oracle
   checks only its `domain()`/`codomain()` words, and #258 established that a
   word can be right over an inverted wiring), and `NamedCospan`'s **port-name
-  direction** — its cospan direction was already pinned transitively through
-  `Cospan` (the two `named_cospan` lib tests in (6) below compare the
-  composite's legs), but names permuted by `p` instead of `p⁻¹` in
-  `permute_side` reddened nothing in core, see (4). A downstream test
+  direction** — its cospan direction was already pinned transitively:
+  `NamedCospan` delegates its cospan to `Cospan::from_permutation_on_*`, so
+  `cospan::test::permutation_automatic` / `permutatation_manual_labelled` pin it
+  (of the two `named_cospan` lib tests in (6) below, `permutatation_automatic`
+  compares the composite's legs, `permutatation_manual` only its words). Its
+  names were pinned nowhere in core: permuting them by `p` instead of `p⁻¹`
+  reddens only the new file, whether in `permute_side` (see (4)) or in the
+  constructor (`from_permutation_extra_data_on_domain`: `['b','c','a']` vs
+  `['c','a','b']` in two tests, the 289 lib tests green). A downstream test
   restructure would have zeroed core's coverage of those rows silently.
 
   New `tests/braiding_core_pins.rs` lifts those three rows into core: a

@@ -25,9 +25,10 @@ version history.
   pin distinctness of the enumeration itself; `all_perms` yields `Permutation`
   values ready to feed a constructor. This crate's own tests pin `n!` and
   distinctness for `n ≤ 5`, that every entry is a bijection of `0..n`, and that
-  the two views are **index-aligned** — `all_perms(n)[k]` is the permutation
-  whose one-line notation is `all_perm_indices(n)[k]`, asserted through
-  `all_perms` itself. Alignment is the only contract a caller mixing the views
+  the two views are **index-aligned** (checked at `n ∈ {3, 4}`, the only `n`
+  any consuming sweep runs) — `all_perms(n)[k]` is the permutation whose
+  one-line notation is `all_perm_indices(n)[k]`, asserted through `all_perms`
+  itself. Alignment is the only contract a caller mixing the views
   depends on; a drift in `all_perms` cannot flip a consuming sweep's convention
   (each sweep derives its reference from the same `p` it feeds the constructor,
   and `Sₙ` is closed under inversion), so this pin is the only place such a

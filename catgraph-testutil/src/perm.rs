@@ -141,6 +141,10 @@ mod tests {
     /// `all_perm_indices(3)[3]` is `[1, 2, 0]` (16 passed, 1 failed) — while
     /// all 66 test binaries of `cargo test -p catgraph -p catgraph-applied
     /// --tests` stay green.
+    ///
+    /// Space: alignment is checked at `n ∈ {3, 4}` only — the only `n` any
+    /// consuming sweep runs; `counts_are_factorial_and_distinct` covers the
+    /// enumeration itself (count, distinctness, bijection) up to `n = 5`.
     #[test]
     fn permutation_view_matches_the_indices() {
         for n in [3usize, 4] {
