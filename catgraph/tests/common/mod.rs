@@ -6,6 +6,7 @@
 use catgraph::{
     category::{Composable, ComposableMutating},
     cospan::Cospan,
+    cospan_algebra::frobenius_to_cospan,
     frobenius::FrobeniusMorphism,
     named_cospan::NamedCospan,
     span::Span,
@@ -94,24 +95,40 @@ where
 }
 
 /// Assert two `FrobeniusMorphism`s are equal *by content* (presentation
-/// equality), reporting both shapes on failure.
+/// equality), reporting both shapes **and both semantic images** on failure.
 ///
 /// Note this is **presentation** equality, not equality modulo the Frobenius
 /// axioms: `δ ; μ` and `id` are semantically equal but compare unequal here.
+///
+/// `depth`/`domain`/`codomain` cannot tell a connectivity-only regression from
+/// a fixture drift (`σ_{a,a}` and `id_{a,a}` print identically), so the message
+/// also renders each side's `frobenius_to_cospan(..).canonical_form()` — equal
+/// up to apex isomorphism exactly when the two presentations denote the same
+/// cospan.
 #[allow(dead_code)]
 pub fn assert_frobenius_eq_msg<L, BL>(
     a: &FrobeniusMorphism<L, BL>,
     b: &FrobeniusMorphism<L, BL>,
     msg: &str,
 ) where
-    L: Eq + Copy + std::fmt::Debug,
-    BL: Eq + Clone,
+    L: Eq + Ord + std::hash::Hash + Copy + std::fmt::Debug + Send + Sync,
+    BL: Eq + Clone + Send + Sync,
 {
-    assert!(
-        a == b,
-        "{msg}: FrobeniusMorphism presentations differ\n  lhs: {}\n  rhs: {}",
+    if a == b {
+        return;
+    }
+    let semantic = |m: &FrobeniusMorphism<L, BL>| -> String {
+        match frobenius_to_cospan(m) {
+            Ok(c) => format!("{:?}", c.canonical_form()),
+            Err(e) => format!("<no Cospan image: {e}>"),
+        }
+    };
+    panic!(
+        "{msg}: FrobeniusMorphism presentations differ\n  lhs: {} ⟼ {}\n  rhs: {} ⟼ {}",
         frobenius_shape(a),
+        semantic(a),
         frobenius_shape(b),
+        semantic(b),
     );
 }
 

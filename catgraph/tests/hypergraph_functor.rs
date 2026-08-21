@@ -8,6 +8,7 @@ mod common;
 use catgraph::{
     category::{Composable, ComposableMutating, HasIdentity},
     cospan::Cospan,
+    cospan_algebra::frobenius_to_cospan,
     frobenius::{FrobeniusMorphism, special_frobenius_morphism},
     hypergraph_category::HypergraphCategory,
     hypergraph_functor::{CospanToFrobeniusFunctor, HypergraphFunctor, RelabelingFunctor},
@@ -177,8 +178,10 @@ fn relabeling_roundtrip_invertible() {
 //
 // These four compare the *whole morphism* (`FrobeniusMorphism: PartialEq` is
 // layer-by-layer presentation equality), not just the boundary types — see
-// `assert_frobenius_eq_msg`. Boundary-only versions passed under a
-// merge-everything-into-one-spider implementation of the functor (#285).
+// `assert_frobenius_eq_msg`. Boundary-only versions could not see
+// connectivity: under a merge-everything-into-one-spider implementation of the
+// functor (#285) every uniform-label one of them stayed green, and the
+// mixed-label ones went red only for their boundary labels.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -385,9 +388,11 @@ fn ctf_asymmetric_cospan() {
 // ---------------------------------------------------------------------------
 // CospanToFrobeniusFunctor: content-level pins (#285)
 //
-// Everything above this line that compares only `domain()` / `codomain()` was
-// shown to pass under an implementation that mapped *every* `m → n` cospan to
-// `special_frobenius_morphism(m, n, z)`. The three tests below compare whole
+// Everything above this line that compares only `domain()` / `codomain()`
+// cannot see connectivity: under an implementation that mapped *every* `m → n`
+// cospan to `special_frobenius_morphism(m, n, z)` (label read off the cospan),
+// 7 of the 10 `ctf_*` tests stayed green and the other three went red for
+// their mixed boundary labels, not their wiring. The tests below compare whole
 // morphisms, and each states the space its claim ranges over.
 // ---------------------------------------------------------------------------
 
@@ -396,9 +401,15 @@ fn ctf_asymmetric_cospan() {
 ///
 /// Scope of the claim: exactly the 25 cospans `(m, n) ∈ {0,…,4}²` over the
 /// single label `'a'` with a one-element apex. It ranges over no multi-apex
-/// and no multi-label cospan; the reference side is
-/// `special_frobenius_morphism`, an independently-written constructor, not a
-/// re-derivation of the epi-mono decomposition under test.
+/// and no multi-label cospan. The reference side is
+/// `special_frobenius_morphism`, which is **not** independent of the code
+/// under test: `from_decomposition` builds each surjection block by calling
+/// it, and for `m ≥ n`, `n ≠ 1` it is literally `sfm(m,1) ; sfm(1,n)` — the
+/// same shape the general route composes. A defect inside
+/// `special_frobenius_morphism` is therefore invisible here; what this pin
+/// does see is the guard regression below, and
+/// `ctf_single_apex_cospan_round_trips_up_to_canonical_form` is the
+/// `sfm`-independent companion.
 ///
 /// Regression pinned (#285): the identity fast path in `cospan_to_frobenius`
 /// fired on `domain == codomain && left == right`, which the all-merged
@@ -419,6 +430,49 @@ fn ctf_single_apex_cospan_is_the_spider() {
                 "F(single-apex {m}→{n}) must be spider({m},{n}): got {}, want {}",
                 frobenius_shape(&mapped),
                 frobenius_shape(&spider),
+            );
+        }
+    }
+}
+
+/// `sfm`-independent companion to the grid pin: interpret `F(c)` back into
+/// `Cospan` through `frobenius_to_cospan` (a layer-by-layer interpreter that
+/// never calls `special_frobenius_morphism`) and compare canonical forms with
+/// the original.
+///
+/// Scope of the claim: the 24 single-apex cospans `(m, n) ∈ {0,…,4}² \ (0,0)`
+/// over `'a'`. `(0,0)` is excluded and asserted separately: the bubble is lost
+/// on the way back (`two_layer_simplify` rule 3 cancels `η;ε`), which is the
+/// discrepancy `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions`
+/// pins as-is.
+///
+/// Falsified: under the pre-#285 guard the round trip disagreed at `(2,2)`,
+/// `(3,3)` and `(4,4)` (back apex 2, 3, 4 against the original's 1).
+#[test]
+fn ctf_single_apex_cospan_round_trips_up_to_canonical_form() {
+    let f = CospanToFrobeniusFunctor::<String>::new();
+    for m in 0usize..=4 {
+        for n in 0usize..=4 {
+            let c = Cospan::new(vec![0; m], vec![0; n], vec!['a'])
+                .expect("single-apex cospan is well formed for every (m, n)");
+            let mapped: FM = f.map_mor(&c).unwrap();
+            let back = frobenius_to_cospan(&mapped).unwrap().canonical_form();
+            if (m, n) == (0, 0) {
+                assert_eq!(
+                    back.apex_len(),
+                    0,
+                    "the (0,0) bubble is expected to be lost (rule 3), got apex {}",
+                    back.apex_len()
+                );
+                continue;
+            }
+            let original = c.canonical_form();
+            assert_eq!(
+                back,
+                original,
+                "F(single-apex {m}→{n}) does not round-trip: back apex {}, original apex {}",
+                back.apex_len(),
+                original.apex_len()
             );
         }
     }
