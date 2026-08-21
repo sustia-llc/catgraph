@@ -28,9 +28,25 @@ type FM = FrobeniusMorphism<char, String>;
 // differ syntactically — `==` on `FM` is sound but far too fine to state the
 // compact-closed laws with. `frobenius_to_cospan` sends a term to its image in
 // `Cospan`, the theory of special commutative Frobenius monoids (F&S 2019
-// Prop 3.8), and `canonical_form` decides isomorphism there. So
-// `canon(a) == canon(b)` iff `a` and `b` are equal under the SCFM axioms —
-// exactly the equality every proposition in §3.1 is stated up to.
+// Prop 3.8), and `canonical_form` decides isomorphism there.
+//
+// ⚠ **One direction only.** `a` and `b` equal under the SCFM axioms *implies*
+// `canon(a) == canon(b)`, because `Cospan` models those axioms — that is what
+// makes the pins below sound. The converse is **false as implemented**: the
+// layer simplifier cancels `η;ε` (the *extra-special* axiom, which `Cospan`
+// does not satisfy), so `Spider('a', 0, 0)` — a genuine `0 → 0` non-identity in
+// the special theory — has the same image as `FM::identity(&vec![])`. Measured
+// and pinned in `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions`.
+//
+// Consequence for everything below: `assert_same_cospan` is blind to precisely
+// the scalars the layer simplifier removes *before* `frobenius_to_cospan` sees
+// them — an `η(z);ε(z)` pair at a layer boundary. `CospanCanon` itself counts
+// bubbles (`scalar_count`), so a scalar that survives simplification IS caught;
+// what these pins cannot see is a regression whose only effect is to add or
+// drop an adjacent `η;ε`. What they do catch is any change to a term's
+// boundary-to-apex connectivity — which is what the audit's two measured
+// vacuity modes (discard-inputs/create-outputs junk, and dropping `f̂`/`ĝ` for
+// bare units) both are.
 
 /// The semantic image of a Frobenius term: its cospan up to apex isomorphism.
 fn canon(m: &FM) -> CospanCanon<char> {
@@ -82,7 +98,9 @@ fn assert_image_is(got: &FM, want: &Cospan<char>, what: &str) {
 }
 
 /// The sample terms every content pin below ranges over, as
-/// `(label, f, domain, codomain)`.
+/// `(label, f, domain, codomain)`. The two interface columns are declared data
+/// beside the term; `samples_are_well_formed` checks them against `f` itself so
+/// they cannot drift.
 ///
 /// Ten terms: both identities, all four Frobenius generators, the braiding, two
 /// two-layer composites, and one spider. This is the *whole* space these pins
@@ -143,6 +161,27 @@ fn samples() -> Vec<(&'static str, FM, Vec<char>, Vec<char>)> {
             vec!['a', 'a', 'a'],
         ),
     ]
+}
+
+/// The declared `(domain, codomain)` columns of [`samples`] are the term's own.
+///
+/// Without this, the codomain column is inert — every call site destructures it
+/// as `_y` — and could drift out of sync with the term beside it unnoticed. The
+/// domain column is load-bearing (it supplies `x.len()` to `unname`), but a
+/// wrong value there would surface only as a confusing roundtrip failure.
+///
+/// **Space:** the ten [`samples`]. This is an interface check, not a content
+/// one: it says the columns describe the term, not that the term is right.
+#[test]
+fn samples_are_well_formed() {
+    for (label, f, x, y) in samples() {
+        assert_eq!(f.domain(), x, "{label}: declared domain != f.domain()");
+        assert_eq!(
+            f.codomain(),
+            y,
+            "{label}: declared codomain != f.codomain()"
+        );
+    }
 }
 
 /// Bend a cospan's left leg round to the right: `X → A ← Y` becomes
@@ -777,10 +816,13 @@ fn cup_cap_tensor_are_the_bent_identity() {
 ///
 /// **Space:** `X` of length 0–3 over `{'a','b'}`, both snake orientations.
 /// Specialness itself (`δ;μ = id`) is pinned in `frobenius_laws.rs`; this test
-/// claims only that the two zigzags reduce.
+/// claims only that the two zigzags reduce. A bubble that survives the layer
+/// simplifier *is* caught here, since it changes the apex size; an adjacent
+/// `η;ε` the simplifier cancels first is not — see the header.
 #[test]
 fn zigzag_snakes_reduce_to_the_identity() {
     for types in [
+        vec![],
         vec!['a'],
         vec!['a', 'b'],
         vec!['a', 'a'],

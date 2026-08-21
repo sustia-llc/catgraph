@@ -126,7 +126,7 @@
 | Item | Status | catgraph location | Notes |
 |---|---|---|---|
 | Compact closed category definition (cup, cap, zigzag) | ✅ | compact_closed.rs (cup/cap functions) | not a separate trait; provided as helper functions |
-| Eq 13: zigzag identities | ✅ | tests/compact_closed.rs (51 tests) | tested; content-pinned against `Cospan` canonical forms since [#284](https://github.com/sustia-llc/catgraph/issues/284) — before that the suite asserted interfaces only |
+| Eq 13: zigzag identities | ✅ | tests/compact_closed.rs (52 tests) | tested; content-pinned against `Cospan` canonical forms since [#284](https://github.com/sustia-llc/catgraph/issues/284) — before that the suite asserted interfaces only |
 | Prop 3.1: every hypergraph cat is self-dual compact closed (cup_X := η; δ, cap_X := μ; ε) | ✅ | compact_closed.rs::cup, cap | exact formula |
 | Prop 3.2: bijection C(X,Y) ≅ C(I, X⊗Y) (name) | ✅ | compact_closed.rs::name, unname | |
 | Eq 14: comp^Y_{X,Z} morphism (id_X ⊗ cap_Y ⊗ id_Z) | ✅ | equivalence.rs::comp_cospan | |

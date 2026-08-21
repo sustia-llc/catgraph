@@ -8,20 +8,62 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Added
 
-- **`cospan_algebra::frobenius_to_cospan`** — the semantics direction of the
-  Fong-Spivak Prop 3.8 correspondence, inverse in spirit to the existing
-  `cospan_to_frobenius` ([#284](https://github.com/sustia-llc/catgraph/issues/284)).
-  It interprets a `FrobeniusMorphism<Lambda, _>` in `Cospan<Lambda>` layer by
-  layer, and errors (`CatgraphError::Interpret`) on an `UnSpecifiedBox`, which
-  has no image in the free hypergraph category.
+- **`cospan_algebra::frobenius_to_cospan`** — interprets a
+  `FrobeniusMorphism<Lambda, _>` in `Cospan<Lambda>` layer by layer, inverse in
+  spirit to the existing `cospan_to_frobenius`
+  ([#284](https://github.com/sustia-llc/catgraph/issues/284)). It errors
+  (`CatgraphError::Interpret`) on an `UnSpecifiedBox`, which has no image in the
+  free hypergraph category.
+
+  Fong-Spivak Prop 3.8 is a one-to-one correspondence between special
+  commutative Frobenius monoids (SCFMs) in a symmetric monoidal category `C` and
+  strict symmetric monoidal functors `(Cospan, ⊕) → (C, ⊗)` — **both** of its
+  directions are functors *out of* `Cospan`, so neither of them is this map.
+  What Prop 3.8 licenses is the construction: the black-box-free part of
+  `FrobeniusMorphism_Λ` is the free SCFM prop, `Cospan_Λ` carries an SCFM
+  structure on each object (Ex 2.8), and the proposition turns that structure
+  into the interpreting functor.
 
   This is the *observable* the compact-closed suite was missing.
   `FrobeniusMorphism`'s derived `Eq` compares layer vectors and composition only
   applies a local `two_layer_simplify`, so equal diagrams routinely differ
   syntactically and no equality on `FM` could state §3.1's propositions.
-  Composing with `Cospan::canonical_form` gives the semantic one: equality up to
-  apex isomorphism, which by Prop 3.8 *is* equality under the special
-  commutative Frobenius axioms.
+  Composing with `Cospan::canonical_form` gives a semantic one — equality up to
+  apex isomorphism. **One direction only:** SCFM-equal terms have equal images,
+  because `Cospan` models the SCFM axioms; the converse fails on scalars, since
+  `Spider(z, 0, 0)` is a genuine bubble in the *special* theory yet has the same
+  image as `FrobeniusMorphism::identity(&vec![])` (see "Known discrepancy"
+  below). So the new pins catch any change to a term's boundary-to-apex
+  connectivity, and to any bubble that survives the layer simplifier; the one
+  thing they cannot see is a change whose only effect is to add or drop an
+  adjacent `η;ε` pair, which the simplifier cancels before this function runs.
+
+### Fixed
+
+- **`Frobenius::basic_interpret`'s default interpreted every braiding as the
+  identity** ([#284]). It built `Permutation::try_from(vec![0, 1])` — the
+  identity permutation — where `σ: [z1, z2] → [z2, z1]` needs the transposition
+  `[1, 0]`. Dead code today (`FrobeniusMorphism` is the only implementor and
+  overrides `basic_interpret`), but it is the reference semantics any future
+  implementor inherits, and `cospan_algebra::generator_to_cospan` — its
+  `Cospan`-valued twin, added in this release — builds the true transposition,
+  so the two disagreed.
+
+- **`Frobenius::interpret_frob`'s default rejected `identity(&vec![])`**
+  ([#284]). It errored on *every* block-free layer, including the block-free,
+  empty-interface layer that is how `FrobeniusMorphism::identity` represents the
+  identity on the empty type list. It now interprets that layer as `id_I` (the
+  unit of its fold) and rejects only a block-free layer with a non-empty
+  interface, matching `frobenius_to_cospan`. The two functions now cross-
+  reference each other, with the reason they are not one function (`Cospan` is
+  `Composable`, not the `ComposableMutating` the `Frobenius` supertraits
+  require).
+
+- **`compact_closed`'s module docs stated both zigzag identities in the wrong
+  composition order** ([#284]) — `(id_X ⊗ cap_X) ; (cup_X ⊗ id_X)`, which does
+  not typecheck as `id_X` (it is an endomorphism of `X ⊗ X ⊗ X`). Corrected to
+  `(cup_X ⊗ id_X) ; (id_X ⊗ cap_X)` and `(id_X ⊗ cup_X) ; (cap_X ⊗ id_X)`, the
+  composites `zigzag_snakes_reduce_to_the_identity` actually builds.
 
 ### Fixed — tests
 
@@ -40,18 +82,30 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Known discrepancy — scalars (bubbles)
 
-- **Neither direction of the Prop 3.8 correspondence preserves scalars**, from
+- **Neither direction of the `Cospan` ↔ `FrobeniusMorphism` translation
+  preserves scalars** (`cospan_to_frobenius` / `frobenius_to_cospan`), from
   two independent causes, each localised by disabling it and re-measuring
   ([#284]; pinned as-is by
   `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions`, not
   endorsed):
-  1. `cospan_to_frobenius`'s identity fast path fires on *every* `0 → 0` cospan
-     (`domain == codomain`, both legs empty), so one bubble and two bubbles
-     produce the same term even though their canonical forms differ.
+  1. `cospan_to_frobenius`'s identity fast path. Its guard is
+     `domain == codomain && left_to_middle() == right_to_middle()` — about the
+     *legs*, not the arity — so it discards *every apex vertex neither leg
+     reaches, at any arity*, not only at `0 → 0`. At `0 → 0` (both legs empty)
+     one bubble and two bubbles produce the same term even though their
+     canonical forms differ.
   2. `FrobeniusLayer::two_layer_simplify` rule 3 cancels `η(z);ε(z)` — the
      **extra-special** axiom. `Cospan` is the theory of *special* commutative
      Frobenius monoids and keeps bubbles (`cospan_canon`'s module docs say so
      explicitly); `Corel` is the extra-special quotient that discards them.
+
+  The two are independent **at `0 → 0` only**. Away from it they overlap, and
+  the pin covers that case separately: `Cospan::new(vec![0], vec![0],
+  vec!['a', 'b'])` — `id_a` beside a bubble — collapses to
+  `FrobeniusMorphism::identity(&['a'])`; narrowing the fast-path guard to
+  `0 → 0` leaves it collapsed (the decomposition path emits `η('b');ε('b')`,
+  which rule 3 eats), and only disabling rule 3 as well keeps the bubble
+  (a depth-2 term). So a fix to either cause alone does not silence the pin.
 
   Correcting either sends that pin red, at which point the two exclusions its
   neighbours document can be lifted.
