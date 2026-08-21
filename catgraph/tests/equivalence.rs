@@ -5,6 +5,10 @@
 
 use std::sync::Arc;
 
+mod common;
+
+use common::assert_cospan_eq_msg;
+
 use catgraph::{
     category::{Composable, ComposableMutating, HasIdentity},
     cospan::Cospan,
@@ -313,10 +317,27 @@ fn lemma_4_9_identity_functor_preserves_composition() {
 ///
 /// Using `α = id` and `β = id` (both on `PartitionAlgebra` → `PartitionAlgebra`)
 /// gives `F_{id;id}(f) = F_id(F_id(f)) = f`.
+///
+/// The witness is deliberately **not** an identity morphism: `μ ; δ` on `'a'`.
+/// The comparison is **leg by leg** on the underlying element — an
+/// identity witness compared on `middle()` alone left a wrong leg invisible
+/// (#285).
+///
+/// Scope of the claim, stated honestly: `Part` is the **initial**
+/// cospan-algebra, so its only self-morphism is the identity — `α` and `β`
+/// cannot be anything else here, and the two routes are therefore the same
+/// expression. What this pins is `functor_from_algebra_morphism` transporting
+/// the element and both boundaries faithfully, **not** functoriality of a
+/// non-trivial `α`. The non-trivial `α` (`cospan_to_frobenius`, `Part → Name`)
+/// is covered by `lemma_4_9_cospan_to_name_preserves_composition`.
 #[test]
 fn lemma_4_9_functor_composition_of_morphisms() {
     let alg = alg();
-    let f: PartMorph = PartMorph::identity_in(Arc::clone(&alg), &['a', 'b']);
+    let mu: PartMorph = PartMorph::multiplication_in(Arc::clone(&alg), 'a');
+    let delta: PartMorph = PartMorph::comultiplication_in(Arc::clone(&alg), 'a');
+    let f: PartMorph = mu.compose(&delta).unwrap();
+    assert_eq!(f.domain(), vec!['a', 'a'], "witness μ;δ domain");
+    assert_eq!(f.codomain(), vec!['a', 'a'], "witness μ;δ codomain");
 
     let alpha = |e: &Cospan<char>| e.clone();
     let beta = |e: &Cospan<char>| e.clone();
@@ -330,7 +351,17 @@ fn lemma_4_9_functor_composition_of_morphisms() {
 
     assert_eq!(combined.domain(), two_step.domain());
     assert_eq!(combined.codomain(), two_step.codomain());
-    assert_eq!(combined.element().middle(), two_step.element().middle());
+    assert_cospan_eq_msg(
+        combined.element(),
+        two_step.element(),
+        "F_{α;β}(μ;δ) vs F_α(F_β(μ;δ))",
+    );
+    // …and the round trip really is the input element, not just self-consistent.
+    assert_cospan_eq_msg(
+        combined.element(),
+        f.element(),
+        "F_{id;id}(μ;δ) reproduces μ;δ",
+    );
 }
 
 /// Lemma 4.9 — non-trivial α: `PartitionAlgebra` → `NameAlgebra` via
@@ -360,15 +391,69 @@ fn lemma_4_9_cospan_to_name_functor_preserves_identity() {
     assert_eq!(elem.codomain(), vec!['a', 'a']);
 }
 
+/// Lemma 4.9 — the same non-trivial α on a **non-identity** morphism: `F_α(μ)`.
+///
+/// `lemma_4_9_cospan_to_name_functor_preserves_identity` above only exercises
+/// `id_['a']`, whose image is symmetric in every component — a functor that
+/// dropped or swapped a leg would land on the same answer. `μ: [a,a] → [a]` is
+/// asymmetric, so the boundaries below pin the direction as well as the size.
+///
+/// Scope of the claim: this one morphism, compared on the morphism boundary,
+/// the name element's boundary, and the element's `depth()`. It is not a
+/// content comparison — see `lemma_4_9_cospan_to_name_preserves_composition`
+/// for why presentation equality is out of reach on this side.
+#[test]
+fn lemma_4_9_cospan_to_name_on_a_non_identity_morphism() {
+    let part = alg();
+    let name = name_alg();
+
+    let mu: PartMorph = PartMorph::multiplication_in(Arc::clone(&part), 'a');
+    let alpha = |c: &Cospan<char>| -> FrobeniusMorphism<char, String> {
+        cospan_to_frobenius(c).expect("cospan_to_frobenius is total")
+    };
+    let image: NameMorph = functor_from_algebra_morphism(&alpha, Arc::clone(&name), &mu);
+
+    assert_eq!(image.domain(), vec!['a', 'a'], "F_α(μ) domain");
+    assert_eq!(image.codomain(), vec!['a'], "F_α(μ) codomain");
+
+    // The name of μ lives in H(I, P(X) ⊕ Y): a morphism [] → [a,a,a].
+    let elem = image.element();
+    assert!(elem.domain().is_empty(), "a name has empty domain");
+    assert_eq!(
+        elem.codomain(),
+        vec!['a', 'a', 'a'],
+        "the name of a 2→1 morphism has the X⊕Y interface [a,a,a]"
+    );
+    assert_eq!(
+        elem.depth(),
+        3,
+        "the epi-mono realisation of μ's name is three layers; the identity \
+         witness this test used to rely on is a single layer, so depth alone \
+         could not tell the two apart"
+    );
+}
+
 /// Lemma 4.9 — `F_α` preserves composition for the non-trivial α above:
 /// `F_α(f ; g)` agrees with `F_α(f) ; F_α(g)` on domain/codomain.
+///
+/// The witnesses are **non-identity** (`μ` and `δ` on `'a'`), and the
+/// assertions cover the name element's own boundary as well as the morphism's
+/// — the identity witnesses this test used to carry made `F_α` indistinguishable
+/// from a constant (#285).
+///
+/// Scope of the claim: this one composable pair, compared on four boundaries
+/// (`domain`/`codomain` of the morphism and of its `FrobeniusMorphism`
+/// element). It is **not** a content comparison: presentation equality does
+/// not hold here — `F_α(μ;δ).element()` is a depth-3 layering and
+/// `(F_α(μ);F_α(δ)).element()` a depth-5 one, equal only modulo the Frobenius
+/// axioms, which `FrobeniusMorphism: PartialEq` does not quotient by.
 #[test]
 fn lemma_4_9_cospan_to_name_preserves_composition() {
     let part = alg();
     let name = name_alg();
 
-    let f: PartMorph = PartMorph::identity_in(Arc::clone(&part), &['a']);
-    let g: PartMorph = PartMorph::identity_in(Arc::clone(&part), &['a']);
+    let f: PartMorph = PartMorph::multiplication_in(Arc::clone(&part), 'a');
+    let g: PartMorph = PartMorph::comultiplication_in(Arc::clone(&part), 'a');
 
     let alpha = |c: &Cospan<char>| -> FrobeniusMorphism<char, String> {
         cospan_to_frobenius(c).expect("cospan_to_frobenius is total")
@@ -381,6 +466,22 @@ fn lemma_4_9_cospan_to_name_preserves_composition() {
     let gg: NameMorph = functor_from_algebra_morphism(&alpha, Arc::clone(&name), &g);
     let rhs = ff.compose(&gg).unwrap();
 
-    assert_eq!(lhs.domain(), rhs.domain());
-    assert_eq!(lhs.codomain(), rhs.codomain());
+    assert_eq!(lhs.domain(), rhs.domain(), "F_α(μ;δ) domain");
+    assert_eq!(lhs.codomain(), rhs.codomain(), "F_α(μ;δ) codomain");
+    assert_eq!(lhs.domain(), vec!['a', 'a'], "μ;δ is 2→2, not an identity");
+    assert_eq!(
+        lhs.element().domain(),
+        rhs.element().domain(),
+        "F_α(μ;δ) name-element domain"
+    );
+    assert_eq!(
+        lhs.element().codomain(),
+        rhs.element().codomain(),
+        "F_α(μ;δ) name-element codomain"
+    );
+    assert_eq!(
+        lhs.element().codomain(),
+        vec!['a', 'a', 'a', 'a'],
+        "the name of a 2→2 morphism has the X⊕Y interface [a,a,a,a]"
+    );
 }

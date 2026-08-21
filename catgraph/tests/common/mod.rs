@@ -3,7 +3,14 @@
 //! Core catgraph types intentionally lack `PartialEq` — these helpers compare
 //! via public accessors instead.
 
-use catgraph::{category::Composable, cospan::Cospan, named_cospan::NamedCospan, span::Span};
+use catgraph::{
+    category::{Composable, ComposableMutating},
+    cospan::Cospan,
+    cospan_algebra::frobenius_to_cospan,
+    frobenius::FrobeniusMorphism,
+    named_cospan::NamedCospan,
+    span::Span,
+};
 
 // ---------------------------------------------------------------------------
 // Cospan helpers
@@ -61,6 +68,68 @@ pub fn assert_cospan_shape<L: Eq + Copy + std::fmt::Debug>(
         a.middle().len(),
         b.middle().len(),
         "{msg}: middle size mismatch"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// FrobeniusMorphism helpers
+// ---------------------------------------------------------------------------
+
+/// Render the public observables of a `FrobeniusMorphism` for a failure message.
+///
+/// `FrobeniusMorphism` derives `PartialEq` (layer-by-layer presentation
+/// equality) but has no `Debug` impl, so `assert_eq!` is unavailable. This
+/// stands in for one: the three accessors the crate exposes publicly.
+#[allow(dead_code)]
+pub fn frobenius_shape<L, BL>(m: &FrobeniusMorphism<L, BL>) -> String
+where
+    L: Eq + Copy + std::fmt::Debug,
+    BL: Eq + Clone,
+{
+    format!(
+        "depth={} dom={:?} cod={:?}",
+        m.depth(),
+        m.domain(),
+        m.codomain()
+    )
+}
+
+/// Assert two `FrobeniusMorphism`s are equal *by content* (presentation
+/// equality), reporting both shapes **and both semantic images** on failure.
+///
+/// Note this is **presentation** equality, not equality modulo the Frobenius
+/// axioms: `δ ; μ` and `id` are semantically equal but compare unequal here.
+///
+/// `depth`/`domain`/`codomain` cannot tell a connectivity-only regression from
+/// a fixture drift (`σ_{a,a}` and `id_{a,a}` print identically), so the message
+/// also renders each side's `frobenius_to_cospan(..).canonical_form()` — equal
+/// up to apex isomorphism when the two presentations denote the same cospan,
+/// away from scalars (`frobenius_to_cospan` is neither sound nor complete on
+/// bubbles — see its docs; a spelled `η;ε` and `identity([])` render alike).
+#[allow(dead_code)]
+pub fn assert_frobenius_eq_msg<L, BL>(
+    a: &FrobeniusMorphism<L, BL>,
+    b: &FrobeniusMorphism<L, BL>,
+    msg: &str,
+) where
+    L: Eq + Ord + std::hash::Hash + Copy + std::fmt::Debug + Send + Sync,
+    BL: Eq + Clone + Send + Sync,
+{
+    if a == b {
+        return;
+    }
+    let semantic = |m: &FrobeniusMorphism<L, BL>| -> String {
+        match frobenius_to_cospan(m) {
+            Ok(c) => format!("{:?}", c.canonical_form()),
+            Err(e) => format!("<no Cospan image: {e}>"),
+        }
+    };
+    panic!(
+        "{msg}: FrobeniusMorphism presentations differ\n  lhs: {} ⟼ {}\n  rhs: {} ⟼ {}",
+        frobenius_shape(a),
+        semantic(a),
+        frobenius_shape(b),
+        semantic(b),
     );
 }
 

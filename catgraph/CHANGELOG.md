@@ -115,37 +115,39 @@ All notable changes to `catgraph` are documented here. The format follows
   translation**: `cospan_to_frobenius` drops them, and `frobenius_to_cospan`
   keeps the `Spider(z, 0, 0)` bubble (see "Fixed" below) but never sees a
   spelled `η;ε`, which `two_layer_simplify` rule 3 cancels before the function
-  runs. Two independent causes, each localised by disabling it and re-measuring
-  ([#284]; pinned as-is by
+  runs ([#284]; pinned as-is by
   `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions`, not
-  endorsed):
-  1. `cospan_to_frobenius`'s identity fast path. Its guard is
-     `domain == codomain && left_to_middle() == right_to_middle()` — about the
-     *legs*, not the arity — so it discards *every apex vertex neither leg
-     reaches, at any arity*, not only at `0 → 0`. At `0 → 0` (both legs empty)
-     one bubble and two bubbles produce the same term even though their
-     canonical forms differ.
+  endorsed). When first recorded the loss had **two** causes; the first was
+  closed in this same release by [#285] (the "Fixed" entry below), and on the
+  merged tree the pin is about the second alone:
+  1. ~~`cospan_to_frobenius`'s identity fast path~~ — **closed by #285.** Its
+     guard was `domain == codomain && left_to_middle() == right_to_middle()`,
+     about the *legs*, not the arity, so it returned `identity(&domain)` and
+     discarded every apex vertex neither leg reaches, at any arity. The guard
+     now also requires the common leg to be a bijection onto the apex, which
+     reaches every apex vertex by construction; a bubble makes
+     `leg.len() < middle_len`, so `0 → 0` with any bubble falls through to the
+     decomposition path like everything else. Measured on the merged tree:
+     disabling the fast path entirely leaves every `cospan_algebra`,
+     `equivalence` and `hypergraph_functor` test green with byte-identical
+     results — it has no observable effect on this discrepancy any more.
   2. `FrobeniusLayer::two_layer_simplify` rule 3 cancels `η(z);ε(z)` — the
      **extra-special** axiom. `Cospan` is the theory of *special* commutative
      Frobenius monoids and keeps bubbles (`cospan_canon`'s module docs say so
      explicitly); `Corel` is the extra-special quotient that discards them.
+     **The sole remaining cause.** The decomposition path emits one `η;ε` per
+     unreached apex vertex and rule 3 eats each of them — at `0 → 0` and
+     beside `id_a` alike.
 
-  The two are independent **at `0 → 0` only**. Away from it they overlap, and
-  the pin covers that case separately: `Cospan::new(vec![0], vec![0],
-  vec!['a', 'b'])` — `id_a` beside a bubble — collapses to
-  `FrobeniusMorphism::identity(&['a'])`; narrowing the fast-path guard to
-  `0 → 0` leaves it collapsed (the decomposition path emits `η('b');ε('b')`,
-  which rule 3 eats), and only disabling rule 3 as well keeps the bubble
-  (a depth-2 term). So a fix to either cause alone leaves that assertion green.
-
-  ⚠ **Correction, measured — the pin signals cause 2 only, not "either
-  cause".** Correcting cause 1 in the strongest sensible form (adding
-  `&& cospan.is_left_identity()` to the fast-path guard, so it can never drop
-  an unreached apex vertex) leaves the pin GREEN together with the whole lib
-  suite: rule 3 still eats the `η;ε` the decomposition emits, so every
-  assertion holds for the same reason as before. Correcting cause 2 does turn
-  it red. A cause-1-only fix is therefore exactly the partial fix this pin does
-  not catch; the `id_a`-beside-a-bubble assertion is the both-causes signal.
+  Measured on the merged tree, rule 3 disabled and nothing else: the pin goes
+  RED at its first assertion (one bubble and two bubbles become distinct
+  depth-2 terms), and `Cospan::new(vec![0], vec![0], vec!['a', 'b'])` — `id_a`
+  beside a bubble — comes back as a depth-2 term that keeps its bubble rather
+  than `identity(['a'])`. So the pin signals rule 3, and there is no longer a
+  cause-1 half for it to miss. An earlier revision of this entry recorded,
+  correctly for the pre-#285 tree, that "the pin signals cause 2 only" and
+  called the `id_a`-beside-a-bubble assertion "the both-causes signal"; both
+  statements are superseded by the guard change.
 
 - **Fixed, and it was a soundness break, not only a scalar loss:**
   `generator_to_cospan`'s `Spider(z, 0, 0)` arm recursed into
@@ -267,6 +269,67 @@ All notable changes to `catgraph` are documented here. The format follows
   `multiplication_in`'s right leg `[0, 0, 0]` → `[0, 1, 0]`: the trio stays
   green, while `cospan_algebra_morphism_battery`, the bubble ledger and the
   zigzag rider all go red.
+
+### Fixed
+
+- **`cospan_algebra::cospan_to_frobenius` no longer collapses an all-merged
+  cospan to the identity**
+  ([#285](https://github.com/sustia-llc/catgraph/issues/285)). Its identity
+  fast path fired on `domain == codomain && left_leg == right_leg`, which the
+  single-apex cospan `m → {•} ← m` also satisfies (both legs are `[0; m]`) even
+  though it is the `m→n` spider, not the identity. Measured: `[a,a] → {•} ←
+  [a,a]` returned `identity` (depth 1) where the correct answer is
+  `special_frobenius_morphism(2, 2, 'a')` (depth 2); `[a,a,a] → {•} ← [a,a,a]`
+  returned depth 1 against the correct depth 4. The wrong answers were
+  reachable for every `m = n ≥ 2` with a non-injective common leg; the guard
+  now additionally requires the common leg to be a **bijection** onto the
+  apex. Cospans whose apex carries a node no leg hits (`[a] → {•,•} ← [a]`)
+  also satisfied the old guard, but their *output is unchanged*: they now take
+  the general route, which emits `η;ε` for the spare node, and
+  `two_layer_simplify` rule 3 cancels it, so the answer is still
+  `identity(['a'])` — only the code path moved. Whether that scalar should
+  survive is the extra-special question the "Known discrepancy" entry above
+  leaves undecided pending rule 3. Every cospan the fast path used to answer
+  correctly — the genuine identities, permuted ones such as
+  `[1,0] → {a,b} ← [1,0]` included — still short-circuits.
+
+  Behaviour change, not an API change: `cospan_to_frobenius`,
+  `CospanToFrobeniusFunctor::map_mor`, and `NameAlgebra::map_cospan` all return
+  different (correct) morphisms for the affected cospans. Callers comparing
+  `FrobeniusMorphism` presentations against previously-recorded values for
+  those inputs will see a difference.
+
+### Added
+
+- Content-level regression pins for the `Cospan → Frobenius` functor ([#285]).
+  The `ctf_*` suite compared only `domain()` / `codomain()`, so it could not
+  see connectivity: an implementation mapping every `m → n` cospan to
+  `special_frobenius_morphism(m, n, z)` (label read off the cospan) passed
+  every uniform-label test in it — measured against the old file, 7 of the 10
+  `ctf_*` tests stayed green and only the three with mixed boundary labels went
+  red, for the labels rather than the wiring. New and strengthened tests
+  compare whole morphisms via `FrobeniusMorphism: PartialEq`:
+  `ctf_single_apex_cospan_is_the_spider` (the 5×5 grid `(m,n) ∈ {0,…,4}²`),
+  `ctf_disconnected_cospan_is_the_tensor_not_a_spider` (including a
+  uniform-label witness whose boundary is byte-identical to the spider it must
+  not equal), `ctf_functoriality_composition_content`, and content assertions
+  on `F(id)`, `F(η)`, `F(ε)`, `F(μ)`, `F(δ)`. Because
+  `special_frobenius_morphism` is not independent of the code under test
+  (`from_decomposition` builds each surjection block with it),
+  `ctf_single_apex_cospan_round_trips_up_to_canonical_form` round-trips the 24
+  non-bubble grid cells through `frobenius_to_cospan` + `canonical_form` and
+  asserts the `(0,0)` bubble loss separately.
+- Leg-by-leg Prop 4.6 and Lemma 4.9 witnesses ([#285]). The Prop 4.6 proptests
+  ran on a uniform-label generator with an injective leg, under which a wrong
+  leg is invisible; `arb_mixed_part_element` now emits two apex classes sharing
+  the label `'a'`, so `right_to_middle` carries information the codomain does
+  not. The Lemma 4.9 witnesses moved off identity morphisms onto `μ`, `δ` and
+  `μ ; δ`.
+- `tests/common::assert_frobenius_eq_msg` / `frobenius_shape` — `FrobeniusMorphism`
+  has `PartialEq` but no `Debug`, so `assert_eq!` is unavailable; these report
+  `depth`/`domain`/`codomain` on failure, and the assertion also renders each
+  side's `frobenius_to_cospan(..).canonical_form()`, since the three shape
+  fields cannot tell a connectivity-only regression from a fixture drift.
 
 ## [workspace-v0.15.0] - 2026-08-16
 

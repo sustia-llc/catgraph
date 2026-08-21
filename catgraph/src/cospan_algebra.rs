@@ -262,8 +262,37 @@ where
     let middle = cospan.middle();
     let middle_len = middle.len();
 
-    // Identity fast path
-    if domain == codomain && cospan.left_to_middle() == cospan.right_to_middle() {
+    // Identity fast path.
+    //
+    // `left == right` on its own is *not* enough: the all-merged cospan
+    // `[a,a] → {•} ← [a,a]` also satisfies it (both legs are `[0, 0]`), yet it
+    // is the 2→2 spider, not the identity. The cospan is the identity (up to
+    // apex isomorphism) exactly when the common leg is a *bijection* onto the
+    // apex (#285). `[a] → {•,•} ← [a]` with both legs `[0]` also fails the new
+    // guard — its apex carries a node no leg hits — and takes the general
+    // route below, which emits `η;ε` for the spare node; `two_layer_simplify`
+    // rule 3 then cancels it, so the answer is still `identity(['a'])`. Whether
+    // that scalar should survive is deliberately undecided (see
+    // `scalar_bubbles_are_lost_in_both_directions`); what #285 changed for this
+    // shape is the code path, not the output.
+    //
+    // `domain == codomain` is implied by `legs_agree` (both boundaries are
+    // `middle[leg[i]]`), so it is not a separate conjunct. `domain()` above has
+    // already indexed `middle` by every leg entry, so an out-of-range leg
+    // (reachable only through `Cospan::new_unchecked`) panics there, before
+    // this guard; the `get_mut` form below is merely total, not a defense.
+    let leg = cospan.left_to_middle();
+    let legs_agree = leg == cospan.right_to_middle();
+    // A leg of exactly `middle_len` entries hitting each apex node at most once
+    // hits every one of them exactly once.
+    let leg_is_bijection = leg.len() == middle_len && {
+        let mut hit = vec![false; middle_len];
+        leg.iter().all(|&i| match hit.get_mut(i) {
+            Some(slot) => !std::mem::replace(slot, true),
+            None => false,
+        })
+    };
+    if legs_agree && leg_is_bijection {
         return Ok(FrobeniusMorphism::identity(&domain));
     }
 
@@ -586,10 +615,16 @@ mod tests {
 
     #[test]
     fn cospan_to_frobenius_identity() {
-        let id = Cospan::<char>::identity(&vec!['a', 'b']);
+        let types = vec!['a', 'b'];
+        let id = Cospan::<char>::identity(&types);
         let morph: FM = cospan_to_frobenius(&id).unwrap();
         assert_eq!(morph.domain(), vec!['a', 'b']);
         assert_eq!(morph.codomain(), vec!['a', 'b']);
+        assert!(
+            morph == FM::identity(&types),
+            "F(id) must be the identity morphism, not merely 2→2: depth={}",
+            morph.depth()
+        );
     }
 
     #[test]
@@ -599,6 +634,8 @@ mod tests {
         let morph: FM = cospan_to_frobenius(&merge).unwrap();
         assert_eq!(morph.domain(), vec!['a', 'a']);
         assert_eq!(morph.codomain(), vec!['a']);
+        let mu: FM = crate::frobenius::FrobeniusOperation::Multiplication('a').into();
+        assert!(morph == mu, "F(merge) must be μ: depth={}", morph.depth());
     }
 
     #[test]
@@ -608,6 +645,77 @@ mod tests {
         let morph: FM = cospan_to_frobenius(&split).unwrap();
         assert_eq!(morph.domain(), vec!['a']);
         assert_eq!(morph.codomain(), vec!['a', 'a']);
+        let delta: FM = crate::frobenius::FrobeniusOperation::Comultiplication('a').into();
+        assert!(
+            morph == delta,
+            "F(split) must be δ: depth={}",
+            morph.depth()
+        );
+    }
+
+    /// The identity fast path must not fire on an all-merged cospan (#285).
+    ///
+    /// `[a,a] → {•} ← [a,a]` satisfies `domain == codomain` and
+    /// `left == right == [0, 0]`, yet it is the 2→2 spider. Guarding only on
+    /// those two conditions returned `identity` (depth 1) for it; the correct
+    /// answer is `special_frobenius_morphism(2, 2, 'a')` (depth 2). The same
+    /// confusion hit `[a,a,a] → {•} ← [a,a,a]` (identity depth 1 vs spider
+    /// depth 4).
+    ///
+    /// Scope: the four `m = n` single-apex cospans for `m ∈ {1,…,4}`. The old
+    /// guard also fired at `m = 0` (the bubble — empty legs, empty boundaries),
+    /// where the answer is `identity([])` either way via rule 3, so `m = 0` is
+    /// left to `scalar_bubbles_are_lost_in_both_directions`. The `m ≠ n` cases
+    /// were never affected by the guard and are pinned in
+    /// `tests/hypergraph_functor.rs::ctf_single_apex_cospan_is_the_spider`.
+    #[test]
+    fn cospan_to_frobenius_all_merged_is_not_the_identity() {
+        use crate::frobenius::special_frobenius_morphism;
+
+        for m in 1usize..=4 {
+            let c = Cospan::new(vec![0; m], vec![0; m], vec!['a']).unwrap();
+            let morph: FM = cospan_to_frobenius(&c).unwrap();
+            let spider: FM = special_frobenius_morphism(m, m, 'a');
+            assert!(
+                morph == spider,
+                "F(all-merged {m}→{m}) must be spider({m},{m}) (depth {}), \
+                 got depth {}",
+                spider.depth(),
+                morph.depth(),
+            );
+            if m > 1 {
+                let types: Vec<char> = vec!['a'; m];
+                assert!(
+                    morph != FM::identity(&types),
+                    "F(all-merged {m}→{m}) must not be the identity: \
+                     the {m} input wires are all connected to one another"
+                );
+            }
+        }
+    }
+
+    /// A cospan whose apex carries a node neither leg hits is still handled,
+    /// and keeps the boundary of the identity it wraps.
+    ///
+    /// Honest scope, and a **known gap**: this does *not* pin which code path
+    /// produced the answer, and the answer did not change at #285. The old fast
+    /// path returned `identity(['a'])` directly; the general route the new
+    /// guard sends this shape down emits `η ; ε` for the spare node and rule 3
+    /// simplifies it away, so it returns `identity(['a'])` too. No observable
+    /// the crate exposes separates the two, and reverting the #285 guard leaves
+    /// this test green. Whether the scalar component should survive at all is
+    /// the "extra" Frobenius law, deliberately undecided here (see
+    /// `scalar_bubbles_are_lost_in_both_directions`). What the assertions do
+    /// range over is totality and the resulting boundary for this one witness.
+    #[test]
+    fn cospan_to_frobenius_unhit_apex_node_is_total() {
+        // [a] → {•, •} ← [a], right/left legs both hit node 0 only.
+        let c = Cospan::new(vec![0], vec![0], vec!['a', 'a']).unwrap();
+        assert_eq!(c.middle().len(), 2, "the witness has a spare apex node");
+        assert_eq!(c.left_to_middle(), c.right_to_middle());
+        let morph: FM = cospan_to_frobenius(&c).unwrap();
+        assert_eq!(morph.domain(), vec!['a']);
+        assert_eq!(morph.codomain(), vec!['a']);
     }
 
     // --- frobenius_to_cospan (#284) ---
@@ -828,50 +936,42 @@ mod tests {
     /// Frobenius monoids: the closed bubble `η # ε` is a genuine `0 → 0`
     /// non-identity and `k` bubbles are distinguished from `k-1` (see
     /// [`cospan_canon`](crate::cospan_canon)'s module docs). Neither
-    /// `cospan_to_frobenius` nor `frobenius_to_cospan` preserves that today, and
-    /// the two losses have **different causes** — established by disabling each
-    /// in turn:
+    /// `cospan_to_frobenius` nor `frobenius_to_cospan` preserves that today.
+    /// When this pin was written the loss had two causes; the first has since
+    /// been closed (#285), and what remains is one:
     ///
-    /// 1. **`cospan_to_frobenius`'s identity fast path.** Its guard is
-    ///    `domain == codomain && left_to_middle() == right_to_middle()`, so it
-    ///    returns `identity(&domain)` and **discards every apex vertex neither
-    ///    leg reaches, at any arity** — not only at `0 → 0`. Disabling
-    ///    `two_layer_simplify`'s rule 3 does not change the `0 → 0` half, which
-    ///    is what localises *that* half here rather than in the simplifier.
+    /// 1. ~~`cospan_to_frobenius`'s identity fast path~~ — **closed by #285.**
+    ///    Its guard was `domain == codomain && left_to_middle() ==
+    ///    right_to_middle()`, so it returned `identity(&domain)` and discarded
+    ///    every apex vertex neither leg reaches. The guard now also requires
+    ///    the common leg to be a bijection onto the apex, which reaches every
+    ///    apex vertex by construction (a bubble makes `leg.len() < middle_len`,
+    ///    so `0 → 0` with a bubble falls through too). Measured: disabling the
+    ///    fast path entirely leaves this module's tests and the `equivalence` /
+    ///    `hypergraph_functor` suites green with byte-identical results — it no
+    ///    longer touches this discrepancy.
     /// 2. **`two_layer_simplify` rule 3.** It cancels `η(z);ε(z)` outright
-    ///    ("scalar loop") — the *extra-special* axiom — so a spelled-out `η;ε`
-    ///    interprets to `apex_len() == 0`; with rule 3 disabled it interprets to
-    ///    `apex_len() == 1` instead, which is what localises this half to the
-    ///    simplifier. **`Spider(z, 0, 0)` is no longer an instance of this.**
-    ///    Its arm in `generator_to_cospan` builds the bubble directly rather
-    ///    than recursing into `special_frobenius_morphism`'s already-simplified
-    ///    output; recursing broke the *sound* direction outright, and the repair
-    ///    is pinned by `scfm_equal_scalars_have_equal_images`.
+    ///    ("scalar loop") — the *extra-special* axiom. The decomposition path
+    ///    emits one `η;ε` per unreached apex vertex and rule 3 eats each, so a
+    ///    bubble interprets to nothing and a spelled-out `η;ε` interprets to
+    ///    `apex_len() == 0`; with rule 3 disabled both keep their bubble.
+    ///    **`Spider(z, 0, 0)` is no longer an instance of this.** Its arm in
+    ///    `generator_to_cospan` builds the bubble directly rather than recursing
+    ///    into `special_frobenius_morphism`'s already-simplified output;
+    ///    recursing broke the *sound* direction outright, and the repair is
+    ///    pinned by `scfm_equal_scalars_have_equal_images`.
     ///
-    /// **Away from `0 → 0` the two causes overlap**, and the pin says so rather
-    /// than mis-attributing the loss. `Cospan::new(vec![0], vec![0],
-    /// vec!['a', 'b'])` — `id_a` beside a bubble — trips the fast-path guard
-    /// (`domain == codomain`, legs equal) and loses its bubble; but narrowing
-    /// the guard to `0 → 0` alone does **not** restore it, because the general
-    /// decomposition path then produces `η('b');ε('b')` in the middle and rule 3
-    /// cancels *that*. Measured: with the guard narrowed the term is still
-    /// `identity(['a'])`; with rule 3 also disabled it is a depth-2 term whose
-    /// bubble survives. So a fix to either cause alone leaves this case broken,
-    /// which is why it is asserted separately below.
-    ///
-    /// The pin exists so all of this is *visible and testable*. ⚠ **What it
-    /// actually signals is cause 2, not "either cause" — measured, and an
-    /// earlier revision of this docstring claimed otherwise.** Correcting cause
-    /// 1 in the strongest sensible form (guarding the fast path with
-    /// `&& cospan.is_left_identity()` so it can never drop an unreached apex
-    /// vertex) leaves this test GREEN along with the whole lib suite: with rule
-    /// 3 still live the decomposition path emits `η;ε`, rule 3 cancels it, and
-    /// every assertion below is satisfied for the same reason as before.
-    /// Correcting cause 2 (rule 3 disabled) does turn it red. So a cause-1-only
-    /// fix is exactly the partial fix this pin does **not** catch; treat the
-    /// `id_a`-beside-a-bubble assertion as the both-causes signal and this
-    /// sentence as the honest statement of the gap. It is not a claim that the
-    /// current behaviour is right.
+    /// **What this pin signals is rule 3** — measured on the post-#285 tree by
+    /// disabling rule 3 and nothing else: the first assertion below goes red
+    /// (one bubble and two bubbles become distinct depth-2 terms), and the
+    /// `id_a`-beside-a-bubble case comes back as a depth-2 term keeping its
+    /// bubble instead of `identity(['a'])`. The fast path cannot fire on either
+    /// (`leg.len() < middle_len`), so there is no cause-1 half left for this
+    /// pin to miss. Earlier revisions of this docstring said "the pin signals
+    /// cause 2 only, not either cause" and called the `id_a` assertion "the
+    /// both-causes signal"; both were measured against the pre-#285 guard and
+    /// are superseded. None of this is a claim that the current behaviour is
+    /// right.
     #[test]
     fn scalar_bubbles_are_lost_in_both_directions() {
         let one_bubble = Cospan::new(vec![], vec![], vec!['a']).unwrap();
@@ -884,13 +984,15 @@ mod tests {
             "as cospans, one bubble and two are different morphisms"
         );
 
-        // Cause 1: the identity fast path collapses both to id_I.
+        // Rule 3 (the only remaining cause): each bubble reaches the term
+        // algebra as `η;ε`, which rule 3 cancels, so both cospans collapse to
+        // id_I. Measured with rule 3 disabled: distinct depth-2 terms.
         let one_term: FM = cospan_to_frobenius(&one_bubble).unwrap();
         let two_term: FM = cospan_to_frobenius(&two_bubbles).unwrap();
         assert!(
             one_term == two_term,
-            "the identity fast path maps every 0→0 cospan to the same term \
-             (depths {} and {})",
+            "rule 3 maps every 0→0 cospan to the same term (depths {} and {}; \
+             with rule 3 disabled they are distinct depth-2 terms)",
             one_term.depth(),
             two_term.depth()
         );
@@ -904,14 +1006,12 @@ mod tests {
             );
         }
 
-        // Both causes at once, away from 0 → 0: the fast-path guard is about the
-        // *legs*, not the arity, so `id_a` beside a bubble trips it; and even
-        // with the guard narrowed to 0 → 0 the decomposition path emits
-        // η('b');ε('b'), which rule 3 then cancels. Measured both ways — guard
-        // narrowed: still `identity(['a'])`; guard narrowed *and* rule 3 off:
-        // a depth-2 term keeping the bubble. So neither fix alone revives this
-        // case — this assertion goes red only once *both* land, which is
-        // exactly the signal a partial fix must not be allowed to hide.
+        // Rule 3 away from 0 → 0: the fast path cannot fire on `id_a` beside a
+        // bubble (`leg.len() == 1 < middle_len == 2` — not a bijection), so the
+        // decomposition path runs, emits η('b');ε('b') in the middle, and rule
+        // 3 cancels that. Measured with rule 3 disabled and nothing else: a
+        // depth-2 term keeping the bubble. So this assertion goes red with rule
+        // 3 alone — the fast path no longer has a share in it.
         let id_a_and_bubble = Cospan::new(vec![0], vec![0], vec!['a', 'b']).unwrap();
         assert_eq!(id_a_and_bubble.canonical_form().apex_len(), 2);
         assert_eq!(id_a_and_bubble.canonical_form().scalar_count(), 1);
@@ -919,7 +1019,7 @@ mod tests {
         assert!(
             collapsed == FM::identity(&vec!['a']),
             "an unreached apex vertex is dropped at arity 1 too, not just at \
-             0→0 (depth {}; the bubble-keeping term measured with both causes \
+             0→0 (depth {}; the bubble-keeping term measured with rule 3 \
              disabled has depth 2)",
             collapsed.depth()
         );
