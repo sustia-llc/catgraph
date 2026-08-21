@@ -158,6 +158,115 @@ All notable changes to `catgraph` are documented here. The format follows
   This repairs one witness; it does **not** make the translation sound, since a
   spelled `η;ε` still loses its bubble to rule 3 while the SCFM-equal spider now
   keeps one.
+### Added
+
+- **`frobenius::frobenius_to_cospan`** — interpret a `FrobeniusMorphism` as the
+  `Cospan` it denotes, the semantics half of the Prop 3.8 correspondence whose
+  syntax half `cospan_algebra::cospan_to_frobenius` already covered
+  ([#283](https://github.com/sustia-llc/catgraph/issues/283)). Each layer is the
+  monoidal product of its blocks' generator cospans and the morphism is the
+  pushout composite of its layers; an `UnSpecifiedBox` denotes nothing and is
+  rejected with a `CatgraphError::Composition` naming its arities.
+
+  This exists because `FrobeniusMorphism`'s `PartialEq` compares
+  *presentations*: it separates both sides of **all eleven** Def 2.5 equations
+  (measured, and pinned as a count in
+  `tests/frobenius_axioms.rs::frobenius_structural_equality_decides_nothing_here`),
+  so nothing in the crate could decide a Frobenius equation on that carrier.
+  Composing `f` then `g` in `FrobeniusMorphism` and interpreting is *not* the
+  same as interpreting each and composing in `Cospan` when the normalizer's
+  unit/counit rule deletes an `η` feeding an `ε` — the extra-special axiom,
+  which `Cospan` keeps as a bubble. Both halves are pinned. That is the only
+  *known* divergence, not a proof there is one; see the Rule 4 fix below, which
+  was a second one.
+
+- **`tests/frobenius_axioms.rs`** (16 tests) — the Def 2.5 equations built on
+  both sides and decided, for the four carriers this crate defines (#283).
+  Riders for the zigzag identities and for the braiding being a genuine
+  crossing: a disconnected cup and an identity braiding each leave every one of
+  the nine equations intact.
+
+  Four *named* carriers over **three** decision paths, and the file now says so:
+  `Corel` is a transparent newtype whose row recomputes `Cospan`'s
+  (`corel_recomputes_the_cospan_battery` measures it; the `Corel`-specific claim
+  is `corel_battery_composites_stay_jointly_surjective`). Nor is it every
+  implementor — `catgraph-applied`'s `PetriNet` and `DecoratedCospan` also
+  implement `HypergraphCategory` and have no Def 2.5 pin anywhere.
+
+- **`Debug` on `FrobeniusMorphism` and `FrobeniusOperation`** (#283). `PartialEq`
+  on `FrobeniusMorphism` compares presentations, so a failed comparison was only
+  ever reportable as `depth()`; the derive makes the whole presentation
+  printable. Purely additive.
+
+- **`tests/corel.rs::composites_induce_the_expected_partition`** — `Corel`
+  composites are pinned by their whole class structure, not only by the joint
+  surjectivity `Corel::new` checks and every wrong composite also satisfies (#283).
+
+### Fixed
+
+- **The Frobenius normalizer no longer fuses two spiders that share no wire**
+  (#283). `two_layer_simplify`'s Rule 4 matched `Spider(z, m, n)` against
+  `Spider(z, n, k)` with no lower bound on `n`, so `Spider(z, 2, 0)` followed by
+  `Spider(z, 0, 2)` — a sink and a source, two *disconnected* components —
+  collapsed into `Spider(z, 2, 2)`. Measured: the presented composite then
+  interpreted to one apex class where the semantics has two, i.e. the sink's
+  inputs and the source's outputs were wired together. Reachable from the public
+  API (`FrobeniusOperation` and its `From` impl are both `pub`), and the whole
+  workspace was green with it present. Rule 4 now requires `n >= 1`, and the
+  `target_side_placement` lookup excludes zero-output blocks. ⚠ **The pin,
+  `tests/frobenius_axioms.rs::spider_fusion_needs_a_wire_between_the_two_spiders`,
+  covers the CONJUNCTION, not either half** — measured: deleting `&& *n1 > 0`
+  alone leaves `cargo test -p catgraph` fully green, deleting the lookup filter
+  alone is likewise green, and only removing both turns the pin red. The two
+  are redundant defenses against one defect; cargo-mutants will score either
+  single deletion as MISSED, correctly.
+
+  Same function, same root cause: the `target_side_placement → block` lookup
+  keyed zero-output blocks too, and those do not advance the placement, so
+  they shared a key with the emitting block at the same placement.
+  `HashMap::insert` keeps the last writer and blocks are visited in layer
+  order, so the emitting block always won — the collision never displaced one;
+  what the filter removes is the lookup at a placement with no emitting block
+  (the trailing one, where only a zero-input next block can sit), and of those
+  pairings only a spider pair `Spider(z, m, 0) ; Spider(w, 0, k)` gets past a
+  rule's patterns (Rule 4's): `z1 == z2` stops it when `z ≠ w`, and when
+  `z == w` only the `n >= 1` guard does. So the filter's only observable
+  effect is that `n == 0` spider case — which is why it is redundant with the
+  guard. Blocks with no outputs are now excluded, which also makes the
+  remaining keys strictly increasing and therefore unique.
+
+### Changed
+
+- **`CospanAlgebraMorphism`'s `Clone` is hand-written and no longer requires
+  `A: Clone`** (#283). The algebra is held behind an `Arc`, so cloning never
+  clones it; the derived bound put every zero-sized algebra —
+  `PartitionAlgebra` included — outside `Clone`. Strictly a loosening: every
+  call that compiled before still compiles.
+
+- **The Thm 3.14 freeness claims in `hypergraph_category.rs` are scoped to the
+  deferral** ([#277](https://github.com/sustia-llc/catgraph/issues/277)). The
+  trait doc and the impl banner asserted "the free hypergraph category" bare,
+  while `docs/FS19-AUDIT.md` marks Thm 3.14 ❌ DEFERRED and nothing constructs
+  the `Set ⇄ Hyp` adjunction. The module doc's own caveat also cited
+  [#79](https://github.com/sustia-llc/catgraph/issues/79), closed since
+  2026-07-27; it now cites the audit doc. Prose only.
+
+- **The arity-only Frobenius tests are renamed to say so** (#283):
+  `unitality_left` → `unitality_left_arities` and similarly for
+  `counitality_left`, `associativity`, `frobenius_law` (→
+  `frobenius_law_lhs_arities`, which builds one side of a different equation),
+  `special_frobenius`, `zigzag_via_trait` and `frobenius_morphism_special` in
+  `src/hypergraph_category.rs`, plus the H_Part trio in `tests/equivalence.rs`.
+  Test names only; no API change.
+
+  Each half needed its own mutant, because they exercise different code. All
+  **19** tests in the src mod stayed green under a non-merging μ together with a
+  non-splitting δ on `Cospan`'s `HypergraphCategory` impl — which the new battery
+  catches on three carriers. The H_Part trio never touches that impl (it builds
+  from `PartMorph::multiplication_in`/`comultiplication_in`), so its mutant is
+  `multiplication_in`'s right leg `[0, 0, 0]` → `[0, 1, 0]`: the trio stays
+  green, while `cospan_algebra_morphism_battery`, the bubble ledger and the
+  zigzag rider all go red.
 
 ## [workspace-v0.15.0] - 2026-08-16
 

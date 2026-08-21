@@ -1,7 +1,20 @@
-//! The Frobenius layer (Phase S4): the free hypergraph category on a colour
-//! palette `Λ` as a **sum over** a user signature, plus the spider calculus, the
-//! special commutative Frobenius monoid (SCFM) equations, and a sound semantic
-//! checker into [`MatKron(R)`](catgraph_applied::mat_kron::MatKron).
+//! The Frobenius layer (Phase S4): a **presentation** of the hypergraph theory
+//! on a colour palette `Λ`, built as a **sum over** a user signature, plus the
+//! spider calculus, the special commutative Frobenius monoid (SCFM) equations,
+//! and a sound semantic checker into
+//! [`MatKron(R)`](catgraph_applied::mat_kron::MatKron).
+//!
+//! ## "Free" here is F&S 2018 Thm 5.60, not F&S 2019 Thm 3.14
+//!
+//! What this module builds is the free **prop** on `FrobeniusOr<G>` quotiented
+//! by the SCFM equations at every colour — a presentation by generators and
+//! relations. It is *not* a witness that the result is the free **hypergraph
+//! category** on `Λ` in the sense of Thm 3.14, whose content is an adjunction
+//! `Set ⇄ Hyp` that nothing in this workspace constructs (catgraph's
+//! `hypergraph_category` module docs and `catgraph/docs/FS19-AUDIT.md` record
+//! that deferral). Thm 3.14 appears below as a *citation of the paper's theorem
+//! about `Cospan_Λ`* — the thing that makes the per-colour extension in
+//! [`to_mat_kron`] unique — never as a property this crate has checked.
 //!
 //! # The load-bearing shape: a sum type, not a second AST
 //!
@@ -117,8 +130,10 @@ const KW_DELTA: &str = "delta";
 const KW_EPSILON: &str = "epsilon";
 
 /// A user signature `G` extended with the four special-commutative-Frobenius
-/// generators **at each colour** — the generators of the free hypergraph
-/// category on `Λ` laid *over* `G` (F&S 2019 Def 2.5 / Def 2.12 / Lemma 3.10).
+/// generators **at each colour** — a *presentation* of the hypergraph structure
+/// on `Λ` laid *over* `G` (F&S 2019 Def 2.5 / Def 2.12 / Lemma 3.10). The
+/// paper's freeness theorem is about `Cospan_Λ`, not about this type; see
+/// `cospan_functor.rs`'s Thm 3.14 citation for the claim that is the paper's.
 ///
 /// This is a **sum type over the user signature**, not a second AST: it is a
 /// [`PropSignature`], so `PropExpr<FrobeniusOr<G>>` is an ordinary free-prop term
@@ -554,9 +569,13 @@ where
     ]
 }
 
-/// Build a [`Presentation`] of the free hypergraph category on the palette
-/// `colors` over `G`: lift each user equation via [`lift_user`], then add the
-/// nine [`scfm_equations`] **at every colour** (`E_frob`).
+/// Build a [`Presentation`] of the hypergraph theory on the palette `colors`
+/// over `G`: lift each user equation via [`lift_user`], then add the nine
+/// [`scfm_equations`] **at every colour** (`E_frob`).
+///
+/// "Presentation of", not "the free hypergraph category on": this is the free
+/// prop on `FrobeniusOr<G>` modulo those equations. Thm 3.14's freeness is an
+/// adjunction `Set ⇄ Hyp` that is deferred workspace-wide — see the module docs.
 ///
 /// Seeding per colour is F&S 2019 **Lemma 3.10**: on an objectwise-free category
 /// it suffices to give a Frobenius structure to each `l ∈ Λ`, and that induces a

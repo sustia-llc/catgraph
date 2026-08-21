@@ -35,6 +35,88 @@ fn compose_preserves_joint_surjectivity() {
     assert!(fg.as_cospan().is_jointly_surjective());
 }
 
+/// The partition a composite *induces*, as sorted flat-index classes, so the
+/// comparison is deterministic.
+///
+/// Flat layout is [`Corel::equivalence_classes`]'s: `0..dom` for the domain,
+/// then the apex vertices, then the codomain.
+fn partition(c: &Corel<char>) -> Vec<Vec<usize>> {
+    let mut classes: Vec<Vec<usize>> = c
+        .equivalence_classes()
+        .into_iter()
+        .map(|class| {
+            let mut members: Vec<usize> = class.into_iter().collect();
+            members.sort_unstable();
+            members
+        })
+        .collect();
+    classes.sort();
+    classes
+}
+
+/// Composition in `Corel` produces the right **partition**, not merely a
+/// jointly-surjective one.
+///
+/// [`compose_preserves_joint_surjectivity`] above and the rest of this file's
+/// composition coverage assert only the invariant `Corel::new` checks, which a
+/// composite that merged the wrong wires would satisfy just as happily — every
+/// composite here is jointly surjective under a wrong μ too. These name the
+/// whole class structure.
+///
+/// Ranges over three composites on one wire type at arities ≤ 3. It says
+/// nothing about heterogeneous labels or about the tensor.
+#[test]
+fn composites_induce_the_expected_partition() {
+    use catgraph::hypergraph_category::HypergraphCategory;
+
+    let mu = || Corel::<char>::multiplication('a');
+    let delta = || Corel::<char>::comultiplication('a');
+    let id = || Corel::<char>::identity(&vec!['a']);
+
+    // δ ; μ : [a] → [a]. One apex vertex; flat indices dom 0, apex 1, cod 2.
+    let special = delta().compose(&mu()).unwrap();
+    assert_eq!(
+        partition(&special),
+        vec![vec![0, 1, 2]],
+        "delta ; mu should leave one class joining the single domain wire, the apex vertex and \
+         the single codomain wire"
+    );
+    assert!(
+        special.is_identity_partition(),
+        "delta ; mu is the identity partition on one wire"
+    );
+
+    // (μ ⊗ id) ; μ : [a, a, a] → [a]. Everything lands on one apex vertex;
+    // flat indices dom 0,1,2, apex 3, cod 4.
+    let mut mu_id = mu();
+    mu_id.monoidal(id());
+    let fold = mu_id.compose(&mu()).unwrap();
+    assert_eq!(
+        partition(&fold),
+        vec![vec![0, 1, 2, 3, 4]],
+        "(mu (x) id) ; mu should merge all three domain wires with the codomain wire"
+    );
+
+    // μ ; δ : [a, a] → [a, a] — the Frobenius "H", still one class:
+    // flat indices dom 0,1, apex 2, cod 3,4.
+    let h = mu().compose(&delta()).unwrap();
+    assert_eq!(
+        partition(&h),
+        vec![vec![0, 1, 2, 3, 4]],
+        "mu ; delta should join both domain wires to both codomain wires"
+    );
+
+    // id ⊗ id keeps the two wires apart — the control that says the assertions
+    // above are not just "everything merges".
+    let mut two = id();
+    two.monoidal(id());
+    assert_eq!(
+        partition(&two),
+        vec![vec![0, 2, 4], vec![1, 3, 5]],
+        "id (x) id must keep the two wires in separate classes"
+    );
+}
+
 #[test]
 fn monoidal_product_preserves_joint_surjectivity() {
     let mut a = Corel::<char>::new(Cospan::new(vec![0], vec![0], vec!['a']).unwrap()).unwrap();

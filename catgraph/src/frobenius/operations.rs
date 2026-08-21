@@ -5,6 +5,7 @@ use crate::errors::CatgraphError;
 use {
     crate::{
         category::{ComposableMutating, HasIdentity},
+        cospan::Cospan,
         finset::Decomposition,
         monoidal::{
             GenericMonoidalMorphism, GenericMonoidalMorphismLayer, Monoidal,
@@ -31,7 +32,7 @@ const PARALLEL_BLOCK_THRESHOLD: usize = 64;
 /// Six standard generators plus `Spider(z, m, n)` (m-to-n special Frobenius morphism)
 /// and `UnSpecifiedBox` for opaque black-box operations.
 #[allow(clippy::module_name_repetitions)]
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum FrobeniusOperation<Lambda: Eq + Copy, BlackBoxLabel: Eq + Clone> {
     /// η: \[\] → \[z\] — the unit (creation).
     Unit(Lambda),
@@ -133,7 +134,7 @@ where
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) struct FrobeniusBlock<Lambda: Eq + Copy, BlackBoxLabel: Eq + Clone> {
     pub(crate) op: FrobeniusOperation<Lambda, BlackBoxLabel>,
     source_side_placement: usize,
@@ -202,7 +203,7 @@ where
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) struct FrobeniusLayer<Lambda: Eq + Copy, BlackBoxLabel: Eq + Clone> {
     pub(crate) blocks: Vec<FrobeniusBlock<Lambda, BlackBoxLabel>>,
     pub(crate) left_type: Vec<Lambda>,
@@ -313,7 +314,39 @@ where
     /// into `Counit(z)` (a scalar loop) removes both blocks.
     ///
     /// **Rule 4 — Spider fusion**: `Spider(z, m, n)` followed by
-    /// `Spider(z, n, k)` at matching wires fuses into `Spider(z, m, k)`.
+    /// `Spider(z, n, k)` fuses into `Spider(z, m, k)` — **only for `n >= 1`**.
+    /// The spider theorem fuses two spiders across the wires that join them, and
+    /// with `n == 0` there are no such wires: `Spider(z, m, 0) ; Spider(z, 0, k)`
+    /// is a monoidal product of two *disconnected* components, and fusing it
+    /// would wire them together. Pinned as behaviour by
+    /// `spider_fusion_needs_a_wire_between_the_two_spiders` in
+    /// `tests/frobenius_axioms.rs` — i.e. the conjunction of the `n >= 1` guard
+    /// and the lookup filter described next, not either one alone (see the
+    /// Rule 4 comment in the body).
+    ///
+    /// # The connection invariant every rule rests on
+    ///
+    /// A `self` block and a `next_layer` block are candidates only when the
+    /// former's outputs *are* the latter's inputs: same wire position, same
+    /// non-zero count. Blocks with no outputs (`Counit`, `Spider(z, m, 0)`, a
+    /// zero-target `UnSpecifiedBox`) are therefore excluded from the lookup
+    /// below — besides never being connected to anything, they do not advance
+    /// `target_side_placement`, so they share a key with the emitting block at
+    /// the same placement. `HashMap::insert` keeps the last writer, and blocks
+    /// are visited in layer order with the placement taken at append, so the
+    /// emitting block always came last and always won; the collision never
+    /// displaced an emitting block. What the filter removes is the lookup at a
+    /// placement with no emitting block — the trailing one, where only a
+    /// zero-input `next` block can sit. Of those pairings only a spider pair
+    /// `Spider(z, m, 0) ; Spider(w, 0, k)` gets past a rule's patterns (Rule
+    /// 4's): `z1 == z2` stops it when `z ≠ w`, and when `z == w` only the
+    /// `*n1 > 0` guard does. `Counit ; Unit`, `Counit ; Spider(z, 0, k)`,
+    /// `Spider(z, m, 0) ; Unit`, and every pairing with a zero-arity
+    /// `UnSpecifiedBox` on either side fall through unmatched (no rule's
+    /// patterns name a black box). So the filter's only *observable* effect is
+    /// that `n == 0` spider case, which is why it is redundant with Rule 4's
+    /// guard. Excluding them also makes the remaining keys strictly increasing,
+    /// hence unique.
     pub(crate) fn two_layer_simplify(&mut self, next_layer: &mut Self) -> (bool, bool, bool) {
         // Rule 1: identity check (no mutations needed)
         let self_id = self.is_identity();
@@ -322,10 +355,17 @@ where
             return (self_id, next_id, false);
         }
 
-        // Build lookup: target_side_placement → index in self.blocks
+        // Build lookup: target_side_placement → index in self.blocks.
+        //
+        // Only blocks that actually emit wires take part: a zero-output block
+        // feeds nothing in `next_layer`, and including it would both invite a
+        // spurious "0 outputs meet 0 inputs" match and collide on the key with
+        // whatever block sits at the same placement.
         let mut target_pos_to_self_idx: HashMap<usize, usize> = HashMap::new();
         for (i, block) in self.blocks.iter().enumerate() {
-            target_pos_to_self_idx.insert(block.target_side_placement, i);
+            if block.target_size() > 0 {
+                target_pos_to_self_idx.insert(block.target_side_placement, i);
+            }
         }
 
         // Track which blocks are matched for simplification.
@@ -410,11 +450,31 @@ where
                 }
 
                 // Rule 4: Spider fusion
-                // Spider(z, m, n) then Spider(z, n, k) → Spider(z, m, k)
+                // Spider(z, m, n) then Spider(z, n, k) → Spider(z, m, k), for n >= 1.
+                //
+                // `*n1 > 0` is **redundant with** the `target_size() > 0` filter
+                // on the lookup above, which already drops zero-output `self`
+                // blocks; it is kept for local intent, because the reason is
+                // invisible at this site otherwise. At n == 0 the two spiders
+                // share no wire, the "composite" is really a monoidal product of
+                // two disconnected components, and fusing them would connect
+                // what the semantics keeps apart.
+                //
+                // ⚠ Neither half is individually pinned — measured, and an
+                // earlier revision of this comment claimed the guard was
+                // load-bearing. Deleting `&& *n1 > 0` alone leaves
+                // `cargo test -p catgraph` fully green (276 lib tests + every
+                // integration target), and deleting the lookup filter alone is
+                // likewise green; only removing BOTH reddens
+                // `frobenius_axioms.rs::spider_fusion_needs_a_wire_between_the_two_spiders`.
+                // So expect cargo-mutants to report either deletion as a MISSED
+                // mutant: that is the true state of the cover, not a stale
+                // result. The pin covers the conjunction.
                 if let FrobeniusOperation::Spider(z1, m, n1) = &self_block.op
                     && let FrobeniusOperation::Spider(z2, n2, k) = &next_block.op
                     && z1 == z2
                     && n1 == n2
+                    && *n1 > 0
                 {
                     self_replacements.insert(i, vec![FrobeniusOperation::Spider(*z1, *m, *k)]);
                     next_replacements.insert(j, vec![]);
@@ -485,8 +545,13 @@ where
 /// A string diagram morphism: a sequence of horizontal layers, each containing parallel generators.
 ///
 /// Composition appends layers with automatic `two_layer_simplify` at the boundary.
+///
+/// The [`Debug`] rendering is the whole presentation — every layer, every block,
+/// every generator with its arities. `PartialEq` compares presentations, so a
+/// failed comparison is only readable next to that rendering; the alternative is
+/// a failure message that can say no more than `depth()`.
 #[allow(clippy::module_name_repetitions)]
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FrobeniusMorphism<Lambda: Eq + Copy + Debug, BlackBoxLabel: Eq + Clone> {
     pub(crate) layers: Vec<FrobeniusLayer<Lambda, BlackBoxLabel>>,
 }
@@ -1026,6 +1091,117 @@ where
         "The provided source and target types did not line up for the given decomposed finite set map"
     );
     Ok(answer)
+}
+
+/// Interpret one generator as the cospan it denotes.
+///
+/// `Spider(z, m, n)` is one apex vertex with `m` domain wires and `n` codomain
+/// wires on it — which at `(m, n) = (0, 0)` is a bubble, exactly the scalar
+/// `η # ε` denotes.
+fn operation_to_cospan<Lambda, BlackBoxLabel>(
+    op: &FrobeniusOperation<Lambda, BlackBoxLabel>,
+) -> Result<Cospan<Lambda>, CatgraphError>
+where
+    Lambda: Eq + Copy + Debug,
+    BlackBoxLabel: Eq + Clone,
+{
+    use crate::hypergraph_category::HypergraphCategory;
+
+    Ok(match op {
+        FrobeniusOperation::Unit(z) => Cospan::unit(*z),
+        FrobeniusOperation::Counit(z) => Cospan::counit(*z),
+        FrobeniusOperation::Multiplication(z) => Cospan::multiplication(*z),
+        FrobeniusOperation::Comultiplication(z) => Cospan::comultiplication(*z),
+        FrobeniusOperation::Identity(z) => Cospan::identity(&vec![*z]),
+        // σ: [z, w] → [w, z]. Two apex vertices; the right leg reads them back
+        // in the other order. Correct by construction: both legs index a
+        // two-vertex apex.
+        FrobeniusOperation::SymmetricBraiding(z, w) => {
+            Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![*z, *w])
+        }
+        // Correct by construction: every leg entry is `0` against a one-vertex apex.
+        FrobeniusOperation::Spider(z, m, n) => {
+            Cospan::new_unchecked(vec![0; *m], vec![0; *n], vec![*z])
+        }
+        FrobeniusOperation::UnSpecifiedBox(_, srcs, tgts) => {
+            return Err(CatgraphError::Composition {
+                message: format!(
+                    "frobenius_to_cospan: an UnSpecifiedBox on {} → {} wires has no cospan \
+                     interpretation; resolve it through a MorphismSystem first",
+                    srcs.len(),
+                    tgts.len()
+                ),
+            });
+        }
+    })
+}
+
+/// Interpret a `FrobeniusMorphism` as the [`Cospan`] it denotes — the semantics
+/// half of the Fong-Spivak Prop 3.8 correspondence that
+/// [`cospan_to_frobenius`](crate::cospan_algebra::cospan_to_frobenius) covers in
+/// the syntax direction.
+///
+/// Each layer is the monoidal product of its blocks' generator cospans, in block
+/// order, and the morphism is the pushout composite of its layers. Because
+/// [`Cospan`] carries no presentation — only the apex quotient — this is the
+/// decision procedure for Def 2.5 equality of two parallel `FrobeniusMorphism`s:
+/// compare `frobenius_to_cospan(f)?.canonical_form()` with `g`'s. `FrobeniusMorphism`'s
+/// own `PartialEq` cannot serve there; it compares *presentations*, and it
+/// separates both sides of every one of the eleven Def 2.5 equations
+/// (`tests/frobenius_axioms.rs` measures that).
+///
+/// # Scalars, and where this does not commute with composition
+///
+/// The interpretation is of the diagram **as presented**. `FrobeniusMorphism`'s
+/// own [`compose`](ComposableMutating::compose) runs `two_layer_simplify`, whose
+/// unit/counit rule deletes an `η` feeding directly into an `ε` — the
+/// *extra*-special move. `Cospan` is the theory of **special** commutative
+/// Frobenius monoids and keeps that bubble as a genuine scalar, so on a term
+/// carrying that pattern the presentation reaching this function has already
+/// lost a bubble that the semantics would have kept:
+/// `interp(f # g) != interp(f) # interp(g)`, measured in
+/// `tests/frobenius_axioms.rs::frobenius_scalar_loop_is_erased_before_interpretation`.
+///
+/// That is the only *known* divergence, which is a weaker statement than "the
+/// only one": nothing here proves the normalizer sound, and the claim that the
+/// remaining rules are sound has been wrong before. `Spider(z, m, 0)` followed
+/// by `Spider(z, 0, k)` used to fuse into `Spider(z, m, k)`, wiring two
+/// disconnected components together — a *connectivity* change, strictly worse
+/// than a dropped scalar. Rule 4 now requires `n >= 1` (with a redundant
+/// zero-output filter on the placement lookup), and
+/// `spider_fusion_needs_a_wire_between_the_two_spiders` in the same test file
+/// holds the *behaviour* there — the conjunction of the two defenses, not
+/// either alone. Treat divergences as things to be measured one at a time.
+///
+/// # Errors
+///
+/// Returns [`CatgraphError::Composition`] if the morphism contains an
+/// [`UnSpecifiedBox`](FrobeniusOperation::UnSpecifiedBox), which denotes nothing
+/// until a [`MorphismSystem`](super::MorphismSystem) resolves it, or if two
+/// adjacent layers fail to compose (which a well-formed morphism cannot do).
+pub fn frobenius_to_cospan<Lambda, BlackBoxLabel>(
+    morphism: &FrobeniusMorphism<Lambda, BlackBoxLabel>,
+) -> Result<Cospan<Lambda>, CatgraphError>
+where
+    Lambda: Eq + Copy + Debug,
+    BlackBoxLabel: Eq + Clone,
+{
+    use crate::category::Composable;
+
+    let mut answer: Option<Cospan<Lambda>> = None;
+    for layer in &morphism.layers {
+        let mut current = Cospan::<Lambda>::empty();
+        for block in &layer.blocks {
+            current.monoidal(operation_to_cospan(&block.op)?);
+        }
+        answer = Some(match answer {
+            None => current,
+            Some(previous) => Composable::compose(&previous, &current)?,
+        });
+    }
+    // A layerless morphism is the identity on the empty word, whose cospan is
+    // the empty cospan — the same value `Cospan::identity(&vec![])` returns.
+    Ok(answer.unwrap_or_else(Cospan::empty))
 }
 
 #[cfg(test)]
@@ -1757,9 +1933,9 @@ mod test {
     // subdivided) and pin that equivalence against an in-test sequential
     // reference, plus the hflip involution: `hflip ∘ hflip == id` whenever the
     // block-label changer is involutive, and `std::convert::identity` is.
-    // `FrobeniusLayer`/`FrobeniusMorphism` derive only `Clone, PartialEq, Eq`
-    // (no `Debug`), so equality is asserted with `assert!(a == b, ..)` rather
-    // than `assert_eq!`.
+    // `FrobeniusLayer`/`FrobeniusMorphism` derive `Debug` (added at #283, so a
+    // failed presentation comparison can print more than `depth()`), so these
+    // use `assert_eq!`/`assert_ne!` and get both values on failure.
 
     /// A single layer of `n` heterogeneous blocks, so `hflip` actually
     /// transforms every block (Unit↔Counit, Mul↔Comul, braiding swap, spider
@@ -1793,14 +1969,57 @@ mod test {
         }
     }
 
+    /// The layer widths `tests/rayon_parallel.rs` rests on, which that file
+    /// cannot see for itself — `FrobeniusLayer::blocks` is `pub(crate)`.
+    ///
+    /// `special_frobenius_morphism(m, 1, _)` is a binary μ tree, so its widest
+    /// layer holds `m / 2` blocks. Rayon's
+    /// `with_min_len(PARALLEL_BLOCK_THRESHOLD)` subdivides only at length
+    /// ≥ 2·64 = 128, so **m = 128 does not reach the subdividing arm** (widest
+    /// layer 64) and m = 256 does (widest layer 128). `frobenius_hflip_above_threshold`
+    /// ran at 128 until #283 and so never exercised the arm it names.
+    #[test]
+    fn special_frobenius_layer_widths_straddle_the_rayon_split() {
+        #[cfg(feature = "parallel")]
+        assert_eq!(
+            PARALLEL_BLOCK_THRESHOLD, 64,
+            "the threshold moved; the widths below and the arity in \
+             tests/rayon_parallel.rs must move with it"
+        );
+
+        let widest = |m: usize| {
+            let morph: FrobeniusMorphism<char, ()> = special_frobenius_morphism(m, 1, 'a');
+            morph
+                .layers
+                .iter()
+                .map(|layer| layer.blocks.len())
+                .max()
+                .unwrap_or(0)
+        };
+
+        assert_eq!(
+            widest(128),
+            64,
+            "m = 128 stopped being *below* the subdividing width; if it is now at or above \
+             128 blocks the note in tests/rayon_parallel.rs is stale"
+        );
+        assert_eq!(
+            widest(256),
+            128,
+            "m = 256 no longer produces a layer rayon subdivides, so \
+             frobenius_hflip_above_threshold is back to testing the sequential arm"
+        );
+    }
+
     #[test]
     fn frobenius_layer_hflip_matches_sequential_reference() {
         // 40 blocks < 128: rayon runs this as a single task (no subdivision).
         let small = wide_frobenius_layer(40);
         let mut small_flipped = small.clone();
         small_flipped.hflip(&std::convert::identity);
-        assert!(
-            small_flipped == hflip_layer_reference(&small),
+        assert_eq!(
+            small_flipped,
+            hflip_layer_reference(&small),
             "single-task hflip (40 blocks) must match the sequential reference"
         );
 
@@ -1808,8 +2027,9 @@ mod test {
         let large = wide_frobenius_layer(200);
         let mut large_flipped = large.clone();
         large_flipped.hflip(&std::convert::identity);
-        assert!(
-            large_flipped == hflip_layer_reference(&large),
+        assert_eq!(
+            large_flipped,
+            hflip_layer_reference(&large),
             "subdivided parallel hflip (200 blocks) must match the sequential reference"
         );
     }
@@ -1821,8 +2041,8 @@ mod test {
             let mut twice = original.clone();
             twice.hflip(&std::convert::identity);
             twice.hflip(&std::convert::identity);
-            assert!(
-                twice == original,
+            assert_eq!(
+                twice, original,
                 "hflip∘hflip must be the identity at n={n} blocks"
             );
         }
@@ -1835,8 +2055,9 @@ mod test {
             layer.hflip(&std::convert::identity);
             layer
         };
-        assert!(
-            build() == build(),
+        assert_eq!(
+            build(),
+            build(),
             "subdivided parallel hflip (200 blocks) must be run-to-run stable"
         );
     }
@@ -1852,15 +2073,15 @@ mod test {
         let mut twice = base.clone();
         twice.hflip(&std::convert::identity);
         twice.hflip(&std::convert::identity);
-        assert!(twice == base, "morphism hflip∘hflip must be the identity");
+        assert_eq!(twice, base, "morphism hflip∘hflip must be the identity");
 
         let mut once_a = base.clone();
         once_a.hflip(&std::convert::identity);
         let mut once_b: FrobeniusMorphism<char, ()> = special_frobenius_morphism(200, 1, 'a');
         once_b.hflip(&std::convert::identity);
-        assert!(once_a == once_b, "morphism hflip must be run-to-run stable");
+        assert_eq!(once_a, once_b, "morphism hflip must be run-to-run stable");
 
         // Sanity: a single flip of a non-self-dual (200→1) morphism is not a no-op.
-        assert!(once_a != base);
+        assert_ne!(once_a, base);
     }
 }
