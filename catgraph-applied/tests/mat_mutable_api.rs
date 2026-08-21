@@ -26,9 +26,7 @@ fn entry_mut_out_of_bounds_returns_none() {
 #[test]
 fn entries_mut_lets_us_zero_a_row() {
     let mut m = MatR::<F64Rig>::identity(3);
-    for cell in &mut m.entries_mut()[1] {
-        *cell = F64Rig(0.0);
-    }
+    m.entries_mut()[1].fill(F64Rig(0.0));
     assert_eq!(m.entries()[1].iter().map(|c| c.0).sum::<f64>(), 0.0);
 }
 

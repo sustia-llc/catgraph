@@ -349,6 +349,14 @@ All notable changes to `catgraph` are documented here. The format follows
   green, while `cospan_algebra_morphism_battery`, the bubble ledger and the
   zigzag rider all go red.
 
+- **clippy 1.98 compatibility**
+  ([#340](https://github.com/sustia-llc/catgraph/issues/340)). The six
+  `#[allow(clippy::from_iter_instead_of_collect)]` in `span.rs` named a lint
+  clippy 1.98 removed ("lint has proved problematic"), which `-D warnings`
+  turned into `renamed_and_removed_lints` errors and failed every `main` CI
+  run from #334 (2026-08-21) on; the `HashSet::from_iter` calls are now
+  `.collect()`, so no allow is needed on either toolchain. No behaviour change.
+
 ### Fixed
 
 - **`cospan_algebra::cospan_to_frobenius` no longer collapses an all-merged

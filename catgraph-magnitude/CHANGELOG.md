@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **clippy 1.98 compatibility**
+  ([#340](https://github.com/sustia-llc/catgraph/issues/340)). The pairwise
+  block merge in `smith_from_diagonal_raw` (`src/snf/diagonal.rs`) tripped
+  `clippy::chunks_exact_to_as_chunks`, new in clippy 1.98 and a hard error
+  under `-D warnings`; `blocks.chunks_exact(2)` is now
+  `blocks.as_chunks::<2>().0`, the rewrite the lint prescribes, and the
+  function's terminating `expect` message was updated to name it. Both forms
+  drop the same remainder — and the `blocks` length is a power of two here, so
+  there is never one. No behaviour change.
+
 ## [workspace-v0.11.0] - 2026-08-10
 
 ### Changed
