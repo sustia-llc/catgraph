@@ -181,7 +181,9 @@ fn relabeling_roundtrip_invertible() {
 // `assert_frobenius_eq_msg`. Boundary-only versions could not see
 // connectivity: under a merge-everything-into-one-spider implementation of the
 // functor (#285) all four stayed green (each uses one label); the three
-// mixed-label tests further down went red for their labels, not their wiring.
+// mixed-label tests further down that the mutant reddened
+// (`ctf_functoriality_identity`, `ctf_monoidal_preservation`,
+// `ctf_multi_type_cospan`) went red for their labels, not their wiring.
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -439,9 +441,10 @@ fn ctf_single_apex_cospan_is_the_spider() {
 /// `sfm`-independent companion to the grid pin: interpret `F(c)` back into
 /// `Cospan` through `frobenius_to_cospan` and compare canonical forms with the
 /// original. `frobenius_to_cospan`'s only `special_frobenius_morphism` call
-/// sits in the `Spider` arm of its generator interpreter, which
-/// `cospan_to_frobenius`'s image never reaches — no production path emits a
-/// `Spider` block except rule 4 fusing two existing ones — so on this input
+/// sits in the general `Spider` arm of its generator interpreter (the `(0,0)`
+/// arm builds the bubble without it), which `cospan_to_frobenius`'s image
+/// never reaches — no production path introduces a `Spider` block; rule 4
+/// (fusion) and `hflip` only rewrite ones already present — so on this input
 /// space the reference side shares no code with `special_frobenius_morphism`.
 ///
 /// Scope of the claim: the 24 single-apex cospans `(m, n) ∈ {0,…,4}² \ (0,0)`
