@@ -328,21 +328,24 @@ where
     ///
     /// A `self` block and a `next_layer` block are candidates only when the
     /// former's outputs *are* the latter's inputs: same wire position, same
-    /// non-zero count. Blocks with no outputs (`Counit`, `Spider(z, m, 0)`) are
-    /// therefore excluded from the lookup below — besides never being connected
-    /// to anything, they do not advance `target_side_placement`, so they share
-    /// a key with the emitting block at the same placement. `HashMap::insert`
-    /// keeps the last writer, and blocks are visited in layer order with the
-    /// placement taken at append, so the emitting block always came last and
-    /// always won; the collision never displaced an emitting block. What the
-    /// filter removes is the lookup at a placement with no emitting block — the
-    /// trailing one, where only a zero-input `next` block can sit. Of those
-    /// pairings only `Spider(z, m, 0) ; Spider(z, 0, k)` matches a rule (Rule 4
-    /// at `n == 0`); `Counit ; Unit`, `Counit ; Spider(z, 0, k)` and
-    /// `Spider(z, m, 0) ; Unit` fall through unmatched. So the filter's only
-    /// *observable* effect is that `n == 0` spider match, which is why it is
-    /// redundant with Rule 4's guard. Excluding them also makes the remaining
-    /// keys strictly increasing, hence unique.
+    /// non-zero count. Blocks with no outputs (`Counit`, `Spider(z, m, 0)`, a
+    /// zero-target `UnSpecifiedBox`) are therefore excluded from the lookup
+    /// below — besides never being connected to anything, they do not advance
+    /// `target_side_placement`, so they share a key with the emitting block at
+    /// the same placement. `HashMap::insert` keeps the last writer, and blocks
+    /// are visited in layer order with the placement taken at append, so the
+    /// emitting block always came last and always won; the collision never
+    /// displaced an emitting block. What the filter removes is the lookup at a
+    /// placement with no emitting block — the trailing one, where only a
+    /// zero-input `next` block can sit. Of those pairings only
+    /// `Spider(z, m, 0) ; Spider(z, 0, k)` reaches a rule head (Rule 4's, at
+    /// `n == 0`, where only the guard stops it); `Counit ; Unit`,
+    /// `Counit ; Spider(z, 0, k)`, `Spider(z, m, 0) ; Unit`, and every pairing
+    /// with a zero-arity `UnSpecifiedBox` on either side fall through unmatched
+    /// (no rule matches a black box). So the filter's only *observable* effect
+    /// is that `n == 0` spider case, which is why it is redundant with Rule 4's
+    /// guard. Excluding them also makes the remaining keys strictly increasing,
+    /// hence unique.
     pub(crate) fn two_layer_simplify(&mut self, next_layer: &mut Self) -> (bool, bool, bool) {
         // Rule 1: identity check (no mutations needed)
         let self_id = self.is_identity();
