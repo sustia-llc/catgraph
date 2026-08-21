@@ -86,9 +86,20 @@ pub trait Frobenius<
     /// The `Cospan`-valued twin of this default is
     /// [`cospan_algebra::frobenius_to_cospan`](crate::cospan_algebra::frobenius_to_cospan),
     /// which has the same shape (identity-on-domain seed, per-layer monoidal
-    /// fold, compose in order) and the same treatment of a block-free layer;
-    /// see [`basic_interpret`](Self::basic_interpret) for why it is a separate
-    /// function rather than a call into this one.
+    /// fold, compose in order); see [`basic_interpret`](Self::basic_interpret)
+    /// for why it is a separate function rather than a call into this one.
+    ///
+    /// ⚠ **They differ on a block-free layer**, contrary to what this
+    /// cross-reference used to claim. This default `continue`s past one;
+    /// `frobenius_to_cospan` builds `Cospan::identity(&Vec::new())` and composes
+    /// it. On a malformed morphism whose block-free *empty-interface* layer
+    /// follows a layer with a non-empty `right_type`, `frobenius_to_cospan`
+    /// returns `CatgraphError::Composition` while this default silently skips
+    /// the layer and returns a morphism whose codomain disagrees with
+    /// `morphism.codomain()`. Unreachable through the public constructors today
+    /// (`layers` is `pub(crate)` and `rebuild_from_ops` recomputes types), so it
+    /// is a latent divergence rather than a live bug — but this path is the
+    /// weaker of the two, because it succeeds.
     ///
     /// # Errors
     ///

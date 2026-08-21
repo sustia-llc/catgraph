@@ -29,11 +29,13 @@ All notable changes to `catgraph` are documented here. The format follows
   applies a local `two_layer_simplify`, so equal diagrams routinely differ
   syntactically and no equality on `FM` could state §3.1's propositions.
   Composing with `Cospan::canonical_form` gives a semantic one — equality up to
-  apex isomorphism. **One direction only:** SCFM-equal terms have equal images,
-  because `Cospan` models the SCFM axioms; the converse fails on scalars, since
-  `Spider(z, 0, 0)` is a genuine bubble in the *special* theory yet has the same
-  image as `FrobeniusMorphism::identity(&vec![])` (see "Known discrepancy"
-  below). So the new pins catch any change to a term's boundary-to-apex
+  apex isomorphism. ⚠ **Incomparable with SCFM on scalars — neither direction
+  is exact**, both measured. `two_layer_simplify`'s rule 3 cancels a spelled
+  `η;ε`, so it shares an image with `FrobeniusMorphism::identity(&vec![])`
+  without being SCFM-equal to it (*not complete*), and shares SCFM-equality with
+  `Spider(z, 0, 0)` — which `generator_to_cospan` builds directly as the bubble
+  — without sharing its image (*not sound*). See "Known discrepancy"
+  below. So the new pins catch any change to a term's boundary-to-apex
   connectivity, and to any bubble that survives the layer simplifier; the one
   thing they cannot see is a change whose only effect is to add or drop an
   adjacent `η;ε` pair, which the simplifier cancels before this function runs.
@@ -107,8 +109,26 @@ All notable changes to `catgraph` are documented here. The format follows
   which rule 3 eats), and only disabling rule 3 as well keeps the bubble
   (a depth-2 term). So a fix to either cause alone does not silence the pin.
 
-  Correcting either sends that pin red, at which point the two exclusions its
-  neighbours document can be lifted.
+  ⚠ **Correction, measured — the pin signals cause 2 only, not "either
+  cause".** Correcting cause 1 in the strongest sensible form (adding
+  `&& cospan.is_left_identity()` to the fast-path guard, so it can never drop
+  an unreached apex vertex) leaves the pin GREEN together with the whole lib
+  suite: rule 3 still eats the `η;ε` the decomposition emits, so every
+  assertion holds for the same reason as before. Correcting cause 2 does turn
+  it red. A cause-1-only fix is therefore exactly the partial fix this pin does
+  not catch; the `id_a`-beside-a-bubble assertion is the both-causes signal.
+
+- **Fixed, and it was a soundness break, not only a scalar loss:**
+  `generator_to_cospan`'s `Spider(z, 0, 0)` arm recursed into
+  `special_frobenius_morphism`, which returns the **simplified** term — rule 3
+  had already emptied it — so the `(0, 0)` spider interpreted to `apex 0`. It
+  now builds the bubble `η;ε` directly. Pinned by
+  `cospan_algebra::tests::scfm_equal_scalars_have_equal_images`, which was
+  measured RED before the change (`Spider(a,0,0)` apex 0 / scalars 0 against
+  `η;δ;(ε⊗ε)`'s apex 1 / scalars 1, and the same split beside `id_a`).
+  This repairs one witness; it does **not** make the translation sound, since a
+  spelled `η;ε` still loses its bubble to rule 3 while the SCFM-equal spider now
+  keeps one.
 
 ## [workspace-v0.15.0] - 2026-08-16
 

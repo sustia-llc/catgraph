@@ -30,13 +30,19 @@ type FM = FrobeniusMorphism<char, String>;
 // `Cospan`, the theory of special commutative Frobenius monoids (F&S 2019
 // Prop 3.8), and `canonical_form` decides isomorphism there.
 //
-// ⚠ **One direction only.** `a` and `b` equal under the SCFM axioms *implies*
-// `canon(a) == canon(b)`, because `Cospan` models those axioms — that is what
-// makes the pins below sound. The converse is **false as implemented**: the
-// layer simplifier cancels `η;ε` (the *extra-special* axiom, which `Cospan`
-// does not satisfy), so `Spider('a', 0, 0)` — a genuine `0 → 0` non-identity in
-// the special theory — has the same image as `FM::identity(&vec![])`. Measured
-// and pinned in `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions`.
+// ⚠ **Incomparable with SCFM on scalars — neither direction is exact.** The
+// layer simplifier cancels `η;ε` (the *extra-special* axiom, which `Cospan` does
+// not satisfy), and that single fact breaks both directions. *Not complete:* a
+// spelled `η;ε` and `FM::identity(&vec![])` get the same image and are not
+// SCFM-equal. *Not sound:* that same spelled `η;ε` and `Spider('a', 0, 0)` —
+// which `generator_to_cospan` builds directly as the bubble — are SCFM-equal
+// with different images. Both measured and pinned in
+// `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions` and
+// `::scfm_equal_scalars_have_equal_images`.
+//
+// The pins below are sound anyway, for a narrower reason than "SCFM-equal ⟹
+// equal images": none of them ranges over a term carrying a boundary-adjacent
+// `η;ε`, which is the only shape the gap touches.
 //
 // Consequence for everything below: `assert_same_cospan` is blind to precisely
 // the scalars the layer simplifier removes *before* `frobenius_to_cospan` sees
@@ -814,7 +820,12 @@ fn cup_cap_tensor_are_the_bent_identity() {
 /// snake's cospan must equal `id_X`'s on the nose: same apex size (so no scalar
 /// is left dangling) and the same wire-for-wire connectivity.
 ///
-/// **Space:** `X` of length 0–3 over `{'a','b'}`, both snake orientations.
+/// **Space:** `X` of length 0–3 over `{'a','b'}`, both snake orientations —
+/// but **length 0 pins the empty short-circuit only**, not Eq. (13):
+/// `cup_tensor(&[])` and `cap_tensor(&[])` both return through `cup`/`cap`'s
+/// `types.is_empty()` early return to `FM::identity(&vec![])`, so both snakes
+/// are `id_I ; id_I` and nothing about cup/cap connectivity can fail there.
+/// The law itself is exercised at lengths 1–3.
 /// Specialness itself (`δ;μ = id`) is pinned in `frobenius_laws.rs`; this test
 /// claims only that the two zigzags reduce. A bubble that survives the layer
 /// simplifier *is* caught here, since it changes the apex size; an adjacent
