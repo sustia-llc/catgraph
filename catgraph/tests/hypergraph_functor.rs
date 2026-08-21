@@ -283,10 +283,12 @@ fn ctf_functoriality_composition() {
 /// `ctf_single_apex_cospan_is_the_spider` and
 /// `ctf_disconnected_cospan_is_the_tensor_not_a_spider`).
 ///
-/// Regression pinned (#285): every `m → n` cospan mapped to
-/// `special_frobenius_morphism(m, n, z)` left this test green when it only
-/// compared domain/codomain — `F(id_['a','a'])` came out as the 2→2 spider
-/// (depth 2), while the identity has depth 1.
+/// Regression pinned (#285): under an implementation mapping every `m → n`
+/// cospan to `special_frobenius_morphism(m, n, z)`, and with this test only
+/// comparing domain/codomain, its `['a','b','c']` case went red on its labels
+/// alone, while the `['a','a']` case (added here) would have stayed green —
+/// `F(id_['a','a'])` came out as the 2→2 spider (depth 2) with the identity's
+/// boundary, while the identity has depth 1. Presentation equality sees both.
 #[test]
 fn ctf_functoriality_identity() {
     let f = CospanToFrobeniusFunctor::<String>::new();
