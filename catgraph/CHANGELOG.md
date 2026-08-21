@@ -133,6 +133,70 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Fixed — tests
 
+- **The #258 braiding contract was pinned only downstream, and the one core test
+  that named permutation composition was vacuous**
+  ([#286](https://github.com/sustia-llc/catgraph/issues/286)). Measured before
+  the fix: inverting the braiding direction in
+  `equivalence::CospanAlgebraMorphism`'s two constructors — `p.inv()` ⇄ `p` in
+  both the forced label word and the structural cospan's right leg — left
+  `cargo test -p catgraph` **fully green** while `cargo test -p catgraph-applied`
+  went red on exactly 4 tests, all in `tests/braiding_cross_carrier.rs`. Three
+  carriers *defined in this crate* had no core-side pin at all:
+  `CospanAlgebraMorphism`, `FrobeniusMorphism`'s **wiring** (the applied oracle
+  checks only its `domain()`/`codomain()` words, and #258 established that a
+  word can be right over an inverted wiring), and `NamedCospan`. A downstream
+  test restructure would have zeroed core's coverage of its own types silently.
+
+  New `tests/braiding_core_pins.rs` lifts those three rows into core: a
+  hand-written anchor comparing `CospanAlgebraMorphism::from_permutation_*`'s
+  `.element()` **canonically** — `CospanCanon::from_parts` built by hand from
+  `ApexClass`es, so the pushout's apex numbering cannot make it pass — plus
+  exhaustive sweeps over all `6 + 24 = 30` permutations at `n ∈ {3, 4}` with
+  **distinct** labels, a `permute_side` identity/conjugation sweep, all 36
+  ordered `S₃` pairs for `β(p₁) ; β(p₂) == β(p₁ ; p₂)`, and the arity-mismatch
+  and `NamedCospan`-refusal rows. `FrobeniusMorphism` wiring is read through the
+  crate's own `cospan_algebra::frobenius_to_cospan`.
+
+  `tests/monoidal_structure.rs::permutation_cospan_compose` was rewritten in the
+  same pass. It ran **one** pair of permutations over the uniform word
+  `['a','a','a']`; uniform labels make `domain()` and `codomain()` constant in
+  the permutation, so both word assertions held for any `p₁`, `p₂` — a compose
+  realizing `p₂ ; p₁` passes — and the only other assertion was
+  `middle.len() >= 3`. It now runs all 36 ordered `S₃` pairs over `['a','b','c']`,
+  compares the composite's *wiring* against `(0..3).map(|i| (p1 * p2).apply(i))`
+  computed from the two permutations directly, and asserts the apex is exactly
+  `n` vertices rather than "at least".
+
+  **Falsified six ways.** (1) The `CospanAlgebraMorphism` constructor flip above
+  now reddens 4 core tests, reporting the element's apex classes as
+  `A:[0,5] B:[1,3] C:[2,4]` where the contract requires `A:[0,4] B:[1,5] C:[2,3]`,
+  and the wiring as `[2, 0, 1]` where it must be `[1, 2, 0]`. (2) Dropping the
+  `.inv()` from `FrobeniusMorphism::from_permutation_on_codomain` reddens the new
+  Frobenius *wiring* row (`[2, 0, 1]` vs `[1, 2, 0]`) — also caught by two
+  pre-existing lib tests, so a redundant catch rather than new coverage.
+  (3) Reading the `FrobeniusMorphism::permute_side` domain branch symmetrically
+  (`β(p)` where the contract asks for `β(p⁻¹)`) reddens the conjugation row
+  (`['B','C','A']` vs `['C','A','B']`) — also redundant, three pre-existing lib
+  tests see it. (4) Permuting `NamedCospan`'s port names by `p` instead of
+  `p.inv()` in `permute_side` reddens **only** the new file (`['b','c','a']` vs
+  `['c','a','b']`); the rest of `cargo test -p catgraph` stays green. (5) Using
+  `p.apply` where `CospanAlgebraMorphism::permute_side`'s domain branch builds
+  its relabelling leg with `p_inv.apply` likewise reddens **only** the new file
+  (`[1, 2, 0]` vs `[2, 0, 1]`). (6) Flipping `Cospan`'s two constructors reddens
+  the rewritten `permutation_cospan_compose` (`[2, 0, 1]` vs `[1, 2, 0]`) — and
+  the **pre-#286 version of that same test was measured green under the identical
+  mutation**, along with all 6 tests in its file.
+
+  **The space these claims range over**, stated where the assertions can be
+  checked against it: `n ∈ {3, 4}` only (`n ≤ 2` makes every permutation an
+  involution, so a direction flip is unobservable there); `PartitionAlgebra` and
+  `char` are the only algebra and label type instantiated; `()` is the only
+  black-box label; the composition sweep is `S₃ × S₃` and does not extend to
+  `n = 4`; and no `permute_side` row here starts from a *non*-identity morphism —
+  that separation ("splices the right braiding" vs "rebuilds one from scratch")
+  remains `catgraph-applied/tests/braiding_cross_carrier.rs`'s claim, not this
+  crate's.
+
 - **Nothing measured that the crate's two `frobenius_to_cospan` implementations
   agreed** ([#336]). The G1 merge left `frobenius::frobenius_to_cospan` (#283)
   and `cospan_algebra::frobenius_to_cospan` (#284) both public and both

@@ -83,52 +83,112 @@ fn tensor_unit_cospan() {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Permutation cospan compose: from_permutation(p1).compose(from_permutation(p2))
-//    matches from_permutation(p1 * p2) in domain/codomain/middle size.
+// 3. Permutation cospan compose: β(p₁) ; β(p₂) == β(p₁ ; p₂)
 // ---------------------------------------------------------------------------
 
+/// Domain wire `i` and codomain wire `k` meet when they land on the same apex
+/// vertex, i.e. `left[i] == right[k]`.
+fn cospan_wiring(c: &Cospan<char>) -> Vec<usize> {
+    let (l, r) = (c.left_to_middle(), c.right_to_middle());
+    l.iter()
+        .map(|li| {
+            r.iter()
+                .position(|rk| rk == li)
+                .expect("a braiding cospan links every domain wire to a codomain wire")
+        })
+        .collect()
+}
+
+/// Every permutation of `0..n`, each exactly once.
+fn all_perms(n: usize) -> Vec<Permutation> {
+    fn go(cur: &mut Vec<usize>, k: usize, out: &mut Vec<Vec<usize>>) {
+        if k == cur.len() {
+            out.push(cur.clone());
+            return;
+        }
+        for i in k..cur.len() {
+            cur.swap(k, i);
+            go(cur, k + 1, out);
+            cur.swap(k, i);
+        }
+    }
+    let mut cur: Vec<usize> = (0..n).collect();
+    let mut out = Vec::new();
+    go(&mut cur, 0, &mut out);
+    out.into_iter()
+        .map(|v| Permutation::try_from(v).expect("permutation of 0..n"))
+        .collect()
+}
+
+/// `β(p₁) ; β(p₂) == β(p₁ ; p₂)`, over **all 36 ordered pairs of `S₃`** with
+/// **distinct** labels.
+///
+/// ⚠ This test used to run one pair over the uniform word `['a','a','a']`
+/// (#286). Uniform labels make `domain()` and `codomain()` constant in the
+/// permutation, so both word assertions held for *any* `p₁`, `p₂` — including a
+/// compose that realized `p₂ ; p₁` — and the only other assertion was
+/// `middle.len() >= 3`. Distinct labels force the middle word, so `c2` has to be
+/// built on `c1`'s actual codomain, and the wiring is compared against
+/// `(0..n).map(|i| (p1 * p2).apply(i))` computed from the two permutations
+/// directly rather than against a third call to the constructor under test —
+/// which would cancel a symmetric drift.
+///
+/// # The space this claim ranges over
+///
+/// `S₃ × S₃` (36 pairs), `Cospan<char>`, `from_permutation_on_domain` only.
+/// `n = 4` and the `on_codomain` constructor are covered in
+/// `tests/braiding_core_pins.rs`, not here.
 #[test]
 fn permutation_cospan_compose() {
-    // Use uniform labels so every permutation cospan has domain == codomain
-    // labels, making any two composable.
-    let types: Vec<char> = vec!['a', 'a', 'a'];
+    let types: Vec<char> = vec!['a', 'b', 'c'];
+    let perms = all_perms(3);
+    assert_eq!(perms.len(), 6, "S3 has 6 elements");
 
-    // p1 = rotation_left(3,1): 0->1, 1->2, 2->0
-    let p1 = Permutation::rotation_left(3, 1);
-    // p2 = transposition(3,0,2): swap 0<->2
-    let p2 = Permutation::transposition(3, 0, 2);
+    let mut checked = 0usize;
+    for p1 in &perms {
+        for p2 in &perms {
+            // c1 : types → p1.inv().permute(types); c2 must start where it ends.
+            let mid: Vec<char> = p1.inv().permute(&types);
+            let c1 = Cospan::from_permutation_on_domain(p1.clone(), &types).unwrap();
+            let c2 = Cospan::from_permutation_on_domain(p2.clone(), &mid).unwrap();
+            assert!(
+                c1.composable(&c2).is_ok(),
+                "c1;c2 must be composable; p1={p1:?} p2={p2:?}"
+            );
 
-    let c1 = Cospan::from_permutation_on_domain(p1.clone(), &types).unwrap();
-    let c2 = Cospan::from_permutation_on_domain(p2.clone(), &types).unwrap();
+            let composed = c1.compose(&c2).expect("compose should succeed");
+            let p12 = p1 * p2;
 
-    // With uniform labels, any two permutation cospans are composable.
-    assert!(c1.composable(&c2).is_ok(), "c1;c2 should be composable");
+            assert_eq!(
+                cospan_wiring(&composed),
+                (0..3).map(|i| p12.apply(i)).collect::<Vec<_>>(),
+                "composite wiring must be i ↦ p2(p1(i)); p1={p1:?} p2={p2:?}"
+            );
+            assert_eq!(
+                composed.domain(),
+                types,
+                "composite domain; p1={p1:?} p2={p2:?}"
+            );
+            assert_eq!(
+                composed.codomain(),
+                p12.inv().permute(&types),
+                "composite codomain; p1={p1:?} p2={p2:?}"
+            );
 
-    let composed = c1.compose(&c2).expect("compose should succeed");
+            // A braiding merges each domain wire with exactly one codomain
+            // wire, so the pushout has exactly `n` apex vertices — not merely
+            // "at least n", which the pre-#286 assertion settled for.
+            assert_eq!(
+                composed.middle().len(),
+                types.len(),
+                "composite apex; p1={p1:?} p2={p2:?}"
+            );
 
-    // The combined permutation p1*p2.
-    let p12 = p1 * p2;
-    let expected = Cospan::from_permutation_on_domain(p12, &types).unwrap();
-
-    // Domain and codomain must match the composed permutation.
-    assert_eq!(composed.domain(), expected.domain(), "domain after compose");
-    assert_eq!(
-        composed.codomain(),
-        expected.codomain(),
-        "codomain after compose"
-    );
-
-    // Middle size: the pushout may differ from the direct construction, but
-    // should be at most the sum of the two middles and at least max(left, right).
-    let mid_len = composed.middle().len();
-    assert!(
-        mid_len >= types.len(),
-        "middle should have at least {n} nodes, got {mid_len}",
-        n = types.len()
-    );
-
-    // Validate the composed cospan is internally consistent.
-    composed.assert_valid(false, true);
+            composed.assert_valid(false, true);
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 36, "all 36 ordered S3 pairs must have run");
 }
 
 // ---------------------------------------------------------------------------
