@@ -51,6 +51,32 @@ All notable changes to `catgraph` are documented here. The format follows
   `Cospan`-valued twin, added in this release — builds the true transposition,
   so the two disagreed.
 
+- **`Frobenius::basic_interpret`'s default interpreted the bubble
+  `Spider(z, 0, 0)` as `id_I`** ([#284]). Its `Spider` arm recursed into
+  `special_frobenius_morphism(0, 0, z)`, which returns the **simplified** term —
+  `two_layer_simplify`'s rule 3, the *extra-special* axiom, has already cancelled
+  the `η;ε` — and `interpret_frob`ed the emptied result to `Self::identity(&[])`.
+  This is the same soundness break fixed one bullet above in
+  `generator_to_cospan`, on the other side of the twin: with only the `Cospan`
+  side repaired, the two disagreed at exactly this generator, falsifying
+  `basic_interpret`'s own "the two must agree generator-for-generator", and any
+  *special-but-not-extra-special* implementor inheriting the default (the
+  reference semantics, as the braiding bullet notes) got `id_I` for a
+  non-identity `0 → 0` scalar. The default now builds the bubble directly as
+  `interpret_unit(z) ; interpret_counit(z)`; every other spider arity still
+  recurses.
+
+  Pinned by
+  `frobenius::trait_impl::tests::basic_interpret_default_spider_zero_zero_is_the_bubble`.
+  The pin needs a **`Cospan`-backed** probe implementor (`CospanBacked`), added
+  in that test module beside the existing `Defaulting`: a `FrobeniusMorphism`-
+  backed implementor is structurally incapable of observing the fix, because its
+  carrier quotients by rule 3 and so identifies the bubble with `id_I`. Measured
+  by reverting the new arm — each assertion falsified separately: apex 0 vs 1,
+  scalars 0 vs 1, and both canonical-form equalities (`classes: []` vs
+  `[ApexClass { label: 'a', … }]`) against the hand-built `η;ε` and against
+  `frobenius_to_cospan`. Space: one generator, one label, one carrier.
+
 - **`Frobenius::interpret_frob`'s default rejected `identity(&vec![])`**
   ([#284]). It errored on *every* block-free layer, including the block-free,
   empty-interface layer that is how `FrobeniusMorphism::identity` represents the
