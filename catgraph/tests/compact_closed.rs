@@ -768,8 +768,10 @@ fn compose_names_direct_rejects_mismatched_y() {
 // replacing `unname` with discard-inputs/create-outputs junk, and
 // `compose_names_direct` with one that drops f̂ and ĝ for bare units, both left
 // all 44 tests green. The pins below compare the *content* — the image in
-// `Cospan` up to apex isomorphism, which is SCFM-equality (F&S 2019 Prop 3.8)
-// — against references built without the function under test.
+// `Cospan` up to apex isomorphism, i.e. SCFM-equality of the *images* (`Cospan`
+// is the free SCFM prop, F&S 2019 Prop 3.8); on *terms* this relation is
+// incomparable with SCFM-equality on scalars, see the header above — against
+// references built without the function under test.
 // ---------------------------------------------------------------------------
 
 /// `cup_tensor`/`cap_tensor` are the bent identity, not merely a morphism of the

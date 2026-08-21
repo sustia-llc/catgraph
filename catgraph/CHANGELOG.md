@@ -84,9 +84,11 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Known discrepancy — scalars (bubbles)
 
-- **Neither direction of the `Cospan` ↔ `FrobeniusMorphism` translation
-  preserves scalars** (`cospan_to_frobenius` / `frobenius_to_cospan`), from
-  two independent causes, each localised by disabling it and re-measuring
+- **Scalars are not preserved across the `Cospan` ↔ `FrobeniusMorphism`
+  translation**: `cospan_to_frobenius` drops them, and `frobenius_to_cospan`
+  keeps the `Spider(z, 0, 0)` bubble (see "Fixed" below) but never sees a
+  spelled `η;ε`, which `two_layer_simplify` rule 3 cancels before the function
+  runs. Two independent causes, each localised by disabling it and re-measuring
   ([#284]; pinned as-is by
   `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions`, not
   endorsed):
@@ -107,7 +109,7 @@ All notable changes to `catgraph` are documented here. The format follows
   `FrobeniusMorphism::identity(&['a'])`; narrowing the fast-path guard to
   `0 → 0` leaves it collapsed (the decomposition path emits `η('b');ε('b')`,
   which rule 3 eats), and only disabling rule 3 as well keeps the bubble
-  (a depth-2 term). So a fix to either cause alone does not silence the pin.
+  (a depth-2 term). So a fix to either cause alone leaves that assertion green.
 
   ⚠ **Correction, measured — the pin signals cause 2 only, not "either
   cause".** Correcting cause 1 in the strongest sensible form (adding

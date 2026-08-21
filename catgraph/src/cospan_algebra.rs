@@ -727,8 +727,11 @@ mod tests {
     /// bubble is a genuine `0 → 0` non-identity and must survive.
     ///
     /// **Space:** the `0 → 0` scalar and the same scalar beside `id_a`. The
-    /// second case is the one that shows the failure was not confined to the
-    /// empty object — it is a live shape inside what `samples()` ranges over.
+    /// second case shows the failure was not confined to the empty object: it
+    /// is an `a → a` endomorphism — the same interface as half of `samples()`
+    /// in `tests/compact_closed.rs`, which is why an interface-only check could
+    /// not see a bubble beside an identity. (`samples()` itself is scalar-free;
+    /// the compact_closed pins do not exercise this shape.)
     #[test]
     fn scfm_equal_scalars_have_equal_images() {
         use crate::monoidal::Monoidal;
@@ -790,8 +793,11 @@ mod tests {
     /// `(m, n)` spider is one apex vertex joining all `m + n` boundary wires.
     ///
     /// **Space:** `(m, n)` for `m, n <= 3` **except `(0, 0)`**, label `'a'` only.
-    /// `(0, 0)` is the bubble, which the layer simplifier cancels — measured in
-    /// `scalar_bubbles_are_lost_in_both_directions` rather than quietly skipped.
+    /// `(0, 0)` is the bubble: since the `generator_to_cospan` fix it interprets
+    /// to apex 1 with one scalar (pinned by `scfm_equal_scalars_have_equal_images`),
+    /// which the assertions here — `scalar_count() == 0`, one vertex joining all
+    /// `m + n` boundary wires — do not fit, so it is pinned there rather than
+    /// quietly skipped.
     #[test]
     fn frobenius_to_cospan_spiders_are_single_apex_vertices() {
         for m in 0..=3usize {
