@@ -145,9 +145,12 @@ All notable changes to `catgraph` are documented here. The format follows
   the retired algorithm is now the oracle), and keeps measuring the survivor
   against that retired algorithm — independent on the spider route and the
   layer fold; its six generator arms, the hand-built braiding literal
-  included, are byte-identical to the survivor's, so a convention error
-  applied to both copies is invisible here and is held by
-  `frobenius_to_cospan_agrees_with_the_cospan_generators` instead. The space:
+  included, are byte-identical to the survivor's, so a type-correct
+  convention error applied to both copies cannot be compared away here
+  (measured: flipping the braiding leg in both still reddens the pin, but via
+  the fold's label check on a mixed-label σ, not a comparison; the
+  same-label case is held by
+  `frobenius_to_cospan_agrees_with_the_cospan_generators`). The space:
   the ten `tests/compact_closed.rs::samples()`, the thirty-six
   `(m, n) ≤ 5` spiders including the `(0, 0)` bubble, both sides of all eleven
   Def 2.5 equations, fifteen cup / cap / name / unname terms, and 300

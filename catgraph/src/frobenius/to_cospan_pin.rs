@@ -14,9 +14,9 @@
 //! vertex, built directly, versus a recursion into
 //! `special_frobenius_morphism`) and the layer fold are genuinely different;
 //! the six non-spider generator arms — the hand-built braiding literal
-//! included — are byte-identical to the survivor's, so a convention error
-//! applied to both copies alike is invisible here (see *What it cannot see* on
-//! the pin).
+//! included — are byte-identical to the survivor's, so a type-correct
+//! convention error applied to both copies alike cannot be compared away here
+//! (measured; see *What it cannot see* on the pin for exactly what E showed).
 //!
 //! It lives inside the crate because the T1 algorithm walks
 //! `FrobeniusMorphism::layers`, which is `pub(crate)`; an integration test
@@ -522,9 +522,16 @@ fn space() -> Vec<(String, FM)> {
 /// hand-written `Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![z, w])`
 /// literal included — it is not a `HypergraphCategory` generator cospan, so a
 /// convention error applied to both copies (the natural shape of a "fix" to two
-/// identical-looking lines) is invisible here; only
-/// `frobenius_to_cospan_agrees_with_the_cospan_generators`, which goes through
-/// `Cospan::from_permutation_on_domain`, catches it.
+/// identical-looking lines) is not something this pin can *compare* away.
+/// Measured (perturbation E, right leg `[1, 0]` → `[0, 1]` in **both** copies,
+/// reverted after): this test still goes red, but at `random_5` through the
+/// fold's label check — the flipped literal is ill-typed on a mixed-label σ
+/// (`[z, w] → [z, w]`), so the term is rejected before any comparison happens.
+/// On a same-label σ the flipped literal is type-correct and both copies agree
+/// on the wrong answer, which only
+/// `tests/frobenius_axioms.rs::frobenius_to_cospan_agrees_with_the_cospan_generators`
+/// — built through `Cospan::from_permutation_on_domain` — catches: under E it
+/// went red exactly there, on label `'z'`.
 #[test]
 fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
     let terms = space();
