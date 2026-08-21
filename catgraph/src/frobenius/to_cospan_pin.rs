@@ -8,7 +8,7 @@
 //!
 //! The G1-T1 algorithm did not go with it: it lives on here as
 //! [`reference_to_cospan`], an **independent oracle** the survivor is measured
-//! against up to [`canonical_form`](crate::cospan_canon::CospanCanon) over 363
+//! against up to [`canonical_form`](crate::cospan_canon::CospanCanon) over 383
 //! terms — a space far wider than the 19 probe samples the issue recorded. It is
 //! a genuinely different route through the spider generator (one apex vertex,
 //! built directly, versus a recursion into `special_frobenius_morphism`), so the
@@ -21,10 +21,12 @@
 //! In the commit that introduced this module both implementations were still
 //! live, and `the_reference_copy_is_the_live_g1_t1_implementation` measured the
 //! copy below against the original **byte-identically** over this same space
-//! before the original was deleted. That test went with the body it checked; its
-//! record is in git.
+//! before the original was deleted — over the 363-term version of it, the
+//! `(m, n) ≤ 3` spider grid this file has since widened to `≤ 5`. That test went
+//! with the body it checked; its record is in git.
 //!
-//! # Falsification (measured 2026-08-21, each perturbation reverted after)
+//! # Falsification (re-measured 2026-08-21 on the 383-term space, each
+//! perturbation reverted after)
 //!
 //! Perturbing the **survivor** — `cospan_algebra::generator_to_cospan` — takes
 //! [`the_two_frobenius_to_cospan_agree_over_the_wide_space`] red three ways:
@@ -32,8 +34,8 @@
 //! | perturbation | result |
 //! |---|---|
 //! | braiding right leg `vec![1, 0]` → `vec![0, 1]` | red at `random_5`: the ill-typed braiding makes the layer fold fail outright (`'a'` vs `'b'` at a common interface) |
-//! | delete the `Spider(z, 0, 0)` carve-out, i.e. recurse as the pre-#284 body did | red, **48 of 363** terms disagree — `spider_0_0`: survivor `apex=0 scalars=0` vs reference `apex=1 scalars=1` |
-//! | `Comultiplication(z)` → the *disconnected* `Cospan::new_unchecked(vec![0], vec![0, 1], vec![z, z])` | red, **153 of 363** terms disagree — `delta`: survivor `apex=2` vs reference `apex=1` |
+//! | delete the `Spider(z, 0, 0)` carve-out, i.e. recurse as the pre-#284 body did | red, **48 of 383** terms disagree — `spider_0_0`: survivor `apex=0 scalars=0` vs reference `apex=1 scalars=1` |
+//! | `Comultiplication(z)` → the *disconnected* `Cospan::new_unchecked(vec![0], vec![0, 1], vec![z, z])` | red, **169 of 383** terms disagree — `delta`: survivor `apex=2` vs reference `apex=1` |
 //!
 //! The third is a pure connectivity change with no scalar in sight, so the
 //! green run is not resting on the bubble arm alone. [`black_boxes_are_rejected_by_both`]
@@ -41,6 +43,14 @@
 //! `CatgraphError::Composition`, and the retired copy-fidelity test went red
 //! when the live T1 spider arm was given one apex vertex per output
 //! (`spider_2_3`: right leg `[0, 0, 0]` vs `[0, 1, 2]`).
+//!
+//! **The space itself is falsified too**, which is a different question from
+//! "does a production perturbation redden the pin": short-circuiting
+//! [`random_generator`] to `None` — the shape a regression in its position
+//! guards would take — leaves 300 identities that *agree perfectly*, so the
+//! differential assertion stays green. The [`MIN_RANDOM_DISTINCT`] floor is what
+//! catches it: **7 distinct canonical forms over the 300 random terms, against
+//! the 172 measured here**. `SPACE_SIZE` alone would not have noticed.
 
 use crate::{
     category::{Composable, ComposableMutating, HasIdentity},
@@ -52,6 +62,7 @@ use crate::{
     monoidal::Monoidal,
 };
 use rand::{RngExt, SeedableRng, rngs::StdRng};
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 // The surviving implementation, reached through the `frobenius::` re-export
@@ -67,8 +78,30 @@ const LABELS: [char; 2] = ['a', 'b'];
 /// How many random terms [`space`] contributes.
 const RANDOM_TERMS: usize = 300;
 
-/// The exact size of [`space`]. Asserted, so the space cannot shrink silently.
-const SPACE_SIZE: usize = 63 + RANDOM_TERMS;
+/// The exact size of [`space`]: eighty-three hand-built terms plus
+/// [`RANDOM_TERMS`]. Asserted, so the space cannot shrink silently.
+const SPACE_SIZE: usize = 83 + RANDOM_TERMS;
+
+/// Floor on the number of **distinct canonical forms** among the random terms.
+///
+/// `SPACE_SIZE` guards the space's *count*; this guards its *content*.
+/// [`random_generator`] returns `None` whenever the drawn generator has no legal
+/// position, and the caller skips that step, so a regression in its guards (say,
+/// every arm falling through to `None`) would leave 300 identities behind with
+/// `SPACE_SIZE` still satisfied and the differential assertion still green.
+///
+/// Measured on the pinned seed: **172** distinct canonical forms over the 300
+/// random terms. The floor sits a little below that so an incidental reshuffle
+/// of the draw does not red the pin, while a collapse cannot pass.
+const MIN_RANDOM_DISTINCT: usize = 150;
+
+/// Floor on the number of distinct canonical forms over the **whole** space.
+///
+/// Measured on the pinned seed: **209**. Same rationale as
+/// [`MIN_RANDOM_DISTINCT`]; this one additionally notices a hand-built block
+/// (the spider grid, the Def 2.5 battery, the compact-closed terms) degenerating
+/// without its length changing.
+const MIN_TOTAL_DISTINCT: usize = 180;
 
 // ---------------------------------------------------------------------------
 // The reference implementation: the retired G1-T1 body
@@ -215,11 +248,21 @@ fn compact_closed_samples() -> Vec<(String, FM)> {
     ]
 }
 
-/// The `(m, n) ≤ 3` spider grid — sixteen terms, including the `(0, 0)` bubble.
+/// The `(m, n) ≤ 5` spider grid — thirty-six terms, including the `(0, 0)`
+/// bubble.
+///
+/// The bound is `5`, not `3`, for one reason: the survivor's spider arm recurses
+/// into
+/// [`special_frobenius_morphism`](crate::frobenius::special_frobenius_morphism),
+/// whose `m.is_multiple_of(2)` doubling branch is reachable only at even
+/// `m >= 4`. At `m <= 3` the one route through which the two implementations are
+/// genuinely independent never exercises that branch, so the grid covers
+/// `(4, n)` and `(5, n)` too. The random terms do not reach there —
+/// [`random_generator`]'s spider arm caps both arities at `3`.
 fn spider_grid() -> Vec<(String, FM)> {
     let mut out = Vec::new();
-    for m in 0..=3usize {
-        for n in 0..=3usize {
+    for m in 0..=5usize {
+        for n in 0..=5usize {
             out.push((
                 format!("spider_{m}_{n}"),
                 FrobeniusOperation::Spider('a', m, n).into(),
@@ -336,7 +379,8 @@ fn compact_closed_terms() -> Vec<(String, FM)> {
 /// Returns `None` when the drawn generator has no legal position, which the
 /// caller treats as a skipped step — that keeps the draw uniform over generator
 /// *kinds* rather than over (kind, position) pairs, and costs only term length.
-#[allow(clippy::cast_possible_truncation)]
+/// [`MIN_RANDOM_DISTINCT`] is what keeps a regression in these guards from
+/// silently emptying the random half of the space.
 fn random_generator(rng: &mut StdRng, cod: &[char]) -> Option<(usize, usize, FM)> {
     let n = cod.len();
     // Positions where two adjacent wires carry the same label.
@@ -444,15 +488,25 @@ fn space() -> Vec<(String, FM)> {
 /// through the `frobenius::` re-export so that path is exercised too — against
 /// [`reference_to_cospan`], the retired G1-T1 algorithm, up to `canonical_form`.
 ///
-/// **Space (363 terms, stated exactly):** the ten
-/// `tests/compact_closed.rs::samples()` terms; the sixteen `(m, n) ≤ 3` spiders
-/// including the `(0, 0)` bubble; both sides of all eleven Def 2.5 equations as
-/// `tests/frobenius_axioms.rs` builds them (22 terms); fifteen cup / cap / name
-/// / unname terms; and 300 pseudo-random terms of 1–8 generator steps over two
-/// labels, seeded at `0x0336_0001`. All at `Lambda = char`,
-/// `BlackBoxLabel = String` — **one instantiation**, not "every carrier". No
-/// term here carries a black box; that arm is
+/// **Space (383 terms, stated exactly):** the ten
+/// `tests/compact_closed.rs::samples()` terms; the thirty-six `(m, n) ≤ 5`
+/// spiders including the `(0, 0)` bubble; both sides of all eleven Def 2.5
+/// equations as `tests/frobenius_axioms.rs` builds them (22 terms); fifteen cup
+/// / cap / name / unname terms; and 300 pseudo-random terms of **up to 8
+/// extension attempts** over two labels, seeded at `0x0336_0001`. All at
+/// `Lambda = char`, `BlackBoxLabel = String` — **one instantiation**, not "every
+/// carrier". No term here carries a black box; that arm is
 /// [`black_boxes_are_rejected_by_both`].
+///
+/// "Attempts", not steps: [`random_generator`] returns `None` when the drawn
+/// generator fits nowhere in the running codomain and the caller skips that
+/// step, and its `Identity` arm contributes a no-op layer — so the terms are
+/// shorter than the attempt count and many are short. Measured on the pinned
+/// seed: 209 distinct canonical forms over the 383 terms, 172 over the 300
+/// random ones, 46 of whose images are scalars (`0 → 0`).
+/// The count alone would not notice that collapsing, so
+/// [`MIN_RANDOM_DISTINCT`] and [`MIN_TOTAL_DISTINCT`] are asserted beside
+/// [`SPACE_SIZE`].
 ///
 /// **What it cannot see:** both sides fold with the same `Cospan::compose`,
 /// `Monoidal` and `HypergraphCategory` generator cospans, so this is a
@@ -470,6 +524,8 @@ fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
     );
 
     let mut mismatches: Vec<String> = Vec::new();
+    let mut all_images: HashSet<CospanCanon<char>> = HashSet::new();
+    let mut random_images: HashSet<CospanCanon<char>> = HashSet::new();
     for (label, term) in &terms {
         let survivor = survivor_to_cospan(term)
             .unwrap_or_else(|e| panic!("{label}: the survivor rejected a black-box-free term: {e}"))
@@ -479,6 +535,10 @@ fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
                 panic!("{label}: the reference rejected a black-box-free term: {e}")
             })
             .canonical_form();
+        all_images.insert(survivor.clone());
+        if label.starts_with("random_") {
+            random_images.insert(survivor.clone());
+        }
         if survivor != reference {
             mismatches.push(format!(
                 "  {label}: survivor {} vs G1-T1 reference {}\n    survivor classes:  {:?}\n    \
@@ -498,6 +558,25 @@ fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
         mismatches.len(),
         terms.len(),
         mismatches.join("\n"),
+    );
+
+    // The space's *content*, not just its count. Agreement over 383 copies of
+    // the identity would be agreement about nothing.
+    assert!(
+        random_images.len() >= MIN_RANDOM_DISTINCT,
+        "the random half of the space collapsed: {} distinct canonical forms over {} random \
+         terms, floor {} (measured 172 when this pin was written)",
+        random_images.len(),
+        RANDOM_TERMS,
+        MIN_RANDOM_DISTINCT,
+    );
+    assert!(
+        all_images.len() >= MIN_TOTAL_DISTINCT,
+        "the space collapsed: {} distinct canonical forms over {} terms, floor {} (measured 209 \
+         when this pin was written)",
+        all_images.len(),
+        terms.len(),
+        MIN_TOTAL_DISTINCT,
     );
 }
 

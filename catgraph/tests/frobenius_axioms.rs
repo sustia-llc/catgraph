@@ -36,10 +36,13 @@
 //! touches, so its row recomputes the `Cospan` row — measured in
 //! [`corel_recomputes_the_cospan_battery`], not asserted. A mutant that reddens
 //! both has been caught once, not twice. Nor are the remaining three fully
-//! disjoint: `frobenius_to_cospan` interprets each generator *as* the
-//! corresponding `Cospan` generator, so the `FrobeniusMorphism` row shares that
-//! half of its path with the `Cospan` row and contributes its own composition
-//! and normalizer on top. Measured with a non-merging μ and a non-splitting δ
+//! disjoint: `frobenius_to_cospan` interprets each of the battery's generators
+//! (η, ε, μ, δ, `id`, σ) *as* the corresponding `Cospan` generator, so the
+//! `FrobeniusMorphism` row shares that half of its path with the `Cospan` row
+//! and contributes its own composition and normalizer on top. The qualifier is
+//! load-bearing: the generator the battery never builds — `Spider(z, m, n)` at
+//! `(m, n) != (0, 0)` — is *not* read off a `Cospan` generator; that arm
+//! recurses into `special_frobenius_morphism` and folds the decomposition. Measured with a non-merging μ and a non-splitting δ
 //! on `Cospan`'s `HypergraphCategory` impl: `Cospan`, `Corel` and
 //! `FrobeniusMorphism` all go red, `CospanAlgebraMorphism` — which builds its
 //! generators from its own literal cospans — stays green.

@@ -412,7 +412,7 @@ where
 /// [`frobenius::frobenius_to_cospan`](crate::frobenius::frobenius_to_cospan).
 /// That path briefly named a *second* implementation of the same map, added
 /// under #283 on a branch parallel to the one adding this one; #336 unified
-/// them after measuring that they agree over 363 terms
+/// them after measuring that they agree over 383 terms
 /// (`frobenius::to_cospan_pin`, where the retired algorithm lives on as the
 /// oracle). ⚠ Two things changed for callers of the `frobenius::` path: the
 /// bounds now require `Send + Sync`, and an `UnSpecifiedBox` is rejected with
