@@ -15,9 +15,9 @@
 //! `special_frobenius_morphism`) and the layer fold are genuinely different;
 //! the six arms other than `Spider` and `UnSpecifiedBox` — the hand-built
 //! braiding literal included — are byte-identical to the survivor's, so a
-//! type-correct
-//! convention error applied to both copies alike cannot be compared away here
-//! (measured; see *What it cannot see* on the pin for exactly what E showed).
+//! type-correct convention error applied to both copies alike cannot be
+//! compared away here (measured; see *What it cannot see* on the pin for
+//! exactly what E showed).
 //!
 //! It lives inside the crate because the T1 algorithm walks
 //! `FrobeniusMorphism::layers`, which is `pub(crate)`; an integration test
@@ -519,9 +519,10 @@ fn space() -> Vec<(String, FM)> {
 /// one about the cospan machinery underneath them. A bug in the pushout moves
 /// both sides together and stays green here — `tests/frobenius_axioms.rs` and
 /// `cospan_canon`'s own tests are what hold that. The oracle's six arms other
-/// than `Spider` and `UnSpecifiedBox` are byte-identical to the survivor's, the braiding's
-/// hand-written `Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![z, w])`
-/// literal included — it is not a `HypergraphCategory` generator cospan, so a
+/// than `Spider` and `UnSpecifiedBox` are byte-identical to the survivor's,
+/// the braiding's hand-written
+/// `Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![z, w])` literal
+/// included — it is not a `HypergraphCategory` generator cospan, so a
 /// convention error applied to both copies (the natural shape of a "fix" to two
 /// identical-looking lines) is not something this pin can *compare* away.
 /// Measured (perturbation E, right leg `[1, 0]` → `[0, 1]` in **both** copies,
@@ -537,8 +538,10 @@ fn space() -> Vec<(String, FM)> {
 /// carrier), not this pin:
 /// `tests/frobenius_axioms.rs::frobenius_to_cospan_agrees_with_the_cospan_generators`
 /// compares the FM braiding against `Cospan::from_permutation_on_domain`, and
-/// `braiding_is_a_genuine_crossing_per_carrier` asserts the FM carrier's σ ≠
-/// `id`; both went red under E on label `'z'` (a full `--no-fail-fast` run
+/// `braiding_is_a_genuine_crossing_per_carrier` asserts σ ≠ `id` on all four
+/// carriers — only the FM row reddens, because its `key()` is the one carrier
+/// key routed through `frobenius_to_cospan`, i.e. through the perturbed
+/// literal; both went red under E on label `'z'` (a full `--no-fail-fast` run
 /// under E reddens 15 tests crate-wide, eleven of them in
 /// `tests/compact_closed.rs`).
 #[test]

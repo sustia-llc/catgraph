@@ -144,9 +144,10 @@ All notable changes to `catgraph` are documented here. The format follows
   terms** before either body was removed (widened to 383 in the same PR, where
   the retired algorithm is now the oracle), and keeps measuring the survivor
   against that retired algorithm — independent on the spider route and the
-  layer fold; its six arms other than `Spider` and `UnSpecifiedBox`, the hand-built braiding literal
-  included, are byte-identical to the survivor's, so a type-correct
-  convention error applied to both copies cannot be compared away here
+  layer fold; its six arms other than `Spider` and `UnSpecifiedBox`, the
+  hand-built braiding literal included, are byte-identical to the survivor's,
+  so a type-correct convention error applied to both copies cannot be compared
+  away here
   (measured: flipping the braiding leg in both still reddens the pin, but via
   the fold's label check on a mixed-label σ, not a comparison; the
   same-label case is held by the `from_permutation_on_domain`-built tests in
