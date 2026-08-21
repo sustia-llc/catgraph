@@ -5,6 +5,8 @@
 
 mod morphism_system;
 mod operations;
+#[cfg(test)]
+mod to_cospan_pin;
 mod trait_impl;
 
 pub use morphism_system::{Contains, InterpretableMorphism, MorphismSystem};

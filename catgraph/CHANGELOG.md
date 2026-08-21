@@ -96,6 +96,25 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Fixed — tests
 
+- **Nothing measured that the crate's two `frobenius_to_cospan` implementations
+  agreed** ([#336](https://github.com/sustia-llc/catgraph/issues/336)). The G1
+  merge left `frobenius::frobenius_to_cospan` (#283)
+  and `cospan_algebra::frobenius_to_cospan` (#284) both public and both
+  computing the Prop 3.8 semantics map; each branch was reviewed against
+  `96cfea7`, so no reviewer saw the other, and the only comparison on record was
+  a 19-sample throwaway probe. `frobenius::to_cospan_pin` (a `#[cfg(test)]`
+  module — the T1 algorithm walks the `pub(crate)` `layers`, so no integration
+  test can express it) now measures the two up to `canonical_form` over **363
+  terms**: the ten `tests/compact_closed.rs::samples()`, the sixteen
+  `(m, n) ≤ 3` spiders including the `(0, 0)` bubble, both sides of all eleven
+  Def 2.5 equations, fifteen cup / cap / name / unname terms, and 300
+  pseudo-random terms of 1–8 generator steps over two labels. Falsified three
+  ways on the survivor — dropping the `Spider(z, 0, 0)` carve-out reddens 48 of
+  363, a *disconnected* comultiplication reddens 153 of 363, and an ill-typed
+  braiding reddens the fold outright. One instantiation (`char`/`String`), and a
+  differential claim only: both sides fold with the same `Cospan::compose`, so a
+  bug in the pushout moves them together.
+
 - **The `compact_closed` suite asserted only interfaces** ([#284]). Audit
   phase 1 measured that replacing `unname` with discard-inputs/create-outputs
   junk left 44/44 green, and that a `compose_names_direct` discarding `f̂` and
