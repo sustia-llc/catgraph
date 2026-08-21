@@ -147,11 +147,15 @@ All notable changes to `catgraph` are documented here. The format follows
   both the forced label word and the structural cospan's right leg — left
   `cargo test -p catgraph` **fully green** while `cargo test -p catgraph-applied`
   went red on exactly 4 tests, all in `tests/braiding_cross_carrier.rs`. Three
-  carriers *defined in this crate* had no core-side pin at all:
+  rows on types *defined in this crate* had no core-side pin:
   `CospanAlgebraMorphism`, `FrobeniusMorphism`'s **wiring** (the applied oracle
   checks only its `domain()`/`codomain()` words, and #258 established that a
-  word can be right over an inverted wiring), and `NamedCospan`. A downstream
-  test restructure would have zeroed core's coverage of its own types silently.
+  word can be right over an inverted wiring), and `NamedCospan`'s **port-name
+  direction** — its cospan direction was already pinned transitively through
+  `Cospan` (the two `named_cospan` lib tests in (6) below compare the
+  composite's legs), but names permuted by `p` instead of `p⁻¹` in
+  `permute_side` reddened nothing in core, see (4). A downstream test
+  restructure would have zeroed core's coverage of those rows silently.
 
   New `tests/braiding_core_pins.rs` lifts those three rows into core: a
   hand-written anchor comparing `CospanAlgebraMorphism::from_permutation_*`'s
@@ -177,13 +181,15 @@ All notable changes to `catgraph` are documented here. The format follows
   **`catgraph-testutil`** (`all_perms` / `all_perm_indices`, and a
   `[dev-dependencies]` edge on this crate) rather than as two more private
   copies: it already existed twice in `catgraph-applied/tests`, and #33 opened
-  that crate for exactly this. All four copies are retired. The
+  that crate for exactly this. Both applied copies are retired. The
   `cospan_wiring` extractor — which needs a `catgraph` type, so it cannot live
   in `catgraph-testutil` (no `catgraph` edge, by design) — moved to this crate's
   existing `tests/common/mod.rs` instead of being written twice.
 
   **Falsified six ways.** (1) The `CospanAlgebraMorphism` constructor flip above
-  now reddens all 4 tests of the new file, and nothing else in core — the 289
+  now reddens 4 of the 5 tests in the new file
+  (`arity_mismatch_and_named_cospan_refusal` asserts refusals, not direction,
+  and stays green), and nothing else in core — the 289
   lib unit tests stay green, which is the gap restated as a measurement.
   `hand_written_reference_and_cam_element` fails first on the **codomain word**
   (`['B','C','A']` where the contract requires `['C','A','B']`), never reaching

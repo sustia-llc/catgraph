@@ -14,10 +14,10 @@ version history.
 - **`all_perms` + `all_perm_indices`**
   ([#286](https://github.com/sustia-llc/catgraph/issues/286)): exhaustive `Sₙ`
   enumeration by prefix swaps, the generator every #258 braiding sweep runs on.
-  It had drifted into four private copies — `catgraph-applied`'s
-  `tests/braiding_cross_carrier.rs` and `tests/prop.rs`, plus two more added by
-  `catgraph/tests` at #286 — which is exactly the duplication class #33 opened
-  this crate for.
+  It existed as two private copies on `main` — `catgraph-applied`'s
+  `tests/braiding_cross_carrier.rs` and `tests/prop.rs` — and #286's new core
+  sweeps needed it too; rather than write it a third and fourth time it moved
+  here, which is exactly the duplication class #33 opened this crate for.
 
   Two entry points because the call sites want different things:
   `all_perm_indices` yields raw `Vec<usize>` one-line notations, which sort and
@@ -25,9 +25,16 @@ version history.
   pin distinctness of the enumeration itself; `all_perms` yields `Permutation`
   values ready to feed a constructor. This crate's own tests pin `n!` and
   distinctness for `n ≤ 5`, that every entry is a bijection of `0..n`, and that
-  the `Permutation` view reproduces the one-line notation under `apply` — the
-  last of these is what stops the two views from disagreeing by an inverse and
-  silently flipping the convention every consuming sweep is testing.
+  the two views are **index-aligned** — `all_perms(n)[k]` is the permutation
+  whose one-line notation is `all_perm_indices(n)[k]`, asserted through
+  `all_perms` itself. Alignment is the only contract a caller mixing the views
+  depends on; a drift in `all_perms` cannot flip a consuming sweep's convention
+  (each sweep derives its reference from the same `p` it feeds the constructor,
+  and `Sₙ` is closed under inversion), so this pin is the only place such a
+  drift is visible — falsified by mapping `all_perms` through `.inv()`: RED at
+  `all_perms(3)[3]`, `[2, 0, 1]` where `all_perm_indices(3)[3]` is `[1, 2, 0]`
+  (16 passed, 1 failed), with all 66 test binaries of
+  `cargo test -p catgraph -p catgraph-applied --tests` staying green.
 - **`permutations` dependency**
   ([#286](https://github.com/sustia-llc/catgraph/issues/286)) — required by
   `all_perms` above, and free on the same grounds as `proptest` below: dev-only

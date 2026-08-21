@@ -4,10 +4,11 @@
 //!
 //! The #258 contract was pinned once, in
 //! `catgraph-applied/tests/braiding_cross_carrier.rs`. That file is the
-//! cross-carrier oracle and stays where it is — but three of the carriers it
-//! covers are defined *here*, in `catgraph`, and had no core-side pin at all:
+//! cross-carrier oracle and stays where it is — but three of the rows it
+//! covers are on types defined *here*, in `catgraph`, and had no core-side pin:
 //! [`CospanAlgebraMorphism`], [`FrobeniusMorphism`]'s **wiring**, and
-//! [`NamedCospan`].
+//! [`NamedCospan`]'s **port-name direction** (its cospan direction was already
+//! pinned through `Cospan`'s lib tests; its names were not).
 //!
 //! The measured consequence (#286): inverting the braiding direction in
 //! `CospanAlgebraMorphism`'s two constructors — `p.inv()` ⇄ `p` in both the
@@ -306,9 +307,15 @@ fn core_carriers_realize_p_on_both_constructors() {
             assert_eq!(a.domain(), dom_labels, "Cam on_codomain dom n={n} p={p:?}");
             assert_eq!(a.codomain(), types, "Cam on_codomain cod n={n} p={p:?}");
 
-            // The relabelling law, which no single-constructor assertion can
-            // see: an impl that inverted exactly one constructor passes both
-            // blocks above and fails here.
+            // The relabelling law, on_codomain(p, types) == on_domain(p, p.permute(types)):
+            // a consistency check restating the trait's own cross-check. It is
+            // redundant with the wiring rows above, not the only witness of a
+            // one-sided inversion — inverting `from_permutation_on_codomain`
+            // alone (labels and leg through `p.inv()`) already fails the
+            // `Cam on_codomain` wiring assertion above, measured at n=3
+            // p=[1,2,0]: `[2,0,1]` vs `[1,2,0]`, with
+            // `hand_written_reference_and_cam_element` red on its codomain word
+            // too (3 passed, 2 failed); this line is never reached.
             let relabelled: Vec<char> = p.permute(&types);
             let via_domain = Cam::from_permutation_on_domain(p.clone(), &relabelled).unwrap();
             assert_eq!(
