@@ -436,12 +436,24 @@ where
                 // Rule 4: Spider fusion
                 // Spider(z, m, n) then Spider(z, n, k) → Spider(z, m, k), for n >= 1.
                 //
-                // `*n1 > 0` is load-bearing, not decoration. The lookup above
-                // already drops zero-output `self` blocks, but the guard says
-                // locally why: at n == 0 the two spiders share no wire, the
-                // "composite" is really a monoidal product of two disconnected
-                // components, and fusing them would connect what the semantics
-                // keeps apart.
+                // `*n1 > 0` is **redundant with** the `target_size() > 0` filter
+                // on the lookup above, which already drops zero-output `self`
+                // blocks; it is kept for local intent, because the reason is
+                // invisible at this site otherwise. At n == 0 the two spiders
+                // share no wire, the "composite" is really a monoidal product of
+                // two disconnected components, and fusing them would connect
+                // what the semantics keeps apart.
+                //
+                // ⚠ Neither half is individually pinned — measured, and an
+                // earlier revision of this comment claimed the guard was
+                // load-bearing. Deleting `&& *n1 > 0` alone leaves
+                // `cargo test -p catgraph` fully green (276 lib tests + every
+                // integration target), and deleting the lookup filter alone is
+                // likewise green; only removing BOTH reddens
+                // `frobenius_axioms.rs::spider_fusion_needs_a_wire_between_the_two_spiders`.
+                // So expect cargo-mutants to report either deletion as a MISSED
+                // mutant: that is the true state of the cover, not a stale
+                // result. The pin covers the conjunction.
                 if let FrobeniusOperation::Spider(z1, m, n1) = &self_block.op
                     && let FrobeniusOperation::Spider(z2, n2, k) = &next_block.op
                     && z1 == z2

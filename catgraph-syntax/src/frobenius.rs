@@ -130,8 +130,10 @@ const KW_DELTA: &str = "delta";
 const KW_EPSILON: &str = "epsilon";
 
 /// A user signature `G` extended with the four special-commutative-Frobenius
-/// generators **at each colour** — the generators of the free hypergraph
-/// category on `Λ` laid *over* `G` (F&S 2019 Def 2.5 / Def 2.12 / Lemma 3.10).
+/// generators **at each colour** — a *presentation* of the hypergraph structure
+/// on `Λ` laid *over* `G` (F&S 2019 Def 2.5 / Def 2.12 / Lemma 3.10). The
+/// paper's freeness theorem is about `Cospan_Λ`, not about this type; see
+/// `cospan_functor.rs`'s Thm 3.14 citation for the claim that is the paper's.
 ///
 /// This is a **sum type over the user signature**, not a second AST: it is a
 /// [`PropSignature`], so `PropExpr<FrobeniusOr<G>>` is an ordinary free-prop term

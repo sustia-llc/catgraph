@@ -13,10 +13,13 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
   crate's own claims too**
   ([#277](https://github.com/sustia-llc/catgraph/issues/277)). #277 scoped the
   freeness claims in `catgraph`'s `hypergraph_category` module to the deferred
-  `Set ⇄ Hyp` adjunction, but three sites here made the same bare claim about
+  `Set ⇄ Hyp` adjunction, but four sites here made the same bare claim about
   **catgraph-syntax's own artifacts** rather than citing the paper's theorem
-  about `Cospan_Λ`: the `frobenius` module banner, `hypergraph_presentation`'s
-  doc, and `README.md`'s Frobenius-layer section (plus the `lib.rs` tour line).
+  about `Cospan_Λ`: the `frobenius` module banner, `FrobeniusOr<G>`'s own
+  rustdoc, `hypergraph_presentation`'s doc, and `README.md`'s Frobenius-layer
+  section (plus the `lib.rs` tour line). The `FrobeniusOr<G>` occurrence was
+  missed on the first pass because a line-scoped `rg` cannot see it — the
+  phrase wraps across two `///` lines — and was caught by the delta review.
   They now say what the code builds — a **presentation** of the hypergraph
   theory on the palette, i.e. the free *prop* on `FrobeniusOr<G>` modulo the
   SCFM equations at every colour — and the module docs spell out the

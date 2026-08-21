@@ -22,8 +22,14 @@
 //! decided here or anywhere else — the only Def 2.5 equation pins in
 //! `catgraph-applied` are for `MatKron`. That gap is not hypothetical for
 //! `PetriNet`: `catgraph-applied/tests/braiding_cross_carrier.rs` already
-//! records it as the carrier whose `permute_side` discards both leg maps, so it
-//! is the last one a reader should assume this file covers.
+//! records it as the carrier whose **constructor** is lossy —
+//! `from_decorated_cospan` keeps only the apex as places and the decoration as
+//! transitions, discarding both leg maps — so it is the last one a reader
+//! should assume this file covers. (That file separately notes a *different*
+//! fact about `permute_side`: it permutes `self.transitions`, so its `p` is
+//! sized by the transition count rather than by a boundary arity. The two are
+//! not the same mechanism and an earlier revision of this paragraph merged
+//! them. See #272, whose ratified reading retains the boundary.)
 //!
 //! **The carrier count is three decision paths, not four.** `Corel` is a
 //! transparent newtype over `Cospan` and delegates everything the battery
@@ -563,8 +569,15 @@ fn frobenius_scalar_loop_is_erased_before_interpretation() {
 /// not of a scalar, and reachable from the public API (`FrobeniusOperation` and
 /// its `From` impl are both `pub`).
 ///
-/// Rule 4 carries an `n >= 1` guard for exactly this, and the whole workspace
-/// stayed green without it, which is why this test exists rather than a remark.
+/// Rule 4 carries an `n >= 1` guard for exactly this, and the pre-fix tree was
+/// fully green without it, which is why this test exists rather than a remark.
+///
+/// ⚠ **What this pins is the conjunction of the two defenses, not either one.**
+/// Rule 4's `&& *n1 > 0` and the `target_size() > 0` filter on the
+/// `target_side_placement` lookup are redundant with each other; measured,
+/// deleting either alone leaves `cargo test -p catgraph` green and only
+/// deleting both reddens this test. Read a MISSED cargo-mutants score on either
+/// single deletion as accurate rather than stale.
 ///
 /// The oracle is the semantics: interpret each factor and compose in `Cospan`,
 /// versus interpret the presented composite. Both are named below, so a failure

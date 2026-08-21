@@ -60,8 +60,14 @@ All notable changes to `catgraph` are documented here. The format follows
   interpreted to one apex class where the semantics has two, i.e. the sink's
   inputs and the source's outputs were wired together. Reachable from the public
   API (`FrobeniusOperation` and its `From` impl are both `pub`), and the whole
-  workspace was green with it present. Rule 4 now requires `n >= 1`, pinned by
-  `tests/frobenius_axioms.rs::spider_fusion_needs_a_wire_between_the_two_spiders`.
+  workspace was green with it present. Rule 4 now requires `n >= 1`, and the
+  `target_side_placement` lookup excludes zero-output blocks. ⚠ **The pin,
+  `tests/frobenius_axioms.rs::spider_fusion_needs_a_wire_between_the_two_spiders`,
+  covers the CONJUNCTION, not either half** — measured: deleting `&& *n1 > 0`
+  alone leaves `cargo test -p catgraph` fully green, deleting the lookup filter
+  alone is likewise green, and only removing both turns the pin red. The two
+  are redundant defenses against one defect; cargo-mutants will score either
+  single deletion as MISSED, correctly.
 
   Same function, same root cause: the `target_side_placement → block` lookup
   keyed zero-output blocks too, and those do not advance the placement, so
