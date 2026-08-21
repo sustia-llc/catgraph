@@ -6,3 +6,4 @@
 # Private AI-context artifacts (symlinked to tsondru-notes; not for the public repo)
 /.claude/
 /CLAUDE.local.md
+mutants/
