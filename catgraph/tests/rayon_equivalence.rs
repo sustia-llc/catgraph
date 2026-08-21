@@ -159,9 +159,8 @@ fn find_nodes_at_most_one_short_circuits() {
 
 // ── hflip (threshold 64) — public-API determinism guards ────────────────────
 //
-// `FrobeniusMorphism`/`FrobeniusLayer` derive only `Clone, PartialEq, Eq` (no
-// `Debug`), so morphisms are compared with `==` inside `assert!`, not
-// `assert_eq!`.
+// `FrobeniusMorphism` derives `Debug` (#283), so morphisms are compared with
+// `assert_eq!` and a failure prints both presentations.
 
 /// `special_frobenius_morphism(1, n, _)` builds the `(n, 1)` morphism and
 /// `hflip`s it; at n = 256 the flipped layers are wide enough (≥ 128) that
@@ -173,7 +172,7 @@ fn find_nodes_at_most_one_short_circuits() {
 fn frobenius_hflip_construction_deterministic() {
     let a: FrobeniusMorphism<char, String> = special_frobenius_morphism(1, 256, 'a');
     let b: FrobeniusMorphism<char, String> = special_frobenius_morphism(1, 256, 'a');
-    assert!(a == b, "hflip-driven construction must be deterministic");
+    assert_eq!(a, b, "hflip-driven construction must be deterministic");
     assert_eq!(a.domain(), vec!['a']);
     assert_eq!(a.codomain(), vec!['a'; 256]);
 }
@@ -199,8 +198,8 @@ fn cospan_to_frobenius_hflip_deterministic() {
     };
     let first = build();
     let second = build();
-    assert!(
-        first == second,
+    assert_eq!(
+        first, second,
         "cospan_to_frobenius (internal hflip) must be deterministic"
     );
 }

@@ -115,11 +115,16 @@ fn monoidal_with_empty() {
 }
 
 // ---------------------------------------------------------------------------
-// Frobenius axioms in H_Part
+// Frobenius axiom ARITIES in H_Part
+//
+// ⚠ The three tests below assert domains and codomains only. The equations
+// themselves are decided in `tests/frobenius_axioms.rs`, where this carrier
+// needs its bubbles quotiented first — `(η ⊗ id) ; μ` and `id` differ by two
+// scalar classes, so an equality here would not even have been true.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn special_frobenius() {
+fn special_frobenius_arities() {
     // δ;μ = id (domain/codomain)
     let a = alg();
     let delta = PartMorph::comultiplication_in(Arc::clone(&a), 'a');
@@ -130,7 +135,7 @@ fn special_frobenius() {
 }
 
 #[test]
-fn unitality_left() {
+fn unitality_left_arities() {
     // (η ⊗ id) ; μ = id
     let a = alg();
     let mut eta_id = PartMorph::unit_in(Arc::clone(&a), 'a');
@@ -142,7 +147,7 @@ fn unitality_left() {
 }
 
 #[test]
-fn counitality_left() {
+fn counitality_left_arities() {
     // δ ; (ε ⊗ id) = id
     let a = alg();
     let delta = PartMorph::comultiplication_in(Arc::clone(&a), 'a');

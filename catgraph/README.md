@@ -51,6 +51,7 @@ Features implementing structures from [Fong & Spivak, *Hypergraph Categories*](h
 | Lemma 4.3 | `cospan_algebra.rs` | `functor_induced_algebra_map` lifts a `HypergraphFunctor` to a cospan-algebra morphism α: A_H → A_H'. Paper states the lemma for io functors over fixed Λ; the cross-label case is a beyond-paper generalization (Eq 29 direction). |
 | Lemma 4.9 | `equivalence.rs` | `functor_from_algebra_morphism` lifts a monoidal natural transformation α: A → B to the induced io hypergraph functor F_α: H_A → H_B. |
 | Lemma 3.6, Prop 3.8 | `cospan_algebra.rs`, `hypergraph_functor.rs` | `cospan_to_frobenius` + `CospanToFrobeniusFunctor` — epi-mono decomposition into Frobenius generators. |
+| Prop 3.8 (semantics direction) | `frobenius/` | `frobenius_to_cospan` — the cospan a string diagram denotes: layers tensored blockwise, composed by pushout. The decision procedure for Def 2.5 equality of two `FrobeniusMorphism`s, whose own `PartialEq` compares presentations. |
 | **Thm 1.2** (per-Λ = Thm 4.13) | `equivalence.rs` | `CospanAlgebraMorphism<A>` (Lemma 4.8): cospan-algebra → hypergraph category. `comp_cospan` (Ex 3.5, Eq 32). Identity/Frobenius via Eq 33. Roundtrip: `Hyp_OF(Λ) ≅ Lax(Cospan_Λ, Set)` (Eq 8). |
 
 **Permanently deferred** (documented in [`docs/FS19-AUDIT.md`](docs/FS19-AUDIT.md) — require parametric Λ machinery or 2-category machinery beyond catgraph's current type system):

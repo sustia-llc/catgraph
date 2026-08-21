@@ -13,7 +13,7 @@ use catgraph::{
 };
 
 fn main() {
-    println!("=== HypergraphCategory: Cospan<char> (free hypergraph category) ===\n");
+    println!("=== HypergraphCategory: Cospan<char> (Def 2.12 carrier) ===\n");
 
     let z = 'a';
 

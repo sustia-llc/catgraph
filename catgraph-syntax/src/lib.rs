@@ -12,7 +12,8 @@
 //! round-trip and presentation files), the *interpreter*
 //! ([`eval`] — the executable term-action of Def 5.25, with the R-linear
 //! [`SfgModel`](eval::SfgModel) as its worked example), the *Frobenius layer*
-//! ([`frobenius`] — the free hypergraph category on a colour palette `Λ` as
+//! ([`frobenius`] — a presentation of the hypergraph theory on a colour palette
+//! `Λ` as
 //! [`FrobeniusOr<G>`](frobenius::FrobeniusOr), its spider calculus, the nine
 //! SCFM equations per colour, and the sound
 //! [`to_mat_kron`](frobenius::to_mat_kron) checker,

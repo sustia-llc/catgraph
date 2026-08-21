@@ -104,9 +104,13 @@ one family **per wire colour** (`Mu(c)` `[c,c]→[c]`, `Eta(c)` `[]→[c]`,
 `Delta(c)` `[c]→[c,c]`, `Epsilon(c)` `[c]→[]`) — to a user signature `G` as a
 **sum type**. `FrobeniusOr<G>` is itself a `PropSignature` (colour-transparent:
 `Color = G::Color`), so `PropExpr<FrobeniusOr<G>>` reuses the whole engine (NF,
-presentation, `eq_mod`, parser/printer, `eval`) with no new AST. This presents
-the free hypergraph category on the palette `Λ` (F&S 2019 Def 2.12 / Lemma 3.10);
-`Color = ()` recovers the single-sorted `Λ = {•}` case.
+presentation, `eq_mod`, parser/printer, `eval`) with no new AST. This gives a
+**presentation** of the hypergraph theory on the palette `Λ` — the free prop on
+`FrobeniusOr<G>` modulo the SCFM equations at every colour (F&S 2019 Def 2.12 /
+Lemma 3.10). It is not a witness of Thm 3.14's freeness, whose content is a
+`Set ⇄ Hyp` adjunction that no crate here constructs (see
+`catgraph/docs/FS19-AUDIT.md`). `Color = ()` recovers the single-sorted
+`Λ = {•}` case.
 
 - **Colored text.** A palette implementing `ColorSyntax` gives its letters
   tokens, and spiders print/parse annotated: `mu@A`, `eta@A`, `delta@A`,
