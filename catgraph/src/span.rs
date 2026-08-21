@@ -576,11 +576,8 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
             });
         }
 
-        #[allow(clippy::from_iter_instead_of_collect)]
-        let self_pairs: HashSet<(usize, usize)> = HashSet::from_iter(self.0.middle.iter().copied());
-        #[allow(clippy::from_iter_instead_of_collect)]
-        let other_pairs: HashSet<(usize, usize)> =
-            HashSet::from_iter(other.0.middle.iter().copied());
+        let self_pairs: HashSet<(usize, usize)> = self.0.middle.iter().copied().collect();
+        let other_pairs: HashSet<(usize, usize)> = other.0.middle.iter().copied().collect();
 
         Ok(self_pairs.is_superset(&other_pairs))
     }
@@ -607,8 +604,7 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
             });
         }
 
-        #[allow(clippy::from_iter_instead_of_collect)]
-        let self_pairs: HashSet<(usize, usize)> = HashSet::from_iter(self.0.middle.iter().copied());
+        let self_pairs: HashSet<(usize, usize)> = self.0.middle.iter().copied().collect();
         let mut ret_val = self.0.clone();
         for (x, y) in &other.0.middle {
             if !self_pairs.contains(&(*x, *y)) {
@@ -649,11 +645,8 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
             Vec::with_capacity(capacity),
         );
 
-        #[allow(clippy::from_iter_instead_of_collect)]
-        let self_pairs: HashSet<(usize, usize)> = HashSet::from_iter(self.0.middle.iter().copied());
-        #[allow(clippy::from_iter_instead_of_collect)]
-        let other_pairs: HashSet<(usize, usize)> =
-            HashSet::from_iter(other.0.middle.iter().copied());
+        let self_pairs: HashSet<(usize, usize)> = self.0.middle.iter().copied().collect();
+        let other_pairs: HashSet<(usize, usize)> = other.0.middle.iter().copied().collect();
 
         let in_common = self_pairs.intersection(&other_pairs);
         for (x, y) in in_common {
@@ -679,8 +672,7 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
             Vec::with_capacity(capacity),
         );
 
-        #[allow(clippy::from_iter_instead_of_collect)]
-        let self_pairs: HashSet<(usize, usize)> = HashSet::from_iter(self.0.middle.iter().copied());
+        let self_pairs: HashSet<(usize, usize)> = self.0.middle.iter().copied().collect();
 
         for x in 0..source_size {
             for y in 0..target_size {
