@@ -489,8 +489,9 @@ mod tests {
     /// rule 3 has *already cancelled* under the extra-special axiom; the
     /// resulting empty term then interpreted to `Self::identity(&[])`. The
     /// `Cospan`-valued twin `generator_to_cospan` had the identical bug and was
-    /// fixed one commit earlier, which left the two disagreeing at exactly this
-    /// generator — contradicting
+    /// fixed in the same pass (#284; see its `(0, 0)` arm and
+    /// `scfm_equal_scalars_have_equal_images`), which left the two disagreeing
+    /// at exactly this generator — contradicting
     /// [`basic_interpret`](Frobenius::basic_interpret)'s own "must agree
     /// generator-for-generator". Any *special-but-not-extra-special* implementor
     /// inheriting the default got `id_I` for a non-identity scalar.
@@ -549,8 +550,8 @@ mod tests {
             "the default and generator_to_cospan disagree at Spider('a', 0, 0)"
         );
 
-        // Controls: the new arm is narrow — every other arity still recurses,
-        // and still agrees with the twin.
+        // Controls: (1,1) and (2,2) still recurse and still agree with the twin
+        // — the carve-out did not swallow the general arm.
         for (label, d1, d2) in [("1x1", 1, 1), ("2x2", 2, 2)] {
             let op: FrobeniusOperation<char, String> = FrobeniusOperation::Spider('a', d1, d2);
             let via_default = CospanBacked::basic_interpret(&op, &no_cospan_boxes)

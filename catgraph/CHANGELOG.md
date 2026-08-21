@@ -56,8 +56,9 @@ All notable changes to `catgraph` are documented here. The format follows
   `special_frobenius_morphism(0, 0, z)`, which returns the **simplified** term —
   `two_layer_simplify`'s rule 3, the *extra-special* axiom, has already cancelled
   the `η;ε` — and `interpret_frob`ed the emptied result to `Self::identity(&[])`.
-  This is the same soundness break fixed one bullet above in
-  `generator_to_cospan`, on the other side of the twin: with only the `Cospan`
+  This is the same soundness break fixed in `generator_to_cospan` — see the
+  final bullet under "Known discrepancy — scalars (bubbles)" below — on the
+  other side of the twin: with only the `Cospan`
   side repaired, the two disagreed at exactly this generator, falsifying
   `basic_interpret`'s own "the two must agree generator-for-generator", and any
   *special-but-not-extra-special* implementor inheriting the default (the
