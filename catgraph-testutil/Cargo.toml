@@ -1,6 +1,6 @@
 [package]
 name = "catgraph-testutil"
-description = "Dev-only test/bench helpers for the catgraph workspace (unpublished). Currently a shared deterministic LCG used by seeded fixtures."
+description = "Dev-only test/bench helpers for the catgraph workspace (unpublished): a deterministic LCG for seeded fixtures, relative float comparison, shared proptest float strategies, and exhaustive permutation enumeration."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
