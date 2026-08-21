@@ -72,7 +72,7 @@ pub trait Frobenius<
                 // σ: [z1, z2] → [z2, z1]. The permutation is the *transposition*
                 // `[1, 0]`; `[0, 1]` is the identity and would make this default
                 // silently interpret every braiding as `id` (this line read
-                // `[0, 1]` until #284's doc-truth pass — the bug was invisible
+                // `[0, 1]` until #284 — the bug was invisible
                 // because `FrobeniusMorphism`, the only implementor, overrides
                 // `basic_interpret`).
                 let transposition = Permutation::try_from(vec![1, 0])
@@ -484,12 +484,12 @@ mod tests {
     /// The `basic_interpret` default sends `Spider(z, 0, 0)` to the bubble
     /// `η;ε`, not to `id_I`.
     ///
-    /// Until #284's second pass this arm recursed into
+    /// Until #284 this arm recursed into
     /// `special_frobenius_morphism(0, 0, z)`, whose `η;ε` the layer simplifier's
     /// rule 3 has *already cancelled* under the extra-special axiom; the
     /// resulting empty term then interpreted to `Self::identity(&[])`. The
     /// `Cospan`-valued twin `generator_to_cospan` had the identical bug and was
-    /// fixed in the same pass (#284; see its `(0, 0)` arm and
+    /// fixed under #284 as well (see its `(0, 0)` arm and
     /// `scfm_equal_scalars_have_equal_images`), which left the two disagreeing
     /// at exactly this generator — contradicting
     /// [`basic_interpret`](Frobenius::basic_interpret)'s own "must agree
