@@ -71,9 +71,14 @@ All notable changes to `catgraph` are documented here. The format follows
 
   Same function, same root cause: the `target_side_placement → block` lookup
   keyed zero-output blocks too, and those do not advance the placement, so
-  several of them shared one key and `HashMap::insert` kept an arbitrary one.
-  Blocks with no outputs are now excluded, which makes the remaining keys
-  strictly increasing and therefore unique.
+  they shared a key with the emitting block at the same placement.
+  `HashMap::insert` keeps the last writer and blocks are visited in layer
+  order, so the emitting block always won — the collision never displaced one;
+  what the filter removes is the only case in which a non-emitting block could
+  be looked up at all (a placement with no emitting block, i.e. the `n == 0`
+  spider match), which is why it is redundant with the guard. Blocks with no
+  outputs are now excluded, which also makes the remaining keys strictly
+  increasing and therefore unique.
 
 ### Changed
 

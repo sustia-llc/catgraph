@@ -318,9 +318,11 @@ where
     /// The spider theorem fuses two spiders across the wires that join them, and
     /// with `n == 0` there are no such wires: `Spider(z, m, 0) ; Spider(z, 0, k)`
     /// is a monoidal product of two *disconnected* components, and fusing it
-    /// would wire them together. Pinned by
+    /// would wire them together. Pinned as behaviour by
     /// `spider_fusion_needs_a_wire_between_the_two_spiders` in
-    /// `tests/frobenius_axioms.rs`.
+    /// `tests/frobenius_axioms.rs` — i.e. the conjunction of the `n >= 1` guard
+    /// and the lookup filter described next, not either one alone (see the
+    /// Rule 4 comment in the body).
     ///
     /// # The connection invariant every rule rests on
     ///
@@ -328,9 +330,16 @@ where
     /// former's outputs *are* the latter's inputs: same wire position, same
     /// non-zero count. Blocks with no outputs (`Counit`, `Spider(z, m, 0)`) are
     /// therefore excluded from the lookup below — besides never being connected
-    /// to anything, they do not advance `target_side_placement`, so several of
-    /// them share one key and a plain `insert` would keep an arbitrary one.
-    /// Excluding them makes the remaining keys strictly increasing, hence unique.
+    /// to anything, they do not advance `target_side_placement`, so they share
+    /// a key with the emitting block at the same placement. `HashMap::insert`
+    /// keeps the last writer, and blocks are visited in layer order with the
+    /// placement taken at append, so the emitting block always came last and
+    /// always won; the collision never displaced an emitting block. What the
+    /// filter removes is the one case in which a *non*-emitting block could be
+    /// looked up at all — a placement with no emitting block, i.e. the `n == 0`
+    /// spider match — which is why it is redundant with Rule 4's guard.
+    /// Excluding them also makes the remaining keys strictly increasing, hence
+    /// unique.
     pub(crate) fn two_layer_simplify(&mut self, next_layer: &mut Self) -> (bool, bool, bool) {
         // Rule 1: identity check (no mutations needed)
         let self_id = self.is_identity();
@@ -1151,9 +1160,11 @@ where
 /// remaining rules are sound has been wrong before. `Spider(z, m, 0)` followed
 /// by `Spider(z, 0, k)` used to fuse into `Spider(z, m, k)`, wiring two
 /// disconnected components together — a *connectivity* change, strictly worse
-/// than a dropped scalar. Rule 4 now requires `n >= 1`, and
+/// than a dropped scalar. Rule 4 now requires `n >= 1` (with a redundant
+/// zero-output filter on the placement lookup), and
 /// `spider_fusion_needs_a_wire_between_the_two_spiders` in the same test file
-/// holds it there. Treat divergences as things to be measured one at a time.
+/// holds the *behaviour* there — the conjunction of the two defenses, not
+/// either alone. Treat divergences as things to be measured one at a time.
 ///
 /// # Errors
 ///

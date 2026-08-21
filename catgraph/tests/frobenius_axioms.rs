@@ -614,11 +614,13 @@ fn spider_fusion_needs_a_wire_between_the_two_spiders() {
         "Cospan stopped keeping the sink and the source apart; got {semantic:?}"
     );
 
-    // The connectivity claim goes first, so that reverting the guard fails
-    // *here* — on the semantics — and not merely on the presentation shape.
-    // Measured with the guard removed: the presented composite becomes the
-    // single block `Spider('z', 2, 2)` and interprets to ONE class,
-    // {dom [0, 1], cod [0, 1]}, against the semantics' two.
+    // The connectivity claim goes first, so that reverting both defenses (Rule
+    // 4's `*n1 > 0` guard and the zero-output filter on the lookup — either
+    // alone leaves the crate green, see the docstring) fails *here* — on the
+    // semantics — and not merely on the presentation shape. Measured with both
+    // removed: the presented composite becomes the single block
+    // `Spider('z', 2, 2)` and interprets to ONE class, {dom [0, 1], cod [0, 1]},
+    // against the semantics' two.
     assert_eq!(
         after_fm_compose,
         semantic,
