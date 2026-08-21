@@ -76,11 +76,12 @@ All notable changes to `catgraph` are documented here. The format follows
   order, so the emitting block always won — the collision never displaced one;
   what the filter removes is the lookup at a placement with no emitting block
   (the trailing one, where only a zero-input next block can sit), and of those
-  pairings only `Spider(z, m, 0) ; Spider(z, 0, k)` reaches a rule head (Rule
-  4's, where only the guard stops it), so the filter's only observable effect
-  is that `n == 0` spider case — which is why it is redundant with the guard. Blocks with no outputs are now excluded,
-  which also makes the remaining keys strictly increasing and therefore
-  unique.
+  pairings only a spider pair `Spider(z, m, 0) ; Spider(w, 0, k)` gets past a
+  rule's patterns (Rule 4's): `z1 == z2` stops it when `z ≠ w`, and when
+  `z == w` only the `n >= 1` guard does. So the filter's only observable
+  effect is that `n == 0` spider case — which is why it is redundant with the
+  guard. Blocks with no outputs are now excluded, which also makes the
+  remaining keys strictly increasing and therefore unique.
 
 ### Changed
 

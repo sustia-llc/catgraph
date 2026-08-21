@@ -337,13 +337,14 @@ where
     /// emitting block always came last and always won; the collision never
     /// displaced an emitting block. What the filter removes is the lookup at a
     /// placement with no emitting block — the trailing one, where only a
-    /// zero-input `next` block can sit. Of those pairings only
-    /// `Spider(z, m, 0) ; Spider(z, 0, k)` reaches a rule head (Rule 4's, at
-    /// `n == 0`, where only the guard stops it); `Counit ; Unit`,
-    /// `Counit ; Spider(z, 0, k)`, `Spider(z, m, 0) ; Unit`, and every pairing
-    /// with a zero-arity `UnSpecifiedBox` on either side fall through unmatched
-    /// (no rule matches a black box). So the filter's only *observable* effect
-    /// is that `n == 0` spider case, which is why it is redundant with Rule 4's
+    /// zero-input `next` block can sit. Of those pairings only a spider pair
+    /// `Spider(z, m, 0) ; Spider(w, 0, k)` gets past a rule's patterns (Rule
+    /// 4's): `z1 == z2` stops it when `z ≠ w`, and when `z == w` only the
+    /// `*n1 > 0` guard does. `Counit ; Unit`, `Counit ; Spider(z, 0, k)`,
+    /// `Spider(z, m, 0) ; Unit`, and every pairing with a zero-arity
+    /// `UnSpecifiedBox` on either side fall through unmatched (no rule's
+    /// patterns name a black box). So the filter's only *observable* effect is
+    /// that `n == 0` spider case, which is why it is redundant with Rule 4's
     /// guard. Excluding them also makes the remaining keys strictly increasing,
     /// hence unique.
     pub(crate) fn two_layer_simplify(&mut self, next_layer: &mut Self) -> (bool, bool, bool) {
