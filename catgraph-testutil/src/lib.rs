@@ -18,8 +18,8 @@
 //!   dynamic ranges and near-cancellation pairs the workspace's uniform-
 //!   magnitude strategies never reached (#169).
 //! - [`all_perms`] and [`all_perm_indices`] — exhaustive `Sₙ` enumeration for
-//!   the `#258` braiding sweeps: two private copies in `catgraph-applied/tests`,
-//!   needed again by `catgraph/tests` (#286).
+//!   the `#258` braiding sweeps; replaced two private copies in
+//!   `catgraph-applied/tests` once `catgraph/tests` needed it too (#286).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

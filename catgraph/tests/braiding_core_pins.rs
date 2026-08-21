@@ -8,11 +8,12 @@
 //! covers are on types defined *here*, in `catgraph`, and had no core-side pin:
 //! [`CospanAlgebraMorphism`], [`FrobeniusMorphism`]'s **wiring**, and
 //! [`NamedCospan`]'s **port-name direction** (it delegates its cospan to
-//! `Cospan::from_permutation_on_*`, so `cospan::test::permutation_automatic` /
-//! `permutatation_manual_labelled` pin that direction, and
-//! `named_cospan::test::permutatation_automatic` compares a composite's legs;
-//! nothing in core pinned the names — permuting them by `p` instead of `p⁻¹`,
-//! in the constructor or in `permute_side`, reddens only this file).
+//! `Cospan::from_permutation_on_*`, so the cospan direction is pinned by
+//! `cospan::test::permutation_automatic` / `permutatation_manual_labelled`, and
+//! `named_cospan::test::permutatation_automatic` compares a composite's legs
+//! (its name assertions are over all-`()` names); nothing in core pinned the
+//! names — permuting them by `p` instead of `p⁻¹`, in the constructor or in
+//! `permute_side`, reddens only this file).
 //!
 //! The measured consequence (#286): inverting the braiding direction in
 //! `CospanAlgebraMorphism`'s two constructors — `p.inv()` ⇄ `p` in both the

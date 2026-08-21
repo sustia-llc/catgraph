@@ -16,14 +16,14 @@
 //!
 //! The two views are index-aligned — `all_perms(n)[k]` is the permutation whose
 //! one-line notation is `all_perm_indices(n)[k]` — and this module's tests pin
-//! that through `all_perms` itself.
+//! that through `all_perms` itself (at `n ∈ {3, 4}`).
 
 use permutations::Permutation;
 
 /// Every permutation of `0..n` in one-line notation, each exactly once.
 ///
 /// Prefix-swap (Heap-style) recursion: `n!` vectors of length `n`, so this is
-/// for small `n` only — the workspace's sweeps run `n ≤ 4`.
+/// for small `n` only — the workspace's sweeps run `n ∈ {3, 4}`.
 ///
 /// # Examples
 ///
@@ -134,10 +134,10 @@ mod tests {
     ///
     /// What a drift here can and cannot do: every consuming sweep derives its
     /// reference from the same `p` it feeds the constructor, and `Sₙ` is closed
-    /// under inversion, so `all_perms` returning inverses would reorder a sweep,
-    /// not flip its convention — this test is the only place such a drift is
-    /// visible. Falsified: `all_perms` mapped through `.inv()` → RED here at
-    /// `all_perms(3)[3]`, the first non-involution — `[2, 0, 1]` where
+    /// under inversion, so `all_perms` returning inverses would reorder a
+    /// sweep, not flip its convention — this test is the only place such a
+    /// drift is visible. Falsified: `all_perms` mapped through `.inv()` → RED
+    /// here at `all_perms(3)[3]`, the first non-involution — `[2, 0, 1]` where
     /// `all_perm_indices(3)[3]` is `[1, 2, 0]` (16 passed, 1 failed) — while
     /// all 66 test binaries of `cargo test -p catgraph -p catgraph-applied
     /// --tests` stay green.

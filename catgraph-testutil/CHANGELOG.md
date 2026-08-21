@@ -28,11 +28,11 @@ version history.
   the two views are **index-aligned** (checked at `n ∈ {3, 4}`, the only `n`
   any consuming sweep runs) — `all_perms(n)[k]` is the permutation whose
   one-line notation is `all_perm_indices(n)[k]`, asserted through `all_perms`
-  itself. Alignment is the only contract a caller mixing the views
-  depends on; a drift in `all_perms` cannot flip a consuming sweep's convention
-  (each sweep derives its reference from the same `p` it feeds the constructor,
-  and `Sₙ` is closed under inversion), so this pin is the only place such a
-  drift is visible — falsified by mapping `all_perms` through `.inv()`: RED at
+  itself. Alignment is the only contract a caller mixing the views depends
+  on; a drift in `all_perms` cannot flip a consuming sweep's convention (each
+  sweep derives its reference from the same `p` it feeds the constructor, and
+  `Sₙ` is closed under inversion), so this pin is the only place such a drift
+  is visible — falsified by mapping `all_perms` through `.inv()`: RED at
   `all_perms(3)[3]`, `[2, 0, 1]` where `all_perm_indices(3)[3]` is `[1, 2, 0]`
   (16 passed, 1 failed), with all 66 test binaries of
   `cargo test -p catgraph -p catgraph-applied --tests` staying green.

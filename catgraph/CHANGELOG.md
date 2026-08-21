@@ -155,7 +155,8 @@ All notable changes to `catgraph` are documented here. The format follows
   `NamedCospan` delegates its cospan to `Cospan::from_permutation_on_*`, so
   `cospan::test::permutation_automatic` / `permutatation_manual_labelled` pin it
   (of the two `named_cospan` lib tests in (6) below, `permutatation_automatic`
-  compares the composite's legs, `permutatation_manual` only its words). Its
+  compares the composite's legs — its name assertions are over all-`()`
+  names — and `permutatation_manual` only its words). Its
   names were pinned nowhere in core: permuting them by `p` instead of `p⁻¹`
   reddens only the new file, whether in `permute_side` (see (4)) or in the
   constructor (`from_permutation_extra_data_on_domain`: `['b','c','a']` vs
