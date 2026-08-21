@@ -8,6 +8,158 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Added
 
+- **`cospan_algebra::frobenius_to_cospan`** — interprets a
+  `FrobeniusMorphism<Lambda, _>` in `Cospan<Lambda>` layer by layer, inverse in
+  spirit to the existing `cospan_to_frobenius`
+  ([#284](https://github.com/sustia-llc/catgraph/issues/284)). It errors
+  (`CatgraphError::Interpret`) on an `UnSpecifiedBox`, which has no image in the
+  free hypergraph category.
+
+  Fong-Spivak Prop 3.8 is a one-to-one correspondence between special
+  commutative Frobenius monoids (SCFMs) in a symmetric monoidal category `C` and
+  strict symmetric monoidal functors `(Cospan, ⊕) → (C, ⊗)` — **both** of its
+  directions are functors *out of* `Cospan`, so neither of them is this map.
+  What Prop 3.8 licenses is the construction: the black-box-free part of
+  `FrobeniusMorphism_Λ` is the free SCFM prop, `Cospan_Λ` carries an SCFM
+  structure on each object (Ex 2.8), and the proposition turns that structure
+  into the interpreting functor.
+
+  This is the *observable* the compact-closed suite was missing.
+  `FrobeniusMorphism`'s derived `Eq` compares layer vectors and composition only
+  applies a local `two_layer_simplify`, so equal diagrams routinely differ
+  syntactically and no equality on `FM` could state §3.1's propositions.
+  Composing with `Cospan::canonical_form` gives a semantic one — equality up to
+  apex isomorphism. ⚠ **Incomparable with SCFM on scalars — neither direction
+  is exact**, both measured. `two_layer_simplify`'s rule 3 cancels a spelled
+  `η;ε`, so it shares an image with `FrobeniusMorphism::identity(&vec![])`
+  without being SCFM-equal to it (*not complete*), and shares SCFM-equality with
+  `Spider(z, 0, 0)` — which `generator_to_cospan` builds directly as the bubble
+  — without sharing its image (*not sound*). See "Known discrepancy"
+  below. So the new pins catch any change to a term's boundary-to-apex
+  connectivity, and to any bubble that survives the layer simplifier; the one
+  thing they cannot see is a change whose only effect is to add or drop an
+  adjacent `η;ε` pair, which the simplifier cancels before this function runs.
+
+### Fixed
+
+- **`Frobenius::basic_interpret`'s default interpreted every braiding as the
+  identity** ([#284]). It built `Permutation::try_from(vec![0, 1])` — the
+  identity permutation — where `σ: [z1, z2] → [z2, z1]` needs the transposition
+  `[1, 0]`. Dead code today (`FrobeniusMorphism` is the only implementor and
+  overrides `basic_interpret`), but it is the reference semantics any future
+  implementor inherits, and `cospan_algebra::generator_to_cospan` — its
+  `Cospan`-valued twin, added in this release — builds the true transposition,
+  so the two disagreed.
+
+- **`Frobenius::basic_interpret`'s default interpreted the bubble
+  `Spider(z, 0, 0)` as `id_I`** ([#284]). Its `Spider` arm recursed into
+  `special_frobenius_morphism(0, 0, z)`, which returns the **simplified** term —
+  `two_layer_simplify`'s rule 3, the *extra-special* axiom, has already cancelled
+  the `η;ε` — and `interpret_frob`ed the emptied result to `Self::identity(&[])`.
+  This is the same soundness break fixed in `generator_to_cospan` — see the
+  final bullet under "Known discrepancy — scalars (bubbles)" below — on the
+  other side of the twin: with only the `Cospan` side repaired, the two
+  disagreed at exactly this generator, falsifying `basic_interpret`'s own
+  "the two must agree generator-for-generator", and any
+  *special-but-not-extra-special* implementor inheriting the default (the
+  reference semantics, as the braiding bullet notes) got `id_I` for a
+  non-identity `0 → 0` scalar. The default now builds the bubble directly as
+  `interpret_unit(z) ; interpret_counit(z)`; every other spider arity still
+  recurses.
+
+  Pinned by
+  `frobenius::trait_impl::tests::basic_interpret_default_spider_zero_zero_is_the_bubble`.
+  The pin needs a **`Cospan`-backed** probe implementor (`CospanBacked`), added
+  in that test module beside the existing `Defaulting`: a `FrobeniusMorphism`-
+  backed implementor is structurally incapable of observing the fix, because its
+  carrier quotients by rule 3 and so identifies the bubble with `id_I`. Measured
+  by reverting the new arm — each assertion falsified separately: apex 0 vs 1,
+  scalars 0 vs 1, and both canonical-form equalities (`classes: []` vs
+  `[ApexClass { label: 'a', … }]`) against the hand-built `η;ε` and against
+  `frobenius_to_cospan`. Space: one generator, one label, one carrier.
+
+- **`Frobenius::interpret_frob`'s default rejected `identity(&vec![])`**
+  ([#284]). It errored on *every* block-free layer, including the block-free,
+  empty-interface layer that is how `FrobeniusMorphism::identity` represents the
+  identity on the empty type list. It now interprets that layer as `id_I` (the
+  unit of its fold) and rejects only a block-free layer with a non-empty
+  interface, matching `frobenius_to_cospan`. The two functions now cross-
+  reference each other, with the reason they are not one function (`Cospan` is
+  `Composable`, not the `ComposableMutating` the `Frobenius` supertraits
+  require).
+
+- **`compact_closed`'s module docs stated both zigzag identities in the wrong
+  composition order** ([#284]) — `(id_X ⊗ cap_X) ; (cup_X ⊗ id_X)`, which does
+  not typecheck as `id_X` (it is an endomorphism of `X ⊗ X ⊗ X`). Corrected to
+  `(cup_X ⊗ id_X) ; (id_X ⊗ cap_X)` and `(id_X ⊗ cup_X) ; (cap_X ⊗ id_X)`, the
+  composites `zigzag_snakes_reduce_to_the_identity` actually builds.
+
+### Fixed — tests
+
+- **The `compact_closed` suite asserted only interfaces** ([#284]). Audit
+  phase 1 measured that replacing `unname` with discard-inputs/create-outputs
+  junk left 44/44 green, and that a `compose_names_direct` discarding `f̂` and
+  `ĝ` for bare units did too; `assert_compose_names_equivalent`'s doc promised a
+  structural cross-check its body never performed (it compared codomains). The
+  suite now carries content pins routed through `frobenius_to_cospan` +
+  `canonical_form`: cup/cap against a hand-built bent identity, both Eq. (13)
+  snakes against `id_X`, `name`/`unname` against leg-bending computed directly on
+  the cospan, Prop 3.3 against `name(f;g)`, Prop 3.4's explicit-comp helper
+  against `f` itself, and the `id ⊗ cap ⊗ id` comp factor against
+  `equivalence::comp_cospan`, an independently written implementation. Each was
+  falsified by reverting the corresponding production line.
+
+### Known discrepancy — scalars (bubbles)
+
+- **Scalars are not preserved across the `Cospan` ↔ `FrobeniusMorphism`
+  translation**: `cospan_to_frobenius` drops them, and `frobenius_to_cospan`
+  keeps the `Spider(z, 0, 0)` bubble (see "Fixed" below) but never sees a
+  spelled `η;ε`, which `two_layer_simplify` rule 3 cancels before the function
+  runs. Two independent causes, each localised by disabling it and re-measuring
+  ([#284]; pinned as-is by
+  `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions`, not
+  endorsed):
+  1. `cospan_to_frobenius`'s identity fast path. Its guard is
+     `domain == codomain && left_to_middle() == right_to_middle()` — about the
+     *legs*, not the arity — so it discards *every apex vertex neither leg
+     reaches, at any arity*, not only at `0 → 0`. At `0 → 0` (both legs empty)
+     one bubble and two bubbles produce the same term even though their
+     canonical forms differ.
+  2. `FrobeniusLayer::two_layer_simplify` rule 3 cancels `η(z);ε(z)` — the
+     **extra-special** axiom. `Cospan` is the theory of *special* commutative
+     Frobenius monoids and keeps bubbles (`cospan_canon`'s module docs say so
+     explicitly); `Corel` is the extra-special quotient that discards them.
+
+  The two are independent **at `0 → 0` only**. Away from it they overlap, and
+  the pin covers that case separately: `Cospan::new(vec![0], vec![0],
+  vec!['a', 'b'])` — `id_a` beside a bubble — collapses to
+  `FrobeniusMorphism::identity(&['a'])`; narrowing the fast-path guard to
+  `0 → 0` leaves it collapsed (the decomposition path emits `η('b');ε('b')`,
+  which rule 3 eats), and only disabling rule 3 as well keeps the bubble
+  (a depth-2 term). So a fix to either cause alone leaves that assertion green.
+
+  ⚠ **Correction, measured — the pin signals cause 2 only, not "either
+  cause".** Correcting cause 1 in the strongest sensible form (adding
+  `&& cospan.is_left_identity()` to the fast-path guard, so it can never drop
+  an unreached apex vertex) leaves the pin GREEN together with the whole lib
+  suite: rule 3 still eats the `η;ε` the decomposition emits, so every
+  assertion holds for the same reason as before. Correcting cause 2 does turn
+  it red. A cause-1-only fix is therefore exactly the partial fix this pin does
+  not catch; the `id_a`-beside-a-bubble assertion is the both-causes signal.
+
+- **Fixed, and it was a soundness break, not only a scalar loss:**
+  `generator_to_cospan`'s `Spider(z, 0, 0)` arm recursed into
+  `special_frobenius_morphism`, which returns the **simplified** term — rule 3
+  had already emptied it — so the `(0, 0)` spider interpreted to `apex 0`. It
+  now builds the bubble `η;ε` directly. Pinned by
+  `cospan_algebra::tests::scfm_equal_scalars_have_equal_images`, which was
+  measured RED before the change (`Spider(a,0,0)` apex 0 / scalars 0 against
+  `η;δ;(ε⊗ε)`'s apex 1 / scalars 1, and the same split beside `id_a`).
+  This repairs one witness; it does **not** make the translation sound, since a
+  spelled `η;ε` still loses its bubble to rule 3 while the SCFM-equal spider now
+  keeps one.
+### Added
+
 - **`frobenius::frobenius_to_cospan`** — interpret a `FrobeniusMorphism` as the
   `Cospan` it denotes, the semantics half of the Prop 3.8 correspondence whose
   syntax half `cospan_algebra::cospan_to_frobenius` already covered
