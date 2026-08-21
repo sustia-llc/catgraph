@@ -262,8 +262,28 @@ where
     let middle = cospan.middle();
     let middle_len = middle.len();
 
-    // Identity fast path
-    if domain == codomain && cospan.left_to_middle() == cospan.right_to_middle() {
+    // Identity fast path.
+    //
+    // `left == right` on its own is *not* enough: the all-merged cospan
+    // `[a,a] → {•} ← [a,a]` also satisfies it (both legs are `[0, 0]`), yet it
+    // is the 2→2 spider, not the identity. Likewise `[a] → {•,•} ← [a]` with
+    // both legs `[0]` carries an unhit apex node — an extra scalar component —
+    // and is `id ⊗ scalar`, not `id`. The cospan is the identity exactly when
+    // the common leg is a *bijection* onto the apex (#285).
+    let leg = cospan.left_to_middle();
+    let legs_agree = leg == cospan.right_to_middle();
+    // A leg of exactly `middle_len` entries hitting each apex node at most once
+    // hits every one of them exactly once. An out-of-range entry (reachable
+    // only through `Cospan::new_unchecked`) answers `false` and falls through
+    // to the general epi-mono route rather than indexing out of bounds.
+    let leg_is_bijection = leg.len() == middle_len && {
+        let mut hit = vec![false; middle_len];
+        leg.iter().all(|&i| match hit.get_mut(i) {
+            Some(slot) => !std::mem::replace(slot, true),
+            None => false,
+        })
+    };
+    if domain == codomain && legs_agree && leg_is_bijection {
         return Ok(FrobeniusMorphism::identity(&domain));
     }
 
@@ -586,10 +606,16 @@ mod tests {
 
     #[test]
     fn cospan_to_frobenius_identity() {
-        let id = Cospan::<char>::identity(&vec!['a', 'b']);
+        let types = vec!['a', 'b'];
+        let id = Cospan::<char>::identity(&types);
         let morph: FM = cospan_to_frobenius(&id).unwrap();
         assert_eq!(morph.domain(), vec!['a', 'b']);
         assert_eq!(morph.codomain(), vec!['a', 'b']);
+        assert!(
+            morph == FM::identity(&types),
+            "F(id) must be the identity morphism, not merely 2→2: depth={}",
+            morph.depth()
+        );
     }
 
     #[test]
@@ -599,6 +625,8 @@ mod tests {
         let morph: FM = cospan_to_frobenius(&merge).unwrap();
         assert_eq!(morph.domain(), vec!['a', 'a']);
         assert_eq!(morph.codomain(), vec!['a']);
+        let mu: FM = crate::frobenius::FrobeniusOperation::Multiplication('a').into();
+        assert!(morph == mu, "F(merge) must be μ: depth={}", morph.depth());
     }
 
     #[test]
@@ -608,6 +636,73 @@ mod tests {
         let morph: FM = cospan_to_frobenius(&split).unwrap();
         assert_eq!(morph.domain(), vec!['a']);
         assert_eq!(morph.codomain(), vec!['a', 'a']);
+        let delta: FM = crate::frobenius::FrobeniusOperation::Comultiplication('a').into();
+        assert!(
+            morph == delta,
+            "F(split) must be δ: depth={}",
+            morph.depth()
+        );
+    }
+
+    /// The identity fast path must not fire on an all-merged cospan (#285).
+    ///
+    /// `[a,a] → {•} ← [a,a]` satisfies `domain == codomain` and
+    /// `left == right == [0, 0]`, yet it is the 2→2 spider. Guarding only on
+    /// those two conditions returned `identity` (depth 1) for it; the correct
+    /// answer is `special_frobenius_morphism(2, 2, 'a')` (depth 2). The same
+    /// confusion hit `[a,a,a] → {•} ← [a,a,a]` (identity depth 1 vs spider
+    /// depth 4).
+    ///
+    /// Scope: the four `m = n` single-apex cospans for `m ∈ {1,…,4}`, which are
+    /// exactly the ones the old guard could reach. The `m ≠ n` cases were never
+    /// affected by the guard and are pinned in
+    /// `tests/hypergraph_functor.rs::ctf_single_apex_cospan_is_the_spider`.
+    #[test]
+    fn cospan_to_frobenius_all_merged_is_not_the_identity() {
+        use crate::frobenius::special_frobenius_morphism;
+
+        for m in 1usize..=4 {
+            let c = Cospan::new(vec![0; m], vec![0; m], vec!['a']).unwrap();
+            let morph: FM = cospan_to_frobenius(&c).unwrap();
+            let spider: FM = special_frobenius_morphism(m, m, 'a');
+            assert!(
+                morph == spider,
+                "F(all-merged {m}→{m}) must be spider({m},{m}) (depth {}), \
+                 got depth {}",
+                spider.depth(),
+                morph.depth(),
+            );
+            if m > 1 {
+                let types: Vec<char> = vec!['a'; m];
+                assert!(
+                    morph != FM::identity(&types),
+                    "F(all-merged {m}→{m}) must not be the identity: \
+                     the {m} input wires are all connected to one another"
+                );
+            }
+        }
+    }
+
+    /// A cospan whose apex carries a node neither leg hits is still handled,
+    /// and keeps the boundary of the identity it wraps.
+    ///
+    /// Honest scope, and a **known gap**: this does *not* pin which code path
+    /// produced the answer. Both the pre-#285 fast path and the general
+    /// epi-mono route return the identity here — the route simplifies the
+    /// spare node's `η ; ε` away — so no observable the crate exposes
+    /// separates them, and reverting the #285 guard leaves this test green.
+    /// Whether the scalar component should survive at all is the "extra"
+    /// Frobenius law, deliberately undecided here. What the assertions do
+    /// range over is totality and the resulting boundary for this one witness.
+    #[test]
+    fn cospan_to_frobenius_unhit_apex_node_is_total() {
+        // [a] → {•, •} ← [a], right/left legs both hit node 0 only.
+        let c = Cospan::new(vec![0], vec![0], vec!['a', 'a']).unwrap();
+        assert_eq!(c.middle().len(), 2, "the witness has a spare apex node");
+        assert_eq!(c.left_to_middle(), c.right_to_middle());
+        let morph: FM = cospan_to_frobenius(&c).unwrap();
+        assert_eq!(morph.domain(), vec!['a']);
+        assert_eq!(morph.codomain(), vec!['a']);
     }
 
     // --- frobenius_to_cospan (#284) ---

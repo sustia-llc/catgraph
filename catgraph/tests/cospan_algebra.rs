@@ -205,12 +205,76 @@ where
 }
 
 /// Generate a Part-element: a cospan [] → x with small codomain of char labels.
+///
+/// Note the shape: one label repeated, and an *injective* right leg. Under
+/// that shape a permuted or otherwise wrong leg is invisible, because every
+/// candidate leg reads back the same label sequence — see
+/// [`arb_mixed_part_element`] for the generator that can see legs (#285).
 fn arb_part_element() -> impl Strategy<Value = Cospan<char>> {
     (1usize..=3, prop::sample::select(vec!['a', 'b', 'c'])).prop_map(|(n, c)| {
         let cod: Vec<char> = std::iter::repeat_n(c, n).collect();
         let right_to_mid: Vec<usize> = (0..n).collect();
         Cospan::new(vec![], right_to_mid, cod).unwrap()
     })
+}
+
+/// Generate a Part-element with **mixed labels and a non-injective right leg**:
+/// a cospan `[] → x` whose apex merges the wires that share a class.
+///
+/// Two of the three classes carry the *same* label `'a'`, deliberately: with
+/// distinct labels per class the codomain would determine the right leg, and
+/// a leg assertion would be redundant with the codomain one. Here the apex
+/// `['a', 'a']` with right leg `[0, 1]` and the apex `['a', 'a']` with right
+/// leg `[0, 0]`… differ only in the leg — the codomain reads `[a, a]` either
+/// way (#285).
+fn arb_mixed_part_element() -> impl Strategy<Value = Cospan<char>> {
+    prop::collection::vec(0usize..3, 1..=5).prop_map(|classes| {
+        let mut distinct: Vec<usize> = Vec::new();
+        for &k in &classes {
+            if !distinct.contains(&k) {
+                distinct.push(k);
+            }
+        }
+        // Classes 0 and 1 share the label 'a'; class 2 is 'b'.
+        let labels = ['a', 'a', 'b'];
+        let middle: Vec<char> = distinct.iter().map(|&k| labels[k]).collect();
+        let right_to_mid: Vec<usize> = classes
+            .iter()
+            .map(|k| {
+                distinct
+                    .iter()
+                    .position(|d| d == k)
+                    .expect("invariant: every class index was pushed into `distinct` above")
+            })
+            .collect();
+        Cospan::new(vec![], right_to_mid, middle).unwrap()
+    })
+}
+
+/// The "merge every wire sharing a label" cospan `x → y`, where `y` carries one
+/// wire per distinct label of `x` in first-occurrence order.
+///
+/// This is a **non-identity** downstream cospan whenever `x` repeats a label —
+/// the Prop 4.6 naturality squares below need one, since `f = id` collapses
+/// both sides of the square to the same expression.
+fn merge_by_label(x: &[char]) -> Cospan<char> {
+    let mut distinct: Vec<char> = Vec::new();
+    for &c in x {
+        if !distinct.contains(&c) {
+            distinct.push(c);
+        }
+    }
+    let left: Vec<usize> = x
+        .iter()
+        .map(|c| {
+            distinct
+                .iter()
+                .position(|d| d == c)
+                .expect("invariant: every label of `x` was pushed into `distinct` above")
+        })
+        .collect();
+    let right: Vec<usize> = (0..distinct.len()).collect();
+    Cospan::new(left, right, distinct).unwrap()
 }
 
 proptest! {
@@ -244,6 +308,55 @@ proptest! {
         let rhs = alg.map_cospan(&f, &alpha_c).unwrap();
         prop_assert_eq!(lhs.codomain(), rhs.codomain());
         prop_assert_eq!(lhs.middle().to_vec(), rhs.middle().to_vec());
+    }
+
+    /// Prop 4.6 for `PartitionAlgebra`, **leg by leg**: `α = initial_map` is
+    /// the identity self-map, so `α_x(c)` must reproduce `c` in every
+    /// component — both legs included, not just the codomain and the apex.
+    ///
+    /// Scope of the claim: `arb_mixed_part_element`, i.e. cospans `[] → x`
+    /// with 1–5 codomain wires over three classes and one apex node per class
+    /// present. The assertions cover all four public components of the result
+    /// (`left_to_middle`, `right_to_middle`, `middle`, `codomain`), and the
+    /// generator's two same-labelled classes make the leg assertion carry
+    /// information the codomain assertion does not. It ranges over no cospan
+    /// with a non-empty domain and over no apex node that the right leg misses
+    /// (#285 leaves scalar components unpinned).
+    #[test]
+    fn prop_4_6_partition_is_identity_leg_by_leg(c in arb_mixed_part_element()) {
+        let alg = PartitionAlgebra;
+        let mapped = initial_map(&alg, &c);
+        prop_assert_eq!(mapped.left_to_middle().to_vec(), c.left_to_middle().to_vec());
+        prop_assert_eq!(mapped.right_to_middle().to_vec(), c.right_to_middle().to_vec());
+        prop_assert_eq!(mapped.middle().to_vec(), c.middle().to_vec());
+        prop_assert_eq!(mapped.codomain(), c.codomain());
+    }
+
+    /// Prop 4.6 naturality for `PartitionAlgebra` over a **non-identity** `f`
+    /// and mixed labels, compared **leg by leg**.
+    ///
+    /// `f = merge_by_label(x)` collapses every group of same-labelled wires,
+    /// so the two routes around the square genuinely traverse different
+    /// pushouts. Scope of the claim: `arb_mixed_part_element` inputs and that
+    /// one family of `f`; the assertions compare `left_to_middle`,
+    /// `right_to_middle`, `middle` and `codomain` of both routes. It says
+    /// nothing about downstream cospans that split rather than merge.
+    #[test]
+    fn prop_4_6_partition_naturality_nonidentity_leg_by_leg(c in arb_mixed_part_element()) {
+        let alg = PartitionAlgebra;
+        let x = c.codomain();
+        let f = merge_by_label(&x);
+        prop_assume!(f.left_to_middle() != f.right_to_middle());
+
+        let lhs_elem = alg.map_cospan(&f, &c).unwrap();
+        let lhs = initial_map(&alg, &lhs_elem);
+        let alpha_c = initial_map(&alg, &c);
+        let rhs = alg.map_cospan(&f, &alpha_c).unwrap();
+
+        prop_assert_eq!(lhs.left_to_middle().to_vec(), rhs.left_to_middle().to_vec());
+        prop_assert_eq!(lhs.right_to_middle().to_vec(), rhs.right_to_middle().to_vec());
+        prop_assert_eq!(lhs.middle().to_vec(), rhs.middle().to_vec());
+        prop_assert_eq!(lhs.codomain(), rhs.codomain());
     }
 
     /// Prop 4.6 naturality for `NameAlgebra` over concrete witnesses.
@@ -303,6 +416,46 @@ fn prop_4_6_partition_identity_is_unique_self_map() {
     let mapped = initial_map(&alg, &c);
     assert_eq!(mapped.codomain(), c.codomain());
     assert_eq!(mapped.middle().to_vec(), c.middle().to_vec());
+    assert_eq!(mapped.left_to_middle(), c.left_to_middle());
+    assert_eq!(mapped.right_to_middle(), c.right_to_middle());
+}
+
+/// Prop 4.6 monoidal coherence for `NameAlgebra` on a **mixed-label, merging**
+/// witness, compared as whole `FrobeniusMorphism`s rather than at the boundary.
+///
+/// Scope of the claim: the single pair `c1 = ([] → [a,a] merged)`,
+/// `c2 = ([] → [b])`. `FrobeniusMorphism: PartialEq` is presentation equality,
+/// not equality modulo the Frobenius axioms, so the content comparison is only
+/// available where both routes normalize to the same layering — the proptest
+/// above therefore stays boundary-only, and this concrete case carries the
+/// content claim.
+#[test]
+fn prop_4_6_name_monoidal_content() {
+    let name_alg = NameAlgebra::<String>::new();
+    let part = PartitionAlgebra;
+
+    // c1 merges its two 'a' wires into one apex node; c2 is a lone 'b'.
+    let c1 = Cospan::new(vec![], vec![0, 0], vec!['a']).unwrap();
+    let c2 = Cospan::new(vec![], vec![0], vec!['b']).unwrap();
+
+    let combined = part.lax_monoidal(&c1, &c2);
+    let lhs: FM = initial_map(&name_alg, &combined);
+
+    let alpha_c1: FM = initial_map(&name_alg, &c1);
+    let alpha_c2: FM = initial_map(&name_alg, &c2);
+    let rhs: FM = name_alg.lax_monoidal(&alpha_c1, &alpha_c2);
+
+    assert_eq!(lhs.domain(), rhs.domain(), "α(c1 ⊕ c2) domain");
+    assert_eq!(lhs.codomain(), rhs.codomain(), "α(c1 ⊕ c2) codomain");
+    assert!(
+        lhs == rhs,
+        "α_{{x⊕y}}(c1 ⊕ c2) must equal lax_monoidal(α(c1), α(c2)) as a whole \
+         morphism: lhs depth={} cod={:?}, rhs depth={} cod={:?}",
+        lhs.depth(),
+        lhs.codomain(),
+        rhs.depth(),
+        rhs.codomain(),
+    );
 }
 
 // ---------------------------------------------------------------------------

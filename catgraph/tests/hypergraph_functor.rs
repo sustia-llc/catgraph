@@ -8,12 +8,12 @@ mod common;
 use catgraph::{
     category::{Composable, ComposableMutating, HasIdentity},
     cospan::Cospan,
-    frobenius::FrobeniusMorphism,
+    frobenius::{FrobeniusMorphism, special_frobenius_morphism},
     hypergraph_category::HypergraphCategory,
     hypergraph_functor::{CospanToFrobeniusFunctor, HypergraphFunctor, RelabelingFunctor},
     monoidal::Monoidal,
 };
-use common::assert_cospan_eq_msg;
+use common::{assert_cospan_eq_msg, assert_frobenius_eq_msg, frobenius_shape};
 
 fn char_to_u32(c: char) -> u32 {
     c as u32
@@ -174,6 +174,11 @@ fn relabeling_roundtrip_invertible() {
 
 // ---------------------------------------------------------------------------
 // CospanToFrobeniusFunctor: Frobenius preservation (Eq. 12)
+//
+// These four compare the *whole morphism* (`FrobeniusMorphism: PartialEq` is
+// layer-by-layer presentation equality), not just the boundary types — see
+// `assert_frobenius_eq_msg`. Boundary-only versions passed under a
+// merge-everything-into-one-spider implementation of the functor (#285).
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -185,6 +190,7 @@ fn ctf_unit_preservation() {
     let tgt_unit: FM = HypergraphCategory::unit(f.map_ob(z));
     assert_eq!(mapped.domain(), tgt_unit.domain(), "F(η) domain");
     assert_eq!(mapped.codomain(), tgt_unit.codomain(), "F(η) codomain");
+    assert_frobenius_eq_msg(&mapped, &tgt_unit, "F(η_x) = η_{F(x)}");
 }
 
 #[test]
@@ -196,6 +202,7 @@ fn ctf_counit_preservation() {
     let tgt_counit: FM = HypergraphCategory::counit(f.map_ob(z));
     assert_eq!(mapped.domain(), tgt_counit.domain(), "F(ε) domain");
     assert_eq!(mapped.codomain(), tgt_counit.codomain(), "F(ε) codomain");
+    assert_frobenius_eq_msg(&mapped, &tgt_counit, "F(ε_x) = ε_{F(x)}");
 }
 
 #[test]
@@ -207,6 +214,7 @@ fn ctf_multiplication_preservation() {
     let tgt_mul: FM = HypergraphCategory::multiplication(f.map_ob(z));
     assert_eq!(mapped.domain(), tgt_mul.domain(), "F(μ) domain");
     assert_eq!(mapped.codomain(), tgt_mul.codomain(), "F(μ) codomain");
+    assert_frobenius_eq_msg(&mapped, &tgt_mul, "F(μ_x) = μ_{F(x)}");
 }
 
 #[test]
@@ -218,12 +226,22 @@ fn ctf_comultiplication_preservation() {
     let tgt_comul: FM = HypergraphCategory::comultiplication(f.map_ob(z));
     assert_eq!(mapped.domain(), tgt_comul.domain(), "F(δ) domain");
     assert_eq!(mapped.codomain(), tgt_comul.codomain(), "F(δ) codomain");
+    assert_frobenius_eq_msg(&mapped, &tgt_comul, "F(δ_x) = δ_{F(x)}");
 }
 
 // ---------------------------------------------------------------------------
 // CospanToFrobeniusFunctor: Functoriality
 // ---------------------------------------------------------------------------
 
+/// `F(g;h)` and `F(g);F(h)` agree at the boundary for the `δ ; μ` witness.
+///
+/// Deliberately boundary-only: `δ ; μ` is the one pair where the two routes
+/// land on *different presentations* of the same morphism. `F(g;h)` is the
+/// identity (depth 1, because `g;h` is the identity cospan), while `F(g);F(h)`
+/// is the two-layer `δ ; μ` — equal only modulo the specialness axiom, which
+/// `FrobeniusMorphism: PartialEq` does not quotient by. Content-level
+/// functoriality is pinned on other witnesses by
+/// `ctf_functoriality_composition_content`.
 #[test]
 fn ctf_functoriality_composition() {
     let f = CospanToFrobeniusFunctor::<String>::new();
@@ -251,21 +269,56 @@ fn ctf_functoriality_composition() {
     );
 }
 
+/// `F(id_x) = id_{F(x)}` — as whole morphisms, not just at the boundary.
+///
+/// Scope of the claim: the three concrete objects listed in `cases`. The
+/// assertions compare full presentation equality plus `depth()`; they say
+/// nothing about objects with more than three wires, and nothing about
+/// non-identity cospans (those are pinned by
+/// `ctf_single_apex_cospan_is_the_spider` and
+/// `ctf_disconnected_cospan_is_the_tensor_not_a_spider`).
+///
+/// Regression pinned (#285): every `m → n` cospan mapped to
+/// `special_frobenius_morphism(m, n, z)` left this test green when it only
+/// compared domain/codomain — `F(id_['a','a'])` came out as the 2→2 spider
+/// (depth 2), while the identity has depth 1.
 #[test]
 fn ctf_functoriality_identity() {
     let f = CospanToFrobeniusFunctor::<String>::new();
-    let types = vec!['a', 'b', 'c'];
-    let src_id = Cospan::<char>::identity(&types);
-    let mapped: FM = f.map_mor(&src_id).unwrap();
-    let tgt_id: FM = HasIdentity::identity(&types);
-    assert_eq!(mapped.domain(), tgt_id.domain(), "F(id) domain");
-    assert_eq!(mapped.codomain(), tgt_id.codomain(), "F(id) codomain");
+    let cases: Vec<Vec<char>> = vec![vec!['a'], vec!['a', 'a'], vec!['a', 'b', 'c']];
+    for types in cases {
+        let src_id = Cospan::<char>::identity(&types);
+        let mapped: FM = f.map_mor(&src_id).unwrap();
+        let tgt_id: FM = HasIdentity::identity(&types);
+        assert_eq!(mapped.domain(), tgt_id.domain(), "F(id) domain");
+        assert_eq!(mapped.codomain(), tgt_id.codomain(), "F(id) codomain");
+        assert!(
+            mapped == tgt_id,
+            "F(id_{types:?}) must be the identity morphism, not a spider: \
+             got {}, want {}",
+            frobenius_shape(&mapped),
+            frobenius_shape(&tgt_id),
+        );
+        assert_eq!(
+            mapped.depth(),
+            1,
+            "F(id_{types:?}) is a single layer; the 2→2 spider that the \
+             merge-everything implementation produced has depth 2"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
 // CospanToFrobeniusFunctor: Monoidal preservation
 // ---------------------------------------------------------------------------
 
+/// `F(g⊗h)` and `F(g)⊗F(h)` agree at the boundary for the `η ⊗ ε` witness.
+///
+/// Deliberately boundary-only, for the same reason as
+/// `ctf_functoriality_composition`: for `η_a ⊗ ε_b` the epi-mono route through
+/// the tensored cospan produces a two-layer presentation while the tensor of
+/// the two images is one layer. Content-level monoidality is pinned on a
+/// different witness by `ctf_disconnected_cospan_is_the_tensor_not_a_spider`.
 #[test]
 fn ctf_monoidal_preservation() {
     let f = CospanToFrobeniusFunctor::<String>::new();
@@ -309,10 +362,13 @@ fn ctf_empty_cospan() {
 #[test]
 fn ctf_multi_type_cospan() {
     let f = CospanToFrobeniusFunctor::<String>::new();
-    let id = Cospan::<char>::identity(&vec!['a', 'b']);
+    let types = vec!['a', 'b'];
+    let id = Cospan::<char>::identity(&types);
     let mapped: FM = f.map_mor(&id).unwrap();
     assert_eq!(mapped.domain(), vec!['a', 'b']);
     assert_eq!(mapped.codomain(), vec!['a', 'b']);
+    let tgt: FM = HasIdentity::identity(&types);
+    assert_frobenius_eq_msg(&mapped, &tgt, "F(id_[a,b])");
 }
 
 #[test]
@@ -322,4 +378,185 @@ fn ctf_asymmetric_cospan() {
     let mapped: FM = f.map_mor(&split3).unwrap();
     assert_eq!(mapped.domain(), vec!['a']);
     assert_eq!(mapped.codomain(), vec!['a', 'a', 'a']);
+    let spider: FM = special_frobenius_morphism(1, 3, 'a');
+    assert_frobenius_eq_msg(&mapped, &spider, "F(1→3 single-apex cospan) = spider(1,3)");
+}
+
+// ---------------------------------------------------------------------------
+// CospanToFrobeniusFunctor: content-level pins (#285)
+//
+// Everything above this line that compares only `domain()` / `codomain()` was
+// shown to pass under an implementation that mapped *every* `m → n` cospan to
+// `special_frobenius_morphism(m, n, z)`. The three tests below compare whole
+// morphisms, and each states the space its claim ranges over.
+// ---------------------------------------------------------------------------
+
+/// Every single-apex ("all-merged") cospan `m → {•} ← n` maps to the `(m,n)`
+/// spider, by content.
+///
+/// Scope of the claim: exactly the 25 cospans `(m, n) ∈ {0,…,4}²` over the
+/// single label `'a'` with a one-element apex. It ranges over no multi-apex
+/// and no multi-label cospan; the reference side is
+/// `special_frobenius_morphism`, an independently-written constructor, not a
+/// re-derivation of the epi-mono decomposition under test.
+///
+/// Regression pinned (#285): the identity fast path in `cospan_to_frobenius`
+/// fired on `domain == codomain && left == right`, which the all-merged
+/// `m → {•} ← m` cospan also satisfies (both legs are `[0; m]`). Before the
+/// fix `(2,2)`, `(3,3)` and `(4,4)` all returned the identity (depth 1)
+/// instead of the spider (depth 2, 4, 4).
+#[test]
+fn ctf_single_apex_cospan_is_the_spider() {
+    let f = CospanToFrobeniusFunctor::<String>::new();
+    for m in 0usize..=4 {
+        for n in 0usize..=4 {
+            let c = Cospan::new(vec![0; m], vec![0; n], vec!['a'])
+                .expect("single-apex cospan is well formed for every (m, n)");
+            let mapped: FM = f.map_mor(&c).unwrap();
+            let spider: FM = special_frobenius_morphism(m, n, 'a');
+            assert!(
+                mapped == spider,
+                "F(single-apex {m}→{n}) must be spider({m},{n}): got {}, want {}",
+                frobenius_shape(&mapped),
+                frobenius_shape(&spider),
+            );
+        }
+    }
+}
+
+/// A *disconnected* cospan maps to the tensor of its components' images, not
+/// to one spider that merges everything.
+///
+/// Scope of the claim: three concrete two-component witnesses —
+/// `μ_a ⊗ id_a` (`[a,a,a] → [a,a]`, **uniform label**, two apex nodes),
+/// `μ_a ⊗ id_b` (`[a,a,b] → [a,b]`) and `μ_a ⊗ μ_b` (`[a,a,b,b] → [a,b]`).
+/// Each is compared as a whole morphism against the tensor of the component
+/// images, and against the single spider a merge-everything implementation
+/// would produce. It claims nothing about components with empty boundaries
+/// (scalars), nor about three or more components.
+///
+/// The uniform-label witness is the one that carries the claim: for the
+/// mixed-label witnesses a wrong implementation is already visible in the
+/// boundary *labels*, so they cannot tell a connectivity bug from a labelling
+/// bug. `μ_a ⊗ id_a` and `spider(3,2,'a')` have byte-identical domains and
+/// codomains, so only the connectivity separates them.
+///
+/// Regression pinned (#285): mapping every `m → n` cospan to
+/// `special_frobenius_morphism(m, n, z)` is wrong for exactly this shape, and
+/// the boundary-only tests could not see it — `spider(3,2,'a')` has depth 3
+/// against the correct depth 1.
+#[test]
+fn ctf_disconnected_cospan_is_the_tensor_not_a_spider() {
+    let f = CospanToFrobeniusFunctor::<String>::new();
+
+    /// `(name, g, h, m, n)`: the two components and the arity of `g ⊗ h`.
+    type TensorWitness = (&'static str, Cospan<char>, Cospan<char>, usize, usize);
+
+    let witnesses: Vec<TensorWitness> = vec![
+        (
+            "μ_a ⊗ id_a",
+            Cospan::<char>::multiplication('a'),
+            Cospan::<char>::identity(&vec!['a']),
+            3,
+            2,
+        ),
+        (
+            "μ_a ⊗ id_b",
+            Cospan::<char>::multiplication('a'),
+            Cospan::<char>::identity(&vec!['b']),
+            3,
+            2,
+        ),
+        (
+            "μ_a ⊗ μ_b",
+            Cospan::<char>::multiplication('a'),
+            Cospan::<char>::multiplication('b'),
+            4,
+            2,
+        ),
+    ];
+
+    for (name, g, h, m, n) in witnesses {
+        let mut tensor = g.clone();
+        tensor.monoidal(h.clone());
+        assert_eq!(
+            tensor.middle().len(),
+            2,
+            "{name}: the witness must be disconnected (two apex nodes)"
+        );
+
+        let mapped_tensor: FM = f.map_mor(&tensor).unwrap();
+        let mut mapped_parts: FM = f.map_mor(&g).unwrap();
+        mapped_parts.monoidal(f.map_mor(&h).unwrap());
+
+        assert!(
+            mapped_tensor == mapped_parts,
+            "{name}: F(g⊗h) must equal F(g)⊗F(h): got {}, want {}",
+            frobenius_shape(&mapped_tensor),
+            frobenius_shape(&mapped_parts),
+        );
+
+        let merge_all: FM = special_frobenius_morphism(m, n, 'a');
+        assert!(
+            mapped_tensor != merge_all,
+            "{name}: F(g⊗h) must NOT be the connected spider({m},{n}) \
+             (both are {m}→{n}, so the arities alone cannot tell them apart): \
+             got {}, spider is {}",
+            frobenius_shape(&mapped_tensor),
+            frobenius_shape(&merge_all),
+        );
+    }
+}
+
+/// `F(g ; h) = F(g) ; F(h)`, by content.
+///
+/// Scope of the claim: two concrete composable pairs — `μ_a ; δ_a` (a merge
+/// followed by a split, both connected) and
+/// `(η_a ⊗ id_b) ; (id_a ⊗ ε_b)` (disconnected on both sides). It does **not**
+/// range over all composable pairs: `FrobeniusMorphism: PartialEq` is
+/// presentation equality, not equality modulo the Frobenius axioms, so pairs
+/// whose two routes normalize differently are out of reach — `δ_a ; μ_a` is
+/// exactly such a pair (`F(g;h)` is the depth-1 identity, `F(g);F(h)` is the
+/// depth-2 `δ ; μ`), and is covered at the boundary by
+/// `ctf_functoriality_composition` instead.
+///
+/// Regression pinned (#285): the `μ_a ; δ_a` witness composes to the all-merged
+/// `[a,a] → {•} ← [a,a]` cospan, which the old identity fast path mapped to
+/// the identity (depth 1) while `F(μ) ; F(δ)` is depth 2.
+#[test]
+fn ctf_functoriality_composition_content() {
+    let f = CospanToFrobeniusFunctor::<String>::new();
+
+    let mut disconnected_g = Cospan::<char>::unit('a');
+    disconnected_g.monoidal(Cospan::<char>::identity(&vec!['b']));
+    let mut disconnected_h = Cospan::<char>::identity(&vec!['a']);
+    disconnected_h.monoidal(Cospan::<char>::counit('b'));
+
+    let witnesses: Vec<(&str, Cospan<char>, Cospan<char>)> = vec![
+        (
+            "μ_a ; δ_a",
+            Cospan::<char>::multiplication('a'),
+            Cospan::<char>::comultiplication('a'),
+        ),
+        (
+            "(η_a ⊗ id_b) ; (id_a ⊗ ε_b)",
+            disconnected_g,
+            disconnected_h,
+        ),
+    ];
+
+    for (name, g, h) in witnesses {
+        let composed = g.compose(&h).unwrap();
+        let mapped_composed: FM = f.map_mor(&composed).unwrap();
+
+        let mut mapped_g: FM = f.map_mor(&g).unwrap();
+        ComposableMutating::compose(&mut mapped_g, f.map_mor(&h).unwrap()).unwrap();
+
+        assert!(
+            mapped_composed == mapped_g,
+            "{name}: F(g;h) must equal F(g);F(h): got {}, want {}",
+            frobenius_shape(&mapped_composed),
+            frobenius_shape(&mapped_g),
+        );
+    }
 }

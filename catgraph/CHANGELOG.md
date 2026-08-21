@@ -268,6 +268,50 @@ All notable changes to `catgraph` are documented here. The format follows
   green, while `cospan_algebra_morphism_battery`, the bubble ledger and the
   zigzag rider all go red.
 
+### Fixed
+
+- **`cospan_algebra::cospan_to_frobenius` no longer collapses an all-merged
+  cospan to the identity**
+  ([#285](https://github.com/sustia-llc/catgraph/issues/285)). Its identity
+  fast path fired on `domain == codomain && left_leg == right_leg`, which the
+  single-apex cospan `m → {•} ← m` also satisfies (both legs are `[0; m]`) even
+  though it is the `m→n` spider, not the identity. Measured: `[a,a] → {•} ←
+  [a,a]` returned `identity` (depth 1) where the correct answer is
+  `special_frobenius_morphism(2, 2, 'a')` (depth 2); `[a,a,a] → {•} ← [a,a,a]`
+  returned depth 1 against the correct depth 4. The guard now additionally
+  requires the common leg to be a **bijection** onto the apex, so the wrong
+  answers were reachable for every `m = n ≥ 2` and for any cospan whose apex
+  carries a node no leg hits. Everything the fast path used to answer
+  correctly still short-circuits.
+
+  Behaviour change, not an API change: `cospan_to_frobenius`,
+  `CospanToFrobeniusFunctor::map_mor`, and `NameAlgebra::map_cospan` all return
+  different (correct) morphisms for the affected cospans. Callers comparing
+  `FrobeniusMorphism` presentations against previously-recorded values for
+  those inputs will see a difference.
+
+### Added
+
+- Content-level regression pins for the `Cospan → Frobenius` functor ([#285]).
+  The `ctf_*` suite compared only `domain()` / `codomain()`, which an
+  implementation mapping every `m → n` cospan to
+  `special_frobenius_morphism(m, n, z)` passed in full. New and strengthened
+  tests compare whole morphisms via `FrobeniusMorphism: PartialEq`:
+  `ctf_single_apex_cospan_is_the_spider` (the 5×5 grid `(m,n) ∈ {0,…,4}²`),
+  `ctf_disconnected_cospan_is_the_tensor_not_a_spider` (including a
+  uniform-label witness whose boundary is byte-identical to the spider it must
+  not equal), `ctf_functoriality_composition_content`, and content assertions
+  on `F(id)`, `F(η)`, `F(ε)`, `F(μ)`, `F(δ)`.
+- Leg-by-leg Prop 4.6 and Lemma 4.9 witnesses ([#285]). The Prop 4.6 proptests
+  ran on a uniform-label generator with an injective leg, under which a wrong
+  leg is invisible; `arb_mixed_part_element` now emits two apex classes sharing
+  the label `'a'`, so `right_to_middle` carries information the codomain does
+  not. The Lemma 4.9 witnesses moved off identity morphisms onto `μ`, `δ` and
+  `μ ; δ`.
+- `tests/common::assert_frobenius_eq_msg` / `frobenius_shape` — `FrobeniusMorphism`
+  has `PartialEq` but no `Debug`, so `assert_eq!` is unavailable; these report
+  `depth`/`domain`/`codomain` on failure.
+
 ## [workspace-v0.15.0] - 2026-08-16
 
 ### Changed — BREAKING

@@ -3,7 +3,13 @@
 //! Core catgraph types intentionally lack `PartialEq` — these helpers compare
 //! via public accessors instead.
 
-use catgraph::{category::Composable, cospan::Cospan, named_cospan::NamedCospan, span::Span};
+use catgraph::{
+    category::{Composable, ComposableMutating},
+    cospan::Cospan,
+    frobenius::FrobeniusMorphism,
+    named_cospan::NamedCospan,
+    span::Span,
+};
 
 // ---------------------------------------------------------------------------
 // Cospan helpers
@@ -61,6 +67,51 @@ pub fn assert_cospan_shape<L: Eq + Copy + std::fmt::Debug>(
         a.middle().len(),
         b.middle().len(),
         "{msg}: middle size mismatch"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// FrobeniusMorphism helpers
+// ---------------------------------------------------------------------------
+
+/// Render the public observables of a `FrobeniusMorphism` for a failure message.
+///
+/// `FrobeniusMorphism` derives `PartialEq` (layer-by-layer presentation
+/// equality) but has no `Debug` impl, so `assert_eq!` is unavailable. This
+/// stands in for one: the three accessors the crate exposes publicly.
+#[allow(dead_code)]
+pub fn frobenius_shape<L, BL>(m: &FrobeniusMorphism<L, BL>) -> String
+where
+    L: Eq + Copy + std::fmt::Debug,
+    BL: Eq + Clone,
+{
+    format!(
+        "depth={} dom={:?} cod={:?}",
+        m.depth(),
+        m.domain(),
+        m.codomain()
+    )
+}
+
+/// Assert two `FrobeniusMorphism`s are equal *by content* (presentation
+/// equality), reporting both shapes on failure.
+///
+/// Note this is **presentation** equality, not equality modulo the Frobenius
+/// axioms: `δ ; μ` and `id` are semantically equal but compare unequal here.
+#[allow(dead_code)]
+pub fn assert_frobenius_eq_msg<L, BL>(
+    a: &FrobeniusMorphism<L, BL>,
+    b: &FrobeniusMorphism<L, BL>,
+    msg: &str,
+) where
+    L: Eq + Copy + std::fmt::Debug,
+    BL: Eq + Clone,
+{
+    assert!(
+        a == b,
+        "{msg}: FrobeniusMorphism presentations differ\n  lhs: {}\n  rhs: {}",
+        frobenius_shape(a),
+        frobenius_shape(b),
     );
 }
 
