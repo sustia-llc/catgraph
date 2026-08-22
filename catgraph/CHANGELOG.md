@@ -133,6 +133,70 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Fixed — tests
 
+- **`tests/property_laws.rs` asserted a production predicate against its own
+  definition, generated only identity left legs, and never randomised an apex**
+  ([#287](https://github.com/sustia-llc/catgraph/issues/287)). Test-only; no
+  library surface changes.
+
+  1. **`rel_equivalence_iff_rst` was self-oracled** — it compared
+     `is_equivalence_rel()` with `is_reflexive() && is_symmetric() &&
+     is_transitive()`, which is the production body spelled out on the other
+     side of the `prop_assert_eq!`. Measured: rewriting all three predicates to
+     `return true` left it **green**. Replaced by
+     `rel_predicates_match_a_direct_pair_set_oracle`, which decides all seven
+     `Rel` predicates against quantifiers over `middle_pairs()` that never call
+     a `Rel` method, plus
+     `rel_predicates_decided_exhaustively_on_small_carriers`, which does the
+     same over **every** relation on carriers of size 1, 2 and 3 (530 in all)
+     and cross-checks the per-predicate acceptance totals against published
+     enumerations — reflexive/irreflexive `2^(n²−n)`, symmetric
+     `2^(n(n+1)/2)`, antisymmetric `2ⁿ·3^(n(n−1)/2)`, transitive
+     [A006905](https://oeis.org/A006905) `2, 13, 171`, equivalence Bell(n)
+     `1, 2, 5`, partial order [A001035](https://oeis.org/A001035) `1, 3, 19`.
+     The literature totals are what catches a bug shared by a predicate *and*
+     its oracle — whenever the shared bug changes how many relations the
+     predicate accepts (a shared bug under which the predicate accepts a
+     different set of the same size passes both checks).
+     `rel_composites_require_homogeneity` additionally pins the
+     `is_homogeneous() &&` screen in both composites, which the exhaustive
+     sweep cannot see (every relation it builds is homogeneous). Falsified:
+     the three `return true` stubs redden all three tests; dropping the
+     homogeneity screen turns `is_equivalence_rel` on a heterogeneous relation
+     from `false` into an `unwrap` panic.
+
+  2. **The composability generators emitted identity-only left legs** —
+     `left_g`/`left_h` were `(0..b_size).collect()` unconditionally, so
+     `cospan_associativity` was doubly quotiented outside the space it claims.
+     New `arb_label_preserving_leg` sends each boundary slot to a uniformly
+     chosen apex vertex *carrying that slot's label*, keeping `g.domain() ==
+     f.codomain()` while allowing non-identity legs (measured: 139 of 256
+     samples for `g`, 138 of 256 for `h`). Because a consuming proptest is
+     blind to this — associativity holds over identity legs just as well — the
+     generator is pinned by its own meta-test,
+     `composability_generators_emit_label_aware_non_identity_left_legs`.
+     Falsified: reverting the leg to `i ↦ i` reddens *only* the meta-test
+     (0 of 256, `cospan_associativity` still green); making the leg
+     label-blind reddens the meta-test and `cospan_associativity` together.
+
+  3. **`CospanCanon`'s "equal iff isomorphic" had one hand-written apex swap
+     and no random coverage** — new `canonical_form_decides_apex_isomorphism`
+     asserts that equality of canonical forms **is** apex isomorphism, in both
+     directions, against a brute-force search over `S_apex` (the F&S 2019 §3
+     definition, not a second copy of the canonicaliser). Pairs are generated
+     by a random apex permutation optionally followed by one rewired leg entry;
+     `perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs` pins
+     that both sides of the `iff` are reached (measured: 192 isomorphic, 64
+     non-isomorphic of 256). `a_single_rewire_changes_the_form_unless_it_is_a_relabelling`
+     adds the single-rewire negative *and* the case that keeps it honest — a
+     rewire onto an equally-labelled vertex can be an apex transposition, which
+     the form is designed to forget. Falsified: deleting `classes.sort()` from
+     `canonical_form` reddens `canonical_form_decides_apex_isomorphism` and
+     `a_single_rewire_changes_the_form_unless_it_is_a_relabelling` (the
+     proptest shrinks to a pure apex relabelling; the meta-test never calls
+     `canonical_form` and stays green); dropping the rewire arm from the
+     generator leaves the `iff` test green at 256/256 isomorphic and reddens
+     only the meta-test.
+
 - **The #258 braiding contract was pinned only downstream, and the only core
   *integration* test that named permutation composition was vacuous**
   ([#286](https://github.com/sustia-llc/catgraph/issues/286)). (Core's lib unit
