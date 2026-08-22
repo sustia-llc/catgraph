@@ -832,13 +832,17 @@ fn rel_predicates_decided_exhaustively_on_small_carriers() {
 /// The two composite predicates screen for homogeneity *first*, and answer
 /// `false` on a relation whose domain and codomain words differ.
 ///
-/// Not decoration: `is_reflexive` / `is_symmetric` / `is_transitive` each
-/// `unwrap()` a `subsumes` — or, for `is_transitive`, the self-composition
-/// `self.0.compose(&self.0)`, which `Span::composable` rejects before
-/// `subsumes` is reached — that returns `Err` on a boundary mismatch, so
+/// Not decoration: every leaf predicate `unwrap()`s something that returns
+/// `Err` on a boundary mismatch — `is_reflexive` and `is_symmetric` a
+/// `subsumes`, `is_antisymmetric` an `intersection` and then a `subsumes`,
+/// `is_transitive` the self-composition `self.0.compose(&self.0)`, which
+/// `Span::composable` rejects before `subsumes` is reached. `is_reflexive` is
+/// the first leaf in BOTH chains (`is_equivalence_rel`: reflexive, symmetric,
+/// transitive; `is_partial_order`: reflexive, antisymmetric, transitive), so
 /// dropping the `is_homogeneous() &&` guard from either composite turns this
-/// case from `false` into a panic. The exhaustive test above cannot see it —
-/// every relation it builds is homogeneous by construction.
+/// case from `false` into a panic at that first `unwrap`. The exhaustive test
+/// above cannot see it — every relation it builds is homogeneous by
+/// construction.
 #[test]
 fn rel_composites_require_homogeneity() {
     // 1 → 1 with differently-labelled boundaries and no pairs: legal as a span
@@ -1072,8 +1076,13 @@ proptest! {
     /// related by an apex permutation and at most **one** rewired leg entry. It
     /// does not range over pairs that differ in more than one leg entry, over
     /// pairs with different boundary sizes (those are separated by `dom_len` /
-    /// `cod_len` and pinned in the module's own tests), or over larger apexes,
-    /// where the brute-force oracle stops being affordable.
+    /// `cod_len` and pinned in the module's own tests), over pairs with
+    /// different **apex** sizes — both arms preserve `middle.len()`, so the
+    /// oracle's size early-return is dead here and the form's `apex_len` /
+    /// scalar-count dimension is never exercised by a `false`; a
+    /// `canonical_form` that dropped bubble classes would pass this test and is
+    /// caught only by `cospan_canon.rs`'s own `scalar_count` / bubble pins — or
+    /// over larger apexes, where the brute-force oracle stops being affordable.
     #[test]
     fn canonical_form_decides_apex_isomorphism((a, b) in arb_cospan_and_perturbation()) {
         let by_canonical_form = a.canonical_form() == b.canonical_form();

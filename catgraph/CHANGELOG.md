@@ -154,7 +154,9 @@ All notable changes to `catgraph` are documented here. The format follows
      [A006905](https://oeis.org/A006905) `2, 13, 171`, equivalence Bell(n)
      `1, 2, 5`, partial order [A001035](https://oeis.org/A001035) `1, 3, 19`.
      The literature totals are what catches a bug shared by a predicate *and*
-     its oracle. `rel_composites_require_homogeneity` additionally pins the
+     its oracle — whenever the shared bug changes how many relations the
+     predicate accepts (one accepting a different set of the same size passes
+     both checks). `rel_composites_require_homogeneity` additionally pins the
      `is_homogeneous() &&` screen in both composites, which the exhaustive
      sweep cannot see (every relation it builds is homogeneous). Falsified:
      the three `return true` stubs redden all three tests; dropping the
@@ -187,9 +189,12 @@ All notable changes to `catgraph` are documented here. The format follows
      adds the single-rewire negative *and* the case that keeps it honest — a
      rewire onto an equally-labelled vertex can be an apex transposition, which
      the form is designed to forget. Falsified: deleting `classes.sort()` from
-     `canonical_form` reddens both new tests (proptest shrinks to exactly the
-     relabelling pair); dropping the rewire arm from the generator leaves the
-     `iff` test green at 256/256 isomorphic and reddens only the meta-test.
+     `canonical_form` reddens `canonical_form_decides_apex_isomorphism` and
+     `a_single_rewire_changes_the_form_unless_it_is_a_relabelling` (the
+     proptest shrinks to a pure apex relabelling; the meta-test never calls
+     `canonical_form` and stays green); dropping the rewire arm from the
+     generator leaves the `iff` test green at 256/256 isomorphic and reddens
+     only the meta-test.
 
 - **The #258 braiding contract was pinned only downstream, and the only core
   *integration* test that named permutation composition was vacuous**
