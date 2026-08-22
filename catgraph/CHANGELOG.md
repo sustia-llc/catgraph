@@ -17,9 +17,10 @@ All notable changes to `catgraph` are documented here. The format follows
   - `Cospan::is_left_identity()` / `is_right_identity()` keep their signatures
     and return `leg.len() == middle.len() && represents_id(leg)` — `O(leg)`
     per call, and **exact in both directions**. The cached answers were not:
-    every writer that maintained them could only ever *clear*, so a leg that
-    genuinely was the identity reported `false` if the value had reached that
-    shape by mutation rather than by construction. Consumers reading either
+    every mutator that maintained them could only ever *clear* (and
+    `connect_pair` did not maintain them at all), so a leg that genuinely was
+    the identity reported `false` if the value had reached that shape by
+    mutation rather than by construction. Consumers reading either
     accessor should expect `true` in cases that previously read `false` —
     `identity(&['a', 'b'])`, `delete_boundary_node(Left(1))`,
     `add_boundary_node_known_target(Left(1))` is the shortest example.
@@ -47,8 +48,8 @@ All notable changes to `catgraph` are documented here. The format follows
   `perform_pushout` derives the predicate itself, with the same private
   `leg_is_identity` the accessors use.
 
-  **This changes results**, in one shape. Only the `left_leg_id` arm is
-  observable: the `right_leg_id` arm returns field-for-field what the
+  **This changes results**, through one arm only. The `right_leg_id` arm — the
+  one `other.is_left_id` used to select — returns field-for-field what the
   union-find body returns for the same input, so entering it or not cannot
   change an answer — confirmed by deleting that arm outright and running the
   whole workspace, **2085 tests, zero failures**. So the operands that move are
