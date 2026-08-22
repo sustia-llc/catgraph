@@ -206,19 +206,20 @@ All notable changes to `catgraph` are documented here. The format follows
   strategies' bool-vec view and the sweep's `u32`-bitmask view agree. The
   strategies now build through a named `rel_from_bools`, and the new
   `rel_from_selector_matches_its_definition` checks, for every mask over
-  `n ∈ {2, 3}` (528 relations), first that `rel_from_bools` and `rel_from_mask`
-  agree, then that `rel_from_mask` matches a reference written from the
-  row-major definition without calling the helper. Falsified three ways, each
-  reverted: a column-major flat index (`j*n + i`) inside the helper moves both
-  views together, so only the definition check reddens (`n = 2, mask = 0b10`,
-  `{(1, 0)}` vs `{(0, 1)}`); reversing `rel_from_mask`'s bit order reddens the
-  parity check (`n = 2, mask = 0b1`, bool-vec `{(0, 0)}` vs bitmask
-  `{(1, 1)}`); reversing `rel_from_bools`'s bit order — the strategies' own
-  path — reddens the parity check with the definition check untouched
-  (`n = 2, mask = 0b1`, `{(1, 1)}` vs `{(0, 0)}`). Scope: `n = 4` is drawn by
-  the strategies but not
-  enumerated (2^16 masks); the convention is `n`-independent, so a break shows
-  at `n = 2`, as all three mutations do.
+  `n ∈ {1, 2, 3}` (530 relations — the exhaustive sweep's whole corpus), first
+  that `rel_from_bools` and `rel_from_mask` agree, then that `rel_from_mask`
+  matches a reference written from the row-major definition without calling
+  the helper. Falsified three ways, each reverted: a column-major flat index
+  (`j*n + i`) inside the helper moves both views together, so only the
+  definition check reddens (`n = 2, mask = 0b10`, `{(1, 0)}` vs `{(0, 1)}`);
+  reversing `rel_from_mask`'s bit order reddens the parity check
+  (`n = 2, mask = 0b1`, bool-vec `{(0, 0)}` vs bitmask `{(1, 1)}` — the
+  definition check would too, behind it); reversing `rel_from_bools`'s bit
+  order — the strategies' own path — reddens the parity check with the
+  definition check untouched (`n = 2, mask = 0b1`, `{(1, 1)}` vs `{(0, 0)}`).
+  Scope: `n = 4` is drawn by the strategies but not enumerated (2^16 masks);
+  the convention is `n`-independent, so a break shows at `n = 2`, as all three
+  mutations do.
 
 - **The #258 braiding contract was pinned only downstream, and the only core
   *integration* test that named permutation composition was vacuous**
