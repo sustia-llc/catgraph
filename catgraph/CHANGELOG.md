@@ -185,11 +185,17 @@ All notable changes to `catgraph` are documented here. The format follows
   the cached identity flags* below, which closes the same class a second time,
   structurally. Both halves ship: the flags are the subject of two public
   accessors and of `assert_valid`, so they still have to be right. Pinned in
-  `tests/checked_mutators.rs`. Reverting only the
-  `delete_boundary_node` conjunct makes `id_ab.delete(Right(1)).compose(&id_a)`
+  `tests/checked_mutators.rs`. **The measurements that follow are historical:**
+  they were taken while `perform_pushout` still selected its fast path from the
+  flags, and on the shipped code the same reverts leave the compositions green
+  and redden only the flag assertions (re-measured on this branch). Reverting
+  the `delete_boundary_node` clear to the pre-#289
+  `is_right_id &= z == self.right.len() - 1` — the two-conjunct intermediate
+  this sentence used to name was itself deleted, as provably equal to the
+  clear — made `id_ab.delete(Right(1)).compose(&id_a)`
   panic in `compose_with_quotient` at `left_to_pushout[*target_in_self_middle]`
-  with `index out of bounds: the len is 1 but the index is 1`; reverting only
-  the `Right(label)` partner-flag clear makes
+  with `index out of bounds: the len is 1 but the index is 1`; reverting
+  the `Right(label)` partner-flag clear made
   `Cospan::new(vec![0], vec![0], vec!['a', 'x'])` composed with
   `Cospan::new(vec![0], vec![], vec!['a'])` + `unknown_target(Right('b'))`
   panic the same way at `right_to_pushout[*target_in_other_middle]` — and,

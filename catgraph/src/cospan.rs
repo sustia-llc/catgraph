@@ -61,10 +61,13 @@ where
     ///
     /// That predicate is [`new_unchecked`](Self::new_unchecked)'s, in both
     /// arms: `leg.len() == middle.len() && represents_id(leg)`, spelled once
-    /// as the private `leg_is_identity` and shared with `new_unchecked` and
-    /// [`connect_pair`](Self::connect_pair). The length conjunct is not decoration — without it the strong arm rejects valid
-    /// cospans, e.g. `Cospan::new(vec![0], vec![0, 1], vec!['a', 'b'])`, whose
-    /// `is_left_id` is correctly `false` while `represents_id([0])` is `true`.
+    /// as the private `leg_is_identity` and shared with `new_unchecked`,
+    /// [`connect_pair`](Self::connect_pair), and `perform_pushout` — which
+    /// since #289's fourth review asks the legs directly rather than reading
+    /// these flags. The length conjunct is not decoration: without it the
+    /// strong arm rejects valid cospans, e.g.
+    /// `Cospan::new(vec![0], vec![0, 1], vec!['a', 'b'])`, whose `is_left_id`
+    /// is correctly `false` while `represents_id([0])` is `true`.
     ///
     /// `check_id_weak` asks the same question of a flag that is currently
     /// `true` only, which is the direction that matters for a value built by
@@ -379,7 +382,16 @@ where
                     Right(new_lambda) => {
                         self.left.push(self.middle.len());
                         self.middle.push(new_lambda);
-                        self.is_left_id &= self.left.len() == self.middle.len();
+                        // The pushed leg keeps its flag: `is_left_id == true`
+                        // implied `left.len() == middle.len()`, and this arm
+                        // pushes to both, so the equality — and the identity —
+                        // survive. (Until #289's fourth review this line read
+                        // `is_left_id &= self.left.len() == self.middle.len()`,
+                        // which by that same argument could never clear the
+                        // flag: a no-op that read as a guard, of exactly the
+                        // kind whose `Left(idx)` siblings above were reduced to
+                        // an unconditional clear.)
+                        //
                         // This arm grows the **apex**, so it is not only the
                         // pushed leg's flag that moves: the codomain leg keeps
                         // its length while the apex gains a vertex, so a
@@ -407,7 +419,11 @@ where
                     Right(new_lambda) => {
                         self.right.push(self.middle.len());
                         self.middle.push(new_lambda);
-                        self.is_right_id &= self.right.len() == self.middle.len();
+                        // The pushed leg keeps its flag, by the mirror of the
+                        // argument in the domain arm above — and for the same
+                        // reason the `&=` that stood here until #289's fourth
+                        // review could never clear it.
+                        //
                         // The mirror of the domain arm: the apex grew, the
                         // domain leg did not, so `is_left_id` is exactly
                         // `false` now.
@@ -598,6 +614,13 @@ where
         // accessors.
         self.is_left_id = leg_is_identity(&self.left, self.middle.len());
         self.is_right_id = leg_is_identity(&self.right, self.middle.len());
+        // #289 r4: this method had no validity check of its own, which is why
+        // the leg-remap defect the third review found (both legs left holding
+        // `middle.len()` after a `swap_remove`) was silent in *every* profile
+        // rather than tripping a debug assertion. The strong arm is sound here
+        // because both flags were just recomputed from the definition, and the
+        // whole call compiles away in release.
+        self.assert_valid(true, false);
     }
 
     /// Append a new vertex to the middle set with the given label. Returns its index.

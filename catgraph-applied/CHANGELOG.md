@@ -35,14 +35,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   `examples/wiring_diagram.rs`, `tests/wiring_diagram.rs`. Downstream callers
   need a `?`, an `.expect(..)`, or a `let _ =` to restore the old behaviour.
 
-  `WiringDiagram::connect_pair` keeps its signature but changes behaviour,
-  through `NamedCospan::connect_pair` → `Cospan::connect_pair` (core's `Fixed`
-  entries for #289): (1) it now merges the two ports in **every** argument
-  order — before, naming the port that sits on the **last** apex vertex first
-  (the "`add_boundary_node_unconnected`, then connect it" workflow) left both
-  legs out of bounds and the ports unmerged, silently, in every profile;
-  (2) both identity flags are recomputed after a merge instead of left stale,
-  which keeps `is_left_identity()` / `is_right_identity()` honest on a merged
+- **`WiringDiagram::connect_pair` merges the two ports in every argument
+  order** ([#289](https://github.com/sustia-llc/catgraph/issues/289)). It keeps
+  its signature, so unlike every other entry here **the compiler will not flag
+  this one** — it is a silent behaviour change and worth reading before
+  upgrading. It inherits both halves through `NamedCospan::connect_pair` →
+  `Cospan::connect_pair` (core's `Fixed` entries for #289): (1) before, naming
+  the port that sits on the **last** apex vertex first (the
+  "`add_boundary_node_unconnected`, then connect it" workflow) left both legs
+  out of bounds and the ports unmerged, silently, in every profile; (2) both
+  identity flags are recomputed after a merge instead of left stale, which
+  keeps `is_left_identity()` / `is_right_identity()` honest on a merged
   diagram.
 
   ⚠ **An earlier draft of this entry described a second consequence of (2)
@@ -64,7 +67,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   whose ports have been merged reports its identity flags correctly where it
   previously reported a stale `true`.
 
-  No other `catgraph-applied` surface is affected: `remove_multiple` and
+  Beyond the two bullets above, no other `catgraph-applied` surface is
+  affected: `remove_multiple` and
   `from_cycle` — core's other #289 changes — keep their signatures, and this
   crate's two `remove_multiple` calls in `operadic_substitution` already pass
   distinct in-range indices (they come from `find_nodes_by_name_predicate`), so

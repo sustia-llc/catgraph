@@ -324,12 +324,15 @@ fn named_cospan_unknown_target_add_clears_the_partner_legs_identity_flag() {
 /// mint a port with `add_boundary_node_unknown_target` (it lands on the
 /// **last** apex vertex), then connect it, passing the new port first.
 ///
-/// **What this ranges over.** One merge on the named wrapper in the argument
-/// order the remap used to get wrong. Legs are checked by hand, the ports by
-/// `map_to_same`, the flags against a fresh construction — including the one
-/// flag a merge can legitimately turn **on** (`right == [0]` over the merged
-/// 1-vertex apex *is* the identity), which is what "recomputed" means over
-/// "cleared". The per-shape sweep is the `Cospan` tests above.
+/// **What this ranges over.** Both argument orders of one merge on the named
+/// wrapper — the order the remap used to get wrong (new port first, so the
+/// last apex index is node 1) and its reverse (last apex index in node 2) —
+/// on one fixture, one apex size, one leg. Legs are checked by hand, the ports
+/// by `map_to_same`, the flags against a fresh construction *and* absolutely,
+/// including the one flag a merge can legitimately turn **on** (`right == [0]`
+/// over the merged 1-vertex apex *is* the identity), which is what
+/// "recomputed" means over "cleared". Codomain-side merges, mixed legs and
+/// larger apexes are swept by the `Cospan` tests above, not here.
 #[test]
 fn named_cospan_connect_pair_merges_and_recomputes_the_flags_in_either_order() {
     let mut nc = NamedCospan::<char, &str, &str>::new(
@@ -366,6 +369,40 @@ fn named_cospan_connect_pair_merges_and_recomputes_the_flags_in_either_order() {
         "right == [0] over the merged 1-vertex apex IS the identity: the merge turned the \
          flag back on, which `&=` could never do"
     );
+
+    // The other argument order on the same surface: passing the OLD port first
+    // puts the last apex index in node 2 rather than node 1, which is the other
+    // branch of the remap. The merged value must be identical either way.
+    let mut rev = NamedCospan::<char, &str, &str>::new(
+        vec![0],
+        vec![0],
+        vec!['a'],
+        vec!["in0"],
+        vec!["out0"],
+    )
+    .expect("in-bounds fixture with one name per port");
+    rev.add_boundary_node_unknown_target('a', Left("in1"))
+        .expect("fresh name, and the apex index is minted by the call");
+    rev.connect_pair(Left("in0"), Left("in1"));
+    assert_eq!(rev.cospan().middle(), &['a']);
+    assert_eq!(
+        (
+            rev.cospan().left_to_middle(),
+            rev.cospan().right_to_middle()
+        ),
+        (&[0, 0][..], &[0][..]),
+        "the merge must not depend on which port is passed first"
+    );
+    assert!(
+        rev.map_to_same(Left("in0"), Left("in1")),
+        "the two named ports must share a vertex in this order too"
+    );
+    assert_flags_agree_with_a_fresh_construction(rev.cospan(), "after the reversed named merge");
+    assert!(!rev.cospan().is_left_identity());
+    assert!(
+        rev.cospan().is_right_identity(),
+        "right == [0] over the merged 1-vertex apex IS the identity, in this order too"
+    );
 }
 
 /// The stale `true` **was** a wrong composition, not a cosmetic lie: while
@@ -375,12 +412,16 @@ fn named_cospan_connect_pair_merges_and_recomputes_the_flags_in_either_order() {
 /// panic), one silently dropped an apex vertex (an `Ok` with the wrong middle)
 /// — and each carries its measured pre-fix value inline.
 ///
-/// ⚠ **Read the `structurally_equal` assertions as retired.** They compare the
-/// composite built from the mutated operand against one built from the same
-/// operand rebuilt by `Cospan::new`, i.e. with different flags — and since the
-/// r4 review made `perform_pushout` derive the predicate, those two composites
-/// are equal *by construction*, whatever the flags say. Those assertions are
-/// therefore **vacuous** today: they cannot fail. They are kept because the
+/// ⚠ **Read the `structurally_equal` assertions as retired** — and note *why*,
+/// because an earlier draft of this note got the reason wrong. It said they
+/// were retired by the r4 change making `perform_pushout` derive the
+/// predicate. They were already vacuous before it: this fixture's mutated `g`
+/// and `fresh(&g)` carry the **same** flags (both `(false, false)` — the
+/// `Right(label)` arm clears `is_left_id`, and `fresh` recomputes it as `false`
+/// for `[0]` over a 2-vertex apex), so even the flag-reading `perform_pushout`
+/// composed the two operands identically. The assertion never discriminated
+/// the cache, so re-introducing flag-reading would not redden it. That fact is
+/// asserted below rather than left as prose. They are kept because the
 /// property they state (the composite ignores the cache) is now a real contract
 /// with a non-vacuous pin of its own in
 /// `tests/compose_flag_independence.rs`, which manufactures the disagreement
@@ -414,6 +455,16 @@ fn cospan_unknown_target_add_keeps_composition_correct() {
     let f = Cospan::<char>::new(vec![0], vec![0], vec!['a', 'x']).expect("in-bounds fixture");
     let composite = f.compose(&g).expect("f ; g composes");
     let reference = f.compose(&fresh(&g)).expect("f ; g composes");
+    // Why the `structurally_equal` assertion below cannot discriminate the
+    // cache: the two operands carry identical flags, so no `perform_pushout` —
+    // flag-reading or not — can tell them apart. Asserted so the ⚠ note above
+    // cannot drift from the fixture.
+    assert_eq!(
+        (g.is_left_identity(), g.is_right_identity()),
+        (fresh(&g).is_left_identity(), fresh(&g).is_right_identity()),
+        "shape 1's mutated and rebuilt operands must carry the same flags for \
+         the retirement note above to be accurate"
+    );
     assert!(
         composite.structurally_equal(&reference),
         "the composite must not depend on whether `g`'s flags were cached or \
@@ -434,6 +485,14 @@ fn cospan_unknown_target_add_keeps_composition_correct() {
     assert_eq!(g.right_to_middle(), &[] as &[usize]);
     let composite = f.compose(&g).expect("f ; g composes");
     let reference = f.compose(&fresh(&g)).expect("f ; g composes");
+    // Same as shape 1: identical flags on both operands, so this comparison
+    // cannot see the cache either.
+    assert_eq!(
+        (g.is_left_identity(), g.is_right_identity()),
+        (fresh(&g).is_left_identity(), fresh(&g).is_right_identity()),
+        "shape 2's mutated and rebuilt operands must carry the same flags for \
+         the retirement note above to be accurate"
+    );
     assert!(
         composite.structurally_equal(&reference),
         "the composite silently dropped an apex vertex: middle = {:?} against \
@@ -450,8 +509,10 @@ fn cospan_unknown_target_add_keeps_composition_correct() {
 ///
 /// This was the flag defect with teeth, back when `perform_pushout` took its
 /// fast path on the flag: that path sizes its reindexing map from the
-/// *partner's* apex. Measured then, by reverting only the
-/// `&& self.right.len() == self.middle.len()` conjunct, the `f.compose(&g)`
+/// *partner's* apex. Measured then by reverting the clear to the pre-#289
+/// `is_right_id &= z == self.right.len() - 1` — the two-conjunct form the
+/// recipe used to name was itself deleted, as provably equal to the
+/// unconditional clear on every reachable state — and the `f.compose(&g)`
 /// below **panicked** with `index out of bounds: the len is 1 but the index is
 /// 1` at `compose_with_quotient`'s `left_to_pushout[*target_in_self_middle]`
 /// (the `left_leg_id` fast path had sized that map from `g`'s one-entry domain
@@ -650,6 +711,12 @@ fn cospan_connect_pair_merges_when_node_1s_vertex_is_the_last_apex_index() {
         "the two ports must share a vertex after the merge"
     );
     assert_flags_agree_with_a_fresh_construction(&f, "after the reversed-order merge");
+    assert!(
+        !f.is_left_identity() && !f.is_right_identity(),
+        "both legs are length 2 over a 1-vertex apex, so neither is the \
+         identity; without connect_pair's recompute both stay stale-`true` \
+         from the pre-merge value"
+    );
 
     // A 3-vertex apex, merging the LAST vertex into the first: the moved
     // vertex (old index 2) lands in slot 0, and the untouched port keeps its own.
@@ -671,6 +738,12 @@ fn cospan_connect_pair_merges_when_node_1s_vertex_is_the_last_apex_index() {
         &c,
         "after merging the last apex vertex into the first",
     );
+    assert!(
+        !c.is_left_identity() && !c.is_right_identity(),
+        "left is length 3 over a 2-vertex apex and right is empty, so neither \
+         is the identity; without connect_pair's recompute is_left_id stays \
+         stale-`true` from the pre-merge [0, 1, 2] over 3"
+    );
 
     // Mixed legs: a domain port on the last vertex merged with a codomain port
     // on the first.
@@ -685,6 +758,11 @@ fn cospan_connect_pair_merges_when_node_1s_vertex_is_the_last_apex_index() {
     );
     assert!(m.map_to_same(Left(1), Right(0)));
     assert_flags_agree_with_a_fresh_construction(&m, "after the mixed-leg merge");
+    assert!(
+        !m.is_left_identity() && !m.is_right_identity(),
+        "both legs are length 2 over a 1-vertex apex after the mixed-leg \
+         merge; without connect_pair's recompute both stay stale-`true`"
+    );
 }
 
 /// `Span`'s identity flags are weaker than `Cospan`'s, and the `Span`
