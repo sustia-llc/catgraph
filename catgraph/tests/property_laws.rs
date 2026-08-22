@@ -1078,20 +1078,21 @@ proptest! {
     /// pairs with different boundary sizes (those are separated by `dom_len` /
     /// `cod_len` and pinned in the module's own tests); over pairs with
     /// different apex sizes or different apex label multisets (both arms
-    /// preserve `middle.len()` and the labels); or over larger apexes, where
-    /// the brute-force oracle stops being affordable.
+    /// preserve `middle.len()` and the label multiset); or over larger apexes,
+    /// where the brute-force oracle stops being affordable.
     ///
-    /// Consequence of the equal-size, equal-labels corpus, measured over the
-    /// meta-test's 256 deterministic samples: the oracle's size early-return is
-    /// dead here and `apex_len` never differs across a pair (0 of 256);
-    /// `scalar_count` does differ (33 of 256, all non-isomorphic — a rewire
-    /// that merges two wires frees a bubble), but in every one of the 64
-    /// non-isomorphic pairs the non-bubble classes already differ, so a
-    /// `canonical_form` that dropped bubble classes would pass this test
-    /// (measured: 18/18 green under that mutant). It is caught by
-    /// `cospan_canon.rs`'s own scalar pins and the bubble ledgers in
-    /// `cospan_algebra`, `frobenius` and `tests/frobenius_axioms.rs` — 11 tests
-    /// crate-wide — not here.
+    /// Consequence of the equal-size, equal-label-multiset corpus, by
+    /// construction: the oracle's size early-return is dead here, and equal
+    /// non-bubble classes force equal bubble labels and hence equal forms, so a
+    /// `canonical_form` that dropped bubble classes would pass this test on
+    /// every seed. Confirmed on the meta-test's 256 deterministic samples:
+    /// `apex_len` differs in 0 of 256; `scalar_count` differs in 33 of 256, all
+    /// non-isomorphic (a rewire that empties a vertex frees a bubble; one that
+    /// lands on a bubble fills it); the non-bubble classes differ in all 64 of
+    /// the 64 non-isomorphic pairs; and all 18 tests in this file stay green
+    /// under that mutant. It is caught by `cospan_canon.rs`'s own scalar pins
+    /// and the bubble ledgers in `cospan_algebra`, `frobenius` and
+    /// `tests/frobenius_axioms.rs` — 11 tests crate-wide — not here.
     #[test]
     fn canonical_form_decides_apex_isomorphism((a, b) in arb_cospan_and_perturbation()) {
         let by_canonical_form = a.canonical_form() == b.canonical_form();
