@@ -27,8 +27,12 @@ type MiddleIndexOrLambda<Lambda> = Either<MiddleIndex, Lambda>;
 /// The predicate both identity flags cache: the leg is a bijection onto the
 /// whole apex — as long as the apex **and** `[0, 1, …, n-1]` in order.
 ///
-/// One spelling for every site that computes a flag from scratch
-/// (`new_unchecked`, `assert_valid`'s strong arm, `connect_pair`):
+/// One spelling, shared by every site in this module that needs the predicate
+/// rather than the cache. Those visible here: `new_unchecked` (computes the
+/// two flags), `assert_valid` (**both** arms — the strong one re-derives every
+/// flag, the weak one re-derives a flag that is currently `true`),
+/// `connect_pair` (recomputes both after a merge) and `perform_pushout`, which
+/// since the r4 review takes the predicate directly and reads no flag at all.
 /// [#289](https://github.com/sustia-llc/catgraph/issues/289) found three arms
 /// that had re-spelled it by hand and lost the length conjunct.
 fn leg_is_identity(leg: &[MiddleIndex], apex_len: usize) -> bool {
@@ -513,12 +517,16 @@ where
     /// return before it and leave the cache as it was, so a `false` another
     /// mutator left conservatively is *not* refreshed by a no-op merge. Before
     /// #289 the flags were not touched, and the stale `true` reached
-    /// `perform_pushout`'s fast path as a silent wrong composition. The other
-    /// direction is observable too: a merge can turn a flag **on**, and a
-    /// composite built after it may then come back with a different
-    /// (isomorphic) apex order than the union-find path gives for the same
-    /// operands — `structurally_equal` sees the difference, `canonical_form`
-    /// does not.
+    /// `perform_pushout`'s fast path as a silent wrong composition.
+    ///
+    /// That fast path no longer reads a flag at all — `perform_pushout`
+    /// re-derives the predicate — so the recompute here is now about keeping
+    /// the **public accessors** honest
+    /// ([`is_left_identity`](Self::is_left_identity) /
+    /// [`is_right_identity`](Self::is_right_identity) and
+    /// [`assert_valid`](Self::assert_valid)), not about steering composition.
+    /// Neither a stale `false` nor a merge that turns a flag on can move a
+    /// composite any more.
     ///
     /// The leg remap after the `swap_remove` keeps the vertex node 1 maps to
     /// even when that vertex is the **last** apex index and has just been moved
@@ -578,12 +586,16 @@ where
         }
         // #289: the apex just lost a vertex while both legs kept their length,
         // so neither cached flag can be trusted. Recompute both from the
-        // definition rather than `&=` them — exact in both directions, and what
-        // keeps `perform_pushout`'s fast path off a merged apex. Measured before
-        // this existed: `Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'a'])`
-        // merged at `Left(0)` / `Left(1)` kept `(true, true)` and composed with
+        // definition rather than `&=` them — exact in both directions, which is
+        // what the public accessors and `assert_valid` need. Measured back when
+        // `perform_pushout` still read these flags and this recompute did not
+        // exist: `Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'a'])` merged at
+        // `Left(0)` / `Left(1)` kept `(true, true)` and composed with
         // `identity(&['a', 'a'])` to `right == [0, 1]` over a 2-vertex apex,
         // where the reference composition gives `right == [0, 0]` over one.
+        // Composition is flag-independent now, so that particular consequence
+        // is closed twice over; the flags still have to be right for the
+        // accessors.
         self.is_left_id = leg_is_identity(&self.left, self.middle.len());
         self.is_right_id = leg_is_identity(&self.right, self.middle.len());
     }
@@ -694,6 +706,14 @@ where
     /// [`Composable::compose`], which
     /// wraps this and discards the map.
     ///
+    /// The result is a function of the two operands' `(left, right, middle)`
+    /// alone. It does **not** read the cached `is_left_id` / `is_right_id`:
+    /// those are conservative, so equal triples can carry different flags
+    /// depending on how each value was built, and reading them made the
+    /// composite depend on mutation history. `perform_pushout` re-derives the
+    /// identity predicate instead — see its docs for why each fast path is the
+    /// correct answer. Pinned in `tests/compose_flag_independence.rs`.
+    ///
     /// # Errors
     ///
     /// Returns [`CatgraphError::Composition`] if the right boundary of `self`
@@ -705,10 +725,8 @@ where
             perform_pushout::<union_find::QuickUnionUf<union_find::UnionBySize>>(
                 &self.right,
                 self.middle.len(),
-                self.is_right_id,
                 &other.left,
                 other.middle.len(),
-                other.is_left_id,
             )
             .map_err(|e| CatgraphError::Composition {
                 message: e.to_string(),
@@ -878,13 +896,62 @@ type PushoutResult = (
 ///
 /// Fast-paths when either leg is an identity. Returns reindexing maps and
 /// a representative (Left or Right original index) for each equivalence class.
+///
+/// # Why the predicate is derived here, not passed in
+///
+/// Both fast paths used to be selected by `Cospan`'s cached
+/// `is_right_id` / `is_left_id`, handed down from
+/// [`compose_with_quotient`](Cospan::compose_with_quotient). Those flags are
+/// **conservative**: the `&=` mutators can only clear, so a leg that *is* the
+/// identity can carry a `false` left behind by an earlier
+/// `delete_boundary_node`, `permute_side` or `add_middle` — and every
+/// composite carries `false` on both legs, because the pushout builder below
+/// mints its result through mutators that clear unconditionally. Reading the
+/// cache therefore made `compose` a function of the operands' *mutation
+/// history* as well as their `(left, right, middle)`: two structurally equal
+/// cospans could compose two different ways. Deriving the predicate with
+/// [`leg_is_identity`] — the same spelling `new_unchecked` and `connect_pair`
+/// use — makes composition a pure function of the public state. It can only
+/// ever turn a fast path *on* relative to the flags, never off: since #289 no
+/// writer leaves a stale `true`, so `cached == true` implies the predicate.
+///
+/// # Which arm is the correct one
+///
+/// The `right_leg_id` arm is not a shortcut, it is an *equality*: it returns
+/// exactly what the union-find body below returns for the same input. When
+/// `right_leg == [0, …, R-1]` the union graph's edges are
+/// `(left_leg[i], right_leg[i] + L) = (left_leg[i], i + L)`, so every right
+/// vertex has degree exactly one and no two left vertices can be connected
+/// through one. Loop 1 therefore discovers `L` singleton classes in index
+/// order (`left_to_pushout = [0, …, L-1]`, `representative = Left(0..L)`), and
+/// loop 2 finds every right vertex already classed, at
+/// `right_to_pushout[i] = left_leg[i]`. Identical, field for field.
+///
+/// The `left_leg_id` arm does **not** agree with union-find, and is the arm
+/// that is right. It numbers the composite apex by the right operand's own
+/// indexing; union-find numbers it by left-leg discovery order. The two
+/// coincide only when the right leg first-visits the apex in increasing order.
+/// Taking the fast path is strict left unitality — `id ; g == g` on the nose —
+/// and taking union-find returns `g` with its apex permuted: for
+/// `f = Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b'])`,
+/// `Cospan::identity(&f.domain()) ; f` gives the apex `['a', 'b']` here and
+/// `['b', 'a']` through union-find. Pinned in
+/// `tests/compose_flag_independence.rs`.
+///
+/// When **both** predicates hold the `left_leg_id` arm wins, and the two arms
+/// tag `representative` differently (`Right(i)` vs `Left(i)`), which selects
+/// which operand's labels fill the composite apex. That is unobservable:
+/// `Composable::composable` has already run `same_labels_check` over the two
+/// interfaces, and when both legs are the identity those interfaces *are* the
+/// two apexes in order, so `self.middle == other.middle` elementwise. Every
+/// other component of the result is literally equal between the arms
+/// (`pushout_target` is `L == R`, and both reindexing maps are the identity on
+/// either side). Pinned in `tests/compose_flag_independence.rs`.
 fn perform_pushout<T>(
     left_leg: &[LeftIndex],
     left_leg_max_target: LeftIndex,
-    left_leg_id: bool,
     right_leg: &[RightIndex],
     right_leg_max_target: RightIndex,
-    right_leg_id: bool,
 ) -> Result<PushoutResult, &'static str>
 where
     T: UnionFind<UnionBySize>,
@@ -892,7 +959,7 @@ where
     if left_leg.len() != right_leg.len() {
         return Err("Mismatch in cardinalities of common interface");
     }
-    if left_leg_id {
+    if leg_is_identity(left_leg, left_leg_max_target) {
         let pushout_target = right_leg_max_target;
         let left_to_pushout = right_leg.to_vec();
         let right_to_pushout = (0..right_leg_max_target).collect::<FinSetMap>();
@@ -904,7 +971,7 @@ where
             representative.collect(),
         ));
     }
-    if right_leg_id {
+    if leg_is_identity(right_leg, right_leg_max_target) {
         let pushout_target = left_leg_max_target;
         let right_to_pushout = left_leg.to_vec();
         let left_to_pushout = (0..left_leg_max_target).collect::<FinSetMap>();
@@ -1642,7 +1709,8 @@ mod test {
             !c.is_left_identity(),
             "left == [0] on a 2-vertex apex misses apex vertex 1. This read true \
              before the `Right(label)` arms were fixed to clear the partner \
-             flag, and `perform_pushout` fast-paths on it"
+             flag — a lie the public accessor still tells, even now that \
+             `perform_pushout` derives the predicate instead of reading it"
         );
 
         c.add_boundary_node_unknown_target(Right('c'));

@@ -42,11 +42,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   (the "`add_boundary_node_unconnected`, then connect it" workflow) left both
   legs out of bounds and the ports unmerged, silently, in every profile;
   (2) both identity flags are recomputed after a merge instead of left stale,
-  so a composition after a merge — `operadic_substitution` composes — no
-  longer takes `perform_pushout`'s fast path on a stale `true`; and because a
-  merge can now also turn a flag *on*, a composite built after one may come
-  back with a different, isomorphic apex order than before — compare
-  canonical forms, not bytes.
+  which keeps `is_left_identity()` / `is_right_identity()` honest on a merged
+  diagram.
+
+  ⚠ **An earlier draft of this entry described a second consequence of (2)
+  that the release does not have.** It said that because a merge can turn a
+  flag *on*, a composite built after one — `operadic_substitution` composes —
+  might come back with a different, isomorphic apex order than before, so
+  callers should compare canonical forms rather than bytes. That was true of
+  the branch while `Cospan::compose` still selected `perform_pushout`'s fast
+  path from the cached flag. Core's r4 review made composition derive the
+  identity predicate from the legs (see catgraph's CHANGELOG, *`Cospan::compose`
+  ignores the cached identity flags*), so a merge cannot move a later composite
+  at all: composition is a function of `(left, right, middle)`, and byte
+  comparison of composites is sound for byte-equal operands. Pinned upstream in
+  `catgraph/tests/compose_flag_independence.rs`, whose
+  `a_connect_pair_merge_does_not_move_the_next_composite` runs exactly the
+  fixture the retired claim was measured on.
+
+  What (2) still changes for this crate is the accessor: a `WiringDiagram`
+  whose ports have been merged reports its identity flags correctly where it
+  previously reported a stale `true`.
 
   No other `catgraph-applied` surface is affected: `remove_multiple` and
   `from_cycle` — core's other #289 changes — keep their signatures, and this

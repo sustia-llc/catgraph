@@ -8,6 +8,53 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Changed — BREAKING (#289: the checked boundary-node mutators)
 
+- **`Cospan::compose` ignores the cached identity flags, and is now a function
+  of `(left, right, middle)` alone**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289), found by the r4
+  review of the flag fix below). `compose_with_quotient` used to hand
+  `self.is_right_id` / `other.is_left_id` to `perform_pushout`, which selected
+  its two identity fast paths from them. Those flags are **conservative** — the
+  `&=` mutators only ever clear — so a leg that *is* the identity can carry a
+  `false` left behind by an earlier `delete_boundary_node`, `permute_side` or
+  `add_middle`, and every composite carries `false` on both legs because the
+  pushout builder mints its result through mutators that clear
+  unconditionally. Composition therefore depended on each operand's **mutation
+  history** as well as its public state: two structurally equal cospans could
+  compose two different ways. `perform_pushout` now derives the predicate
+  itself with the same private `leg_is_identity` that `new_unchecked`,
+  `connect_pair` and `assert_valid` use.
+
+  **This changes results**, in one direction and one shape. It can only turn a
+  fast path *on* relative to the old behaviour (since #289 no writer leaves a
+  stale `true`, so a cached `true` always implies the predicate), and only the
+  `left_leg_id` arm is observable: the `right_leg_id` arm returns
+  field-for-field what the union-find body returns for the same input, so
+  entering it or not cannot change an answer. Confirmed by deleting that arm
+  outright and running the whole workspace — 2083 tests, zero failures. So the
+  operands that move are those whose **codomain leg is the identity while
+  `is_right_id` says `false`**, composed with a partner whose domain leg does
+  not first-visit its apex in increasing order. Such a composite used to come
+  back with its apex permuted and now comes back strict: `identity(&f.domain())
+  ; f` is `f` on the nose for every `f`, not only for the `f.left = [0, 1]`
+  fixtures the old suite happened to use. Measured, `id ; f` for
+  `f = Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b'])`: apex `['a', 'b']`
+  now, `['b', 'a']` under the union-find numbering.
+
+  Downstream impact is limited to byte-level comparison of composites built
+  from operands with stale flags; `canonical_form` was and stays equal across
+  the change, since both answers are legitimate pushouts differing only in
+  apex numbering. No in-tree expectation moved — the whole workspace was green
+  before and after, which is precisely why this needed a pin of its own:
+  `tests/compose_flag_independence.rs` (five tests; four go red when the flag
+  parameters are restored, and the fifth when the `left_leg_id` arm is
+  disabled).
+
+  It also retires the stale-`true` class structurally rather than per-writer.
+  Re-measured on this branch: reverting `delete_boundary_node`'s codomain flag
+  clear now leaves the entire workspace green **except** two flag assertions,
+  and the `index out of bounds: the len is 1 but the index is 1` panic that
+  same revert used to produce in `compose_with_quotient` does not recur.
+
 - **The `add_boundary_node` family is checked, and the raw path is
   `*_unchecked`** ([#289](https://github.com/sustia-llc/catgraph/issues/289)).
   The #256/#261 arc fenced the *constructors* (`new` → `Result`), but these
@@ -128,9 +175,13 @@ All notable changes to `catgraph` are documented here. The format follows
     clear. Reachable through `WiringDiagram::connect_pair` in
     `catgraph-applied`.
 
-  This is not cosmetic: `perform_pushout` **fast-paths** on those flags and
-  sizes its reindexing map from the partner's apex, so a stale `true` is a
-  wrong composition. Pinned in `tests/checked_mutators.rs`. Reverting only the
+  This was not cosmetic: `perform_pushout` **fast-pathed** on those flags and
+  sizes its reindexing map from the partner's apex, so a stale `true` was a
+  wrong composition. It no longer reads them — see *`Cospan::compose` ignores
+  the cached identity flags* below, which closes the same class a second time,
+  structurally. Both halves ship: the flags are the subject of two public
+  accessors and of `assert_valid`, so they still have to be right. Pinned in
+  `tests/checked_mutators.rs`. Reverting only the
   `delete_boundary_node` conjunct makes `id_ab.delete(Right(1)).compose(&id_a)`
   panic in `compose_with_quotient` at `left_to_pushout[*target_in_self_middle]`
   with `index out of bounds: the len is 1 but the index is 1`; reverting only
@@ -151,28 +202,35 @@ All notable changes to `catgraph` are documented here. The format follows
   those arms only ever clear, so `identity(&['a', 'b'])` →
   `delete_boundary_node(Left(1))` → `add_boundary_node_known_target(Left(1))`
   leaves `is_left_identity()` `false` where a fresh `Cospan::new` of the same
-  three vectors says `true`. That is safe for `perform_pushout` — it costs the
-  fast path, not correctness — and is the direction `structurally_equal`'s
-  docs already warn about. `connect_pair` is the one mutator exact both ways,
+  three vectors says `true`. That direction is the one `structurally_equal`'s
+  docs already warn about, and it now costs nothing at all — composition does
+  not read the flags. `connect_pair` is the one mutator exact both ways,
   **after a merge**: its two no-op arms (same vertex; mismatched labels) return
-  before the recompute and leave a conservative `false` where it was.
-  Exactness has its own observable: a merge can turn a flag **on**, which
-  routes the next `perform_pushout` onto a fast path the old code never
-  reached for that value, and the composite can come back with a different
-  (isomorphic) apex order than the union-find path gives — `structurally_equal`
-  false, `canonical_form` equal. Measured (review R3-03):
-  `Cospan::new(vec![1, 2], vec![0, 1], vec!['b', 'a', 'a'])` →
-  `connect_pair(Left(0), Left(1))` turns `is_right_id` on; composed with
-  `Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b'])` it gives
-  `left = [0, 0], right = [0, 1], middle = ['a', 'b']`, where the same operand
-  with the flag left `false` gives `left = [1, 1], right = [1, 0],
-  middle = ['b', 'a']`. Byte-level consumers of composites built after a merge
-  (a persisted-cospan store) should compare canonical forms. Every flag writer
-  now keeps a flag from going stale-`true`: the `add_boundary_node` family,
-  `delete_boundary_node`, `connect_pair`, `add_middle` (which already cleared
-  both), `Monoidal::monoidal` and `permute_side` (unchanged — the former
-  `&=`s both flags, the latter clears the permuted leg's); `map_to_same` only
-  reads.
+  before the recompute and leave a conservative `false` where it was. Every
+  flag writer now keeps a flag from going stale-`true`: the
+  `add_boundary_node` family, `delete_boundary_node`, `connect_pair`,
+  `add_middle` (which already cleared both), `Monoidal::monoidal` and
+  `permute_side` (unchanged — the former `&=`s both flags, the latter clears
+  the permuted leg's); `map_to_same` only reads.
+
+  **An earlier draft of this entry described a permanent observable that the
+  release does not have** and it is corrected here rather than quietly
+  dropped. It said that because `connect_pair`'s recompute can turn a flag
+  **on**, a composite built after a merge could come back with a different
+  (isomorphic) apex order than one built before — `structurally_equal` false,
+  `canonical_form` equal — and advised byte-level consumers to compare
+  canonical forms. That was true of the branch when it was written, and is
+  not true of what ships: the flag no longer selects the fast path, so the
+  merge cannot move the composite. The R3-03 fixture
+  (`Cospan::new(vec![1, 2], vec![0, 1], vec!['b', 'a', 'a'])` →
+  `connect_pair(Left(0), Left(1))`, composed with
+  `Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b'])`) now gives
+  `left = [0, 0], right = [0, 1], middle = ['a', 'b']` **whatever** the flag
+  says — that is, the answer the entry attributed to the flag being on is now
+  the only answer, and the `left = [1, 1], right = [1, 0], middle = ['b', 'a']`
+  alternative is unreachable. A composite is a function of the operands'
+  `(left, right, middle)`, so byte-level comparison of composites is sound
+  again for operands that are byte-equal.
 
 - **`Cospan::connect_pair` merges the two ports in every argument order**
   ([#289](https://github.com/sustia-llc/catgraph/issues/289), found by the

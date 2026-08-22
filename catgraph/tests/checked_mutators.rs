@@ -8,10 +8,22 @@
 //!    `true` by `add_boundary_node` (either arm, on either leg),
 //!    `delete_boundary_node` or `connect_pair`, where they previously were. The
 //!    predicate they claim to cache is `Cospan::new_unchecked`'s,
-//!    `leg.len() == middle.len() && represents_id(leg)`; `perform_pushout`
-//!    fast-paths on the flags, so a stale `true` is a *wrong composition*, not
-//!    a cosmetic lie. The `false` direction stays conservative by design for
-//!    `add`/`delete`, and is pinned as such below; `connect_pair` recomputes.
+//!    `leg.len() == middle.len() && represents_id(leg)`. The `false` direction
+//!    stays conservative by design for `add`/`delete`, and is pinned as such
+//!    below; `connect_pair` recomputes.
+//!
+//!    ⚠ **The teeth moved.** While #289 was being written, `perform_pushout`
+//!    selected its fast paths from these cached flags, so a stale `true` was a
+//!    *wrong composition* rather than a cosmetic lie — which is why several
+//!    tests below assert a composite as well as a flag, and why their
+//!    docstrings record composites measured against the pre-fix code. The r4
+//!    review then made `perform_pushout` derive the predicate from the legs, so
+//!    **composition no longer reads a flag at all**
+//!    (`tests/compose_flag_independence.rs`). Those composition assertions are
+//!    now belt-and-braces: they still pin the composite, but reverting a flag
+//!    fix alone no longer moves one, so it is the **flag** assertions that
+//!    discriminate here. Read the measured composites as history, not as a
+//!    claim about what today's code would do.
 //! 3. The remaining panicking preconditions name the invariant they enforce,
 //!    in every build profile.
 //! 4. `connect_pair`'s leg remap merges the two ports in **every** argument
@@ -143,8 +155,10 @@ fn cospan_add_boundary_node_error_renders_the_leg_position_target_and_size() {
 /// On an identity cospan `leg.len() == middle.len()`, so the one index that
 /// satisfies the old test `leg.len() - 1 == tgt_idx` *after* the push is
 /// exactly `middle.len()` — out of bounds. The old code therefore pushed an
-/// out-of-range entry **and kept `is_right_id == true`**, which is the silent
-/// half of #289: `perform_pushout` fast-paths on that flag.
+/// out-of-range entry **and kept `is_right_id == true`**, which was the silent
+/// half of #289 — `perform_pushout` fast-pathed on that flag then. The
+/// out-of-range leg entry is the part that still bites: it survives the r4
+/// change untouched, since composition reads the legs.
 ///
 /// Measured on the pre-#289 body: the call returned `Ok(Right(2))`,
 /// `right_to_middle()` became `[0, 1, 2]` (entry 2 out of range for a 2-vertex
@@ -216,8 +230,11 @@ fn assert_flags_agree_with_a_fresh_construction(c: &Cospan<char>, context: &str)
 /// left a legitimately-`true` `is_left_id` in place with the domain leg now
 /// strictly shorter than the apex (and the mirror for `Left(_)` /
 /// `is_right_id`). It is reachable through the fully checked API — no
-/// `_unchecked` call, no malformed input — and `perform_pushout` fast-paths on
-/// exactly that flag, so it is a wrong composition (pinned by the test below).
+/// `_unchecked` call, no malformed input — and while `perform_pushout` still
+/// read the flags it was a wrong composition (the test below carries the
+/// measurement). Composition no longer reads them, so what is left is an
+/// accessor that lies; this test asserts the flag, which is the part that was
+/// ever specific to it.
 ///
 /// Measured before the fix: `Cospan::new(vec![0], vec![], vec!['a'])` followed
 /// by `add_boundary_node_unknown_target(Right('b'))` reported
@@ -351,17 +368,29 @@ fn named_cospan_connect_pair_merges_and_recomputes_the_flags_in_either_order() {
     );
 }
 
-/// The stale `true` is a **wrong composition**, not a cosmetic lie:
-/// `perform_pushout` fast-paths on the flag and sizes its reindexing map from
-/// the partner's apex.
+/// The stale `true` **was** a wrong composition, not a cosmetic lie: while
+/// `perform_pushout` selected its fast path from the flag, it sized its
+/// reindexing map from the partner's apex. The two shapes below are the two
+/// ways that reached `compose_with_quotient` — one indexed out of range (a
+/// panic), one silently dropped an apex vertex (an `Ok` with the wrong middle)
+/// — and each carries its measured pre-fix value inline.
 ///
-/// **What this ranges over.** Both shapes the stale `is_left_id` reached in
-/// `compose_with_quotient` — one that indexed out of range (a panic) and one
-/// that silently dropped an apex vertex (an `Ok` with the wrong middle). Each
-/// composite is compared against the reference composition, i.e. the same
-/// operand rebuilt with `Cospan::new` so that its flags are computed from
-/// scratch, rather than against a transcribed expectation. One pair of
-/// operands per shape; it does not sweep apex sizes or the mirrored
+/// ⚠ **Read the `structurally_equal` assertions as retired.** They compare the
+/// composite built from the mutated operand against one built from the same
+/// operand rebuilt by `Cospan::new`, i.e. with different flags — and since the
+/// r4 review made `perform_pushout` derive the predicate, those two composites
+/// are equal *by construction*, whatever the flags say. Those assertions are
+/// therefore **vacuous** today: they cannot fail. They are kept because the
+/// property they state (the composite ignores the cache) is now a real contract
+/// with a non-vacuous pin of its own in
+/// `tests/compose_flag_independence.rs`, which manufactures the disagreement
+/// these two operands can no longer produce. What still has teeth here are the
+/// **absolute** `assert_eq!`s on `middle`, `left_to_middle` and
+/// `right_to_middle` — hand-written expectations, not a second run of the code
+/// under test.
+///
+/// **What this ranges over.** Two shapes, one pair of operands each, one apex
+/// size. It does not sweep apex sizes and does not touch the mirrored
 /// (`is_right_id`) fast path.
 #[test]
 fn cospan_unknown_target_add_keeps_composition_correct() {
@@ -373,12 +402,14 @@ fn cospan_unknown_target_add_keeps_composition_correct() {
         g
     };
 
-    // Shape 1: `g`'s stale `is_left_id` is `perform_pushout`'s `right_leg_id`,
+    // Shape 1: `g`'s stale `is_left_id` was `perform_pushout`'s `right_leg_id`,
     // whose fast path sizes `right_to_pushout` from `f`'s one-entry codomain
     // leg; `compose_with_quotient` then indexes it with `g`'s codomain port —
     // `right_to_pushout[*target_in_other_middle]`. Measured with the partner
-    // flag left stale: `f.compose(&g)` panicked there with
-    // `index out of bounds: the len is 1 but the index is 1`.
+    // flag left stale, back when the flag chose the arm: `f.compose(&g)`
+    // panicked there with `index out of bounds: the len is 1 but the index is
+    // 1`. The arm is chosen from the leg now, and `g`'s domain leg `[0]` over a
+    // 2-vertex apex fails `leg_is_identity`, so that arm is not entered at all.
     let g = build_g();
     let f = Cospan::<char>::new(vec![0], vec![0], vec!['a', 'x']).expect("in-bounds fixture");
     let composite = f.compose(&g).expect("f ; g composes");
@@ -417,14 +448,29 @@ fn cospan_unknown_target_add_keeps_composition_correct() {
 /// deleting the **last** port of an identity cospan ends the identity — and
 /// the old `is_right_id &= z == right.len() - 1` kept the flag `true`.
 ///
-/// This is the flag defect with teeth: `perform_pushout` takes a fast path
-/// when a leg is flagged as the identity, and that path sizes its reindexing
-/// map from the *partner's* apex. Measured by reverting only the
-/// `&& self.right.len() == self.middle.len()` conjunct: the `f.compose(&g)`
+/// This was the flag defect with teeth, back when `perform_pushout` took its
+/// fast path on the flag: that path sizes its reindexing map from the
+/// *partner's* apex. Measured then, by reverting only the
+/// `&& self.right.len() == self.middle.len()` conjunct, the `f.compose(&g)`
 /// below **panicked** with `index out of bounds: the len is 1 but the index is
 /// 1` at `compose_with_quotient`'s `left_to_pushout[*target_in_self_middle]`
 /// (the `left_leg_id` fast path had sized that map from `g`'s one-entry domain
-/// leg). Post-fix it returns the correct composite `{a,b} -> {a}`.
+/// leg).
+///
+/// ⚠ **That is history now.** `perform_pushout` derives the predicate from the
+/// legs, so the same revert leaves the composition below **green** and only the
+/// flag assertion red — re-measured on this branch, whole workspace, and the
+/// panic did not recur. The composition here is a second, independent check
+/// that the composite is right; it is no longer what discriminates the flag.
+/// Both halves are kept: the flag assertion is the pin, and if a future change
+/// ever routes composition back through the cache the composite is already
+/// under assertion.
+///
+/// **What this ranges over.** One delete-the-last-codomain-port on one
+/// 2-vertex fixture, composed with one identity. It does not sweep apex sizes,
+/// non-last ports, or the domain-side mirror (the lib test
+/// `cospan_delete_boundary_node_states_its_invariant_and_clears_the_flag`
+/// carries that).
 #[test]
 fn cospan_delete_boundary_node_clears_the_identity_flag_so_compose_is_right() {
     let mut f = Cospan::<char>::identity(&vec!['a', 'b']);
@@ -451,14 +497,23 @@ fn cospan_delete_boundary_node_clears_the_identity_flag_so_compose_is_right() {
 /// so: `&=` can only clear, so a flag that a delete correctly cleared is never
 /// restored by a later add that makes the leg an identity again.
 ///
-/// Stale `false` costs `perform_pushout` its fast path and nothing else, which
-/// is why it is left alone — but it is the reason
-/// `assert_flags_agree_with_a_fresh_construction` is not a general invariant of
-/// the type, and the reason `Cospan` does not derive `PartialEq`. Pinned so
-/// that "conservative in one direction" stays a measured claim rather than a
+/// A stale `false` now costs nothing at all: it used to cost `perform_pushout`
+/// its fast path, and since the r4 review that path is chosen from the legs, so
+/// the cache cannot reach composition. What the stale `false` still does is
+/// make the **public accessor** disagree with a fresh construction — which is
+/// why `assert_flags_agree_with_a_fresh_construction` is not a general
+/// invariant of the type, and why `Cospan` does not derive `PartialEq`. Pinned
+/// so that "conservative in one direction" stays a measured claim rather than a
 /// remembered one.
 ///
-/// **What this ranges over.** One delete-then-add round trip on the domain leg.
+/// This is also the state `tests/compose_flag_independence.rs` builds its
+/// operands in: the round trip below is exactly how it manufactures a leg that
+/// *is* the identity while its flag says otherwise.
+///
+/// **What this ranges over.** One delete-then-add round trip on the domain leg,
+/// one 2-vertex fixture. It asserts flags only — it composes nothing, so it
+/// says nothing about whether the stale flag is observable downstream; that is
+/// the separate file's claim.
 #[test]
 fn cospan_identity_flags_are_conservative_in_the_false_direction() {
     let mut c = Cospan::<char>::identity(&vec!['a', 'b']);
@@ -477,14 +532,15 @@ fn cospan_identity_flags_are_conservative_in_the_false_direction() {
     );
     assert!(
         !c.is_left_identity(),
-        "the cached flag stays false — conservative, not wrong: a stale false \
-         only costs `perform_pushout` its fast path"
+        "the cached flag stays false — conservative, not wrong: since \
+         `perform_pushout` derives the predicate, a stale false costs nothing \
+         beyond this accessor disagreeing with a fresh construction"
     );
 }
 
 /// `connect_pair` merges two apex vertices, so a leg that was the identity on
 /// the old apex is not one on the new — and before #289 the flags said
-/// otherwise, with teeth: `perform_pushout` fast-pathed on them.
+/// otherwise, with teeth back when `perform_pushout` fast-pathed on them.
 ///
 /// Measured on the branch before the fix (review R2-01): `f` below kept
 /// `(true, true)` after the merge where a fresh construction says
@@ -494,16 +550,24 @@ fn cospan_identity_flags_are_conservative_in_the_false_direction() {
 /// `left = [0, 0], right = [0, 0], middle = ['a']`. No panic, the types line
 /// up, `structurally_equal` is false.
 ///
+/// ⚠ That composite could only go wrong because the flag chose the arm. Since
+/// the r4 review it does not, so the composition assertions below no longer
+/// discriminate the flag fix; the flag assertions do. The composite is still
+/// asserted, against **hand-written** legs, which is a claim about
+/// `connect_pair`'s remap and stays live.
+///
 /// **What this ranges over.** One merge of two domain ports on a 2-vertex
 /// apex, in the argument order whose remap was already correct (node 2's
 /// vertex is the last index — the reversed order is the sibling test below),
 /// composed with one identity; the flags are compared against a fresh
 /// construction (exact after a merge — `connect_pair` recomputes rather than
 /// `&=`s) and the composite against the reference composition **and** against
-/// the hand-written `[0, 0]` legs (the reference is rebuilt from the mutated
-/// legs, so the absolute assertions are the independent ones). It does not
-/// sweep apex sizes, codomain-side merges, or the same-vertex /
-/// label-mismatch no-op arms.
+/// the hand-written `[0, 0]` legs. Only the hand-written ones are independent:
+/// the reference is rebuilt from the mutated legs, and comparing against it is
+/// now vacuous for the same reason as in
+/// `cospan_unknown_target_add_keeps_composition_correct`. It does not sweep
+/// apex sizes, codomain-side merges, or the same-vertex / label-mismatch no-op
+/// arms.
 #[test]
 fn cospan_connect_pair_clears_the_identity_flags_so_compose_is_right() {
     let mut f =
@@ -518,9 +582,11 @@ fn cospan_connect_pair_clears_the_identity_flags_so_compose_is_right() {
     assert_eq!(f.left_to_middle(), &[0, 0]);
     assert_eq!(f.right_to_middle(), &[0, 0]);
     assert!(f.map_to_same(Left(0), Left(1)));
-    // Composition first: it is the consequence with teeth, and under the
-    // pre-fix code this assertion is the one that fires, carrying the measured
-    // wrong composite in its message. The flag assertions follow.
+    // Composition first: under the pre-fix code this was the assertion that
+    // fired, carrying the measured wrong composite in its message. It cannot
+    // fire on a flag any more (the differential below is `fresh(&f)` against
+    // `f`, and composition no longer reads flags), so it is retained for the
+    // absolute expectations that follow it. The flag assertions are last.
     let g = Cospan::<char>::identity(&vec!['a', 'a']);
     let composite = f.compose(&g).expect("f ; id composes");
     let reference = fresh(&f).compose(&g).expect("the reference composes");
