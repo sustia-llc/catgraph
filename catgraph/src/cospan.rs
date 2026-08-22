@@ -651,7 +651,7 @@ where
     /// alone — which is all a `Cospan` is. `perform_pushout` derives the
     /// identity predicate from the legs it is handed; see its docs for why each
     /// fast path is the correct answer. Pinned in
-    /// `tests/compose_flag_independence.rs`.
+    /// `tests/compose_identity_arms.rs`.
     ///
     /// # Errors
     ///
@@ -865,7 +865,7 @@ type PushoutResult = (
 /// `f = Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b'])`,
 /// `Cospan::identity(&f.domain()) ; f` gives the apex `['a', 'b']` here and
 /// `['b', 'a']` through union-find. Pinned in
-/// `tests/compose_flag_independence.rs`.
+/// `tests/compose_identity_arms.rs`.
 ///
 /// When **both** predicates hold the `left_leg_id` arm wins, and the two arms
 /// tag `representative` differently (`Right(i)` vs `Left(i)`), which selects
@@ -883,7 +883,7 @@ type PushoutResult = (
 /// — a label carrying provenance it does not compare on — the choice becomes
 /// observable, and the answer is that the composite keeps the **right**
 /// operand's labels. That is measured, not argued, in
-/// `tests/compose_flag_independence.rs`
+/// `tests/compose_identity_arms.rs`
 /// (`both_legs_identity_keeps_the_right_operands_labels`); this arm order is
 /// therefore load-bearing for such a `Lambda` and should not be swapped
 /// casually.

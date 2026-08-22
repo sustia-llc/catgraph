@@ -75,7 +75,7 @@ All notable changes to `catgraph` are documented here. The format follows
   `canonical_form` was and stays equal across the change, since both answers
   are legitimate pushouts differing only in apex numbering. No in-tree
   expectation moved, which is precisely why this needed a pin of its own:
-  `tests/compose_flag_independence.rs`, whose five tests all go red when the
+  `tests/compose_identity_arms.rs`, whose five tests all go red when the
   `left_leg_id` arm is disabled.
 
   One further fact the review turned up and the pins now record: when **both**

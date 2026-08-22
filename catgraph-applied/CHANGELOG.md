@@ -74,7 +74,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   the legs and there is no cache left to read, so a merge cannot move a later
   composite at all: composition is a function of `(left, right, middle)`, and
   byte comparison of composites is sound for byte-equal operands. Pinned
-  upstream in `catgraph/tests/compose_flag_independence.rs`, whose
+  upstream in `catgraph/tests/compose_identity_arms.rs`, whose
   `a_connect_pair_merge_composes_to_the_merged_apex` runs exactly the fixture
   the retired claim was measured on.
 

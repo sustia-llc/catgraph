@@ -20,16 +20,18 @@
 //!    requires `Eq`, never that `Eq` be identity, and under a coarser `Eq` the
 //!    two arms give visibly different answers.
 //!
-//! **The filename is historical.** This file was written for a third claim —
-//! that the arms are entered on the legs and not on `Cospan`'s cached
-//! `is_left_id` / `is_right_id` — and its four tests for it manufactured an
-//! operand whose cached flag disagreed with its legs, then composed both and
-//! compared. #289 removed the cache outright, so that disagreement cannot be
-//! built and the claim has no content left to pin: `is_left_identity()` *is*
-//! `leg_is_identity(left, middle.len())`. Three of those four tests are kept
-//! here for their **absolute** expectations, which were always hand-written and
-//! never depended on the cache; the fourth duplicated the `n = 2` unitality pin
-//! and is gone.
+//! **Provenance.** This file was written as `compose_flag_independence.rs`,
+//! for a third claim — that the arms are entered on the legs and not on
+//! `Cospan`'s cached `is_left_id` / `is_right_id` — and its four tests for it
+//! manufactured an operand whose cached flag disagreed with its legs, then
+//! composed both and compared. #289 removed the cache outright, so that
+//! disagreement cannot be built and the claim has no content left to pin:
+//! `is_left_identity()` *is* `leg_is_identity(left, middle.len())`. Three of
+//! those four tests are kept here for their **absolute** expectations, which
+//! were always hand-written and never depended on the cache; the fourth
+//! duplicated the `n = 2` unitality pin and is gone. The file was renamed with
+//! the cache, so that its name states what it pins rather than a property
+//! nothing can now violate.
 //!
 //! **What this file ranges over**, taken together: five fixtures, apex sizes 2
 //! and 3, `char` labels plus one deliberately-coarse `Eq`, and one partner per
