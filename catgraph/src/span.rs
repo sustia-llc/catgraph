@@ -231,20 +231,22 @@ where
     /// signature. [`add_middle`](Self::add_middle) is the `Span` mutator that
     /// does have preconditions, and it does return a `Result`.
     ///
-    /// ⚠ **The flags this leaves alone mean less than a `Cospan`'s** — tracked
-    /// as [#345](https://github.com/sustia-llc/catgraph/issues/345).
+    /// ⚠ **The flags this leaves alone mean less than a `Cospan`'s answer** —
+    /// tracked as [#345](https://github.com/sustia-llc/catgraph/issues/345).
     /// [`new_unchecked`](Self::new_unchecked) computes `is_left_id` /
     /// `is_right_id` as `represents_id` over the middle-pair components with
     /// **no** conjunct against `left.len()` / `right.len()` — the conjunct
-    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) added to
-    /// [`Cospan`](crate::cospan::Cospan). So after
+    /// [`Cospan`](crate::cospan::Cospan) carries. So after
     /// `Span::identity(&['a', 'b']).add_boundary_node(Left('c'))` the span is no
     /// longer an identity (the middle no longer covers the domain) while
     /// `is_left_identity()` still reports `true`. Nothing mis-composes on it:
     /// `Span::compose` reads the middle pairs, never the flags, so the lie is
-    /// confined to the accessor. (`Cospan`'s flags used to steer its pushout;
-    /// since #289's r4 review they no longer do either, so on both types these
-    /// are read surfaces rather than control.) Tightening this one is a
+    /// confined to the accessor. (`Cospan`'s flags used to steer its pushout
+    /// and to be cached; [#289](https://github.com/sustia-llc/catgraph/issues/289)
+    /// stopped the first and then deleted them outright, so `Cospan` computes
+    /// its answer per call while `Span` still caches — a second axis on which
+    /// the two differ, and one #345 will have to settle along with the
+    /// conjunct.) Tightening this one is a
     /// separate change with its own breaking surface — the current behaviour is
     /// pinned in `tests/checked_mutators.rs`
     /// (`span_identity_flag_ignores_the_boundary_length`), and that pin is

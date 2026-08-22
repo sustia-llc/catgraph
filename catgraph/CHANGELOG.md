@@ -8,46 +8,68 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Changed — BREAKING (#289: the checked boundary-node mutators)
 
-- **`Cospan::compose` ignores the cached identity flags, and is now a function
-  of `(left, right, middle)` alone**
-  ([#289](https://github.com/sustia-llc/catgraph/issues/289), found by the r4
-  review of the flag fix below). `compose_with_quotient` used to hand
-  `self.is_right_id` / `other.is_left_id` to `perform_pushout`, which selected
-  its two identity fast paths from them. Those flags are **conservative** — the
-  `&=` mutators only ever clear — so a leg that *is* the identity can carry a
-  `false` left behind by an earlier `delete_boundary_node`, `permute_side` or
-  `add_middle`, and every composite carries `false` on both legs because the
-  pushout builder mints its result through mutators that clear
-  unconditionally. Composition therefore depended on each operand's **mutation
-  history** as well as its public state: two structurally equal cospans could
-  compose two different ways. `perform_pushout` now derives the predicate
-  itself with the same private `leg_is_identity` that `new_unchecked`,
-  `connect_pair` and `assert_valid` use.
+- **`Cospan` has no cached identity flags**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)). The private
+  `is_left_id` / `is_right_id` fields are deleted. A `Cospan` is its
+  `(left, right, middle)` triple and nothing else, and the two questions the
+  cache answered are now computed on demand:
 
-  **This changes results**, in one direction and one shape. It can only turn a
-  fast path *on* relative to the old behaviour (since #289 no writer leaves a
-  stale `true`, so a cached `true` always implies the predicate), and only the
-  `left_leg_id` arm is observable: the `right_leg_id` arm returns
-  field-for-field what the union-find body returns for the same input, so
-  entering it or not cannot change an answer. Confirmed by deleting that arm
-  outright and running the whole workspace — 2083 tests, zero failures. So the
-  operands that move are those whose **codomain leg is the identity while
-  `is_right_id` says `false`**, composed with a partner whose domain leg does
-  not first-visit its apex in increasing order. Such a composite used to come
-  back with its apex permuted and now comes back strict: `identity(&f.domain())
-  ; f` is `f` on the nose for every `f`, not only for the `f.left = [0, 1]`
-  fixtures the old suite happened to use. Measured, `id ; f` for
+  - `Cospan::is_left_identity()` / `is_right_identity()` keep their signatures
+    and return `leg.len() == middle.len() && represents_id(leg)` — `O(leg)`
+    per call, and **exact in both directions**. The cached answers were not:
+    every writer that maintained them could only ever *clear*, so a leg that
+    genuinely was the identity reported `false` if the value had reached that
+    shape by mutation rather than by construction. Consumers reading either
+    accessor should expect `true` in cases that previously read `false` —
+    `identity(&['a', 'b'])`, `delete_boundary_node(Left(1))`,
+    `add_boundary_node_known_target(Left(1))` is the shortest example.
+  - `Cospan::assert_valid` **loses both of its `bool` parameters** — the
+    signature is now `assert_valid(&self)`. They selected two arms that
+    compared a cached flag against the predicate it cached; with no cache
+    those arms could only compare `leg_is_identity` with itself. The two
+    bounds `debug_assert!`s are unchanged, and the method still compiles away
+    entirely in release. `NamedCospan::assert_valid` and
+    `NamedCospan::assert_valid_nohash` lose the `check_id: bool` they
+    forwarded, for the same reason. Callers drop the arguments; there is no
+    behaviour to preserve.
+
+  `Span` is untouched: it keeps its own two flags, which are computed
+  differently (no boundary-length conjunct — see
+  [#345](https://github.com/sustia-llc/catgraph/issues/345)) and are not read
+  by `Span::compose`.
+
+- **`Cospan::compose` is a function of `(left, right, middle)` alone**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)).
+  `compose_with_quotient` used to hand `self.is_right_id` / `other.is_left_id`
+  to `perform_pushout`, which selected its two identity fast paths from them,
+  so the composite depended on each operand's **mutation history** as well as
+  its state: two structurally equal cospans could compose two different ways.
+  `perform_pushout` derives the predicate itself, with the same private
+  `leg_is_identity` the accessors use.
+
+  **This changes results**, in one shape. Only the `left_leg_id` arm is
+  observable: the `right_leg_id` arm returns field-for-field what the
+  union-find body returns for the same input, so entering it or not cannot
+  change an answer — confirmed by deleting that arm outright and running the
+  whole workspace, **2085 tests, zero failures**. So the operands that move are
+  those whose **codomain leg is the identity while the old cache said
+  otherwise**, composed with a partner whose domain leg does not first-visit
+  its apex in increasing order. Such a composite used to come back with its
+  apex permuted and now comes back strict: `identity(&f.domain()) ; f` is `f`
+  on the nose for every `f`, not only for the `f.left = [0, 1]` fixtures the
+  old suite happened to use. Measured, `id ; f` for
   `f = Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b'])`: apex `['a', 'b']`
-  now, `['b', 'a']` under the union-find numbering.
+  now, `['b', 'a']` under the union-find numbering. The correction runs both
+  ways relative to `0.15.0`, because that release's cache could be stale in
+  either direction: a stale `false` cost a fast path that is now taken, and a
+  stale `true` — the defect class below — took one that is now refused.
 
-  Downstream impact is limited to byte-level comparison of composites built
-  from operands with stale flags; `canonical_form` was and stays equal across
-  the change, since both answers are legitimate pushouts differing only in
-  apex numbering. No in-tree expectation moved — the whole workspace was green
-  before and after, which is precisely why this needed a pin of its own:
-  `tests/compose_flag_independence.rs` (five tests; four go red when the flag
-  parameters are restored, and the fifth when the `left_leg_id` arm is
-  disabled).
+  Downstream impact is limited to byte-level comparison of such composites;
+  `canonical_form` was and stays equal across the change, since both answers
+  are legitimate pushouts differing only in apex numbering. No in-tree
+  expectation moved, which is precisely why this needed a pin of its own:
+  `tests/compose_flag_independence.rs`, whose five tests all go red when the
+  `left_leg_id` arm is disabled.
 
   One further fact the review turned up and the pins now record: when **both**
   legs are the identity, the `left_leg_id` arm is tried first, and its
@@ -58,12 +80,6 @@ All notable changes to `catgraph` are documented here. The format follows
   identity, so for a label carrying provenance it does not compare on the arm
   order is visible. It is unchanged by this release and is now pinned rather
   than incidental.
-
-  It also retires the stale-`true` class structurally rather than per-writer.
-  Re-measured on this branch: reverting `delete_boundary_node`'s codomain flag
-  clear now leaves the entire workspace green **except** two flag assertions,
-  and the `index out of bounds: the len is 1 but the index is 1` panic that
-  same revert used to produce in `compose_with_quotient` does not recur.
 
 - **The `add_boundary_node` family is checked, and the raw path is
   `*_unchecked`** ([#289](https://github.com/sustia-llc/catgraph/issues/289)).
@@ -110,10 +126,13 @@ All notable changes to `catgraph` are documented here. The format follows
     `identity(&['a', 'b'])` followed by `add_boundary_node(Left('c'))` still
     reports `is_left_identity() == true`. That is pinned as the *current*
     contract in `tests/checked_mutators.rs`
-    (`span_identity_flag_ignores_the_boundary_length`) and must be inverted
-    when [#345](https://github.com/sustia-llc/catgraph/issues/345) lands;
-    #345 is a flag-semantics change with no error arm, so it is not a reason to
-    pre-emptively widen this return type either.
+    (`span_identity_flag_ignores_the_boundary_length`, which asserts the
+    `Cospan` shape beside it for contrast) and must be inverted when
+    [#345](https://github.com/sustia-llc/catgraph/issues/345) lands; #345 is a
+    flag-semantics change with no error arm, so it is not a reason to
+    pre-emptively widen this return type either. Deleting `Cospan`'s cache
+    widens #345 rather than closing it: the two types now differ both in the
+    missing conjunct and in whether the answer is cached at all.
 
 - **`CatgraphError::ConstructionDuplicatePortName`** is a new variant (the enum
   is `#[non_exhaustive]`, so this is additive for `match`es that already carry
@@ -142,105 +161,83 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Fixed (#289)
 
-- **`Cospan`'s boundary-node mutators no longer leave an identity flag a stale
-  `true`** ([#289](https://github.com/sustia-llc/catgraph/issues/289)).
-  `is_left_id` / `is_right_id` mean what `Cospan::new_unchecked` computes —
-  `leg.len() == middle.len() && represents_id(leg)` — but three arms tested
-  less than that, `connect_pair` tested nothing, and each shortfall is
-  satisfiable with a leg out of step with the apex:
+- **`Cospan`'s identity accessors cannot go stale**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)) — because there
+  is nothing left to go stale. See *`Cospan` has no cached identity flags*
+  under **Changed — BREAKING** above for the API surface; this entry records
+  the defect class that motivated deleting it.
 
-  - `add_boundary_node`'s `Left(idx)` (existing-target) arms tested
-    `leg.len() - 1 == tgt_idx`. On an identity cospan the only index that
-    satisfies it is `middle.len()` itself, so the old code pushed an
-    out-of-range entry **and kept the flag `true`**. Both arms are now an
-    unconditional clear — exact: a `true` flag meant the leg already matched
-    the apex, and the arm grows the leg without it, so no index keeps it an
-    identity (the first draft's `&= leg.len() - 1 == tgt_idx && leg.len() ==
-    middle.len()` was equivalent to the clear on every reachable state, and
-    the release-only pin that guarded its second conjunct is gone with it).
-  - `add_boundary_node`'s `Right(label)` (new-vertex) arms grow the **apex**,
-    and updated only the flag of the leg they push to. The partner leg kept its
-    length while the apex gained a vertex, so a legitimately-`true` flag
-    survived on a leg that is now strictly shorter than the apex —
-    reachable through the fully checked API, with no `_unchecked` call and no
-    malformed input, and inherited by `NamedCospan`. Both arms now clear the
-    partner flag, which is exact rather than conservative: no leg shorter than
-    the apex is the identity on it.
+  `is_left_id` / `is_right_id` were documented to mean
+  `leg.len() == middle.len() && represents_id(leg)`, and **four** writers each
+  re-spelled that predicate by hand and lost part of it — three of them
+  reachable through the fully checked API, with no `_unchecked` call and no
+  malformed input:
+
+  - `add_boundary_node`'s `Left(idx)` arms tested `leg.len() - 1 == tgt_idx`.
+    On an identity cospan the only index that satisfies it is `middle.len()`
+    itself, so the old code pushed an out-of-range entry **and kept the flag
+    `true`**.
+  - `add_boundary_node`'s `Right(label)` arms grow the **apex**, and updated
+    only the flag of the leg they push to. The partner leg kept its length
+    while the apex gained a vertex, so a legitimately-`true` flag survived on
+    a leg now strictly shorter than the apex. Inherited by `NamedCospan`.
   - `delete_boundary_node` tested `z == leg.len() - 1`. Deleting the last port
-    of an identity cospan shortens the leg without shrinking the apex, so the
-    leg stops being an identity while the flag says otherwise. Now an
-    unconditional clear, exact for the same reason — whichever port goes, a
-    leg that matched the apex no longer does.
-  - `connect_pair` merged two apex vertices and left both flags alone. The
-    apex shrinks by one while both legs keep their length, so a
-    legitimately-`true` pair survived over an apex the legs are now *longer*
-    than. Both flags are now **recomputed** from the definition after the
-    merge — exact in both directions, unlike the `&=` updates, which can only
-    clear. Reachable through `WiringDiagram::connect_pair` in
+    of an identity cospan shortens the leg without shrinking the apex.
+  - `connect_pair` left both flags alone. A merge shrinks the apex while both
+    legs keep their length, so a `true` pair survived over an apex the legs
+    are now *longer* than. Reachable through `WiringDiagram::connect_pair` in
     `catgraph-applied`.
 
-  This was not cosmetic: `perform_pushout` **fast-pathed** on those flags and
-  sizes its reindexing map from the partner's apex, so a stale `true` was a
-  wrong composition. It no longer reads them — see *`Cospan::compose` ignores
-  the cached identity flags* below, which closes the same class a second time,
-  structurally. Both halves ship: the flags are the subject of two public
-  accessors and of `assert_valid`, so they still have to be right. Pinned in
-  `tests/checked_mutators.rs`. **The measurements that follow are historical:**
-  they were taken while `perform_pushout` still selected its fast path from the
-  flags, and on the shipped code the same reverts leave the compositions green
-  and redden only the flag assertions (re-measured on this branch). Reverting
-  the `delete_boundary_node` clear to the pre-#289
-  `is_right_id &= z == self.right.len() - 1` — the two-conjunct intermediate
-  this sentence used to name was itself deleted, as provably equal to the
-  clear — made `id_ab.delete(Right(1)).compose(&id_a)`
-  panic in `compose_with_quotient` at `left_to_pushout[*target_in_self_middle]`
-  with `index out of bounds: the len is 1 but the index is 1`; reverting
-  the `Right(label)` partner-flag clear made
-  `Cospan::new(vec![0], vec![0], vec!['a', 'x'])` composed with
-  `Cospan::new(vec![0], vec![], vec!['a'])` + `unknown_target(Right('b'))`
-  panic the same way at `right_to_pushout[*target_in_other_middle]` — and,
-  with that `g`'s codomain port then deleted so nothing indexes out of range,
-  compose *silently* to the apex `['a', 'x']` where the reference composition
-  gives `['a', 'x', 'b']`. The `connect_pair` shape was measured on the branch
-  before its fix (review R2-01): `Cospan::new(vec![0, 1], vec![0, 1],
-  vec!['a', 'a'])` → `connect_pair(Left(0), Left(1))` →
-  `compose(&identity(&['a', 'a']))` *silently* returned `right == [0, 1]` over
-  the apex `['a', 'a']` where the reference gives `right == [0, 0]` over
-  `['a']`.
+  This was not cosmetic while `perform_pushout` fast-pathed on the flags and
+  sized its reindexing map from the partner's apex: a stale `true` was a wrong
+  composition. Measured then, and kept here because they are the evidence the
+  class mattered — none of them is reproducible on the shipped code, which has
+  no flag to make stale. `identity(&['a','b']).delete(Right(1)).compose(&id_a)`
+  panicked in `compose_with_quotient` at
+  `left_to_pushout[*target_in_self_middle]` with `index out of bounds: the len
+  is 1 but the index is 1`; `Cospan::new(vec![0], vec![0], vec!['a', 'x'])`
+  composed with `Cospan::new(vec![0], vec![], vec!['a'])` +
+  `unknown_target(Right('b'))` panicked the same way at
+  `right_to_pushout[*target_in_other_middle]`, and with that operand's codomain
+  port then deleted so nothing indexed out of range, composed *silently* to the
+  apex `['a', 'x']` against a reference `['a', 'x', 'b']`; and
+  `Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'a'])` →
+  `connect_pair(Left(0), Left(1))` → `compose(&identity(&['a', 'a']))`
+  *silently* returned `right == [0, 1]` over `['a', 'a']` against a reference
+  `right == [0, 0]` over `['a']` (review R2-01).
 
-  The `add`/`delete` flags remain **conservative in the other direction**:
-  those arms only ever clear, so `identity(&['a', 'b'])` →
-  `delete_boundary_node(Left(1))` → `add_boundary_node_known_target(Left(1))`
-  leaves `is_left_identity()` `false` where a fresh `Cospan::new` of the same
-  three vectors says `true`. That direction is the one `structurally_equal`'s
-  docs already warn about, and it now costs nothing at all — composition does
-  not read the flags. `connect_pair` is the one mutator exact both ways,
-  **after a merge**: its two no-op arms (same vertex; mismatched labels) return
-  before the recompute and leave a conservative `false` where it was. Every
-  flag writer now keeps a flag from going stale-`true`: the
-  `add_boundary_node` family, `delete_boundary_node`, `connect_pair`,
-  `add_middle` (which already cleared both), `Monoidal::monoidal` and
-  `permute_side` (unchanged — the former `&=`s both flags, the latter clears
-  the permuted leg's); `map_to_same` only reads.
+  Pinned in `tests/checked_mutators.rs`, which now asserts legs, apexes and
+  composites against hand-written expectations —
+  `cospan_identity_accessors_need_the_leg_to_cover_the_whole_apex` names the
+  `leg.len() == middle.len()` conjunct all four defects dropped, and reddens
+  when it is deleted from the private `leg_is_identity` (9 of that file's 27
+  tests do, `perform_pushout` reading the same predicate).
 
-  **An earlier draft of this entry described a permanent observable that the
-  release does not have** and it is corrected here rather than quietly
-  dropped. It said that because `connect_pair`'s recompute can turn a flag
-  **on**, a composite built after a merge could come back with a different
-  (isomorphic) apex order than one built before — `structurally_equal` false,
-  `canonical_form` equal — and advised byte-level consumers to compare
-  canonical forms. That was true of the branch when it was written, and is
-  not true of what ships: the flag no longer selects the fast path, so the
-  merge cannot move the composite. The R3-03 fixture
-  (`Cospan::new(vec![1, 2], vec![0, 1], vec!['b', 'a', 'a'])` →
-  `connect_pair(Left(0), Left(1))`, composed with
-  `Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b'])`) now gives
-  `left = [0, 0], right = [0, 1], middle = ['a', 'b']` **whatever** the flag
-  says — that is, the answer the entry attributed to the flag being on is now
-  the only answer, and the `left = [1, 1], right = [1, 0], middle = ['b', 'a']`
-  alternative is unreachable. A composite is a function of the operands'
-  `(left, right, middle)`, so byte-level comparison of composites is sound
-  again for operands that are byte-equal.
+  **Two earlier drafts of this entry described observables the release does not
+  have**, corrected here rather than quietly dropped.
+
+  - It said `connect_pair`'s flag recompute could turn a flag **on**, so a
+    composite built after a merge might come back with a different (isomorphic)
+    apex order than one built before — `structurally_equal` false,
+    `canonical_form` equal — and advised byte-level consumers to compare
+    canonical forms. The composite never depended on the flag once
+    `perform_pushout` derived the predicate, and now there is no flag at all.
+    The R3-03 fixture (`Cospan::new(vec![1, 2], vec![0, 1], vec!['b','a','a'])`
+    → `connect_pair(Left(0), Left(1))`, composed with
+    `Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b'])`) has exactly one
+    answer, `left = [0, 0], right = [0, 1], middle = ['a', 'b']`; the
+    `left = [1, 1], right = [1, 0], middle = ['b', 'a']` alternative is
+    unreachable. Byte-level comparison of composites is sound for operands that
+    are byte-equal.
+  - It said the `add` / `delete` flags stay **conservative in the false
+    direction**, so `identity(&['a', 'b'])` → `delete_boundary_node(Left(1))` →
+    `add_boundary_node_known_target(Left(1))` left `is_left_identity()` `false`
+    where a fresh `Cospan::new` of the same three vectors said `true`. That was
+    the last thing the cache still did, and deleting it is what closed it: that
+    sequence now reports `true`. It is the one shape where a consumer can see
+    an accessor answer change, and it is the reason
+    `Cospan::structurally_equal`'s "the flags can make structurally equal
+    cospans compare unequal" caveat is gone from its docs.
 
 - **`Cospan::connect_pair` merges the two ports in every argument order**
   ([#289](https://github.com/sustia-llc/catgraph/issues/289), found by the
@@ -248,8 +245,9 @@ All notable changes to `catgraph` are documented here. The format follows
   after `swap_remove` had moved that vertex into node 2's slot, so whenever
   node 1's vertex was the **last** apex index (and node 2's was not) both legs
   received an entry equal to `middle.len()` and the two ports were never
-  merged — a pre-existing defect, silent in every profile (`connect_pair` runs
-  no `assert_valid`), and invisible to every in-tree caller because each
+  merged — a pre-existing defect, silent in every profile (`connect_pair` ran
+  no `assert_valid`; it does now, so the same regression would trip the bounds
+  assertion in debug), and invisible to every in-tree caller because each
   passes the lower apex index first or merges away the last vertex. Reachable
   unchanged through `NamedCospan::connect_pair` and
   `WiringDiagram::connect_pair` (`catgraph-applied`): mint a port with
@@ -267,16 +265,17 @@ All notable changes to `catgraph` are documented here. The format follows
   against hand-written legs and `map_to_same` — a rebuild of the mutated
   value cannot see a remap error.
 
-- **`Cospan::assert_valid`'s strong arm checks the predicate the flags actually
-  cache** ([#289](https://github.com/sustia-llc/catgraph/issues/289)). It
-  compared `represents_id(leg)` against the flag, without the
-  `leg.len() == middle.len()` conjunct that `new_unchecked`, the mutators and
-  this changelog all define the flag by — so
-  `Cospan::new(vec![0], vec![0, 1], vec!['a', 'b'])` (valid, `is_left_id`
-  correctly `false`) tripped `assert_valid(true, _)` in debug with "The
+- **`Cospan::assert_valid` no longer rejects valid cospans**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)). Its strong arm
+  compared `represents_id(leg)` against the cached flag, without the
+  `leg.len() == middle.len()` conjunct that defines the flag, so
+  `Cospan::new(vec![0], vec![0, 1], vec!['a', 'b'])` — valid, and correctly
+  *not* a left identity — tripped `assert_valid(true, _)` in debug with "The
   identity nature of the left arrow was wrong". Reachable through
-  `NamedCospan::assert_valid(true)` / `assert_valid_nohash(true)`. No in-tree
-  caller passes `check_id_strong = true`.
+  `NamedCospan::assert_valid(true)` / `assert_valid_nohash(true)`; no in-tree
+  caller passed `true`. Both arms are gone with the cache they checked, and
+  with them both `bool` parameters — see *`Cospan` has no cached identity
+  flags* under **Changed — BREAKING** above.
 
 - **`Span::add_middle` bounds-checks the pair before reading the labels**
   ([#289](https://github.com/sustia-llc/catgraph/issues/289)), returning

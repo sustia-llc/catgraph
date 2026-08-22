@@ -165,7 +165,7 @@ fn cospan_add_middle_then_add_boundary_pointing_to_it() {
 }
 
 #[test]
-fn cospan_identity_flags_preserved_and_broken_by_mutations() {
+fn cospan_leg_identity_preserved_and_broken_by_mutations() {
     let mut id = id_ab();
     assert!(id.is_left_identity());
     assert!(id.is_right_identity());

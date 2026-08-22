@@ -39,40 +39,51 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   order** ([#289](https://github.com/sustia-llc/catgraph/issues/289)). It keeps
   its signature, so unlike every other entry here **the compiler will not flag
   this one** — it is a silent behaviour change and worth reading before
-  upgrading. It inherits both halves through `NamedCospan::connect_pair` →
-  `Cospan::connect_pair` (core's `Fixed` entries for #289): (1) before, naming
-  the port that sits on the **last** apex vertex first (the
-  "`add_boundary_node_unconnected`, then connect it" workflow) left both legs
-  out of bounds and the ports unmerged, silently, in every profile; (2) both
-  identity flags are recomputed after a merge instead of left stale, which
-  keeps `is_left_identity()` / `is_right_identity()` honest on a merged
-  diagram.
+  upgrading. Inherited through `NamedCospan::connect_pair` →
+  `Cospan::connect_pair` (core's `Fixed` entry for #289): naming the port that
+  sits on the **last** apex vertex first — the "`add_boundary_node_unconnected`,
+  then connect it" workflow this crate exposes — left both legs out of bounds
+  and the ports unmerged, silently, in every profile.
 
-  ⚠ **An earlier draft of this entry described a second consequence of (2)
-  that the release does not have.** It said that because a merge can turn a
+- **`NamedCospan::assert_valid_nohash` takes no argument**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)), so this crate's
+  fifteen `assert_valid_nohash(false)` calls in `src/wiring_diagram.rs` are now
+  `assert_valid_nohash()`. Core deleted `Cospan`'s cached identity flags, and
+  with them the `check_id` parameter that selected the arms which checked them
+  — see catgraph's CHANGELOG, *`Cospan` has no cached identity flags*. Any
+  downstream caller of either `NamedCospan::assert_valid` or
+  `assert_valid_nohash` drops the argument; there is no behaviour to preserve.
+
+  The visible consequence for this crate reaches callers through
+  `WiringDiagram::inner()`: `wd.inner().cospan().is_left_identity()` and its
+  codomain mirror are now computed from the legs on every call. A diagram whose
+  ports have been merged, whose boundary has been permuted, or that has been
+  through a delete-then-re-add round trip reports its identity status
+  correctly, where before it could report either a stale `true` (the defect
+  class core's entry enumerates) or a conservative `false`. `WiringDiagram`
+  itself exposes no identity accessor of its own, so nothing on this crate's
+  own surface changes shape.
+
+  ⚠ **An earlier draft of this entry described a further consequence that the
+  release does not have.** It said that because a merge can turn an identity
   flag *on*, a composite built after one — `operadic_substitution` composes —
   might come back with a different, isomorphic apex order than before, so
   callers should compare canonical forms rather than bytes. That was true of
   the branch while `Cospan::compose` still selected `perform_pushout`'s fast
-  path from the cached flag. Core's r4 review made composition derive the
-  identity predicate from the legs (see catgraph's CHANGELOG, *`Cospan::compose`
-  ignores the cached identity flags*), so a merge cannot move a later composite
-  at all: composition is a function of `(left, right, middle)`, and byte
-  comparison of composites is sound for byte-equal operands. Pinned upstream in
-  `catgraph/tests/compose_flag_independence.rs`, whose
-  `a_connect_pair_merge_does_not_move_the_next_composite` runs exactly the
-  fixture the retired claim was measured on.
+  path from the cached flag. Composition derives the identity predicate from
+  the legs and there is no cache left to read, so a merge cannot move a later
+  composite at all: composition is a function of `(left, right, middle)`, and
+  byte comparison of composites is sound for byte-equal operands. Pinned
+  upstream in `catgraph/tests/compose_flag_independence.rs`, whose
+  `a_connect_pair_merge_composes_to_the_merged_apex` runs exactly the fixture
+  the retired claim was measured on.
 
-  What (2) still changes for this crate is the accessor: a `WiringDiagram`
-  whose ports have been merged reports its identity flags correctly where it
-  previously reported a stale `true`.
-
-  Beyond the two bullets above, no other `catgraph-applied` surface is
-  affected: `remove_multiple` and
-  `from_cycle` — core's other #289 changes — keep their signatures, and this
-  crate's two `remove_multiple` calls in `operadic_substitution` already pass
-  distinct in-range indices (they come from `find_nodes_by_name_predicate`), so
-  the new dedup and bounds check are no-ops for them.
+  Beyond the bullets above, no other `catgraph-applied` surface is affected:
+  `remove_multiple` and `from_cycle` — core's other #289 changes — keep their
+  signatures, and this crate's two `remove_multiple` calls in
+  `operadic_substitution` already pass distinct in-range indices (they come
+  from `find_nodes_by_name_predicate`), so the new dedup and bounds check are
+  no-ops for them.
 
 ### Changed
 

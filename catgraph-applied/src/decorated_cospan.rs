@@ -111,10 +111,13 @@ pub trait Decoration: Sized {
 /// apex type determines the shape of the decoration.
 ///
 /// Note: `PartialEq` is intentionally **not** derived here, because the
-/// upstream `Cospan<Lambda>` does not implement `PartialEq` (its identity
-/// flags are cached and can make structurally equal cospans compare unequal).
-/// Downstream code should compare the `cospan` fields through the public
-/// leg/middle accessors and the `decoration` fields via their own `PartialEq`.
+/// upstream `Cospan<Lambda>` does not implement it. (It once could not: its
+/// identity flags were cached and could make structurally equal cospans
+/// compare unequal. [#289](https://github.com/sustia-llc/catgraph/issues/289)
+/// deleted that cache, so the obstacle is gone and only the missing derive
+/// remains.) Downstream code should compare the `cospan` fields through
+/// [`Cospan::structurally_equal`] or the public leg/middle accessors, and the
+/// `decoration` fields via their own `PartialEq`.
 #[derive(Clone, Debug)]
 pub struct DecoratedCospan<Lambda, D>
 where

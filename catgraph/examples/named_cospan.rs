@@ -64,8 +64,8 @@ fn identity() {
     println!("  right_names = {:?}", id.right_names());
     println!("  domain      = {:?}", id.domain());
     println!("  codomain    = {:?}", id.codomain());
-    println!("  is_left_id  = {}", id.cospan().is_left_identity());
-    println!("  is_right_id = {}", id.cospan().is_right_identity());
+    println!("  is_left_identity  = {}", id.cospan().is_left_identity());
+    println!("  is_right_identity = {}", id.cospan().is_right_identity());
     println!();
 }
 
