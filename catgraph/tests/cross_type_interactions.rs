@@ -171,7 +171,7 @@ fn cospan_from_permutation_structure() {
     );
     assert!(
         c_dom.is_left_identity(),
-        "left should be flagged as identity"
+        "left should be the identity on the apex"
     );
 
     // Right leg is p.inv().permute([0,1,2]).
@@ -198,7 +198,7 @@ fn cospan_from_permutation_structure() {
     );
     assert!(
         c_cod.is_right_identity(),
-        "right should be flagged as identity"
+        "right should be the identity on the apex"
     );
     assert_eq!(c_cod.middle(), types);
     // Left leg = p.permute([0,1,2]).

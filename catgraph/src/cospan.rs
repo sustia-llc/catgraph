@@ -1562,38 +1562,29 @@ mod test {
         assert_eq!(c.left_to_middle(), &[0, 0]);
     }
 
-    /// The identity flag no longer survives a boundary-node push that leaves the
-    /// leg out of step with the apex — the #289 corruption, in both the shapes
-    /// that reached it.
+    /// A boundary-node push that leaves the leg out of step with the apex ends
+    /// the identity — the #289 corruption, in both the shapes that reached it.
     ///
     /// # What this ranges over
     ///
-    /// Two shapes on the **domain** leg only, both starting from a flag that is
-    /// legitimately `true`:
+    /// Two shapes on the **domain** leg only, both starting from a leg that is
+    /// legitimately the identity:
     ///
-    /// 1. `tgt_idx == leg.len()`, the one out-of-bounds target that satisfies
-    ///    the old `leg.len() - 1 == tgt_idx` conjunct. This one is now refused
-    ///    outright, so the flag cannot move.
+    /// 1. `tgt_idx == leg.len()`, the one out-of-bounds target that satisfied
+    ///    the old cache's `leg.len() - 1 == tgt_idx` conjunct. It is now
+    ///    refused outright, so nothing moves.
     /// 2. The apex-growing `Right(label)` arm on the **other** leg, which is
-    ///    what used to leave this flag a stale `true`: it grew the apex past
-    ///    the domain leg while updating only the codomain flag. The flag must
-    ///    clear, and must agree with a fresh construction from the same three
-    ///    vectors.
+    ///    what used to leave a stale `true` behind: it grew the apex past the
+    ///    domain leg while updating only the codomain flag. The domain leg is
+    ///    now one short of the apex, and `is_left_identity()` — which reads the
+    ///    leg — says so.
     ///
-    /// It covers the **domain** leg only. The `Left(idx)` arms themselves are
-    /// now an unconditional clear (`is_left_id = false`): a `true` flag meant
-    /// the leg already matched the apex, and that arm grows the leg without the
-    /// apex, so no index keeps it an identity — there is no per-index conjunct
-    /// left to pin (#289's review showed the first draft's
-    /// `&= leg.len() - 1 == tgt_idx && leg.len() == middle.len()` was
-    /// equivalent to the clear on every reachable state). Shape (1) is refused
-    /// before the arm runs; the in-bounds add in (2) lands on a flag the apex
-    /// growth already cleared and checks it stays cleared. The codomain mirror
-    /// of shape (2) is pinned by `tests/checked_mutators.rs`
-    /// (`cospan_unknown_target_add_clears_the_partner_legs_identity_flag`, which
+    /// It covers the **domain** leg only. The codomain mirror of shape (2) is
+    /// pinned by `tests/checked_mutators.rs`
+    /// (`cospan_unknown_target_add_grows_the_apex_past_the_partner_leg`, which
     /// sweeps both arms) and the codomain refusal of shape (1) by
-    /// `cospan_identity_flag_is_not_corrupted_at_the_boundary_index` there. The
-    /// two arms are separate expressions — while #289 was being written the
+    /// `cospan_add_boundary_node_rejects_the_boundary_index` there. The two
+    /// arms are separate expressions — while #289 was being written the
     /// codomain one was in fact left behind while every domain-side assertion
     /// stayed green — so do not delete any of these believing another
     /// generalises.
@@ -1601,7 +1592,7 @@ mod test {
     /// It does not range over `delete_boundary_node` (pinned separately below,
     /// on both legs) or over apex sizes beyond the two used here.
     #[test]
-    fn cospan_identity_flag_survives_neither_shape_of_the_289_corruption() {
+    fn cospan_add_boundary_node_survives_neither_shape_of_the_289_corruption() {
         use super::Cospan;
         use crate::errors::{BoundaryLeg, CatgraphError};
         use either::Either::{Left, Right};
@@ -1628,14 +1619,12 @@ mod test {
         assert_eq!(
             (id.left_to_middle(), id.is_left_identity()),
             (&[0, 1][..], true),
-            "the rejected push must not have appended 2 to the leg, and must not \
-             have moved the flag; before #289 the leg became [0, 1, 2] with the \
-             flag still true"
+            "the rejected push must not have appended 2 to the leg; before #289 \
+             the leg became [0, 1, 2] with the cached flag still true"
         );
 
-        // (2) The apex grows on the *codomain* side. `is_left_id` is
-        // legitimately true on entry and must not survive: the domain leg keeps
-        // its single entry while the apex gains vertices.
+        // (2) The apex grows on the *codomain* side. The domain leg keeps its
+        // single entry while the apex gains vertices.
         let mut c = Cospan::<char>::new(vec![0], vec![], vec!['a']).unwrap();
         assert!(
             c.is_left_identity(),
@@ -1647,56 +1636,43 @@ mod test {
             !c.is_left_identity(),
             "left == [0] on a 2-vertex apex misses apex vertex 1. This read true \
              before the `Right(label)` arms were fixed to clear the partner \
-             flag — a lie the public accessor still tells, even now that \
-             `perform_pushout` derives the predicate instead of reading it"
+             flag, and again after — a lie the public accessor kept telling \
+             until #289 deleted the cache behind it"
         );
 
         c.add_boundary_node_unknown_target(Right('c'));
         // An in-bounds domain-side add on the leg that has fallen behind the
-        // apex. The flag is already `false` from (2) — the pre-#289
-        // `left.len() - 1 == tgt_idx` alone would have kept a `false` too — so
-        // this checks only that the add keeps the flag false and in agreement
-        // with a fresh construction.
+        // apex: the leg grows by one, the apex does not, so it stays behind.
         c.add_boundary_node_known_target(Left(1))
             .expect("apex index 1 is in bounds for a 3-vertex apex");
         assert_eq!(c.left_to_middle(), &[0, 1]);
+        assert_eq!(c.middle(), &['a', 'b', 'c']);
         assert!(
             !c.is_left_identity(),
             "left == [0, 1] on a 3-vertex apex is not an identity: it misses apex \
              vertex 2"
         );
-        // The reference: what `new_unchecked` would compute for the same data.
-        assert!(
-            !Cospan::new_unchecked(
-                c.left_to_middle().to_vec(),
-                c.right_to_middle().to_vec(),
-                c.middle().to_vec(),
-            )
-            .is_left_identity(),
-            "the mutator's flag must agree with a fresh construction from the \
-             same three vectors"
-        );
     }
 
     /// `delete_boundary_node` names the invariant it needs instead of
-    /// underflowing, and clears an identity flag the removal invalidates.
+    /// underflowing, and ends an identity the removal invalidates.
     ///
     /// # What this ranges over
     ///
     /// The empty-leg case on the domain (the underflow), one non-empty
-    /// out-of-range index on the codomain, and the flag update for a
-    /// delete-the-last-port on **both** legs — the two flag arms are separate
-    /// expressions in the source, so each is asserted on its own fixture. It
-    /// does not range over deleting a non-last port, or over apex sizes beyond
-    /// the one used here.
+    /// out-of-range index on the codomain, and a delete-the-last-port on
+    /// **both** legs — the two `swap_remove` arms are separate expressions in
+    /// the source, so each is asserted on its own fixture. It does not range
+    /// over deleting a non-last port, or over apex sizes beyond the one used
+    /// here.
     #[test]
-    fn cospan_delete_boundary_node_states_its_invariant_and_clears_the_flag() {
+    fn cospan_delete_boundary_node_states_its_invariant() {
         use super::Cospan;
         use either::Either::{Left, Right};
 
         // Deleting the last port of an identity leaves left == [0] on a 2-vertex
         // apex, which is not an identity. Before #289 `is_left_id &= z ==
-        // len - 1` held it true.
+        // len - 1` held the cached flag true.
         let mut id = Cospan::<char>::identity(&vec!['a', 'b']);
         assert!(id.is_left_identity());
         id.delete_boundary_node(Left(1));

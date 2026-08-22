@@ -175,22 +175,18 @@ fn cospan_identity_flags_preserved_and_broken_by_mutations() {
     //   Left leg is still [0,1,...,n-1] on a middle of size n — identity is PRESERVED.
     id.add_boundary_node_unknown_target(Left('c'));
     assert!(id.is_left_identity()); // left=[0,1,2], middle len=3 — still identity
-    // Right is [0,1] on a middle of size 3 — NOT a bijection onto all of middle,
-    // and since #289 the arm says so: growing the apex clears the *other* leg's
-    // flag, because that leg is now strictly shorter than the apex.
+    // Right is [0,1] on a middle of size 3 — NOT a bijection onto all of middle.
     assert!(!id.is_right_identity());
 
     // Break left identity: add a left boundary pointing to an EXISTING middle node.
-    // This makes left=[0,1,2,0] which is not [0,1,...,n-1].
+    // This makes left=[0,1,2,0], which is not [0,1,...,n-1] and is one longer
+    // than the 3-vertex apex.
     id.add_boundary_node_known_target(Left(0)).unwrap();
-    // is_left_id &= (left.len()-1 == tgt_idx) && (left.len() == middle.len())
-    //            => (3 == 0) && (4 == 3) => false.
     assert!(!id.is_left_identity());
 
     // Adding a right boundary with an unknown target grows the apex again:
-    // right becomes [0,1,3], middle becomes ['a','b','c','d'].
-    // is_right_id &= (right.len() == middle.len()) => (3 == 4) => false, and it
-    // was already false above.
+    // right becomes [0,1,3], middle becomes ['a','b','c','d'] — three entries
+    // over four vertices, and out of order besides.
     id.add_boundary_node_unknown_target(Right('d'));
     assert!(!id.is_right_identity());
 }

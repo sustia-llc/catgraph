@@ -293,13 +293,16 @@ fn permute_side_reorders_domain() {
     assert_eq!(c.domain(), rot.inv().permute(&types));
     assert!(
         !c.is_left_identity(),
-        "left identity flag should be cleared"
+        "the permuted left leg is no longer the identity"
     );
 
     // Codomain should be untouched.
     assert_eq!(c.codomain(), vec!['a', 'b', 'c'], "codomain unchanged");
     assert_eq!(c.right_to_middle(), &[0, 1, 2], "right leg unchanged");
-    assert!(c.is_right_identity(), "right identity flag preserved");
+    assert!(
+        c.is_right_identity(),
+        "the untouched right leg is still the identity"
+    );
 
     // The cospan should still be valid.
     c.assert_valid();
