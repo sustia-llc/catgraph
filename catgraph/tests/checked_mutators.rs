@@ -705,8 +705,7 @@ fn cospan_connect_pair_merges_when_node_1s_vertex_is_the_last_apex_index() {
 fn span_identity_flag_ignores_the_boundary_length() {
     let mut s = Span::<char>::identity(&vec!['a', 'b']);
     assert!(s.is_left_identity());
-    s.add_boundary_node(Left('c'))
-        .expect("#289's parity `Result` on `Span::add_boundary_node` is always `Ok`");
+    s.add_boundary_node(Left('c'));
     assert_eq!(s.left().len(), 3);
     assert_eq!(s.middle_pairs().len(), 2);
     assert!(

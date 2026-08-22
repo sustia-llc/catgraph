@@ -86,30 +86,24 @@ All notable changes to `catgraph` are documented here. The format follows
     first, and neither the name list nor the leg is written on `Err`.
   - `NamedCospan::add_middle` returns the new `MiddleIndex`, as
     `Cospan::add_middle` always has. It previously discarded it.
-  - `Span::add_boundary_node` returns the same
-    `Result<Either<LeftIndex, RightIndex>, CatgraphError>`, and
-    `Span::add_boundary_node_unchecked` is the plain form — **for signature
-    parity, not because anything can fail.** A span's legs point *out* of the
-    apex, so this mutator takes a **label** (`Either<Lambda, Lambda>`), not an
-    index: there is no argument to bounds-check, appending one leaves every
-    existing middle pair in bounds and label-agreeing, and the identity flags
-    are computed from the middle pairs alone, which the call does not touch.
-    The `Result` is therefore always `Ok` today and its rustdoc says so. The
-    shape is an owner decision (2026-08-22, superseding the issue's "both
-    types" reading — the phase-1 source scoped the `Result` to `Cospan` +
-    `NamedCospan`), so that the three mutators share one return type and a
-    caller can treat them alike. No error is anticipated: the `Span` follow-up
-    on this method, [#345](https://github.com/sustia-llc/catgraph/issues/345),
-    is a flag-semantics change with no error arm that would land in
-    `add_boundary_node` and `add_boundary_node_unchecked` alike — `Span`'s
-    flags carry no boundary-length conjunct, so `identity(&['a', 'b'])`
-    followed by `add_boundary_node(Left('c'))` still reports
-    `is_left_identity() == true`; that is pinned as the *current* contract in
-    `tests/checked_mutators.rs`, and the pin must be inverted when #345 lands.
-    Eight call sites moved, all in core's own tests (`span.rs`,
-    `tests/mutation_workflows.rs`, `tests/checked_mutators.rs`); no dependent
-    crate calls it. `Span::add_middle` is the `Span` item with a real error
-    arm, below.
+  - `Span::add_boundary_node` **keeps its infallible signature** and gains no
+    `_unchecked` sibling. A span's legs point *out* of the apex, so this
+    mutator takes a **label** (`Either<Lambda, Lambda>`), not an index: there
+    is no argument to bounds-check, appending one leaves every existing middle
+    pair in bounds and label-agreeing, and the identity flags are computed from
+    the middle pairs alone, which the call does not touch. A `Result` here
+    would have been permanently `Ok`, so every caller would write a `?` or an
+    `.expect(..)` for an error that cannot occur. `Span::add_middle`, below, is
+    the `Span` mutator with real preconditions, and it does return a `Result`.
+
+    `Span`'s identity flags carry no boundary-length conjunct, so
+    `identity(&['a', 'b'])` followed by `add_boundary_node(Left('c'))` still
+    reports `is_left_identity() == true`. That is pinned as the *current*
+    contract in `tests/checked_mutators.rs`
+    (`span_identity_flag_ignores_the_boundary_length`) and must be inverted
+    when [#345](https://github.com/sustia-llc/catgraph/issues/345) lands;
+    #345 is a flag-semantics change with no error arm, so it is not a reason to
+    pre-emptively widen this return type either.
 
 - **`CatgraphError::ConstructionDuplicatePortName`** is a new variant (the enum
   is `#[non_exhaustive]`, so this is additive for `match`es that already carry
