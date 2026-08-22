@@ -21,9 +21,15 @@ All notable changes to `catgraph` are documented here. The format follows
     `connect_pair` did not maintain them at all), so a leg that genuinely was
     the identity reported `false` if the value had reached that shape by
     mutation rather than by construction. Consumers reading either
-    accessor should expect `true` in cases that previously read `false` —
-    `identity(&['a', 'b'])`, `delete_boundary_node(Left(1))`,
-    `add_boundary_node_known_target(Left(1))` is the shortest example.
+    accessor should expect `true` in cases that previously read `false`. Two
+    concrete ones: `identity(&['a', 'b'])`, `delete_boundary_node(Left(1))`,
+    `add_boundary_node_known_target(Left(1))` reports a left identity again;
+    and `from_permutation_on_domain(Permutation::identity(n), types)` reports a
+    **right** identity, where the constructor used to hard-code
+    `is_right_id: false` for every permutation including the identity (its
+    codomain mirror likewise for `is_left_id`). A `permute_side` call with an
+    identity permutation is the third — it used to clear the permuted leg's
+    flag unconditionally.
   - `Cospan::assert_valid` **loses both of its `bool` parameters** — the
     signature is now `assert_valid(&self)`. They selected two arms that
     compared a cached flag against the predicate it cached; with no cache

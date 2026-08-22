@@ -38,11 +38,13 @@ use catgraph::{
     cospan::Cospan,
     errors::{BoundaryLeg, CatgraphError},
     finset::from_cycle,
+    monoidal::SymmetricMonoidalMorphism,
     named_cospan::NamedCospan,
     span::Span,
     utils::remove_multiple,
 };
 use either::Either::{Left, Right};
+use permutations::Permutation;
 
 // ===========================================================================
 // 1. Bounds: the mutator rejects, and does not half-mutate
@@ -194,18 +196,23 @@ fn cospan_identity_accessors_need_the_leg_to_cover_the_whole_apex() {
 /// behaviour (`cospan_identity_flags_are_conservative_in_the_false_direction`)
 /// asserted exactly the negation of the last assertion below.
 ///
-/// **What this ranges over.** One delete-then-add round trip on the domain leg
-/// of one 2-vertex fixture, and one direction of the history-independence
-/// claim — the one #289 changed. It does not sweep other mutator sequences,
-/// and the *other* direction (a mutator leaving a stale `true`) has no fixture
-/// here because it has no reachable state: the accessor reads the leg.
+/// **What this ranges over.** Three routes by which the old cache reported a
+/// conservative `false` over a leg that was the identity — a delete-then-add
+/// round trip, the two permutation constructors' hard-coded flags, and
+/// `permute_side` with an identity permutation — on one apex size each, and
+/// only that direction of the history-independence claim, which is the one
+/// #289 changed. The *other* direction (a writer leaving a stale `true`) has
+/// no fixture here because it has no reachable state: the accessor reads the
+/// leg. It does not sweep other mutator sequences or non-identity
+/// permutations.
 ///
 /// Two measured falsifications, which is what separates this from a
-/// restatement of the two `assert_eq!`s beside it: dropping the length conjunct
+/// restatement of the `assert_eq!`s beside it: dropping the length conjunct
 /// from the private `leg_is_identity` reddens the **first** assertion (`[0]`
 /// over a 2-vertex apex starts reporting `true`), and any accessor that goes
-/// back to reading a clear-only cache reddens the **last** — which is the
-/// state this branch started from.
+/// back to reading a clear-only cache reddens all four `true` assertions —
+/// which is the state this branch started from, where the three routes below
+/// reported `false`, `false` and `false`.
 #[test]
 fn cospan_identity_accessors_ignore_how_the_value_was_built() {
     let mut c = Cospan::<char>::identity(&vec!['a', 'b']);
@@ -229,6 +236,36 @@ fn cospan_identity_accessors_ignore_how_the_value_was_built() {
         "the leg is the identity again, so the accessor says so; before #289 \
          deleted the cache this reported `false` — the mutators' `&=` could \
          only clear"
+    );
+
+    // The two permutation constructors hard-coded the flag of the leg they do
+    // not build, so for `p == identity` both lied `false`.
+    let types = ['a', 'b', 'c'];
+    let dom = Cospan::<char>::from_permutation_on_domain(Permutation::identity(3), &types)
+        .expect("the permutation's length matches the type list");
+    assert_eq!(dom.right_to_middle(), &[0, 1, 2]);
+    assert!(
+        dom.is_right_identity(),
+        "the identity permutation leaves the codomain leg [0, 1, 2] over a \
+         3-vertex apex; the constructor used to hard-code `is_right_id: false`"
+    );
+    let cod = Cospan::<char>::from_permutation_on_codomain(Permutation::identity(3), &types)
+        .expect("the permutation's length matches the type list");
+    assert_eq!(cod.left_to_middle(), &[0, 1, 2]);
+    assert!(
+        cod.is_left_identity(),
+        "the mirror, hard-coded `is_left_id: false`"
+    );
+
+    // `permute_side` cleared the permuted leg's flag unconditionally, so an
+    // identity permutation — which moves no wire — ended the identity.
+    let mut id = Cospan::<char>::identity(&types.to_vec());
+    id.permute_side(&Permutation::identity(3), false);
+    assert_eq!(id.left_to_middle(), &[0, 1, 2], "no wire moved");
+    assert!(
+        id.is_left_identity(),
+        "an identity permutation cannot end an identity; the unconditional \
+         clear used to say it did"
     );
 }
 
