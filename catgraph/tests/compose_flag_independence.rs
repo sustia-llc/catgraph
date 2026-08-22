@@ -31,13 +31,16 @@
 //! never depended on the cache; the fourth duplicated the `n = 2` unitality pin
 //! and is gone.
 //!
-//! **What this file ranges over**, taken together: four fixtures, apex sizes 2
+//! **What this file ranges over**, taken together: five fixtures, apex sizes 2
 //! and 3, `char` labels plus one deliberately-coarse `Eq`, and one partner per
 //! fixture. It does not sweep apex sizes past 3, does not touch the
 //! right-unitality mirror, and has no fixture whose partner's left leg merges
-//! apex vertices. Every test below goes red when the `left_leg_id` arm is
-//! disabled (measured — see each docstring), except the label-provenance one,
-//! which goes red when the two arms are swapped.
+//! apex vertices. **All five** go red when the `left_leg_id` arm is disabled —
+//! measured, and each docstring carries the value its fixture then returns.
+//! That one perturbation does not falsify claim 2 on its own, though: with the
+//! first arm disabled the second takes over, so the label-provenance test
+//! cannot tell "arm 1 gone" from "arms swapped". Swapping them is its own
+//! perturbation, and the one its docstring names.
 
 use catgraph::{
     category::{Composable, HasIdentity},
@@ -257,7 +260,9 @@ impl Eq for Tagged {}
 /// claim anything about label types whose `Eq` *is* identity, for which the
 /// question has no observable answer. Swapping the two arms in
 /// `perform_pushout` turns `["right", "right"]` into `["left", "left"]` here,
-/// which is the falsification.
+/// which is the falsification — measured by disabling the `left_leg_id` arm,
+/// which for a both-identity fixture is the same perturbation (the second arm
+/// takes over and tags `Left(..)`).
 #[test]
 fn both_legs_identity_keeps_the_right_operands_labels() {
     let l = Cospan::new(
