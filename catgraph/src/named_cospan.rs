@@ -81,11 +81,18 @@ where
     /// Mirrors [`Cospan::new`](Cospan::new) / [`Span::new`](crate::span::Span::new):
     /// the checked constructor owns the plain name.
     ///
-    /// Name **uniqueness** is still assumed rather than enforced — port names
-    /// need only be `Eq`, so deduplicating them is not something this
-    /// constructor can do in general. See
-    /// [`assert_valid`](Self::assert_valid), which checks it under `Hash` in
-    /// debug builds.
+    /// Name **uniqueness** is still assumed rather than enforced by this
+    /// constructor. Port names need only be `Eq`, so the check would be a
+    /// quadratic scan — which is exactly what
+    /// [`add_boundary_node`](Self::add_boundary_node) runs per insertion since
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) — but `new`
+    /// does not run it, so a duplicate admitted here is first reported when a
+    /// later `add_boundary_node` returns
+    /// [`ConstructionDuplicatePortName`](crate::errors::CatgraphError::ConstructionDuplicatePortName)
+    /// with the `existing_position` of the first copy. That asymmetry between
+    /// the checked constructor and the checked mutator is a known follow-up
+    /// candidate, not a promise. See [`assert_valid`](Self::assert_valid),
+    /// which checks uniqueness under `Hash` in debug builds.
     ///
     /// # Errors
     ///

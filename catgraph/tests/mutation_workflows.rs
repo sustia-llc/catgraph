@@ -294,7 +294,7 @@ fn span_add_boundary_left_then_compose() {
     // Start with span f: left=['a','b'], right=['a','b'], pairs=[(0,0),(1,1)].
     // Add a left boundary 'c'. Domain becomes ['a','b','c'].
     let mut f = span_f();
-    let added = f.add_boundary_node(Left('c'));
+    let added = f.add_boundary_node(Left('c')).unwrap();
     assert_eq!(added, Left(2));
 
     assert_eq!(f.left(), &['a', 'b', 'c']);
@@ -314,7 +314,7 @@ fn span_add_boundary_left_then_compose() {
 #[test]
 fn span_add_boundary_right_then_compose() {
     let mut f = span_f();
-    let added = f.add_boundary_node(Right('c'));
+    let added = f.add_boundary_node(Right('c')).unwrap();
     assert_eq!(added, Right(2));
 
     assert_eq!(f.right(), &['a', 'b', 'c']);
@@ -391,7 +391,7 @@ fn span_middle_to_left_right_projections() {
 #[test]
 fn span_add_boundary_then_dagger() {
     let mut s = span_f(); // left=['a','b'], right=['a','b'], pairs=[(0,0),(1,1)]
-    s.add_boundary_node(Left('c'));
+    s.add_boundary_node(Left('c')).unwrap();
     // left=['a','b','c'], right=['a','b'], pairs=[(0,0),(1,1)]
 
     let dag = s.dagger();
@@ -413,9 +413,9 @@ fn span_multiple_mutations_then_compose_with_identity() {
     let mut s = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]).unwrap();
 
     // Extend domain.
-    s.add_boundary_node(Left('b'));
+    s.add_boundary_node(Left('b')).unwrap();
     // Extend codomain.
-    s.add_boundary_node(Right('b'));
+    s.add_boundary_node(Right('b')).unwrap();
     // Connect the new boundary nodes through middle.
     let mid_result = s.add_middle((1, 1)); // left[1]='b' == right[1]='b'
     assert!(mid_result.is_ok());

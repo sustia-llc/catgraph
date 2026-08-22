@@ -218,22 +218,30 @@ where
     /// The new node is not yet in the image of any middle pair; the caller should
     /// add middle entries via [`add_middle`](Self::add_middle) to connect it.
     ///
-    /// Infallible, and deliberately so — unlike
-    /// [`Cospan::add_boundary_node`](crate::cospan::Cospan::add_boundary_node)
-    /// and
-    /// [`NamedCospan::add_boundary_node`](crate::named_cospan::NamedCospan::add_boundary_node),
-    /// which [#289](https://github.com/sustia-llc/catgraph/issues/289) made
-    /// fallible for reasons that genuinely apply to them (an out-of-bounds apex
-    /// index; a duplicate port name). A span's legs point *out* of the apex, so
-    /// a boundary node here is a **label rather than an index**: there is no
+    /// # Errors
+    ///
+    /// **None today — this always returns `Ok`**, and no error arm is described
+    /// because there is none. A span's legs point *out* of the apex, so a
+    /// boundary node here is a **label rather than an index**: there is no
     /// argument to bounds-check, appending one leaves every existing middle pair
     /// in bounds and label-agreeing, and the identity flags are computed from
-    /// the middle pairs alone, which this call does not touch. A `Result` added
-    /// for signature parity could never be `Err`, so it would cost every caller
-    /// an `unwrap`/`expect` and tell them nothing; there is no `_unchecked`
-    /// sibling for the same reason — nothing is being skipped.
+    /// the middle pairs alone, which this call does not touch. The `Result` is
+    /// a **signature-parity** decision
+    /// ([#289](https://github.com/sustia-llc/catgraph/issues/289); owner
+    /// directive of 2026-08-22, superseding the issue's per-type reading):
+    /// [`Cospan::add_boundary_node`](crate::cospan::Cospan::add_boundary_node)
+    /// and
+    /// [`NamedCospan::add_boundary_node`](crate::named_cospan::NamedCospan::add_boundary_node)
+    /// are fallible for reasons that genuinely apply to them (an out-of-bounds
+    /// apex index; a duplicate port name), and with all three mutators sharing
+    /// one shape, a precondition added to `Span` later — the boundary-length
+    /// conjunct of [#345](https://github.com/sustia-llc/catgraph/issues/345) is
+    /// the candidate — is not a second breaking change for callers.
+    /// [`add_boundary_node_unchecked`](Self::add_boundary_node_unchecked) is the
+    /// same operation without the wrapper.
     ///
-    /// ⚠ **The flags this leaves alone mean less than a `Cospan`'s.**
+    /// ⚠ **The flags this leaves alone mean less than a `Cospan`'s** — tracked
+    /// as [#345](https://github.com/sustia-llc/catgraph/issues/345).
     /// [`new_unchecked`](Self::new_unchecked) computes `is_left_id` /
     /// `is_right_id` as `represents_id` over the middle-pair components with
     /// **no** conjunct against `left.len()` / `right.len()` — the conjunct
@@ -247,6 +255,27 @@ where
     /// its cospan namesake, and tightening it is a separate change with its own
     /// breaking surface.
     pub fn add_boundary_node(
+        &mut self,
+        new_boundary: Either<Lambda, Lambda>,
+    ) -> Result<Either<LeftIndex, RightIndex>, CatgraphError> {
+        Ok(self.add_boundary_node_unchecked(new_boundary))
+    }
+
+    /// Add a boundary node with the given label, without the parity `Result`.
+    ///
+    /// Named for parity with
+    /// [`Cospan::add_boundary_node_unchecked`](crate::cospan::Cospan::add_boundary_node_unchecked)
+    /// and
+    /// [`NamedCospan::add_boundary_node_unchecked`](crate::named_cospan::NamedCospan::add_boundary_node_unchecked),
+    /// but **not** the same kind of method: those two skip a real check and
+    /// carry a `debug_assert!` in its place, so a release build accepts invalid
+    /// data through them. This one skips nothing — a label has no invariant to
+    /// check — so it is equally safe on untrusted input today. Prefer
+    /// [`add_boundary_node`](Self::add_boundary_node) anyway: it is the name
+    /// that will carry a check if `Span` ever gains one
+    /// ([#345](https://github.com/sustia-llc/catgraph/issues/345)), and the one
+    /// the other two types' callers already write.
+    pub fn add_boundary_node_unchecked(
         &mut self,
         new_boundary: Either<Lambda, Lambda>,
     ) -> Either<LeftIndex, RightIndex> {
@@ -1074,16 +1103,19 @@ mod test {
         // Start with matching types
         let mut span = Span::new(vec!['a'], vec!['a'], vec![(0, 0)]).unwrap();
 
-        let left_idx = span.add_boundary_node(Left('c'));
+        let left_idx = span.add_boundary_node(Left('c')).unwrap();
         assert!(matches!(left_idx, Left(1)));
 
-        let right_idx = span.add_boundary_node(Right('d'));
+        let right_idx = span.add_boundary_node(Right('d')).unwrap();
         assert!(matches!(right_idx, Right(1)));
 
-        // #289 left this mutator infallible on purpose: a boundary node here is
-        // a label, not an index, so there is no precondition a `Result` could
-        // report and no check for an `_unchecked` sibling to skip.
-        assert_eq!(span.left(), &['a', 'c']);
+        // #289's parity `Result` is always `Ok` — a boundary node here is a
+        // label, not an index — so the `_unchecked` sibling is the same
+        // operation with the wrapper removed, not a check skipped.
+        let e_idx = span.add_boundary_node_unchecked(Left('e'));
+        assert!(matches!(e_idx, Left(2)));
+
+        assert_eq!(span.left(), &['a', 'c', 'e']);
         assert_eq!(span.right(), &['a', 'd']);
     }
 

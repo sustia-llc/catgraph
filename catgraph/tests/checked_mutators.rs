@@ -316,9 +316,11 @@ fn cospan_unknown_target_add_keeps_composition_correct() {
         .expect("the mutated legs are in bounds")
     };
 
-    // Shape 1: the fast path indexes `left_to_pushout` past its end.
-    // Measured with the partner flag left stale: `f.compose(&g)` panicked at
-    // `catgraph/src/cospan.rs:653` with
+    // Shape 1: `g`'s stale `is_left_id` is `perform_pushout`'s `right_leg_id`,
+    // whose fast path sizes `right_to_pushout` from `f`'s one-entry codomain
+    // leg; `compose_with_quotient` then indexes it with `g`'s codomain port —
+    // `right_to_pushout[*target_in_other_middle]`. Measured with the partner
+    // flag left stale: `f.compose(&g)` panicked there with
     // `index out of bounds: the len is 1 but the index is 1`.
     let g = build_g();
     let f = Cospan::<char>::new(vec![0], vec![0], vec!['a', 'x']).expect("in-bounds fixture");
@@ -362,10 +364,10 @@ fn cospan_unknown_target_add_keeps_composition_correct() {
 /// when a leg is flagged as the identity, and that path sizes its reindexing
 /// map from the *partner's* apex. Measured by reverting only the
 /// `&& self.right.len() == self.middle.len()` conjunct: the `f.compose(&g)`
-/// below **panicked** at `catgraph/src/cospan.rs:648` with `index out of
-/// bounds: the len is 1 but the index is 1` — `compose_with_quotient`'s
-/// `left_to_pushout[*target_in_self_middle]`. Post-fix it returns the correct
-/// composite `{a,b} -> {a}`.
+/// below **panicked** with `index out of bounds: the len is 1 but the index is
+/// 1` at `compose_with_quotient`'s `left_to_pushout[*target_in_self_middle]`
+/// (the `left_leg_id` fast path had sized that map from `g`'s one-entry domain
+/// leg). Post-fix it returns the correct composite `{a,b} -> {a}`.
 #[test]
 fn cospan_delete_boundary_node_clears_the_identity_flag_so_compose_is_right() {
     let mut f = Cospan::<char>::identity(&vec!['a', 'b']);
@@ -429,6 +431,72 @@ fn cospan_identity_flags_are_conservative_in_the_false_direction() {
     );
 }
 
+/// `connect_pair` merges two apex vertices, so a leg that was the identity on
+/// the old apex is not one on the new — and before #289 the flags said
+/// otherwise, with teeth: `perform_pushout` fast-pathed on them.
+///
+/// Measured on the branch before the fix (review R2-01): `f` below kept
+/// `(true, true)` after the merge where a fresh construction says
+/// `(false, false)`, and `f.compose(&identity(&['a', 'a']))` returned
+/// `left = [0, 0], right = [0, 1], middle = ['a', 'a']` — the `left_leg_id`
+/// fast path took `g`'s apex unmerged — against the reference's
+/// `left = [0, 0], right = [0, 0], middle = ['a']`. No panic, the types line
+/// up, `structurally_equal` is false.
+///
+/// **What this ranges over.** One merge of two domain ports on a 2-vertex
+/// apex, composed with one identity; the flags are compared against a fresh
+/// construction (exact here — `connect_pair` recomputes rather than `&=`s) and
+/// the composite against the reference composition. It does not sweep apex
+/// sizes, codomain-side merges, or the same-vertex / label-mismatch no-op arms.
+#[test]
+fn cospan_connect_pair_clears_the_identity_flags_so_compose_is_right() {
+    let mut f =
+        Cospan::<char>::new(vec![0, 1], vec![0, 1], vec!['a', 'a']).expect("in-bounds fixture");
+    assert!(
+        f.is_left_identity() && f.is_right_identity(),
+        "fixture must start as an identity on both legs"
+    );
+
+    f.connect_pair(Left(0), Left(1));
+    assert_eq!(f.middle(), &['a']);
+    assert_eq!(f.left_to_middle(), &[0, 0]);
+    assert_eq!(f.right_to_middle(), &[0, 0]);
+    // Composition first: it is the consequence with teeth, and under the
+    // pre-fix code this assertion is the one that fires, carrying the measured
+    // wrong composite in its message. The flag assertions follow.
+    let g = Cospan::<char>::identity(&vec!['a', 'a']);
+    let composite = f.compose(&g).expect("f ; id composes");
+    let reference = Cospan::new(
+        f.left_to_middle().to_vec(),
+        f.right_to_middle().to_vec(),
+        f.middle().to_vec(),
+    )
+    .expect("the merged legs are in bounds")
+    .compose(&g)
+    .expect("the reference composes");
+    assert!(
+        composite.structurally_equal(&reference),
+        "the composite must not depend on the cached flags: got left = {:?}, right = {:?}, \
+         middle = {:?} against the reference's left = {:?}, right = {:?}, middle = {:?} \
+         (pre-fix: right = [0, 1] over ['a', 'a'])",
+        composite.left_to_middle(),
+        composite.right_to_middle(),
+        composite.middle(),
+        reference.left_to_middle(),
+        reference.right_to_middle(),
+        reference.middle(),
+    );
+    assert_eq!(composite.middle(), &['a']);
+    assert_eq!(composite.right_to_middle(), &[0, 0]);
+
+    assert_flags_agree_with_a_fresh_construction(&f, "after connect_pair merged the apex");
+    assert!(
+        !f.is_left_identity() && !f.is_right_identity(),
+        "a 2-entry leg over a 1-vertex apex is not the identity (pre-fix both flags \
+         stayed true)"
+    );
+}
+
 /// `Span`'s identity flags are weaker than `Cospan`'s, and the `Span`
 /// docs now say so — pinned here so the docstring cannot drift from the code.
 ///
@@ -437,14 +505,18 @@ fn cospan_identity_flags_are_conservative_in_the_false_direction() {
 /// boundary label leaves `is_left_identity()` reporting `true` for a span whose
 /// middle no longer covers its domain. Nothing mis-composes on it —
 /// `Span::compose` does not fast-path on the flags — so this pins the current
-/// contract, not a defect being fixed here.
+/// contract, not a defect being fixed here. Tracked as
+/// [#345](https://github.com/sustia-llc/catgraph/issues/345): when that issue
+/// tightens the flag this pin must go **red** and be inverted — that is what it
+/// is for; do not "fix" it by deleting it.
 ///
 /// **What this ranges over.** One domain-side append on one fixture.
 #[test]
 fn span_identity_flag_ignores_the_boundary_length() {
     let mut s = Span::<char>::identity(&vec!['a', 'b']);
     assert!(s.is_left_identity());
-    s.add_boundary_node(Left('c'));
+    s.add_boundary_node(Left('c'))
+        .expect("#289's parity `Result` on `Span::add_boundary_node` is always `Ok`");
     assert_eq!(s.left().len(), 3);
     assert_eq!(s.middle_pairs().len(), 2);
     assert!(

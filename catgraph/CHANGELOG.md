@@ -39,16 +39,27 @@ All notable changes to `catgraph` are documented here. The format follows
     first, and neither the name list nor the leg is written on `Err`.
   - `NamedCospan::add_middle` returns the new `MiddleIndex`, as
     `Cospan::add_middle` always has. It previously discarded it.
-  - `Span::add_boundary_node` is **not** changed, and has no `_unchecked`
-    sibling. The issue asks for `Result` on "both types", but a span's legs
-    point *out* of the apex, so this mutator takes a **label**
-    (`Either<Lambda, Lambda>`), not an index: there is no argument to
-    bounds-check, appending one leaves every existing middle pair in bounds and
-    label-agreeing, and the identity flags are computed from the middle pairs
-    alone, which the call does not touch. A `Result` here could never be `Err`
-    — it would cost every caller an `unwrap`/`expect` and tell them nothing —
-    and an `_unchecked` sibling would name a check that does not exist. The
-    real `Span` item in this issue is `add_middle`, below.
+  - `Span::add_boundary_node` returns the same
+    `Result<Either<LeftIndex, RightIndex>, CatgraphError>`, and
+    `Span::add_boundary_node_unchecked` is the plain form — **for signature
+    parity, not because anything can fail.** A span's legs point *out* of the
+    apex, so this mutator takes a **label** (`Either<Lambda, Lambda>`), not an
+    index: there is no argument to bounds-check, appending one leaves every
+    existing middle pair in bounds and label-agreeing, and the identity flags
+    are computed from the middle pairs alone, which the call does not touch.
+    The `Result` is therefore always `Ok` today and its rustdoc says so. The
+    shape is an owner decision (2026-08-22, superseding the issue's "both
+    types" reading — the phase-1 source scoped the `Result` to `Cospan` +
+    `NamedCospan`), so that the three mutators keep one signature and a
+    precondition added to `Span` later is not a second break. The candidate is
+    [#345](https://github.com/sustia-llc/catgraph/issues/345): `Span`'s flags
+    carry no boundary-length conjunct, so `identity(&['a', 'b'])` followed by
+    `add_boundary_node(Left('c'))` still reports `is_left_identity() == true`;
+    that is pinned as the *current* contract in `tests/checked_mutators.rs`,
+    and the pin must be inverted when #345 lands. Eight call sites moved, all
+    in core's own tests (`span.rs`, `tests/mutation_workflows.rs`,
+    `tests/checked_mutators.rs`); no dependent crate calls it.
+    `Span::add_middle` is the `Span` item with a real error arm, below.
 
 - **`CatgraphError::ConstructionDuplicatePortName`** is a new variant (the enum
   is `#[non_exhaustive]`, so this is additive for `match`es that already carry
@@ -81,8 +92,8 @@ All notable changes to `catgraph` are documented here. The format follows
   `true`** ([#289](https://github.com/sustia-llc/catgraph/issues/289)).
   `is_left_id` / `is_right_id` mean what `Cospan::new_unchecked` computes —
   `leg.len() == middle.len() && represents_id(leg)` — but three arms tested
-  less than that, and each shortfall is satisfiable with a leg out of step with
-  the apex:
+  less than that, `connect_pair` tested nothing, and each shortfall is
+  satisfiable with a leg out of step with the apex:
 
   - `add_boundary_node`'s `Left(idx)` (existing-target) arms tested
     `leg.len() - 1 == tgt_idx`. On an identity cospan the only index that
@@ -99,27 +110,48 @@ All notable changes to `catgraph` are documented here. The format follows
   - `delete_boundary_node` tested `z == leg.len() - 1`. Deleting the last port
     of an identity cospan shortens the leg without shrinking the apex, so the
     leg stops being an identity while the flag says otherwise.
+  - `connect_pair` merged two apex vertices and left both flags alone. The
+    apex shrinks by one while both legs keep their length, so a
+    legitimately-`true` pair survived over an apex the legs are now *longer*
+    than. Both flags are now **recomputed** from the definition after the
+    merge — exact in both directions, unlike the `&=` updates, which can only
+    clear. Reachable through `WiringDiagram::connect_pair` in
+    `catgraph-applied`.
 
   This is not cosmetic: `perform_pushout` **fast-paths** on those flags and
   sizes its reindexing map from the partner's apex, so a stale `true` is a
-  wrong composition. Pinned in `tests/checked_mutators.rs`. Reverting only the
+  wrong composition. Pinned in `tests/checked_mutators.rs` — and, for the
+  `Left(idx)` arms' length conjunct, which only the raw path in a release build
+  can reach, by a release-only lib pin under CI's
+  `cargo test -p catgraph --lib --release` (with that conjunct deleted from
+  both arms every debug lane stays green; review R2-02). Reverting only the
   `delete_boundary_node` conjunct makes `id_ab.delete(Right(1)).compose(&id_a)`
-  panic at `cospan.rs:648` with `index out of bounds: the len is 1 but the
-  index is 1`; reverting only the `Right(label)` partner-flag clear makes
+  panic in `compose_with_quotient` at `left_to_pushout[*target_in_self_middle]`
+  with `index out of bounds: the len is 1 but the index is 1`; reverting only
+  the `Right(label)` partner-flag clear makes
   `Cospan::new(vec![0], vec![0], vec!['a', 'x'])` composed with
   `Cospan::new(vec![0], vec![], vec!['a'])` + `unknown_target(Right('b'))`
-  panic the same way at `cospan.rs:653` — and, with that `g`'s codomain port
-  then deleted so nothing indexes out of range, compose *silently* to the apex
-  `['a', 'x']` where the reference composition gives `['a', 'x', 'b']`.
+  panic the same way at `right_to_pushout[*target_in_other_middle]` — and,
+  with that `g`'s codomain port then deleted so nothing indexes out of range,
+  compose *silently* to the apex `['a', 'x']` where the reference composition
+  gives `['a', 'x', 'b']`. The `connect_pair` shape was measured on the branch
+  before its fix (review R2-01): `Cospan::new(vec![0, 1], vec![0, 1],
+  vec!['a', 'a'])` → `connect_pair(Left(0), Left(1))` →
+  `compose(&identity(&['a', 'a']))` *silently* returned `right == [0, 1]` over
+  the apex `['a', 'a']` where the reference gives `right == [0, 0]` over
+  `['a']`.
 
-  The flags remain **conservative in the other direction**: `&=` can only
-  clear, so `identity(&['a', 'b'])` → `delete_boundary_node(Left(1))` →
-  `add_boundary_node_known_target(Left(1))` leaves `is_left_identity()` `false`
-  where a fresh `Cospan::new` of the same three vectors says `true`. That is
-  safe for `perform_pushout` — it costs the fast path, not correctness — and is
-  the direction `structurally_equal`'s docs already warn about. Mutators
-  outside this family are unchanged and are not covered by this entry:
-  `connect_pair` still does not touch the flags at all.
+  The `add`/`delete` flags remain **conservative in the other direction**: `&=`
+  can only clear, so `identity(&['a', 'b'])` → `delete_boundary_node(Left(1))`
+  → `add_boundary_node_known_target(Left(1))` leaves `is_left_identity()`
+  `false` where a fresh `Cospan::new` of the same three vectors says `true`.
+  That is safe for `perform_pushout` — it costs the fast path, not correctness
+  — and is the direction `structurally_equal`'s docs already warn about
+  (`connect_pair`, which recomputes, is the one mutator exact both ways). With
+  `connect_pair` included, every in-place mutator — the `add_boundary_node`
+  family, `delete_boundary_node`, `connect_pair`, and `add_middle`, which
+  already cleared both flags — now keeps a flag from going stale-`true`;
+  `map_to_same` only reads.
 
 - **`Cospan::assert_valid`'s strong arm checks the predicate the flags actually
   cache** ([#289](https://github.com/sustia-llc/catgraph/issues/289)). It

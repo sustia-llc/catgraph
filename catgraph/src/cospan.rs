@@ -501,6 +501,14 @@ where
     ///
     /// No-op if they already share a vertex. Warns and makes no change if their labels differ.
     ///
+    /// A merge shrinks the apex by one while both legs keep their length, so a
+    /// leg that was the identity on the old apex is not one on the new. Since
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) both identity
+    /// flags are **recomputed** from the merged value — exact in both
+    /// directions, unlike the `&=` updates elsewhere, which can only clear.
+    /// Before that the flags were not touched, and the stale `true` reached
+    /// `perform_pushout`'s fast path as a silent wrong composition.
+    ///
     /// # Panics
     ///
     /// Panics — in every build profile — if either node is at or beyond the
@@ -546,6 +554,19 @@ where
             } else {
             }
         });
+        // #289: the apex just lost a vertex while both legs kept their length,
+        // so neither cached flag can be trusted. Recompute both from the
+        // definition (`leg.len() == middle.len() && represents_id(leg)`) rather
+        // than `&=` them — exact in both directions, and what keeps
+        // `perform_pushout`'s fast path off a merged apex. Measured before this
+        // line existed: `Cospan::new(vec![0, 1], vec![0, 1], vec!['a', 'a'])`
+        // merged at `Left(0)` / `Left(1)` kept `(true, true)` and composed with
+        // `identity(&['a', 'a'])` to `right == [0, 1]` over a 2-vertex apex,
+        // where the reference composition gives `right == [0, 0]` over one.
+        self.is_left_id =
+            self.left.len() == self.middle.len() && represents_id(self.left.iter().copied());
+        self.is_right_id =
+            self.right.len() == self.middle.len() && represents_id(self.right.iter().copied());
     }
 
     /// Append a new vertex to the middle set with the given label. Returns its index.
@@ -1005,6 +1026,54 @@ mod test {
         assert!(
             Cospan::<char>::new(vec![0, 2], vec![1], vec!['a', 'b']).is_err(),
             "the same input must be refused by the checked constructor"
+        );
+    }
+
+    /// The `leg.len() == middle.len()` conjunct in the `Left(idx)` arms of
+    /// `add_boundary_node_unchecked` is live on exactly one route: the raw path
+    /// in a release build. The checked entry point refuses the only input that
+    /// reaches it (`tgt_idx == middle.len()`), and a debug build
+    /// `debug_assert!`s it first — so no debug lane can pin it, and review
+    /// R2-02 measured that with the conjunct deleted from both arms every
+    /// debug lane, `--lib --release` and `--test checked_mutators --release`
+    /// stayed green. This test is the lane that goes red; CI runs
+    /// `cargo test -p catgraph --lib --release`.
+    ///
+    /// # What this ranges over
+    ///
+    /// Both arms, one fixture each — an identity cospan on one label pushed one
+    /// entry past its apex through the raw path. Nothing else: not apex sizes,
+    /// not the `Right(label)` arms, not the checked entry point.
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn cospan_left_idx_arms_keep_the_apex_length_conjunct_in_release() {
+        use super::Cospan;
+        use either::Either::{Left, Right};
+
+        let mut d = Cospan::<char>::identity(&vec!['a']);
+        assert!(
+            d.is_left_identity(),
+            "fixture must start as a left identity"
+        );
+        d.add_boundary_node_unchecked(Left(Left(1)));
+        assert_eq!(d.left_to_middle(), &[0, 1]);
+        assert!(
+            !d.is_left_identity(),
+            "left == [0, 1] over a 1-vertex apex is not the identity; without the \
+             length conjunct, `left.len() - 1 == tgt_idx` (1 == 1) keeps the flag true"
+        );
+
+        let mut c = Cospan::<char>::identity(&vec!['a']);
+        assert!(
+            c.is_right_identity(),
+            "fixture must start as a right identity"
+        );
+        c.add_boundary_node_unchecked(Right(Left(1)));
+        assert_eq!(c.right_to_middle(), &[0, 1]);
+        assert!(
+            !c.is_right_identity(),
+            "right == [0, 1] over a 1-vertex apex is not the identity; without the \
+             length conjunct, `right.len() - 1 == tgt_idx` (1 == 1) keeps the flag true"
         );
     }
 
@@ -1535,15 +1604,22 @@ mod test {
     ///    clear, and must agree with a fresh construction from the same three
     ///    vectors.
     ///
-    /// It covers the **domain** arm only. That is a real gap in *this* test, not
-    /// a free pass: the two arms are separate expressions, and while #289 was
-    /// being written the codomain one was in fact left without the added
-    /// conjunct while every domain-side assertion stayed green. The codomain arm
-    /// is pinned by `tests/checked_mutators.rs`
-    /// (`cospan_identity_flag_is_not_corrupted_at_the_boundary_index` and
-    /// `cospan_unknown_target_add_clears_the_partner_legs_identity_flag`, which
-    /// sweeps both arms), so the pair of files covers both — do not delete
-    /// either half believing the other generalises.
+    /// It covers the **domain** leg only, and — read the shapes again — it does
+    /// not reach the `leg.len() == middle.len()` conjunct in the `Left(idx)`
+    /// arms at all: shape (1) is refused before the arm runs, and the in-bounds
+    /// add in (2) lands on a flag the apex growth already cleared. That conjunct
+    /// is live only on the raw path in a release build, and is pinned by the
+    /// release-only `cospan_left_idx_arms_keep_the_apex_length_conjunct_in_release`
+    /// above (CI's `cargo test -p catgraph --lib --release`); with it deleted
+    /// from both arms every debug lane stays green — measured by review R2-02.
+    /// The codomain mirror of shape (2) is pinned by `tests/checked_mutators.rs`
+    /// (`cospan_unknown_target_add_clears_the_partner_legs_identity_flag`, which
+    /// sweeps both arms) and the codomain refusal of shape (1) by
+    /// `cospan_identity_flag_is_not_corrupted_at_the_boundary_index` there. The
+    /// two arms are separate expressions — while #289 was being written the
+    /// codomain one was in fact left without the added conjunct while every
+    /// domain-side assertion stayed green — so do not delete any of these
+    /// believing another generalises.
     ///
     /// It does not range over `delete_boundary_node` (pinned separately below,
     /// on both legs) or over apex sizes beyond the two used here.
@@ -1599,8 +1675,12 @@ mod test {
 
         c.add_boundary_node_unknown_target(Right('c'));
         // An in-bounds domain-side add on the leg that has fallen behind the
-        // apex: `left.len() - 1 == tgt_idx` holds after the push (1 == 1), so
-        // the pre-#289 expression would have kept whatever the flag was.
+        // apex. The flag is already `false` from (2), so this does NOT exercise
+        // the `Left(idx)` arm's length conjunct — the pre-#289
+        // `left.len() - 1 == tgt_idx` alone would have kept a `false` too. It
+        // checks that the add keeps the flag false and in agreement with a
+        // fresh construction; the conjunct itself is pinned by the release-only
+        // test above.
         c.add_boundary_node_known_target(Left(1))
             .expect("apex index 1 is in bounds for a 3-vertex apex");
         assert_eq!(c.left_to_middle(), &[0, 1]);
