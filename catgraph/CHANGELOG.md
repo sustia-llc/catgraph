@@ -49,6 +49,16 @@ All notable changes to `catgraph` are documented here. The format follows
   parameters are restored, and the fifth when the `left_leg_id` arm is
   disabled).
 
+  One further fact the review turned up and the pins now record: when **both**
+  legs are the identity, the `left_leg_id` arm is tried first, and its
+  `Right(..)` representative tags mean the composite keeps the **right**
+  operand's apex labels. `composable` has already forced the two apexes equal
+  under `Lambda`'s `Eq`, so under every label type in this workspace there is
+  nothing to observe — but `Cospan` requires only `Eq`, never that `Eq` be
+  identity, so for a label carrying provenance it does not compare on the arm
+  order is visible. It is unchanged by this release and is now pinned rather
+  than incidental.
+
   It also retires the stale-`true` class structurally rather than per-writer.
   Re-measured on this branch: reverting `delete_boundary_node`'s codomain flag
   clear now leaves the entire workspace green **except** two flag assertions,

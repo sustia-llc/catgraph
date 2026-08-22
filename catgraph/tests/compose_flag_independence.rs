@@ -1,6 +1,6 @@
 //! `Cospan::compose` is a function of `(left, right, middle)` — of nothing else.
 //!
-//! Two separable claims about `perform_pushout`'s two identity fast paths,
+//! Three separable claims about `perform_pushout`'s two identity fast paths,
 //! pinned separately because they can fail independently:
 //!
 //! 1. **Which answer the `left_leg_id` arm gives.** It numbers the composite
@@ -18,8 +18,15 @@
 //!    history** as well as its public state: two structurally equal cospans
 //!    composed two different ways. `perform_pushout` now re-derives the
 //!    predicate with `leg_is_identity`.
+//! 3. **Which arm wins when both predicates hold.** The `left_leg_id` arm is
+//!    tried first and tags the composite apex's representatives `Right(..)`,
+//!    so the composite keeps the *right* operand's labels. `composable` has
+//!    already forced the two apexes equal under `Lambda`'s `Eq`, so for every
+//!    label type in this workspace there is nothing to see — but `Cospan` only
+//!    requires `Eq`, never that `Eq` be identity, and under a coarser `Eq` the
+//!    two arms give visibly different answers.
 //!
-//! Claim 2 has exactly one observable shape, and the tests below are confined
+//! Claim 2 has exactly one observable shape, and its tests below are confined
 //! to it on purpose. A stale `false` on the *right* operand's `is_left_id`
 //! (`perform_pushout`'s `right_leg_id`) changes nothing at all: that arm returns
 //! field-for-field what the union-find body returns for the same input, so
@@ -156,6 +163,113 @@ fn strict_left_unitality_with_a_non_monotone_left_leg() {
         result.right_to_middle(),
         f.right_to_middle()
     );
+}
+
+/// A label whose `Eq` is deliberately coarser than its identity: two `Tagged`
+/// values compare equal when their `sort` agrees, whatever their `origin`.
+///
+/// `Cospan` only ever requires `Lambda: Eq`, never that `Eq` be identity, so
+/// this is a legal label — and it is the only way to *see* which operand's
+/// apex a both-legs-identity compose keeps.
+#[derive(Clone, Copy, Debug)]
+struct Tagged {
+    sort: char,
+    origin: &'static str,
+}
+
+impl PartialEq for Tagged {
+    fn eq(&self, other: &Self) -> bool {
+        self.sort == other.sort
+    }
+}
+
+impl Eq for Tagged {}
+
+/// When both legs are the identity, `perform_pushout` enters the `left_leg_id`
+/// arm and the composite keeps the **right** operand's apex labels.
+///
+/// The two arms tag `representative` differently (`Right(i)` vs `Left(i)`),
+/// and that tag is what decides whose labels the composite carries. Under
+/// every label type in this workspace the choice is invisible, because
+/// `composable` has already forced `self.middle[i] == other.middle[i]` and
+/// their `Eq` is identity. It is invisible only that far: with a `Lambda`
+/// whose `Eq` is coarser than its identity the two arms give visibly different
+/// answers, so the arm order is a real decision and not an implementation
+/// detail. This pins which way it currently goes.
+///
+/// **What this ranges over.** One fixture, `n = 2`, both legs the identity on
+/// both operands — the only configuration in which both predicates hold at
+/// once. It observes provenance through a field `Eq` ignores; it does not
+/// claim anything about label types whose `Eq` *is* identity, for which the
+/// question has no observable answer. Swapping the two arms in
+/// `perform_pushout` turns `["right", "right"]` into `["left", "left"]` here,
+/// which is the falsification.
+#[test]
+fn both_legs_identity_keeps_the_right_operands_labels() {
+    let l = Cospan::new(
+        vec![0, 1],
+        vec![0, 1],
+        vec![
+            Tagged {
+                sort: 'a',
+                origin: "left",
+            },
+            Tagged {
+                sort: 'b',
+                origin: "left",
+            },
+        ],
+    )
+    .expect("in-bounds fixture");
+    let r = Cospan::new(
+        vec![0, 1],
+        vec![0, 1],
+        vec![
+            Tagged {
+                sort: 'a',
+                origin: "right",
+            },
+            Tagged {
+                sort: 'b',
+                origin: "right",
+            },
+        ],
+    )
+    .expect("in-bounds fixture");
+
+    assert!(
+        l.is_right_identity() && r.is_left_identity(),
+        "both predicates must hold, else only one arm is reachable and this \
+         test is measuring nothing"
+    );
+
+    let composite = l
+        .compose(&r)
+        .expect("both operands' interfaces agree under Tagged's Eq");
+
+    assert_eq!(
+        composite
+            .middle()
+            .iter()
+            .map(|t| t.origin)
+            .collect::<Vec<_>>(),
+        vec!["right", "right"],
+        "the `left_leg_id` arm runs first and tags `Right(..)`, so the right \
+         operand's apex is the one kept; got {:?}",
+        composite.middle(),
+    );
+    assert_eq!(
+        composite
+            .middle()
+            .iter()
+            .map(|t| t.sort)
+            .collect::<Vec<_>>(),
+        vec!['a', 'b'],
+        "the sorts are equal either way — that is why this needed a coarse `Eq` \
+         to observe at all"
+    );
+    assert_eq!(composite.left_to_middle(), &[0, 1]);
+    assert_eq!(composite.right_to_middle(), &[0, 1]);
 }
 
 // ---------------------------------------------------------------------------

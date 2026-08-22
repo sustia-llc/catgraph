@@ -940,13 +940,24 @@ type PushoutResult = (
 ///
 /// When **both** predicates hold the `left_leg_id` arm wins, and the two arms
 /// tag `representative` differently (`Right(i)` vs `Left(i)`), which selects
-/// which operand's labels fill the composite apex. That is unobservable:
-/// `Composable::composable` has already run `same_labels_check` over the two
-/// interfaces, and when both legs are the identity those interfaces *are* the
-/// two apexes in order, so `self.middle == other.middle` elementwise. Every
-/// other component of the result is literally equal between the arms
-/// (`pushout_target` is `L == R`, and both reindexing maps are the identity on
-/// either side). Pinned in `tests/compose_flag_independence.rs`.
+/// which operand's labels fill the composite apex. Everything else about the
+/// result is literally equal between the arms — `pushout_target` is `L == R`,
+/// and both reindexing maps are the identity on either side — so the label
+/// provenance is the whole of the difference, and `self.middle[i] ==
+/// other.middle[i]` holds for every `i`: `Composable::composable` has already
+/// run `same_labels_check` over the two interfaces, and when both legs are the
+/// identity those interfaces *are* the two apexes in order.
+///
+/// So the choice is invisible **exactly as far as `Lambda`'s own `Eq` is**.
+/// For every `Lambda` in this workspace `Eq` is identity and there is nothing
+/// to see. For a `Lambda` whose `Eq` is deliberately coarser than its identity
+/// — a label carrying provenance it does not compare on — the choice becomes
+/// observable, and the answer is that the composite keeps the **right**
+/// operand's labels. That is measured, not argued, in
+/// `tests/compose_flag_independence.rs`
+/// (`both_legs_identity_keeps_the_right_operands_labels`); this arm order is
+/// therefore load-bearing for such a `Lambda` and should not be swapped
+/// casually.
 fn perform_pushout<T>(
     left_leg: &[LeftIndex],
     left_leg_max_target: LeftIndex,
