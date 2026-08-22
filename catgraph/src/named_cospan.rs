@@ -83,10 +83,11 @@ where
     ///
     /// Name **uniqueness** is still assumed rather than enforced by this
     /// constructor. Port names need only be `Eq`, so the check would be a
-    /// quadratic scan — which is exactly what
-    /// [`add_boundary_node`](Self::add_boundary_node) runs per insertion since
-    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) — but `new`
-    /// does not run it, so a duplicate admitted here is first reported when a
+    /// quadratic scan over the list — the same linear `position()` scan
+    /// [`add_boundary_node`](Self::add_boundary_node) runs once per insertion
+    /// since [#289](https://github.com/sustia-llc/catgraph/issues/289), applied
+    /// to every port — but `new` does not run it, so a duplicate admitted here
+    /// is first reported when a
     /// later `add_boundary_node` returns
     /// [`ConstructionDuplicatePortName`](crate::errors::CatgraphError::ConstructionDuplicatePortName)
     /// with the `existing_position` of the first copy. That asymmetry between

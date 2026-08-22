@@ -5,14 +5,18 @@
 //! 1. The `add_boundary_node` family **rejects** an out-of-bounds apex index in
 //!    every build profile and leaves the value untouched when it does.
 //! 2. `Cospan`'s cached `is_left_id` / `is_right_id` are no longer left a stale
-//!    `true` by `add_boundary_node` (either arm, on either leg) or
-//!    `delete_boundary_node`, where they previously were. The predicate they
-//!    claim to cache is `Cospan::new_unchecked`'s, `leg.len() == middle.len()
-//!    && represents_id(leg)`; `perform_pushout` fast-paths on the flags, so a
-//!    stale `true` is a *wrong composition*, not a cosmetic lie. The `false`
-//!    direction stays conservative by design, and is pinned as such below.
+//!    `true` by `add_boundary_node` (either arm, on either leg),
+//!    `delete_boundary_node` or `connect_pair`, where they previously were. The
+//!    predicate they claim to cache is `Cospan::new_unchecked`'s,
+//!    `leg.len() == middle.len() && represents_id(leg)`; `perform_pushout`
+//!    fast-paths on the flags, so a stale `true` is a *wrong composition*, not
+//!    a cosmetic lie. The `false` direction stays conservative by design for
+//!    `add`/`delete`, and is pinned as such below; `connect_pair` recomputes.
 //! 3. The remaining panicking preconditions name the invariant they enforce,
 //!    in every build profile.
+//! 4. `connect_pair`'s leg remap merges the two ports in **every** argument
+//!    order — a pre-existing defect surfaced by #289's review left both legs
+//!    out of bounds whenever node 1's apex vertex was the last index.
 //!
 //! Every `#[should_panic]` below is on a plain `assert!`, not a
 //! `debug_assert!`, so this file states release behaviour too — and CI runs it
@@ -31,6 +35,23 @@ use catgraph::{
     utils::remove_multiple,
 };
 use either::Either::{Left, Right};
+
+mod common;
+use common::assert_cospan_eq_msg;
+
+/// The same three public vectors, flags computed from scratch by `Cospan::new`
+/// — the reference operand for every "cached flag vs definition" comparison in
+/// this file. It cannot see a leg-remap error (it reproduces whatever legs it
+/// is handed, or refuses them), which is why the `connect_pair` remap pins
+/// compare against hand-written legs instead.
+fn fresh(c: &Cospan<char>) -> Cospan<char> {
+    Cospan::new(
+        c.left_to_middle().to_vec(),
+        c.right_to_middle().to_vec(),
+        c.middle().to_vec(),
+    )
+    .expect("the mutated cospan's legs are in bounds")
+}
 
 // ===========================================================================
 // 1. Bounds: the mutator rejects, and does not half-mutate
@@ -175,12 +196,7 @@ fn cospan_identity_flag_is_not_corrupted_at_the_boundary_index() {
 /// says `true` (see the CHANGELOG's `Fixed` entry) — so this is not a general
 /// invariant of the type and must not be asserted after a `delete`.
 fn assert_flags_agree_with_a_fresh_construction(c: &Cospan<char>, context: &str) {
-    let fresh = Cospan::new(
-        c.left_to_middle().to_vec(),
-        c.right_to_middle().to_vec(),
-        c.middle().to_vec(),
-    )
-    .expect("the mutated cospan's legs are in bounds");
+    let fresh = fresh(c);
     assert_eq!(
         (c.is_left_identity(), c.is_right_identity()),
         (fresh.is_left_identity(), fresh.is_right_identity()),
@@ -285,6 +301,56 @@ fn named_cospan_unknown_target_add_clears_the_partner_legs_identity_flag() {
     );
 }
 
+/// `NamedCospan::connect_pair` resolves the names and delegates to `Cospan`,
+/// so it inherited both the stale-`true` flags and the last-vertex remap
+/// defect — and this is the shape `WiringDiagram::connect_pair` exposes:
+/// mint a port with `add_boundary_node_unknown_target` (it lands on the
+/// **last** apex vertex), then connect it, passing the new port first.
+///
+/// **What this ranges over.** One merge on the named wrapper in the argument
+/// order the remap used to get wrong. Legs are checked by hand, the ports by
+/// `map_to_same`, the flags against a fresh construction — including the one
+/// flag a merge can legitimately turn **on** (`right == [0]` over the merged
+/// 1-vertex apex *is* the identity), which is what "recomputed" means over
+/// "cleared". The per-shape sweep is the `Cospan` tests above.
+#[test]
+fn named_cospan_connect_pair_merges_and_recomputes_the_flags_in_either_order() {
+    let mut nc = NamedCospan::<char, &str, &str>::new(
+        vec![0],
+        vec![0],
+        vec!['a'],
+        vec!["in0"],
+        vec!["out0"],
+    )
+    .expect("in-bounds fixture with one name per port");
+    nc.add_boundary_node_unknown_target('a', Left("in1"))
+        .expect("fresh name, and the apex index is minted by the call");
+    assert_eq!(nc.cospan().left_to_middle(), &[0, 1]);
+    assert!(
+        !nc.cospan().is_right_identity(),
+        "right == [0] over a 2-vertex apex is not the identity"
+    );
+
+    nc.connect_pair(Left("in1"), Left("in0"));
+    assert_eq!(nc.cospan().middle(), &['a']);
+    assert_eq!(
+        (nc.cospan().left_to_middle(), nc.cospan().right_to_middle()),
+        (&[0, 0][..], &[0][..]),
+        "pre-fix: left = [1, 0], right = [1] over a 1-vertex apex — every entry out of bounds"
+    );
+    assert!(
+        nc.map_to_same(Left("in0"), Left("in1")),
+        "the two named ports must share a vertex after the merge (pre-fix: false)"
+    );
+    assert_flags_agree_with_a_fresh_construction(nc.cospan(), "after the named merge");
+    assert!(!nc.cospan().is_left_identity());
+    assert!(
+        nc.cospan().is_right_identity(),
+        "right == [0] over the merged 1-vertex apex IS the identity: the merge turned the \
+         flag back on, which `&=` could never do"
+    );
+}
+
 /// The stale `true` is a **wrong composition**, not a cosmetic lie:
 /// `perform_pushout` fast-paths on the flag and sizes its reindexing map from
 /// the partner's apex.
@@ -306,15 +372,6 @@ fn cospan_unknown_target_add_keeps_composition_correct() {
         g.add_boundary_node_unknown_target(Right('b'));
         g
     };
-    // The reference operand: the same three vectors, flags computed from scratch.
-    let refresh = |g: &Cospan<char>| {
-        Cospan::new(
-            g.left_to_middle().to_vec(),
-            g.right_to_middle().to_vec(),
-            g.middle().to_vec(),
-        )
-        .expect("the mutated legs are in bounds")
-    };
 
     // Shape 1: `g`'s stale `is_left_id` is `perform_pushout`'s `right_leg_id`,
     // whose fast path sizes `right_to_pushout` from `f`'s one-entry codomain
@@ -325,7 +382,7 @@ fn cospan_unknown_target_add_keeps_composition_correct() {
     let g = build_g();
     let f = Cospan::<char>::new(vec![0], vec![0], vec!['a', 'x']).expect("in-bounds fixture");
     let composite = f.compose(&g).expect("f ; g composes");
-    let reference = f.compose(&refresh(&g)).expect("f ; g composes");
+    let reference = f.compose(&fresh(&g)).expect("f ; g composes");
     assert!(
         composite.structurally_equal(&reference),
         "the composite must not depend on whether `g`'s flags were cached or \
@@ -345,7 +402,7 @@ fn cospan_unknown_target_add_keeps_composition_correct() {
     g.delete_boundary_node(Right(0));
     assert_eq!(g.right_to_middle(), &[] as &[usize]);
     let composite = f.compose(&g).expect("f ; g composes");
-    let reference = f.compose(&refresh(&g)).expect("f ; g composes");
+    let reference = f.compose(&fresh(&g)).expect("f ; g composes");
     assert!(
         composite.structurally_equal(&reference),
         "the composite silently dropped an apex vertex: middle = {:?} against \
@@ -414,14 +471,8 @@ fn cospan_identity_flags_are_conservative_in_the_false_direction() {
     c.add_boundary_node_known_target(Left(1))
         .expect("apex index 1 is in bounds for a 2-vertex apex");
     assert_eq!(c.left_to_middle(), &[0, 1]);
-    let fresh = Cospan::new(
-        c.left_to_middle().to_vec(),
-        c.right_to_middle().to_vec(),
-        c.middle().to_vec(),
-    )
-    .expect("the legs are in bounds");
     assert!(
-        fresh.is_left_identity(),
+        fresh(&c).is_left_identity(),
         "a fresh construction from the same three vectors says identity"
     );
     assert!(
@@ -444,10 +495,15 @@ fn cospan_identity_flags_are_conservative_in_the_false_direction() {
 /// up, `structurally_equal` is false.
 ///
 /// **What this ranges over.** One merge of two domain ports on a 2-vertex
-/// apex, composed with one identity; the flags are compared against a fresh
-/// construction (exact here — `connect_pair` recomputes rather than `&=`s) and
-/// the composite against the reference composition. It does not sweep apex
-/// sizes, codomain-side merges, or the same-vertex / label-mismatch no-op arms.
+/// apex, in the argument order whose remap was already correct (node 2's
+/// vertex is the last index — the reversed order is the sibling test below),
+/// composed with one identity; the flags are compared against a fresh
+/// construction (exact after a merge — `connect_pair` recomputes rather than
+/// `&=`s) and the composite against the reference composition **and** against
+/// the hand-written `[0, 0]` legs (the reference is rebuilt from the mutated
+/// legs, so the absolute assertions are the independent ones). It does not
+/// sweep apex sizes, codomain-side merges, or the same-vertex /
+/// label-mismatch no-op arms.
 #[test]
 fn cospan_connect_pair_clears_the_identity_flags_so_compose_is_right() {
     let mut f =
@@ -461,32 +517,21 @@ fn cospan_connect_pair_clears_the_identity_flags_so_compose_is_right() {
     assert_eq!(f.middle(), &['a']);
     assert_eq!(f.left_to_middle(), &[0, 0]);
     assert_eq!(f.right_to_middle(), &[0, 0]);
+    assert!(f.map_to_same(Left(0), Left(1)));
     // Composition first: it is the consequence with teeth, and under the
     // pre-fix code this assertion is the one that fires, carrying the measured
     // wrong composite in its message. The flag assertions follow.
     let g = Cospan::<char>::identity(&vec!['a', 'a']);
     let composite = f.compose(&g).expect("f ; id composes");
-    let reference = Cospan::new(
-        f.left_to_middle().to_vec(),
-        f.right_to_middle().to_vec(),
-        f.middle().to_vec(),
-    )
-    .expect("the merged legs are in bounds")
-    .compose(&g)
-    .expect("the reference composes");
-    assert!(
-        composite.structurally_equal(&reference),
-        "the composite must not depend on the cached flags: got left = {:?}, right = {:?}, \
-         middle = {:?} against the reference's left = {:?}, right = {:?}, middle = {:?} \
-         (pre-fix: right = [0, 1] over ['a', 'a'])",
-        composite.left_to_middle(),
-        composite.right_to_middle(),
-        composite.middle(),
-        reference.left_to_middle(),
-        reference.right_to_middle(),
-        reference.middle(),
+    let reference = fresh(&f).compose(&g).expect("the reference composes");
+    assert_cospan_eq_msg(
+        &composite,
+        &reference,
+        "the composite must not depend on the cached flags (pre-fix: right = [0, 1] over \
+         ['a', 'a'] against the reference's right = [0, 0] over ['a'])",
     );
     assert_eq!(composite.middle(), &['a']);
+    assert_eq!(composite.left_to_middle(), &[0, 0]);
     assert_eq!(composite.right_to_middle(), &[0, 0]);
 
     assert_flags_agree_with_a_fresh_construction(&f, "after connect_pair merged the apex");
@@ -495,6 +540,85 @@ fn cospan_connect_pair_clears_the_identity_flags_so_compose_is_right() {
         "a 2-entry leg over a 1-vertex apex is not the identity (pre-fix both flags \
          stayed true)"
     );
+}
+
+/// `connect_pair`'s remap wrote node 1's **old** apex index after `swap_remove`
+/// had moved that vertex into node 2's slot, so whenever node 1's vertex was
+/// the last apex index (and node 2's was not) both legs received an
+/// out-of-bounds entry and the two ports were never merged at all — a
+/// pre-existing defect surfaced by #289's third review (R3-01), invisible to
+/// every in-tree caller because each passes the lower apex index first or
+/// merges away the last vertex. Reachable unchanged through
+/// `NamedCospan::connect_pair` and `WiringDiagram::connect_pair`, where
+/// "mint a port with `add_boundary_node_unconnected`, then connect it" hits
+/// it whenever the new (last) port is passed first.
+///
+/// Measured before the fix, on the three shapes below: `left = [1, 0]`,
+/// `right = [1, 0]` over a 1-vertex apex (entry 1 out of bounds);
+/// `left = [2, 1, 0]` over a 2-vertex apex with `map_to_same(Left(0),
+/// Left(2))` false; and the mixed pair likewise `[1, 0]` / `[1, 0]`. A debug
+/// build was equally silent: `connect_pair` runs no `assert_valid`.
+///
+/// **What this ranges over.** Three argument shapes on two fixtures — the
+/// reversed order of the sibling test's fixture, a 3-vertex apex merged from
+/// its last vertex into its first, and a mixed `Left`/`Right` pair — each
+/// compared against **hand-written** legs and `map_to_same`, because a rebuild
+/// of the mutated value cannot see a remap error. Codomain-side merges of the
+/// same shape and apex sizes above 3 are not swept; the one order the remap
+/// always got right is the sibling test's.
+#[test]
+fn cospan_connect_pair_merges_when_node_1s_vertex_is_the_last_apex_index() {
+    // Reversed order of the sibling test's fixture: node 1 sits on vertex 1,
+    // the last, so `swap_remove(0)` moves it into slot 0.
+    let mut f =
+        Cospan::<char>::new(vec![0, 1], vec![0, 1], vec!['a', 'a']).expect("in-bounds fixture");
+    f.connect_pair(Left(1), Left(0));
+    assert_eq!(f.middle(), &['a']);
+    assert_eq!(
+        (f.left_to_middle(), f.right_to_middle()),
+        (&[0, 0][..], &[0, 0][..]),
+        "pre-fix: left = [1, 0], right = [1, 0] over a 1-vertex apex — entry 1 out of bounds"
+    );
+    assert!(
+        f.map_to_same(Left(0), Left(1)),
+        "the two ports must share a vertex after the merge"
+    );
+    assert_flags_agree_with_a_fresh_construction(&f, "after the reversed-order merge");
+
+    // A 3-vertex apex, merging the LAST vertex into the first: the moved
+    // vertex (old index 2) lands in slot 0, and the untouched port keeps its own.
+    let mut c =
+        Cospan::<char>::new(vec![0, 1, 2], vec![], vec!['a', 'a', 'a']).expect("in-bounds fixture");
+    c.connect_pair(Left(2), Left(0));
+    assert_eq!(c.middle(), &['a', 'a']);
+    assert_eq!(
+        c.left_to_middle(),
+        &[0, 1, 0],
+        "pre-fix: left = [2, 1, 0] over a 2-vertex apex — two entries out of bounds"
+    );
+    assert!(c.map_to_same(Left(0), Left(2)));
+    assert!(
+        !c.map_to_same(Left(0), Left(1)),
+        "the untouched port keeps its own vertex"
+    );
+    assert_flags_agree_with_a_fresh_construction(
+        &c,
+        "after merging the last apex vertex into the first",
+    );
+
+    // Mixed legs: a domain port on the last vertex merged with a codomain port
+    // on the first.
+    let mut m =
+        Cospan::<char>::new(vec![0, 1], vec![0, 1], vec!['a', 'a']).expect("in-bounds fixture");
+    m.connect_pair(Left(1), Right(0));
+    assert_eq!(m.middle(), &['a']);
+    assert_eq!(
+        (m.left_to_middle(), m.right_to_middle()),
+        (&[0, 0][..], &[0, 0][..]),
+        "pre-fix: left = [1, 0], right = [1, 0] over a 1-vertex apex"
+    );
+    assert!(m.map_to_same(Left(1), Right(0)));
+    assert_flags_agree_with_a_fresh_construction(&m, "after the mixed-leg merge");
 }
 
 /// `Span`'s identity flags are weaker than `Cospan`'s, and the `Span`

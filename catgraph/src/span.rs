@@ -226,18 +226,20 @@ where
     /// argument to bounds-check, appending one leaves every existing middle pair
     /// in bounds and label-agreeing, and the identity flags are computed from
     /// the middle pairs alone, which this call does not touch. The `Result` is
-    /// a **signature-parity** decision
+    /// a **shape-parity** decision
     /// ([#289](https://github.com/sustia-llc/catgraph/issues/289); owner
     /// directive of 2026-08-22, superseding the issue's per-type reading):
     /// [`Cospan::add_boundary_node`](crate::cospan::Cospan::add_boundary_node)
     /// and
     /// [`NamedCospan::add_boundary_node`](crate::named_cospan::NamedCospan::add_boundary_node)
     /// are fallible for reasons that genuinely apply to them (an out-of-bounds
-    /// apex index; a duplicate port name), and with all three mutators sharing
-    /// one shape, a precondition added to `Span` later — the boundary-length
-    /// conjunct of [#345](https://github.com/sustia-llc/catgraph/issues/345) is
-    /// the candidate — is not a second breaking change for callers.
-    /// [`add_boundary_node_unchecked`](Self::add_boundary_node_unchecked) is the
+    /// apex index; a duplicate port name), and the three mutators share one
+    /// return type so a caller can treat them alike. No error is anticipated:
+    /// the one `Span` follow-up on this method,
+    /// [#345](https://github.com/sustia-llc/catgraph/issues/345), is a
+    /// flag-semantics change that would land in this method *and* in
+    /// [`add_boundary_node_unchecked`](Self::add_boundary_node_unchecked)
+    /// alike, and carries no error arm. `add_boundary_node_unchecked` is the
     /// same operation without the wrapper.
     ///
     /// ⚠ **The flags this leaves alone mean less than a `Cospan`'s** — tracked
@@ -272,9 +274,10 @@ where
     /// data through them. This one skips nothing — a label has no invariant to
     /// check — so it is equally safe on untrusted input today. Prefer
     /// [`add_boundary_node`](Self::add_boundary_node) anyway: it is the name
-    /// that will carry a check if `Span` ever gains one
-    /// ([#345](https://github.com/sustia-llc/catgraph/issues/345)), and the one
-    /// the other two types' callers already write.
+    /// the other two types' callers already write, and the one that would
+    /// carry a check if `Span` ever gained a precondition — none is
+    /// anticipated; [#345](https://github.com/sustia-llc/catgraph/issues/345)
+    /// is a flag-semantics change that lands in both methods alike.
     pub fn add_boundary_node_unchecked(
         &mut self,
         new_boundary: Either<Lambda, Lambda>,

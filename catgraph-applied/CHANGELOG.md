@@ -35,6 +35,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   `examples/wiring_diagram.rs`, `tests/wiring_diagram.rs`. Downstream callers
   need a `?`, an `.expect(..)`, or a `let _ =` to restore the old behaviour.
 
+  `WiringDiagram::connect_pair` keeps its signature but changes behaviour,
+  through `NamedCospan::connect_pair` → `Cospan::connect_pair` (core's `Fixed`
+  entries for #289): (1) it now merges the two ports in **every** argument
+  order — before, naming the port that sits on the **last** apex vertex first
+  (the "`add_boundary_node_unconnected`, then connect it" workflow) left both
+  legs out of bounds and the ports unmerged, silently, in every profile;
+  (2) both identity flags are recomputed after a merge instead of left stale,
+  so a composition after a merge — `operadic_substitution` composes — no
+  longer takes `perform_pushout`'s fast path on a stale `true`; and because a
+  merge can now also turn a flag *on*, a composite built after one may come
+  back with a different, isomorphic apex order than before — compare
+  canonical forms, not bytes.
+
   No other `catgraph-applied` surface is affected: `remove_multiple` and
   `from_cycle` — core's other #289 changes — keep their signatures, and this
   crate's two `remove_multiple` calls in `operadic_substitution` already pass
