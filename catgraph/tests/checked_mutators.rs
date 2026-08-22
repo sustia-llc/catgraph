@@ -131,11 +131,11 @@ fn cospan_add_boundary_node_error_renders_the_leg_position_target_and_size() {
 ///
 /// `represents_id` tests only `leg[i] == i` for the entries present, so without
 /// the `leg.len() == middle.len()` conjunct a leg strictly shorter than the
-/// apex passes. That conjunct is what four separate #289 defects each dropped
-/// in their own way, and what `Cospan::assert_valid`'s retired strong arm
-/// dropped a fifth time — it rejected `Cospan::new(vec![0], vec![0, 1],
-/// vec!['a', 'b'])`, a perfectly valid cospan, for having a correctly-`false`
-/// left flag.
+/// apex passes. Three of the four #289 flag defects were exactly that — a
+/// hand-written re-spelling missing the conjunct — and `Cospan::assert_valid`'s
+/// retired strong arm made the same omission in the other direction, rejecting
+/// `Cospan::new(vec![0], vec![0, 1], vec!['a', 'b'])`, a perfectly valid
+/// cospan, for having a correctly-`false` left flag.
 ///
 /// **What this ranges over.** One 2-vertex apex, both legs, both answers, plus
 /// the empty cospan as the degenerate case. It does not sweep apex sizes and

@@ -32,8 +32,10 @@ type MiddleIndexOrLambda<Lambda> = Either<MiddleIndex, Lambda>;
 /// function applied to a leg, and `perform_pushout`, which selects its two fast
 /// paths with it. The length conjunct is the half that keeps being lost when
 /// the predicate is re-spelled by hand:
-/// [#289](https://github.com/sustia-llc/catgraph/issues/289) found four such
-/// re-spellings, each satisfiable by a leg out of step with the apex.
+/// [#289](https://github.com/sustia-llc/catgraph/issues/289) found three sites
+/// that had re-spelled it without the conjunct, each then satisfiable by a leg
+/// out of step with the apex, plus a fourth that maintained no answer at all.
+/// The crate's CHANGELOG enumerates them.
 fn leg_is_identity(leg: &[MiddleIndex], apex_len: usize) -> bool {
     leg.len() == apex_len && represents_id(leg.iter().copied())
 }

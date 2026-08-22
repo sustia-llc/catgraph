@@ -168,10 +168,11 @@ All notable changes to `catgraph` are documented here. The format follows
   the defect class that motivated deleting it.
 
   `is_left_id` / `is_right_id` were documented to mean
-  `leg.len() == middle.len() && represents_id(leg)`, and **four** writers each
-  re-spelled that predicate by hand and lost part of it — three of them
-  reachable through the fully checked API, with no `_unchecked` call and no
-  malformed input:
+  `leg.len() == middle.len() && represents_id(leg)`. **Four** writers were
+  responsible for keeping that true and each failed differently — three by
+  re-spelling the predicate by hand and dropping part of it, one by not
+  updating at all — and three of the four are reachable through the fully
+  checked API, with no `_unchecked` call and no malformed input:
 
   - `add_boundary_node`'s `Left(idx)` arms tested `leg.len() - 1 == tgt_idx`.
     On an identity cospan the only index that satisfies it is `middle.len()`
