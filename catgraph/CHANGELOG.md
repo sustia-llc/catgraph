@@ -197,6 +197,20 @@ All notable changes to `catgraph` are documented here. The format follows
      generator leaves the `iff` test green at 256/256 isomorphic and reddens
      only the meta-test.
 
+- **`rel_from_selector`'s "same relation for a given mask" was a structural
+  claim no test asserted** (#287 follow-up) — the helper extracted in (1) above
+  is shared by the proptest strategies and the exhaustive sweep, but sharing a
+  function is not evidence that a bit denotes the pair the docstring says it
+  does. New `rel_from_selector_matches_its_definition` decides the row-major
+  convention against a reference written from the definition (never calling the
+  helper), and asserts the bool-vec and `u32`-bitmask paths agree, for every
+  mask over `n ∈ {2, 3}` — 528 relations. Falsified: a column-major flat index
+  (`j*n + i`) inside the helper reddens it at `n = 2, mask = 0b10`, `{(1, 0)}`
+  vs `{(0, 1)}`; reversing `rel_from_mask`'s bit order reddens it at
+  `n = 2, mask = 0b1`, `{(1, 1)}` vs `{(0, 0)}`. Narrow by construction: `n = 4`
+  is drawn by the strategies but not enumerated (2^16 masks), which the test's
+  own docstring states.
+
 - **The #258 braiding contract was pinned only downstream, and the only core
   *integration* test that named permutation composition was vacuous**
   ([#286](https://github.com/sustia-llc/catgraph/issues/286)). (Core's lib unit

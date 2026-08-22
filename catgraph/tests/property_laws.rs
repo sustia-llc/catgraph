@@ -529,7 +529,11 @@ impl std::fmt::Debug for DebugRel {
 /// [`arb_three_homogeneous_rels`], and
 /// [`rel_predicates_decided_exhaustively_on_small_carriers`] — so the proptest
 /// corpus and the exhaustive corpus contain the *same* relation for a given
-/// mask by construction, not by parallel transcription.
+/// mask by construction, not by parallel transcription. Sharing one function
+/// is not on its own evidence of that, and it says nothing about which pair a
+/// given bit denotes, so both the flat-index convention and the mask-vs-
+/// bool-vec parity are asserted by
+/// [`rel_from_selector_matches_its_definition`].
 fn rel_from_selector(n: usize, keep: impl Fn(usize) -> bool) -> Rel<char> {
     let types: Vec<char> = vec!['a'; n];
     let pairs: Vec<(usize, usize)> = (0..n)
@@ -734,6 +738,82 @@ fn oracle_transitive(pairs: &HashSet<(usize, usize)>) -> bool {
 /// proptest strategies use.
 fn rel_from_mask(n: usize, mask: u32) -> Rel<char> {
     rel_from_selector(n, |bit| mask & (1 << bit) != 0)
+}
+
+/// [`rel_from_selector`]'s row-major flat-index convention, decided against an
+/// independent reference, and the mask-vs-bool-vec parity its docstring claims.
+///
+/// The helper says the proptest corpus and the exhaustive corpus "contain the
+/// *same* relation for a given mask by construction". That was a structural
+/// claim no test asserted (#287 follow-up); both halves are now checked for
+/// every mask over `n ∈ {2, 3}` — 16 + 512 = 528 relations:
+///
+/// 1. **definition** — `rel_from_mask(n, mask)`'s middle pairs equal
+///    `{ (i, j) : bit i*n + j of mask is set }`, built here from the row-major
+///    convention itself. The reference never calls [`rel_from_selector`], so a
+///    convention change inside the helper cannot move both sides together.
+/// 2. **parity** — the bool-vec path the strategies take,
+///    `rel_from_selector(n, |k| bits[k])` with `bits[k]` = bit `k` of `mask`,
+///    yields that same pair set. This is the literal "same relation for a
+///    given mask", and it is the half that a divergence between the *two call
+///    sites* (not the shared helper) would break.
+///
+/// # What this ranges over
+///
+/// Every mask for `n ∈ {2, 3}` exhaustively, and **nothing about `n ≥ 4`** —
+/// where [`arb_homogeneous_rel`] does draw `n = 4`. `n = 4` is not enumerated
+/// because it is `2^16` = 65 536 masks; the convention `bit ↦ (bit / n,
+/// bit % n)` is `n`-independent, so a break in it is already visible at
+/// `n = 2`. Homogeneous, single-label relations only, like the corpora it
+/// pins.
+///
+/// Falsified at the commit that introduced this test, both mutations measured:
+///
+/// - building the Cartesian product column-major inside [`rel_from_selector`]
+///   (flat index `j*n + i`) reddens assertion (1) at `n = 2, mask = 0b10` —
+///   left `{(1, 0)}`, right `{(0, 1)}`;
+/// - reversing [`rel_from_mask`]'s bit order (`1 << (n*n - 1 - bit)`) reddens
+///   assertion (1) at `n = 2, mask = 0b1` — left `{(1, 1)}`, right `{(0, 0)}`.
+///
+/// Assertion (2) reddens under *neither*, and that is the honest reading of
+/// it: today both corpora call the one helper, so (1) failing first is
+/// unavoidable and (2) is a consequence rather than an independent check. It
+/// is a guard against the future — the transcription (2) forbids is exactly
+/// what a refactor giving `rel_from_mask` its own body would reintroduce, and
+/// (2) is where that would surface once it no longer implies (1).
+#[test]
+fn rel_from_selector_matches_its_definition() {
+    for n in [2_usize, 3] {
+        for mask in 0..(1_u32 << (n * n)) {
+            // Independent reference: the row-major convention, spelled out.
+            let mut reference: HashSet<(usize, usize)> = HashSet::new();
+            for i in 0..n {
+                for j in 0..n {
+                    if mask & (1 << (i * n + j)) != 0 {
+                        reference.insert((i, j));
+                    }
+                }
+            }
+
+            let from_mask = rel_pair_set(&rel_from_mask(n, mask));
+            assert_eq!(
+                from_mask, reference,
+                "n = {n}, mask = {mask:#b}: rel_from_mask built {from_mask:?}, \
+                 the row-major definition (bit i*n + j set ⟺ (i, j) ∈ R) \
+                 gives {reference:?}"
+            );
+
+            let bits: Vec<bool> = (0..n * n).map(|k| ((mask >> k) & 1) == 1).collect();
+            let from_bools = rel_pair_set(&rel_from_selector(n, |k| bits[k]));
+            assert_eq!(
+                from_bools, from_mask,
+                "n = {n}, mask = {mask:#b}: the bool-vec path the proptest \
+                 strategies take built {from_bools:?}, the u32-bitmask path \
+                 the exhaustive test takes built {from_mask:?} — not the same \
+                 relation for a given mask"
+            );
+        }
+    }
 }
 
 /// Every `Rel` predicate decided against its oracle on **every** relation over
