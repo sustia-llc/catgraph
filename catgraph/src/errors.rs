@@ -166,6 +166,40 @@ pub enum CatgraphError {
         name_count: usize,
     },
 
+    /// A [`NamedCospan`](crate::named_cospan::NamedCospan) mutator was asked to
+    /// add a port whose name is already taken on that boundary.
+    ///
+    /// Port names are the named cospan's addressing scheme: every name-keyed
+    /// operation (`find_node_by_name`, `delete_boundary_node_by_name`,
+    /// `map_to_same`, `connect_pair`) resolves a name by `position`, i.e. to the
+    /// **first** port carrying it, so a duplicate makes the second port
+    /// unaddressable and silently redirects every later lookup to the first.
+    ///
+    /// Raised by
+    /// [`NamedCospan::add_boundary_node`](crate::named_cospan::NamedCospan::add_boundary_node)
+    /// and its `known_target` / `unknown_target` wrappers. Before
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) this was a hard
+    /// release `assert!` inside `add_boundary_node`, which meant one method
+    /// aborted the process for a duplicate name while accepting an
+    /// out-of-bounds middle index without a word — two postures for two
+    /// invariants of the same call. The `_unchecked` constructor and
+    /// [`assert_valid`](crate::named_cospan::NamedCospan::assert_valid) leave it
+    /// to a `debug_assert!`.
+    ///
+    /// The offending name itself is deliberately **not** carried: port names are
+    /// only bounded by `Eq`, so there is no `Debug`/`Display` to render them
+    /// with. `existing_position` locates the port that already holds it, which
+    /// is what a caller needs to recover.
+    #[error(
+        "construction error: a {leg} port at position {existing_position} already carries the requested name; port names must be unique on each boundary"
+    )]
+    ConstructionDuplicatePortName {
+        /// Which boundary the name collision was found on.
+        leg: BoundaryLeg,
+        /// The position of the port that already carries the requested name.
+        existing_position: usize,
+    },
+
     /// A [`CospanCanon`](crate::cospan_canon::CospanCanon)'s class vector is not
     /// sorted under [`ApexClass`](crate::cospan_canon::ApexClass)'s `Ord`.
     ///

@@ -133,12 +133,16 @@ fn port_manipulation() {
     );
 
     // Add left port pointing to existing middle node
-    let idx = nc.add_boundary_node_known_target(0, Left("in_1"));
+    let idx = nc
+        .add_boundary_node_known_target(0, Left("in_1"))
+        .expect("apex index 0 is in bounds and \"in_1\" is a fresh domain port name");
     println!("\nadd_boundary_node_known_target(0, Left(\"in_1\")) -> {idx:?}");
     println!("  left_names = {:?}", nc.left_names());
 
     // Add right port with new middle node
-    let idx = nc.add_boundary_node_unknown_target('b', Right("out_1"));
+    let idx = nc
+        .add_boundary_node_unknown_target('b', Right("out_1"))
+        .expect("\"out_1\" is a fresh codomain port name");
     println!("\nadd_boundary_node_unknown_target('b', Right(\"out_1\")) -> {idx:?}");
     println!("  right_names = {:?}", nc.right_names());
     println!("  middle      = {:?}", nc.cospan().middle());

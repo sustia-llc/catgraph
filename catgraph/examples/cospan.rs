@@ -186,7 +186,9 @@ fn mutation() {
     );
 
     // Add a left boundary node pointing to existing middle[0]
-    let idx = c.add_boundary_node_known_target(Left(0));
+    let idx = c
+        .add_boundary_node_known_target(Left(0))
+        .expect("apex index 0 is in bounds");
     println!("\nadd_boundary_node_known_target(Left(0)) -> {idx:?}");
     println!("  left = {:?}", c.left_to_middle());
 

@@ -13,6 +13,34 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **`WiringDiagram::add_boundary_node_unconnected` returns
+  `Result<(), CatgraphError>`**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)). It forwards to
+  `NamedCospan::add_boundary_node_unknown_target`, which core made fallible in
+  the same issue: a duplicate port name used to abort the process through a
+  bare release `assert!` inside `NamedCospan`, and this wrapper discarded the
+  mutator's return value (`let _ = ...`), so a caller had no way to see the
+  collision coming or to recover from it. The failure is
+  `CatgraphError::ConstructionDuplicatePortName`, carrying the leg and the
+  position of the port that already holds the name. On `Err` the diagram is
+  untouched — no port, no wire. Port names are a wiring diagram's addressing
+  scheme (`connect_pair`, `delete_boundary_node` and `operadic_substitution`
+  all resolve ports by name), so a duplicate makes the new port unaddressable
+  rather than merely untidy. Pinned in
+  `wiring_diagram::test::add_boundary_node_unconnected_reports_a_duplicate_name`.
+
+  Every call site inside this crate moved with it — `src/wiring_diagram.rs`,
+  `examples/wiring_diagram.rs`, `tests/wiring_diagram.rs`. Downstream callers
+  need a `?`, an `.expect(..)`, or a `let _ =` to restore the old behaviour.
+
+  No other `catgraph-applied` surface is affected: `remove_multiple` and
+  `from_cycle` — core's other #289 changes — keep their signatures, and this
+  crate's two `remove_multiple` calls in `operadic_substitution` already pass
+  distinct in-range indices (they come from `find_nodes_by_name_predicate`), so
+  the new dedup and bounds check are no-ops for them.
+
 ### Changed
 
 - **clippy 1.98 compatibility**

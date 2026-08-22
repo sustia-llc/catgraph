@@ -234,7 +234,9 @@ fn add_boundary_node_then_substitute() {
     // Add an unconnected left-side (inner circle) boundary node on a
     // *different* circle (circle 5, which doesn't exist yet).
     // This should not affect substitution into circle 0.
-    outer.add_boundary_node_unconnected(true, Left((Dir::In, 5, 100)));
+    outer
+        .add_boundary_node_unconnected(true, Left((Dir::In, 5, 100)))
+        .unwrap();
 
     let inner = leaf_diagram();
     let result = outer.operadic_substitution(0, inner);
@@ -327,7 +329,9 @@ fn chain_of_mutations_then_substitute() {
     let mut outer = two_hole_outer();
 
     // Add an unconnected right-side node
-    outer.add_boundary_node_unconnected((), Right((Dir::Out, 77)));
+    outer
+        .add_boundary_node_unconnected((), Right((Dir::Out, 77)))
+        .unwrap();
 
     // Connect that new node with an existing outer boundary node
     outer.connect_pair(Right((Dir::Out, 50)), Right((Dir::Out, 77)));

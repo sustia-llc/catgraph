@@ -6,6 +6,154 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — BREAKING (#289: the checked boundary-node mutators)
+
+- **The `add_boundary_node` family is checked, and the raw path is
+  `*_unchecked`** ([#289](https://github.com/sustia-llc/catgraph/issues/289)).
+  The #256/#261 arc fenced the *constructors* (`new` → `Result`), but these
+  mutators re-opened the same hole one call later on an already-valid value:
+  `Cospan::add_boundary_node` pushed a caller-supplied apex index into the leg
+  with **no check at all** — weaker than `new_unchecked`, which at least
+  `debug_assert!`s it.
+
+  - `Cospan::add_boundary_node` and
+    `Cospan::add_boundary_node_known_target` now return
+    `Result<Either<LeftIndex, RightIndex>, CatgraphError>`, raising
+    `ConstructionIndexOutOfBounds` when an `Left(tgt_idx)` target is at or
+    beyond `middle.len()`. The variant names the leg, the **position the node
+    would have taken**, the target and the apex size. On `Err` the cospan is
+    left exactly as it was.
+  - `Cospan::add_boundary_node_unchecked` is new: the raw path, with
+    `new_unchecked`'s posture (a `debug_assert!`, no release cost). The one
+    in-crate caller that needs it is the pushout builder in
+    `compose_with_quotient`.
+  - `Cospan::add_boundary_node_unknown_target` keeps its infallible signature.
+    It mints the apex vertex itself, so it has no precondition a `Result`
+    could report.
+  - `NamedCospan::add_boundary_node` and **both** its `_known_target` /
+    `_unknown_target` wrappers return the same `Result`, and
+    `NamedCospan::add_boundary_node_unchecked` is the raw path. The method used
+    to mean two different things by its two invariants — a duplicate port name
+    aborted the process through a bare release `assert!`, an out-of-bounds apex
+    index was not checked at all. Both are now `Err`s, the name is checked
+    first, and neither the name list nor the leg is written on `Err`.
+  - `NamedCospan::add_middle` returns the new `MiddleIndex`, as
+    `Cospan::add_middle` always has. It previously discarded it.
+  - `Span::add_boundary_node` is **not** changed, and has no `_unchecked`
+    sibling. The issue asks for `Result` on "both types", but a span's legs
+    point *out* of the apex, so this mutator takes a **label**
+    (`Either<Lambda, Lambda>`), not an index: there is no argument to
+    bounds-check, appending one leaves every existing middle pair in bounds and
+    label-agreeing, and the identity flags are computed from the middle pairs
+    alone, which the call does not touch. A `Result` here could never be `Err`
+    — it would cost every caller an `unwrap`/`expect` and tell them nothing —
+    and an `_unchecked` sibling would name a check that does not exist. The
+    real `Span` item in this issue is `add_middle`, below.
+
+- **`CatgraphError::ConstructionDuplicatePortName`** is a new variant (the enum
+  is `#[non_exhaustive]`, so this is additive for `match`es that already carry
+  a wildcard). It carries `leg` and the `existing_position` of the port that
+  already holds the name — not the name itself, since port names are only
+  bounded by `Eq`.
+
+- **`finset::from_cycle` validates its cycle**, in every build profile and
+  before any recursion: every element must be `< n`, and the elements must be
+  pairwise distinct. Both were previously accepted. An out-of-range element
+  reached a bare `assert!(i < n && j < n)` inside `permutations 0.1.1` from a
+  recursive call (and a cycle shorter than 2 short-circuited before even that,
+  so `from_cycle(3, &[7])` returned the identity); a repeated element silently
+  returned a permutation that is **not** the documented cycle —
+  `from_cycle(3, &[0, 1, 0])` is the identity, and no 3-cycle exists on the two
+  distinct elements it names. Callers passing malformed cycles now panic with a
+  message naming the function and the cycle.
+
+- **`utils::remove_multiple` deduplicates its index list**, so a repeated index
+  names one element and removes it once. Previously `to_remove = [3, 3]`
+  removed index 3 and then index 3 *of the shortened vector*, silently deleting
+  the element that had been at 4 — or panicked with a bare slice message when 3
+  had been the last index. It also bounds-checks, naming the offending index
+  and the length. Every in-crate and in-workspace caller already passed
+  distinct in-range indices, so no behaviour they relied on changes.
+
+### Fixed (#289)
+
+- **`Cospan`'s boundary-node mutators no longer leave an identity flag a stale
+  `true`** ([#289](https://github.com/sustia-llc/catgraph/issues/289)).
+  `is_left_id` / `is_right_id` mean what `Cospan::new_unchecked` computes —
+  `leg.len() == middle.len() && represents_id(leg)` — but three arms tested
+  less than that, and each shortfall is satisfiable with a leg out of step with
+  the apex:
+
+  - `add_boundary_node`'s `Left(idx)` (existing-target) arms tested
+    `leg.len() - 1 == tgt_idx`. On an identity cospan the only index that
+    satisfies it is `middle.len()` itself, so the old code pushed an
+    out-of-range entry **and kept the flag `true`**.
+  - `add_boundary_node`'s `Right(label)` (new-vertex) arms grow the **apex**,
+    and updated only the flag of the leg they push to. The partner leg kept its
+    length while the apex gained a vertex, so a legitimately-`true` flag
+    survived on a leg that is now strictly shorter than the apex —
+    reachable through the fully checked API, with no `_unchecked` call and no
+    malformed input, and inherited by `NamedCospan`. Both arms now clear the
+    partner flag, which is exact rather than conservative: no leg shorter than
+    the apex is the identity on it.
+  - `delete_boundary_node` tested `z == leg.len() - 1`. Deleting the last port
+    of an identity cospan shortens the leg without shrinking the apex, so the
+    leg stops being an identity while the flag says otherwise.
+
+  This is not cosmetic: `perform_pushout` **fast-paths** on those flags and
+  sizes its reindexing map from the partner's apex, so a stale `true` is a
+  wrong composition. Pinned in `tests/checked_mutators.rs`. Reverting only the
+  `delete_boundary_node` conjunct makes `id_ab.delete(Right(1)).compose(&id_a)`
+  panic at `cospan.rs:648` with `index out of bounds: the len is 1 but the
+  index is 1`; reverting only the `Right(label)` partner-flag clear makes
+  `Cospan::new(vec![0], vec![0], vec!['a', 'x'])` composed with
+  `Cospan::new(vec![0], vec![], vec!['a'])` + `unknown_target(Right('b'))`
+  panic the same way at `cospan.rs:653` — and, with that `g`'s codomain port
+  then deleted so nothing indexes out of range, compose *silently* to the apex
+  `['a', 'x']` where the reference composition gives `['a', 'x', 'b']`.
+
+  The flags remain **conservative in the other direction**: `&=` can only
+  clear, so `identity(&['a', 'b'])` → `delete_boundary_node(Left(1))` →
+  `add_boundary_node_known_target(Left(1))` leaves `is_left_identity()` `false`
+  where a fresh `Cospan::new` of the same three vectors says `true`. That is
+  safe for `perform_pushout` — it costs the fast path, not correctness — and is
+  the direction `structurally_equal`'s docs already warn about. Mutators
+  outside this family are unchanged and are not covered by this entry:
+  `connect_pair` still does not touch the flags at all.
+
+- **`Cospan::assert_valid`'s strong arm checks the predicate the flags actually
+  cache** ([#289](https://github.com/sustia-llc/catgraph/issues/289)). It
+  compared `represents_id(leg)` against the flag, without the
+  `leg.len() == middle.len()` conjunct that `new_unchecked`, the mutators and
+  this changelog all define the flag by — so
+  `Cospan::new(vec![0], vec![0, 1], vec!['a', 'b'])` (valid, `is_left_id`
+  correctly `false`) tripped `assert_valid(true, _)` in debug with "The
+  identity nature of the left arrow was wrong". Reachable through
+  `NamedCospan::assert_valid(true)` / `assert_valid_nohash(true)`. No in-tree
+  caller passes `check_id_strong = true`.
+
+- **`Span::add_middle` bounds-checks the pair before reading the labels**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)), returning
+  `ConstructionMiddlePairOutOfBounds` — the variant `Span::new` already raises
+  for the identical input shape. It previously reached the labels through
+  `self.left[new_middle.0]` first, so `add_middle((usize::MAX, 0))` panicked
+  with a bare `index out of bounds: the len is 1 but the index is
+  18446744073709551615`, in every profile, from a method that already returns
+  `Result`. The reported `pair_position` is the position the pair would have
+  taken.
+
+- **The remaining panicking preconditions name their invariant**, in every
+  build profile: `Cospan::delete_boundary_node`, `Cospan::map_to_same`,
+  `Cospan::connect_pair` and `NamedCospan::delete_boundary_node` now carry
+  `# Panics` sections and messages that say which index was out of bounds and
+  how large the boundary is. The empty-leg case is why the checks are explicit
+  rather than left to the indexing: `delete_boundary_node` read
+  `leg.len() - 1` first, which underflowed (debug panic, release wrap to
+  `usize::MAX` followed by a `swap_remove` panic). Measured pre-#289 messages,
+  now replaced: `attempt to subtract with overflow`; `swap_remove index (is 3)
+  should be < len (is 1)`; `index out of bounds: the len is 1 but the index is
+  5`.
+
 ### Changed — BREAKING
 
 - **`frobenius::frobenius_to_cospan` is now a re-export of

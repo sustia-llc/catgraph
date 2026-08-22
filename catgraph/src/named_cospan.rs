@@ -306,41 +306,137 @@ where
     }
 
     /// Add a named boundary node targeting an existing middle index. Side determined by `new_name`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::ConstructionDuplicatePortName`] if `new_name` is
+    /// already taken on that boundary, or
+    /// [`CatgraphError::ConstructionIndexOutOfBounds`] if `new_arrow` is at or
+    /// beyond the apex size; see
+    /// [`add_boundary_node`](Self::add_boundary_node) for the order and for the
+    /// no-change-on-error guarantee.
     pub fn add_boundary_node_known_target(
         &mut self,
         new_arrow: MiddleIndex,
         new_name: Either<LeftPortName, RightPortName>,
-    ) -> Either<LeftIndex, RightIndex> {
+    ) -> Result<Either<LeftIndex, RightIndex>, CatgraphError> {
         self.add_boundary_node(Left(new_arrow), new_name)
     }
 
     /// Add a named boundary node that creates a new middle vertex with the given label.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::ConstructionDuplicatePortName`] if `new_name` is
+    /// already taken on that boundary. The apex index cannot be out of bounds
+    /// here — the vertex is minted by this call — so that is the only failure.
     pub fn add_boundary_node_unknown_target(
         &mut self,
         new_arrow: Lambda,
         new_name: Either<LeftPortName, RightPortName>,
-    ) -> Either<LeftIndex, RightIndex> {
+    ) -> Result<Either<LeftIndex, RightIndex>, CatgraphError> {
         self.add_boundary_node(Right(new_arrow), new_name)
     }
 
     /// Add a named boundary node to new or existing middle vertex.
     ///
-    /// # Panics
+    /// Both of this method's invariants are now reported the same way. Before
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) it meant two
+    /// different things by them: a duplicate port name aborted the process with
+    /// a bare release `assert!`, while an out-of-bounds apex index was not
+    /// checked at all — so one call could undo the leg-bounds guarantee
+    /// [`new`](Self::new) had just established.
     ///
-    /// Panics if the new name already exists on the relevant boundary side.
+    /// # Errors
+    ///
+    /// - [`CatgraphError::ConstructionDuplicatePortName`] if `new_name` already
+    ///   names a port on the boundary it selects, giving that port's position.
+    /// - [`CatgraphError::ConstructionIndexOutOfBounds`] if `new_arrow` is
+    ///   `Left(tgt_idx)` with `tgt_idx` at or beyond the apex size. This check is
+    ///   not re-implemented here — it is
+    ///   [`Cospan::add_boundary_node`](Cospan::add_boundary_node)'s, so the leg
+    ///   bounds have exactly one home and one error shape.
+    ///
+    /// The name is checked before the index, so a call that violates both is
+    /// reported as the duplicate name. On `Err` the named cospan is left exactly
+    /// as it was: neither the name list nor the leg is pushed to.
     pub fn add_boundary_node(
         &mut self,
         new_arrow: MiddleIndexOrLambda<Lambda>,
         new_name: Either<LeftPortName, RightPortName>,
-    ) -> Either<LeftIndex, RightIndex> {
-        self.cospan.add_boundary_node(match new_name {
+    ) -> Result<Either<LeftIndex, RightIndex>, CatgraphError> {
+        // Resolve the collision before touching either list, so an `Err` leaves
+        // the value untouched rather than half-mutated.
+        let (leg, collision) = match &new_name {
+            Left(name) => (
+                BoundaryLeg::Domain,
+                self.left_names.iter().position(|r| r == name),
+            ),
+            Right(name) => (
+                BoundaryLeg::Codomain,
+                self.right_names.iter().position(|r| r == name),
+            ),
+        };
+        if let Some(existing_position) = collision {
+            return Err(CatgraphError::ConstructionDuplicatePortName {
+                leg,
+                existing_position,
+            });
+        }
+        let arrow = match new_name {
             Left(new_name_real) => {
-                assert!(!self.left_names.contains(&new_name_real));
+                // Bounds first: the cospan must not be mutated if the name list
+                // is not, and vice versa.
+                let index = self.cospan.add_boundary_node(Left(new_arrow))?;
+                self.left_names.push(new_name_real);
+                index
+            }
+            Right(new_name_real) => {
+                let index = self.cospan.add_boundary_node(Right(new_arrow))?;
+                self.right_names.push(new_name_real);
+                index
+            }
+        };
+        Ok(arrow)
+    }
+
+    /// Add a named boundary node without checking the port name or the apex index.
+    ///
+    /// Both invariants are the caller's responsibility; both are re-checked by
+    /// `debug_assert!` only (name uniqueness here, apex bounds in
+    /// [`Cospan::add_boundary_node_unchecked`](Cospan::add_boundary_node_unchecked)),
+    /// so a release build accepts a duplicate name or an out-of-bounds entry and
+    /// defers the failure to whatever reads it later. Use this where the data is
+    /// correct **by construction** and
+    /// [`add_boundary_node`](Self::add_boundary_node) everywhere it crosses a
+    /// trust boundary.
+    ///
+    /// Mirrors [`new_unchecked`](Self::new_unchecked): the whole check set
+    /// compiles away in release, so the mutator costs nothing there.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds only, panics if `new_name` is already taken on that
+    /// boundary or if `new_arrow` is an out-of-bounds apex index.
+    pub fn add_boundary_node_unchecked(
+        &mut self,
+        new_arrow: MiddleIndexOrLambda<Lambda>,
+        new_name: Either<LeftPortName, RightPortName>,
+    ) -> Either<LeftIndex, RightIndex> {
+        self.cospan.add_boundary_node_unchecked(match new_name {
+            Left(new_name_real) => {
+                debug_assert!(
+                    !self.left_names.contains(&new_name_real),
+                    "There was already a node on the left with the specified new name"
+                );
                 self.left_names.push(new_name_real);
                 Left(new_arrow)
             }
             Right(new_name_real) => {
-                assert!(!self.right_names.contains(&new_name_real));
+                debug_assert!(
+                    !self.right_names.contains(&new_name_real),
+                    "There was already a node on the right with the specified new name"
+                );
                 self.right_names.push(new_name_real);
                 Right(new_arrow)
             }
@@ -348,6 +444,15 @@ where
     }
 
     /// Remove a boundary node by index, keeping names in sync (uses `swap_remove` internally).
+    ///
+    /// # Panics
+    ///
+    /// Panics — in **every** build profile — if `which_node` is at or beyond the
+    /// length of the boundary it names, the empty boundary included. The name
+    /// list is `swap_remove`d first, so the check has to happen here as well as
+    /// in [`Cospan::delete_boundary_node`](Cospan::delete_boundary_node): the
+    /// underlying cospan's message would otherwise never be reached, and the
+    /// name list would be left one shorter than the leg.
     pub fn delete_boundary_node(&mut self, which_node: Either<LeftIndex, RightIndex>) {
         /*
         CAUTION : relies on knowing that cospan uses swap_remove when deleting a node
@@ -355,9 +460,19 @@ where
         */
         match which_node {
             Left(z) => {
+                assert!(
+                    z < self.left_names.len(),
+                    "delete_boundary_node: domain index {z} is out of bounds; the domain has {} port(s)",
+                    self.left_names.len()
+                );
                 self.left_names.swap_remove(z);
             }
             Right(z) => {
+                assert!(
+                    z < self.right_names.len(),
+                    "delete_boundary_node: codomain index {z} is out of bounds; the codomain has {} port(s)",
+                    self.right_names.len()
+                );
                 self.right_names.swap_remove(z);
             }
         }
@@ -494,6 +609,11 @@ where
     }
 
     /// Delete a boundary node by name. Warns and makes no change if the name is not found.
+    ///
+    /// Cannot panic, unlike the index-taking
+    /// [`delete_boundary_node`](Self::delete_boundary_node) it forwards to: the
+    /// index comes from a `position` lookup on the very list being shortened, so
+    /// it is in bounds by construction, and a missing name returns early.
     pub fn delete_boundary_node_by_name(
         &mut self,
         which_node: Either<LeftPortName, RightPortName>,
@@ -574,9 +694,15 @@ where
         }
     }
 
-    /// Append a new vertex to the middle set with the given label.
-    pub fn add_middle(&mut self, new_middle: Lambda) {
-        self.cospan.add_middle(new_middle);
+    /// Append a new vertex to the middle set with the given label. Returns its index.
+    ///
+    /// The index is what
+    /// [`add_boundary_node_known_target`](Self::add_boundary_node_known_target)
+    /// takes, so returning it — as
+    /// [`Cospan::add_middle`](Cospan::add_middle) always has — is what lets the
+    /// two be chained without counting vertices by hand.
+    pub fn add_middle(&mut self, new_middle: Lambda) -> MiddleIndex {
+        self.cospan.add_middle(new_middle)
     }
 
     /// Apply a function to all middle vertex labels, preserving port names.
@@ -1038,12 +1164,16 @@ mod test {
             NamedCospan::new(vec![0], vec![0], vec!['a'], vec!["left1"], vec!["right1"]).unwrap();
 
         // Add left boundary node pointing to existing middle
-        let idx = cospan.add_boundary_node_known_target(0, Left("left2"));
+        let idx = cospan
+            .add_boundary_node_known_target(0, Left("left2"))
+            .unwrap();
         assert!(matches!(idx, Left(_)));
         assert_eq!(cospan.left_names().len(), 2);
 
         // Add right boundary node pointing to existing middle
-        let idx = cospan.add_boundary_node_known_target(0, Right("right2"));
+        let idx = cospan
+            .add_boundary_node_known_target(0, Right("right2"))
+            .unwrap();
         assert!(matches!(idx, Right(_)));
         assert_eq!(cospan.right_names().len(), 2);
     }
@@ -1054,11 +1184,15 @@ mod test {
             NamedCospan::new(vec![0], vec![0], vec!['a'], vec!["left1"], vec!["right1"]).unwrap();
 
         // Add left boundary with new middle node
-        let idx = cospan.add_boundary_node_unknown_target('b', Left("left2"));
+        let idx = cospan
+            .add_boundary_node_unknown_target('b', Left("left2"))
+            .unwrap();
         assert!(matches!(idx, Left(_)));
 
         // Add right boundary with new middle node
-        let idx = cospan.add_boundary_node_unknown_target('c', Right("right2"));
+        let idx = cospan
+            .add_boundary_node_unknown_target('c', Right("right2"))
+            .unwrap();
         assert!(matches!(idx, Right(_)));
     }
 

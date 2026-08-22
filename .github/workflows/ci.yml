@@ -184,6 +184,15 @@ jobs:
       # fixed in `Span::assert_valid` (a check computed in a `let` *outside* its
       # `debug_assert!`, so it ran in release and panicked) would ship green.
       - run: cargo test -p catgraph --lib --release
+      # #289: `tests/checked_mutators.rs` states *release* behaviour — every
+      # `#[should_panic]` in it is on a plain `assert!`, not a
+      # `debug_assert!`, and the mutators it pins were changed precisely
+      # because their old failure modes differed between profiles (an
+      # underflow that panicked in debug and wrapped to `usize::MAX` in
+      # release). Integration targets are not built by the `--lib` lane above,
+      # so without this step that claim only ever runs with debug assertions
+      # on.
+      - run: cargo test -p catgraph --test checked_mutators --release
 
   # #233: wasm compile-only regression guard, so the wasm properties probed
   # for #230-#232 can't regress silently. Check-only — running the wasi smoke

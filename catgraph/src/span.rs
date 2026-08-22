@@ -217,6 +217,35 @@ where
     ///
     /// The new node is not yet in the image of any middle pair; the caller should
     /// add middle entries via [`add_middle`](Self::add_middle) to connect it.
+    ///
+    /// Infallible, and deliberately so — unlike
+    /// [`Cospan::add_boundary_node`](crate::cospan::Cospan::add_boundary_node)
+    /// and
+    /// [`NamedCospan::add_boundary_node`](crate::named_cospan::NamedCospan::add_boundary_node),
+    /// which [#289](https://github.com/sustia-llc/catgraph/issues/289) made
+    /// fallible for reasons that genuinely apply to them (an out-of-bounds apex
+    /// index; a duplicate port name). A span's legs point *out* of the apex, so
+    /// a boundary node here is a **label rather than an index**: there is no
+    /// argument to bounds-check, appending one leaves every existing middle pair
+    /// in bounds and label-agreeing, and the identity flags are computed from
+    /// the middle pairs alone, which this call does not touch. A `Result` added
+    /// for signature parity could never be `Err`, so it would cost every caller
+    /// an `unwrap`/`expect` and tell them nothing; there is no `_unchecked`
+    /// sibling for the same reason — nothing is being skipped.
+    ///
+    /// ⚠ **The flags this leaves alone mean less than a `Cospan`'s.**
+    /// [`new_unchecked`](Self::new_unchecked) computes `is_left_id` /
+    /// `is_right_id` as `represents_id` over the middle-pair components with
+    /// **no** conjunct against `left.len()` / `right.len()` — the conjunct
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) added to
+    /// [`Cospan`](crate::cospan::Cospan). So after
+    /// `Span::identity(&['a', 'b']).add_boundary_node(Left('c'))` the span is no
+    /// longer an identity (the middle no longer covers the domain) while
+    /// `is_left_identity()` still reports `true`. Nothing mis-composes on it —
+    /// `Span::compose` deliberately does not fast-path on the flags, unlike
+    /// `Cospan::compose_with_quotient` — but the public accessor is weaker than
+    /// its cospan namesake, and tightening it is a separate change with its own
+    /// breaking surface.
     pub fn add_boundary_node(
         &mut self,
         new_boundary: Either<Lambda, Lambda>,
@@ -235,15 +264,53 @@ where
 
     /// Add a middle pair mapping to the given left and right indices. Returns the new middle index.
     ///
-    /// Fails if the domain and codomain labels at those indices differ.
+    /// Both invariants [`new`](Self::new) checks for a whole pair list are
+    /// checked here for the one new pair, and in the same order: bounds first,
+    /// on the domain half before the codomain half, then label agreement. The
+    /// **bounds** failure is reported with `new`'s own variant, so those two
+    /// ways of arriving at a middle pair report the identical error. The label
+    /// failure is not: this method keeps its pre-existing
+    /// [`CatgraphError::Composition`] where `new` raises
+    /// [`CatgraphError::ConstructionLabelMismatch`] — a difference #289 did not
+    /// close, since changing it would break every caller matching on the
+    /// current variant. See `# Errors` below for what each arm actually
+    /// returns. Before
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) this method
+    /// reached the labels through `self.left[new_middle.0]` first, so an
+    /// out-of-bounds pair panicked with a bare slice message even though
+    /// [`CatgraphError::ConstructionMiddlePairOutOfBounds`] exists precisely to
+    /// name it.
     ///
     /// # Errors
     ///
-    /// Returns [`CatgraphError`] if left or right index has mismatched labels.
+    /// - [`CatgraphError::ConstructionMiddlePairOutOfBounds`] if `new_middle.0`
+    ///   is at or beyond `left.len()`, or `new_middle.1` at or beyond
+    ///   `right.len()`, naming which half was out of range, the **position the
+    ///   pair would have occupied** in the middle-pair list (its current
+    ///   length), the out-of-range target and the boundary size. The domain half
+    ///   is checked before the codomain half.
+    /// - [`CatgraphError::Composition`] if the pair is in bounds on both sides
+    ///   but the two labels it names disagree.
+    ///
+    /// On `Err` the span is left exactly as it was — no pair is pushed and the
+    /// identity flags are not touched.
     pub fn add_middle(
         &mut self,
         new_middle: (LeftIndex, RightIndex),
     ) -> Result<MiddleIndex, CatgraphError> {
+        for (leg, target, target_len) in [
+            (BoundaryLeg::Domain, new_middle.0, self.left.len()),
+            (BoundaryLeg::Codomain, new_middle.1, self.right.len()),
+        ] {
+            if target >= target_len {
+                return Err(CatgraphError::ConstructionMiddlePairOutOfBounds {
+                    leg,
+                    pair_position: self.middle.len(),
+                    target,
+                    target_len,
+                });
+            }
+        }
         let type_left = self.left[new_middle.0];
         let type_right = self.right[new_middle.1];
         if type_left != type_right {
@@ -1012,6 +1079,12 @@ mod test {
 
         let right_idx = span.add_boundary_node(Right('d'));
         assert!(matches!(right_idx, Right(1)));
+
+        // #289 left this mutator infallible on purpose: a boundary node here is
+        // a label, not an index, so there is no precondition a `Result` could
+        // report and no check for an `_unchecked` sibling to skip.
+        assert_eq!(span.left(), &['a', 'c']);
+        assert_eq!(span.right(), &['a', 'd']);
     }
 
     // Rel tests
@@ -1307,5 +1380,97 @@ mod test {
                 "n={n} p={p:?}"
             );
         }
+    }
+
+    // ---- #289: `add_middle` reports the bound it used to panic on ----
+
+    /// `Span::add_middle` rejects an out-of-bounds pair with the variant
+    /// `Span::new` already raises for the identical input shape, and leaves the
+    /// span untouched.
+    ///
+    /// # What this ranges over
+    ///
+    /// Three pairs: one out of range on the domain half (`usize::MAX`, the
+    /// falsification-priority value from the audit), one out of range on the
+    /// codomain half, and one out of range on **both**, which pins the
+    /// domain-before-codomain order. It does not range over boundary sizes or
+    /// `Lambda` types, and it says nothing about the label-mismatch arm, which
+    /// `span_add_middle_type_mismatch_returns_error` in
+    /// `tests/mutation_workflows.rs` already covers.
+    #[test]
+    fn span_add_middle_rejects_out_of_bounds_pairs() {
+        use crate::errors::BoundaryLeg;
+
+        let mut s = Span::new(vec!['a', 'b'], vec!['a'], vec![]).unwrap();
+
+        let err = s
+            .add_middle((usize::MAX, 0))
+            .expect_err("usize::MAX is out of bounds for a 2-element domain");
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionMiddlePairOutOfBounds {
+                leg: BoundaryLeg::Domain,
+                pair_position: 0,
+                target: usize::MAX,
+                target_len: 2,
+            },
+            "before #289 this input panicked with a bare slice message"
+        );
+        assert_eq!(
+            err.to_string(),
+            format!(
+                "construction error: middle pair 0 targets domain index {}, but the domain has 2 element(s)",
+                usize::MAX
+            )
+        );
+
+        let err = s
+            .add_middle((0, 5))
+            .expect_err("codomain index 5 is out of bounds for a 1-element codomain");
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionMiddlePairOutOfBounds {
+                leg: BoundaryLeg::Codomain,
+                pair_position: 0,
+                target: 5,
+                target_len: 1,
+            }
+        );
+
+        // Both halves bad: the domain half is checked first, as in `new`.
+        let err = s
+            .add_middle((9, 9))
+            .expect_err("both halves are out of range");
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionMiddlePairOutOfBounds {
+                leg: BoundaryLeg::Domain,
+                pair_position: 0,
+                target: 9,
+                target_len: 2,
+            }
+        );
+
+        assert!(
+            s.middle_pairs().is_empty(),
+            "a rejected add_middle must not have pushed a pair"
+        );
+
+        // `pair_position` tracks the list, so a later rejection reports a later
+        // position — the field is not a constant 0.
+        s.add_middle((0, 0))
+            .expect("(0, 0) is in bounds and both labels are 'a'");
+        let err = s
+            .add_middle((0, 4))
+            .expect_err("codomain index 4 is out of bounds");
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionMiddlePairOutOfBounds {
+                leg: BoundaryLeg::Codomain,
+                pair_position: 1,
+                target: 4,
+                target_len: 1,
+            }
+        );
     }
 }
