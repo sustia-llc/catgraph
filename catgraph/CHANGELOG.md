@@ -198,18 +198,27 @@ All notable changes to `catgraph` are documented here. The format follows
      only the meta-test.
 
 - **`rel_from_selector`'s "same relation for a given mask" was a structural
-  claim no test asserted** (#287 follow-up) — the helper extracted in (1) above
-  is shared by the proptest strategies and the exhaustive sweep, but sharing a
-  function is not evidence that a bit denotes the pair the docstring says it
-  does. New `rel_from_selector_matches_its_definition` decides the row-major
-  convention against a reference written from the definition (never calling the
-  helper), and asserts the bool-vec and `u32`-bitmask paths agree, for every
-  mask over `n ∈ {2, 3}` — 528 relations. Falsified: a column-major flat index
-  (`j*n + i`) inside the helper reddens it at `n = 2, mask = 0b10`, `{(1, 0)}`
-  vs `{(0, 1)}`; reversing `rel_from_mask`'s bit order reddens it at
-  `n = 2, mask = 0b1`, `{(1, 1)}` vs `{(0, 0)}`. Narrow by construction: `n = 4`
-  is drawn by the strategies but not enumerated (2^16 masks), which the test's
-  own docstring states.
+  claim no test asserted**
+  ([#287](https://github.com/sustia-llc/catgraph/issues/287) follow-up) — the
+  helper #287 introduced (`rel_from_selector`, shared by the proptest strategies
+  and the exhaustive sweep) is one function, but sharing a function is not
+  evidence that a bit denotes the pair the docstring says it does, nor that the
+  strategies' bool-vec view and the sweep's `u32`-bitmask view agree. The
+  strategies now build through a named `rel_from_bools`, and the new
+  `rel_from_selector_matches_its_definition` checks, for every mask over
+  `n ∈ {2, 3}` (528 relations), first that `rel_from_bools` and `rel_from_mask`
+  agree, then that `rel_from_mask` matches a reference written from the
+  row-major definition without calling the helper. Falsified three ways, each
+  reverted: a column-major flat index (`j*n + i`) inside the helper moves both
+  views together, so only the definition check reddens (`n = 2, mask = 0b10`,
+  `{(1, 0)}` vs `{(0, 1)}`); reversing `rel_from_mask`'s bit order reddens the
+  parity check (`n = 2, mask = 0b1`, bool-vec `{(0, 0)}` vs bitmask
+  `{(1, 1)}`); reversing `rel_from_bools`'s bit order — the strategies' own
+  path — reddens the parity check with the definition check untouched
+  (`n = 2, mask = 0b1`, `{(1, 1)}` vs `{(0, 0)}`). Scope: `n = 4` is drawn by
+  the strategies but not
+  enumerated (2^16 masks); the convention is `n`-independent, so a break shows
+  at `n = 2`, as all three mutations do.
 
 - **The #258 braiding contract was pinned only downstream, and the only core
   *integration* test that named permutation composition was vacuous**

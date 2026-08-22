@@ -525,15 +525,14 @@ impl std::fmt::Debug for DebugRel {
 /// type-compatible. Pairs are distinct by construction, so the span is jointly
 /// injective and `new_unchecked` is safe.
 ///
-/// The single construction shared by [`arb_homogeneous_rel`],
-/// [`arb_three_homogeneous_rels`], and
-/// [`rel_predicates_decided_exhaustively_on_small_carriers`] — so the proptest
-/// corpus and the exhaustive corpus contain the *same* relation for a given
-/// mask by construction, not by parallel transcription. Sharing one function
-/// is not on its own evidence of that, and it says nothing about which pair a
-/// given bit denotes, so both the flat-index convention and the mask-vs-
-/// bool-vec parity are asserted by
-/// [`rel_from_selector_matches_its_definition`].
+/// The single construction shared by [`arb_homogeneous_rel`] and
+/// [`arb_three_homogeneous_rels`] (through [`rel_from_bools`]) and by
+/// [`rel_predicates_decided_exhaustively_on_small_carriers`] (through
+/// [`rel_from_mask`]). Sharing one function is not on its own evidence that
+/// the proptest corpus and the exhaustive corpus contain the same relation for
+/// a given mask, and it says nothing about which pair a given bit denotes —
+/// both the flat-index convention and the mask-vs-bool-vec parity are
+/// asserted by [`rel_from_selector_matches_its_definition`].
 fn rel_from_selector(n: usize, keep: impl Fn(usize) -> bool) -> Rel<char> {
     let types: Vec<char> = vec!['a'; n];
     let pairs: Vec<(usize, usize)> = (0..n)
@@ -543,6 +542,16 @@ fn rel_from_selector(n: usize, keep: impl Fn(usize) -> bool) -> Rel<char> {
         .map(|(_, pair)| pair)
         .collect();
     Rel::new_unchecked(Span::new(types.clone(), types, pairs).unwrap())
+}
+
+/// The bool-vec view of [`rel_from_selector`] — the construction the proptest
+/// strategies use, `bits[bit]` deciding pair `bit` of the row-major product.
+///
+/// A named function rather than a closure inside each strategy, so that
+/// [`rel_from_selector_matches_its_definition`] exercises the strategies'
+/// actual path instead of a re-spelling of it.
+fn rel_from_bools(n: usize, bits: &[bool]) -> Rel<char> {
+    rel_from_selector(n, |bit| bits[bit])
 }
 
 /// Generate a homogeneous `Rel<char>` on a small type set (1–4 elements).
@@ -558,7 +567,7 @@ fn arb_homogeneous_rel() -> impl Strategy<Value = DebugRel> {
             let mask = prop::collection::vec(prop::bool::ANY, n_possible);
             (Just(size), mask)
         })
-        .prop_map(|(size, mask)| DebugRel(rel_from_selector(size, |bit| mask[bit])))
+        .prop_map(|(size, mask)| DebugRel(rel_from_bools(size, &mask)))
 }
 
 /// Generate three homogeneous `Rel<char>` instances on the *same* type set.
@@ -572,7 +581,7 @@ fn arb_three_homogeneous_rels() -> impl Strategy<Value = (DebugRel, DebugRel, De
             (Just(size), mask(), mask(), mask())
         })
         .prop_map(|(size, m1, m2, m3)| {
-            let build = |mask: &[bool]| DebugRel(rel_from_selector(size, |bit| mask[bit]));
+            let build = |mask: &[bool]| DebugRel(rel_from_bools(size, mask));
             (build(&m1), build(&m2), build(&m3))
         })
 }
@@ -752,11 +761,12 @@ fn rel_from_mask(n: usize, mask: u32) -> Rel<char> {
 ///    `{ (i, j) : bit i*n + j of mask is set }`, built here from the row-major
 ///    convention itself. The reference never calls [`rel_from_selector`], so a
 ///    convention change inside the helper cannot move both sides together.
-/// 2. **parity** — the bool-vec path the strategies take,
-///    `rel_from_selector(n, |k| bits[k])` with `bits[k]` = bit `k` of `mask`,
-///    yields that same pair set. This is the literal "same relation for a
-///    given mask", and it is the half that a divergence between the *two call
-///    sites* (not the shared helper) would break.
+/// 2. **parity** — the strategies' own path, [`rel_from_bools`]`(n, &bits)`
+///    with `bits[k]` = bit `k` of `mask`, yields that same pair set. This is
+///    the literal "same relation for a given mask", the half that a divergence
+///    between the *two views* (not the shared helper) would break — and it is
+///    checked **first**, so such a divergence reports through it instead of
+///    being masked by (1).
 ///
 /// # What this ranges over
 ///
@@ -767,20 +777,19 @@ fn rel_from_mask(n: usize, mask: u32) -> Rel<char> {
 /// `n = 2`. Homogeneous, single-label relations only, like the corpora it
 /// pins.
 ///
-/// Falsified at the commit that introduced this test, both mutations measured:
+/// Falsified at the commit that introduced this test — three mutations, each
+/// measured and reverted; each assertion has a mutation that reports through
+/// it:
 ///
-/// - building the Cartesian product column-major inside [`rel_from_selector`]
-///   (flat index `j*n + i`) reddens assertion (1) at `n = 2, mask = 0b10` —
-///   left `{(1, 0)}`, right `{(0, 1)}`;
-/// - reversing [`rel_from_mask`]'s bit order (`1 << (n*n - 1 - bit)`) reddens
-///   assertion (1) at `n = 2, mask = 0b1` — left `{(1, 1)}`, right `{(0, 0)}`.
-///
-/// Assertion (2) reddens under *neither*, and that is the honest reading of
-/// it: today both corpora call the one helper, so (1) failing first is
-/// unavoidable and (2) is a consequence rather than an independent check. It
-/// is a guard against the future — the transcription (2) forbids is exactly
-/// what a refactor giving `rel_from_mask` its own body would reintroduce, and
-/// (2) is where that would surface once it no longer implies (1).
+/// - the Cartesian product built column-major inside [`rel_from_selector`]
+///   (flat index `j*n + i`): both views drift together, so (2) stays green
+///   and (1) reddens at `n = 2, mask = 0b10` — `{(1, 0)}` vs `{(0, 1)}`;
+/// - [`rel_from_mask`]'s bit order reversed (`1 << (n*n - 1 - bit)`): (2)
+///   reddens at `n = 2, mask = 0b1` — bool-vec `{(0, 0)}`, bitmask `{(1, 1)}`;
+/// - [`rel_from_bools`]'s bit order reversed (the strategies' own path): (2)
+///   reddens at `n = 2, mask = 0b1` — bool-vec `{(1, 1)}`, bitmask `{(0, 0)}`
+///   — with (1) untouched, which is what makes (2) an independent check of
+///   the corpus the strategies actually draw.
 #[test]
 fn rel_from_selector_matches_its_definition() {
     for n in [2_usize, 3] {
@@ -796,21 +805,24 @@ fn rel_from_selector_matches_its_definition() {
             }
 
             let from_mask = rel_pair_set(&rel_from_mask(n, mask));
+
+            // (2) first: the strategies' path vs the exhaustive test's path.
+            let bits: Vec<bool> = (0..n * n).map(|k| ((mask >> k) & 1) == 1).collect();
+            let from_bools = rel_pair_set(&rel_from_bools(n, &bits));
+            assert_eq!(
+                from_bools, from_mask,
+                "n = {n}, mask = {mask:#b}: the strategies' bool-vec path \
+                 (rel_from_bools) built {from_bools:?}, the exhaustive test's \
+                 u32-bitmask path (rel_from_mask) built {from_mask:?} — \
+                 not the same relation for a given mask"
+            );
+
+            // (1): the u32 path against the row-major definition itself.
             assert_eq!(
                 from_mask, reference,
                 "n = {n}, mask = {mask:#b}: rel_from_mask built {from_mask:?}, \
                  the row-major definition (bit i*n + j set ⟺ (i, j) ∈ R) \
                  gives {reference:?}"
-            );
-
-            let bits: Vec<bool> = (0..n * n).map(|k| ((mask >> k) & 1) == 1).collect();
-            let from_bools = rel_pair_set(&rel_from_selector(n, |k| bits[k]));
-            assert_eq!(
-                from_bools, from_mask,
-                "n = {n}, mask = {mask:#b}: the bool-vec path the proptest \
-                 strategies take built {from_bools:?}, the u32-bitmask path \
-                 the exhaustive test takes built {from_mask:?} — not the same \
-                 relation for a given mask"
             );
         }
     }
