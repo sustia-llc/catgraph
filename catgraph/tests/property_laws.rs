@@ -191,11 +191,12 @@ fn arb_cospan() -> impl Strategy<Value = Cospan<char>> {
 
 /// A left leg for a boundary word `boundary`, into an apex labelled `apex`.
 ///
-/// Every slot `i` is sent to some apex vertex `j` with `apex[j] == boundary[i]`,
-/// chosen uniformly among the vertices carrying that label — so the leg is
-/// **label-aware** (the generated cospan's `domain()` is `boundary` on the nose,
-/// which is what keeps it composable) but **not forced to be the identity
-/// injection** `i ↦ i`, which is what the composability generators used to emit.
+/// Every slot `i` is sent to some apex vertex `j` with
+/// `apex[j] == boundary[i]`, chosen uniformly among the vertices carrying that
+/// label — so the leg is **label-aware** (the generated cospan's `domain()` is
+/// `boundary` on the nose, which is what keeps it composable) but **not forced
+/// to be the identity injection** `i ↦ i`, which is what the composability
+/// generators used to emit.
 ///
 /// # Panics
 ///
@@ -651,11 +652,11 @@ proptest! {
     ///
     /// Homogeneous relations on a **1–4 element** carrier, every element
     /// labelled `'a'`, with pairs drawn from the full Cartesian product by an
-    /// independent boolean mask — so any of the `2^(n²)` relations is reachable,
-    /// but only a random sample of them is seen per run. It says nothing about
-    /// heterogeneous relations, and nothing about carriers of 5 or more.
-    /// `rel_predicates_decided_exhaustively_on_small_carriers` closes the sampling
-    /// gap for `n ≤ 3` by deciding *every* relation there, and
+    /// independent boolean mask — so any of the `2^(n²)` relations is
+    /// reachable, but only a random sample of them is seen per run. It says
+    /// nothing about heterogeneous relations, and nothing about carriers of 5
+    /// or more. `rel_predicates_decided_exhaustively_on_small_carriers` closes
+    /// the sampling gap for `n ≤ 3` by deciding *every* relation there, and
     /// `rel_composites_require_homogeneity` covers the non-homogeneous case.
     #[test]
     fn rel_predicates_match_a_direct_pair_set_oracle(dr in arb_homogeneous_rel()) {
@@ -874,9 +875,9 @@ fn rel_composites_require_homogeneity() {
 /// claim: associativity of cospan composition holds over identity-injection
 /// left legs exactly as well as over general ones, so `cospan_associativity`
 /// stays green whichever the generator emits (#287 — the legs used to be
-/// `(0..b_size).collect()` unconditionally, quotienting the property outside the
-/// generated space). Both halves are therefore asserted here, where a drift in
-/// [`arb_label_preserving_leg`] is actually visible:
+/// `(0..b_size).collect()` unconditionally, quotienting the property outside
+/// the generated space). Both halves are therefore asserted here, where a drift
+/// in [`arb_label_preserving_leg`] is actually visible:
 ///
 /// - **label-aware** — every sampled pair/triple composes. A leg that picked
 ///   apex vertices without regard to labels would land a `'b'` slot on an `'a'`
@@ -886,15 +887,15 @@ fn rel_composites_require_homogeneity() {
 ///
 /// # What this ranges over
 ///
-/// 256 deterministic samples per generator. The count assertion is a claim about
-/// *those samples*, not that every draw is non-identity: an apex whose only
-/// matching vertex is `i` leaves the leg nowhere else to go, and the identity is
-/// a legitimate draw whenever the apex does offer a choice.
+/// 256 deterministic samples per generator. The count assertion is a claim
+/// about *those samples*, not that every draw is non-identity: an apex whose
+/// only matching vertex is `i` leaves the leg nowhere else to go, and the
+/// identity is a legitimate draw whenever the apex does offer a choice.
 ///
 /// Measured at the commit that introduced this test: **139 of 256** for `g`,
 /// **138 of 256** for `h`. Only `> 0` is asserted (a proptest RNG change would
-/// move the exact figures), but a run reporting a number far from those is drift
-/// in the generator, not noise.
+/// move the exact figures), but a run reporting a number far from those is
+/// drift in the generator, not noise.
 #[test]
 fn composability_generators_emit_label_aware_non_identity_left_legs() {
     const SAMPLES: usize = 256;
@@ -1082,8 +1083,9 @@ proptest! {
     /// where the brute-force oracle stops being affordable.
     ///
     /// Consequence of the equal-size (apex and both boundaries),
-    /// equal-label-multiset corpus, by construction: the oracle's three size
-    /// early-returns are dead here, and equal non-bubble classes force equal
+    /// equal-label-multiset corpus, by construction: the oracle's size guard —
+    /// three length checks, one early `return false` — is dead here, and equal
+    /// non-bubble classes force equal
     /// bubble-label multisets (a bubble class is its label and two empty
     /// preimages) and hence equal forms, so a `canonical_form` that dropped
     /// bubble classes would pass this test on every seed. Confirmed on the
