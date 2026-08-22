@@ -1,24 +1,18 @@
-//! `Cospan::compose` is a function of `(left, right, middle)` — of nothing else.
+//! What `perform_pushout`'s two identity fast paths compute.
 //!
-//! Three separable claims about `perform_pushout`'s two identity fast paths,
-//! pinned separately because they can fail independently:
+//! `Cospan::compose` is a function of the two operands' `(left, right, middle)`
+//! — which, since [#289](https://github.com/sustia-llc/catgraph/issues/289)
+//! deleted the cached identity flags, is the whole of a `Cospan`. Two claims
+//! about the fast paths, pinned separately because they can fail
+//! independently:
 //!
 //! 1. **Which answer the `left_leg_id` arm gives.** It numbers the composite
 //!    apex by the *right* operand's own indexing, where the union-find body
 //!    numbers it by left-leg discovery order. That choice is strict left
 //!    unitality — `id ; f == f` on the nose — and it is only visible on an `f`
-//!    whose left leg does not first-visit its apex in increasing order.
-//! 2. **That the arm is entered on the legs, not on a cache.** `Cospan` carries
-//!    `is_left_id` / `is_right_id`, and they are *conservative*: the `&=`
-//!    mutators only ever clear, so a leg that is the identity can carry
-//!    `false`. Until the r4 review of
-//!    [#289](https://github.com/sustia-llc/catgraph/issues/289),
-//!    `compose_with_quotient` handed those cached flags to `perform_pushout`,
-//!    which made the composite a function of each operand's **mutation
-//!    history** as well as its public state: two structurally equal cospans
-//!    composed two different ways. `perform_pushout` now re-derives the
-//!    predicate with `leg_is_identity`.
-//! 3. **Which arm wins when both predicates hold.** The `left_leg_id` arm is
+//!    whose left leg does not first-visit its apex in increasing order. Three
+//!    tests below: two unital (`n = 2`, `n = 3`), one not.
+//! 2. **Which arm wins when both predicates hold.** The `left_leg_id` arm is
 //!    tried first and tags the composite apex's representatives `Right(..)`,
 //!    so the composite keeps the *right* operand's labels. `composable` has
 //!    already forced the two apexes equal under `Lambda`'s `Eq`, so for every
@@ -26,79 +20,30 @@
 //!    requires `Eq`, never that `Eq` be identity, and under a coarser `Eq` the
 //!    two arms give visibly different answers.
 //!
-//! Claim 2 has exactly one observable shape, and its tests below are confined
-//! to it on purpose. A stale `false` on the *right* operand's `is_left_id`
-//! (`perform_pushout`'s `right_leg_id`) changes nothing at all: that arm returns
-//! field-for-field what the union-find body returns for the same input, so
-//! whether it is taken is unobservable. Only a stale `false` on the **left**
-//! operand's `is_right_id`, over a right leg that really is the identity, can
-//! move a composite — and only when the partner's left leg is not the identity
-//! and does not first-visit in increasing order.
+//! **The filename is historical.** This file was written for a third claim —
+//! that the arms are entered on the legs and not on `Cospan`'s cached
+//! `is_left_id` / `is_right_id` — and its four tests for it manufactured an
+//! operand whose cached flag disagreed with its legs, then composed both and
+//! compared. #289 removed the cache outright, so that disagreement cannot be
+//! built and the claim has no content left to pin: `is_left_identity()` *is*
+//! `leg_is_identity(left, middle.len())`. Three of those four tests are kept
+//! here for their **absolute** expectations, which were always hand-written and
+//! never depended on the cache; the fourth duplicated the `n = 2` unitality pin
+//! and is gone.
+//!
+//! **What this file ranges over**, taken together: four fixtures, apex sizes 2
+//! and 3, `char` labels plus one deliberately-coarse `Eq`, and one partner per
+//! fixture. It does not sweep apex sizes past 3, does not touch the
+//! right-unitality mirror, and has no fixture whose partner's left leg merges
+//! apex vertices. Every test below goes red when the `left_leg_id` arm is
+//! disabled (measured — see each docstring), except the label-provenance one,
+//! which goes red when the two arms are swapped.
 
 use catgraph::{
     category::{Composable, HasIdentity},
     cospan::Cospan,
 };
-use either::Either::{Left, Right};
-
-/// Build a cospan from slices, twice: once through `Cospan::new`, so its flags
-/// are computed from the legs, and once through a mutation round trip that
-/// leaves `is_right_id` a conservative `false` on a codomain leg that *is* the
-/// identity.
-///
-/// The round trip is `delete_boundary_node(Right(last))` — an unconditional
-/// clear since #289 — followed by `add_boundary_node_known_target(Right(last))`,
-/// whose existing-target arm also clears unconditionally and so never restores
-/// the `true`. `swap_remove` on the last port is a plain pop, so the leg comes
-/// back byte-identical; only the flag differs. This is the codomain-side twin
-/// of the route `checked_mutators.rs`'s
-/// `cospan_identity_flags_are_conservative_in_the_false_direction` documents.
-///
-/// # Panics
-///
-/// If the fixture's codomain leg is not already the identity on its apex, or if
-/// the round trip fails to reproduce it — either would make the returned pair
-/// differ in more than the flag, and the tests below would be measuring
-/// something other than the flag.
-fn fresh_and_stale(
-    left: &[usize],
-    right: &[usize],
-    middle: &[char],
-) -> (Cospan<char>, Cospan<char>) {
-    let build = || {
-        Cospan::new(left.to_vec(), right.to_vec(), middle.to_vec())
-            .expect("fixture legs are in bounds")
-    };
-
-    let fresh = build();
-    assert!(
-        fresh.is_right_identity(),
-        "fixture must start with a genuine codomain identity, else there is no \
-         stale `false` to make: right = {:?} over a {}-vertex apex",
-        right,
-        middle.len()
-    );
-
-    let mut stale = build();
-    let last = right.len() - 1;
-    stale.delete_boundary_node(Right(last));
-    stale
-        .add_boundary_node_known_target(Right(last))
-        .expect("re-adding the port that was just removed targets an in-bounds apex vertex");
-    assert_eq!(
-        stale.right_to_middle(),
-        right,
-        "the round trip must restore the leg exactly — only the flag may differ"
-    );
-    assert!(
-        !stale.is_right_identity(),
-        "the round trip must leave the flag stale-`false`; if the mutators ever \
-         become exact in this direction this helper stops testing anything and \
-         must be replaced, not deleted"
-    );
-
-    (fresh, stale)
-}
+use either::Either::Left;
 
 /// Assert two composites agree field for field, reporting all three fields.
 fn assert_same_composite(got: &Cospan<char>, want: &Cospan<char>, what: &str) {
@@ -130,10 +75,9 @@ fn assert_same_composite(got: &Cospan<char>, want: &Cospan<char>, what: &str) {
 /// left-hand identity only. That is deliberate — its whole job is to separate
 /// two candidate implementations of the `left_leg_id` arm, and one point of the
 /// space where they differ suffices for that. It is **not** a general unitality
-/// pin: it does not sweep apex sizes, does not touch the right-unitality
-/// mirror, and says nothing about non-identity operands. Both operands here
-/// have honest flags, so it is also blind to claim 2 above — that is the next
-/// test's job.
+/// pin: it does not sweep apex sizes beyond the `n = 3` sibling below, does not
+/// touch the right-unitality mirror, and says nothing about non-identity
+/// operands.
 #[test]
 fn strict_left_unitality_with_a_non_monotone_left_leg() {
     let f = Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b']).expect("in-bounds fixture");
@@ -162,6 +106,116 @@ fn strict_left_unitality_with_a_non_monotone_left_leg() {
         "right leg: got {:?} want {:?} (the union-find numbering gives [1, 0])",
         result.right_to_middle(),
         f.right_to_middle()
+    );
+}
+
+/// The same law one apex size up, where the partner's left leg is a 3-cycle.
+///
+/// A numbering bug that happened to be an involution could hide in the `n = 2`
+/// fixture above; `g.left = [2, 0, 1]` differs from the apex order by more than
+/// a transposition, so it cannot. Same oracle: the left operand is an identity,
+/// so the answer must be `g` itself, independently of what `perform_pushout`
+/// does internally.
+///
+/// **What this ranges over.** One fixture, `n = 3`, `char` labels, left-hand
+/// identity only. Measured falsification: disabling the `left_leg_id` arm makes
+/// the composite come back as `left = [0, 1, 2]`, `right = [1, 2, 0]`,
+/// `middle = ['a', 'b', 'c']` — the union-find numbering — against `g`'s
+/// `[2, 0, 1]` / `[0, 1, 2]` / `['b', 'c', 'a']`.
+#[test]
+fn strict_left_unitality_at_three_vertices_with_a_cyclic_left_leg() {
+    let g =
+        Cospan::new(vec![2, 0, 1], vec![0, 1, 2], vec!['b', 'c', 'a']).expect("in-bounds fixture");
+    let id = Cospan::identity(&g.domain());
+
+    let result = id.compose(&g).expect("id ; g must compose");
+
+    assert_same_composite(&result, &g, "id ; g must be g on the nose");
+}
+
+/// The `left_leg_id` arm on an operand that is **not** an identity.
+///
+/// Unitality is unavailable as an oracle here — the composite is not the
+/// partner — so the expectation is hand-derived from the arm's definition
+/// (renumber `f`'s codomain-side apex by `g`'s indexing via `g.left`) rather
+/// than read off a second run of the code under test. This is the shape that
+/// says claim 1 is about `compose` generally and not only about units.
+///
+/// **What this ranges over.** One fixture, `n = 2`, `char` labels, with `f`'s
+/// domain leg reversed so the renumbering is visible in the answer. Measured
+/// falsification: disabling the `left_leg_id` arm gives `left = [1, 0]`,
+/// `right = [1, 0]`, `middle = ['a', 'b']`.
+#[test]
+fn the_left_leg_id_arm_renumbers_by_the_right_operands_apex() {
+    let f = Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b']).expect("in-bounds fixture");
+    let g = Cospan::new(vec![1, 0], vec![0, 1], vec!['b', 'a']).expect("in-bounds partner");
+
+    let composite = f.compose(&g).expect("f ; g composes");
+
+    assert_eq!(
+        (
+            composite.left_to_middle(),
+            composite.right_to_middle(),
+            composite.middle()
+        ),
+        (&[0, 1][..], &[0, 1][..], &['b', 'a'][..]),
+        "the fast path renumbers by g's apex, so f's reversed domain leg lands \
+         back in order: got left = {:?}, right = {:?}, middle = {:?}",
+        composite.left_to_middle(),
+        composite.right_to_middle(),
+        composite.middle(),
+    );
+}
+
+/// Composing after a `connect_pair` merge: the CHANGELOG's retired "observable
+/// side-effect", now a fixed value.
+///
+/// `Cospan`'s CHANGELOG carried this fixture (review R3-03) as evidence that a
+/// merge is observable downstream — that composing after one could return a
+/// different, isomorphic apex order, `structurally_equal` false and
+/// `canonical_form` equal, so byte-level consumers had to compare canonical
+/// forms. That held while a cached flag chose `perform_pushout`'s fast path.
+/// The cache is gone, and this test is why both CHANGELOGs now say the claim
+/// was retired: the merge produces `([1, 1], [0, 1], ['b', 'a'])`, and
+/// composing that with `g` has exactly one answer.
+///
+/// **What this ranges over.** One fixture, one merge, one partner. It does not
+/// sweep apex sizes or merge arguments, and it does not cover `connect_pair`'s
+/// two no-op arms. Measured falsification: disabling `perform_pushout`'s
+/// `left_leg_id` arm returns `left = [1, 1]`, `right = [1, 0]`,
+/// `middle = ['b', 'a']` — the value the retired entry attributed to the flag
+/// being **off**.
+#[test]
+fn a_connect_pair_merge_composes_to_the_merged_apex() {
+    // The R3-03 fixture, merged for real: left [1, 2] -> [1, 1], and the apex
+    // loses a vertex.
+    let mut merged =
+        Cospan::new(vec![1, 2], vec![0, 1], vec!['b', 'a', 'a']).expect("in-bounds fixture");
+    merged.connect_pair(Left(0), Left(1));
+    assert_eq!(
+        (
+            merged.left_to_middle(),
+            merged.right_to_middle(),
+            merged.middle()
+        ),
+        (&[1, 1][..], &[0, 1][..], &['b', 'a'][..]),
+        "the merge must produce the triple the composition below is derived from"
+    );
+
+    let g = Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b']).expect("in-bounds partner");
+    let composite = merged.compose(&g).expect("merged ; g composes");
+
+    assert_eq!(
+        (
+            composite.left_to_middle(),
+            composite.right_to_middle(),
+            composite.middle()
+        ),
+        (&[0, 0][..], &[0, 1][..], &['a', 'b'][..]),
+        "got left = {:?}, right = {:?}, middle = {:?}",
+        composite.left_to_middle(),
+        composite.right_to_middle(),
+        composite.middle(),
     );
 }
 
@@ -270,230 +324,4 @@ fn both_legs_identity_keeps_the_right_operands_labels() {
     );
     assert_eq!(composite.left_to_middle(), &[0, 1]);
     assert_eq!(composite.right_to_middle(), &[0, 1]);
-}
-
-// ---------------------------------------------------------------------------
-// Claim 2: the arm is entered on the legs, not on the cache.
-//
-// Four shapes, kept as four tests rather than one so that a regression reports
-// every shape it breaks in a single run — the shapes differ in what oracle is
-// available to them, so a failure in one says something different from a
-// failure in another.
-//
-// Each builds the same three vectors more than once — by `Cospan::new`, by the
-// round trip that stales `is_right_id`, and in shape D also by a real
-// `connect_pair` merge — and composes each with the same partner. The
-// differential assertion (the composites agree) is the pin. Each shape also
-// carries an **absolute** expectation, so it cannot pass by both sides
-// agreeing on a wrong answer; that is not decoration, and it is what catches
-// the `left_leg_id` arm being disabled, a perturbation the differential alone
-// survives.
-//
-// Measured with the flag parameters restored (the fix reverted). Every row was
-// observed, not derived-and-assumed:
-//
-// | shape | stale operand, pre-fix | fresh operand, and both post-fix |
-// |-------|------------------------|----------------------------------|
-// | A | `left = [0, 1], right = [1, 0], middle = ['a', 'b']` | `left = [1, 0], right = [0, 1], middle = ['b', 'a']` |
-// | B | `left = [0, 1, 2], right = [1, 2, 0], middle = ['a', 'b', 'c']` | `left = [2, 0, 1], right = [0, 1, 2], middle = ['b', 'c', 'a']` |
-// | C | `left = [1, 0], right = [1, 0], middle = ['a', 'b']` | `left = [0, 1], right = [0, 1], middle = ['b', 'a']` |
-// | D | `left = [1, 1], right = [1, 0], middle = ['b', 'a']` | `left = [0, 0], right = [0, 1], middle = ['a', 'b']` |
-//
-// The canonical forms are equal in every row, before and after: both answers
-// are legitimate pushouts and the difference is only apex numbering. Those
-// assertions are therefore **not** the pin — they pass with the fix reverted —
-// and are here to say what did *not* change.
-//
-// Between them the four shapes cover the whole *observable* shape of the
-// change, as the module docs argue, at four points — not exhaustively, and
-// with two of the three known routes to a flag disagreement (delete-then-re-add
-// in A/B/C, a `connect_pair` merge in D; the third, a composite's own
-// unconditionally-cleared flags, is not exercised here, nor is `permute_side`
-// with an identity permutation). None sweeps apex sizes past `n = 3` or label
-// types past `char`, and none uses a partner whose left leg merges apex
-// vertices. A `perform_pushout` that special-cased on apex size could pass all
-// four and still be history-dependent.
-// ---------------------------------------------------------------------------
-
-/// A stale flag does not move `id ; g` at `n = 2`.
-///
-/// **What this ranges over.** One fixture. The left operand is the identity on
-/// `['a', 'b']`, so strict left unitality is available as an oracle
-/// independent of `perform_pushout`: the composite must be `g` itself, not
-/// merely whatever the fresh operand produced.
-#[test]
-fn compose_ignores_a_stale_flag_on_an_identity_operand() {
-    let (fresh, stale) = fresh_and_stale(&[0, 1], &[0, 1], &['a', 'b']);
-    // g's left leg runs backwards, which is what makes the two numberings
-    // differ; on a monotone left leg both arms agree and nothing is visible.
-    let g = Cospan::new(vec![1, 0], vec![0, 1], vec!['b', 'a']).expect("in-bounds partner");
-
-    let from_fresh = fresh.compose(&g).expect("fresh ; g composes");
-    let from_stale = stale.compose(&g).expect("stale ; g composes");
-
-    assert_same_composite(
-        &from_stale,
-        &from_fresh,
-        "the composite must not depend on the cached flag (measured pre-fix, \
-         the stale operand gave left = [0, 1], right = [1, 0], middle = \
-         ['a', 'b'])",
-    );
-    assert_same_composite(&from_stale, &g, "id ; g must be g on the nose");
-    assert_eq!(
-        from_stale.canonical_form(),
-        from_fresh.canonical_form(),
-        "characterization, not the pin — this held pre-fix too: both answers \
-         are legitimate pushouts differing only in apex numbering"
-    );
-}
-
-/// The same at `n = 3`, where the partner's left leg is a 3-cycle.
-///
-/// **What this ranges over.** One fixture, one apex size larger than the
-/// previous test, with a partner whose left leg differs from the apex order by
-/// more than a transposition — so a numbering bug that happened to be an
-/// involution could not hide in it. Same oracle: the left operand is an
-/// identity, so the answer must be `g`.
-#[test]
-fn compose_ignores_a_stale_flag_on_a_three_vertex_identity_operand() {
-    let (fresh, stale) = fresh_and_stale(&[0, 1, 2], &[0, 1, 2], &['a', 'b', 'c']);
-    let g =
-        Cospan::new(vec![2, 0, 1], vec![0, 1, 2], vec!['b', 'c', 'a']).expect("in-bounds partner");
-
-    let from_fresh = fresh.compose(&g).expect("fresh ; g composes");
-    let from_stale = stale.compose(&g).expect("stale ; g composes");
-
-    assert_same_composite(
-        &from_stale,
-        &from_fresh,
-        "the composite must not depend on the cached flag (measured pre-fix, \
-         the stale operand gave left = [0, 1, 2], right = [1, 2, 0], middle = \
-         ['a', 'b', 'c'])",
-    );
-    assert_same_composite(&from_stale, &g, "id ; g must be g on the nose");
-    assert_eq!(
-        from_stale.canonical_form(),
-        from_fresh.canonical_form(),
-        "characterization, not the pin — this held pre-fix too"
-    );
-}
-
-/// The CHANGELOG's retired "observable side-effect": a `connect_pair` merge
-/// that turns `is_right_id` **on** no longer moves the next composite.
-///
-/// `Cospan`'s CHANGELOG carried this fixture (review R3-03) as evidence that a
-/// merge is observable downstream — that composing after one could return a
-/// different, isomorphic apex order, `structurally_equal` false and
-/// `canonical_form` equal, so byte-level consumers had to compare canonical
-/// forms. That held while the flag chose the fast path. It does not hold in
-/// what ships, and this test is why the CHANGELOG now says so.
-///
-/// The merge is performed for real (`connect_pair`), and the resulting triple
-/// `([1, 1], [0, 1], ['b', 'a'])` is *also* built twice by hand — once with
-/// honest flags, once staled — so all three operands are byte-equal and differ
-/// only in `is_right_id`. All three must compose to the same thing. The
-/// absolute expectation is the value the CHANGELOG attributed to the flag being
-/// **on**; the value it attributed to the flag being **off**,
-/// `left = [1, 1], right = [1, 0], middle = ['b', 'a']`, is now unreachable and
-/// is the measured falsification of this test.
-///
-/// **What this ranges over.** One fixture, and the *second* route to a flag
-/// disagreement (a real `connect_pair` merge, where the other tests in this
-/// file use delete-then-re-add). It does not sweep apex sizes or merge
-/// arguments, and it does not cover `connect_pair`'s two no-op arms, which
-/// leave the flags untouched.
-#[test]
-fn a_connect_pair_merge_does_not_move_the_next_composite() {
-    // The R3-03 fixture, merged for real: left [1, 2] -> [1, 1], apex loses a
-    // vertex, and the codomain flag comes back on.
-    let mut merged =
-        Cospan::new(vec![1, 2], vec![0, 1], vec!['b', 'a', 'a']).expect("in-bounds fixture");
-    merged.connect_pair(Left(0), Left(1));
-    assert_eq!(
-        (
-            merged.left_to_middle(),
-            merged.right_to_middle(),
-            merged.middle()
-        ),
-        (&[1, 1][..], &[0, 1][..], &['b', 'a'][..]),
-        "the merge must produce the triple the two hand-built operands use"
-    );
-    assert!(
-        merged.is_right_identity(),
-        "the merge turns `is_right_id` on — that is the premise of the retired \
-         observable, and if it stops holding this test is measuring nothing"
-    );
-
-    // The same triple with honest flags and with a stale `false`.
-    let (fresh, stale) = fresh_and_stale(&[1, 1], &[0, 1], &['b', 'a']);
-    let g = Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b']).expect("in-bounds partner");
-
-    let from_merged = merged.compose(&g).expect("merged ; g composes");
-    let from_fresh = fresh.compose(&g).expect("fresh ; g composes");
-    let from_stale = stale.compose(&g).expect("stale ; g composes");
-
-    assert_same_composite(
-        &from_stale,
-        &from_merged,
-        "the composite must not depend on how the operand's flag got its value \
-         (measured pre-fix, the stale operand gave left = [1, 1], \
-         right = [1, 0], middle = ['b', 'a'])",
-    );
-    assert_same_composite(&from_fresh, &from_merged, "fresh vs merged");
-    assert_eq!(
-        (
-            from_merged.left_to_middle(),
-            from_merged.right_to_middle(),
-            from_merged.middle()
-        ),
-        (&[0, 0][..], &[0, 1][..], &['a', 'b'][..]),
-        "got left = {:?}, right = {:?}, middle = {:?}",
-        from_merged.left_to_middle(),
-        from_merged.right_to_middle(),
-        from_merged.middle(),
-    );
-}
-
-/// A stale flag does not move a composite whose left operand is *not* an
-/// identity.
-///
-/// **What this ranges over.** One fixture whose domain leg is `[1, 0]`, so the
-/// composite is not the partner and unitality is unavailable as an oracle; the
-/// absolute expectation below is hand-derived from the fast path's definition
-/// (renumber `f`'s codomain-side apex by `g`'s indexing via `g.left`) rather
-/// than read off a second run of the code under test. This is the shape that
-/// says the claim is about `compose` generally and not only about units.
-#[test]
-fn compose_ignores_a_stale_flag_on_a_non_identity_operand() {
-    let (fresh, stale) = fresh_and_stale(&[1, 0], &[0, 1], &['a', 'b']);
-    let g = Cospan::new(vec![1, 0], vec![0, 1], vec!['b', 'a']).expect("in-bounds partner");
-
-    let from_fresh = fresh.compose(&g).expect("fresh ; g composes");
-    let from_stale = stale.compose(&g).expect("stale ; g composes");
-
-    assert_same_composite(
-        &from_stale,
-        &from_fresh,
-        "the composite must not depend on the cached flag (measured pre-fix, \
-         the stale operand gave left = [1, 0], right = [1, 0], middle = \
-         ['a', 'b'])",
-    );
-    assert_eq!(
-        (
-            from_stale.left_to_middle(),
-            from_stale.right_to_middle(),
-            from_stale.middle()
-        ),
-        (&[0, 1][..], &[0, 1][..], &['b', 'a'][..]),
-        "the fast path renumbers by g's apex, so f's reversed domain leg lands \
-         back in order: got left = {:?}, right = {:?}, middle = {:?}",
-        from_stale.left_to_middle(),
-        from_stale.right_to_middle(),
-        from_stale.middle(),
-    );
-    assert_eq!(
-        from_stale.canonical_form(),
-        from_fresh.canonical_form(),
-        "characterization, not the pin — this held pre-fix too"
-    );
 }
