@@ -4,10 +4,10 @@
 //! Two parallel cospans `X → a ← Y` and `X → a' ← Y` are equal *as morphisms
 //! of the cospan category* iff there is a bijection of apexes `a ≅ a'`
 //! commuting with both legs (F&S 2019, §3; the boundary objects `X`, `Y` are
-//! fixed, only the apex is quotiented). [`Cospan`] deliberately derives no
-//! `PartialEq` (its cached `is_left_id`/`is_right_id` flags can lag the maps
-//! they summarise, and raw structural equality is apex-order sensitive), so
-//! this module supplies the *semantic* comparison.
+//! fixed, only the apex is quotiented). Raw structural equality on a
+//! [`Cospan`] — [`Cospan::structurally_equal`] — is apex-order sensitive and so
+//! answers a strictly finer question, which is why this module supplies the
+//! *semantic* comparison.
 //!
 //! # Why this is a complete decision for special Frobenius monoids
 //!

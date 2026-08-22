@@ -151,7 +151,7 @@ fn permutation_cospan_compose() {
                 "composite apex; p1={p1:?} p2={p2:?}"
             );
 
-            composed.assert_valid(false, true);
+            composed.assert_valid();
             checked += 1;
         }
     }
@@ -197,7 +197,7 @@ fn symmetric_braiding_involutive() {
         );
     }
 
-    sigma_sq.assert_valid(false, true);
+    sigma_sq.assert_valid();
 }
 
 // ---------------------------------------------------------------------------
@@ -302,5 +302,5 @@ fn permute_side_reorders_domain() {
     assert!(c.is_right_identity(), "right identity flag preserved");
 
     // The cospan should still be valid.
-    c.assert_valid(false, true);
+    c.assert_valid();
 }

@@ -48,8 +48,14 @@ where
     RightPortName: Eq,
 {
     /// Debug-asserts cospan validity and name-count consistency (does not check uniqueness).
-    pub fn assert_valid_nohash(&self, check_id: bool) {
-        self.cospan.assert_valid(check_id, true);
+    ///
+    /// It took a `check_id: bool` until
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289), forwarded to
+    /// `Cospan::assert_valid` to select an arm that compared a cached identity
+    /// flag against the predicate it cached. `Cospan` has no such cache any
+    /// more, so there is nothing left for the parameter to select.
+    pub fn assert_valid_nohash(&self) {
+        self.cospan.assert_valid();
         debug_assert_eq!(
             self.cospan.left_to_middle().len(),
             self.left_names.len(),
@@ -166,7 +172,7 @@ where
             left_names,
             right_names,
         };
-        answer.assert_valid_nohash(false);
+        answer.assert_valid_nohash();
         answer
     }
 
@@ -735,8 +741,11 @@ where
     RightPortName: Eq + std::hash::Hash,
 {
     /// Full validity check including name uniqueness (requires `Hash`).
-    pub fn assert_valid(&self, check_id: bool) {
-        self.assert_valid_nohash(check_id);
+    ///
+    /// Lost its `check_id: bool` with
+    /// [`assert_valid_nohash`](Self::assert_valid_nohash)'s; see there.
+    pub fn assert_valid(&self) {
+        self.assert_valid_nohash();
         debug_assert!(
             crate::utils::is_unique(&self.left_names),
             "There was a duplicate name on the domain"
@@ -1395,8 +1404,8 @@ mod test {
     fn named_cospan_assert_valid() {
         let cospan: NamedCospan<char, i32, i32> =
             NamedCospan::new(vec![0], vec![0], vec!['a'], vec![1], vec![2]).unwrap();
-        cospan.assert_valid(false);
-        cospan.assert_valid_nohash(false);
+        cospan.assert_valid();
+        cospan.assert_valid_nohash();
     }
 
     #[test]
