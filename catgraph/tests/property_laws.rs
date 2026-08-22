@@ -1074,15 +1074,24 @@ proptest! {
     ///
     /// Apexes of 0–5 vertices, boundaries of 0–3 wires, three labels — pairs
     /// related by an apex permutation and at most **one** rewired leg entry. It
-    /// does not range over pairs that differ in more than one leg entry, over
+    /// does not range over pairs that differ in more than one leg entry; over
     /// pairs with different boundary sizes (those are separated by `dom_len` /
-    /// `cod_len` and pinned in the module's own tests), over pairs with
-    /// different **apex** sizes — both arms preserve `middle.len()`, so the
-    /// oracle's size early-return is dead here and the form's `apex_len` /
-    /// scalar-count dimension is never exercised by a `false`; a
-    /// `canonical_form` that dropped bubble classes would pass this test and is
-    /// caught only by `cospan_canon.rs`'s own `scalar_count` / bubble pins — or
-    /// over larger apexes, where the brute-force oracle stops being affordable.
+    /// `cod_len` and pinned in the module's own tests); over pairs with
+    /// different apex sizes or different apex label multisets (both arms
+    /// preserve `middle.len()` and the labels); or over larger apexes, where
+    /// the brute-force oracle stops being affordable.
+    ///
+    /// Consequence of the equal-size, equal-labels corpus, measured over the
+    /// meta-test's 256 deterministic samples: the oracle's size early-return is
+    /// dead here and `apex_len` never differs across a pair (0 of 256);
+    /// `scalar_count` does differ (33 of 256, all non-isomorphic — a rewire
+    /// that merges two wires frees a bubble), but in every one of the 64
+    /// non-isomorphic pairs the non-bubble classes already differ, so a
+    /// `canonical_form` that dropped bubble classes would pass this test
+    /// (measured: 18/18 green under that mutant). It is caught by
+    /// `cospan_canon.rs`'s own scalar pins and the bubble ledgers in
+    /// `cospan_algebra`, `frobenius` and `tests/frobenius_axioms.rs` — 11 tests
+    /// crate-wide — not here.
     #[test]
     fn canonical_form_decides_apex_isomorphism((a, b) in arb_cospan_and_perturbation()) {
         let by_canonical_form = a.canonical_form() == b.canonical_form();

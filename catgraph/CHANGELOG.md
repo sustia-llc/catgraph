@@ -155,8 +155,9 @@ All notable changes to `catgraph` are documented here. The format follows
      `1, 2, 5`, partial order [A001035](https://oeis.org/A001035) `1, 3, 19`.
      The literature totals are what catches a bug shared by a predicate *and*
      its oracle — whenever the shared bug changes how many relations the
-     predicate accepts (one accepting a different set of the same size passes
-     both checks). `rel_composites_require_homogeneity` additionally pins the
+     predicate accepts (a shared bug under which the predicate accepts a
+     different set of the same size passes both checks).
+     `rel_composites_require_homogeneity` additionally pins the
      `is_homogeneous() &&` screen in both composites, which the exhaustive
      sweep cannot see (every relation it builds is homogeneous). Falsified:
      the three `return true` stubs redden all three tests; dropping the
