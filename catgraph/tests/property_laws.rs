@@ -1066,8 +1066,8 @@ proptest! {
     /// against a brute-force search over `S_apex`.
     ///
     /// The module's one hand-written iso⇒equal fixture covers a single apex
-    /// swap on `id(2)` (#287); this ranges over random permutations of apexes up
-    /// to 5 vertices, and over single-leg rewires, which supply the
+    /// swap on `id(2)` (#287); this ranges over random permutations of apexes
+    /// up to 5 vertices, and over single-leg rewires, which supply the
     /// non-isomorphic side that a permutation-only generator could never reach.
     ///
     /// # What this ranges over
@@ -1081,18 +1081,20 @@ proptest! {
     /// preserve `middle.len()` and the label multiset); or over larger apexes,
     /// where the brute-force oracle stops being affordable.
     ///
-    /// Consequence of the equal-size, equal-label-multiset corpus, by
-    /// construction: the oracle's size early-return is dead here, and equal
-    /// non-bubble classes force equal bubble labels and hence equal forms, so a
-    /// `canonical_form` that dropped bubble classes would pass this test on
-    /// every seed. Confirmed on the meta-test's 256 deterministic samples:
-    /// `apex_len` differs in 0 of 256; `scalar_count` differs in 33 of 256, all
-    /// non-isomorphic (a rewire that empties a vertex frees a bubble; one that
-    /// lands on a bubble fills it); the non-bubble classes differ in all 64 of
-    /// the 64 non-isomorphic pairs; and all 18 tests in this file stay green
-    /// under that mutant. It is caught by `cospan_canon.rs`'s own scalar pins
-    /// and the bubble ledgers in `cospan_algebra`, `frobenius` and
-    /// `tests/frobenius_axioms.rs` — 11 tests crate-wide — not here.
+    /// Consequence of the equal-size (apex and both boundaries),
+    /// equal-label-multiset corpus, by construction: the oracle's three size
+    /// early-returns are dead here, and equal non-bubble classes force equal
+    /// bubble-label multisets (a bubble class is its label and two empty
+    /// preimages) and hence equal forms, so a `canonical_form` that dropped
+    /// bubble classes would pass this test on every seed. Confirmed on the
+    /// meta-test's 256 deterministic samples: `apex_len` differs in 0 of 256;
+    /// `scalar_count` differs in 33 of 256, all non-isomorphic (a rewire that
+    /// empties a vertex frees a bubble; one that lands on a bubble fills it);
+    /// the non-bubble classes differ in all 64 of the 64 non-isomorphic pairs;
+    /// and all 18 tests in this file stay green under that mutant. The mutant
+    /// is caught by `cospan_canon.rs`'s own scalar pins and the bubble ledgers
+    /// in `cospan_algebra`, `frobenius` and `tests/frobenius_axioms.rs` — 11
+    /// tests crate-wide — not here.
     #[test]
     fn canonical_form_decides_apex_isomorphism((a, b) in arb_cospan_and_perturbation()) {
         let by_canonical_form = a.canonical_form() == b.canonical_form();
@@ -1117,8 +1119,8 @@ proptest! {
 /// vacuity #287 was filed for. The measured split is reported either way.
 ///
 /// Measured at the commit that introduced this test: **192 isomorphic, 64
-/// non-isomorphic** of 256. Only "both sides non-empty" is asserted; the figures
-/// are here so a later run can tell generator drift from RNG noise.
+/// non-isomorphic** of 256. Only "both sides non-empty" is asserted; the
+/// figures are here so a later run can tell generator drift from RNG noise.
 #[test]
 fn perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs() {
     const SAMPLES: usize = 256;
