@@ -741,9 +741,12 @@ impl Built {
     ///   special axiom). But a reader checking "does it factor as
     ///   `s_{m,1} ; … ; s_{1,n}`?" at `m = n = 1` will find that it does, so the
     ///   phrase alone does not decide the question and the split is what does.
-    ///   The 8 `(1, 1)` terms of [`connected_family`] are counted wide on this
-    ///   reading; the 992 of [`wide_waist_permutation_family`] all have
-    ///   `m, n >= 2` and do not rest on it.
+    ///   **15** corpus terms are counted wide on this reading — pinned as
+    ///   [`MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS`], and that total is the number
+    ///   to quote; it was 8 if you count only [`connected_family`]'s scripted
+    ///   `(1, 1)` terms and miss the random walks that also land there. The 992
+    ///   of [`wide_waist_permutation_family`] all have `m, n >= 2` and do not
+    ///   rest on it.
     /// - **It under-reports in general.** A cut of a string diagram is an
     ///   antichain, not necessarily a boundary between two recipe *layers*, so a
     ///   diagram can have a one-wire cut that no layer boundary of this
@@ -840,9 +843,9 @@ fn scripted_connected(z: char, m: usize, n: usize, variant: usize) -> Built {
 /// non-trivial, put into the corpus deliberately rather than by luck.
 ///
 /// [`connected_family`]'s recipes fold to one wire before decorating whenever
-/// `m >= 2`, so they carry a one-wire *internal* cut: they are already in the
-/// spider's own `s_{m,1} ; decoration ; s_{1,n}` shape, and "one apex vertex"
-/// follows almost immediately from the recipe. Measured on `5457e2d`, before
+/// `m >= 2`, so they carry a one-wire *internal* boundary: they **split** into
+/// two strictly smaller connected pieces, on which "one apex vertex" follows by
+/// induction. Measured on `5457e2d`, before
 /// this family existed, only 22 of the 272 connected terms had an interior
 /// waist of two or more, and a further 45 had no internal cut at all — fewer
 /// than two blocks, so nothing to narrow, and not an instance of the
@@ -1062,13 +1065,19 @@ fn the_permutation_sweep_really_sweeps_every_permutation() {
         );
 
         for target in &all {
-            // Driven through `Recipe`/`Block::Braid` itself rather than through
-            // a hand-copied `swap`, so the check is a *link* to the braid
-            // convention and not a re-spelling of it: if the DSL's braid arm
-            // changed, the sweep's wirings would stop being the permutations
-            // their names claim, and a duplicated convention here would stay
-            // green through it. The wires carry distinct components, so tracking
-            // `comp` tracks the permutation.
+            // Driven through `Recipe`/`Block::Braid` rather than through a
+            // hand-copied `swap`, so the check is a *link* to the DSL's WIRE
+            // BOOKKEEPING and not a re-spelling of it: change which wires
+            // `Block::Braid` exchanges and the sweep's wirings stop being the
+            // permutations their names claim, and a duplicated convention here
+            // would have stayed green through it. The wires carry distinct
+            // components, so tracking `comp` tracks the permutation.
+            //
+            // It links to that half only. `realised` is read from
+            // `recipe.wires`, never from `recipe.term`, so a `Block::Braid` that
+            // kept the swap and emitted the wrong *generator* — an identity, say
+            // — passes here. The emitted term is what the two claim tests
+            // exercise; this test's subject is the permutation, not the layer.
             let mut recipe = Recipe::new(&vec![LABELS[0]; n]);
             for at in transposition_word(target) {
                 recipe
@@ -1463,8 +1472,9 @@ fn connected_diagrams_denote_the_spider_in_cospan() {
         wide_waist >= MIN_CONNECTED_WIDE_WAIST,
         "the connected arm collapsed onto the spider's own factorisation: {wide_waist} of \
          {connected} terms have interior waist ≥ 2, floor {} (measured {} when this pin was \
-         written) — without them every term splits at a single wire into two smaller connected \
-         pieces, on which Thm 6.55 follows by induction",
+         written) — without them every term that has an internal boundary at all splits at a \
+         single wire into two smaller connected pieces, on which Thm 6.55 follows by induction \
+         (the rest have fewer than two blocks and are instances of nothing)",
         MIN_CONNECTED_WIDE_WAIST,
         MEASURED_CONNECTED_WIDE_WAIST,
     );
@@ -1605,21 +1615,23 @@ fn disconnected_recipes_denote_more_than_one_apex_vertex() {
 }
 
 // The values measured on `d6c7bd5` (production) with the corpus at this file's
-// current shape. All eleven are asserted exactly in
+// current shape. All twelve are asserted exactly in
 // `the_corpus_is_the_space_these_pins_claim`.
 //
 // Eight of them additionally appear in a failure message above or below, so a
 // reader can tell a real regression from fixture drift without rerunning
-// anything. Three do not, and here is exactly where each is reported, since a
+// anything. Four do not, and here is exactly where each is reported, since a
 // wrong answer to that is the same over-quantification this file exists to
 // remove: `MEASURED_CLOSED_EXCLUDED` is reported by the census tuple and by the
-// floor-vs-census loop (as `MIN_CLOSED_EXCLUDED`'s partner); `MEASURED_EMPTY_RECIPES`
-// and `MEASURED_CONNECTED_NO_INTERNAL_CUT` are reported by the census tuple
-// **alone** — no floor guards either of them, because neither bounds a claim
-// test's space. They are census bookkeeping: together with
-// `MEASURED_CONNECTED_WIDE_WAIST` they account for every connected term as
-// wide / narrow / no-cut, so the corpus's structural bias is stated in full
-// rather than for the wide part only.
+// floor-vs-census loop (as `MIN_CLOSED_EXCLUDED`'s partner); `MEASURED_EMPTY_RECIPES`,
+// `MEASURED_CONNECTED_NO_INTERNAL_CUT` and
+// `MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS` are reported by the census tuple
+// **alone** — no floor guards any of them, because none bounds a claim test's
+// space. They are census bookkeeping: together with
+// `MEASURED_CONNECTED_WIDE_WAIST` the first two account for every connected term
+// as wide / narrow / no-cut, and the third bounds how much of the wide bucket
+// rests on `Built::is_wide_waist`'s over-reporting arity — so the corpus's
+// structural bias is stated in full rather than for the favourable part.
 const MEASURED_CONNECTED: usize = 1280;
 const MEASURED_CONNECTED_WITH_BRAIDING: usize = 1105;
 const MEASURED_CONNECTED_WIDE_WAIST: usize = 1030;
@@ -1655,9 +1667,9 @@ const MEASURED_EMPTY_RECIPES: usize = 47;
 /// **Space:** the corpus of [`corpus`] at `char`/`String` on the pinned seed
 /// `0x6055_0001`.
 ///
-/// **Ten of the eleven numbers are properties of the generator**, not of the
+/// **Eleven of the twelve numbers are properties of the generator**, not of the
 /// production code under test, and for those this test goes red when the
-/// *generator* drifts — which is exactly its job. The eleventh is not, and the
+/// *generator* drifts — which is exactly its job. The twelfth is not, and the
 /// docstring says so rather than pointing a future maintainer at the wrong
 /// cause: `MEASURED_DISCONNECTED_DISTINCT` counts distinct **canonical forms**,
 /// so it is computed by [`image`] — `frobenius_to_cospan` + `canonical_form`,
@@ -1756,6 +1768,10 @@ fn the_corpus_is_the_space_these_pins_claim() {
         }
     }
 
+    // ⚠ Twelve elements is the ceiling for std's tuple `PartialEq`/`Debug`
+    // impls. A thirteenth census bucket does not fail here with an arity
+    // message — it fails with an unsatisfied trait bound. Split into a named
+    // struct at that point rather than puzzling over the error.
     assert_eq!(
         (
             connected,

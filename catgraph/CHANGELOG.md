@@ -54,10 +54,11 @@ All notable changes to `catgraph` are documented here. The format follows
     both gaps: a diagram cut is an antichain and need not fall on a recipe layer
     boundary, and at `m = n = 1` the `s_{m,1} ; … ; s_{1,n}` phrase is satisfied
     vacuously by `id ; D ; id` — 15 of the 1030 wide terms sit at that arity,
-    census-pinned so the prose bounds the reading instead of estimating it. The scripted connected family folds to one wire by
-    construction at `m >= 2`, and before the wide families existed only 22 of
-    the 272 connected terms had an interior waist ≥ 2 (a further 45 had no
-    internal cut at all). Two families answer it: the 16-term `wide_waist_family`
+    census-pinned so the prose bounds the reading instead of estimating it.
+    The scripted connected family folds to one wire by construction at
+    `m >= 2`, and before the wide families existed only 22 of the 272 connected
+    terms had an interior waist ≥ 2 (a further 45 had no internal cut at all).
+    Two families answer it: the 16-term `wide_waist_family`
     (comb, braided-comb and folded-comb at widths 2–4 on both labels,
     generalising three of the composites above — `wide_comb_z_2` *is*
     `(δ ⊗ id);(id ⊗ μ)`; `wide_braided_comb_z_2` is
@@ -103,8 +104,9 @@ All notable changes to `catgraph` are documented here. The format follows
     over it. Both claim tests additionally assert `scalar_count() == 0` on every
     term they *do* range over, so a surviving scalar reddens the pin.
   - **The census says which of its numbers are the generator's and which are
-    not.** Ten of the eleven counts in `the_corpus_is_the_space_these_pins_claim`
-    are properties of the generator alone; the eleventh, the number of distinct
+    not.** Eleven of the twelve counts in
+    `the_corpus_is_the_space_these_pins_claim`
+    are properties of the generator alone; the twelfth, the number of distinct
     disconnected canonical forms, is computed through `frobenius_to_cospan` +
     `canonical_form` and therefore moves with the production code — measured, it
     goes 203 → 220 under the comultiplication perturbation below, and an `Err`
