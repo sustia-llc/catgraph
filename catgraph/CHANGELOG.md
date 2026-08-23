@@ -28,35 +28,67 @@ All notable changes to `catgraph` are documented here. The format follows
     arity, so they are a *builder-shape* pin.
   - **The theorem is asserted where it is true** — on the image under
     `frobenius_to_cospan` (Prop 3.8), canonicalised by `Cospan::canonical_form`.
-    A generated corpus of 601 terms, built from η, ε, μ, δ, σ and `id` alone
+    A generated corpus of 617 terms, built from η, ε, μ, δ, σ and `id` alone
     (never from a `Spider` block, so the builder never appears inside a term
-    under test), yields 272 connected diagrams — both labels × `(m, n)` in
-    `0..=4 × 0..=4` minus `(0, 0)` × four decoration variants, plus seeded random
-    walks; recipe depth to 11; 107 carrying a braiding — and each is asserted to
-    have exactly one apex vertex, no scalar class, and preimages covering all of
-    `0..m` and `0..n`, *and* to equal the canonical form of
-    `special_frobenius_morphism(m, n, z)`. The oracle is independent of the
-    builder; the builder is compared to it.
+    under test), yields 288 connected diagrams — both labels × `(m, n)` in
+    `0..=4 × 0..=4` minus `(0, 0)` × four decoration variants, plus a scripted
+    wide-waist family and seeded random walks; recipe depth to 11; 113 carrying a
+    braiding — and each is asserted to have exactly one apex vertex, no scalar
+    class, and preimages covering all of `0..m` and `0..n`, *and* to equal the
+    canonical form of `special_frobenius_morphism(m, n, z)`. The oracle is
+    independent of the builder; the builder is compared to it.
+  - **The corpus's one structural bias is measured and answered, not left
+    implicit.** A diagram's *waist* is the narrowest running codomain its recipe
+    reaches; waist ≤ 1 means it factors as `s_{m,1} ; decoration ; s_{1,n}`, the
+    spider's own factorisation, on which the conclusion is nearly immediate. The
+    scripted connected family folds to one wire by construction, and the whole
+    connected arm measured a waist histogram of `{0: 107, 1: 164, 2: 1}` — 271 of
+    272 factoring through at most one wire. A 16-term `wide_waist_family` was
+    added for exactly that: comb, braided-comb and folded-comb shapes at widths
+    2–4 on both labels, generalising three of the composites above, each staying
+    two or more wires wide throughout (`wide_comb_z_2` *is*
+    `(δ ⊗ id);(id ⊗ μ)`; `wide_braided_comb_z_2` is
+    `(δ ⊗ id);(id ⊗ σ);(μ ⊗ id)`; `wide_folded_comb_z_2` is
+    `(μ ⊗ id);(δ ⊗ id);(id ⊗ μ)`). 17 of the 288 connected terms now have waist
+    ≥ 2, with a floor asserted so they cannot silently leave, and the "space the
+    assertions touch" paragraph states the restriction outright.
   - **Connectivity is decided by the recipe, never read off the oracle.** A
     disjoint-set over the construction is carried block by block (μ unions, δ
     propagates, η starts a component, ε consumes a wire without destroying its
     component, and σ permutes wires and unions nothing). The verdict is used in
-    both directions: the 267 disconnected recipes are asserted to denote exactly
+    both directions: the 220 disconnected recipes are asserted to denote exactly
     their own component count, which makes it a differential rather than an
     unchecked filter.
-  - **Excluded by design, and said so:** `m == n == 0`, and any recipe that
-    closes a component. Both sit on the *special* vs *extra-special* line —
-    `two_layer_simplify` cancels `η;ε` while `Cospan` keeps the bubble as a
-    genuine scalar — which this file does not decide. 62 corpus terms fall in
-    that arm; both claim tests additionally assert `scalar_count() == 0` on every
+  - **Excluded by design, and said so:** `m == n == 0`; any recipe that closes a
+    component; and any recipe with *no* component at all. The first two sit on
+    the *special* vs *extra-special* line — `two_layer_simplify` cancels `η;ε`
+    while `Cospan` keeps the bubble as a genuine scalar — which this file does
+    not decide; 62 corpus terms fall in that arm. The third is the empty term
+    (`[] → []`, depth 0), produced 47 times by walks that started at width 0 and
+    never drew an η: on it `apex_len() == components` reads `0 == 0`, true and
+    vacuous, and `apex_len() > 1` is simply false, so admitting it would make the
+    disconnected arm's own name wrong for 17.6% of its range. It is now counted
+    in the census and pinned to be exactly that shape, and no claim test ranges
+    over it. Both claim tests additionally assert `scalar_count() == 0` on every
     term they *do* range over, so a surviving scalar reddens the pin.
+  - **The census says which of its numbers are the generator's and which are
+    not.** Nine of the ten counts in `the_corpus_is_the_space_these_pins_claim`
+    are properties of the generator alone; the tenth, the number of distinct
+    disconnected canonical forms, is computed through `frobenius_to_cospan` +
+    `canonical_form` and therefore moves with the production code — measured, it
+    goes 184 → 189 under the comultiplication perturbation below, and an `Err`
+    from `frobenius_to_cospan` takes the census down with a panic rather than an
+    assertion. The docstring says so, instead of pointing a future maintainer at
+    the fixture.
   - **Falsified, measured, reverted.** Replacing `generator_to_cospan`'s
-    `Comultiplication` arm with a disconnected cospan: 157 of 272 connected and
-    84 of 267 disconnected terms disagree. Making the `SymmetricBraiding` arm a
-    merge: on mixed labels the layer fold rejects it outright (a merged apex
-    cannot retype `[z, w] → [w, z]`), and restricted to same-label σ so every
-    term stays type-correct, 29 of 267 disconnected recipes disagree while the
-    connected arm stays green by rights. Mirroring
+    `Comultiplication` arm with a disconnected cospan: 173 of 288 connected —
+    all 16 wide-waist terms among them — and 84 of 220 disconnected terms
+    disagree. Making the `SymmetricBraiding` arm a merge: on mixed labels the
+    layer fold rejects it outright (a merged apex cannot retype
+    `[z, w] → [w, z]`), and restricted to same-label σ so every term stays
+    type-correct, 29 of 220 disconnected recipes disagree while the connected arm
+    stays green by rights. Dropping `wide_waist_family` (with `CORPUS_SIZE`
+    followed down): the waist floor reddens at 1 of 272. Mirroring
     `special_frobenius_morphism`'s odd-`m` branch to `id ⊗ sfm(m-1, 1)` reddens
     two of the five term-level tests and leaves the semantic pin green — the two
     shapes are SCFM-equal, which is precisely the division of labour between the

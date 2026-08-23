@@ -24,8 +24,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   arities — structural equality is not the Frobenius quotient, so it could not
   have said more. Both rows now state the two halves the file has since #288:
   five term-level builder-shape tests, and the theorem itself pinned at the
-  semantics over a 601-term generated corpus. The row carries an `(8 tests)`
-  citation, so `scripts/check_audit_counts.py` guards the count from here on.
+  semantics over a 617-term generated corpus. They also record what that corpus
+  is *not*: a finite sample at one instantiation, most of whose connected terms
+  factor through a single wire (the scripted `wide_waist_family` is what puts the
+  non-trivial shapes in), with `m = n = 0`, component-closing and component-free
+  recipes excluded by design. The row carries an `(8 tests)` citation, so
+  `scripts/check_audit_counts.py` guards the count from here on.
 
 ### Changed — BREAKING
 
