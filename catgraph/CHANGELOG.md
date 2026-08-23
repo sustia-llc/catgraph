@@ -6,6 +6,62 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Tests (#288: `tests/spider_theorem.rs` widened to the theorem it cites)
+
+- **Thm 6.55 is now pinned at the semantics, not only at the term level**
+  ([#288](https://github.com/sustia-llc/catgraph/issues/288)). The file carried
+  an "any connected Frobenius diagram on `m` inputs and `n` outputs equals the
+  spider `s_{m,n}`" header over five hand-built ≤ 2-layer, single-label,
+  braid-free composites at `m, n ≤ 3`, each asserting *structural* equality
+  against `special_frobenius_morphism`. No production code changed; this is a
+  test-and-docs change.
+
+  - **The over-claim is corrected rather than papered over.**
+    `FrobeniusMorphism`'s derived `Eq` is syntactic up to `two_layer_simplify`'s
+    four rewrite rules — it is not the Frobenius quotient — so a term-level
+    assertion *cannot* be widened to arbitrary connected diagrams. Measured on
+    `d6c7bd5`: `(δ ⊗ id);(id ⊗ μ)`, `σ;μ;δ`, `(μ ⊗ id);(δ ⊗ id);(id ⊗ μ)`,
+    `(δ ⊗ id);(id ⊗ σ);(μ ⊗ id)`, `(η ⊗ id);μ` and the left-comb `4 → 1` are all
+    connected and all structurally ≠ the spider at their arities. The five tests
+    are kept, with docstrings that say what they actually pin: each hand-built
+    recipe is the recipe `special_frobenius_morphism` itself follows at that
+    arity, so they are a *builder-shape* pin.
+  - **The theorem is asserted where it is true** — on the image under
+    `frobenius_to_cospan` (Prop 3.8), canonicalised by `Cospan::canonical_form`.
+    A generated corpus of 601 terms, built from η, ε, μ, δ, σ and `id` alone
+    (never from a `Spider` block, so the builder never appears inside a term
+    under test), yields 272 connected diagrams — both labels × `(m, n)` in
+    `0..=4 × 0..=4` minus `(0, 0)` × four decoration variants, plus seeded random
+    walks; recipe depth to 11; 107 carrying a braiding — and each is asserted to
+    have exactly one apex vertex, no scalar class, and preimages covering all of
+    `0..m` and `0..n`, *and* to equal the canonical form of
+    `special_frobenius_morphism(m, n, z)`. The oracle is independent of the
+    builder; the builder is compared to it.
+  - **Connectivity is decided by the recipe, never read off the oracle.** A
+    disjoint-set over the construction is carried block by block (μ unions, δ
+    propagates, η starts a component, ε consumes a wire without destroying its
+    component, and σ permutes wires and unions nothing). The verdict is used in
+    both directions: the 267 disconnected recipes are asserted to denote exactly
+    their own component count, which makes it a differential rather than an
+    unchecked filter.
+  - **Excluded by design, and said so:** `m == n == 0`, and any recipe that
+    closes a component. Both sit on the *special* vs *extra-special* line —
+    `two_layer_simplify` cancels `η;ε` while `Cospan` keeps the bubble as a
+    genuine scalar — which this file does not decide. 62 corpus terms fall in
+    that arm; both claim tests additionally assert `scalar_count() == 0` on every
+    term they *do* range over, so a surviving scalar reddens the pin.
+  - **Falsified, measured, reverted.** Replacing `generator_to_cospan`'s
+    `Comultiplication` arm with a disconnected cospan: 157 of 272 connected and
+    84 of 267 disconnected terms disagree. Making the `SymmetricBraiding` arm a
+    merge: on mixed labels the layer fold rejects it outright (a merged apex
+    cannot retype `[z, w] → [w, z]`), and restricted to same-label σ so every
+    term stays type-correct, 29 of 267 disconnected recipes disagree while the
+    connected arm stays green by rights. Mirroring
+    `special_frobenius_morphism`'s odd-`m` branch to `id ⊗ sfm(m-1, 1)` reddens
+    two of the five term-level tests and leaves the semantic pin green — the two
+    shapes are SCFM-equal, which is precisely the division of labour between the
+    file's two halves.
+
 ### Changed — BREAKING (#289: the checked boundary-node mutators)
 
 - **`Cospan` has no cached identity flags**
