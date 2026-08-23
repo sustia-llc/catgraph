@@ -1109,10 +1109,16 @@ enum BubbleOp {
 /// — the brute-force oracle decides which, so both outcomes are legal here.
 ///
 /// The permutation and rewire arms both preserve `middle.len()` and the apex
-/// label multiset, so on their own they leave the oracle's size guard dead and
-/// the form's bubble dimension unobserved (#343). The [`BubbleOp`] arm is the
-/// one that moves the apex size; [`perturbation_generator_reaches_bubble_edits`]
-/// is what keeps it from silently ceasing to fire.
+/// label multiset, so on their own every generated pair has *equal* apex sizes:
+/// the oracle's size guard is dead, and equal non-bubble classes then force
+/// equal forms, which is what let a `canonical_form` dropping bubble classes
+/// pass on every seed (#343). They do **not** leave `scalar_count` untouched —
+/// a rewire that empties a vertex frees a bubble and one that lands on a bubble
+/// fills it, which moved `scalar_count` in 33 of 256 samples before this arm
+/// existed. What was unreachable is the apex *size*, and the [`BubbleOp`] arm
+/// is the one that moves it;
+/// [`perturbation_generator_reaches_bubble_edits`] is what keeps it from
+/// silently ceasing to fire.
 fn arb_cospan_and_perturbation() -> impl Strategy<Value = (Cospan<char>, Cospan<char>)> {
     arb_small_cospan()
         .prop_flat_map(|a| {
@@ -1163,17 +1169,45 @@ fn arb_cospan_and_perturbation() -> impl Strategy<Value = (Cospan<char>, Cospan<
                         (0..middle.len()).filter(|v| !hit.contains(v)).collect();
                     if !bubbles.is_empty() {
                         let victim = bubbles[which.index(bubbles.len())];
+                        // An independent reference for the reindexing, taken
+                        // before the removal: a surviving vertex's new index is
+                        // its *position among the survivors*. The arithmetic
+                        // below — shift everything above `victim` down one —
+                        // has to agree with it, and the `expect` is where "no
+                        // leg entry equals `victim`", the definition of a
+                        // bubble, stops being a comment and becomes a check.
+                        //
+                        // `Cospan::new` does not cover this: it bounds-checks
+                        // only, so an in-bounds slip would build a different,
+                        // perfectly valid cospan and silently narrow the corpus
+                        // rather than failing (#343 review).
+                        let survivors: Vec<usize> =
+                            (0..middle.len()).filter(|&v| v != victim).collect();
+                        let expected: Vec<usize> = left
+                            .iter()
+                            .chain(right.iter())
+                            .map(|&m| {
+                                survivors.iter().position(|&s| s == m).expect(
+                                    "invariant: a bubble is hit by no leg, so no leg entry \
+                                     can point at the dropped vertex",
+                                )
+                            })
+                            .collect();
+
                         middle.remove(victim);
-                        // Every surviving vertex above `victim` shifts down one.
-                        // No leg entry equals `victim` — that is what "bubble"
-                        // means — so this is exactly the reindexing needed, and
-                        // `Cospan::new` below rejects the value loudly if it is
-                        // not.
                         for m in left.iter_mut().chain(right.iter_mut()) {
                             if *m > victim {
                                 *m -= 1;
                             }
                         }
+
+                        let reindexed: Vec<usize> =
+                            left.iter().chain(right.iter()).copied().collect();
+                        assert_eq!(
+                            reindexed, expected,
+                            "bubble-drop reindexing slipped: dropped apex vertex {victim}, \
+                             surviving vertices (old indices) {survivors:?}"
+                        );
                     }
                 }
                 None => {}
@@ -1230,23 +1264,32 @@ proptest! {
     /// Apexes of 0–5 vertices, boundaries of 0–3 wires, three labels — pairs
     /// related by an apex permutation, at most **one** rewired leg entry, and at
     /// most **one** bubble vertex (an apex vertex hit by no leg) added or
-    /// dropped. So it *does* reach pairs of unequal apex size and unequal apex
-    /// label multiset, and with them the oracle's size guard and the form's
-    /// `apex_len` / `scalar_count` dimension. Measured on the meta-tests' 256
-    /// deterministic samples: 133 isomorphic and 123 non-isomorphic pairs; the
+    /// dropped. So it *does* reach pairs of unequal apex size, and with them the
+    /// oracle's size guard and the form's `apex_len` dimension. The apex label
+    /// multiset differs on exactly those pairs and no others: the bubble arm
+    /// changes it only by appending or removing one label. Measured on the
+    /// meta-tests' 256 deterministic samples: 133 isomorphic and 123
+    /// non-isomorphic pairs; the
     /// apex size differs in 97 of 256 (57 grew, 40 shrank); `scalar_count`
     /// differs in 93 of 256; and in **72** of the 123 non-isomorphic pairs the
     /// *non-bubble* classes are equal, so only the bubble classes separate the
-    /// forms — those 72 are what a `canonical_form` that dropped bubble classes
-    /// (`classes.retain(|c| !c.is_scalar())` before the sort) fails on here.
+    /// forms — those 72 (59 of them with a non-bubble class present) are what a
+    /// `canonical_form` that dropped bubble classes
+    /// (`classes.retain(|c| !c.is_scalar())` before the sort) fails on here, and
+    /// [`perturbation_generator_reaches_bubble_edits`] asserts their existence
+    /// rather than leaving the number as prose.
     ///
     /// It still does not range over pairs that differ in more than one leg
     /// entry, over pairs with different boundary sizes (those are separated by
     /// `dom_len` / `cod_len` and pinned in the module's own tests), over
     /// apex-size changes larger than one vertex, over the deletion of a
     /// *non*-bubble vertex (that is not a cospan operation — the legs would
-    /// have nowhere to point), or over larger apexes, where the brute-force
-    /// oracle stops being affordable.
+    /// have nowhere to point), over pairs of **equal** apex size whose label
+    /// multisets differ — an in-place relabelling of one apex vertex (middle
+    /// `['a','a']` vs `['a','b']`, legs identical) is a perturbation no arm
+    /// performs, so the form's label dimension is reached only via the rewire
+    /// and bubble arms — or over larger apexes, where the brute-force oracle
+    /// stops being affordable.
     #[test]
     fn canonical_form_decides_apex_isomorphism((a, b) in arb_cospan_and_perturbation()) {
         let by_canonical_form = a.canonical_form() == b.canonical_form();
@@ -1291,8 +1334,8 @@ fn perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs() {
     );
 }
 
-/// The generator's bubble arm reaches the apex-size dimension — in **both**
-/// directions.
+/// The generator's bubble arm reaches the apex-size dimension in **both**
+/// directions, and leaves pairs that **only** the bubble classes separate.
 ///
 /// The permutation and rewire arms preserve `middle.len()` by construction, so
 /// before #343 every generated pair had equal apex sizes: the oracle's size
@@ -1304,17 +1347,38 @@ fn perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs() {
 ///
 /// # What this ranges over
 ///
-/// The same 256 deterministic samples as the split meta-test above, and only
-/// their **apex sizes**: that `b` is sometimes larger than `a` and sometimes
-/// smaller. It asserts nothing about the label of the vertex added, which
-/// bubble was dropped, or that the reindexing was correct — `Cospan::new`
-/// rejects a bad reindex inside the generator, and the `iff` test itself is
-/// what ranges over the resulting forms.
+/// The same 256 deterministic samples as the split meta-test above, along two
+/// axes.
+///
+/// The first is the **apex size**: that `b` is sometimes larger than `a` and
+/// sometimes smaller. That is only a proxy, and a weak one — apex sizes can go
+/// on moving in both directions while every bubble edit is coupled to a
+/// form-changing rewire, which would restore the blind corpus with this half
+/// green. So the second axis is the property the arm actually exists to supply:
+/// pairs that the brute-force oracle calls **non-isomorphic** while `dom_len`,
+/// `cod_len` and every *non*-bubble class agree — exactly the pairs on which a
+/// `canonical_form` that discarded bubble classes
+/// (`classes.retain(|c| !c.is_scalar())` before the sort) would wrongly report
+/// equality. Those are what kill that mutant, and their count is asserted
+/// here rather than left as prose in the `iff` test's docstring.
+///
+/// The assertion is on the subset of those pairs that *also* carry a non-bubble
+/// class. A pair of empty-boundary cospans differing by one bubble qualifies on
+/// the bare predicate for free — both sides have no non-bubble classes at all —
+/// so counting only the pairs whose wiring genuinely coincides keeps the
+/// assertion from being satisfiable by that degenerate corner alone.
+///
+/// It still asserts nothing about the label of the vertex added or which bubble
+/// was dropped; the reindexing after a drop is checked inside the generator
+/// itself, against the survivors-position reference there (`Cospan::new` would
+/// not catch an in-bounds slip).
 ///
 /// Measured when this test landed (#343), of 256 samples: **57 grew** (a bubble
 /// added) and **40 shrank** (a bubble dropped); the remaining 159 kept the apex
-/// size — the arm was not drawn, or `Drop` found no bubble to take. Only "both
-/// directions non-empty" is asserted.
+/// size — the arm was not drawn, or `Drop` found no bubble to take — and **72**
+/// pairs are separated by their bubble classes alone, **59** of them with a
+/// non-bubble class present. Only non-emptiness is asserted; the figures are
+/// here so a later run can tell generator drift from RNG noise.
 #[test]
 fn perturbation_generator_reaches_bubble_edits() {
     const SAMPLES: usize = 256;
@@ -1333,6 +1397,39 @@ fn perturbation_generator_reaches_bubble_edits() {
         "bubble-arm split over {SAMPLES} samples: {grew} grew, {shrank} shrank, \
          {same} kept the apex size — canonical_form_decides_apex_isomorphism is \
          back on an equal-apex-size corpus, blind to bubble classes (#343)"
+    );
+
+    // Non-isomorphic (by the oracle, not by the form the mutant would change)
+    // yet agreeing on everything a bubble-dropping `canonical_form` would keep.
+    // Counted twice: all such pairs, and — the assertion — only those that also
+    // carry a non-bubble class, so that the agreement is a real coincidence of
+    // wiring rather than the degenerate both-boundaries-empty corner, which
+    // would satisfy a bare `> 0` for free.
+    let separated: Vec<usize> = samples
+        .iter()
+        .filter_map(|(a, b)| {
+            if exists_apex_iso(a, b) {
+                return None;
+            }
+            let (form_a, form_b) = (a.canonical_form(), b.canonical_form());
+            let non_bubble_a: Vec<_> = form_a.classes().iter().filter(|c| !c.is_scalar()).collect();
+            let non_bubble_b: Vec<_> = form_b.classes().iter().filter(|c| !c.is_scalar()).collect();
+            let bubbles_alone = form_a.dom_len() == form_b.dom_len()
+                && form_a.cod_len() == form_b.cod_len()
+                && non_bubble_a == non_bubble_b;
+            bubbles_alone.then_some(non_bubble_a.len())
+        })
+        .collect();
+    let bubbles_alone_separate = separated.len();
+    let with_wiring = separated.iter().filter(|&&classes| classes > 0).count();
+    assert!(
+        with_wiring > 0,
+        "of {SAMPLES} samples, {bubbles_alone_separate} non-isomorphic pairs are \
+         separated by their bubble classes alone (72 when this landed), of which \
+         {with_wiring} also carry a non-bubble class (59 when this landed) — \
+         without one of those, canonical_form_decides_apex_isomorphism stays green \
+         under a `canonical_form` that discards bubble classes, however far the \
+         apex sizes move (#343)"
     );
 }
 
