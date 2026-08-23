@@ -51,6 +51,27 @@ where
     /// what [`Span::new_unchecked`] documents. The bounds assertions still
     /// precede the label assertion, so a debug build reports the specific
     /// invariant rather than an index panic.
+    ///
+    /// ⚠ **The two `bool` parameters are on their way out, and the divergence
+    /// from `Cospan` is tracked, not accidental.**
+    /// [`Cospan::assert_valid`](crate::cospan::Cospan::assert_valid) lost both
+    /// of them at [#289](https://github.com/sustia-llc/catgraph/issues/289),
+    /// because they selected arms that compared a cached identity flag against
+    /// the predicate it cached and `Cospan` no longer caches one. `Span` still
+    /// does, so the arms below still have something to check and the parameters
+    /// still mean something — but that leaves the two sibling types with
+    /// different arities for the same method, which reads as an oversight and
+    /// is not: it is **axis 2** of
+    /// [#345](https://github.com/sustia-llc/catgraph/issues/345) ("`Span` still
+    /// caches a predicate `Cospan` computes"), whose recommended first step is
+    /// to delete `Span`'s `is_left_id` / `is_right_id`, compute the accessors,
+    /// and drop these parameters. Axis 1 of the same issue is the separate
+    /// question of whether the predicate should gain `Cospan`'s
+    /// boundary-length conjunct — see
+    /// [`add_boundary_node`](Self::add_boundary_node). Four call sites pass
+    /// these parameters today, all in
+    /// `catgraph-applied/tests/braiding_cross_carrier.rs`, and all pass
+    /// `(false, false)`.
     pub fn assert_valid(&self, check_id_strong: bool, check_id_weak: bool) {
         debug_assert!(
             self.middle.iter().all(|(z, _)| *z < self.left.len()),

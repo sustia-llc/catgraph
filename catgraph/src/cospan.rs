@@ -30,12 +30,36 @@ type MiddleIndexOrLambda<Lambda> = Either<MiddleIndex, Lambda>;
 /// One spelling, shared by the three sites that need it:
 /// [`Cospan::is_left_identity`] / [`Cospan::is_right_identity`], which are this
 /// function applied to a leg, and `perform_pushout`, which selects its two fast
-/// paths with it. The length conjunct is the half that keeps being lost when
-/// the predicate is re-spelled by hand:
-/// [#289](https://github.com/sustia-llc/catgraph/issues/289) found three sites
-/// that had re-spelled it without the conjunct, each then satisfiable by a leg
-/// out of step with the apex, plus a fourth that maintained no answer at all.
-/// The crate's CHANGELOG enumerates them.
+/// paths with it.
+///
+/// One spelling because, until
+/// [#289](https://github.com/sustia-llc/catgraph/issues/289), there were four —
+/// the mutators that maintained the cached flags each re-derived the answer by
+/// hand, and each got it wrong differently. Measured on `0.15.0`, in source
+/// order:
+///
+/// - `add_boundary_node`'s two `Left(idx)` arms wrote
+///   `is_left_id &= self.left.len() - 1 == tgt_idx`, which is neither half of
+///   the predicate. It holds for exactly one `tgt_idx` on an identity cospan —
+///   `middle.len()`, out of bounds — so the flag stayed `true` over an
+///   out-of-range leg entry.
+/// - `add_boundary_node`'s two `Right(label)` arms wrote
+///   `is_left_id &= self.left.len() == self.middle.len()`. That *is* the length
+///   conjunct, and since the arm pushes to leg and apex together it could never
+///   fire: a no-op that read as a guard. Its real defect was elsewhere — the
+///   arm grows the **apex**, so it is the *partner* flag that stops being true,
+///   and the partner was left untouched.
+/// - `delete_boundary_node` wrote `is_left_id &= z == self.left.len() - 1`:
+///   again neither half, and again satisfiable while the leg falls behind the
+///   apex.
+/// - `connect_pair` maintained no answer at all.
+///
+/// So the length conjunct was dropped by two of the four writers, not three;
+/// the third dropped `represents_id` and the wrong flag; the fourth wrote
+/// nothing. It was also missing from a *reader*: `assert_valid`'s retired
+/// strong arm compared `represents_id(leg)` against the flag, with no length
+/// conjunct, and so rejected valid cospans. The crate's CHANGELOG's `Fixed`
+/// entry enumerates all four with their measured consequences.
 fn leg_is_identity(leg: &[MiddleIndex], apex_len: usize) -> bool {
     leg.len() == apex_len && represents_id(leg.iter().copied())
 }
@@ -301,8 +325,17 @@ where
     ///
     /// It grows the **apex**, so it moves *both* identity answers: the leg it
     /// pushes to keeps whatever it had (leg and apex grow together), and the
-    /// other leg stops being an identity, because it is now strictly shorter
-    /// than the apex.
+    /// other leg cannot be an identity afterwards. Note *which* conjunct of
+    /// [`leg_is_identity`] does that work, because it is not always the length
+    /// one: if the partner was an identity it is now one entry short of the
+    /// apex, but if it was not, it cannot have become one either — an in-bounds
+    /// leg's entries are all below the *old* apex size, so `represents_id`
+    /// cannot reach the new last vertex. A leg **longer** than the apex is
+    /// legal and reachable, and lands on exactly that case:
+    /// `Cospan::new(vec![0, 0], vec![], vec!['a'])` then
+    /// `add_boundary_node_unknown_target(Right('b'))` leaves the domain leg at
+    /// length 2 over a 2-vertex apex — not shorter at all, and not an identity
+    /// because `represents_id([0, 0])` is false.
     pub fn add_boundary_node_unknown_target(
         &mut self,
         new_arrow: Either<Lambda, Lambda>,
@@ -575,7 +608,16 @@ where
     /// Append a new vertex to the middle set with the given label. Returns its index.
     ///
     /// It grows the apex without touching either leg, so neither leg is an
-    /// identity afterwards: both are now strictly shorter than the apex.
+    /// identity afterwards — but, as in
+    /// [`add_boundary_node_unknown_target`](Self::add_boundary_node_unknown_target),
+    /// not necessarily because either is shorter than the apex. A leg that was
+    /// an identity is now one entry short; a leg that was not cannot have
+    /// become one, since its entries were already bounded below the old apex
+    /// size and `represents_id` would have to reach the new last vertex. The
+    /// legal-and-reachable long leg is the case where "shorter" would be
+    /// wrong: `Cospan::new(vec![0, 0], vec![], vec!['a'])` then `add_middle`
+    /// leaves the domain leg at length 2 over a 2-vertex apex, and it is
+    /// `represents_id([0, 0])` that says it is no identity.
     pub fn add_middle(&mut self, new_middle: Lambda) -> MiddleIndex {
         self.middle.push(new_middle);
         self.middle.len() - 1
@@ -1664,10 +1706,12 @@ mod test {
         assert_eq!(c.middle().len(), 2);
         assert!(
             !c.is_left_identity(),
-            "left == [0] on a 2-vertex apex misses apex vertex 1. This read true \
-             before the `Right(label)` arms were fixed to clear the partner \
-             flag, and again after — a lie the public accessor kept telling \
-             until #289 deleted the cache behind it"
+            "left == [0] on a 2-vertex apex misses apex vertex 1. Measured on \
+             0.15.0 this read `true` — the `Right(label)` arm updated only the \
+             flag of the leg it pushed to. It has read `false` since the r4 fix \
+             gave that arm an explicit `is_left_id = false`, and reads `false` \
+             now for a structural reason rather than a maintained one: there is \
+             no flag, and the accessor reads the leg"
         );
 
         c.add_boundary_node_unknown_target(Right('c'));
