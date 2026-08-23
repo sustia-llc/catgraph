@@ -35,10 +35,36 @@ pub fn represents_id(it: impl Iterator<Item = usize>) -> bool {
     (0..).zip(it).all(|(l, r)| l == r)
 }
 
+/// Remove the elements at the given indices from `me`, preserving the order of
+/// the survivors.
+///
+/// Every index is read against `me` **as it was on entry**: the list is sorted
+/// and applied from the highest down, so no index has to be adjusted for an
+/// earlier removal.
+///
+/// Repeated indices name one element, and it is removed once
+/// ([#289](https://github.com/sustia-llc/catgraph/issues/289) added the
+/// `dedup`). Without it, `to_remove = [3, 3]` removed index 3 and then index 3
+/// *of the shortened vector* — silently deleting the element that had been at 4
+/// — or panicked with a bare slice message when 3 had been the last index.
+///
+/// # Panics
+///
+/// Panics — in every build profile — if any index is at or beyond `me.len()`,
+/// naming the largest offending index and the length. The check is on the
+/// largest index alone, which is sufficient: the list is sorted, so if it is in
+/// bounds every other one is too.
 pub fn remove_multiple<T>(me: &mut Vec<T>, mut to_remove: Vec<usize>) {
     to_remove.sort_unstable();
-    to_remove.reverse();
-    for r in to_remove {
+    to_remove.dedup();
+    if let Some(&largest) = to_remove.last() {
+        assert!(
+            largest < me.len(),
+            "remove_multiple: index {largest} is out of bounds for a vector of {} element(s)",
+            me.len()
+        );
+    }
+    for r in to_remove.into_iter().rev() {
         me.remove(r);
     }
 }

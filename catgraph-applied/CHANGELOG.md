@@ -13,6 +13,78 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **`WiringDiagram::add_boundary_node_unconnected` returns
+  `Result<(), CatgraphError>`**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)). It forwards to
+  `NamedCospan::add_boundary_node_unknown_target`, which core made fallible in
+  the same issue: a duplicate port name used to abort the process through a
+  bare release `assert!` inside `NamedCospan`, and this wrapper discarded the
+  mutator's return value (`let _ = ...`), so a caller had no way to see the
+  collision coming or to recover from it. The failure is
+  `CatgraphError::ConstructionDuplicatePortName`, carrying the leg and the
+  position of the port that already holds the name. On `Err` the diagram is
+  untouched — no port, no wire. Port names are a wiring diagram's addressing
+  scheme (`connect_pair`, `delete_boundary_node` and `operadic_substitution`
+  all resolve ports by name), so a duplicate makes the new port unaddressable
+  rather than merely untidy. Pinned in
+  `wiring_diagram::test::add_boundary_node_unconnected_reports_a_duplicate_name`.
+
+  Every call site inside this crate moved with it — `src/wiring_diagram.rs`,
+  `examples/wiring_diagram.rs`, `tests/wiring_diagram.rs`. Downstream callers
+  need a `?`, an `.expect(..)`, or a `let _ =` to restore the old behaviour.
+
+- **`WiringDiagram::connect_pair` merges the two ports in every argument
+  order** ([#289](https://github.com/sustia-llc/catgraph/issues/289)). It keeps
+  its signature, so unlike every other entry here **the compiler will not flag
+  this one** — it is a silent behaviour change and worth reading before
+  upgrading. Inherited through `NamedCospan::connect_pair` →
+  `Cospan::connect_pair` (core's `Fixed` entry for #289): naming the port that
+  sits on the **last** apex vertex first — the "`add_boundary_node_unconnected`,
+  then connect it" workflow this crate exposes — left both legs out of bounds
+  and the ports unmerged, silently, in every profile.
+
+- **`NamedCospan::assert_valid_nohash` takes no argument**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)), so this crate's
+  fifteen `assert_valid_nohash(false)` calls in `src/wiring_diagram.rs` are now
+  `assert_valid_nohash()`. Core deleted `Cospan`'s cached identity flags, and
+  with them the `check_id` parameter that selected the arms which checked them
+  — see catgraph's CHANGELOG, *`Cospan` has no cached identity flags*. Any
+  downstream caller of either `NamedCospan::assert_valid` or
+  `assert_valid_nohash` drops the argument; there is no behaviour to preserve.
+
+  The visible consequence for this crate reaches callers through
+  `WiringDiagram::inner()`: `wd.inner().cospan().is_left_identity()` and its
+  codomain mirror are now computed from the legs on every call. A diagram whose
+  ports have been merged, whose boundary has been permuted, or that has been
+  through a delete-then-re-add round trip reports its identity status
+  correctly, where before it could report either a stale `true` (the defect
+  class core's entry enumerates) or a conservative `false`. `WiringDiagram`
+  itself exposes no identity accessor of its own, so nothing on this crate's
+  own surface changes shape.
+
+  ⚠ **An earlier draft of this entry described a further consequence that the
+  release does not have.** It said that because a merge can turn an identity
+  flag *on*, a composite built after one — `operadic_substitution` composes —
+  might come back with a different, isomorphic apex order than before, so
+  callers should compare canonical forms rather than bytes. That was true of
+  the branch while `Cospan::compose` still selected `perform_pushout`'s fast
+  path from the cached flag. Composition derives the identity predicate from
+  the legs and there is no cache left to read, so a merge cannot move a later
+  composite at all: composition is a function of `(left, right, middle)`, and
+  byte comparison of composites is sound for byte-equal operands. Pinned
+  upstream in `catgraph/tests/compose_identity_arms.rs`, whose
+  `a_connect_pair_merge_composes_to_the_merged_apex` runs exactly the fixture
+  the retired claim was measured on.
+
+  Beyond the bullets above, no other `catgraph-applied` surface is affected:
+  `remove_multiple` and `from_cycle` — core's other #289 changes — keep their
+  signatures, and this crate's two `remove_multiple` calls in
+  `operadic_substitution` already pass distinct in-range indices (they come
+  from `find_nodes_by_name_predicate`), so the new dedup and bounds check are
+  no-ops for them.
+
 ### Changed
 
 - **clippy 1.98 compatibility**
@@ -27,6 +99,37 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   though clippy's own `help:` for `manual_slice_fill` is malformed (it keeps a
   leading `&mut`, yielding `&mut ()`), so `--fix` would not have produced this.
   No behaviour change.
+
+### Added
+
+- **`DecoratedCospan` implements `PartialEq`**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)) — additive, not
+  breaking. `==` compares the underlying cospan's `(left, right, middle)`
+  triple and then the decoration. This was blocked upstream: the doc comment on
+  the type said `PartialEq` was "intentionally not derived here, because the
+  upstream `Cospan<Lambda>` does not implement it". #289 deleted `Cospan`'s
+  cached identity flags and `Cospan` now derives `PartialEq`, so the
+  obstruction is gone.
+
+  Two things it deliberately is **not**:
+
+  - **Not a derive.** `#[derive(PartialEq)]` compiles here, but constrains the
+    *type parameters* (`Lambda: PartialEq`, `D: PartialEq`), and the field is
+    `D::Apex`, which the `Decoration` trait already bounds by `PartialEq`.
+    Every `Decoration` marker in the workspace — `PetriDecoration`, and the
+    `Trivial` / `Counter` / `Circuit` / `LocalTrivial` of the tests and the
+    example — is a unit struct that does not implement `PartialEq` itself, so
+    the derived impl would have applied to none of them: comparing two
+    `DecoratedCospan<char, Counter>` fails to compile under it (measured:
+    three `E0369`s, "an implementation of `PartialEq` might be missing for
+    `Counter`"). The hand-written impl asks only for `D: Decoration`. The
+    pre-existing derived `Clone` / `Debug` carry exactly that spurious bound;
+    widening them is a separate change and is not made here.
+  - **Not `Eq`.** `Decoration::Apex` is bounded by `Clone + Debug + PartialEq`,
+    so nothing at this level can promise reflexivity.
+
+  Pinned by `decorated_cospan_equality_compares_both_fields`, which also fails
+  to compile if the impl is swapped for a derive.
 
 ### Fixed — tests
 

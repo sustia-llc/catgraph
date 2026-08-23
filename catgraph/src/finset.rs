@@ -449,13 +449,47 @@ fn permutation_sort<T: Ord>(x: &mut [T]) -> Permutation {
 ///
 /// A cycle `[a, b, c]` sends a→b, b→c, c→a and fixes all other elements.
 /// Cycles of length 0 or 1 return the identity permutation.
+///
+/// # Panics
+///
+/// Panics — in **every** build profile, and before any recursion — if the cycle
+/// is not one: if any element is at or beyond `n`, or if any element is
+/// repeated. Both are checked because the documented meaning above is only
+/// well-defined for a cycle of distinct in-range elements
+/// ([#289](https://github.com/sustia-llc/catgraph/issues/289)):
+///
+/// - An out-of-range element used to reach a bare `assert!(i < n && j < n)`
+///   inside the `permutations` crate, from a recursive call, so the message
+///   named neither this function nor the offending element. A cycle of length
+///   `< 2` did not even reach that: `from_cycle(3, &[7])` silently returned the
+///   identity.
+/// - A repeated element used to return, silently, a permutation that is **not**
+///   the cycle described: `from_cycle(3, &[0, 1, 0])` is a product of two
+///   transpositions of `0` and `1`, i.e. the identity, not a 3-cycle — and no
+///   3-cycle exists on the two distinct elements it names.
 #[must_use]
 pub fn from_cycle(n: usize, cycle: &[usize]) -> Permutation {
+    assert!(
+        cycle.iter().all(|element| *element < n),
+        "from_cycle: every cycle element must be less than n = {n}, but the cycle is {cycle:?}"
+    );
+    assert!(
+        crate::utils::is_unique(cycle),
+        "from_cycle: cycle elements must be pairwise distinct, but the cycle is {cycle:?}"
+    );
+    from_cycle_of_distinct(n, cycle)
+}
+
+/// The recursive body of [`from_cycle`], with its preconditions already checked.
+///
+/// Split out so the distinctness scan runs once per call rather than once per
+/// level of recursion.
+fn from_cycle_of_distinct(n: usize, cycle: &[usize]) -> Permutation {
     if cycle.len() < 2 {
         return Permutation::identity(n);
     }
     let part1 = Permutation::transposition(n, cycle[0], cycle[1]);
-    from_cycle(n, &cycle[1..]) * part1
+    from_cycle_of_distinct(n, &cycle[1..]) * part1
 }
 
 /// Epi-mono factorization of a finite set morphism: `f = ι ∘ π ∘ σ`.

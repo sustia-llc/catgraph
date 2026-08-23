@@ -103,11 +103,13 @@ fn boundary_manipulation() {
 
     // Add an unconnected boundary node on the right (outer) side
     println!("before add: 3 right ports");
-    wd.add_boundary_node_unconnected(true, Right((Dir::Out, 99)));
+    wd.add_boundary_node_unconnected(true, Right((Dir::Out, 99)))
+        .expect("Out(99) is not already an outer port name");
     println!("after add:  4 right ports (added Out(99), type=true)");
 
     // Add a node on the left (inner) side
-    wd.add_boundary_node_unconnected(false, Left((Dir::In, (), 42)));
+    wd.add_boundary_node_unconnected(false, Left((Dir::In, (), 42)))
+        .expect("In((), 42) is not already an inner port name");
     println!("added inner port: In((), 42), type=false");
 
     // Connect two boundary nodes that share the same middle type

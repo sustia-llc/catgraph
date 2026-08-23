@@ -68,8 +68,17 @@ pub enum CatgraphError {
     /// the apex (middle) set it must land in.
     ///
     /// Raised by [`Cospan::new`](crate::cospan::Cospan::new) — and, via it, by
-    /// [`NamedCospan::new`](crate::named_cospan::NamedCospan::new). The
-    /// `_unchecked` constructors leave this to a `debug_assert!`.
+    /// [`NamedCospan::new`](crate::named_cospan::NamedCospan::new) — and, since
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289), by the checked
+    /// mutators
+    /// [`Cospan::add_boundary_node`](crate::cospan::Cospan::add_boundary_node) /
+    /// [`add_boundary_node_known_target`](crate::cospan::Cospan::add_boundary_node_known_target)
+    /// and
+    /// [`NamedCospan::add_boundary_node`](crate::named_cospan::NamedCospan::add_boundary_node)
+    /// with its `_known_target` wrapper (the `_unknown_target` wrappers mint
+    /// their apex vertex and cannot raise this), where `position` is the slot
+    /// the new entry would have taken. The `_unchecked` constructors and
+    /// mutators leave this to a `debug_assert!`.
     ///
     /// A span's failure of the same kind is
     /// [`ConstructionMiddlePairOutOfBounds`](Self::ConstructionMiddlePairOutOfBounds),
@@ -105,8 +114,11 @@ pub enum CatgraphError {
     ///
     /// `leg` still says which half of the pair was out of range, and hence which
     /// boundary `target_len` measures. Raised by
-    /// [`Span::new`](crate::span::Span::new) — `new_unchecked` leaves this to a
-    /// `debug_assert!`.
+    /// [`Span::new`](crate::span::Span::new) and, since
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289), by
+    /// [`Span::add_middle`](crate::span::Span::add_middle), where
+    /// `pair_position` is the slot the new pair would have taken;
+    /// `new_unchecked` leaves this to a `debug_assert!`.
     #[error(
         "construction error: middle pair {pair_position} targets {leg} index {target}, but the {leg} has {target_len} element(s)"
     )]
@@ -164,6 +176,46 @@ pub enum CatgraphError {
         boundary_len: usize,
         /// The number of names supplied for it.
         name_count: usize,
+    },
+
+    /// A [`NamedCospan`](crate::named_cospan::NamedCospan) mutator was asked to
+    /// add a port whose name is already taken on that boundary.
+    ///
+    /// Port names are the named cospan's addressing scheme: every name-keyed
+    /// operation (`find_node_by_name`, `delete_boundary_node_by_name`,
+    /// `map_to_same`, `connect_pair`) resolves a name by `position`, i.e. to the
+    /// **first** port carrying it, so a duplicate makes the second port
+    /// unaddressable and silently redirects every later lookup to the first.
+    ///
+    /// Raised by
+    /// [`NamedCospan::add_boundary_node`](crate::named_cospan::NamedCospan::add_boundary_node)
+    /// and its `known_target` / `unknown_target` wrappers. Before
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) this was a hard
+    /// release `assert!` inside `add_boundary_node`, which meant one method
+    /// aborted the process for a duplicate name while accepting an
+    /// out-of-bounds middle index without a word — two postures for two
+    /// invariants of the same call.
+    /// [`add_boundary_node_unchecked`](crate::named_cospan::NamedCospan::add_boundary_node_unchecked)
+    /// leaves it to a `debug_assert!`. The `_unchecked` *constructor* does not
+    /// check it at all — its `assert_valid_nohash` skips uniqueness, which needs
+    /// `Hash` — and neither does
+    /// [`NamedCospan::new`](crate::named_cospan::NamedCospan::new); only the
+    /// `Hash`-bounded
+    /// [`assert_valid`](crate::named_cospan::NamedCospan::assert_valid) checks
+    /// it, in debug builds.
+    ///
+    /// The offending name itself is deliberately **not** carried: port names are
+    /// only bounded by `Eq`, so there is no `Debug`/`Display` to render them
+    /// with. `existing_position` locates the port that already holds it, which
+    /// is what a caller needs to recover.
+    #[error(
+        "construction error: a {leg} port at position {existing_position} already carries the requested name; port names must be unique on each boundary"
+    )]
+    ConstructionDuplicatePortName {
+        /// Which boundary the name collision was found on.
+        leg: BoundaryLeg,
+        /// The position of the port that already carries the requested name.
+        existing_position: usize,
     },
 
     /// A [`CospanCanon`](crate::cospan_canon::CospanCanon)'s class vector is not

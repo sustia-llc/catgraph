@@ -117,12 +117,22 @@ where
     }
 
     /// Add a new boundary node connected to a fresh, isolated middle node of the given type.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::ConstructionDuplicatePortName`] if `new_name` is
+    /// already the name of a port on the boundary it selects. Fallible since
+    /// [#289](https://github.com/sustia-llc/catgraph/issues/289): the underlying
+    /// [`NamedCospan::add_boundary_node_unknown_target`] used to abort the
+    /// process with a bare release `assert!` on a duplicate name, which this
+    /// wrapper then discarded the result of.
     pub fn add_boundary_node_unconnected(
         &mut self,
         type_: Lambda,
         new_name: Either<(Dir, InterCircle, IntraCircle), (Dir, IntraCircle)>,
-    ) {
-        let _ = self.0.add_boundary_node_unknown_target(type_, new_name);
+    ) -> Result<(), CatgraphError> {
+        self.0.add_boundary_node_unknown_target(type_, new_name)?;
+        Ok(())
     }
 
     /// Merge the middle nodes behind two boundary nodes (by name).
@@ -352,7 +362,7 @@ mod test {
         y.shuffle(&mut rng);
         let p = Permutation::try_from(&y).unwrap();
         example_outer.0.permute_side(&p, false);
-        example_outer.0.assert_valid_nohash(false);
+        example_outer.0.assert_valid_nohash();
         // #258: `permute_side(p, _)` moves the wire at slot `i` to slot
         // `p.apply(i)`, so the word it leaves behind is `p.inv().permute(old)`.
         // These three read `p.permute(old)` before that change.
@@ -370,7 +380,7 @@ mod test {
 
         let op_subbed = example_outer.operadic_substitution(0, example_inner);
         assert_ok!(op_subbed);
-        example_outer.0.assert_valid_nohash(false);
+        example_outer.0.assert_valid_nohash();
         assert_eq!(
             *example_outer.0.left_names(),
             vec![(Dir::Undirected, 1, 500)]
@@ -448,13 +458,13 @@ mod test {
         y.shuffle(&mut rng);
         let p1 = Permutation::try_from(&y).unwrap();
         example_outer.0.permute_side(&p1, false);
-        example_outer.0.assert_valid_nohash(false);
+        example_outer.0.assert_valid_nohash();
 
         let mut y: Vec<usize> = (0..5).collect();
         y.shuffle(&mut rng);
         let p2 = Permutation::try_from(&y).unwrap();
         example_outer.0.permute_side(&p2, true);
-        example_outer.0.assert_valid_nohash(false);
+        example_outer.0.assert_valid_nohash();
 
         // #258: the word left behind is `p.inv().permute(old)`; these read
         // `p.permute(old)` before that change.
@@ -501,7 +511,7 @@ mod test {
         let subbed = example_outer.operadic_substitution(1, example_inner_1);
         assert_ok!(subbed);
 
-        example_outer.0.assert_valid_nohash(false);
+        example_outer.0.assert_valid_nohash();
         let expected_left_names = [
             (Dir::Undirected, 2, 'u'),
             (Dir::Undirected, 2, 'v'),
@@ -646,7 +656,7 @@ mod test {
         let subbed = example_outer.operadic_substitution(2, make_example_inner_2());
         assert_ok!(subbed);
 
-        example_outer.0.assert_valid_nohash(false);
+        example_outer.0.assert_valid_nohash();
         let expected_left_names = [
             (Dir::Undirected, 3, 'w'),
             (Dir::Undirected, 3, 'x'),
@@ -778,10 +788,53 @@ mod test {
         let mut wd = simple_diagram();
         assert_eq!(wd.0.right_names().len(), 3);
         // Add a new unconnected boundary node on the right side
-        wd.add_boundary_node_unconnected(true, Right((Dir::Out, 99)));
+        wd.add_boundary_node_unconnected(true, Right((Dir::Out, 99)))
+            .unwrap();
         assert_eq!(wd.0.right_names().len(), 4);
         assert!(wd.0.right_names().contains(&(Dir::Out, 99)));
-        wd.0.assert_valid_nohash(false);
+        wd.0.assert_valid_nohash();
+    }
+
+    /// #289: a duplicate port name is now an `Err` the caller can act on, and
+    /// the diagram is left untouched.
+    ///
+    /// **What this ranges over.** One collision, on the codomain side, against
+    /// the middle of three existing names — enough to show the position is the
+    /// colliding port's rather than a hard-coded 0. The domain side and the
+    /// out-of-bounds-index arm are covered by the core pins in
+    /// `catgraph/tests/checked_mutators.rs`, since both checks live in
+    /// `NamedCospan` / `Cospan`; this test's claim is only that the wrapper
+    /// propagates instead of discarding.
+    ///
+    /// Measured before #289: `NamedCospan::add_boundary_node`'s bare
+    /// `assert!(!self.right_names.contains(&new_name_real))` aborted the
+    /// process in every profile, and this wrapper returned `()` regardless.
+    #[test]
+    fn add_boundary_node_unconnected_reports_a_duplicate_name() {
+        use super::Dir;
+        use catgraph::errors::{BoundaryLeg, CatgraphError};
+        use either::Either::Right;
+        let mut wd = simple_diagram();
+        assert_eq!(wd.0.right_names().len(), 3);
+        assert_eq!(wd.0.cospan().middle().len(), 3);
+
+        let err = wd
+            .add_boundary_node_unconnected(true, Right((Dir::Out, 1)))
+            .expect_err("(Out, 1) already names codomain port 1");
+        assert_eq!(
+            err,
+            CatgraphError::ConstructionDuplicatePortName {
+                leg: BoundaryLeg::Codomain,
+                existing_position: 1,
+            }
+        );
+        assert_eq!(wd.0.right_names().len(), 3, "no port is added on Err");
+        assert_eq!(
+            wd.0.cospan().middle().len(),
+            3,
+            "and no wire either — the refused call mints nothing"
+        );
+        wd.0.assert_valid_nohash();
     }
 
     #[test]
@@ -791,10 +844,11 @@ mod test {
         let mut wd = simple_diagram();
         assert_eq!(wd.0.left_names().len(), 0);
         // Add a new unconnected boundary node on the left (inner) side
-        wd.add_boundary_node_unconnected(false, Left((Dir::In, (), 42)));
+        wd.add_boundary_node_unconnected(false, Left((Dir::In, (), 42)))
+            .unwrap();
         assert_eq!(wd.0.left_names().len(), 1);
         assert_eq!(wd.0.left_names()[0], (Dir::In, (), 42));
-        wd.0.assert_valid_nohash(false);
+        wd.0.assert_valid_nohash();
     }
 
     #[test]
@@ -808,7 +862,7 @@ mod test {
         wd.delete_boundary_node(Right((Dir::Out, 1)));
         assert_eq!(wd.0.right_names().len(), 2);
         assert!(!wd.0.right_names().contains(&(Dir::Out, 1)));
-        wd.0.assert_valid_nohash(false);
+        wd.0.assert_valid_nohash();
     }
 
     #[test]
@@ -817,11 +871,12 @@ mod test {
         use either::Either::Left;
         let mut wd = simple_diagram();
         // First add a left-side node so we can delete it
-        wd.add_boundary_node_unconnected(true, Left((Dir::In, (), 7)));
+        wd.add_boundary_node_unconnected(true, Left((Dir::In, (), 7)))
+            .unwrap();
         assert_eq!(wd.0.left_names().len(), 1);
         wd.delete_boundary_node(Left((Dir::In, (), 7)));
         assert_eq!(wd.0.left_names().len(), 0);
-        wd.0.assert_valid_nohash(false);
+        wd.0.assert_valid_nohash();
     }
 
     #[test]
@@ -883,7 +938,7 @@ mod test {
         wd.change_boundary_node_name(Right(((Dir::In, 0), (Dir::Out, 50))));
         assert!(!wd.0.right_names().contains(&(Dir::In, 0)));
         assert!(wd.0.right_names().contains(&(Dir::Out, 50)));
-        wd.0.assert_valid_nohash(false);
+        wd.0.assert_valid_nohash();
     }
 
     #[test]
@@ -908,7 +963,7 @@ mod test {
         wd.change_boundary_node_name(Left(((Dir::In, 1, 10), (Dir::Undirected, 1, 10))));
         assert!(!wd.0.left_names().contains(&(Dir::In, 1, 10)));
         assert!(wd.0.left_names().contains(&(Dir::Undirected, 1, 10)));
-        wd.0.assert_valid_nohash(false);
+        wd.0.assert_valid_nohash();
     }
 
     #[test]
@@ -936,7 +991,7 @@ mod test {
         assert_eq!(wd.0.right_names()[0].0, Dir::Out);
         assert_eq!(wd.0.right_names()[1].0, Dir::In);
         assert_eq!(wd.0.right_names()[2].0, Dir::Out);
-        wd.0.assert_valid_nohash(false);
+        wd.0.assert_valid_nohash();
     }
 
     #[test]
@@ -960,7 +1015,7 @@ mod test {
         wd.toggle_orientation(true);
         assert_eq!(wd.0.left_names()[0].0, Dir::Out);
         assert_eq!(wd.0.left_names()[1].0, Dir::In);
-        wd.0.assert_valid_nohash(false);
+        wd.0.assert_valid_nohash();
     }
 
     #[test]

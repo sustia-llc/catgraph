@@ -56,7 +56,7 @@ fn cospan_add_boundary_known_target_then_compose_with_identity() {
     // Start with f: {a,b} -> {b,c}, add a left boundary pointing to middle[2]='c'.
     // New domain becomes {a,b,c}. Compose with identity on {a,b,c}.
     let mut f = cospan_f();
-    let added = f.add_boundary_node_known_target(Left(2));
+    let added = f.add_boundary_node_known_target(Left(2)).unwrap();
     assert_eq!(added, Left(2)); // new left index = 2
 
     assert_eq!(f.domain(), vec!['a', 'b', 'c']);
@@ -144,8 +144,8 @@ fn cospan_add_middle_then_add_boundary_pointing_to_it() {
     assert_eq!(m1, 1);
 
     // Add left boundary pointing to m0, right boundary pointing to m1.
-    c.add_boundary_node_known_target(Left(m0));
-    c.add_boundary_node_known_target(Right(m1));
+    c.add_boundary_node_known_target(Left(m0)).unwrap();
+    c.add_boundary_node_known_target(Right(m1)).unwrap();
 
     assert_eq!(c.domain(), vec!['p']);
     assert_eq!(c.codomain(), vec!['q']);
@@ -156,8 +156,8 @@ fn cospan_add_middle_then_add_boundary_pointing_to_it() {
     let mut d: Cospan<char> = Cospan::empty();
     let dm0 = d.add_middle('q');
     let dm1 = d.add_middle('r');
-    d.add_boundary_node_known_target(Left(dm0));
-    d.add_boundary_node_known_target(Right(dm1));
+    d.add_boundary_node_known_target(Left(dm0)).unwrap();
+    d.add_boundary_node_known_target(Right(dm1)).unwrap();
 
     let result = c.compose(&d).expect("manual cospans compose");
     assert_eq!(result.domain(), vec!['p']);
@@ -165,7 +165,7 @@ fn cospan_add_middle_then_add_boundary_pointing_to_it() {
 }
 
 #[test]
-fn cospan_identity_flags_preserved_and_broken_by_mutations() {
+fn cospan_leg_identity_preserved_and_broken_by_mutations() {
     let mut id = id_ab();
     assert!(id.is_left_identity());
     assert!(id.is_right_identity());
@@ -175,19 +175,18 @@ fn cospan_identity_flags_preserved_and_broken_by_mutations() {
     //   Left leg is still [0,1,...,n-1] on a middle of size n — identity is PRESERVED.
     id.add_boundary_node_unknown_target(Left('c'));
     assert!(id.is_left_identity()); // left=[0,1,2], middle len=3 — still identity
-    // Right is [0,1] on a middle of size 3 — NOT a bijection onto all of middle,
-    // but the flag is only updated by the Right branch, so it's still true here
-    // (conservative hint — the Left branch doesn't touch is_right_id).
+    // Right is [0,1] on a middle of size 3 — NOT a bijection onto all of middle.
+    assert!(!id.is_right_identity());
 
     // Break left identity: add a left boundary pointing to an EXISTING middle node.
-    // This makes left=[0,1,2,0] which is not [0,1,...,n-1].
-    id.add_boundary_node_known_target(Left(0));
-    // is_left_id &= (left.len()-1 == tgt_idx) => (3 == 0) => false.
+    // This makes left=[0,1,2,0], which is not [0,1,...,n-1] and is one longer
+    // than the 3-vertex apex.
+    id.add_boundary_node_known_target(Left(0)).unwrap();
     assert!(!id.is_left_identity());
 
-    // Break right identity explicitly by adding a right boundary with unknown target.
-    // right becomes [0,1,3], middle becomes ['a','b','c','d'].
-    // is_right_id &= (right.len() == middle.len()) => (3 == 4) => false.
+    // Adding a right boundary with an unknown target grows the apex again:
+    // right becomes [0,1,3], middle becomes ['a','b','c','d'] — three entries
+    // over four vertices, and out of order besides.
     id.add_boundary_node_unknown_target(Right('d'));
     assert!(!id.is_right_identity());
 }
@@ -216,9 +215,9 @@ fn cospan_chain_of_mutations_then_compose() {
     // Add middle node 'b'.
     let m = c.add_middle('b');
     // Add left boundary pointing to 'b'.
-    c.add_boundary_node_known_target(Left(m));
+    c.add_boundary_node_known_target(Left(m)).unwrap();
     // Add right boundary pointing to 'b'.
-    c.add_boundary_node_known_target(Right(m));
+    c.add_boundary_node_known_target(Right(m)).unwrap();
 
     assert_eq!(c.domain(), vec!['a', 'b']);
     assert_eq!(c.codomain(), vec!['a', 'b']);
@@ -271,7 +270,7 @@ fn cospan_add_boundary_to_empty_then_compose() {
     assert!(c.codomain().is_empty());
 
     // Add a right boundary pointing to the same middle node.
-    c.add_boundary_node_known_target(Right(0));
+    c.add_boundary_node_known_target(Right(0)).unwrap();
     assert_eq!(c.codomain(), vec!['x']);
 
     // Should compose with identity on ['x'].
