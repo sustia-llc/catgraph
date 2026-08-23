@@ -771,8 +771,10 @@ impl Built {
 /// puts a one-wire *internal* boundary in every term with `m >= 2`, splitting it
 /// into `s_{m,1}` and the rest — the spider's own factorisation. (At `m <= 1`
 /// there is no fold, so the restriction does not apply: the eight `m == 1`,
-/// `n == 1` terms count as wide-waisted, on the reading
-/// [`Built::is_wide_waist`] flags as over-reporting at that arity.) That is the
+/// `n == 1` terms *of this family* count as wide-waisted, on the reading
+/// [`Built::is_wide_waist`] flags as over-reporting at that arity. Corpus-wide
+/// that count is 15, not 8 — [`MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS`] — and 15
+/// is the number to quote outside this docstring.) That is the
 /// corpus's one systematic bias, and [`wide_waist_family`] and
 /// [`wide_waist_permutation_family`] are what answer it.
 fn connected_family() -> Vec<Built> {
@@ -1627,11 +1629,16 @@ fn disconnected_recipes_denote_more_than_one_apex_vertex() {
 // `MEASURED_CONNECTED_NO_INTERNAL_CUT` and
 // `MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS` are reported by the census tuple
 // **alone** — no floor guards any of them, because none bounds a claim test's
-// space. They are census bookkeeping: together with
-// `MEASURED_CONNECTED_WIDE_WAIST` the first two account for every connected term
-// as wide / narrow / no-cut, and the third bounds how much of the wide bucket
-// rests on `Built::is_wide_waist`'s over-reporting arity — so the corpus's
-// structural bias is stated in full rather than for the favourable part.
+// space. They are census bookkeeping, and each does a different job. The
+// connected arm's partition is `MEASURED_CONNECTED` (1280) = wide 1030 + narrow
+// 205 + `MEASURED_CONNECTED_NO_INTERNAL_CUT` 45; `MEASURED_EMPTY_RECIPES` (47)
+// is **not** part of it — those terms have `components == 0` and are skipped
+// before the connected branch is reached, so adding them into that sum is a
+// misread, not a drift. `MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS` bounds how much
+// of the wide bucket rests on `Built::is_wide_waist`'s over-reporting arity, and
+// `MEASURED_EMPTY_RECIPES` is the non-emptiness pin of an excluded arm. Between
+// them the corpus's structural bias is stated in full rather than for the
+// favourable part.
 const MEASURED_CONNECTED: usize = 1280;
 const MEASURED_CONNECTED_WITH_BRAIDING: usize = 1105;
 const MEASURED_CONNECTED_WIDE_WAIST: usize = 1030;
