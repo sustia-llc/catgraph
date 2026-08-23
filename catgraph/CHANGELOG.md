@@ -75,6 +75,20 @@ All notable changes to `catgraph` are documented here. The format follows
   apex size**, which the size guard cannot decide — fell **64 → 26**, a ~59%
   thinning. That count is what the meta-test now asserts, and the same neutering
   reddens it at `0 of 93`.
+- **The rewire arm is now *observed*, not inferred.** `arb_cospan_and_perturbation`
+  yields a `Perturbed { a, b, rewired }` recording whether a leg entry actually
+  moved (not merely that the option was drawn), and the guard counts pairs where
+  `rewired` **and** the result is non-isomorphic at equal apex size. The earlier
+  version reasoned "equal size + non-isomorphic ⇒ the rewire arm fired" — true
+  today, and only because no other arm produces such pairs. That invariant was
+  prose in an exclusion list, not a check. Measured with a temporary relabel arm
+  added (one of the gaps that same list invites closing) and the rewire arm
+  neutered: the inference-based count reads **126** and would have passed while
+  the rewire arm was dead; the `rewired`-based count reads **0** and reddens.
+  Both probes reverted. The floor is `MIN_REWIRE_DISCRIMINATING = 10` against a
+  measured 26 — a floor rather than `> 0`, so a later thinning to a single
+  sample cannot pass while the docstring still advertises 26; raising it to 30
+  reddens, confirming the measurement.
 
 ### Tests (#288: `tests/spider_theorem.rs` widened to the theorem it cites)
 
