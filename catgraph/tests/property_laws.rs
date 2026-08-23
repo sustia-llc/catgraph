@@ -1134,6 +1134,35 @@ fn arb_cospan_and_perturbation() -> impl Strategy<Value = Perturbed> {
             )
         })
         .prop_map(|(a, perm, rewire, bubble)| {
+            // Built twice from the same draw: once as spelled, and once with the
+            // rewire step skipped. The pair of results is the **counterfactual**
+            // the meta-test needs — see [`Perturbed::without_rewire`].
+            let (b, rewired) = apply_perturbation(&a, &perm, rewire, bubble);
+            let (rewire_only, _) = apply_perturbation(&a, &perm, rewire, None);
+            Perturbed {
+                a,
+                b,
+                rewire_only,
+                rewired,
+            }
+        })
+}
+
+/// One perturbation, applied to `a`: permute the apex, optionally rewire one leg
+/// entry, optionally add or drop a bubble. Each arm is passed in, so a caller
+/// can build the same draw with an arm withheld.
+///
+/// Returns the cospan and whether a leg entry actually **moved** (a drawn rewire
+/// that finds an empty leg, or a single-vertex apex with nowhere to go, is a
+/// no-op and must not count as the arm having fired).
+fn apply_perturbation(
+    a: &Cospan<char>,
+    perm: &[usize],
+    rewire: Option<(bool, Index, Index)>,
+    bubble: Option<BubbleOp>,
+) -> (Cospan<char>, bool) {
+    {
+        {
             let mut left: Vec<usize> = a.left_to_middle().iter().map(|&m| perm[m]).collect();
             let mut right: Vec<usize> = a.right_to_middle().iter().map(|&m| perm[m]).collect();
             let mut middle: Vec<char> = a.middle().to_vec();
@@ -1141,9 +1170,6 @@ fn arb_cospan_and_perturbation() -> impl Strategy<Value = Perturbed> {
                 middle[perm[m]] = label;
             }
 
-            // Set only where a leg entry actually MOVES — a drawn rewire that
-            // finds an empty leg, or a single-vertex apex with nowhere to go,
-            // is a no-op and must not count as the arm having fired.
             let mut rewired = false;
             if let Some((on_right_leg, slot, target)) = rewire {
                 let apex_size = middle.len();
@@ -1218,33 +1244,93 @@ fn arb_cospan_and_perturbation() -> impl Strategy<Value = Perturbed> {
                 None => {}
             }
 
-            let b = Cospan::new(left, right, middle).unwrap();
-            Perturbed { a, b, rewired }
-        })
+            (Cospan::new(left, right, middle).unwrap(), rewired)
+        }
+    }
 }
 
-/// A generated pair together with **which arm actually changed the value**.
+/// A generated pair, together with **the counterfactual that isolates the
+/// rewire arm's contribution**.
 ///
-/// `rewired` exists because the meta-tests must not infer the rewire arm's
-/// contribution from a *consequence* of it. The previous guard counted
-/// non-isomorphic pairs at equal apex size and reasoned "only the rewire arm
-/// can produce those" — true today, and true only because no other arm does.
-/// The docstring on [`canonical_form_decides_apex_isomorphism`] lists a
-/// relabelling arm among the gaps someone might close; such an arm would
-/// manufacture equal-size non-isomorphic pairs on its own, the rewire arm could
-/// then be deleted with the guard still positive, and the guard's stated
-/// purpose would be silently false — the same mode-2 vacuity one level out from
-/// the one #343 fixed (found in the #343 round-3 review).
+/// The meta-tests must not infer that arm's contribution from a *consequence*
+/// of it, and this type has been narrowed twice for that reason.
 ///
-/// So the arm is observed rather than inferred. This is the "add the
-/// observable" move: the fact the assertion needs did not exist in the value,
-/// so it was put there instead of being reconstructed around it.
+/// 1. The first guard counted non-isomorphic pairs at equal apex size and
+///    reasoned "only the rewire arm can produce those" — true today, and only
+///    because no other arm does. A relabelling arm (one of the gaps
+///    [`canonical_form_decides_apex_isomorphism`]'s own exclusion list invites
+///    closing) would manufacture such pairs itself, letting the rewire arm be
+///    deleted with the guard still positive.
+/// 2. Recording `rewired` alone did not close that: it says the arm **changed
+///    the value**, not that the arm **caused the non-isomorphism**. Some rewires
+///    are apex permutations in disguise and preserve isomorphism —
+///    `a_single_rewire_changes_the_form_unless_it_is_a_relabelling` is about
+///    exactly those. So a rewire arm restricted to permutation-equivalent moves
+///    would keep the `rewired` count up while a relabel arm supplied every
+///    discrimination: the same vacuity, one level further in (#343 round-4
+///    review).
+///
+/// [`rewire_only`](Self::rewire_only) is the fix — the same draw with the
+/// permutation and the rewire applied and the **bubble arm withheld**. "Is the
+/// rewire, by itself, enough to break the isomorphism?" is then a question about
+/// that value alone rather than an inference from the finished pair.
+///
+/// ⚠ **That isolation is a maintenance obligation, not a property of the
+/// design.** `rewire_only` withholds the arms [`apply_perturbation`] is
+/// currently given to withhold — today, the bubble arm. An arm added later and
+/// applied unconditionally would land in `rewire_only` too, and its
+/// discrimination would be counted as the rewire's, restoring the very
+/// confusion this field exists to prevent. **Anyone adding a fourth arm must
+/// withhold it here as well.** Stated because the alternative is a claim of
+/// immunity this cannot support.
+///
+/// ⚠ The obvious counterfactual — "the same draw *minus* the rewire" — was
+/// tried first and is **confounded**, measured: the bubble arm's behaviour
+/// depends on whether the rewire fired, because a rewire can destroy the very
+/// bubble `BubbleOp::Drop` would have removed. Witness from the corpus:
+/// `a = [0]/[0]/['b','b']` (vertex 1 a bubble) rewires to
+/// `b = [0]/[1]/['b','b']`, genuinely non-isomorphic — but with the rewire
+/// withheld vertex 1 is still a bubble, `Drop` fires, and the comparison value
+/// is `[0]/[0]/['b']`, a different apex size. Withholding the *bubble* instead
+/// isolates the rewire cleanly, since nothing the rewire does changes what the
+/// permutation did.
 #[derive(Debug)]
 struct Perturbed {
     a: Cospan<char>,
     b: Cospan<char>,
+    /// The same draw with the permutation and rewire applied, bubble withheld.
+    rewire_only: Cospan<char>,
     /// A leg entry actually moved — not merely that the rewire option was drawn.
+    /// Necessary but **not** sufficient for the arm to be discriminating.
     rewired: bool,
+}
+
+impl Perturbed {
+    /// Whether the rewire arm is, on its own, enough to break the isomorphism.
+    ///
+    /// The permutation alone is always an isomorphism, so any non-isomorphism in
+    /// [`rewire_only`](Self::rewire_only) is the rewire's doing and nothing
+    /// else's. Decided by [`exists_apex_iso`] — the definition — so it borrows
+    /// nothing from `canonical_form`, the method under test.
+    fn rewire_breaks_iso(&self) -> bool {
+        self.rewired && !exists_apex_iso(&self.a, &self.rewire_only)
+    }
+
+    /// Whether the rewire arm's discrimination actually **reaches** the property
+    /// under test — both halves, and both are needed.
+    ///
+    /// [`rewire_breaks_iso`](Self::rewire_breaks_iso) says the arm is *capable*
+    /// (causally, unconfounded by the other arms). The equal-apex-size condition
+    /// says that capability is not then *masked*: when the bubble arm changes
+    /// the size, `exists_apex_iso` settles the pair on its size guard before a
+    /// class is ever compared, so `canonical_form`'s label and preimage
+    /// dimensions go unexercised however discriminating the rewire was.
+    ///
+    /// Measured on the corpus: 51 draws where the rewire alone breaks the
+    /// isomorphism, of which this many survive the masking.
+    fn rewire_discrimination_reaches_the_property(&self) -> bool {
+        self.rewire_breaks_iso() && self.a.middle().len() == self.b.middle().len()
+    }
 }
 
 /// Apex isomorphism decided the long way: brute force over `S_apex`, straight
@@ -1346,18 +1432,32 @@ proptest! {
     }
 }
 
-/// Floor on the pairs where the rewire arm fired *and* produced a
-/// non-isomorphic pair at equal apex size — the ones that actually exercise
-/// `canonical_form`'s label and preimage dimensions, because the oracle's size
-/// guard cannot settle them.
+/// The pairs the rewire arm makes non-isomorphic — those that would have been
+/// isomorphic without it ([`Perturbed::rewire_broke_iso`]). They are the ones
+/// exercising `canonical_form`'s label and preimage dimensions, since the
+/// oracle's size guard settles every other non-isomorphic pair here before a
+/// class is ever compared.
 ///
-/// Measured **26** of 256. A floor rather than the bare `> 0` the first version
-/// of this guard used: `> 0` would let a later change to `arb_small_cospan` or
-/// to the rewire arm's `elsewhere` logic thin this subcorpus to a single sample
-/// while the docstring still advertised 26 and the test stayed green — nearly
-/// the vacuity #343 set out to remove, one turn of the screw further in. Set
-/// well below the measurement so ordinary RNG drift does not redden it.
-const MIN_REWIRE_DISCRIMINATING: usize = 10;
+/// **26 of 256, asserted exactly, not floored.** [`sample_n`] pins
+/// `TestRng::deterministic_rng(RngAlgorithm::ChaCha)`, so this corpus is fixed
+/// and the count is the same on every run — there is no run-to-run drift for a
+/// floor to absorb, and an earlier revision of this comment claimed there was.
+/// Slack is worse than useless here: measured (#343 round-4 review), a floor of
+/// 10 let a plausible generator tweak — weighting the rewire draw to
+/// `prop::option::weighted(0.20, …)` — halve this subcorpus from 26 to 13 with
+/// all 20 tests in the file still green and three docstrings still advertising
+/// 26. An exact count costs nothing and makes a generator change restate what
+/// it produced, which is the same discipline the corpus census in
+/// `tests/spider_theorem.rs` uses. A proptest version bump may legitimately
+/// move it; restate it then.
+const MEASURED_REWIRE_DISCRIMINATING: usize = 26;
+
+/// Draws where the rewire arm alone breaks the isomorphism
+/// ([`Perturbed::rewire_breaks_iso`]) — before the masking the constant above
+/// accounts for. Asserted beside it so a change that leaves the arm capable but
+/// masks all of it, or that cripples the arm while the bubble arm keeps the
+/// aggregate up, moves a number rather than passing.
+const MEASURED_REWIRE_CAPABLE: usize = 51;
 
 /// The perturbation generator reaches **both** sides of the `iff` above — and
 /// reaches the non-isomorphic side *by the rewire arm*, not only by apex size.
@@ -1394,15 +1494,14 @@ fn perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs() {
         .filter(|p| exists_apex_iso(&p.a, &p.b))
         .count();
     let non_isomorphic = SAMPLES - isomorphic;
-    // The load-bearing subset, read off the generator's own record of which arm
-    // fired rather than inferred from a consequence: the rewire arm moved a leg
-    // entry AND the result is non-isomorphic at equal apex size, so
-    // `exists_apex_iso` had to look past its size guard to say so.
+    // The load-bearing subset, decided by counterfactual rather than by
+    // inference: the pair is non-isomorphic AND would have been isomorphic
+    // without the rewire. See `Perturbed` for why neither "equal apex size and
+    // non-isomorphic" nor "`rewired` is set" is enough on its own.
+    let rewire_capable = samples.iter().filter(|p| p.rewire_breaks_iso()).count();
     let rewire_discriminating = samples
         .iter()
-        .filter(|p| {
-            p.rewired && p.a.middle().len() == p.b.middle().len() && !exists_apex_iso(&p.a, &p.b)
-        })
+        .filter(|p| p.rewire_discrimination_reaches_the_property())
         .count();
     assert!(
         isomorphic > 0,
@@ -1410,16 +1509,16 @@ fn perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs() {
          {non_isomorphic} non-isomorphic — the `iff` in \
          canonical_form_decides_apex_isomorphism is one-sided on this corpus"
     );
-    assert!(
-        rewire_discriminating >= MIN_REWIRE_DISCRIMINATING,
-        "over {SAMPLES} samples the corpus has {non_isomorphic} non-isomorphic pairs but only \
-         {rewire_discriminating} where the rewire arm fired AND the pair is non-isomorphic at \
-         equal apex size, floor {MIN_REWIRE_DISCRIMINATING} (measured 26 when this assertion \
-         was written). Below that floor the rewire arm is barely reaching \
-         canonical_form_decides_apex_isomorphism at all: every other non-isomorphic pair is \
-         settled by exists_apex_iso's size guard before a class is ever compared. A bare \
-         `non_isomorphic > 0` reads {non_isomorphic} here and cannot see the difference — that \
-         is the vacuity this assertion replaced"
+    assert_eq!(
+        (rewire_capable, rewire_discriminating),
+        (MEASURED_REWIRE_CAPABLE, MEASURED_REWIRE_DISCRIMINATING),
+        "(rewire alone breaks the isomorphism, and that reaches the property un-masked) over \
+         {SAMPLES} samples. The corpus is deterministic, so these are exact counts, not floors — \
+         if you changed the generator, restate them, and check the second did not fall. Those \
+         are the pairs exercising canonical_form's label and preimage dimensions; every other \
+         non-isomorphic pair here is settled by exists_apex_iso's size guard before a class is \
+         compared. For scale, a bare `non_isomorphic > 0` reads {non_isomorphic} on this same \
+         corpus and cannot see any of it"
     );
 }
 

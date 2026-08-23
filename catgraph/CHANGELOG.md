@@ -75,20 +75,38 @@ All notable changes to `catgraph` are documented here. The format follows
   apex size**, which the size guard cannot decide — fell **64 → 26**, a ~59%
   thinning. That count is what the meta-test now asserts, and the same neutering
   reddens it at `0 of 93`.
-- **The rewire arm is now *observed*, not inferred.** `arb_cospan_and_perturbation`
-  yields a `Perturbed { a, b, rewired }` recording whether a leg entry actually
-  moved (not merely that the option was drawn), and the guard counts pairs where
-  `rewired` **and** the result is non-isomorphic at equal apex size. The earlier
-  version reasoned "equal size + non-isomorphic ⇒ the rewire arm fired" — true
-  today, and only because no other arm produces such pairs. That invariant was
-  prose in an exclusion list, not a check. Measured with a temporary relabel arm
-  added (one of the gaps that same list invites closing) and the rewire arm
-  neutered: the inference-based count reads **126** and would have passed while
-  the rewire arm was dead; the `rewired`-based count reads **0** and reddens.
-  Both probes reverted. The floor is `MIN_REWIRE_DISCRIMINATING = 10` against a
-  measured 26 — a floor rather than `> 0`, so a later thinning to a single
-  sample cannot pass while the docstring still advertises 26; raising it to 30
-  reddens, confirming the measurement.
+- **The rewire arm's contribution is now *causal*, not inferred.**
+  `arb_cospan_and_perturbation` yields
+  `Perturbed { a, b, rewire_only, rewired }`, where `rewire_only` is the same
+  draw with the permutation and rewire applied and the **bubble arm withheld**.
+  The guard asserts the exact pair `(51, 26)`: draws where the rewire alone
+  breaks the isomorphism, and the subset of those that reach the property
+  un-masked (equal apex size, so `exists_apex_iso` cannot settle the pair on its
+  size guard before a class is compared). Three predicates were tried and the
+  first two were measured wrong:
+  - "equal size + non-isomorphic" *infers* the arm from a consequence — true
+    only while no other arm makes such pairs, an invariant that lived in an
+    exclusion list as prose. With a temporary relabel arm added and the rewire
+    arm neutered it reads **126** and passes with the rewire arm dead.
+  - "`rewired` is set" says the arm changed the *value*, not that it caused the
+    *non-isomorphism*; some rewires are apex permutations in disguise, so a
+    rewire arm restricted to those would keep the count up while another arm
+    supplied every discrimination.
+  - "the same draw *minus* the rewire" is **confounded**: a rewire can destroy
+    the very bubble `BubbleOp::Drop` would have removed, so withholding it
+    changes the bubble arm too. Witness: `a = [0]/[0]/['b','b']` →
+    `b = [0]/[1]/['b','b']`, genuinely non-isomorphic, but the minus-rewire
+    build is `[0]/[0]/['b']` — a different apex size. Withholding the *bubble*
+    instead isolates the rewire cleanly.
+
+  Falsified: neutering the rewire arm takes the pair to `(0, 0)`. Exact counts
+  rather than floors, because `sample_n` pins a deterministic ChaCha RNG and
+  there is no run-to-run drift for slack to absorb — an earlier revision claimed
+  there was, and measured, a floor of 10 let `prop::option::weighted(0.20, …)`
+  halve the subcorpus 26 → 13 with every test still green. ⚠ The isolation is a
+  maintenance obligation, not a property of the design: a fourth arm added later
+  must be withheld from `rewire_only` too, or its discrimination is counted as
+  the rewire's.
 
 ### Tests (#288: `tests/spider_theorem.rs` widened to the theorem it cites)
 
