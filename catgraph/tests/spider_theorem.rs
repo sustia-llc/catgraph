@@ -73,18 +73,25 @@
 //! It is the theorem *over the corpus it ranges over*, and the shape of that
 //! corpus is stated rather than implied. The measure that matters is a
 //! diagram's **interior waist**: the narrowest running codomain strictly
-//! *between* two blocks (see [`Built::is_wide_waist`]). An internal cut of one
-//! wire means the diagram factors as `s_{m,1} ; decoration ; s_{1,n}` — the
-//! spider's own factorisation, on which the conclusion is nearly immediate. A
-//! narrow *boundary* means no such thing, which is why neither the domain nor
-//! the final codomain counts as a cut: a `1 → 1` diagram that δ's out to four
-//! wires, braids and μ's back is a fully non-trivial instance.
+//! *between* two blocks. A one-wire internal boundary **splits** the diagram
+//! into two strictly smaller connected pieces, `A : m → 1` and `B : 1 → n`, on
+//! which "one apex vertex" follows by induction. A narrow *boundary* splits
+//! nothing, which is why neither the domain nor the final codomain counts as a
+//! cut: a `1 → 1` diagram that δ's out to four wires, braids and μ's back is a
+//! genuine instance.
+//!
+//! ⚠ **Read [`Built::is_wide_waist`] before quoting that count** — it is
+//! evidence, not proof, and the gap runs both ways: a diagram cut is an
+//! antichain and need not fall on a recipe layer boundary (under-reports), and
+//! at `m == n == 1` the factorisation phrase is satisfied vacuously by
+//! `id ; D ; id` without splitting anything (over-reports).
 //!
 //! Measured over the 1280 connected terms: **1030** have an interior waist of
-//! two or more, 205 have an internal cut of one wire, and 45 have no internal
-//! cut at all (fewer than two blocks — nothing to narrow). All three are pinned
-//! by the census, so the accounting is complete rather than stated for the
-//! favourable part. [`wide_waist_permutation_family`] is what supplies the bulk
+//! two or more — 15 of those at `1 → 1`, where the over-reporting reading
+//! applies — 205 have an internal cut of one wire, and 45 have no internal cut
+//! at all (fewer than two blocks — nothing to narrow). All four counts are
+//! pinned by the census, so the accounting is complete rather than stated for
+//! the favourable part. [`wide_waist_permutation_family`] is what supplies the bulk
 //! of the first bucket — every wiring of a δ-fan into a μ-fan, all of them
 //! wide-waisted by construction — and [`MIN_CONNECTED_WIDE_WAIST`] is the floor
 //! that keeps them there.
@@ -369,11 +376,12 @@ const MIN_CONNECTED_WITH_BRAIDING: usize = 900;
 /// Measured 1030.
 ///
 /// This is the load-bearing count for the corpus's one structural bias. A
-/// diagram with an internal cut of one wire factors as
-/// `s_{m,1} ; (decoration) ; s_{1,n}`, which is the spider's own factorisation,
-/// and Thm 6.55 is nearly immediate on it; the shapes that make the theorem say
-/// something are the ones that never narrow to a single wire *inside*. A narrow
-/// boundary is not such a cut — see [`Built::is_wide_waist`].
+/// diagram with a one-wire internal boundary **splits** into two strictly
+/// smaller connected pieces, on which the conclusion follows by induction; the
+/// shapes that make the theorem say something are the ones that never narrow to
+/// a single wire *inside*. A narrow boundary is not such a cut, and the metric
+/// is evidence rather than proof in both directions — see
+/// [`Built::is_wide_waist`], which states both gaps.
 /// [`wide_waist_permutation_family`] supplies 992 of these by construction and
 /// [`wide_waist_family`] 16 more, so the floor is structural rather than seeded.
 const MIN_CONNECTED_WIDE_WAIST: usize = 900;
@@ -757,11 +765,12 @@ impl Built {
 /// mistake would show up as `components > 1` and land the term in the other arm.
 ///
 /// **Note the structural restriction this shape imposes:** folding to one wire
-/// puts a one-wire *internal* cut in every term with `m >= 2`, making it an
-/// `s_{m,1} ; decoration ; s_{1,n}` — the spider's own factorisation. (At
-/// `m <= 1` there is no fold, so the restriction does not apply: the `m == 1`,
-/// `n == 1` terms are wide-waisted, measured.) That is the corpus's one
-/// systematic bias, and [`wide_waist_family`] and
+/// puts a one-wire *internal* boundary in every term with `m >= 2`, splitting it
+/// into `s_{m,1}` and the rest — the spider's own factorisation. (At `m <= 1`
+/// there is no fold, so the restriction does not apply: the eight `m == 1`,
+/// `n == 1` terms count as wide-waisted, on the reading
+/// [`Built::is_wide_waist`] flags as over-reporting at that arity.) That is the
+/// corpus's one systematic bias, and [`wide_waist_family`] and
 /// [`wide_waist_permutation_family`] are what answer it.
 fn connected_family() -> Vec<Built> {
     let mut out = Vec::new();
@@ -1029,7 +1038,11 @@ fn transposition_word(target: &[usize]) -> Vec<usize> {
 /// distinct, and each word applied to `0..n` reproducing its target exactly.
 #[test]
 fn the_permutation_sweep_really_sweeps_every_permutation() {
-    for n in 0..=5usize {
+    // Up to 6, because `wide_waist_permutation_family` calls `permutations(2m)`
+    // at `m ∈ {2, 3}` — and the 6-element case supplies 1440 of the family's
+    // 1488 terms. Stopping at 5 would leave 97% of the sweep guarded by a check
+    // that never reaches its arity.
+    for n in 0..=6usize {
         let factorial: usize = (1..=n).product();
         let all = permutations(n);
         assert_eq!(
@@ -1049,17 +1062,25 @@ fn the_permutation_sweep_really_sweeps_every_permutation() {
         );
 
         for target in &all {
-            // Apply the word the way `Block::Braid` does — swap adjacent wires
-            // at the reported position, in order — and check it lands on
-            // `target`.
-            let mut wires: Vec<usize> = (0..n).collect();
+            // Driven through `Recipe`/`Block::Braid` itself rather than through
+            // a hand-copied `swap`, so the check is a *link* to the braid
+            // convention and not a re-spelling of it: if the DSL's braid arm
+            // changed, the sweep's wirings would stop being the permutations
+            // their names claim, and a duplicated convention here would stay
+            // green through it. The wires carry distinct components, so tracking
+            // `comp` tracks the permutation.
+            let mut recipe = Recipe::new(&vec![LABELS[0]; n]);
             for at in transposition_word(target) {
-                wires.swap(at, at + 1);
+                recipe
+                    .apply(Block::Braid(at))
+                    .unwrap_or_else(|e| panic!("transposition_word({target:?}) at {at}: {e}"));
             }
+            let realised: Vec<usize> = recipe.wires.iter().map(|w| w.comp).collect();
             assert_eq!(
-                &wires, target,
-                "transposition_word({target:?}) realises {wires:?} instead — every swept diagram \
-                 would still be well-typed and connected, so nothing else here would notice",
+                &realised, target,
+                "transposition_word({target:?}) realises {realised:?} through Block::Braid — every \
+                 swept diagram would still be well-typed and connected, so nothing else here \
+                 would notice",
             );
         }
     }
@@ -1275,9 +1296,11 @@ fn image(term: &FM, name: &str) -> CospanCanon<char> {
 ///
 /// **And the structural spread, stated in full rather than for its favourable
 /// part.** A diagram's *interior waist* is the narrowest running codomain
-/// strictly between two of its blocks ([`Built::is_wide_waist`]); an internal
-/// cut of one wire means it factors as `s_{m,1} ; decoration ; s_{1,n}`, the
-/// spider's own factorisation, on which the conclusion is nearly immediate. Over
+/// strictly between two of its blocks; a one-wire internal boundary **splits**
+/// it into two strictly smaller connected pieces, on which the conclusion
+/// follows by induction. ⚠ The metric is evidence and not proof in either
+/// direction — [`Built::is_wide_waist`] states both gaps, and 15 of the wide
+/// terms below sit at the `1 → 1` arity where it over-reports. Over
 /// the 1280 connected terms the interior-waist histogram is
 /// `{None: 45, 1: 205, 2: 23, 3: 619, 4: 388}` — **1030** with a cut of two or
 /// more, 205 with a one-wire cut, and 45 with no internal cut at all (fewer than
@@ -1439,8 +1462,9 @@ fn connected_diagrams_denote_the_spider_in_cospan() {
     assert!(
         wide_waist >= MIN_CONNECTED_WIDE_WAIST,
         "the connected arm collapsed onto the spider's own factorisation: {wide_waist} of \
-         {connected} terms have waist ≥ 2, floor {} (measured {} when this pin was written) — \
-         without them every term factors through a single wire and Thm 6.55 is nearly immediate",
+         {connected} terms have interior waist ≥ 2, floor {} (measured {} when this pin was \
+         written) — without them every term splits at a single wire into two smaller connected \
+         pieces, on which Thm 6.55 follows by induction",
         MIN_CONNECTED_WIDE_WAIST,
         MEASURED_CONNECTED_WIDE_WAIST,
     );
@@ -1600,6 +1624,13 @@ const MEASURED_CONNECTED: usize = 1280;
 const MEASURED_CONNECTED_WITH_BRAIDING: usize = 1105;
 const MEASURED_CONNECTED_WIDE_WAIST: usize = 1030;
 const MEASURED_CONNECTED_NO_INTERNAL_CUT: usize = 45;
+/// Connected wide-waist terms at `m == n == 1` — the arity where
+/// [`Built::is_wide_waist`] over-reports, since `s_{1,1}` is the identity and
+/// the `s_{m,1} ; … ; s_{1,n}` phrase is then satisfied without splitting
+/// anything. Pinned so the prose can *bound* that reading rather than estimate
+/// it: 15 of the 1030 wide terms, and none of them in the permutation sweep,
+/// whose terms all have `m, n >= 2`.
+const MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS: usize = 15;
 const MEASURED_CONNECTED_MAX_DEPTH: usize = 21;
 const MEASURED_CONNECTED_ARITIES: usize = 24;
 const MEASURED_DISCONNECTED: usize = 716;
@@ -1650,6 +1681,7 @@ fn the_corpus_is_the_space_these_pins_claim() {
     let mut with_braiding = 0usize;
     let mut wide_waist = 0usize;
     let mut no_internal_cut = 0usize;
+    let mut wide_with_trivial_ends = 0usize;
     let mut perm_family_waists: HashSet<Option<usize>> = HashSet::new();
     let mut perm_family_structurally_equal = 0usize;
     let mut cross = 0usize;
@@ -1688,6 +1720,14 @@ fn the_corpus_is_the_space_these_pins_claim() {
             if built.interior_waist.is_none() {
                 no_internal_cut += 1;
             }
+            // The wide terms that rest on `is_wide_waist`'s over-reporting end:
+            // at `m == n == 1` the `s_{m,1} ; … ; s_{1,n}` phrase is satisfied
+            // vacuously by `id ; D ; id`, so "wide" there means only "this
+            // spelling never passes through one wire". Counted so the docs can
+            // bound the reading instead of estimating it.
+            if built.is_wide_waist() && built.domain.len() == 1 && built.codomain.len() == 1 {
+                wide_with_trivial_ends += 1;
+            }
             if built.name.starts_with("wide_perm_") {
                 let (m, n) = (built.domain.len(), built.codomain.len());
                 // Per TERM, not pooled: a set of the waists seen cannot tell a
@@ -1725,6 +1765,7 @@ fn the_corpus_is_the_space_these_pins_claim() {
             with_braiding,
             wide_waist,
             no_internal_cut,
+            wide_with_trivial_ends,
             cross,
             max_depth,
             arities.len(),
@@ -1738,15 +1779,16 @@ fn the_corpus_is_the_space_these_pins_claim() {
             MEASURED_CONNECTED_WITH_BRAIDING,
             MEASURED_CONNECTED_WIDE_WAIST,
             MEASURED_CONNECTED_NO_INTERNAL_CUT,
+            MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS,
             MEASURED_CROSS_COMPONENT_BRAIDINGS,
             MEASURED_CONNECTED_MAX_DEPTH,
             MEASURED_CONNECTED_ARITIES,
             MEASURED_DISCONNECTED_DISTINCT,
         ),
         "(connected, disconnected, closed, empty, connected-with-σ, \
-         connected-with-interior-waist-≥-2, connected-with-no-internal-cut, cross-component σ, \
-         deepest connected recipe, distinct connected arities, distinct disconnected canonical \
-         forms)"
+         connected-with-interior-waist-≥-2, connected-with-no-internal-cut, \
+         connected-wide-at-1→1, cross-component σ, deepest connected recipe, distinct connected \
+         arities, distinct disconnected canonical forms)"
     );
 
     // `wide_waist_family`'s three named witnesses, guarded by NAME rather than
@@ -1775,6 +1817,19 @@ fn the_corpus_is_the_space_these_pins_claim() {
             found.components,
             found.closed,
             found.interior_waist,
+        );
+        // …and the property that is the stated reason these three are here: each
+        // is a connected diagram the builder does not itself build. Asserting
+        // only "connected and wide" above would leave the justification
+        // unchecked, so a change to `special_frobenius_morphism` or
+        // `two_layer_simplify` that collapsed one onto its spider would pass.
+        let (m, n) = (found.domain.len(), found.codomain.len());
+        let spider: FM = special_frobenius_morphism(m, n, found.domain[0]);
+        assert!(
+            found.term != spider,
+            "{name} is now structurally EQUAL to special_frobenius_morphism({m}, {n}, '{}') — the \
+             reason this shape is in the corpus is that §1's term-level Eq cannot reach it",
+            found.domain[0],
         );
     }
 

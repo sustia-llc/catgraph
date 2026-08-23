@@ -53,7 +53,8 @@ All notable changes to `catgraph` are documented here. The format follows
     evidence and not proof in both directions, and `Built::is_wide_waist` states
     both gaps: a diagram cut is an antichain and need not fall on a recipe layer
     boundary, and at `m = n = 1` the `s_{m,1} ; … ; s_{1,n}` phrase is satisfied
-    vacuously by `id ; D ; id`. The scripted connected family folds to one wire by
+    vacuously by `id ; D ; id` — 15 of the 1030 wide terms sit at that arity,
+    census-pinned so the prose bounds the reading instead of estimating it. The scripted connected family folds to one wire by
     construction at `m >= 2`, and before the wide families existed only 22 of
     the 272 connected terms had an interior waist ≥ 2 (a further 45 had no
     internal cut at all). Two families answer it: the 16-term `wide_waist_family`
