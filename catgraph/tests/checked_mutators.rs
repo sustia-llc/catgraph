@@ -1,6 +1,6 @@
 //! #289 regression pins for the checked boundary-node mutators.
 //!
-//! Three separable claims, pinned separately:
+//! Four separable claims, pinned separately:
 //!
 //! 1. The `add_boundary_node` family **rejects** an out-of-bounds apex index in
 //!    every build profile and leaves the value untouched when it does.
@@ -140,15 +140,40 @@ fn cospan_add_boundary_node_error_renders_the_leg_position_target_and_size() {
 /// cospan, for having a correctly-`false` left flag.
 ///
 /// **What this ranges over.** One 2-vertex apex, both legs, both answers, plus
-/// the empty cospan as the degenerate case. It does not sweep apex sizes and
-/// says nothing about legs *longer* than the apex, which `Cospan::new` refuses
-/// as out of bounds before the predicate is ever asked.
+/// an out-of-order leg and the empty cospan as the degenerate case. It does not
+/// sweep apex sizes. It says nothing about legs *longer* than the apex — legal
+/// (`Cospan::new(vec![0, 0], vec![], vec!['a'])`) but a case where the length
+/// conjunct is not what decides the answer, so it would not exercise this
+/// claim; `Cospan::add_middle`'s docs carry that shape.
 ///
-/// Measured falsification: deleting `leg.len() == apex_len` from the private
-/// `leg_is_identity` makes the first assertion below report `true` for a
-/// 1-entry domain leg over a 2-vertex apex. That perturbation reddens 9 of this
-/// file's 27 tests, `perform_pushout` reading the same predicate; this one is
-/// the only one that names the conjunct as the thing under test.
+/// Both short-leg fixtures are short **and in order**, which is the whole
+/// point: only such a leg separates the two conjuncts. This mirror read
+/// `right == [1]` until the sixth review — an assertion that held for an
+/// unrelated reason, since `represents_id([1])` fails on its own, so the
+/// conjunct was never what it tested.
+///
+/// Three measured falsifications:
+///
+/// 1. Deleting `leg.len() == apex_len` from the private `leg_is_identity`
+///    reddens **9 of this file's 27 tests** — `perform_pushout` reads the same
+///    predicate — this one first, at its opening assertion. The count is 9 with
+///    either mirror fixture; the mirror is not what makes the file sensitive.
+/// 2. That is because the *first* assertion masks the mirror. Under the same
+///    perturbation, with the domain assertion neutralised, the run fails on the
+///    mirror instead ("right == [0] misses apex vertex 1") — so the mirror is
+///    load-bearing rather than decorative. With the old `right == [1]` fixture
+///    in its place, that same run **passes**: the pre-r6 mirror was vacuous
+///    with respect to the conjunct.
+/// 3. Sharper still, dropping the conjunct from `is_right_identity` **alone**
+///    (leaving `leg_is_identity` and hence `is_left_identity` and
+///    `perform_pushout` intact) reddens **4** of the 27 with the old fixture and
+///    **5** with this one — this test being the fifth. So the file was never
+///    blind to a conjunct-less codomain accessor;
+///    `cospan_delete_boundary_node_keeps_composition_correct`,
+///    `cospan_unknown_target_add_grows_the_apex_past_the_partner_leg` and the
+///    two `connect_pair` tests all carry a short-and-in-order codomain leg
+///    incidentally. What was missing was a test that fails *for that reason*,
+///    which is what this one is for.
 #[test]
 fn cospan_identity_accessors_need_the_leg_to_cover_the_whole_apex() {
     // The CHANGELOG's own witness: `represents_id([0])` is true, the leg is
@@ -165,13 +190,18 @@ fn cospan_identity_accessors_need_the_leg_to_cover_the_whole_apex() {
         "right == [0, 1] does cover the 2-vertex apex"
     );
 
-    // The mirror, so the two accessors cannot be checked by one expression.
-    let short_right = Cospan::<char>::new(vec![0, 1], vec![1], vec!['a', 'b'])
+    // The mirror, so the two accessors cannot be checked by one expression —
+    // and, like the domain case above, short but *in order*. `right == [1]`
+    // would be the easier fixture to write and would be worthless here:
+    // `represents_id([1])` already fails, so it would redden for the wrong
+    // reason and a conjunct-less `is_right_identity` would still pass it.
+    let short_right = Cospan::<char>::new(vec![0, 1], vec![0], vec!['a', 'b'])
         .expect("a leg may be shorter than the apex");
     assert!(short_right.is_left_identity());
     assert!(
         !short_right.is_right_identity(),
-        "right == [1] is neither long enough nor in order"
+        "right == [0] misses apex vertex 1; without the length conjunct this \
+         reports true"
     );
 
     // A leg that covers the apex out of order is not an identity either.
@@ -436,18 +466,30 @@ fn named_cospan_connect_pair_merges_in_either_order() {
             "right == [0] over a 2-vertex apex is not the identity"
         );
 
+        // Only the ('in1', 'in0') order exercised the defect: it is the one
+        // whose node 1 sits on the last apex vertex. In the other order node
+        // 2's vertex is the last, `keep = mid_for_node_1` was already right,
+        // and the pre-fix code returned the same answer as today's — so its
+        // row must not be annotated with the other row's history.
+        let history = if first == "in1" {
+            "pre-fix this order gave left = [1, 0], right = [1] over a 1-vertex \
+             apex — every entry out of bounds"
+        } else {
+            "this order's remap was already correct pre-fix; it is here so the \
+             two orders run the same assertions"
+        };
+
         nc.connect_pair(Left(first), Left(second));
         assert_eq!(nc.cospan().middle(), &['a'], "order ({first}, {second})");
         assert_eq!(
             (nc.cospan().left_to_middle(), nc.cospan().right_to_middle()),
             (&[0, 0][..], &[0][..]),
-            "order ({first}, {second}): pre-fix, ('in1', 'in0') gave left = [1, 0], \
-             right = [1] over a 1-vertex apex — every entry out of bounds"
+            "order ({first}, {second}): {history}"
         );
         assert!(
             nc.map_to_same(Left("in0"), Left("in1")),
             "order ({first}, {second}): the two named ports must share a vertex \
-             after the merge (pre-fix, ('in1', 'in0'): false)"
+             after the merge ({history})"
         );
         assert!(!nc.cospan().is_left_identity());
         assert!(
@@ -721,9 +763,23 @@ fn cospan_connect_pair_merges_when_node_1s_vertex_is_the_last_apex_index() {
 /// the missing conjunct #345 names, and whether the answer is recomputed. That
 /// widens #345's scope; it does not settle it.
 ///
-/// **What this ranges over.** One domain-side append on one fixture. The
-/// contrast assertion is `Cospan`'s equivalent shape, so the two claims cannot
-/// be read as one.
+/// **What this ranges over.** One domain-side append on one fixture, with one
+/// `Cospan` contrast beside it so the two claims cannot be read as one.
+///
+/// ⚠ **The contrast is `Cospan`'s mirror, not its twin, and it has to be.** The
+/// two halves grow in opposite directions: the `Span` gains a *boundary* entry
+/// its middle pairs do not reach (boundary **longer** than the middle), while
+/// the `Cospan` gains an *apex* vertex its domain leg does not reach (leg
+/// **shorter** than the apex). The literal twin — a `Cospan` leg longer than
+/// its apex, e.g. `identity(&['a', 'b'])` then
+/// `add_boundary_node_known_target(Left(0))`, giving `left == [0, 1, 0]` over
+/// two vertices — cannot demonstrate the conjunct at all: a leg longer than the
+/// apex has all its entries below `apex_len`, so by pigeonhole it repeats one,
+/// so `represents_id` fails first and the answer is `false` with or without
+/// `leg.len() == middle.len()`. Only a leg that is short **and in order**
+/// leaves the length conjunct deciding. An editor "aligning" the two halves
+/// into the same shape would therefore turn the contrast into a vacuous
+/// assertion; keep them opposite.
 #[test]
 fn span_identity_flag_ignores_the_boundary_length() {
     let mut s = Span::<char>::identity(&vec!['a', 'b']);

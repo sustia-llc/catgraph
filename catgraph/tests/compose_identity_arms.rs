@@ -44,26 +44,14 @@
 //! cannot tell "arm 1 gone" from "arms swapped". Swapping them is its own
 //! perturbation, and the one its docstring names.
 
+mod common;
+use common::assert_cospan_eq_msg;
+
 use catgraph::{
     category::{Composable, HasIdentity},
     cospan::Cospan,
 };
 use either::Either::Left;
-
-/// Assert two composites agree field for field, reporting all three fields.
-fn assert_same_composite(got: &Cospan<char>, want: &Cospan<char>, what: &str) {
-    assert!(
-        got.structurally_equal(want),
-        "{what}\n  got  left = {:?}, right = {:?}, middle = {:?}\
-         \n  want left = {:?}, right = {:?}, middle = {:?}",
-        got.left_to_middle(),
-        got.right_to_middle(),
-        got.middle(),
-        want.left_to_middle(),
-        want.right_to_middle(),
-        want.middle(),
-    );
-}
 
 /// Strict left unitality on a left leg that separates the two numberings.
 ///
@@ -135,7 +123,7 @@ fn strict_left_unitality_at_three_vertices_with_a_cyclic_left_leg() {
 
     let result = id.compose(&g).expect("id ; g must compose");
 
-    assert_same_composite(&result, &g, "id ; g must be g on the nose");
+    assert_cospan_eq_msg(&result, &g, "id ; g must be g on the nose");
 }
 
 /// The `left_leg_id` arm on an operand that is **not** an identity.
