@@ -133,9 +133,14 @@ fn cospan_add_boundary_node_error_renders_the_leg_position_target_and_size() {
 ///
 /// `represents_id` tests only `leg[i] == i` for the entries present, so without
 /// the `leg.len() == middle.len()` conjunct a leg strictly shorter than the
-/// apex passes. Three of the four #289 flag defects were exactly that — a
-/// hand-written re-spelling missing the conjunct — and `Cospan::assert_valid`'s
-/// retired strong arm made the same omission in the other direction, rejecting
+/// apex passes. **Two** of the four #289 flag writers made exactly that
+/// omission — `add_boundary_node`'s `Left(idx)` arms and
+/// `delete_boundary_node`, both spelled `… == leg.len() - 1`. (The other two
+/// failed differently: the `Right(label)` arms *did* carry the length conjunct
+/// and dropped `represents_id` while updating the wrong flag, and
+/// `connect_pair` maintained nothing. `leg_is_identity`'s own docs enumerate
+/// all four.) A *reader* dropped the conjunct too: `Cospan::assert_valid`'s
+/// retired strong arm made the omission in the other direction, rejecting
 /// `Cospan::new(vec![0], vec![0, 1], vec!['a', 'b'])`, a perfectly valid
 /// cospan, for having a correctly-`false` left flag.
 ///
