@@ -1,7 +1,12 @@
 //! Shared test helpers for structural equality checks.
 //!
-//! Core catgraph types intentionally lack `PartialEq` — these helpers compare
-//! via public accessors instead.
+//! `Span` and `NamedCospan` have no `PartialEq`, so `assert_eq!` is unavailable
+//! on them and these helpers compare via public accessors instead. `Cospan` is
+//! the exception since
+//! [#289](https://github.com/sustia-llc/catgraph/issues/289): with the cached
+//! identity flags gone it derives `PartialEq`, so the `Cospan` helpers here are
+//! `==` plus a per-field failure message, kept for their callers rather than
+//! because `==` is unavailable.
 
 use catgraph::{category::Composable, cospan::Cospan, named_cospan::NamedCospan, span::Span};
 

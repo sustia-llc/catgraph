@@ -5,9 +5,12 @@
 //! of the cospan category* iff there is a bijection of apexes `a ≅ a'`
 //! commuting with both legs (F&S 2019, §3; the boundary objects `X`, `Y` are
 //! fixed, only the apex is quotiented). Raw structural equality on a
-//! [`Cospan`] — [`Cospan::structurally_equal`] — is apex-order sensitive and so
-//! answers a strictly finer question, which is why this module supplies the
-//! *semantic* comparison.
+//! [`Cospan`] — the derived `==`, and [`Cospan::structurally_equal`], which
+//! since [#289](https://github.com/sustia-llc/catgraph/issues/289) is a named
+//! alias for it — is apex-order sensitive and so answers a strictly finer
+//! question, which is why this module supplies the *semantic* comparison.
+//! Deriving `PartialEq` did not narrow that gap: it is the same triple
+//! comparison the method always was.
 //!
 //! # Why this is a complete decision for special Frobenius monoids
 //!

@@ -307,6 +307,39 @@ All notable changes to `catgraph` are documented here. The format follows
   should be < len (is 1)`; `index out of bounds: the len is 1 but the index is
   5`.
 
+### Added (#289)
+
+- **`Cospan` derives `PartialEq` and `Eq`** — additive, not breaking; nothing
+  that compiled before stops compiling. `==` compares `(left, right, middle)`
+  field for field, which is the whole of the value now that the identity flags
+  are gone. That is precisely what blocked the derive before: two cospans with
+  identical triples could carry different cached flags and so compare unequal,
+  for a difference no other part of the API could see.
+
+  `Cospan::structurally_equal` **stays**, undeprecated, as a named alias for
+  `==` — dropping it would break callers, Phase 6B (`catgraph-coalition`)
+  snapshot-vs-expected assertions among them. New code may use either.
+
+  Two properties of `==` worth stating, because they are easy to assume in the
+  wrong direction:
+
+  - It is **as coarse as `Lambda`'s `Eq`**, which `Cospan` never requires to be
+    identity. Two `==` cospans can therefore differ observably in a field their
+    labels do not compare on, and the difference can survive into a composite:
+    `tests/compose_identity_arms.rs`'s
+    `both_legs_identity_keeps_the_right_operands_labels` is exactly that
+    fixture — its two operands are `==`, and which operand's apex the composite
+    keeps is visible through the ignored field. Every `Lambda` in this
+    workspace has `Eq` equal to identity, where this cannot bite.
+  - It is **finer than equality of cospans as morphisms**, being apex-order
+    sensitive. `cospan_canon`'s existing statement to that effect is unchanged
+    by the derive: `==` is the same triple comparison `structurally_equal`
+    always was, so `CospanCanon` remains the semantic comparison.
+
+- **`catgraph-applied`'s `DecoratedCospan` gains a `PartialEq`** in the same
+  window — hand-written rather than derived, and no `Eq`; see that crate's
+  CHANGELOG for why the bounds differ.
+
 ### Changed — BREAKING
 
 - **`frobenius::frobenius_to_cospan` is now a re-export of

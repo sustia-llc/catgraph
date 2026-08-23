@@ -100,6 +100,37 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   leading `&mut`, yielding `&mut ()`), so `--fix` would not have produced this.
   No behaviour change.
 
+### Added
+
+- **`DecoratedCospan` implements `PartialEq`**
+  ([#289](https://github.com/sustia-llc/catgraph/issues/289)) — additive, not
+  breaking. `==` compares the underlying cospan's `(left, right, middle)`
+  triple and then the decoration. This was blocked upstream: the doc comment on
+  the type said `PartialEq` was "intentionally not derived here, because the
+  upstream `Cospan<Lambda>` does not implement it". #289 deleted `Cospan`'s
+  cached identity flags and `Cospan` now derives `PartialEq`, so the
+  obstruction is gone.
+
+  Two things it deliberately is **not**:
+
+  - **Not a derive.** `#[derive(PartialEq)]` compiles here, but constrains the
+    *type parameters* (`Lambda: PartialEq`, `D: PartialEq`), and the field is
+    `D::Apex`, which the `Decoration` trait already bounds by `PartialEq`.
+    Every `Decoration` marker in the workspace — `PetriDecoration`, and the
+    `Trivial` / `Counter` / `Circuit` / `LocalTrivial` of the tests and the
+    example — is a unit struct that does not implement `PartialEq` itself, so
+    the derived impl would have applied to none of them: comparing two
+    `DecoratedCospan<char, Counter>` fails to compile under it (measured:
+    three `E0369`s, "an implementation of `PartialEq` might be missing for
+    `Counter`"). The hand-written impl asks only for `D: Decoration`. The
+    pre-existing derived `Clone` / `Debug` carry exactly that spurious bound;
+    widening them is a separate change and is not made here.
+  - **Not `Eq`.** `Decoration::Apex` is bounded by `Clone + Debug + PartialEq`,
+    so nothing at this level can promise reflexivity.
+
+  Pinned by `decorated_cospan_equality_compares_both_fields`, which also fails
+  to compile if the impl is swapped for a derive.
+
 ### Fixed — tests
 
 - **The exhaustive-permutation helper this crate's tests carried twice moved to

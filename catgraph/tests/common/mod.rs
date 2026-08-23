@@ -1,7 +1,16 @@
 //! Shared test helpers for structural equality checks.
 //!
-//! Core catgraph types intentionally lack `PartialEq` — these helpers compare
-//! via public accessors instead.
+//! `Span`, `NamedCospan`, `Corel` and `FrobeniusMorphism` have no `Debug` or no
+//! `PartialEq` (or neither), so `assert_eq!` is unavailable on them and these
+//! helpers compare via public accessors instead.
+//!
+//! `Cospan` is the exception since
+//! [#289](https://github.com/sustia-llc/catgraph/issues/289): with the cached
+//! identity flags gone it derives `PartialEq`, so `assert_eq!(a, b)` now works
+//! directly and `cospan_eq` / `assert_cospan_eq` / `assert_cospan_eq_msg` are
+//! `==` plus a per-field failure message. They are kept — twelve test files
+//! call them, and their messages name which of the three fields moved — but new
+//! `Cospan` comparisons need no helper.
 
 use catgraph::{
     category::{Composable, ComposableMutating},

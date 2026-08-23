@@ -47,7 +47,32 @@ fn leg_is_identity(leg: &[MiddleIndex], apex_len: usize) -> bool {
 /// [`is_right_identity`](Self::is_right_identity) derive their answer from the
 /// leg and the apex on every call, so they cannot disagree with the state they
 /// describe, and no mutator has a flag to keep in step.
-#[derive(Clone, Debug)]
+///
+/// # `PartialEq` is the triple, and is only as fine as `Lambda`'s
+///
+/// `==` compares `(left, right, middle)` field for field. That derive was
+/// blocked until [#289](https://github.com/sustia-llc/catgraph/issues/289): two
+/// cached identity flags were part of the value, and they could differ between
+/// two cospans with identical triples, so a derived `==` would have reported
+/// `false` for values nothing else could tell apart.
+/// [`structurally_equal`](Self::structurally_equal) predates the derive and is
+/// kept as its named alias.
+///
+/// Two cautions, in opposite directions:
+///
+/// - **It is coarser than identity exactly as far as `Lambda`'s `Eq` is.**
+///   `Cospan` requires `Lambda: Eq`, never that `Eq` be identity, so for a label
+///   carrying provenance it does not compare on, two `==` cospans can differ
+///   observably. `tests/compose_identity_arms.rs`'s
+///   `both_legs_identity_keeps_the_right_operands_labels` is exactly that
+///   fixture: its two operands are `==`, and which one `compose` keeps is
+///   visible in a field their `Eq` ignores. Every `Lambda` in this workspace has
+///   `Eq` equal to identity, where the caution is vacuous.
+/// - **It is finer than equality of cospans as morphisms.** `==` is apex-order
+///   sensitive: two cospans that differ only by a relabelling of the apex are
+///   the same morphism and compare `false`. [`CospanCanon`](crate::cospan_canon)
+///   is the semantic comparison; see that module's docs.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cospan<Lambda: Sized + Eq + Copy + Debug> {
     /// Domain leg: maps each left boundary node to a middle index.
     left: Vec<MiddleIndex>,
@@ -209,18 +234,21 @@ where
         leg_is_identity(&self.right, self.middle.len())
     }
 
-    /// Structural equality on the underlying `(left, right, middle)` triple.
+    /// Structural equality on the underlying `(left, right, middle)` triple —
+    /// a named alias for `==`.
     ///
-    /// The triple is now the whole of a `Cospan`, so this is exactly what a
-    /// derived `PartialEq` would compute. It kept its own name because it
-    /// predates that: `Cospan` used to carry two cached identity flags that
-    /// could make structurally equal cospans compare unequal, so a derive would
-    /// have been wrong and this method was the way around it. Since
-    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) removed the
-    /// cache the caveat is gone, and the method is retained rather than swapped
-    /// for a derive only because dropping it would break callers — Phase 6B
-    /// (`catgraph-coalition`) snapshot-vs-expected assertions are the
-    /// motivating consumer.
+    /// Since [#289](https://github.com/sustia-llc/catgraph/issues/289) deleted
+    /// the two cached identity flags, the triple is the whole of a `Cospan` and
+    /// `Cospan` derives `PartialEq`, so `a.structurally_equal(b)` and `a == b`
+    /// are the same expression. Both are as coarse as `Lambda`'s `Eq` and finer
+    /// than equality of cospans as morphisms; the type's own docs carry both
+    /// cautions.
+    ///
+    /// It kept its name and is not deprecated: it predates the derive (while
+    /// the flags were part of the value a derive would have been wrong, and
+    /// this method was the way around it), and dropping it would break callers
+    /// — Phase 6B (`catgraph-coalition`) snapshot-vs-expected assertions are
+    /// the motivating consumer. New code may use either.
     #[must_use]
     pub fn structurally_equal(&self, other: &Self) -> bool {
         self.left == other.left && self.right == other.right && self.middle == other.middle
