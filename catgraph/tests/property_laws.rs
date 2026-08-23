@@ -1261,15 +1261,26 @@ proptest! {
     ///
     /// # What this ranges over
     ///
-    /// Apexes of 0–5 vertices, boundaries of 0–3 wires, three labels — pairs
+    /// Apexes of 0–5 vertices on the `a` side and **0–6 on the `b` side**
+    /// (`BubbleOp::Add` pushes a sixth; measured, 8 of 256 pairs exceed 5),
+    /// boundaries of 0–3 wires, three labels — pairs
     /// related by an apex permutation, at most **one** rewired leg entry, and at
     /// most **one** bubble vertex (an apex vertex hit by no leg) added or
     /// dropped. So it *does* reach pairs of unequal apex size, and with them the
     /// oracle's size guard and the form's `apex_len` dimension. The apex label
     /// multiset differs on exactly those pairs and no others: the bubble arm
-    /// changes it only by appending or removing one label. Measured on the
+    /// changes it only by appending or removing one label — which is also why at
+    /// *equal* apex size the label multiset is always identical, so a pair
+    /// differing only by an in-place relabelling of one vertex is never
+    /// generated (listed in the exclusions below).
+    /// [`arb_small_cospan`]'s own 0–5 bound and its `5! = 120` affordability
+    /// note are unaffected: `exists_apex_iso` short-circuits on a size mismatch
+    /// and never enumerates `S_6`. Measured on the
     /// meta-tests' 256 deterministic samples: 133 isomorphic and 123
-    /// non-isomorphic pairs; the
+    /// non-isomorphic pairs, of which **26** are at equal apex size — the subset
+    /// the oracle's size guard cannot decide, and the one
+    /// `perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs`
+    /// asserts on (it read 64 before the bubble arm); the
     /// apex size differs in 97 of 256 (57 grew, 40 shrank); `scalar_count`
     /// differs in 93 of 256; and in **72** of the 123 non-isomorphic pairs the
     /// *non-bubble* classes are equal, so only the bubble classes separate the
@@ -1306,17 +1317,32 @@ proptest! {
     }
 }
 
-/// The perturbation generator reaches **both** sides of the `iff` above.
+/// The perturbation generator reaches **both** sides of the `iff` above — and
+/// reaches the non-isomorphic side *by the rewire arm*, not only by apex size.
 ///
 /// Without this, dropping the rewire arm from [`arb_cospan_and_perturbation`]
 /// would leave `canonical_form_decides_apex_isomorphism` green on a corpus in
 /// which `by_definition` is `true` every single time — the exact shape of
-/// vacuity #287 was filed for. The measured split is reported either way.
+/// vacuity #287 was filed for.
 ///
-/// Measured when the bubble arm landed (#343): **133 isomorphic, 123
-/// non-isomorphic** of 256 (it read 192/64 before that arm). Only "both sides
-/// non-empty" is asserted; the figures are here so a later run can tell
-/// generator drift from RNG noise.
+/// ⚠ **A bare `non_isomorphic > 0` no longer says that**, and this is measured,
+/// not feared. `BubbleOp::Add` always changes `middle.len()`, so
+/// [`exists_apex_iso`]'s size guard returns `false` before it compares
+/// anything: the bubble arm manufactures non-isomorphic pairs for free. With
+/// the rewire arm neutered (`rewire.filter(|_| false)`, which preserves the RNG
+/// draw) the whole file stayed green on the aggregate count, and the rewire arm
+/// — the dimension #287 filed this generator for — could have been deleted with
+/// nothing red. That is CLAUDE.md's vacuity mode 2 exactly: a `> 0` that
+/// another path already makes positive, introduced by the commit whose purpose
+/// was to remove vacuity.
+///
+/// So the assertion is on the **equal-apex-size** non-isomorphic pairs, the
+/// ones the size guard cannot decide and that therefore exercise the label and
+/// preimage dimensions. Measured (#343): **133 isomorphic / 123 non-isomorphic**
+/// of 256 — of which only **26** are equal-size, against **64** before the
+/// bubble arm existed, since 97 of the 123 are now separated by the size guard
+/// alone. That thinning is the cost of the new arm, and it is recorded here
+/// rather than left to look like a gain.
 #[test]
 fn perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs() {
     const SAMPLES: usize = 256;
@@ -1326,11 +1352,25 @@ fn perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs() {
         .filter(|(a, b)| exists_apex_iso(a, b))
         .count();
     let non_isomorphic = SAMPLES - isomorphic;
+    // The load-bearing subset: non-isomorphic *and* the same apex size, so
+    // `exists_apex_iso` had to look past its size guard to say so.
+    let equal_size_non_isomorphic = samples
+        .iter()
+        .filter(|(a, b)| a.middle().len() == b.middle().len() && !exists_apex_iso(a, b))
+        .count();
     assert!(
-        isomorphic > 0 && non_isomorphic > 0,
+        isomorphic > 0,
         "perturbation split over {SAMPLES} samples: {isomorphic} isomorphic, \
          {non_isomorphic} non-isomorphic — the `iff` in \
          canonical_form_decides_apex_isomorphism is one-sided on this corpus"
+    );
+    assert!(
+        equal_size_non_isomorphic > 0,
+        "over {SAMPLES} samples the corpus has {non_isomorphic} non-isomorphic pairs but \
+         {equal_size_non_isomorphic} of them at equal apex size — every one is decided by \
+         exists_apex_iso's size guard alone, so the rewire arm is contributing nothing and \
+         could be deleted with this file still green (measured 26 when this assertion was \
+         written; a bare `non_isomorphic > 0` reads 123 and cannot see the difference)"
     );
 }
 

@@ -63,7 +63,18 @@ All notable changes to `catgraph` are documented here. The format follows
   differing only by an in-place relabelling of one apex vertex (middle
   `['a','a']` vs `['a','b']`, legs identical) is never generated.
   `perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs`'s
-  recorded split moves from 192/64 to 133/123 for the same reason.
+  recorded split moves from 192/64 to 133/123 for the same reason — **but that
+  is not a pure gain, and the test no longer asserts on it.** `BubbleOp::Add`
+  always changes `middle.len()`, so `exists_apex_iso`'s size guard returns
+  `false` before comparing anything: the new arm manufactures non-isomorphic
+  pairs for free, and a bare `non_isomorphic > 0` became satisfiable without the
+  rewire arm entirely. Measured: with the rewire arm neutered
+  (`rewire.filter(|_| false)`, preserving the RNG draw) the whole file stayed
+  green, i.e. the dimension #287 filed this generator for could have been
+  deleted unnoticed. The discriminating subcorpus — non-isomorphic **at equal
+  apex size**, which the size guard cannot decide — fell **64 → 26**, a ~59%
+  thinning. That count is what the meta-test now asserts, and the same neutering
+  reddens it at `0 of 93`.
 
 ### Tests (#288: `tests/spider_theorem.rs` widened to the theorem it cites)
 
