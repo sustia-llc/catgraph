@@ -6,6 +6,37 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Tests (#343: the `CospanCanon` iff proptest now reaches the bubble dimension)
+
+- **`arb_cospan_and_perturbation` gained a third arm that changes the apex
+  size** ([#343](https://github.com/sustia-llc/catgraph/issues/343)). Its two
+  existing arms — a random apex permutation, optionally followed by one rewired
+  leg entry — both preserve `middle.len()` and the apex label multiset by
+  construction, so `canonical_form_decides_apex_isomorphism` never reached
+  `exists_apex_iso`'s size guard or the form's `apex_len` / `scalar_count`
+  dimension. The new `BubbleOp` arm adds a bubble vertex (a push onto `middle`,
+  legs untouched) or drops one (removing a `middle` entry and reindexing both
+  legs above it; `Cospan::new` rejects a reindexing slip loudly). No production
+  code changed; this is a test-and-docs change.
+- **Falsified.** With the arm in place, the bubble-drop mutant
+  `classes.retain(|c| !c.is_scalar())` inserted before `classes.sort()` in
+  `CospanCanon::canonical_form` reddens `canonical_form_decides_apex_isomorphism`
+  after 1 success, shrinking to `a = ([], [], [])` vs `b = ([], [], ['a'])` — the
+  empty cospan against a single bubble. Before this change that mutant left all
+  19 tests in `tests/property_laws.rs` green; it now fails 1 of 20 there, and 14
+  workspace-wide rather than 13.
+- **The new arm is itself pinned.** `perturbation_generator_reaches_bubble_edits`
+  asserts both directions fire — measured over 256 deterministic samples: 57
+  grew, 40 shrank, 159 kept the apex size. Falsified both ways: generating the
+  arm but never applying it gives 0/0 and reddens the meta-test; making only the
+  `Add` variant a no-op gives 0 grew / 40 shrank and reddens it too.
+- The `iff` test's docstring loses the exclusion clause that recorded this blind
+  spot (added at #342) and states the corpus as it now is: 133 isomorphic and
+  123 non-isomorphic pairs of 256; apex size differs in 97; `scalar_count` in
+  93; and in **72** of the 123 non-isomorphic pairs only the bubble classes
+  separate the two forms. `perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs`'s
+  recorded split moves from 192/64 to 133/123 for the same reason.
+
 ### Tests (#288: `tests/spider_theorem.rs` widened to the theorem it cites)
 
 - **Thm 6.55 is now pinned at the semantics, not only at the term level**
