@@ -45,12 +45,15 @@ All notable changes to `catgraph` are documented here. The format follows
     builder; the builder is compared to it.
   - **The corpus's one structural bias is measured and answered, not left
     implicit.** A diagram's *interior waist* is the narrowest running codomain
-    strictly *between* two of its blocks; an internal cut of one wire means it
-    factors as `s_{m,1} ; decoration ; s_{1,n}`, the spider's own factorisation,
-    on which the conclusion is nearly immediate. A narrow *boundary* means no
-    such thing — a `1 → 1` diagram that δ's out to four wires, braids and μ's
-    back is fully non-trivial — so neither the domain nor the final codomain
-    counts as a cut. The scripted connected family folds to one wire by
+    strictly *between* two of its blocks; a one-wire internal boundary splits it
+    into two strictly smaller connected pieces, on which the conclusion follows
+    by induction. A narrow *boundary* means no such thing — a `1 → 1` diagram
+    that δ's out to four wires, braids and μ's back is fully non-trivial — so
+    neither the domain nor the final codomain counts as a cut. The metric is
+    evidence and not proof in both directions, and `Built::is_wide_waist` states
+    both gaps: a diagram cut is an antichain and need not fall on a recipe layer
+    boundary, and at `m = n = 1` the `s_{m,1} ; … ; s_{1,n}` phrase is satisfied
+    vacuously by `id ; D ; id`. The scripted connected family folds to one wire by
     construction at `m >= 2`, and before the wide families existed only 22 of
     the 272 connected terms had an interior waist ≥ 2 (a further 45 had no
     internal cut at all). Two families answer it: the 16-term `wide_waist_family`
@@ -65,9 +68,16 @@ All notable changes to `catgraph` are documented here. The format follows
     realised as a word of adjacent σ's, and the same recipe shape landing in
     *both* arms of the differential (992 connected, 496 disconnected) according
     to the disjoint-set rather than the oracle. None of the 992 is structurally
-    equal to its spider. The connected interior-waist histogram is now
-    `{None: 45, 1: 205, 2: 23, 3: 619, 4: 388}`, all three buckets pinned by the
-    census, with a floor on the wide one so it cannot silently leave.
+    equal to its spider, and each has interior waist exactly `min(m, n) + 1` —
+    both asserted per term, not left as prose, and `permutations` /
+    `transposition_word` are themselves checked (`n!` distinct outputs; each word
+    realising its target) by a new test, since a sweep that silently repeated a
+    wiring would keep every other number in the file intact. The connected
+    interior-waist histogram is now `{None: 45, 1: 205, 2: 23, 3: 619, 4: 388}`,
+    all three buckets pinned by the census, with a floor on the wide one so it
+    cannot silently leave. The 16 hand-picked shapes are guarded by *name*
+    instead: measured, deleting them leaves every floor green, because the sweep
+    out-supplies any count worth flooring.
   - **Connectivity is decided by the recipe, never read off the oracle.** A
     disjoint-set over the construction is carried block by block (μ unions, δ
     propagates, η starts a component, ε consumes a wire without destroying its

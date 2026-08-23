@@ -355,10 +355,13 @@ const MIN_CONNECTED: usize = 900;
 /// Floor on connected terms carrying at least one σ block. Measured 1105.
 ///
 /// The permutation family supplies 992 of those *structurally*: a term of that
-/// family is connected only when its permutation is non-identity (the identity
-/// keeps each δ's two copies adjacent, so every μ merges a component into
-/// itself and the recipe ends with `m` components), and a non-identity
-/// permutation has a non-empty transposition word.
+/// family is connected only when its permutation is non-identity, and a
+/// non-identity permutation has a non-empty transposition word. Under the
+/// identity the fold begins by merging each δ's two copies into their own
+/// component, which is enough to leave at least one input unmerged — measured
+/// disconnected in all four swept `(m, n)`. (It does *not* always end with `m`
+/// components: at `(3, 2)` the fold is `Mu(0), Mu(1), Mu(0), Mu(1)` over
+/// `[c0,c0,c1,c1,c2,c2]`, whose third μ joins `c0` to `c1`, ending with 2.)
 const MIN_CONNECTED_WITH_BRAIDING: usize = 900;
 
 /// Floor on connected terms whose **interior waist** — the narrowest running
@@ -700,24 +703,45 @@ struct Built {
     /// σ blocks whose two sides are still distinct components when the recipe
     /// ends — see [`Recipe::braid_pairs`].
     cross_component_braidings: usize,
-    /// The narrowest **internal** cut the recipe reached, or `None` if it has
-    /// fewer than two blocks and so has no internal cut. `Some(w)` with `w >= 2`
-    /// is what makes a connected term a non-trivial instance of Thm 6.55; see
-    /// [`Built::is_wide_waist`] and [`MIN_CONNECTED_WIDE_WAIST`].
+    /// The narrowest **internal** layer boundary the recipe reached, or `None`
+    /// if it has fewer than two blocks and so has none. `Some(w)` with `w >= 2`
+    /// is the file's evidence that a connected term is a non-trivial instance of
+    /// Thm 6.55 — read [`Built::is_wide_waist`] for exactly how far that
+    /// evidence goes, and [`MIN_CONNECTED_WIDE_WAIST`] for the floor.
     interior_waist: Option<usize>,
 }
 
 impl Built {
-    /// Whether this term is a *non-trivial* instance of Thm 6.55: it has an
-    /// internal cut, and no internal cut of it is narrower than two wires.
+    /// Whether **no layer boundary of this recipe, other than its own domain and
+    /// codomain, is one wire wide** (and at least one such boundary exists).
     ///
-    /// A diagram with an internal cut of width ≤ 1 factors as
-    /// `s_{m,1} ; decoration ; s_{1,n}` — the spider's own factorisation — and
-    /// the conclusion follows almost immediately from the recipe. A narrow
-    /// *boundary* does no such thing, which is why the domain and the final
-    /// codomain are not cuts here: a `1 → 1` diagram that δ's out to four wires,
-    /// braids and μ's back is a fully non-trivial instance whose boundary
-    /// happens to be one wire wide at each end.
+    /// That is the literal predicate. It is worth stating literally, because the
+    /// property it is *evidence for* is a slightly different one and the gap
+    /// runs in both directions.
+    ///
+    /// The property of interest is that the diagram does not **split**: a
+    /// one-wire cut with blocks on both sides exhibits it as `A ; B` with `A` a
+    /// connected `m → 1` and `B` a connected `1 → n`, both strictly smaller, on
+    /// which "one apex vertex" follows by induction — the spider's own
+    /// factorisation. Two caveats, neither of which the count above can see:
+    ///
+    /// - **It over-reports at the ends.** `s_{1,1}` is the identity, so *every*
+    ///   `1 → 1` diagram trivially "factors" as `s_{1,1} ; D ; s_{1,1}`. That
+    ///   factorisation splits nothing — `D` is not smaller than `D` — so it is
+    ///   not the trivialising kind, and a `1 → 1` diagram that δ's out to four
+    ///   wires, braids and μ's back is a genuine instance (its content is the
+    ///   special axiom). But a reader checking "does it factor as
+    ///   `s_{m,1} ; … ; s_{1,n}`?" at `m = n = 1` will find that it does, so the
+    ///   phrase alone does not decide the question and the split is what does.
+    ///   The 8 `(1, 1)` terms of [`connected_family`] are counted wide on this
+    ///   reading; the 992 of [`wide_waist_permutation_family`] all have
+    ///   `m, n >= 2` and do not rest on it.
+    /// - **It under-reports in general.** A cut of a string diagram is an
+    ///   antichain, not necessarily a boundary between two recipe *layers*, so a
+    ///   diagram can have a one-wire cut that no layer boundary of this
+    ///   particular recipe realises. `interior_waist >= 2` therefore means "this
+    ///   spelling never passes through one wire", which is evidence of
+    ///   non-triviality and not a proof of it.
     fn is_wide_waist(&self) -> bool {
         self.interior_waist.is_some_and(|w| w >= 2)
     }
@@ -821,18 +845,30 @@ fn scripted_connected(z: char, m: usize, n: usize, variant: usize) -> Built {
 ///
 /// - **comb `w`** — for `i` in `0..w-1`: split wire `i`, merge the copy into
 ///   wire `i + 1`. At `w == 2` this is exactly `(δ ⊗ id);(id ⊗ μ)`. Arity
-///   `(w, w)`, waist `w`.
+///   `(w, w)`; interior waist `w + 1` at `w == 2` and `w` above it.
 /// - **braided comb `w`** — the same with a σ between the split and the merge.
-///   At `w == 2`, exactly `(δ ⊗ id);(id ⊗ σ);(μ ⊗ id)`. Arity `(w, w)`,
-///   waist `w`.
+///   At `w == 2`, exactly `(δ ⊗ id);(id ⊗ σ);(μ ⊗ id)`. Arity `(w, w)`; interior
+///   waist as for the comb.
 /// - **folded comb `w`** — one μ first, then comb `w`. At `w == 2`, exactly
-///   `(μ ⊗ id);(δ ⊗ id);(id ⊗ μ)`. Arity `(w + 1, w)`, waist `w`.
+///   `(μ ⊗ id);(δ ⊗ id);(id ⊗ μ)`. Arity `(w + 1, w)`, interior waist `w`.
+///
+/// The waist annotations are for the *interior* metric, which excludes the
+/// boundary: at `w == 2` the comb's only internal boundary is the 3-wire one
+/// between its δ and its μ, its final 2-wire codomain not being a cut. Under
+/// the boundary-counting metric this family was written against they all read
+/// `w` instead.
 ///
 /// `w` runs `2..=4` for the first two and `2..=3` for the third, which keeps
 /// every arity inside the scripted grid `0..=4 × 0..=4` (so this family does not
 /// move [`MEASURED_CONNECTED_ARITIES`]). As with [`connected_family`], each is
 /// connected *by construction* and the disjoint-set then verifies it: a
 /// scripting mistake lands the term in the other arm and reddens the census.
+///
+/// **These sixteen are guarded by name, not by a count.** Measured: deleting
+/// them all leaves every floor in this file green, because
+/// [`wide_waist_permutation_family`] out-supplies any count worth flooring. The
+/// three `_a_2` shapes are asserted present and wide in
+/// [`the_corpus_is_the_space_these_pins_claim`].
 fn wide_waist_family() -> Vec<Built> {
     let mut out = Vec::new();
     let step = |r: &mut Recipe, b: Block| {
@@ -978,6 +1014,55 @@ fn transposition_word(target: &[usize]) -> Vec<usize> {
         }
     }
     word
+}
+
+/// The two helpers [`wide_waist_permutation_family`] rests on, checked against
+/// their own claims rather than trusted.
+///
+/// Both are load-bearing in a way nothing else in the file would notice.
+/// [`permutations`] returns `n!` entries *by construction* — a version that
+/// emitted duplicates would leave [`CORPUS_SIZE`] at 2105 and silently shrink
+/// the sweep to fewer distinct wirings; and a [`transposition_word`] that
+/// realised some *other* permutation would still yield well-typed, connected,
+/// wide-waist terms that pass every other assertion in this file. So the word
+/// "every" in that family's docstring is checked here: `n!` outputs, all
+/// distinct, and each word applied to `0..n` reproducing its target exactly.
+#[test]
+fn the_permutation_sweep_really_sweeps_every_permutation() {
+    for n in 0..=5usize {
+        let factorial: usize = (1..=n).product();
+        let all = permutations(n);
+        assert_eq!(
+            all.len(),
+            factorial,
+            "permutations({n}) produced {} entries, not {n}! = {factorial}",
+            all.len(),
+        );
+        let distinct: HashSet<Vec<usize>> = all.iter().cloned().collect();
+        assert_eq!(
+            distinct.len(),
+            factorial,
+            "permutations({n}) produced {} distinct entries out of {}, so the sweep repeats a \
+             wiring instead of covering one more",
+            distinct.len(),
+            all.len(),
+        );
+
+        for target in &all {
+            // Apply the word the way `Block::Braid` does — swap adjacent wires
+            // at the reported position, in order — and check it lands on
+            // `target`.
+            let mut wires: Vec<usize> = (0..n).collect();
+            for at in transposition_word(target) {
+                wires.swap(at, at + 1);
+            }
+            assert_eq!(
+                &wires, target,
+                "transposition_word({target:?}) realises {wires:?} instead — every swept diagram \
+                 would still be well-typed and connected, so nothing else here would notice",
+            );
+        }
+    }
 }
 
 /// The scripted disconnected family — the arm that makes the recipe's verdict a
@@ -1126,9 +1211,12 @@ fn random_term(rng: &mut StdRng, index: usize, steps: usize) -> Built {
     r.finish(format!("random_{index}"))
 }
 
-/// The whole corpus: 192 scripted connected terms, 16 scripted wide-waist ones,
-/// 9 scripted disconnected terms, and [`RANDOM_TERMS`] pseudo-random ones seeded
-/// at `0x6055_0001`.
+/// The whole corpus: 192 scripted connected terms ([`connected_family`]), 16
+/// scripted wide-waist ones ([`wide_waist_family`]), the 1488 of
+/// [`wide_waist_permutation_family`] — 71% of the corpus, and the reason
+/// [`CORPUS_SIZE`] is 2105 rather than 617 — 9 scripted disconnected terms
+/// ([`disconnected_family`]), and [`RANDOM_TERMS`] pseudo-random ones seeded at
+/// `0x6055_0001`.
 ///
 /// The scripted families are appended *before* the seeded walks are drawn, so
 /// adding one does not perturb the random stream.
@@ -1601,10 +1689,20 @@ fn the_corpus_is_the_space_these_pins_claim() {
                 no_internal_cut += 1;
             }
             if built.name.starts_with("wide_perm_") {
+                let (m, n) = (built.domain.len(), built.codomain.len());
+                // Per TERM, not pooled: a set of the waists seen cannot tell a
+                // (3,3) term that regressed to 3 from a (2,2) term that
+                // regressed to 4 — the pooled set is `{3, 4}` either way.
+                assert_eq!(
+                    built.interior_waist,
+                    Some(m.min(n) + 1),
+                    "{}: swept {m}→{n} term has interior waist {:?}, not min(m, n) + 1 = {}",
+                    built.name,
+                    built.interior_waist,
+                    m.min(n) + 1,
+                );
                 perm_family_waists.insert(built.interior_waist);
-                let z = built.domain[0];
-                let spider: FM =
-                    special_frobenius_morphism(built.domain.len(), built.codomain.len(), z);
+                let spider: FM = special_frobenius_morphism(m, n, built.domain[0]);
                 if built.term == spider {
                     perm_family_structurally_equal += 1;
                 }
@@ -1651,11 +1749,42 @@ fn the_corpus_is_the_space_these_pins_claim() {
          forms)"
     );
 
-    // The two claims `wide_waist_permutation_family`'s docstring makes about its
-    // own terms, asserted rather than left as prose: every connected member has
-    // interior waist `min(m, n) + 1` — 3 or 4 across the swept `(m, n)` — and
-    // **none** of them is structurally equal to its spider, which is why the
-    // sweep says something §1's term-level `Eq` cannot.
+    // `wide_waist_family`'s three named witnesses, guarded by NAME rather than
+    // by a count. Measured: deleting all 16 of that family leaves every floor in
+    // this file green — the permutation sweep alone keeps `MIN_CONNECTED` (1264
+    // ≥ 900), `MIN_CONNECTED_WITH_BRAIDING` (1099) and
+    // `MIN_CONNECTED_WIDE_WAIST` (1014) satisfied — so before this check the
+    // exact census tuple was the only thing that noticed, and it would read as
+    // fixture drift. A count floor would not fix that, since the sweep
+    // out-supplies any number worth setting. What actually earns these 16 their
+    // place is that three of them *are* the composites §1 measures as
+    // structurally ≠ their spider, so those three are pinned by name.
+    for name in [
+        "wide_comb_a_2",
+        "wide_braided_comb_a_2",
+        "wide_folded_comb_a_2",
+    ] {
+        let found = terms
+            .iter()
+            .find(|b| b.name == name)
+            .unwrap_or_else(|| panic!("{name} left the corpus — see wide_waist_family"));
+        assert!(
+            found.connected && !found.closed && found.is_wide_waist(),
+            "{name} is no longer a connected, non-closed, wide-waist term ({} components, closed \
+             {}, interior waist {:?})",
+            found.components,
+            found.closed,
+            found.interior_waist,
+        );
+    }
+
+    // `wide_waist_permutation_family`'s two claims about its own terms, asserted
+    // rather than left as prose. The per-term `min(m, n) + 1` law is checked in
+    // the loop above, where the arity is in hand; these two are the corpus-wide
+    // riders: both waists are actually *reached* (a sweep that lost the `m = 3`
+    // regime would satisfy the per-term law over the survivors), and **none** of
+    // the terms is structurally equal to its spider, which is why the sweep says
+    // something §1's term-level `Eq` cannot.
     //
     // Neither can pass vacuously, and the order is what guarantees it: a
     // selector that stops matching leaves both accumulators empty, and an empty
@@ -1667,7 +1796,7 @@ fn the_corpus_is_the_space_these_pins_claim() {
     expected_waists.insert(Some(4));
     assert_eq!(
         perm_family_waists, expected_waists,
-        "the permutation sweep's connected interior waists are no longer exactly {{3, 4}}"
+        "the permutation sweep no longer reaches both interior waists {{3, 4}}"
     );
     assert_eq!(
         perm_family_structurally_equal, 0,
