@@ -16,20 +16,40 @@ All notable changes to `catgraph` are documented here. The format follows
 
   - `Cospan::is_left_identity()` / `is_right_identity()` keep their signatures
     and return `leg.len() == middle.len() && represents_id(leg)` — `O(leg)`
-    per call, and **exact in both directions**. The cached answers were not:
-    every mutator that maintained them could only ever *clear* (and
-    `connect_pair` did not maintain them at all), so a leg that genuinely was
-    the identity reported `false` if the value had reached that shape by
-    mutation rather than by construction. Consumers reading either
-    accessor should expect `true` in cases that previously read `false`. Two
-    concrete ones: `identity(&['a', 'b'])`, `delete_boundary_node(Left(1))`,
-    `add_boundary_node_known_target(Left(1))` reports a left identity again;
-    and `from_permutation_on_domain(Permutation::identity(n), types)` reports a
-    **right** identity, where the constructor used to hard-code
-    `is_right_id: false` for every permutation including the identity (its
-    codomain mirror likewise for `is_left_id`). A `permute_side` call with an
-    identity permutation is the third — it used to clear the permuted leg's
-    flag unconditionally.
+    per call, and **exact in both directions**. The cached answers were not, and
+    **an answer can move either way**, so a consumer that reads either accessor
+    should re-check both directions rather than only the one below.
+
+    **`false` → `true`.** The maintained flags could only ever *clear* (every
+    update was an `&=`; `connect_pair` did not update at all), so a leg that
+    genuinely was the identity reported `false` if it had reached that shape by
+    mutation rather than by construction. **The largest class by far is
+    composites**, which the old entry did not mention:
+    `compose_with_quotient` mints its result through `add_middle` — which set
+    both flags `false` — and then `add_boundary_node`, whose `&=` cannot undo
+    that, so at `0.15.0` **every composite with at least one apex vertex
+    reported `false` on both legs**, whatever it actually was.
+    `perform_pushout`'s own docs said as much; the changelog did not. Measured
+    on `0.15.0` and today:
+    `Cospan::identity(&vec!['a']).compose(&Cospan::identity(&vec!['a']))` has
+    `is_left_identity() == is_right_identity() == false` there and `true` here.
+    (Empty-apex composites are the exception in both releases — with no
+    `add_middle` call there was nothing to clear, so `empty ; empty` read
+    `true` then too.) Three smaller routes: `identity(&['a', 'b'])`,
+    `delete_boundary_node(Left(1))`, `add_boundary_node_known_target(Left(1))`
+    reports a left identity again; `from_permutation_on_domain(
+    Permutation::identity(n), types)` reports a **right** identity, where the
+    constructor used to hard-code `is_right_id: false` for every permutation
+    including the identity (its codomain mirror likewise for `is_left_id`); and
+    a `permute_side` call with an identity permutation, which used to clear the
+    permuted leg's flag unconditionally.
+
+    **`true` → `false`.** The four stale-`true` defects in *Fixed* below run the
+    other way, and a consumer relying on one of those answers loses it.
+    Measured: `Cospan::identity(&vec!['a'])` followed by
+    `add_boundary_node_unknown_target(Right('b'))` gives `([0], [0, 1],
+    ['a', 'b'])`, whose `is_left_identity()` read `true` at `0.15.0` — the
+    domain leg covers one of two apex vertices — and reads `false` here.
   - `Cospan::assert_valid` **loses both of its `bool` parameters** — the
     signature is now `assert_valid(&self)`. They selected two arms that
     compared a cached flag against the predicate it cached; with no cache
@@ -39,11 +59,33 @@ All notable changes to `catgraph` are documented here. The format follows
     `NamedCospan::assert_valid_nohash` lose the `check_id: bool` they
     forwarded, for the same reason. Callers drop the arguments; there is no
     behaviour to preserve.
+  - **`Cospan`'s derived `Debug` output loses two fields.** The fields were
+    private, but `Debug` renders them, so anything that logs, snapshots or
+    diffs a formatted cospan — `catgraph-surreal`, and any consumer with a
+    `format!("{cospan:?}")` in a golden — sees a different string. Nothing
+    in-tree pins it. Measured, on the same value both sides:
+
+    ```text
+    0.15.0:  Cospan { left: [0], right: [0, 1], middle: ['a', 'b'], is_left_id: false, is_right_id: true }
+    now:     Cospan { left: [0], right: [0, 1], middle: ['a', 'b'] }
+    ```
+
+    That is the **final** shape: `Cospan` also gains `PartialEq` / `Eq` in this
+    release (see *Added* below), and deriving those does not touch `Debug` —
+    re-measured after the derive landed, byte-identical to the line above.
+
+    It carries into every wrapper whose own `Debug` is derived and which holds
+    a `Cospan`: `Corel` (a `#[repr(transparent)]` newtype over one) and
+    `catgraph-applied`'s `DecoratedCospan`. `NamedCospan` derives only `Clone`,
+    so nothing moves there.
 
   `Span` is untouched: it keeps its own two flags, which are computed
   differently (no boundary-length conjunct — see
   [#345](https://github.com/sustia-llc/catgraph/issues/345)) and are not read
-  by `Span::compose`.
+  by `Span::compose`. No `Debug` surface moves there — `Span` derives only
+  `Clone`. It also keeps `assert_valid(&self, bool, bool)`, so the two sibling
+  types now differ in that method's arity; #345 **axis 2** owns closing that,
+  and `Span::assert_valid`'s rustdoc says so.
 
 - **`Cospan::compose` is a function of `(left, right, middle)` alone**
   ([#289](https://github.com/sustia-llc/catgraph/issues/289)).

@@ -326,7 +326,7 @@ where
     /// It grows the **apex**, so it moves *both* identity answers: the leg it
     /// pushes to keeps whatever it had (leg and apex grow together), and the
     /// other leg cannot be an identity afterwards. Note *which* conjunct of
-    /// [`leg_is_identity`] does that work, because it is not always the length
+    /// `leg_is_identity` does that work, because it is not always the length
     /// one: if the partner was an identity it is now one entry short of the
     /// apex, but if it was not, it cannot have become one either — an in-bounds
     /// leg's entries are all below the *old* apex size, so `represents_id`
@@ -907,8 +907,11 @@ type PushoutResult = (
 /// were **conservative**: the mutators that maintained them could only clear,
 /// so a leg that *is* the identity could carry a `false` left behind by an
 /// earlier `delete_boundary_node`, `permute_side` or `add_middle` — and every
-/// composite carried `false` on both legs, because the pushout builder below
-/// mints its result through those same mutators. Reading them therefore made
+/// composite **with at least one apex vertex** carried `false` on both legs,
+/// because the pushout builder below mints its result through those same
+/// mutators, `add_middle` first. (An empty-apex composite never reached
+/// `add_middle`, so it kept the `true` its empty legs were constructed with.)
+/// Reading them therefore made
 /// `compose` a function of the operands' *mutation history* as well as their
 /// `(left, right, middle)`: two structurally equal cospans could compose two
 /// different ways. Deriving the predicate with [`leg_is_identity`] makes
