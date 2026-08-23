@@ -1077,9 +1077,29 @@ fn arb_small_cospan() -> impl Strategy<Value = Cospan<char>> {
         .prop_map(|(left, right, middle)| Cospan::new(left, right, middle).unwrap())
 }
 
+/// The third perturbation arm: a change to the apex's *bubble* population.
+///
+/// A bubble is an apex vertex hit by no leg entry — a scalar class in the
+/// canonical form. Both variants change `middle.len()`, which is what makes
+/// them the only arm that reaches [`exists_apex_iso`]'s size guard and the
+/// form's `apex_len` / `scalar_count` dimension.
+#[derive(Debug, Clone, Copy)]
+enum BubbleOp {
+    /// Push a new apex vertex with this label; both legs are left untouched, so
+    /// the new vertex is a bubble by construction.
+    Add(char),
+    /// Delete one of the existing bubble vertices, chosen by this index, and
+    /// reindex both legs above it. A no-op when the apex carries no bubble.
+    Drop(Index),
+}
+
 /// A cospan together with a perturbation of it: the apex relabelled by a random
-/// permutation, then — about half the time — a single leg entry rewired to a
-/// random apex vertex.
+/// permutation, then — each drawn about half the time — a single leg entry
+/// rewired to a random apex vertex, and a bubble vertex added or dropped. Both
+/// of the latter two are no-ops on some inputs (a rewire on an empty leg or a
+/// one-vertex apex; a drop on an apex carrying no bubble), so they change the
+/// value rather less often than they are drawn — see the two meta-tests below
+/// for the measured rates.
 ///
 /// The permutation arm alone would only ever produce isomorphic pairs, making
 /// the `iff` in `canonical_form_decides_apex_isomorphism` half vacuous; the
@@ -1087,7 +1107,19 @@ fn arb_small_cospan() -> impl Strategy<Value = Cospan<char>> {
 /// rewires, because some single rewires happen to be apex permutations in
 /// disguise (see `a_single_rewire_changes_the_form_unless_it_is_a_relabelling`)
 /// — the brute-force oracle decides which, so both outcomes are legal here.
-fn arb_cospan_and_perturbation() -> impl Strategy<Value = (Cospan<char>, Cospan<char>)> {
+///
+/// The permutation and rewire arms both preserve `middle.len()` and the apex
+/// label multiset, so on their own every generated pair has *equal* apex sizes:
+/// the oracle's size guard is dead, and equal non-bubble classes then force
+/// equal forms, which is what let a `canonical_form` dropping bubble classes
+/// pass on every seed (#343). They do **not** leave `scalar_count` untouched —
+/// a rewire that empties a vertex frees a bubble and one that lands on a bubble
+/// fills it, which moved `scalar_count` in 33 of 256 samples before this arm
+/// existed. What was unreachable is the apex *size*, and the [`BubbleOp`] arm
+/// is the one that moves it;
+/// [`perturbation_generator_reaches_bubble_edits`] is what keeps it from
+/// silently ceasing to fire.
+fn arb_cospan_and_perturbation() -> impl Strategy<Value = Perturbed> {
     arb_small_cospan()
         .prop_flat_map(|a| {
             let perms = all_perm_indices(a.middle().len());
@@ -1095,9 +1127,42 @@ fn arb_cospan_and_perturbation() -> impl Strategy<Value = (Cospan<char>, Cospan<
                 Just(a),
                 prop::sample::select(perms),
                 prop::option::of((any::<bool>(), any::<Index>(), any::<Index>())),
+                prop::option::of(prop_oneof![
+                    prop::sample::select(vec!['a', 'b', 'c']).prop_map(BubbleOp::Add),
+                    any::<Index>().prop_map(BubbleOp::Drop),
+                ]),
             )
         })
-        .prop_map(|(a, perm, rewire)| {
+        .prop_map(|(a, perm, rewire, bubble)| {
+            // Built twice from the same draw: once as spelled, and once with the
+            // rewire step skipped. The pair of results is the **counterfactual**
+            // the meta-test needs — see [`Perturbed::without_rewire`].
+            let (b, rewired) = apply_perturbation(&a, &perm, rewire, bubble);
+            let (rewire_only, _) = apply_perturbation(&a, &perm, rewire, None);
+            Perturbed {
+                a,
+                b,
+                rewire_only,
+                rewired,
+            }
+        })
+}
+
+/// One perturbation, applied to `a`: permute the apex, optionally rewire one leg
+/// entry, optionally add or drop a bubble. Each arm is passed in, so a caller
+/// can build the same draw with an arm withheld.
+///
+/// Returns the cospan and whether a leg entry actually **moved** (a drawn rewire
+/// that finds an empty leg, or a single-vertex apex with nowhere to go, is a
+/// no-op and must not count as the arm having fired).
+fn apply_perturbation(
+    a: &Cospan<char>,
+    perm: &[usize],
+    rewire: Option<(bool, Index, Index)>,
+    bubble: Option<BubbleOp>,
+) -> (Cospan<char>, bool) {
+    {
+        {
             let mut left: Vec<usize> = a.left_to_middle().iter().map(|&m| perm[m]).collect();
             let mut right: Vec<usize> = a.right_to_middle().iter().map(|&m| perm[m]).collect();
             let mut middle: Vec<char> = a.middle().to_vec();
@@ -1105,6 +1170,7 @@ fn arb_cospan_and_perturbation() -> impl Strategy<Value = (Cospan<char>, Cospan<
                 middle[perm[m]] = label;
             }
 
+            let mut rewired = false;
             if let Some((on_right_leg, slot, target)) = rewire {
                 let apex_size = middle.len();
                 let leg = if on_right_leg { &mut right } else { &mut left };
@@ -1119,13 +1185,152 @@ fn arb_cospan_and_perturbation() -> impl Strategy<Value = (Cospan<char>, Cospan<
                         (0..apex_size).filter(|&v| v != leg[position]).collect();
                     if !elsewhere.is_empty() {
                         leg[position] = elsewhere[target.index(elsewhere.len())];
+                        rewired = true;
                     }
                 }
             }
 
-            let b = Cospan::new(left, right, middle).unwrap();
-            (a, b)
-        })
+            match bubble {
+                // Nothing points at the new vertex, so it is a bubble and the
+                // legs need no adjustment.
+                Some(BubbleOp::Add(label)) => middle.push(label),
+                Some(BubbleOp::Drop(which)) => {
+                    let hit: HashSet<usize> = left.iter().chain(right.iter()).copied().collect();
+                    let bubbles: Vec<usize> =
+                        (0..middle.len()).filter(|v| !hit.contains(v)).collect();
+                    if !bubbles.is_empty() {
+                        let victim = bubbles[which.index(bubbles.len())];
+                        // An independent reference for the reindexing, taken
+                        // before the removal: a surviving vertex's new index is
+                        // its *position among the survivors*. The arithmetic
+                        // below — shift everything above `victim` down one —
+                        // has to agree with it, and the `expect` is where "no
+                        // leg entry equals `victim`", the definition of a
+                        // bubble, stops being a comment and becomes a check.
+                        //
+                        // `Cospan::new` does not cover this: it bounds-checks
+                        // only, so an in-bounds slip would build a different,
+                        // perfectly valid cospan and silently narrow the corpus
+                        // rather than failing (#343 review).
+                        let survivors: Vec<usize> =
+                            (0..middle.len()).filter(|&v| v != victim).collect();
+                        let expected: Vec<usize> = left
+                            .iter()
+                            .chain(right.iter())
+                            .map(|&m| {
+                                survivors.iter().position(|&s| s == m).expect(
+                                    "invariant: a bubble is hit by no leg, so no leg entry \
+                                     can point at the dropped vertex",
+                                )
+                            })
+                            .collect();
+
+                        middle.remove(victim);
+                        for m in left.iter_mut().chain(right.iter_mut()) {
+                            if *m > victim {
+                                *m -= 1;
+                            }
+                        }
+
+                        let reindexed: Vec<usize> =
+                            left.iter().chain(right.iter()).copied().collect();
+                        assert_eq!(
+                            reindexed, expected,
+                            "bubble-drop reindexing slipped: dropped apex vertex {victim}, \
+                             surviving vertices (old indices) {survivors:?}"
+                        );
+                    }
+                }
+                None => {}
+            }
+
+            (Cospan::new(left, right, middle).unwrap(), rewired)
+        }
+    }
+}
+
+/// A generated pair, together with **the counterfactual that isolates the
+/// rewire arm's contribution**.
+///
+/// The meta-tests must not infer that arm's contribution from a *consequence*
+/// of it, and this type has been narrowed twice for that reason.
+///
+/// 1. The first guard counted non-isomorphic pairs at equal apex size and
+///    reasoned "only the rewire arm can produce those" — true today, and only
+///    because no other arm does. A relabelling arm (one of the gaps
+///    [`canonical_form_decides_apex_isomorphism`]'s own exclusion list invites
+///    closing) would manufacture such pairs itself, letting the rewire arm be
+///    deleted with the guard still positive.
+/// 2. Recording `rewired` alone did not close that: it says the arm **changed
+///    the value**, not that the arm **caused the non-isomorphism**. Some rewires
+///    are apex permutations in disguise and preserve isomorphism —
+///    `a_single_rewire_changes_the_form_unless_it_is_a_relabelling` is about
+///    exactly those. So a rewire arm restricted to permutation-equivalent moves
+///    would keep the `rewired` count up while a relabel arm supplied every
+///    discrimination: the same vacuity, one level further in (#343 round-4
+///    review).
+///
+/// [`rewire_only`](Self::rewire_only) is the fix — the same draw with the
+/// permutation and the rewire applied and the **bubble arm withheld**. "Is the
+/// rewire, by itself, enough to break the isomorphism?" is then a question about
+/// that value alone rather than an inference from the finished pair.
+///
+/// ⚠ **That isolation is a maintenance obligation, not a property of the
+/// design.** `rewire_only` withholds the arms [`apply_perturbation`] is
+/// currently given to withhold — today, the bubble arm. An arm added later and
+/// applied unconditionally would land in `rewire_only` too, and its
+/// discrimination would be counted as the rewire's, restoring the very
+/// confusion this field exists to prevent. **Anyone adding a fourth arm must
+/// withhold it here as well.** Stated because the alternative is a claim of
+/// immunity this cannot support.
+///
+/// ⚠ The obvious counterfactual — "the same draw *minus* the rewire" — was
+/// tried first and is **confounded**, measured: the bubble arm's behaviour
+/// depends on whether the rewire fired, because a rewire can destroy the very
+/// bubble `BubbleOp::Drop` would have removed. Witness from the corpus:
+/// `a = [0]/[0]/['b','b']` (vertex 1 a bubble) rewires to
+/// `b = [0]/[1]/['b','b']`, genuinely non-isomorphic — but with the rewire
+/// withheld vertex 1 is still a bubble, `Drop` fires, and the comparison value
+/// is `[0]/[0]/['b']`, a different apex size. Withholding the *bubble* instead
+/// isolates the rewire cleanly, since nothing the rewire does changes what the
+/// permutation did.
+#[derive(Debug)]
+struct Perturbed {
+    a: Cospan<char>,
+    b: Cospan<char>,
+    /// The same draw with the permutation and rewire applied, bubble withheld.
+    rewire_only: Cospan<char>,
+    /// A leg entry actually moved — not merely that the rewire option was drawn.
+    /// Necessary but **not** sufficient for the arm to be discriminating.
+    rewired: bool,
+}
+
+impl Perturbed {
+    /// Whether the rewire arm is, on its own, enough to break the isomorphism.
+    ///
+    /// The permutation alone is always an isomorphism, so any non-isomorphism in
+    /// [`rewire_only`](Self::rewire_only) is the rewire's doing and nothing
+    /// else's. Decided by [`exists_apex_iso`] — the definition — so it borrows
+    /// nothing from `canonical_form`, the method under test.
+    fn rewire_breaks_iso(&self) -> bool {
+        self.rewired && !exists_apex_iso(&self.a, &self.rewire_only)
+    }
+
+    /// Whether the rewire arm's discrimination actually **reaches** the property
+    /// under test — both halves, and both are needed.
+    ///
+    /// [`rewire_breaks_iso`](Self::rewire_breaks_iso) says the arm is *capable*
+    /// (causally, unconfounded by the other arms). The equal-apex-size condition
+    /// says that capability is not then *masked*: when the bubble arm changes
+    /// the size, `exists_apex_iso` settles the pair on its size guard before a
+    /// class is ever compared, so `canonical_form`'s label and preimage
+    /// dimensions go unexercised however discriminating the rewire was.
+    ///
+    /// Measured on the corpus: 51 draws where the rewire alone breaks the
+    /// isomorphism, of which this many survive the masking.
+    fn rewire_discrimination_reaches_the_property(&self) -> bool {
+        self.rewire_breaks_iso() && self.a.middle().len() == self.b.middle().len()
+    }
 }
 
 /// Apex isomorphism decided the long way: brute force over `S_apex`, straight
@@ -1164,37 +1369,55 @@ proptest! {
     ///
     /// The module's one hand-written iso⇒equal fixture covers a single apex
     /// swap on `id(2)` (#287); this ranges over random permutations of apexes
-    /// up to 5 vertices, and over single-leg rewires, which supply the
-    /// non-isomorphic side that a permutation-only generator could never reach.
+    /// up to 5 vertices, over single-leg rewires, which supply the
+    /// non-isomorphic side that a permutation-only generator could never reach,
+    /// and over bubble additions and deletions, which supply the apex-size
+    /// difference that neither of the other two arms can produce (#343).
     ///
     /// # What this ranges over
     ///
-    /// Apexes of 0–5 vertices, boundaries of 0–3 wires, three labels — pairs
-    /// related by an apex permutation and at most **one** rewired leg entry. It
-    /// does not range over pairs that differ in more than one leg entry; over
-    /// pairs with different boundary sizes (those are separated by `dom_len` /
-    /// `cod_len` and pinned in the module's own tests); over pairs with
-    /// different apex sizes or different apex label multisets (both arms
-    /// preserve `middle.len()` and the label multiset); or over larger apexes,
-    /// where the brute-force oracle stops being affordable.
+    /// Apexes of 0–5 vertices on the `a` side and **0–6 on the `b` side**
+    /// (`BubbleOp::Add` pushes a sixth; measured, 8 of 256 pairs exceed 5),
+    /// boundaries of 0–3 wires, three labels — pairs
+    /// related by an apex permutation, at most **one** rewired leg entry, and at
+    /// most **one** bubble vertex (an apex vertex hit by no leg) added or
+    /// dropped. So it *does* reach pairs of unequal apex size, and with them the
+    /// oracle's size guard and the form's `apex_len` dimension. The apex label
+    /// multiset differs on exactly those pairs and no others: the bubble arm
+    /// changes it only by appending or removing one label — which is also why at
+    /// *equal* apex size the label multiset is always identical, so a pair
+    /// differing only by an in-place relabelling of one vertex is never
+    /// generated (listed in the exclusions below).
+    /// [`arb_small_cospan`]'s own 0–5 bound and its `5! = 120` affordability
+    /// note are unaffected: `exists_apex_iso` short-circuits on a size mismatch
+    /// and never enumerates `S_6`. Measured on the
+    /// meta-tests' 256 deterministic samples: 133 isomorphic and 123
+    /// non-isomorphic pairs, of which **26** are at equal apex size — the subset
+    /// the oracle's size guard cannot decide, and the one
+    /// `perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs`
+    /// asserts on (it read 64 before the bubble arm); the
+    /// apex size differs in 97 of 256 (57 grew, 40 shrank); `scalar_count`
+    /// differs in 93 of 256; and in **72** of the 123 non-isomorphic pairs the
+    /// *non-bubble* classes are equal, so only the bubble classes separate the
+    /// forms — those 72 (59 of them with a non-bubble class present) are what a
+    /// `canonical_form` that dropped bubble classes
+    /// (`classes.retain(|c| !c.is_scalar())` before the sort) fails on here, and
+    /// [`perturbation_generator_reaches_bubble_edits`] asserts their existence
+    /// rather than leaving the number as prose.
     ///
-    /// Consequence of the equal-size (apex and both boundaries),
-    /// equal-label-multiset corpus, by construction: the oracle's size guard —
-    /// three length checks, one early `return false` — is dead here, and equal
-    /// non-bubble classes force equal
-    /// bubble-label multisets (a bubble class is its label and two empty
-    /// preimages) and hence equal forms, so a `canonical_form` that dropped
-    /// bubble classes would pass this test on every seed. Confirmed on the
-    /// meta-test's 256 deterministic samples: `apex_len` differs in 0 of 256;
-    /// `scalar_count` differs in 33 of 256, all non-isomorphic (a rewire that
-    /// empties a vertex frees a bubble; one that lands on a bubble fills it);
-    /// the non-bubble classes differ in all 64 of the 64 non-isomorphic pairs;
-    /// and all 18 tests in this file stay green under that mutant. The mutant
-    /// is caught by `cospan_canon.rs`'s own scalar pins and the bubble ledgers
-    /// in `cospan_algebra`, `frobenius` and `tests/frobenius_axioms.rs` — 11
-    /// tests crate-wide — not here.
+    /// It still does not range over pairs that differ in more than one leg
+    /// entry, over pairs with different boundary sizes (those are separated by
+    /// `dom_len` / `cod_len` and pinned in the module's own tests), over
+    /// apex-size changes larger than one vertex, over the deletion of a
+    /// *non*-bubble vertex (that is not a cospan operation — the legs would
+    /// have nowhere to point), over pairs of **equal** apex size whose label
+    /// multisets differ — an in-place relabelling of one apex vertex (middle
+    /// `['a','a']` vs `['a','b']`, legs identical) is a perturbation no arm
+    /// performs, so the form's label dimension is reached only via the rewire
+    /// and bubble arms — or over larger apexes, where the brute-force oracle
+    /// stops being affordable.
     #[test]
-    fn canonical_form_decides_apex_isomorphism((a, b) in arb_cospan_and_perturbation()) {
+    fn canonical_form_decides_apex_isomorphism(Perturbed { a, b, .. } in arb_cospan_and_perturbation()) {
         let by_canonical_form = a.canonical_form() == b.canonical_form();
         let by_definition = exists_apex_iso(&a, &b);
         prop_assert_eq!(
@@ -1209,30 +1432,193 @@ proptest! {
     }
 }
 
-/// The perturbation generator reaches **both** sides of the `iff` above.
+/// The pairs the rewire arm makes non-isomorphic — those that would have been
+/// isomorphic without it ([`Perturbed::rewire_broke_iso`]). They are the ones
+/// exercising `canonical_form`'s label and preimage dimensions, since the
+/// oracle's size guard settles every other non-isomorphic pair here before a
+/// class is ever compared.
+///
+/// **26 of 256, asserted exactly, not floored.** [`sample_n`] pins
+/// `TestRng::deterministic_rng(RngAlgorithm::ChaCha)`, so this corpus is fixed
+/// and the count is the same on every run — there is no run-to-run drift for a
+/// floor to absorb, and an earlier revision of this comment claimed there was.
+/// Slack is worse than useless here: measured (#343 round-4 review), a floor of
+/// 10 let a plausible generator tweak — weighting the rewire draw to
+/// `prop::option::weighted(0.20, …)` — halve this subcorpus from 26 to 13 with
+/// all 20 tests in the file still green and three docstrings still advertising
+/// 26. An exact count costs nothing and makes a generator change restate what
+/// it produced, which is the same discipline the corpus census in
+/// `tests/spider_theorem.rs` uses. A proptest version bump may legitimately
+/// move it; restate it then.
+const MEASURED_REWIRE_DISCRIMINATING: usize = 26;
+
+/// Draws where the rewire arm alone breaks the isomorphism
+/// ([`Perturbed::rewire_breaks_iso`]) — before the masking the constant above
+/// accounts for. Asserted beside it so a change that leaves the arm capable but
+/// masks all of it, or that cripples the arm while the bubble arm keeps the
+/// aggregate up, moves a number rather than passing.
+const MEASURED_REWIRE_CAPABLE: usize = 51;
+
+/// The perturbation generator reaches **both** sides of the `iff` above — and
+/// reaches the non-isomorphic side *by the rewire arm*, not only by apex size.
 ///
 /// Without this, dropping the rewire arm from [`arb_cospan_and_perturbation`]
 /// would leave `canonical_form_decides_apex_isomorphism` green on a corpus in
 /// which `by_definition` is `true` every single time — the exact shape of
-/// vacuity #287 was filed for. The measured split is reported either way.
+/// vacuity #287 was filed for.
 ///
-/// Measured at the commit that introduced this test: **192 isomorphic, 64
-/// non-isomorphic** of 256. Only "both sides non-empty" is asserted; the
-/// figures are here so a later run can tell generator drift from RNG noise.
+/// ⚠ **A bare `non_isomorphic > 0` no longer says that**, and this is measured,
+/// not feared. `BubbleOp::Add` always changes `middle.len()`, so
+/// [`exists_apex_iso`]'s size guard returns `false` before it compares
+/// anything: the bubble arm manufactures non-isomorphic pairs for free. With
+/// the rewire arm neutered (`rewire.filter(|_| false)`, which preserves the RNG
+/// draw) the whole file stayed green on the aggregate count, and the rewire arm
+/// — the dimension #287 filed this generator for — could have been deleted with
+/// nothing red. That is CLAUDE.md's vacuity mode 2 exactly: a `> 0` that
+/// another path already makes positive, introduced by the commit whose purpose
+/// was to remove vacuity.
+///
+/// So the assertion is on the **equal-apex-size** non-isomorphic pairs, the
+/// ones the size guard cannot decide and that therefore exercise the label and
+/// preimage dimensions. Measured (#343): **133 isomorphic / 123 non-isomorphic**
+/// of 256 — of which only **26** are equal-size, against **64** before the
+/// bubble arm existed, since 97 of the 123 are now separated by the size guard
+/// alone. That thinning is the cost of the new arm, and it is recorded here
+/// rather than left to look like a gain.
 #[test]
 fn perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs() {
     const SAMPLES: usize = 256;
     let samples = sample_n(&arb_cospan_and_perturbation(), SAMPLES);
     let isomorphic = samples
         .iter()
-        .filter(|(a, b)| exists_apex_iso(a, b))
+        .filter(|p| exists_apex_iso(&p.a, &p.b))
         .count();
     let non_isomorphic = SAMPLES - isomorphic;
+    // The load-bearing subset, decided by counterfactual rather than by
+    // inference: the pair is non-isomorphic AND would have been isomorphic
+    // without the rewire. See `Perturbed` for why neither "equal apex size and
+    // non-isomorphic" nor "`rewired` is set" is enough on its own.
+    let rewire_capable = samples.iter().filter(|p| p.rewire_breaks_iso()).count();
+    let rewire_discriminating = samples
+        .iter()
+        .filter(|p| p.rewire_discrimination_reaches_the_property())
+        .count();
     assert!(
-        isomorphic > 0 && non_isomorphic > 0,
+        isomorphic > 0,
         "perturbation split over {SAMPLES} samples: {isomorphic} isomorphic, \
          {non_isomorphic} non-isomorphic — the `iff` in \
          canonical_form_decides_apex_isomorphism is one-sided on this corpus"
+    );
+    assert_eq!(
+        (rewire_capable, rewire_discriminating),
+        (MEASURED_REWIRE_CAPABLE, MEASURED_REWIRE_DISCRIMINATING),
+        "(rewire alone breaks the isomorphism, and that reaches the property un-masked) over \
+         {SAMPLES} samples. The corpus is deterministic, so these are exact counts, not floors — \
+         if you changed the generator, restate them, and check the second did not fall. Those \
+         are the pairs exercising canonical_form's label and preimage dimensions; every other \
+         non-isomorphic pair here is settled by exists_apex_iso's size guard before a class is \
+         compared. For scale, a bare `non_isomorphic > 0` reads {non_isomorphic} on this same \
+         corpus and cannot see any of it"
+    );
+}
+
+/// The generator's bubble arm reaches the apex-size dimension in **both**
+/// directions, and leaves pairs that **only** the bubble classes separate.
+///
+/// The permutation and rewire arms preserve `middle.len()` by construction, so
+/// before #343 every generated pair had equal apex sizes: the oracle's size
+/// guard never fired, and equal non-bubble classes forced equal forms, leaving
+/// `canonical_form_decides_apex_isomorphism` green under a `canonical_form` that
+/// dropped bubble classes outright. This is what stops that corpus from
+/// silently returning — an arm that exists but never fires is the same vacuity
+/// in a new coat.
+///
+/// # What this ranges over
+///
+/// The same 256 deterministic samples as the split meta-test above, along two
+/// axes.
+///
+/// The first is the **apex size**: that `b` is sometimes larger than `a` and
+/// sometimes smaller. That is only a proxy, and a weak one — apex sizes can go
+/// on moving in both directions while every bubble edit is coupled to a
+/// form-changing rewire, which would restore the blind corpus with this half
+/// green. So the second axis is the property the arm actually exists to supply:
+/// pairs that the brute-force oracle calls **non-isomorphic** while `dom_len`,
+/// `cod_len` and every *non*-bubble class agree — exactly the pairs on which a
+/// `canonical_form` that discarded bubble classes
+/// (`classes.retain(|c| !c.is_scalar())` before the sort) would wrongly report
+/// equality. Those are what kill that mutant, and their count is asserted
+/// here rather than left as prose in the `iff` test's docstring.
+///
+/// The assertion is on the subset of those pairs that *also* carry a non-bubble
+/// class. A pair of empty-boundary cospans differing by one bubble qualifies on
+/// the bare predicate for free — both sides have no non-bubble classes at all —
+/// so counting only the pairs whose wiring genuinely coincides keeps the
+/// assertion from being satisfiable by that degenerate corner alone.
+///
+/// It still asserts nothing about the label of the vertex added or which bubble
+/// was dropped; the reindexing after a drop is checked inside the generator
+/// itself, against the survivors-position reference there (`Cospan::new` would
+/// not catch an in-bounds slip).
+///
+/// Measured when this test landed (#343), of 256 samples: **57 grew** (a bubble
+/// added) and **40 shrank** (a bubble dropped); the remaining 159 kept the apex
+/// size — the arm was not drawn, or `Drop` found no bubble to take — and **72**
+/// pairs are separated by their bubble classes alone, **59** of them with a
+/// non-bubble class present. Only non-emptiness is asserted; the figures are
+/// here so a later run can tell generator drift from RNG noise.
+#[test]
+fn perturbation_generator_reaches_bubble_edits() {
+    const SAMPLES: usize = 256;
+    let samples = sample_n(&arb_cospan_and_perturbation(), SAMPLES);
+    let grew = samples
+        .iter()
+        .filter(|p| p.b.middle().len() > p.a.middle().len())
+        .count();
+    let shrank = samples
+        .iter()
+        .filter(|p| p.b.middle().len() < p.a.middle().len())
+        .count();
+    let same = SAMPLES - grew - shrank;
+    assert!(
+        grew > 0 && shrank > 0,
+        "bubble-arm split over {SAMPLES} samples: {grew} grew, {shrank} shrank, \
+         {same} kept the apex size — canonical_form_decides_apex_isomorphism is \
+         back on an equal-apex-size corpus, blind to bubble classes (#343)"
+    );
+
+    // Non-isomorphic (by the oracle, not by the form the mutant would change)
+    // yet agreeing on everything a bubble-dropping `canonical_form` would keep.
+    // Counted twice: all such pairs, and — the assertion — only those that also
+    // carry a non-bubble class, so that the agreement is a real coincidence of
+    // wiring rather than the degenerate both-boundaries-empty corner, which
+    // would satisfy a bare `> 0` for free.
+    let separated: Vec<usize> = samples
+        .iter()
+        .filter_map(|p| {
+            let (a, b) = (&p.a, &p.b);
+            if exists_apex_iso(a, b) {
+                return None;
+            }
+            let (form_a, form_b) = (a.canonical_form(), b.canonical_form());
+            let non_bubble_a: Vec<_> = form_a.classes().iter().filter(|c| !c.is_scalar()).collect();
+            let non_bubble_b: Vec<_> = form_b.classes().iter().filter(|c| !c.is_scalar()).collect();
+            let bubbles_alone = form_a.dom_len() == form_b.dom_len()
+                && form_a.cod_len() == form_b.cod_len()
+                && non_bubble_a == non_bubble_b;
+            bubbles_alone.then_some(non_bubble_a.len())
+        })
+        .collect();
+    let bubbles_alone_separate = separated.len();
+    let with_wiring = separated.iter().filter(|&&classes| classes > 0).count();
+    assert!(
+        with_wiring > 0,
+        "of {SAMPLES} samples, {bubbles_alone_separate} non-isomorphic pairs are \
+         separated by their bubble classes alone (72 when this landed), of which \
+         {with_wiring} also carry a non-bubble class (59 when this landed) — \
+         without one of those, canonical_form_decides_apex_isomorphism stays green \
+         under a `canonical_form` that discards bubble classes, however far the \
+         apex sizes move (#343)"
     );
 }
 

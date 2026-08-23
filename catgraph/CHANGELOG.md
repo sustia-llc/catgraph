@@ -6,6 +6,108 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Tests (#343: the `CospanCanon` iff proptest now reaches the bubble dimension)
+
+- **`arb_cospan_and_perturbation` gained a third arm that changes the apex
+  size** ([#343](https://github.com/sustia-llc/catgraph/issues/343)). Its two
+  existing arms — a random apex permutation, optionally followed by one rewired
+  leg entry — both preserve `middle.len()` and the apex label multiset by
+  construction, so every generated pair had *equal* apex sizes:
+  `canonical_form_decides_apex_isomorphism` never reached `exists_apex_iso`'s
+  size guard or the form's `apex_len` dimension, and at equal apex size equal
+  non-bubble classes force equal forms, which is what left the bubble classes
+  unguarded there. The form's `scalar_count` was *not* part of that blind spot —
+  a rewire that empties a vertex frees a bubble and one that lands on a bubble
+  fills it, which moved `scalar_count` in 33 of 256 samples before this arm
+  existed (the figure #342 recorded). The new `BubbleOp` arm adds a bubble
+  vertex (a push onto `middle`, legs untouched) or drops one (removing a
+  `middle` entry and reindexing both legs above it). No production code changed;
+  this is a test-and-docs change.
+- **The drop arm's reindexing is checked in the generator**, against an
+  independent reference: a surviving vertex's new index is its position among
+  the survivors, computed before the removal, and the arithmetic shift has to
+  agree with it. `Cospan::new` does *not* cover this — it bounds-checks only, so
+  an in-bounds slip such as `if *m >= middle.len()` in place of
+  `if *m > victim` builds a different but perfectly valid cospan and silently
+  narrows the corpus. Falsified: that slip leaves the whole suite green without
+  the check (it moves the bubble-separated corpus from 72 pairs to 61), and
+  reddens three tests with it.
+- **Falsified.** With the arm in place, the bubble-drop mutant
+  `classes.retain(|c| !c.is_scalar())` inserted before `classes.sort()` in
+  `CospanCanon::canonical_form` reddens `canonical_form_decides_apex_isomorphism`,
+  shrinking to a cospan against a copy of itself plus one bubble. (The success
+  count and the exact shrunk witness are proptest per-run artifacts — that test
+  draws on proptest's own seed, not on `sample_n`'s deterministic RNG — so
+  neither is quoted here; every run reddens it.) Before this change that mutant
+  left all 19 tests in `tests/property_laws.rs` green; it now fails 1 of 20
+  there, and 14 workspace-wide rather than 13.
+- **The new arm is itself pinned, on the property and not only on a proxy.**
+  `perturbation_generator_reaches_bubble_edits` asserts both size directions
+  fire — 57 grew, 40 shrank, 159 unchanged of 256 deterministic samples — but
+  that is a proxy: apex sizes can keep moving both ways while every bubble edit
+  is coupled to a form-changing rewire, which would restore the blind corpus
+  with the proxy green. So it also asserts the load-bearing quantity directly:
+  the pairs the oracle calls non-isomorphic while `dom_len`, `cod_len` and every
+  non-bubble class agree — **72** of 256, **59** of them with a non-bubble class
+  present, which is the subset asserted (a bare `> 0` is satisfied for free by
+  empty-boundary pairs, which have no non-bubble classes at all). Falsified:
+  restricting the bubble arm to empty-boundary cospans drives 59 to 0 and
+  reddens the test **while the grew/shrank assertion stays green** — the two
+  assertions catch different degradations.
+- The `iff` test's docstring loses the exclusion clause that recorded this blind
+  spot (added at #342) and states the corpus as it now is: 133 isomorphic and
+  123 non-isomorphic pairs of 256; apex size differs in 97; `scalar_count` in
+  93; and in **72** of the 123 non-isomorphic pairs only the bubble classes
+  separate the two forms. Its exclusion list keeps one residual the arms do not
+  reach: at equal apex size the label multiset is always identical, so a pair
+  differing only by an in-place relabelling of one apex vertex (middle
+  `['a','a']` vs `['a','b']`, legs identical) is never generated.
+  `perturbation_generator_reaches_isomorphic_and_non_isomorphic_pairs`'s
+  recorded split moves from 192/64 to 133/123 for the same reason — **but that
+  is not a pure gain, and the test no longer asserts on it.** `BubbleOp::Add`
+  always changes `middle.len()`, so `exists_apex_iso`'s size guard returns
+  `false` before comparing anything: the new arm manufactures non-isomorphic
+  pairs for free, and a bare `non_isomorphic > 0` became satisfiable without the
+  rewire arm entirely. Measured: with the rewire arm neutered
+  (`rewire.filter(|_| false)`, preserving the RNG draw) the whole file stayed
+  green, i.e. the dimension #287 filed this generator for could have been
+  deleted unnoticed. The discriminating subcorpus — non-isomorphic **at equal
+  apex size**, which the size guard cannot decide — fell **64 → 26**, a ~59%
+  thinning. That count is what the meta-test now asserts, and the same neutering
+  reddens it at `0 of 93`.
+- **The rewire arm's contribution is now *causal*, not inferred.**
+  `arb_cospan_and_perturbation` yields
+  `Perturbed { a, b, rewire_only, rewired }`, where `rewire_only` is the same
+  draw with the permutation and rewire applied and the **bubble arm withheld**.
+  The guard asserts the exact pair `(51, 26)`: draws where the rewire alone
+  breaks the isomorphism, and the subset of those that reach the property
+  un-masked (equal apex size, so `exists_apex_iso` cannot settle the pair on its
+  size guard before a class is compared). Three predicates were tried and the
+  first two were measured wrong:
+  - "equal size + non-isomorphic" *infers* the arm from a consequence — true
+    only while no other arm makes such pairs, an invariant that lived in an
+    exclusion list as prose. With a temporary relabel arm added and the rewire
+    arm neutered it reads **126** and passes with the rewire arm dead.
+  - "`rewired` is set" says the arm changed the *value*, not that it caused the
+    *non-isomorphism*; some rewires are apex permutations in disguise, so a
+    rewire arm restricted to those would keep the count up while another arm
+    supplied every discrimination.
+  - "the same draw *minus* the rewire" is **confounded**: a rewire can destroy
+    the very bubble `BubbleOp::Drop` would have removed, so withholding it
+    changes the bubble arm too. Witness: `a = [0]/[0]/['b','b']` →
+    `b = [0]/[1]/['b','b']`, genuinely non-isomorphic, but the minus-rewire
+    build is `[0]/[0]/['b']` — a different apex size. Withholding the *bubble*
+    instead isolates the rewire cleanly.
+
+  Falsified: neutering the rewire arm takes the pair to `(0, 0)`. Exact counts
+  rather than floors, because `sample_n` pins a deterministic ChaCha RNG and
+  there is no run-to-run drift for slack to absorb — an earlier revision claimed
+  there was, and measured, a floor of 10 let `prop::option::weighted(0.20, …)`
+  halve the subcorpus 26 → 13 with every test still green. ⚠ The isolation is a
+  maintenance obligation, not a property of the design: a fourth arm added later
+  must be withheld from `rewire_only` too, or its discrimination is counted as
+  the rewire's.
+
 ### Tests (#288: `tests/spider_theorem.rs` widened to the theorem it cites)
 
 - **Thm 6.55 is now pinned at the semantics, not only at the term level**
