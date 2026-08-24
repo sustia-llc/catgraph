@@ -78,7 +78,7 @@ An edge `[a,b] → [c,d]` means a→c, a→d, b→c, b→d (bipartite complete s
 | `NamedCospan<Lambda, L, R>` | Port-labeled cospans for wiring-style composition with named boundary nodes. |
 | `Span<Lambda>` | Dual of cospan — composition via pullback. |
 | `Rel<Lambda>` | Relations as jointly-injective spans. Full relation algebra. |
-| `Corel<Lambda>` | Corelations as jointly-surjective cospans. Dual of `Rel`. Implements `HypergraphCategory` (F&S 2018 Ex 6.64). |
+| `Corel<Lambda>` | Corelations as jointly-surjective cospans. Dual of `Rel`. Implements `HypergraphCategory` (F&S 2018 Ex 6.64). Composition is the pushout **followed by the restriction to the outer boundary** (F&S 2018 Ex 4.61 fn. 2); `from_cospan_dropping_bubbles` is that restriction as a total `Cospan → Corel` map. |
 
 `Lambda` types the middle vertices — use `()` for untyped graphs.
 

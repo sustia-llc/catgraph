@@ -27,8 +27,24 @@ fn identity_corel_round_trips() {
     common::assert_corel_eq(&id, &composed);
 }
 
+/// One composite — `f : 1 → {a} ← 2` after `g : 2 → {a} ← 1`, both legs onto a
+/// one-vertex apex — is jointly surjective.
+///
+/// ⚠ Renamed at [#351](https://github.com/sustia-llc/catgraph/issues/351) from
+/// `compose_preserves_joint_surjectivity`, which quantified universally over
+/// composition while asserting this single pair. The universal reading was
+/// **false**: `Cospan::new(vec![], vec![0], vec!['m'])` after
+/// `Cospan::new(vec![0], vec![], vec!['m'])` is a pushout of two jointly
+/// surjective cospans that is not jointly surjective, and `Corel::compose`
+/// wrapped it in `new_unchecked`. It is true now, because `Corel::compose`
+/// performs the F&S 2018 Ex 4.61 fn. 2 restriction — and it is pinned as a
+/// universal claim, over 4 803 pairs, by
+/// `tests/corel_quotient.rs::compose_result_is_always_a_corelation`.
+///
+/// This one stays as the readable single-composite smoke test its assertions
+/// actually support: one wire type, arities ≤ 2, a fold followed by an unfold.
 #[test]
-fn compose_preserves_joint_surjectivity() {
+fn compose_of_fold_then_unfold_is_jointly_surjective() {
     let f = Corel::<char>::new(Cospan::new(vec![0], vec![0, 0], vec!['a']).unwrap()).unwrap();
     let g = Corel::<char>::new(Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap()).unwrap();
     let fg = f.compose(&g).unwrap();

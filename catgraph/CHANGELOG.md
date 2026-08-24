@@ -6,6 +6,125 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — BREAKING (#351: `Corel::compose` restricts to the outer boundary)
+
+- **`Corel`'s `Composable::compose` no longer returns values `Corel::new` would
+  reject** ([#351](https://github.com/sustia-llc/catgraph/issues/351)). It was
+  `self.0.compose(&other.0).map(Self::new_unchecked)` under the comment
+  *"Pushout composition of jointly-surjective cospans is jointly surjective"*.
+  That comment was **false**, and it is deleted rather than reworded. F&S 2018
+  (*Seven Sketches*) Example 4.61 fn. 2 makes corelation composition three
+  steps — (i) read both as relations on `A ⊔ B ⊔ C`, (ii) transitive closure of
+  the union, (iii) **restrict to `A ⊔ C`**. `perform_pushout` does (i) + (ii)
+  and stopped there; step (iii) is now performed by the new
+  `Corel::from_cospan_dropping_bubbles` below.
+- **Smallest witness.** `a = Cospan::new(vec![], vec![0], vec!['m'])` and
+  `b = Cospan::new(vec![0], vec![], vec!['m'])` are both jointly surjective, so
+  `Corel::new` accepts both. A vertex reached only by `a`'s **right** leg and
+  one reached only by `b`'s **left** leg are glued by the pushout into a class
+  no outer leg reaches. The old composite was `left=[] right=[] middle=['m']`
+  — `is_jointly_surjective() == false`, `scalar_count() == 1`. It is now the
+  empty corelation.
+- **What breaks.** Any consumer that composes corelations and **counts apex
+  vertices** (or reads `as_cospan().middle()`, or hashes/compares the
+  underlying `Cospan`) sees a smaller apex wherever a composition merged two
+  boundary-only vertices. Measured over the exhaustive corpus in
+  `tests/corel_quotient.rs` (every cospan with apex ≤ 3, boundary ≤ 2, one wire
+  type): of **4 803** composable pairs of genuine corelations, **2 154** had a
+  raw pushout that was not jointly surjective, and each of those now composes
+  to a strictly smaller apex. **Nothing else moves**: the equivalence relation
+  the composite induces on `domain ⊔ codomain` is unchanged (a dropped class
+  contains no boundary element by definition), and `domain()` / `codomain()`
+  are untouched.
+- **Nothing in-tree consumed the old behaviour.** The whole `-p catgraph`
+  suite, `examples/corel.rs`, and every other workspace crate stayed green
+  across the change without an edit — which is itself the audit finding: no
+  existing test births a mid-composition bubble. `catgraph-syntax`'s
+  `cospan_functor.rs` and `catgraph-applied`'s `mat.rs` mention `Corel` only in
+  prose; neither calls `Corel::compose`.
+
+### Added (#351)
+
+- **`Corel::from_cospan_dropping_bubbles(Cospan<Lambda>) -> Corel<Lambda>`** —
+  the **total** map `Cospan → Corel` the issue asks for. `Corel::new` *rejects*
+  a cospan that is not jointly surjective, so until now a bubble-carrying
+  cospan could not enter the corelation world at all; it can now. Every apex
+  vertex neither leg reaches is dropped and **both legs are reindexed** onto
+  the survivors (not merely filtered — a leg left on a stale index is the
+  failure mode the issue names). Survivors keep their **relative order** and
+  their labels; `domain()` and `codomain()` are untouched; the image always
+  satisfies `is_jointly_surjective()` and `canonical_form().scalar_count() == 0`
+  and is accepted by `Corel::new`; and the map is idempotent and is the
+  identity on an already jointly-surjective input.
+- **Direct, not via `CospanCanon`.** The `classes()` + `to_cospan()` route
+  would need `Lambda: Ord + Hash` — bounds `Corel` itself does not have — and
+  returns a *canonical* witness rather than *this* one, losing the originating
+  apex order. Going straight over `left_to_middle` / `right_to_middle` /
+  `middle` keeps `Corel`'s own bounds (`Eq + Copy + Debug`) and keeps the
+  surviving apex order.
+- ⚠ **Not the `canonical_form` bubble drop.** `classes.retain(|c| !c.is_scalar())`
+  inside `Cospan::canonical_form` is a *defect*
+  ([#343](https://github.com/sustia-llc/catgraph/issues/343) uses it as a
+  deliberate mutant against
+  `tests/property_laws.rs::canonical_form_decides_apex_isomorphism`), because
+  `Cospan` is the theory of *special*, not extra-special, commutative Frobenius
+  monoids and its canonical form must keep scalars. The same expression is a
+  *feature* on the way into `Corel`, whose objects are equivalence relations on
+  the boundary alone and have nowhere to record a bubble. The quotient
+  deliberately lives outside `canonical_form` and is named so the two cannot be
+  confused.
+
+### Tests (#351)
+
+- **`tests/corel_quotient.rs` (new, 7 tests)** over an **exhaustive** corpus:
+  every cospan with apex ≤ 3, domain ≤ 2, codomain ≤ 2 over one wire type —
+  **228** cospans, **139** of them bubble-carrying (**166** bubble vertices),
+  giving **25 616** ordered arity-matching pairs of which **6 896** grow a
+  bubble the operands did not already carry. `corpus_is_not_vacuous` asserts
+  each of those counts non-zero **first**, so no other test in the file can be
+  about nothing.
+- **Functoriality was verified, not assumed — and it is *not* on the nose.**
+  `q(a ; b)` and `q(a) ; q(b)` agree **up to apex isomorphism** on all 25 616
+  pairs (equal `CospanCanon`, which is a complete invariant for
+  parallel-cospan equality), so `q` is a functor into `Corel`. They differ
+  **structurally** on **1 488** of them. The residual is recorded by
+  `quotient_functoriality_is_not_structural` rather than papered over, and
+  characterised: **0** of the 1 488 have two already-jointly-surjective
+  operands (where `q` is the identity and both sides are literally the same
+  expression), and **1 488 of 1 488** are pairs where `perform_pushout`'s
+  identity fast path fires on one side of the quotient and not the other
+  (**6 975** pairs flip in total, so the flip is necessary and not sufficient).
+  Dropping a bubble can *make* a leg the identity on its apex — `right=[0]`
+  over a 2-vertex apex is not, over the 1-vertex quotient it is — and
+  `cospan.rs`'s `left_leg_id` arm deliberately numbers the composite apex by
+  the right operand's indexing where union-find numbers it by left-leg
+  discovery order. That arm is load-bearing for strict left unitality
+  (`id ; g == g`, pinned in `tests/compose_identity_arms.rs`), so the gap is a
+  pre-existing property of composition's apex numbering that the quotient
+  *exposes*, not one it introduces. Smallest witness:
+  `a = ([], [0], ['a','a'])`, `b = ([1], [0,1], ['a','a'])` give apex order
+  `['a','a']` with legs `right=[1,0]` one way and `right=[0,1]` the other.
+- **`tests/corel.rs::compose_preserves_joint_surjectivity` renamed to
+  `compose_of_fold_then_unfold_is_jointly_surjective`.** It quantified
+  universally over composition while asserting exactly one input pair
+  (`f : 1 → {a} ← 2`, `g : 2 → {a} ← 1`), and the universal claim its name made
+  was false. The name now names what it touches; the universal reading is
+  pinned over 4 803 pairs by
+  `corel_quotient.rs::compose_result_is_always_a_corelation`. Measured: with
+  the fix reverted the renamed test **stays green**, which is exactly the
+  narrowness the rename records.
+- **Falsification.** Three perturbations, each applied and reverted.
+  (1) Restoring `map(Self::new_unchecked)` reddens 4 of the 7 new tests —
+  functoriality goes to **6 896** mismatching pairs (from 0) and structural
+  mismatches to **8 204**, of which **2 154** now have two jointly-surjective
+  operands (from 0). (2) Filtering the apex without reindexing the legs reddens
+  5 of 7. (3) Reindexing in-bounds but in the **wrong order** (survivors
+  reversed) reddens only **2** — the three uniform-label sweeps all stay green,
+  because with every vertex labelled `'a'` a wrong-but-in-bounds index is
+  unobservable. That is why
+  `quotient_keeps_surviving_labels_in_their_original_order` uses heterogeneous
+  labels, and that measurement is recorded in its doc comment.
+
 ### Changed — BREAKING (#350: `FrobeniusMorphism` is the *special* theory)
 
 - **`two_layer_simplify`'s rule 3 is deleted**

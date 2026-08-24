@@ -11,8 +11,18 @@ use crate::{cospan::Cospan, errors::CatgraphError};
 
 /// A corelation: jointly-surjective cospan.
 ///
-/// The dual of [`Rel`](crate::span::Rel). Composition is pushout composition
-/// on the underlying cospan; this preserves joint surjectivity.
+/// The dual of [`Rel`](crate::span::Rel). Composition is pushout composition on
+/// the underlying cospan **followed by the restriction to the outer boundary**
+/// (F&S 2018 Ex 4.61 fn. 2 step (iii)) — the pushout on its own does *not*
+/// preserve joint surjectivity, and that restriction is what makes `compose`'s
+/// result something [`Corel::new`](Self::new) would accept. See
+/// [`Composable::compose`](crate::category::Composable::compose)'s notes on
+/// this type.
+///
+/// [`from_cospan_dropping_bubbles`](Self::from_cospan_dropping_bubbles) is the
+/// same restriction exposed as a total map from `Cospan`, and is the only way
+/// to move a bubble-carrying cospan into this type — [`new`](Self::new) refuses
+/// one.
 #[derive(Clone, Debug)]
 #[repr(transparent)]
 pub struct Corel<Lambda: Eq + Sized + Debug + Copy>(Cospan<Lambda>);
@@ -37,6 +47,121 @@ impl<Lambda: Eq + Sized + Debug + Copy> Corel<Lambda> {
     #[must_use]
     pub fn new_unchecked(cospan: Cospan<Lambda>) -> Self {
         Self(cospan)
+    }
+
+    /// The **total** map `Cospan → Corel`: drop every apex vertex neither leg
+    /// reaches, then reindex both legs onto the survivors.
+    ///
+    /// [`new`](Self::new) *rejects* a cospan that is not jointly surjective, so
+    /// until this existed a bubble-carrying cospan could not enter the
+    /// corelation world at all. This is the map that lets it: it is defined on
+    /// every `Cospan<Lambda>` and its image is jointly surjective by
+    /// construction, so `Corel::new(q(c).as_cospan().clone())` always succeeds
+    /// (pinned in `tests/corel_quotient.rs`).
+    ///
+    /// # What it does, precisely
+    ///
+    /// A dropped vertex is exactly a [scalar / bubble] in
+    /// [`CospanCanon`](crate::cospan_canon::CospanCanon)'s sense — both
+    /// preimages empty — so `q(c).as_cospan().canonical_form().scalar_count()`
+    /// is `0` for every `c`. The surviving vertices keep their **relative
+    /// order**: survivor `i` precedes survivor `j` in the image apex iff it did
+    /// in `c`'s apex. Both legs are rewritten through the same
+    /// old-index → new-index renumbering, so no boundary wire changes which
+    /// class it sits in. Domain and codomain are therefore untouched:
+    /// `q(c).domain() == c.domain()` and likewise for the codomain.
+    ///
+    /// On an already jointly-surjective input it is the **identity**, returning
+    /// the cospan unchanged rather than a rebuilt copy.
+    ///
+    /// # Why not via `CospanCanon`
+    ///
+    /// [`CospanCanon::classes`](crate::cospan_canon::CospanCanon::classes) plus
+    /// [`to_cospan`](crate::cospan_canon::CospanCanon::to_cospan) would express
+    /// the same partition, but that route (a) needs `Lambda: Ord + Hash`, which
+    /// `Corel` itself does not require, and (b) returns a *canonical witness*
+    /// rather than *this* witness — the apex comes back in canonical
+    /// (label, preimage) order, not the originating one. Going straight over
+    /// `left_to_middle` / `right_to_middle` / `middle` keeps the bound at
+    /// `Corel`'s own and keeps the surviving apex order.
+    ///
+    /// # Not the `canonical_form` bubble drop
+    ///
+    /// `CospanCanon` deliberately **keeps** scalars: `Cospan` is the theory of
+    /// *special*, not extra-special, commutative Frobenius monoids, and a
+    /// `classes.retain(|c| !c.is_scalar())` inside
+    /// [`Cospan::canonical_form`](crate::cospan::Cospan::canonical_form) is a
+    /// defect that `tests/property_laws.rs`'s
+    /// `canonical_form_decides_apex_isomorphism` exists to catch. The same
+    /// expression is a *feature* here and a *bug* there, because here it is
+    /// applied on the way into `Corel`, whose objects are equivalence relations
+    /// on the boundary alone and have nowhere to record a bubble. Keep the two
+    /// apart.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `cospan` violates the leg-bounds invariant every `Cospan`
+    /// constructor upholds (a leg entry at or beyond `middle().len()`). Only
+    /// reachable through a release-mode
+    /// [`Cospan::new_unchecked`](crate::cospan::Cospan::new_unchecked) misuse,
+    /// which that method documents as deferring the failure to whatever indexes
+    /// the leg next — this is one such place.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use catgraph::{corel::Corel, cospan::Cospan};
+    ///
+    /// // Apex vertex 1 ('z') is reached by neither leg.
+    /// let c = Cospan::new(vec![0], vec![2], vec!['a', 'z', 'b']).unwrap();
+    /// assert!(Corel::new(c.clone()).is_err());
+    ///
+    /// let q = Corel::from_cospan_dropping_bubbles(c);
+    /// assert_eq!(q.as_cospan().middle(), &['a', 'b']);
+    /// assert_eq!(q.as_cospan().left_to_middle(), &[0]);
+    /// assert_eq!(q.as_cospan().right_to_middle(), &[1]);
+    /// ```
+    #[must_use]
+    pub fn from_cospan_dropping_bubbles(cospan: Cospan<Lambda>) -> Self {
+        let apex_len = cospan.middle().len();
+        let mut reached = vec![false; apex_len];
+        for &m in cospan.left_to_middle() {
+            assert!(m < apex_len, "left leg entry {m} is outside the apex");
+            reached[m] = true;
+        }
+        for &m in cospan.right_to_middle() {
+            assert!(m < apex_len, "right leg entry {m} is outside the apex");
+            reached[m] = true;
+        }
+        if reached.iter().all(|r| *r) {
+            // Already jointly surjective — the identity, not a rebuilt copy.
+            return Self(cospan);
+        }
+
+        // Order-preserving renumbering of the survivors. `usize::MAX` marks a
+        // dropped vertex and is never read: only leg entries index into
+        // `renumber`, and every leg entry is `reached`.
+        let mut renumber = vec![usize::MAX; apex_len];
+        let mut middle = Vec::with_capacity(apex_len);
+        for (old, &is_reached) in reached.iter().enumerate() {
+            if is_reached {
+                renumber[old] = middle.len();
+                middle.push(cospan.middle()[old]);
+            }
+        }
+        let left = cospan
+            .left_to_middle()
+            .iter()
+            .map(|&m| renumber[m])
+            .collect();
+        let right = cospan
+            .right_to_middle()
+            .iter()
+            .map(|&m| renumber[m])
+            .collect();
+        // Correct by construction: every entry is a `middle.len()` captured
+        // before the corresponding push, so both legs land inside `middle`.
+        Self(Cospan::new_unchecked(left, right, middle))
     }
 
     /// View the underlying cospan (for bridge-crate access).
@@ -306,9 +431,50 @@ impl<Lambda> crate::category::Composable<Vec<Lambda>> for Corel<Lambda>
 where
     Lambda: Sized + Eq + Copy + Debug,
 {
+    /// Corelation composition: pushout on the underlying cospans, **then the
+    /// restriction to the outer boundary**.
+    ///
+    /// F&S 2018 (*Seven Sketches*) Example 4.61 fn. 2 gives composition of
+    /// corelations `α : A → B`, `β : B → C` in three steps: (i) read both as
+    /// relations on `A ⊔ B ⊔ C`, (ii) take the transitive closure of their
+    /// union, (iii) **restrict to an equivalence relation on `A ⊔ C`**.
+    /// [`Cospan::compose`](crate::category::Composable::compose)'s pushout is
+    /// (i) + (ii); step (iii) is
+    /// [`from_cospan_dropping_bubbles`](Self::from_cospan_dropping_bubbles),
+    /// and it is not optional.
+    ///
+    /// # Breaking at #351
+    ///
+    /// This used to be `self.0.compose(&other.0).map(Self::new_unchecked)`,
+    /// under a comment claiming pushout composition of jointly-surjective
+    /// cospans is jointly surjective. It is not, and the smallest witness is
+    /// two one-vertex corelations:
+    ///
+    /// ```text
+    /// a = Cospan::new(vec![],  vec![0], vec!['m'])   //  0 → {m} ← 1
+    /// b = Cospan::new(vec![0], vec![],  vec!['m'])   //  1 → {m} ← 0
+    /// ```
+    ///
+    /// Both are jointly surjective, so both pass [`new`](Self::new). The
+    /// pushout glues `a`'s right-leg-only vertex to `b`'s left-leg-only vertex
+    /// into one class that no *outer* leg reaches — a bubble born mid-composition
+    /// — and `new_unchecked` then wrapped it, so `compose` returned a value
+    /// `new` would reject: apex `['m']`, both legs empty. With step (iii) in
+    /// place the composite is the empty corelation.
+    ///
+    /// Consumers that compose corelations and **count apex vertices** will see
+    /// smaller apexes wherever a composition merged two boundary-only vertices;
+    /// the induced partition on `domain ⊔ codomain` is unchanged, since a
+    /// dropped class contains no boundary element by definition.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CatgraphError::Composition`] if the two interfaces do not
+    /// type-match, or if the internal pushout fails.
     fn compose(&self, other: &Self) -> Result<Self, CatgraphError> {
-        // Pushout composition of jointly-surjective cospans is jointly surjective.
-        self.0.compose(&other.0).map(Self::new_unchecked)
+        self.0
+            .compose(&other.0)
+            .map(Self::from_cospan_dropping_bubbles)
     }
 
     fn domain(&self) -> Vec<Lambda> {
