@@ -7,6 +7,8 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+## [workspace-v0.16.0] - 2026-08-24
+
 ### Documentation
 
 - **The unqualified "free hypergraph category" phrasing is retired from this
@@ -436,7 +438,8 @@ presentation surface for hypergraph-category morphisms over
   combinators preserve it) and tested per combinator. Hughes 2000 cited as
   lineage.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...HEAD
+[workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0
 [workspace-v0.11.0]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...v0.11.0
 [workspace-v0.10.0]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...v0.10.0

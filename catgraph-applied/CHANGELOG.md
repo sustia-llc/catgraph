@@ -13,6 +13,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.16.0] - 2026-08-24
+
 ### Docs
 
 - **`docs/FS18-AUDIT.md`: the Thm 6.55 rows no longer over-claim**
@@ -2665,7 +2667,8 @@ Tier 1 gap closures (from v0.2.0 audit).
   - `e2_operad.rs` — little-disks operad (E₂).
 - Criterion bench `rayon_thresholds`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...HEAD
+[workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.15.0]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...v0.15.0
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0
 [workspace-v0.13.0]: https://github.com/sustia-llc/catgraph/compare/v0.12.0...v0.13.0

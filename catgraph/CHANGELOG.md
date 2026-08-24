@@ -6,6 +6,8 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+## [workspace-v0.16.0] - 2026-08-24
+
 ### Changed — BREAKING (#351: `Corel::compose` restricts to the outer boundary)
 
 - **`Corel`'s `Composable::compose` no longer returns values `Corel::new` would
@@ -2297,7 +2299,8 @@ substrate (numeric backends kept optional).
   §3.3 io/ff factorization, the global Grothendieck form, LinRel examples) are
   catalogued in [`docs/FS19-AUDIT.md`](docs/FS19-AUDIT.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...HEAD
+[workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.15.0]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...v0.15.0
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0
 [workspace-v0.12.0]: https://github.com/sustia-llc/catgraph/compare/v0.11.0...v0.12.0
