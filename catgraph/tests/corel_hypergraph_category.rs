@@ -53,9 +53,19 @@ fn comultiplication_1_to_2() {
     assert_eq!(delta.codomain(), vec!['a', 'a']);
 }
 
+/// `(id ⊗ η) ; μ` has identity's arities and composes to a corelation.
+///
+/// ⚠ Renamed at [#351](https://github.com/sustia-llc/catgraph/issues/351) from
+/// `left_unitality_via_cospan_delegation`. It routes through `Corel::compose`,
+/// which is precisely the operation that stopped delegating to `Cospan` —
+/// composition now restricts the pushout to the outer boundary. The name said
+/// "delegation" about the one call in the body that no longer delegates.
+///
+/// Arities and joint surjectivity only: this is a shape check, not the
+/// unitality *equation*, which the Def 2.5 battery in `frobenius_axioms.rs`
+/// decides.
 #[test]
-fn left_unitality_via_cospan_delegation() {
-    // (id ⊗ η) ; μ has the same domain/codomain shape as identity on [a].
+fn left_unitality_arities_and_joint_surjectivity() {
     let eta = Corel::<char>::unit('a');
     let mu = Corel::<char>::multiplication('a');
     let id_z = Corel::<char>::identity(&vec!['a']);

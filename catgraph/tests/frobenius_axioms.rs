@@ -31,15 +31,18 @@
 //! not the same mechanism and an earlier revision of this paragraph merged
 //! them. See #272, whose ratified reading retains the boundary.)
 //!
-//! **The carrier count is three decision paths, not four.** `Corel` delegates
-//! everything *this battery* touches, so its row recomputes the `Cospan` row —
+//! **The carrier count is three decision paths, not four.** `Corel`'s row
+//! *agrees with* the `Cospan` row rather than deciding independently —
 //! measured in [`corel_recomputes_the_cospan_battery`], not asserted. A mutant
-//! that reddens both has been caught once, not twice. ⚠ Since
-//! [#351](https://github.com/sustia-llc/catgraph/issues/351) `Corel` is **not**
-//! a transparent newtype in general: `Composable::compose` restricts the
-//! pushout to the outer boundary. The delegation this battery relies on is
-//! narrower than the type-level claim, and
-//! [`corel_recomputes_the_cospan_battery`] records exactly how narrow. Nor are the remaining three fully
+//! that reddens both has been caught once, not twice. ⚠ The reason is narrower
+//! than delegation, and since
+//! [#351](https://github.com/sustia-llc/catgraph/issues/351) it has to be:
+//! `Composable::compose` **overrides** rather than delegates, restricting the
+//! pushout to the outer boundary. It agrees here only because none of the
+//! eleven composites births a mid-composition bubble — the sole input class on
+//! which the override differs — and
+//! [`corel_recomputes_the_cospan_battery`] records that measurement. Nor are
+//! the remaining three fully
 //! disjoint: `frobenius_to_cospan` interprets the battery's generators η, ε,
 //! μ, δ and `id` *as* the corresponding `Cospan` generator, so the
 //! `FrobeniusMorphism` row shares that half of its path with the `Cospan` row

@@ -229,10 +229,14 @@ All notable changes to `catgraph` are documented here. The format follows
   restriction step is exactly the kind of change that can break it — an inner
   composite can lose a vertex the outer composition would have merged. It does
   not: over the **14 473** composable triples of corelations the apex ≤ 2 corpus
-  offers, **0** differ up to apex isomorphism, **456** differ structurally (the
-  same `perform_pushout` apex-numbering artefact recorded above, not a second
-  phenomenon), and **5 048** have step (iii) firing somewhere — that last count
-  is asserted non-zero, so the sweep cannot pass by being about the raw pushout.
+  offers, **0** differ up to apex isomorphism, **456** differ structurally, and
+  **5 048** have step (iii) firing somewhere — that last count is asserted
+  non-zero, so the sweep cannot pass by being about the raw pushout. The 456 are
+  the same `perform_pushout` apex-numbering artefact recorded above and not a
+  second phenomenon, and the test **asserts** that rather than claiming it in
+  prose: **456 of 456** carry an identity fast-path asymmetry between the two
+  associations (**120** of them at the outer composition only — printed, not
+  asserted, since that split moves with the corpus).
   Measured for context and **not** asserted, being a property of the retired
   composition: the pre-#351 pushout has 0 mismatches up to apex isomorphism and
   **512** structural ones on the same corpus, so #351 left associativity intact
@@ -242,12 +246,21 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Changed — prose corrections forced by this change (#351)
 
-- **`Corel` is no longer a transparent newtype, and five in-tree claims said it
-  was.** `Composable::compose` now overrides rather than delegates, so
+- **`Corel` is no longer a transparent newtype, and the in-tree prose still
+  said it was.** `Composable::compose` now overrides rather than delegates, so
   `src/corel.rs`'s `// Trait impls — all delegate to the underlying Cospan`,
   three statements in `tests/frobenius_axioms.rs` (module doc, the per-carrier
-  rationale, and `corel_battery`'s docstring) and the corresponding
-  `docs/FS19-AUDIT.md` row were all false as written. Corrected in place.
+  rationale, and `corel_battery`'s docstring), the corresponding
+  `docs/FS19-AUDIT.md` row, and the test name
+  `corel_hypergraph_category.rs::left_unitality_via_cospan_delegation` — whose
+  body routes through the one call that stopped delegating — were all false or
+  stale as written. All corrected in place; the test is renamed
+  `left_unitality_arities_and_joint_surjectivity`. ⚠ No count is claimed here:
+  the first sweep found five sites and a later review found a sixth, so a
+  number would assert a completeness this was not able to establish. The check
+  that found them is `rg -i delegat` across the workspace, filtered to `Corel`;
+  every other hit is about `PetriNet`, `NamedCospan`, `DecoratedCospan` or
+  `MatKron`, which still delegate and are unaffected.
 - ⚠ **`corel_recomputes_the_cospan_battery` is a sound-but-narrow pin, and its
   own docstring named the trigger it cannot see.** It claimed to be "written to
   go red if that ever stops being true — a `Corel` that overrides any of those
