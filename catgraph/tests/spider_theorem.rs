@@ -63,13 +63,17 @@
 //! `CospanToFrobeniusFunctor` — which *is* one of Prop 3.8's directions — is
 //! the neighbouring row in `FS18-AUDIT.md`.
 //!
-//! That rustdoc also records the map as neither sound nor complete against
-//! SCFM-equality **on scalars**, both witnesses measured. That is not a caveat
-//! bolted onto the exclusions below: it is their cause. `m == n == 0` and every
-//! component-closing recipe are excluded here precisely because they are the
-//! shapes on which the oracle is known to be incomparable, and every term this
-//! file does range over is additionally asserted to carry no scalar class at
-//! all.
+//! That rustdoc *used to* record the map as neither sound nor complete against
+//! SCFM-equality **on scalars**, both witnesses measured, and that
+//! incomparability is why the exclusions below were drawn where they are:
+//! `m == n == 0` and every component-closing recipe are exactly the
+//! scalar-shaped inputs the oracle was known to disagree with the syntax on.
+//! #350 closed that gap — `two_layer_simplify`'s rule 3 is gone, both witnesses
+//! are now pinned the other way up, and the rustdoc says so. The exclusions
+//! therefore outlived their cause; lifting them is possible and tracked as
+//! #288, and is **not** done here (see "Excluded by design" below, which states
+//! the same thing at the point the exclusions are listed). Every term this file
+//! does range over is additionally asserted to carry no scalar class at all.
 //!
 //! It is the theorem *over the corpus it ranges over*, and the shape of that
 //! corpus is stated rather than implied. The measure that matters is a

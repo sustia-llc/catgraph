@@ -430,6 +430,15 @@ where
 /// Def 2.5 equations — `tests/frobenius_axioms.rs` measures that, and runs the
 /// battery through this function for the `FrobeniusMorphism` carrier.
 ///
+/// ⚠ "Decision procedure" states the intent and what is measured, not a proved
+/// property. Def 2.5 *is* the definition of an SCFM, and nothing in-tree
+/// establishes that this map is sound or complete for SCFM-equality in general.
+/// What #350 established is narrower: the two *known* divergences, both on
+/// scalars, are closed, and both witnesses are pinned the other way up. Read
+/// this section against the ⚠ paragraph at the end of "What Prop 3.8 does and
+/// does not license here" below, which states the limit; the same caveat sits
+/// beside the same sentence in the crate README.
+///
 /// # Scalars, and composition
 ///
 /// The interpretation is of the diagram **as presented**. `FrobeniusMorphism`'s
@@ -1041,11 +1050,25 @@ mod tests {
     ///    `apex_len() == 0`. `FrobeniusMorphism` is now the special theory and
     ///    each bubble is carried through as spelled.
     ///
-    /// **This pin signals rule 3.** Restoring it turns every assertion below
-    /// red, and each message carries the measured value it used to have: the
-    /// two `0 → 0` cospans become the same term, the `id_a`-beside-a-bubble
-    /// case comes back as `identity(['a'])`, and the spelled `η;ε` interprets
-    /// to `apex 0`. The #285 fast path cannot fire on any witness here
+    /// **This pin signals rule 3.** Measured: restoring rule 3 and nothing else
+    /// reddens this test at `one_term != two_term`, the first assertion that
+    /// reaches the *term* algebra — both bubbles come back as the empty term
+    /// (`layers: [FrobeniusLayer { blocks: [], … }]`, printed by that message).
+    /// Every later assertion that goes through `cospan_to_frobenius` or through
+    /// a composed `FM` is rule-3-dependent in the same way, and each carries the
+    /// measured value it used to have: the `id_a`-beside-a-bubble case comes
+    /// back as `identity(['a'])`, and the spelled `η;ε` interprets to `apex 0`.
+    ///
+    /// ⚠ Not every assertion below is rule-3-dependent, and the ones that are
+    /// not are fixtures rather than claims: `one_bubble`/`two_bubbles`'
+    /// `scalar_count`s and the `assert_ne!` between them, the two on
+    /// `id_a_and_bubble.canonical_form()`, and `id_empty_canon.apex_len() == 0`
+    /// stay green under restoration. They evaluate `Cospan::new(…)` and
+    /// `FM::identity(&vec![])` only — neither reaches `two_layer_simplify`,
+    /// which is where rule 3 lived, so rule 3 could not move them. They fix the
+    /// values the rule-3-dependent assertions are measured against.
+    ///
+    /// The #285 fast path cannot fire on any witness here
     /// (`leg.len() < middle_len` in each), so nothing below is shared with
     /// cause 1.
     ///

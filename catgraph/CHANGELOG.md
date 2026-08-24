@@ -80,10 +80,22 @@ All notable changes to `catgraph` are documented here. The format follows
 - **`cospan_frobenius_cospan_round_trips` gained its two scalar cases** — a
   bare bubble and `id_a` beside a bubble — which were excluded as unreachable
   before.
-- **Falsified.** Restoring rule 3 and nothing else reddens all nine tests
-  above; the measured pre-#350 values are in each assertion message
-  (`depth 1` where 2 is wanted, `(0, 0)` where `(1, 1)` is, `apex 0` where the
-  original cospan has 1, and the two `0 → 0` cospans sharing one empty term).
+- **Falsified.** Restoring rule 3 and nothing else reddens **nine of the ten**
+  tests named above (measured, `cargo test -p catgraph --no-fail-fast`:
+  `scalar_bubbles_survive_in_both_directions`,
+  `cospan_to_frobenius_unhit_apex_node_keeps_the_bubble`,
+  `cospan_frobenius_cospan_round_trips`, `test_unit_counit_does_not_cancel`,
+  `test_unit_counit_scalar_survives_compose`,
+  `frobenius_scalar_loop_survives_to_interpretation`, `unit_counit_scalar`,
+  `lemma_4_9_cospan_to_name_on_a_non_identity_morphism`, and
+  `ctf_single_apex_cospan_round_trips_up_to_canonical_form`); the measured
+  pre-#350 values are in each assertion message (`depth 1` where 2 is wanted,
+  `(0, 0)` where `(1, 1)` is, `apex 0` where the original cospan has 1, and the
+  two `0 → 0` cospans sharing one empty term). The tenth,
+  `tests/spider_theorem.rs::spider_0_0_via_eta_epsilon`, **cannot** redden and
+  is not claimed to: it compares two terms built the same way, so both sides
+  move together under either theory — which is why the bullet above records "no
+  assertion changed" for it.
 - **`tests/spider_theorem.rs` is unchanged in its assertions**: its `m = n = 0`
   and component-closing exclusions stand, and lifting them is the #288
   follow-up rather than part of this change.

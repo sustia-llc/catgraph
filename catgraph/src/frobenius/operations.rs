@@ -1662,9 +1662,19 @@ mod test {
     ///
     /// This is the inverse of the assertion that stood here until #350
     /// (`test_unit_counit_cancel`, which required `mutations` and two emptied
-    /// layers). Restoring rule 3 turns every assertion below red, and the
-    /// measured falsified values are in the messages: `mutations` becomes
-    /// `true` and both layers become 0 blocks / empty interfaces.
+    /// layers). Measured: restoring rule 3 and nothing else reddens this test at
+    /// its very first assertion, `!mutations` — the rule reports `true` there.
+    /// The block-count, block-shape and `right_type`/`left_type` assertions that
+    /// follow are rule-3-dependent in the same way and carry their falsified
+    /// values in their messages: both layers were emptied to 0 blocks and `[]`
+    /// interfaces.
+    ///
+    /// ⚠ Three assertions below are *not* rule-3-dependent and stay green under
+    /// restoration: `layer1.left_type.is_empty()` and
+    /// `layer2.right_type.is_empty()` (an emptied layer has empty interfaces on
+    /// both sides, so these hold either way), and the mismatched `a`/`b` pairing
+    /// at the end, which never fired even with rule 3 live — the docstring below
+    /// says so, and it is kept as a record, not as a claim.
     ///
     /// **Space of the claim:** two block pairings at the layer level — one
     /// matched-label (`z`/`z`, the pairing rule 3 used to fire on, and the only
