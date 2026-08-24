@@ -6,6 +6,63 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — tooling
+
+- **`scripts/check_measured_claims.py`, a prose-consistency guard, wired into
+  CI.** A measured figure cited in a CHANGELOG or a docstring must equal what
+  the test actually measured. Tests emit a fact; prose cites it by placing an
+  HTML comment immediately after the number, which does not render:
+
+  ```
+  MEASURED assoc.triples = 14473
+  **14 473**<!--m:assoc.triples--> composable triples
+  ```
+
+  Digit-group separators are normalised, so `14 473` and `14473` compare equal.
+  Showing the syntax inside a fenced block, as here, is the documented escape
+  hatch — and the only one.
+
+  **Why.** The audit sweep's dominant defect class is prose about code that no
+  gate can see. On #351 all **twenty-one** review findings across four rounds
+  (5 + 6 + 4 + 6) were invisible to `cargo test`, clippy, fmt, rustdoc and the
+  three existing guards, while the production logic went unchanged after the
+  first commit — 0 non-comment lines added *and* 0 deleted across the whole
+  review arc. The recurring sub-class is one figure restated in several places
+  with nothing checking the restatements still agree, or still name the same
+  quantity: #350's "three terms moved" was a distinct-form delta while eleven
+  terms had moved; #351's falsification record named one perturbation and
+  reported another's counts; and "320 at the outer composition alone" versus a
+  measured 120 was two predicates sharing one undifferentiated word.
+
+  **Failure modes it catches**, each pinned in
+  `scripts/check_measured_claims.test.sh` rather than demonstrated once: a
+  drifted number (reports file, line, claimed and measured); a citation whose
+  emitting test was renamed or deleted; a decimal not read as its fractional
+  digits; prose that cites nothing at all; and a log containing no facts at all.
+  The last two are the symmetric halves of one rule — a guard that checked
+  nothing must not report success, so exit 0 can never mean "nothing was
+  tested". It reads a captured log rather than invoking cargo, so a build
+  failure cannot read as a pass.
+
+  ⚠ The self-test earned itself immediately: it caught negative values being
+  read as positive, which hand-probing had missed.
+
+  **21 citation sites across 6 keys** now carry markers — in the #351 entry
+  below *and* in `tests/corel_quotient.rs`, the emitting test's own docstrings,
+  which were the higher-risk half: a renamed test leaving its own prose claiming
+  the old number is precisely the case this guard exists for. A first pass
+  marked one restatement of `456` per paragraph and left four live in the same
+  paragraph; partial marking is close to no marking. The markers are
+  annotations, not content changes; the numbers are unchanged and were already
+  correct.
+
+  **Two classes cannot be marked and are not pretended otherwise.** Perturbation
+  results (`192`, `512`, `261 625`) are measured only while a perturbation is
+  applied, so no test emits them. And a figure inside an assertion's failure
+  message stays a bare literal, because a marker there would print into test
+  output — `corel_quotient.rs`'s "456 structural mismatches were measured when
+  it was written" is one such, deliberately left alone.
+
 ## [workspace-v0.16.0] - 2026-08-24
 
 ### Changed — BREAKING (#351: `Corel::compose` restricts to the outer boundary)
@@ -220,9 +277,11 @@ All notable changes to `catgraph` are documented here. The format follows
   (6) Restricting **only when the pushout leaves exactly one bubble** — an
   order-dependent rule, which is the shape of defect an associativity pin
   exists to catch — reddens **4 of 9**, with
-  `new_composition_is_associative_up_to_apex_isomorphism` failing on **192 of
-  14 473** triples. That is the falsification of the new pin: its
-  `iso_mismatches == 0` assertion is not satisfied for free.
+  `new_composition_is_associative_up_to_apex_isomorphism` failing on **192** of
+  **14 473**<!--m:assoc.triples--> triples. That is the falsification of the new
+  pin: its `iso_mismatches == 0` assertion is not satisfied for free. (The 192
+  is a perturbation result, so no test in the tree emits it — it is measured
+  only while the perturbation is applied and cannot be marked.)
 
 - **The new composition's own category law is pinned**
   (`new_composition_is_associative_up_to_apex_isomorphism`). Everything else in
@@ -230,17 +289,26 @@ All notable changes to `catgraph` are documented here. The format follows
   *pairwise*; nothing pinned associativity of the operation #351 replaced, and a
   restriction step is exactly the kind of change that can break it — an inner
   composite can lose a vertex the outer composition would have merged. It does
-  not: over the **14 473** composable triples of corelations the apex ≤ 2 corpus
-  offers, **0** differ up to apex isomorphism, **456** differ structurally, and
-  **5 048** have step (iii) firing somewhere — that last count is asserted
-  non-zero, so the sweep cannot pass by being about the raw pushout. The 456 are
+  not: over the **14 473**<!--m:assoc.triples--> composable triples of
+  corelations the apex ≤ 2 corpus
+  offers, **0**<!--m:assoc.iso_mismatches--> differ up to apex isomorphism,
+  **456**<!--m:assoc.structural_mismatches--> differ structurally, and
+  **5 048**<!--m:assoc.restriction_fired--> have step (iii) firing somewhere —
+  that last count is asserted
+  non-zero, so the sweep cannot pass by being about the raw pushout. Those
+  **456**<!--m:assoc.structural_mismatches--> are
   the same `perform_pushout` apex-numbering artefact recorded above and not a
   second phenomenon, and the **correlate** of that is asserted rather than left
-  in prose: **456 of 456** carry an identity fast-path asymmetry between the two
-  associations (**120** of them at the outer composition only — printed, not
+  in prose: all **456**<!--m:assoc.structural_mismatches--> of
+  **456**<!--m:assoc.structural_mismatches--> carry an identity fast-path
+  asymmetry between the two
+  associations (**120**<!--m:assoc.outer_asymmetry_only--> of them at the outer
+  composition only — printed, not
   asserted, since that split moves with the corpus). ⚠ Necessary, not
-  sufficient, and therefore not a proof of the diagnosis: **7 828** of the
-  14 473 triples carry the asymmetry while only 456 mismatch, so a second cause
+  sufficient, and therefore not a proof of the diagnosis:
+  **7 828**<!--m:assoc.any_asymmetry--> of the
+  **14 473**<!--m:assoc.triples--> triples carry the asymmetry while only
+  **456**<!--m:assoc.structural_mismatches--> mismatch, so a second cause
   confined to asymmetric triples would satisfy the assertion unchanged. That
   denominator is printed so the gap is visible rather than inferable.
   Measured for context and **not** asserted, being a property of the retired

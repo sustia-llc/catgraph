@@ -81,7 +81,8 @@ fn corpus() -> Vec<Cospan<char>> {
 ///
 /// The triple sweep ([`new_composition_is_associative_up_to_apex_isomorphism`])
 /// takes `2` rather than `3`: triples grow as the cube of the corpus, and at
-/// apex ≤ 3 the composable-triple count is 261 625 against 14 473 at apex ≤ 2.
+/// apex ≤ 3 the composable-triple count is 261 625 against
+/// **14 473**<!--m:assoc.triples--> at apex ≤ 2.
 /// Both were measured, and both give the same verdict (0 mismatches up to apex
 /// isomorphism); the smaller one is what the suite runs.
 fn corpus_up_to(max_apex: usize) -> Vec<Cospan<char>> {
@@ -833,7 +834,8 @@ fn quotient_functoriality_is_not_structural() {
 /// a vertex that the outer composition would have merged, and whether that
 /// changes the answer depends on the order the two compositions run in.
 ///
-/// It does not. Measured over the 14 473 composable triples of corelations the
+/// It does not. Measured over the **14 473**<!--m:assoc.triples--> composable
+/// triples of corelations the
 /// apex ≤ 2 corpus offers: **0** differ up to apex isomorphism. That is the
 /// assertion. Two riders keep it from being about nothing:
 ///
@@ -841,17 +843,20 @@ fn quotient_functoriality_is_not_structural() {
 ///   somewhere in the sweep, or associativity would be a statement about the
 ///   raw pushout wearing this test's name;
 /// - **the hedge is real** — the two sides differ *structurally* on some
-///   triples (456 measured), so `up to apex isomorphism` is load-bearing and
+///   triples (**456**<!--m:assoc.structural_mismatches--> measured), so
+///   `up to apex isomorphism` is load-bearing and
 ///   not a weaker claim standing in for one that would have held on the nose.
 ///   That residual is the same `perform_pushout` apex-numbering artefact
 ///   [`quotient_functoriality_is_not_structural`] characterises, not a second
 ///   phenomenon — and the **correlate** of that diagnosis is asserted rather
-///   than left in prose: all **456 of 456** carry an identity fast-path
+///   than left in prose: all **456**<!--m:assoc.structural_mismatches--> of
+///   **456**<!--m:assoc.structural_mismatches--> carry an identity fast-path
 ///   asymmetry between the two associations, where the fast path fires for one
 ///   association's composition and not the other's. Of those, **120** have the
 ///   asymmetry at the outer composition only (`(a;b);c` vs `a;(b;c)`) and not
 ///   at the inner one; that split is printed rather than asserted, since it
-///   would move with a corpus retune while the 456-of-456 claim is the one the
+///   would move with a corpus retune while the
+///   **456**<!--m:assoc.structural_mismatches-->-of-456 claim is the one the
 ///   docstring above makes.
 ///
 ///   ⚠ **That is a necessary condition, not a proof.** The asymmetry holds on
@@ -867,7 +872,8 @@ fn quotient_functoriality_is_not_structural() {
 /// heterogeneous labels, wider boundaries, or deeper nestings than three. The
 /// associativity **verdict** is decided on `canonical_form`s, never on
 /// structural equality, deliberately: a structural verdict would be red on the
-/// 456 triples counted below and would pin the artefact rather than the law.
+/// **456**<!--m:assoc.structural_mismatches--> triples counted below and would
+/// pin the artefact rather than the law.
 /// *Structural* (`==`) comparison of `as_cospan()` appears only where the
 /// residual is counted; the verdict compares its `canonical_form`. (`as_cospan()`
 /// itself is used throughout — it is the only way to reach the wrapped value —
@@ -909,7 +915,8 @@ fn new_composition_is_associative_up_to_apex_isomorphism() {
     let mut triples_where_the_restriction_fired = 0usize;
     let mut structural_with_a_fast_path_asymmetry = 0usize;
     let mut structural_with_an_outer_asymmetry_only = 0usize;
-    // The denominator that makes 456-of-456 meaningful: how often the
+    // The denominator that makes **456**<!--m:assoc.structural_mismatches-->-of-456
+    // meaningful: how often the
     // asymmetry holds at all. Without it a reader cannot tell a discriminating
     // predicate from a near-universal one.
     let mut triples_with_a_fast_path_asymmetry = 0usize;
@@ -1020,4 +1027,15 @@ fn new_composition_is_associative_up_to_apex_isomorphism() {
          somewhere, and {triples_with_a_fast_path_asymmetry} of {triples} carry the asymmetry at \
          all — so it is necessary for a structural mismatch and far from sufficient"
     );
+
+    // Machine-readable facts for `scripts/check_measured_claims.py`, which
+    // fails the build when prose citing them drifts. Emit the quantity, not
+    // the sentence: a key names what was counted, so a reader of the prose and
+    // a reader of the log are talking about the same thing.
+    println!("MEASURED assoc.triples = {triples}");
+    println!("MEASURED assoc.iso_mismatches = {iso_mismatches}");
+    println!("MEASURED assoc.structural_mismatches = {structural_mismatches}");
+    println!("MEASURED assoc.outer_asymmetry_only = {structural_with_an_outer_asymmetry_only}");
+    println!("MEASURED assoc.restriction_fired = {triples_where_the_restriction_fired}");
+    println!("MEASURED assoc.any_asymmetry = {triples_with_a_fast_path_asymmetry}");
 }
