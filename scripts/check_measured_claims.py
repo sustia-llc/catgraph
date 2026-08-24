@@ -28,17 +28,35 @@ CONTRACT
      A test-harness prefix before MEASURED is tolerated (`--test-threads=1`
      prepends `test <name> ... ` to the first line a test writes).
   2. Prose cites a fact by placing an HTML comment IMMEDIATELY after the
-     number, with no words in between:
-         **14 473**<!--m:assoc.triples--> composable triples
-     The marker is invisible in rendered Markdown and in rustdoc.
+     number, with nothing between them — not a space, not a closing bracket,
+     not a unit. Digits, then the marker:
+
+     ```
+     **14 473**<!--m:assoc.triples--> composable triples
+     ```
+
+     The marker is an HTML comment, so it does not render in Markdown. rustdoc
+     renders Markdown, so the same holds there; no marker currently lives in a
+     doc comment that rustdoc processes, so that half is reasoned rather than
+     measured.
   3. Every marker must resolve to an emitted fact, and the number touching it
      must equal that fact's value.
 
 A marker whose key no test emits is an error, not a skip: that is exactly the
 "the test was renamed and the prose still claims its number" case.
 
-TO SHOW THE SYNTAX WITHOUT TRIPPING THE GUARD, put it in a fenced code block —
-fenced blocks are skipped, and that is the only escape hatch.
+TO SHOW THE SYNTAX WITHOUT TRIPPING THE GUARD, put it in a fenced code block,
+as just above — that is the only escape hatch. Fences behind `///`, `//!`, `#`
+or `>` count, so it works in rustdoc and in scripts too. An UNTERMINATED fence
+is an error: silently skipping every marker after a stray fence is the same
+content-dependent hole this tool exists to close.
+
+KNOWN LIMITS, all failing loud rather than silent:
+  - Punctuation between number and marker — `(456)`, `456%`, `456th`, `**456**,`
+    — reads as "no number touching it". Move the marker onto the digits.
+  - Two distinct numbers separated by a single space before a marker merge into
+    one, because that is indistinguishable from a grouped `12 456`.
+  - Values are integers. A decimal is rejected rather than read as its tail.
 
 WHY IT TAKES A FILE RATHER THAN RUNNING CARGO
 
@@ -66,6 +84,11 @@ import sys
 
 SEPS = "   ,_"
 
+# Thin, figure and hair spaces, added after review: a thin space silently
+# truncated `14<U+2009>473` to `473`, loud only because the fact did not happen
+# to equal the tail. Written as escapes so an edit cannot drop one invisibly.
+SEPS += "   "
+
 # `MEASURED key = value`, tolerating a test-harness prefix but requiring the
 # value to end the line.
 FACT = re.compile(
@@ -79,14 +102,22 @@ MARKER = re.compile(r"<!--\s*m:([A-Za-z0-9_.]+)\s*-->")
 CITED = re.compile(
     r"(?<![\d.])(-?(?:\d{1,3}(?:[" + SEPS + r"]\d{3})+|\d+))[`*_\s]*$"
 )
-FENCE = re.compile(r"^\s*(```|~~~)")
+# A code fence, optionally behind a doc-comment or blockquote prefix so the
+# escape hatch also exists in `///` / `//!` rustdoc, `#` scripts and `>` quotes.
+# An earlier version matched only column-0 Markdown, which meant the documented
+# escape hatch did not exist in `.rs` — one of the two suffixes this was written
+# for.
+FENCE = re.compile(r"^\s*(?:(?:///|//!|//|#+|>)\s*)?(```+|~~~+)")
 
 PROSE_SUFFIXES = {".md", ".rs", ".txt", ".toml", ".yml", ".yaml", ".py", ".sh"}
-# `testdata` holds this guard's own fixtures, which cite deliberately-unemitted
-# keys. It is skipped during a walk, but naming it as an explicit root still
-# works (the skip applies to child directories, not to the root itself), which
-# is how check_measured_claims.test.sh reaches them.
-SKIP_DIRS = {"target", ".git", "node_modules", "testdata"}
+SKIP_DIRS = {"target", ".git", "node_modules"}
+# This guard's own fixtures cite deliberately-unemitted keys, so the CI walk must
+# not see them. Scoped to the ONE path rather than the bare name `testdata`:
+# a name-based skip would silently exempt any future `<crate>/testdata/*.md` from
+# checking, which is the hole this tool exists to close. Naming it as an explicit
+# root still works — the skip applies to child directories, not to the root
+# itself — which is how check_measured_claims.test.sh reaches these fixtures.
+SKIP_RELATIVE = ("scripts/testdata",)
 
 STRIP = str.maketrans("", "", SEPS)
 
@@ -111,7 +142,12 @@ def collect_facts(log_path):
 
 def prose_files(root):
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [
+            d
+            for d in dirnames
+            if d not in SKIP_DIRS
+            and not pathlib.Path(dirpath, d).as_posix().endswith(SKIP_RELATIVE)
+        ]
         for name in sorted(filenames):
             if pathlib.PurePath(name).suffix.lower() in PROSE_SUFFIXES:
                 yield pathlib.Path(dirpath) / name
@@ -126,12 +162,23 @@ def check_prose(root, facts):
             continue
         if "<!--" not in text:
             continue
-        in_fence = False
+        # A fence is closed only by the same character it opened with, and an
+        # unterminated one is an ERROR rather than a silent skip of every marker
+        # after it. A bare toggle here was a false green: one stray ``` line
+        # disabled checking for the rest of the file, in silence — the same
+        # content-dependent-skip class this tool exists to catch.
+        fence_char = None
         for line_no, line in enumerate(text.splitlines(), 1):
-            if FENCE.match(line):
-                in_fence = not in_fence
-                continue
-            if in_fence:
+            fence = FENCE.match(line)
+            if fence:
+                token = fence.group(1)[0]
+                if fence_char is None:
+                    fence_char, fence_line = token, line_no
+                    continue
+                if token == fence_char:
+                    fence_char = None
+                    continue
+            if fence_char is not None:
                 continue
             for marker in MARKER.finditer(line):
                 key = marker.group(1)
@@ -159,6 +206,15 @@ def check_prose(root, facts):
                     errors.append(
                         f"{where}: cites {key!r} as {claimed} — measured {facts[key]}"
                     )
+        if fence_char is not None:
+            try:
+                shown = path.relative_to(root)
+            except ValueError:
+                shown = path
+            errors.append(
+                f"{shown}:{fence_line}: unterminated code fence — every marker "
+                f"after this line was skipped without being checked"
+            )
     return errors, cited, sites
 
 

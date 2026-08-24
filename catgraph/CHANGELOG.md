@@ -10,10 +10,17 @@ All notable changes to `catgraph` are documented here. The format follows
 
 - **`scripts/check_measured_claims.py`, a prose-consistency guard, wired into
   CI.** A measured figure cited in a CHANGELOG or a docstring must equal what
-  the test actually measured. Tests emit `MEASURED <key> = <value>`; prose cites
-  a fact by placing `<!--m:<key>-->` immediately after the number, which is
-  invisible in rendered Markdown and in rustdoc. Digit-group separators are
-  normalised, so `14 473` and `14473` compare equal.
+  the test actually measured. Tests emit a fact; prose cites it by placing an
+  HTML comment immediately after the number, which does not render:
+
+  ```
+  MEASURED assoc.triples = 14473
+  **14 473**<!--m:assoc.triples--> composable triples
+  ```
+
+  Digit-group separators are normalised, so `14 473` and `14473` compare equal.
+  Showing the syntax inside a fenced block, as here, is the documented escape
+  hatch — and the only one.
 
   **Why.** The audit sweep's dominant defect class is prose about code that no
   gate can see. On #351 all **twenty-one** review findings across four rounds
@@ -33,20 +40,28 @@ All notable changes to `catgraph` are documented here. The format follows
   emitting test was renamed or deleted; a decimal not read as its fractional
   digits; prose that cites nothing at all; and a log containing no facts at all.
   The last two are the symmetric halves of one rule — a guard that checked
-  nothing must not report success — which is `mutants-knowledge.md` §1.3's
-  lesson (exit 0 can mean "nothing was tested") applied in both directions. It
-  reads a captured log rather than invoking cargo, so a build failure cannot
-  read as a pass.
+  nothing must not report success, so exit 0 can never mean "nothing was
+  tested". It reads a captured log rather than invoking cargo, so a build
+  failure cannot read as a pass.
 
   ⚠ The self-test earned itself immediately: it caught negative values being
   read as positive, which hand-probing had missed.
 
-  Figures in the #351 entry below now carry markers, including every restatement
-  of `456` and `14 473` rather than one apiece — a partial marking would have
-  left the drift it targets live in the same paragraph. They are annotations,
-  not content changes; the numbers are unchanged and were already correct. Some
-  figures there cannot be marked in principle, because they are perturbation
-  results measured only while a perturbation is applied and no test emits them.
+  **21 citation sites across 6 keys** now carry markers — in the #351 entry
+  below *and* in `tests/corel_quotient.rs`, the emitting test's own docstrings,
+  which were the higher-risk half: a renamed test leaving its own prose claiming
+  the old number is precisely the case this guard exists for. A first pass
+  marked one restatement of `456` per paragraph and left four live in the same
+  paragraph; partial marking is close to no marking. The markers are
+  annotations, not content changes; the numbers are unchanged and were already
+  correct.
+
+  **Two classes cannot be marked and are not pretended otherwise.** Perturbation
+  results (`192`, `512`, `261 625`) are measured only while a perturbation is
+  applied, so no test emits them. And a figure inside an assertion's failure
+  message stays a bare literal, because a marker there would print into test
+  output — `corel_quotient.rs`'s "456 structural mismatches were measured when
+  it was written" is one such, deliberately left alone.
 
 ## [workspace-v0.16.0] - 2026-08-24
 

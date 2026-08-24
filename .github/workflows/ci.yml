@@ -61,6 +61,12 @@ jobs:
       # this script; a bump commit now fails CI until every reference moves.
       - name: version-refs guard
         run: python3 scripts/check_version_refs.py
+      # The measured-claims guard's own failure modes. Pure python, sub-second,
+      # and deliberately placed with the other script guards rather than after
+      # `cargo test`: it has no cargo dependency, and behind the suite it would
+      # never run on exactly the red builds where a broken guard matters most.
+      - name: measured-claims guard self-test
+        run: bash scripts/check_measured_claims.test.sh
       # #222: the workspace carries ZERO deep_causality_* crates (the #218 arc's
       # end state). A transitive re-introduction would land green without this —
       # nothing else looks at the lockfile's package set.
@@ -103,8 +109,6 @@ jobs:
       # Its own failure modes are pinned by scripts/check_measured_claims.test.sh.
       - name: measured-claims guard
         run: python3 scripts/check_measured_claims.py "${RUNNER_TEMP}/workspace-tests.log"
-      - name: measured-claims guard self-test
-        run: bash scripts/check_measured_claims.test.sh
       - run: cargo test -p catgraph --no-default-features
       # #43: slim-build exercise for catgraph-physics — proves the crate compiles
       # and tests green with both the `spectral` (nalgebra) and `rustworkx` gates
