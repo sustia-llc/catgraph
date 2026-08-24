@@ -13,7 +13,10 @@ All notable changes to `catgraph` are documented here. The format follows
   `Unit(z)` feeding directly into `Counit(z)` — the **extra-special** axiom
   `ε ∘ η = id_I`, which is *not* among the nine equations of F&S 2019 Def 2.5
   (verified against the cached paper: associativity, unitality, commutativity,
-  coassociativity, counitality, cocommutativity, Frobenius, special). Adding
+  coassociativity, counitality, cocommutativity, Frobenius **in both
+  handednesses**, special — nine, per the accounting in `docs/FS19-AUDIT.md`,
+  where unitality and counitality split left/right to give eleven and the two
+  Frobenius halves are counted separately). Adding
   that axiom is a **quotient**, not an extension, so normalizing by it made
   `FrobeniusMorphism` a strictly smaller theory than the
   [`Cospan`](https://docs.rs/catgraph) semantics `frobenius_to_cospan`
@@ -47,7 +50,18 @@ All notable changes to `catgraph` are documented here. The format follows
   `Frobenius::basic_interpret` are now measured redundant** — with rule 3 gone,
   letting `(0, 0)` recurse leaves `cargo test -p catgraph` green. They are kept
   so the bubble does not depend on the layer simplifier; expect cargo-mutants
-  to score their deletion MISSED, and read that as accurate.
+  to score their deletion MISSED, and read that as accurate. The same
+  redundancy retires a falsification row: dropping `generator_to_cospan`'s
+  carve-out used to redden **48 of 383** terms in `frobenius::to_cospan_pin`
+  and now reddens **0** (measured control and treatment).
+- **Three terms in `to_cospan_pin`'s 383-term space now denote different
+  cospans**, because the `η;ε` they carry is no longer cancelled at compose
+  time: distinct canonical forms go **172 → 175** over the 300 random terms and
+  **209 → 212** over the whole space. Both are floors in the pin, so it stayed
+  green while its recorded figures went stale; the figures are updated. The
+  count of random *terms* with scalar images is unchanged at **46** — rule 3
+  never changed *which* terms denote a scalar, only how many of those scalars
+  were told apart (4 distinct scalar-shaped forms before, 6 now).
 
 ### Tests (#350)
 
@@ -288,10 +302,13 @@ All notable changes to `catgraph` are documented here. The format follows
     braiding perturbation either (measured: 121 of the 132 counted at braid time
     survived that test).
   - **Excluded by design, and said so:** `m == n == 0`; any recipe that closes a
-    component; and any recipe with *no* component at all. The first two sit on
-    the *special* vs *extra-special* line — `two_layer_simplify` cancels `η;ε`
-    while `Cospan` keeps the bubble as a genuine scalar — which this file does
-    not decide; 62 corpus terms fall in that arm. The third is the empty term
+    component; and any recipe with *no* component at all. The first two sat on
+    the *special* vs *extra-special* line — `two_layer_simplify` cancelled `η;ε`
+    while `Cospan` kept the bubble as a genuine scalar — which this file did not
+    decide; 62 corpus terms fall in that arm. **That line was decided within this
+    same release by [#350]** (rule 3 deleted; the carrier is the special theory),
+    so the first two exclusions have outlived their cause — lifting them is
+    tracked as [#288] and they stand unchanged until then. The third is the empty term
     (`[] → []`, depth 0), produced 47 times by walks that started at width 0 and
     never drew an η: on it `apex_len() == components` reads `0 == 0`, true and
     vacuous, and `apex_len() > 1` is simply false, so admitting it would make the
@@ -760,16 +777,20 @@ All notable changes to `catgraph` are documented here. The format follows
   applies a local `two_layer_simplify`, so equal diagrams routinely differ
   syntactically and no equality on `FM` could state §3.1's propositions.
   Composing with `Cospan::canonical_form` gives a semantic one — equality up to
-  apex isomorphism. ⚠ **Incomparable with SCFM on scalars — neither direction
-  is exact**, both measured. `two_layer_simplify`'s rule 3 cancels a spelled
-  `η;ε`, so it shares an image with `FrobeniusMorphism::identity(&vec![])`
-  without being SCFM-equal to it (*not complete*), and shares SCFM-equality with
+  apex isomorphism. ⚠ ~~**Incomparable with SCFM on scalars — neither direction
+  is exact**~~ — **superseded within this same release by
+  [#350](https://github.com/sustia-llc/catgraph/issues/350)**. As written, and
+  measured at the time: `two_layer_simplify`'s rule 3 cancelled a spelled
+  `η;ε`, so it shared an image with `FrobeniusMorphism::identity(&vec![])`
+  without being SCFM-equal to it (*not complete*), and shared SCFM-equality with
   `Spider(z, 0, 0)` — which `generator_to_cospan` builds directly as the bubble
-  — without sharing its image (*not sound*). See "Known discrepancy"
-  below. So the new pins catch any change to a term's boundary-to-apex
-  connectivity, and to any bubble that survives the layer simplifier; the one
-  thing they cannot see is a change whose only effect is to add or drop an
-  adjacent `η;ε` pair, which the simplifier cancels before this function runs.
+  — without sharing its image (*not sound*). Rule 3 is deleted; both witnesses
+  are now pinned the other way up (two refuted counterexamples still being short
+  of a soundness or completeness proof). So the new pins catch any change to a
+  term's boundary-to-apex connectivity and to any bubble; ~~the one thing they
+  cannot see is a change whose only effect is to add or drop an adjacent `η;ε`
+  pair, which the simplifier cancels before this function runs~~ — that blind
+  spot closed with rule 3, and such a change is now observable.
 
 ### Fixed
 
@@ -1046,13 +1067,19 @@ All notable changes to `catgraph` are documented here. The format follows
   recurses into `special_frobenius_morphism`, whose doubling branch is reachable
   only at even `m >= 4` — at `m <= 3` the one genuinely independent route was
   never exercised. Falsified three ways on the survivor — dropping the
-  `Spider(z, 0, 0)` carve-out reddens 48 of 383, a *disconnected*
+  `Spider(z, 0, 0)` carve-out reddened 48 of 383 (⚠ **superseded within this
+  same release by [#350]**: that perturbation now reddens **0 of 383**, because
+  with rule 3 gone the recursion yields the same bubble the carve-out builds —
+  re-measured control and treatment, and the pin's own table records it), a
+  *disconnected*
   comultiplication reddens 169 of 383, and an ill-typed braiding reddens the fold
   outright. The **space** is falsified separately, since agreement over 383
   identities would be agreement about nothing: short-circuiting the random-term
   generator leaves the differential assertion green, and a diversity floor beside
   the size assert is what reddens (7 distinct canonical forms over the random
-  terms against 172 measured; 209 over all 383). One instantiation
+  terms against **175** measured; **212** over all 383 — 172 and 209 before
+  [#350], moved by three random terms whose `η;ε` is no longer cancelled at
+  compose time). One instantiation
   (`char`/`String`), and a differential claim only: both sides fold with the same
   `Cospan::compose`, so a bug in the pushout moves them together.
 
@@ -1069,14 +1096,22 @@ All notable changes to `catgraph` are documented here. The format follows
   `equivalence::comp_cospan`, an independently written implementation. Each was
   falsified by reverting the corresponding production line.
 
-### Known discrepancy — scalars (bubbles)
+### Known discrepancy — scalars (bubbles) — **CLOSED within this same release by [#350](https://github.com/sustia-llc/catgraph/issues/350)**
 
-- **Scalars are not preserved across the `Cospan` ↔ `FrobeniusMorphism`
-  translation**: `cospan_to_frobenius` drops them, and `frobenius_to_cospan`
-  keeps the `Spider(z, 0, 0)` bubble (see "Fixed" below) but never sees a
-  spelled `η;ε`, which `two_layer_simplify` rule 3 cancels before the function
-  runs ([#284]; pinned as-is by
-  `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions`, not
+> ⚠ **This whole section is history, not a live discrepancy.** It describes the
+> tree while `two_layer_simplify`'s rule 3 still cancelled `η;ε`. That rule was
+> deleted in this same release (see the "Changed — BREAKING (#350)" entry at the
+> top of `[Unreleased]`): both ends are now the *special* theory, scalars survive
+> in both directions, and the pin named below was re-pointed and renamed to
+> `scalar_bubbles_survive_in_both_directions`. Read the present tense below as
+> past tense throughout.
+
+- ~~**Scalars are not preserved across the `Cospan` ↔ `FrobeniusMorphism`
+  translation**~~: `cospan_to_frobenius` dropped them, and `frobenius_to_cospan`
+  kept the `Spider(z, 0, 0)` bubble (see "Fixed" below) but never saw a
+  spelled `η;ε`, which `two_layer_simplify` rule 3 cancelled before the function
+  ran ([#284]; pinned as-is at the time by the test now called
+  `cospan_algebra::tests::scalar_bubbles_survive_in_both_directions`, not
   endorsed). When first recorded the loss had **two** causes; the first was
   closed in this same release by [#285] (the "Fixed" entry below), and on the
   merged tree the pin is about the second alone:
@@ -1095,9 +1130,10 @@ All notable changes to `catgraph` are documented here. The format follows
      **extra-special** axiom. `Cospan` is the theory of *special* commutative
      Frobenius monoids and keeps bubbles (`cospan_canon`'s module docs say so
      explicitly); `Corel` is the extra-special quotient that discards them.
-     **The sole remaining cause.** The decomposition path emits one `η;ε` per
-     unreached apex vertex and rule 3 eats each of them — at `0 → 0` and
-     beside `id_a` alike.
+     **The sole remaining cause** — ~~and still live when this was written~~,
+     **closed by [#350] in this same release**, which deleted rule 3. The
+     decomposition path emits one `η;ε` per unreached apex vertex and rule 3
+     ate each of them — at `0 → 0` and beside `id_a` alike.
 
   Measured on the merged tree, rule 3 disabled and nothing else: the pin goes
   RED at its first assertion (one bubble and two bubbles become distinct
@@ -1117,9 +1153,15 @@ All notable changes to `catgraph` are documented here. The format follows
   `cospan_algebra::tests::scfm_equal_scalars_have_equal_images`, which was
   measured RED before the change (`Spider(a,0,0)` apex 0 / scalars 0 against
   `η;δ;(ε⊗ε)`'s apex 1 / scalars 1, and the same split beside `id_a`).
-  This repairs one witness; it does **not** make the translation sound, since a
-  spelled `η;ε` still loses its bubble to rule 3 while the SCFM-equal spider now
-  keeps one.
+  This repaired one witness; it did **not** make the translation sound at the
+  time, since a spelled `η;ε` still lost its bubble to rule 3 while the
+  SCFM-equal spider kept one. ~~That asymmetry stands.~~ **Closed by [#350] in
+  this same release**: rule 3 is gone, the spelled `η;ε` keeps its bubble too,
+  and both witnesses are pinned the other way up. The `Spider(z, 0, 0)` arm
+  described here is now *measured redundant* — with rule 3 deleted, letting
+  `(0, 0)` recurse gives the same answer (0 of 383 terms disagree in
+  `frobenius::to_cospan_pin`, against 48 while rule 3 lived) — and is kept only
+  so the bubble does not depend on the layer simplifier.
 ### Added
 
 - **`frobenius::frobenius_to_cospan`** — interpret a `FrobeniusMorphism` as the
@@ -1257,12 +1299,15 @@ All notable changes to `catgraph` are documented here. The format follows
   reachable for every `m = n ≥ 2` with a non-injective common leg; the guard
   now additionally requires the common leg to be a **bijection** onto the
   apex. Cospans whose apex carries a node no leg hits (`[a] → {•,•} ← [a]`)
-  also satisfied the old guard, but their *output is unchanged*: they now take
+  also satisfied the old guard, and ~~their *output is unchanged*: they now take
   the general route, which emits `η;ε` for the spare node, and
   `two_layer_simplify` rule 3 cancels it, so the answer is still
-  `identity(['a'])` — only the code path moved. Whether that scalar should
+  `identity(['a'])` — only the code path moved~~ — **superseded within this same
+  release by [#350]**: with rule 3 deleted the spare node's `η;ε` survives, so
+  for this shape #285 changed the **output** as well as the code path (the
+  answer is a depth-2 term, not `identity(['a'])`). ~~Whether that scalar should
   survive is the extra-special question the "Known discrepancy" entry above
-  leaves undecided pending rule 3. Every cospan the fast path used to answer
+  leaves undecided pending rule 3.~~ It was decided at #350: it survives. Every cospan the fast path used to answer
   correctly — the genuine identities, permuted ones such as
   `[1,0] → {a,b} ← [1,0]` included — still short-circuits.
 
@@ -1289,9 +1334,12 @@ All notable changes to `catgraph` are documented here. The format follows
   on `F(id)`, `F(η)`, `F(ε)`, `F(μ)`, `F(δ)`. Because
   `special_frobenius_morphism` is not independent of the code under test
   (`from_decomposition` builds each surjection block with it),
-  `ctf_single_apex_cospan_round_trips_up_to_canonical_form` round-trips the 24
+  `ctf_single_apex_cospan_round_trips_up_to_canonical_form` ~~round-trips the 24
   non-bubble grid cells through `frobenius_to_cospan` + `canonical_form` and
-  asserts the `(0,0)` bubble loss separately.
+  asserts the `(0,0)` bubble loss separately~~ — **superseded within this same
+  release by [#350]**: with rule 3 deleted the bubble round-trips like every
+  other cell, so the exclusion and its separate `(0,0)` branch are gone and the
+  test ranges over all **25** grid cells.
 - Leg-by-leg Prop 4.6 and Lemma 4.9 witnesses ([#285]). The Prop 4.6 proptests
   ran on a uniform-label generator with an injective leg, under which a wrong
   leg is invisible; `arb_mixed_part_element` now emits two apex classes sharing

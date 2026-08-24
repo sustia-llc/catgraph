@@ -31,19 +31,36 @@
 //! with the body it checked; its record is in git.
 //!
 //! # Falsification (re-measured 2026-08-21 on the 383-term space, each
-//! perturbation reverted after)
+//! perturbation reverted after; the bubble row **re-measured again at #350** —
+//! see the note under the table)
 //!
 //! Perturbing the **survivor** — `cospan_algebra::generator_to_cospan` — takes
-//! [`the_two_frobenius_to_cospan_agree_over_the_wide_space`] red three ways:
+//! [`the_two_frobenius_to_cospan_agree_over_the_wide_space`] red two ways:
 //!
 //! | perturbation | result |
 //! |---|---|
 //! | braiding right leg `vec![1, 0]` → `vec![0, 1]` | red at `random_5`: the ill-typed braiding makes the layer fold fail outright (`'a'` vs `'b'` at a common interface) |
-//! | delete the `Spider(z, 0, 0)` carve-out, i.e. recurse as the pre-#284 body did | red, **48 of 383** terms disagree — `spider_0_0`: survivor `apex=0 scalars=0` vs reference `apex=1 scalars=1` |
+//! | delete the `Spider(z, 0, 0)` carve-out, i.e. recurse as the pre-#284 body did | **no longer red — 0 of 383** since #350; was **48 of 383** while rule 3 lived |
 //! | `Comultiplication(z)` → the *disconnected* `Cospan::new_unchecked(vec![0], vec![0, 1], vec![z, z])` | red, **169 of 383** terms disagree — `delta`: survivor `apex=2` vs reference `apex=1` |
 //!
-//! The third is a pure connectivity change with no scalar in sight, so the
-//! green run is not resting on the bubble arm alone. [`black_boxes_are_rejected_by_both`]
+//! ⚠ **The bubble row is dead, and that is the correct reading — not a
+//! tooling fault.** While `two_layer_simplify` still cancelled `η;ε`, deleting
+//! the carve-out made the `(0, 0)` arm recurse into an *already-emptied* term,
+//! so the survivor said `apex=0 scalars=0` against the reference's
+//! `apex=1 scalars=1` and 48 terms disagreed. #350 deleted rule 3, so that
+//! recursion now yields the depth-2 `η;ε`, which interprets to `apex=1
+//! scalars=1` — exactly what the carve-out builds directly. Measured on this
+//! branch, control and treatment: **48 of 383 red at `90a8824`, 0 of 383 red
+//! here** (`cargo test -p catgraph --no-fail-fast`, 26 targets, no failures).
+//! The carve-out is therefore **measured redundant**, and `cargo-mutants` will
+//! score its deletion MISSED. Read that as accurate. It is kept so the `(0, 0)`
+//! scalar does not depend on what the layer simplifier does — see
+//! `cospan_algebra::generator_to_cospan`'s own note.
+//!
+//! The `Comultiplication` row is a pure connectivity change with no scalar in
+//! sight, so the green run does not rest on the bubble arm — which now matters
+//! more than it did, since the bubble arm no longer separates the two bodies at
+//! all. [`black_boxes_are_rejected_by_both`]
 //! goes red when the survivor's variant is switched to
 //! `CatgraphError::Composition`, and the retired copy-fidelity test went red
 //! when the live T1 spider arm was given one apex vertex per output
@@ -55,7 +72,7 @@
 //! guards would take — leaves 300 identities that *agree perfectly*, so the
 //! differential assertion stays green. The [`MIN_RANDOM_DISTINCT`] floor is what
 //! catches it: **7 distinct canonical forms over the 300 random terms, against
-//! the 172 measured here**. `SPACE_SIZE` alone would not have noticed.
+//! the 175 measured here**. `SPACE_SIZE` alone would not have noticed.
 
 use crate::{
     category::{Composable, ComposableMutating, HasIdentity},
@@ -95,14 +112,17 @@ const SPACE_SIZE: usize = 83 + RANDOM_TERMS;
 /// every arm falling through to `None`) would leave 300 identities behind with
 /// `SPACE_SIZE` still satisfied and the differential assertion still green.
 ///
-/// Measured on the pinned seed: **172** distinct canonical forms over the 300
-/// random terms. The floor sits a little below that so an incidental reshuffle
+/// Measured on the pinned seed: **175** distinct canonical forms over the 300
+/// random terms (**172** before #350 — three random terms carry an `η;ε` that
+/// is no longer cancelled at compose time, so they now denote distinct
+/// cospans). The floor sits a little below that so an incidental reshuffle
 /// of the draw does not red the pin, while a collapse cannot pass.
 const MIN_RANDOM_DISTINCT: usize = 150;
 
 /// Floor on the number of distinct canonical forms over the **whole** space.
 ///
-/// Measured on the pinned seed: **209**. Same rationale as
+/// Measured on the pinned seed: **212** (**209** before #350, moved by the same
+/// three terms). Same rationale as
 /// [`MIN_RANDOM_DISTINCT`]; this one additionally notices a hand-built block
 /// (the spider grid, the Def 2.5 battery, the compact-closed terms) degenerating
 /// without its length changing.
@@ -507,8 +527,12 @@ fn space() -> Vec<(String, FM)> {
 /// generator fits nowhere in the running codomain and the caller skips that
 /// step, and its `Identity` arm contributes a no-op layer — so the terms are
 /// shorter than the attempt count and many are short. Measured on the pinned
-/// seed: 209 distinct canonical forms over the 383 terms, 172 over the 300
-/// random ones, 46 of whose images are scalars (`0 → 0`).
+/// seed: 212 distinct canonical forms over the 383 terms and 175 over the 300
+/// random ones; of the 300 random *terms*, 46 have scalar (`0 → 0`) images,
+/// spread over 6 distinct scalar-shaped forms. (Before #350: 209 and 172, the
+/// same 46 terms, 4 distinct forms — the term count is unchanged because
+/// deleting rule 3 does not change *which* terms denote a scalar, only how
+/// many of those scalars are told apart.)
 /// The count alone would not notice that collapsing, so
 /// [`MIN_RANDOM_DISTINCT`] and [`MIN_TOTAL_DISTINCT`] are asserted beside
 /// [`SPACE_SIZE`].

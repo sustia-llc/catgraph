@@ -535,8 +535,15 @@ fn frobenius_structural_equality_decides_nothing_here() {
 /// [`spider_fusion_needs_a_wire_between_the_two_spiders`], which covers a
 /// second one, in the spider-fusion rule, that changed *connectivity*.
 ///
-/// Falsification: restoring rule 3 turns the first and third assertions red
-/// with `after_fm_compose` back at `(0, 0)`.
+/// Falsification: restoring rule 3 puts `after_fm_compose` back at `(0, 0)`,
+/// reddening the **first** assertion. The test aborts there, so the third
+/// (`after_fm_compose == semantic`) is never reached — it would fail, but
+/// naming it as observed would over-claim.
+///
+/// ⚠ The second assertion is *not* rule-3-dependent: `semantic` composes two
+/// already-interpreted `Cospan`s and never reaches `two_layer_simplify`, so it
+/// holds under restoration. It is the reference half of the comparison, not a
+/// claim about the rule.
 #[test]
 fn frobenius_scalar_loop_survives_to_interpretation() {
     let eta = FrobeniusMorphism::<char, String>::unit(Z);

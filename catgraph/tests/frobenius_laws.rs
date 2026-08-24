@@ -177,8 +177,18 @@ fn spider_fusion() {
 /// blocks, nor about the interpretation into `Cospan` — `frobenius_axioms.rs`
 /// and `cospan_algebra`'s tests carry those.
 ///
-/// Falsification: restoring rule 3 gives depth 1 for both terms, red on the
-/// two depth assertions.
+/// Falsification: restoring rule 3 gives depth 1 for both terms. The **first**
+/// assertion to redden is `scalar.depth() == 2` (measured: got 1); a test aborts
+/// there, so the later `scalar_via_factory.depth() == 2` and the `!=
+/// identity(&[])` assertion are never reached, and quoting them as "red" would
+/// over-claim.
+///
+/// ⚠ Not every assertion below is rule-3-dependent. The four opening
+/// `unit`/`counit` boundary assertions read bare generators, `scalar.domain()`
+/// and `scalar.codomain()` are `[] → []` under either theory (an emptied term
+/// has empty interfaces too), and the closing `scalar_via_factory == scalar`
+/// stays green because restoration collapses both sides together. Those are
+/// fixtures, not claims about rule 3.
 #[test]
 fn unit_counit_scalar() {
     let unit: FM = FrobeniusOperation::Unit('z').into();
