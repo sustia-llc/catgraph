@@ -1,4 +1,5 @@
-//! Corelation: jointly-surjective cospan, composed by pushout.
+//! Corelation: jointly-surjective cospan, composed by pushout **then
+//! restriction to the outer boundary**.
 //!
 //! Dual of [`Rel`](crate::span::Rel); wraps [`Cospan`]
 //! the way `Rel` wraps [`Span`](crate::span::Span).
@@ -414,7 +415,9 @@ impl<Lambda: Eq + Sized + Debug + Copy> Corel<Lambda> {
     }
 }
 
-// Trait impls — all delegate to the underlying Cospan.
+// Trait impls — all delegate to the underlying Cospan EXCEPT `Composable`,
+// which since #351 performs F&S 2018 Ex 4.61 fn. 2's step (iii) on top of the
+// pushout. `Corel` is no longer a transparent newtype for composition.
 
 impl<Lambda> crate::category::HasIdentity<Vec<Lambda>> for Corel<Lambda>
 where
@@ -481,8 +484,9 @@ where
     ///   `equivalence_classes().len()` all change on such a composite.
     ///
     /// Worked witness, pinned in `tests/corel_quotient.rs`'s
-    /// `compose_shifts_the_flat_index_layout`: for `a : 1 → {a,a} ← 2` after
-    /// `b : 2 → {a,a} ← 1` the raw pushout gave classes `[{0,1,3}, {2}]`,
+    /// `compose_shifts_the_flat_index_layout`: for `a : 1 → {a,a} ← 2` **then**
+    /// `b : 2 → {a,a} ← 1` (diagrammatic order — the test runs
+    /// `a.compose(&b)`) the raw pushout gave classes `[{0,1,3}, {2}]`,
     /// `len 2`, `merges(0, 3) == true`, `is_identity_partition() == false`; the
     /// restricted composite gives `[{0,1,2}]`, `len 1`, `merges(0, 3) == false`
     /// (`merges(0, 2) == true` instead), `is_identity_partition() == true`.

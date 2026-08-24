@@ -65,7 +65,7 @@
 |---|---|---|---|
 | Def 4.58: dual, unit η, counit ε, snake equations | 🔗 | catgraph::compact_closed | cup/cap functions, zigzag tests |
 | Prop 4.60: compact closed ⟹ monoidal closed | 🔗 | catgraph core (implicit) | catgraph relies on this via Prop 6.66 |
-| Ex 4.61: Corel as compact closed category | 🔗 | catgraph::span::Rel | `Rel` exists; corelation structure implicit |
+| Ex 4.61: Corel as compact closed category | 🔗 | catgraph::corel | `Corel<Lambda>` — corelations as jointly-surjective cospans, with `Composable::compose` implementing the example's **footnote 2** composition in full since catgraph #351: (i) read both as relations on `A ⊔ B ⊔ C`, (ii) transitive closure of the union (both by `perform_pushout`), (iii) **restrict to `A ⊔ C`** (by `Corel::from_cospan_dropping_bubbles`). Step (iii) was missing before #351, so composition could return a value `Corel::new` rejects. ⚠ This row previously pointed at `catgraph::span::Rel` and called the corelation structure implicit — `Rel` is the *dual* (jointly-injective spans, Ex 5.8), a different type. Marker stays 🔗: `Corel` is in catgraph core, not catgraph-applied. The compact-closed structure itself (η, ε, snakes) is exercised in `catgraph/tests/corel_hypergraph_category.rs`. |
 | Thm 4.63: Prof_V is compact closed | ➖ | — | theoretical; profunctor categories not implemented |
 | Exercise 4.66: snake equations for Prof_V | ➖ | — | theoretical verification |
 

@@ -65,7 +65,8 @@ All notable changes to `catgraph` are documented here. The format follows
   **shifts every codomain flat index down**. `Corel::merges(a, b)` takes flat
   indices; `Corel::is_identity_partition` tests `middle().len() == dom.len()`;
   `equivalence_classes().len()` counts apex classes. All three change on an
-  affected composite. Measured on `a : 1 → {a,a} ← 2` after `b : 2 → {a,a} ← 1`
+  affected composite. Measured on `a : 1 → {a,a} ← 2` **then**
+  `b : 2 → {a,a} ← 1` — diagrammatic order, the test runs `a.compose(&b)`
   (pinned as `compose_shifts_the_flat_index_layout`): raw pushout apex
   `['a','a']` → classes `[{0,1,3}, {2}]`, `len 2`, `merges(0, 3) == true`,
   `is_identity_partition() == false`; new composite apex `['a']` → classes
@@ -120,7 +121,7 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Tests (#351)
 
-- **`tests/corel_quotient.rs` (new, 8 tests)** over an **exhaustive** corpus:
+- **`tests/corel_quotient.rs` (new, 9 tests)** over an **exhaustive** corpus:
   every cospan with apex ≤ 3, domain ≤ 2, codomain ≤ 2 over one wire type —
   **228** cospans, **139** of them bubble-carrying (**166** bubble vertices),
   giving **25 616** ordered arity-matching pairs of which **6 896** grow a
@@ -162,7 +163,7 @@ All notable changes to `catgraph` are documented here. The format follows
   `a = ([], [0], ['a','a'])`, `b = ([1], [0,1], ['a','a'])` give apex order
   `['a','a']` with legs `right=[1,0]` one way and `right=[0,1]` the other.
 - **`tests/corel.rs::compose_preserves_joint_surjectivity` renamed to
-  `compose_of_fold_then_unfold_is_jointly_surjective`.** It quantified
+  `compose_of_unfold_then_fold_is_jointly_surjective`.** It quantified
   universally over composition while asserting exactly one input pair
   (`f : 1 → {a} ← 2`, `g : 2 → {a} ← 1`), and the universal claim its name made
   was false. The name now names what it touches; the universal reading is
@@ -170,28 +171,102 @@ All notable changes to `catgraph` are documented here. The format follows
   `corel_quotient.rs::compose_result_is_always_a_corelation`. Measured: with
   the fix reverted the renamed test **stays green**, which is exactly the
   narrowness the rename records.
-- **Falsification.** Four perturbations, each applied, measured and reverted.
-  (1) Restoring `map(Self::new_unchecked)` reddens **5 of the 8** new tests —
-  functoriality goes to **6 896** mismatching pairs (from 0) and structural
-  mismatches to **8 204**, of which **2 154** now have two jointly-surjective
-  operands (from 0). (2) Filtering the apex without reindexing the legs reddens
-  **5 of 8**. (3) Reindexing in-bounds but in the **wrong order** (the whole
-  apex renumbered in reverse, legs following) reddens only **2 of 8** —
-  `quotient_is_total_and_lands_in_corel`,
-  `compose_result_is_always_a_corelation` and
-  `quotient_is_functorial_up_to_apex_isomorphism` all stay green, because with
-  every vertex labelled `'a'` a consistently renumbered apex is unobservable on
-  everything except the label order itself. That is why
+  ⚠ The rename landed *wrong first*, as `…fold_then_unfold…`, and is corrected
+  here. `Composable::compose` is diagrammatic `self ; other`, and `f` is
+  literally `Cospan::comultiplication` (δ, an **unfold**) while `g` is
+  `Cospan::multiplication` (μ, a **fold**), so `f.compose(&g)` is δ ; μ. The
+  same classical-order misreading had also produced the sentence "η **after**
+  ε … is not jointly surjective", which is false as written: measured,
+  `ε ; η` gives `left=[0] right=[1] middle=['m','m']`, jointly surjective,
+  and only `η ; ε` gives the non-jointly-surjective `middle=['m']`.
+- **Falsification.** Six perturbations, each applied to `src/corel.rs`,
+  measured against the **nine** tests in `tests/corel_quotient.rs`, and
+  reverted. Every denominator below was re-measured after the ninth test was
+  added; none is carried over from an earlier count.
+  (1) Restoring `map(Self::new_unchecked)` — the pre-#351 composition —
+  reddens **6 of 9**; functoriality goes to **6 896** mismatching pairs (from
+  0) and structural mismatches to **8 204**, of which **2 154** now have two
+  jointly-surjective operands (from 0).
+  (2) Filtering the apex without reindexing the legs reddens **6 of 9**, in
+  `Cospan`'s bounds check rather than on a semantic assertion.
+  (3) Reindexing in-bounds but in the **wrong order** (the whole apex
+  renumbered in reverse, both legs following consistently) reddens only
+  **2 of 9** — `quotient_is_total_and_lands_in_corel`,
+  `compose_result_is_always_a_corelation`,
+  `quotient_is_functorial_up_to_apex_isomorphism` and
+  `new_composition_is_associative_up_to_apex_isomorphism` all stay green,
+  because with every vertex labelled `'a'` a *consistently* renumbered apex is
+  unobservable on everything except the label order itself — and the
+  associativity pin compares canonical forms, to which such a renumbering is
+  invisible by construction. That is why
   `quotient_keeps_surviving_labels_in_their_original_order` uses heterogeneous
   labels, and that measurement is recorded in its doc comment.
-  (4) Reversing the composite's **left-leg vector** — which scrambles which
-  domain wire sits in which class while preserving the apex, the labels, every
-  length and joint surjectivity — reddens **5 of 8**, with
-  `quotient_is_total_and_lands_in_corel` and
-  `compose_result_is_always_a_corelation` failing *at the boundary-partition
-  assertion*. Both of those stayed green under this perturbation while their
-  step-(iii) claim was carried by `domain()` / `codomain()` alone; that is the
-  measurement that motivated the boundary-partition assertion above.
+  (4) Reversing the **left-leg vector of the value `Corel::compose` returns**
+  — after the quotient, so composites only — reddens **4 of 9**.
+  `quotient_is_total_and_lands_in_corel` stays **green** and cannot do
+  otherwise: it never calls `compose`.
+  (5) The same reversal applied **inside `from_cospan_dropping_bubbles`**, so
+  to every quotiented value rather than only to composites, reddens **6 of 9**,
+  and `quotient_is_total_and_lands_in_corel` and
+  `compose_result_is_always_a_corelation` both fail *at the boundary-partition
+  assertion*. Both stayed green under this perturbation while their step-(iii)
+  claim was carried by `domain()` / `codomain()` alone; that is the measurement
+  that motivated the boundary-partition assertion above.
+  ⚠ (4) and (5) were previously written up as one perturbation, named as (4)
+  and reported with (5)'s numbers. They are two experiments of different scope
+  and are recorded separately here.
+  (6) Restricting **only when the pushout leaves exactly one bubble** — an
+  order-dependent rule, which is the shape of defect an associativity pin
+  exists to catch — reddens **4 of 9**, with
+  `new_composition_is_associative_up_to_apex_isomorphism` failing on **192 of
+  14 473** triples. That is the falsification of the new pin: its
+  `iso_mismatches == 0` assertion is not satisfied for free.
+
+- **The new composition's own category law is pinned**
+  (`new_composition_is_associative_up_to_apex_isomorphism`). Everything else in
+  the file pins the quotient, or pins composition against the quotient
+  *pairwise*; nothing pinned associativity of the operation #351 replaced, and a
+  restriction step is exactly the kind of change that can break it — an inner
+  composite can lose a vertex the outer composition would have merged. It does
+  not: over the **14 473** composable triples of corelations the apex ≤ 2 corpus
+  offers, **0** differ up to apex isomorphism, **456** differ structurally (the
+  same `perform_pushout` apex-numbering artefact recorded above, not a second
+  phenomenon), and **5 048** have step (iii) firing somewhere — that last count
+  is asserted non-zero, so the sweep cannot pass by being about the raw pushout.
+  Measured for context and **not** asserted, being a property of the retired
+  composition: the pre-#351 pushout has 0 mismatches up to apex isomorphism and
+  **512** structural ones on the same corpus, so #351 left associativity intact
+  and slightly narrowed the structural gap. The apex ≤ 3 corpus was also
+  measured (**261 625** triples, 0 mismatches up to apex isomorphism); the
+  suite runs the smaller one.
+
+### Changed — prose corrections forced by this change (#351)
+
+- **`Corel` is no longer a transparent newtype, and five in-tree claims said it
+  was.** `Composable::compose` now overrides rather than delegates, so
+  `src/corel.rs`'s `// Trait impls — all delegate to the underlying Cospan`,
+  three statements in `tests/frobenius_axioms.rs` (module doc, the per-carrier
+  rationale, and `corel_battery`'s docstring) and the corresponding
+  `docs/FS19-AUDIT.md` row were all false as written. Corrected in place.
+- ⚠ **`corel_recomputes_the_cospan_battery` is a sound-but-narrow pin, and its
+  own docstring named the trigger it cannot see.** It claimed to be "written to
+  go red if that ever stops being true — a `Corel` that overrides any of those
+  operations makes the row independent and this test is where that shows up."
+  #351 overrode `Composable::compose` outright and the test stayed **green**,
+  along with the whole workspace suite. The reason is the corpus, not the
+  assertion: the override changes a composite only when the pushout glues two
+  vertices no *outer* leg reaches, and none of the eleven Def 2.5 equations'
+  composites does that. The docstring now states what the test pins (`Corel`
+  and `Cospan` agree *on these eleven equations*) and records the measurement
+  that falsified the wider claim. The delegation-divergence job belongs to
+  `tests/corel_quotient.rs`, whose corpus does birth such bubbles.
+- **`catgraph-applied/docs/FS18-AUDIT.md`'s Ex 4.61 row pointed at the wrong
+  type.** It read `catgraph::span::Rel` with "corelation structure implicit";
+  `Rel` is the *dual* (jointly-injective spans, Ex 5.8). Repointed at
+  `catgraph::corel` and noted that footnote 2's three-step composition is now
+  realized in full. The `🔗 IN CORE` marker is unchanged and correct — `Corel`
+  lives in catgraph core, not in catgraph-applied — so the per-section tallies
+  `scripts/check_audit_counts.py` guards do not move.
 
 ### Changed — BREAKING (#350: `FrobeniusMorphism` is the *special* theory)
 

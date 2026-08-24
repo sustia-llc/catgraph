@@ -74,8 +74,19 @@ fn tuples(len: usize, radix: usize) -> Vec<Vec<usize>> {
 /// Every cospan with apex ≤ 3, domain ≤ 2, codomain ≤ 2 over the wire type
 /// `'a'` — exhaustive in the leg maps, not sampled.
 fn corpus() -> Vec<Cospan<char>> {
+    corpus_up_to(3)
+}
+
+/// [`corpus`] with the apex bound as a parameter.
+///
+/// The triple sweep ([`new_composition_is_associative_up_to_apex_isomorphism`])
+/// takes `2` rather than `3`: triples grow as the cube of the corpus, and at
+/// apex ≤ 3 the composable-triple count is 261 625 against 14 473 at apex ≤ 2.
+/// Both were measured, and both give the same verdict (0 mismatches up to apex
+/// isomorphism); the smaller one is what the suite runs.
+fn corpus_up_to(max_apex: usize) -> Vec<Cospan<char>> {
     let mut out = Vec::new();
-    for apex in 0..=3usize {
+    for apex in 0..=max_apex {
         for dom in 0..=2usize {
             for cod in 0..=2usize {
                 for left in tuples(dom, apex) {
@@ -564,7 +575,7 @@ fn compose_shifts_the_flat_index_layout() {
 /// composable pair of corelations the corpus offers, not one.
 ///
 /// This is the universal claim `tests/corel.rs`'s
-/// `compose_of_fold_then_unfold_is_jointly_surjective` used to be *named*
+/// `compose_of_unfold_then_fold_is_jointly_surjective` used to be *named*
 /// after while asserting it of a single input pair. Its name is now honest and
 /// the universal reading lives here, swept over 4 803 pairs; the count of
 /// pairs whose *raw* pushout is not jointly surjective is measured and asserted
@@ -809,5 +820,130 @@ fn quotient_functoriality_is_not_structural() {
         "{structural_mismatches} of {} pairs differ structurally; all carry a fast-path flip \
          ({fast_path_flips} pairs flip in total, so the flip is necessary and not sufficient)",
         pairs.len()
+    );
+}
+
+/// `Corel::compose` is still associative — `(a ; b) ; c == a ; (b ; c)` — up to
+/// apex isomorphism, after #351 changed what composition *is*.
+///
+/// Everything else in this file pins the quotient, or pins composition against
+/// the quotient pairwise. Nothing pinned the **category law of the new
+/// composition itself**, and it is exactly the kind of law a restriction step
+/// can break: step (iii) discards apex vertices, so an inner composite can lose
+/// a vertex that the outer composition would have merged, and whether that
+/// changes the answer depends on the order the two compositions run in.
+///
+/// It does not. Measured over the 14 473 composable triples of corelations the
+/// apex ≤ 2 corpus offers: **0** differ up to apex isomorphism. That is the
+/// assertion. Two riders keep it from being about nothing:
+///
+/// - **the corpus reaches the case** — the restriction must actually fire
+///   somewhere in the sweep, or associativity would be a statement about the
+///   raw pushout wearing this test's name;
+/// - **the hedge is real** — the two sides differ *structurally* on some
+///   triples (456 measured), so `up to apex isomorphism` is load-bearing and
+///   not a weaker claim standing in for one that would have held on the nose.
+///   That residual is the same `perform_pushout` apex-numbering artefact
+///   [`quotient_functoriality_is_not_structural`] characterises, not a second
+///   phenomenon.
+///
+/// **Narrow-pin question.** The claim ranges over associativity of `Corel`
+/// composition; the assertions touch triples of jointly-surjective cospans with
+/// apex ≤ 2 and boundaries ≤ 2 over a single wire type. It says nothing about
+/// heterogeneous labels, wider boundaries, or deeper nestings than three. It
+/// compares `canonical_form`s — never `as_cospan()` — deliberately: a
+/// structural version would be red on 456 of these triples and would be pinning
+/// the artefact rather than the law.
+///
+/// **Context, printed rather than asserted:** the pre-#351 composition (the raw
+/// pushout, no restriction) has 0 mismatches up to apex isomorphism and 512
+/// structural ones on this same corpus, so #351 left associativity intact and
+/// slightly narrowed the structural gap. Not asserted because it is a property
+/// of the retired composition, not of this one.
+#[test]
+fn new_composition_is_associative_up_to_apex_isomorphism() {
+    let corels: Vec<Cospan<char>> = corpus_up_to(2)
+        .into_iter()
+        .filter(Cospan::is_jointly_surjective)
+        .collect();
+
+    let mut triples = 0usize;
+    let mut iso_mismatches = 0usize;
+    let mut structural_mismatches = 0usize;
+    let mut triples_where_the_restriction_fired = 0usize;
+
+    for a in &corels {
+        for b in &corels {
+            if a.right_to_middle().len() != b.left_to_middle().len() {
+                continue;
+            }
+            for c in &corels {
+                if b.right_to_middle().len() != c.left_to_middle().len() {
+                    continue;
+                }
+                triples += 1;
+
+                let ca = Corel::new(a.clone()).expect("invariant: filtered to jointly surjective");
+                let cb = Corel::new(b.clone()).expect("invariant: filtered to jointly surjective");
+                let cc = Corel::new(c.clone()).expect("invariant: filtered to jointly surjective");
+
+                let ab = ca.compose(&cb).expect("invariant: arities matched above");
+                let bc = cb.compose(&cc).expect("invariant: arities matched above");
+                let lhs = ab
+                    .compose(&cc)
+                    .expect("invariant: composition preserves the boundary");
+                let rhs = ca
+                    .compose(&bc)
+                    .expect("invariant: composition preserves the boundary");
+
+                // Did step (iii) actually discard anything anywhere in this
+                // triple? Compare each composite's apex against the raw pushout
+                // it was restricted from.
+                let raw_ab = a.compose(b).expect("invariant: arities matched above");
+                let raw_bc = b.compose(c).expect("invariant: arities matched above");
+                let raw_lhs = raw_ab
+                    .compose(c)
+                    .expect("invariant: composition preserves the boundary");
+                let raw_rhs = a
+                    .compose(&raw_bc)
+                    .expect("invariant: composition preserves the boundary");
+                if raw_ab.middle().len() != ab.as_cospan().middle().len()
+                    || raw_bc.middle().len() != bc.as_cospan().middle().len()
+                    || raw_lhs.middle().len() != lhs.as_cospan().middle().len()
+                    || raw_rhs.middle().len() != rhs.as_cospan().middle().len()
+                {
+                    triples_where_the_restriction_fired += 1;
+                }
+
+                if lhs.as_cospan().canonical_form() != rhs.as_cospan().canonical_form() {
+                    iso_mismatches += 1;
+                }
+                if lhs.as_cospan() != rhs.as_cospan() {
+                    structural_mismatches += 1;
+                }
+            }
+        }
+    }
+
+    assert_eq!(
+        iso_mismatches, 0,
+        "{iso_mismatches} of {triples} composable triples break associativity up to apex \
+         isomorphism — 0 was measured when this pin was written"
+    );
+    assert!(
+        triples_where_the_restriction_fired > 0,
+        "step (iii) never fired across {triples} triples, so this sweep is about the raw pushout \
+         and not about #351's composition at all"
+    );
+    assert!(
+        structural_mismatches > 0,
+        "the two sides agree structurally on all {triples} triples, so `up to apex isomorphism` \
+         is no longer load-bearing here and this pin should be strengthened to `==` on the \
+         `Cospan` — 456 structural mismatches were measured when it was written"
+    );
+    println!(
+        "{triples} composable triples: {iso_mismatches} differ up to apex isomorphism, \
+         {structural_mismatches} differ structurally, {triples_where_the_restriction_fired} have \
+         step (iii) firing somewhere"
     );
 }
