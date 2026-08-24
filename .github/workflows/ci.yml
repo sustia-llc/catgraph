@@ -83,22 +83,28 @@ jobs:
       # keeping docs.rs rendering clean now that the crates are public.
       - run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
       # Captured, not plain, so the measured-claims guard below has a log to read.
-      # `set -o pipefail` is explicit and load-bearing: the default Actions shell is
-      # `bash -e {0}` WITHOUT pipefail, so `cargo test | tee` would report tee's exit
-      # status and a failing suite would land green. That is the same false-green
-      # class as the repo's never-pipe-a-gate rule.
+      # `shell: bash` is the load-bearing part: Actions invokes it as
+      # `bash --noprofile --norc -eo pipefail {0}`, so a failing suite fails the step
+      # rather than being masked by tee's exit status. The DEFAULT shell is `bash -e`
+      # WITHOUT pipefail, where `cargo test | tee` lands green on a red suite — the
+      # same false-green class as the repo's never-pipe-a-gate rule. `set -o pipefail`
+      # is therefore redundant here and kept deliberately: it states the dependency, so
+      # dropping `shell: bash` in a future edit cannot silently reintroduce the hole.
       - name: workspace tests (captured for the measured-claims guard)
         shell: bash
         run: |
           set -o pipefail
-          cargo test --workspace -- --nocapture | tee /tmp/workspace-tests.log
+          cargo test --workspace -- --nocapture | tee "${RUNNER_TEMP}/workspace-tests.log"
       # Prose-consistency guard: a measured figure cited in a CHANGELOG or docstring
       # must equal what the test actually measured. The audit sweep's dominant defect
-      # class is prose no gate can see — on #351 all fifteen review findings across
+      # class is prose no gate can see — on #351 all twenty-one review findings across
       # four rounds were invisible to every existing gate while the production logic
       # went unchanged. Restated figures drift silently; this recomputes them.
+      # Its own failure modes are pinned by scripts/check_measured_claims.test.sh.
       - name: measured-claims guard
-        run: python3 scripts/check_measured_claims.py /tmp/workspace-tests.log
+        run: python3 scripts/check_measured_claims.py "${RUNNER_TEMP}/workspace-tests.log"
+      - name: measured-claims guard self-test
+        run: bash scripts/check_measured_claims.test.sh
       - run: cargo test -p catgraph --no-default-features
       # #43: slim-build exercise for catgraph-physics — proves the crate compiles
       # and tests green with both the `spectral` (nalgebra) and `rustworkx` gates

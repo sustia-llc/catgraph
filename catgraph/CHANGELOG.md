@@ -16,28 +16,37 @@ All notable changes to `catgraph` are documented here. The format follows
   normalised, so `14 473` and `14473` compare equal.
 
   **Why.** The audit sweep's dominant defect class is prose about code that no
-  gate can see. On #351 all **fifteen** review findings across four rounds were
-  invisible to `cargo test`, clippy, fmt, rustdoc and the three existing guards,
-  while the production logic went unchanged after the first commit — 0
-  non-comment lines added *and* 0 deleted across the whole review arc. The
-  recurring sub-class is one figure restated in four or five places with nothing
-  checking the restatements still agree, or still name the same quantity: #350's
-  "three terms moved" was a distinct-form delta while eleven terms had moved;
-  #351's falsification record named one perturbation and reported another's
-  counts; and "320 at the outer composition alone" versus a measured 120 was two
-  predicates sharing one undifferentiated word.
+  gate can see. On #351 all **twenty-one** review findings across four rounds
+  (5 + 6 + 4 + 6) were invisible to `cargo test`, clippy, fmt, rustdoc and the
+  three existing guards, while the production logic went unchanged after the
+  first commit — 0 non-comment lines added *and* 0 deleted across the whole
+  review arc. The recurring sub-class is one figure restated in several places
+  with nothing checking the restatements still agree, or still name the same
+  quantity: #350's "three terms moved" was a distinct-form delta while eleven
+  terms had moved; #351's falsification record named one perturbation and
+  reported another's counts; and "320 at the outer composition alone" versus a
+  measured 120 was two predicates sharing one undifferentiated word.
 
-  **Failure modes it catches**, each falsified rather than assumed: a drifted
-  number (reports file, line, claimed and measured); a citation whose emitting
-  test was renamed or deleted; and a log containing no facts at all, which fails
-  rather than passing vacuously. That last one is `mutants-knowledge.md` §1.3's
-  lesson — exit 0 can mean "nothing was tested" — applied to this tool. It reads
-  a captured log rather than invoking cargo, so a build failure cannot read as a
-  pass, and the CI step sets `pipefail` explicitly because the default Actions
-  shell is `bash -e` without it (verified: `false | tee` exits 0 otherwise).
+  **Failure modes it catches**, each pinned in
+  `scripts/check_measured_claims.test.sh` rather than demonstrated once: a
+  drifted number (reports file, line, claimed and measured); a citation whose
+  emitting test was renamed or deleted; a decimal not read as its fractional
+  digits; prose that cites nothing at all; and a log containing no facts at all.
+  The last two are the symmetric halves of one rule — a guard that checked
+  nothing must not report success — which is `mutants-knowledge.md` §1.3's
+  lesson (exit 0 can mean "nothing was tested") applied in both directions. It
+  reads a captured log rather than invoking cargo, so a build failure cannot
+  read as a pass.
 
-  Six figures in the #351 entry below now carry markers. They are annotations,
-  not content changes — the numbers are unchanged and were already correct.
+  ⚠ The self-test earned itself immediately: it caught negative values being
+  read as positive, which hand-probing had missed.
+
+  Figures in the #351 entry below now carry markers, including every restatement
+  of `456` and `14 473` rather than one apiece — a partial marking would have
+  left the drift it targets live in the same paragraph. They are annotations,
+  not content changes; the numbers are unchanged and were already correct. Some
+  figures there cannot be marked in principle, because they are perturbation
+  results measured only while a perturbation is applied and no test emits them.
 
 ## [workspace-v0.16.0] - 2026-08-24
 
@@ -253,9 +262,11 @@ All notable changes to `catgraph` are documented here. The format follows
   (6) Restricting **only when the pushout leaves exactly one bubble** — an
   order-dependent rule, which is the shape of defect an associativity pin
   exists to catch — reddens **4 of 9**, with
-  `new_composition_is_associative_up_to_apex_isomorphism` failing on **192 of
-  14 473** triples. That is the falsification of the new pin: its
-  `iso_mismatches == 0` assertion is not satisfied for free.
+  `new_composition_is_associative_up_to_apex_isomorphism` failing on **192** of
+  **14 473**<!--m:assoc.triples--> triples. That is the falsification of the new
+  pin: its `iso_mismatches == 0` assertion is not satisfied for free. (The 192
+  is a perturbation result, so no test in the tree emits it — it is measured
+  only while the perturbation is applied and cannot be marked.)
 
 - **The new composition's own category law is pinned**
   (`new_composition_is_associative_up_to_apex_isomorphism`). Everything else in
@@ -269,16 +280,20 @@ All notable changes to `catgraph` are documented here. The format follows
   **456**<!--m:assoc.structural_mismatches--> differ structurally, and
   **5 048**<!--m:assoc.restriction_fired--> have step (iii) firing somewhere —
   that last count is asserted
-  non-zero, so the sweep cannot pass by being about the raw pushout. The 456 are
+  non-zero, so the sweep cannot pass by being about the raw pushout. Those
+  **456**<!--m:assoc.structural_mismatches--> are
   the same `perform_pushout` apex-numbering artefact recorded above and not a
   second phenomenon, and the **correlate** of that is asserted rather than left
-  in prose: **456 of 456** carry an identity fast-path asymmetry between the two
+  in prose: all **456**<!--m:assoc.structural_mismatches--> of
+  **456**<!--m:assoc.structural_mismatches--> carry an identity fast-path
+  asymmetry between the two
   associations (**120**<!--m:assoc.outer_asymmetry_only--> of them at the outer
   composition only — printed, not
   asserted, since that split moves with the corpus). ⚠ Necessary, not
   sufficient, and therefore not a proof of the diagnosis:
   **7 828**<!--m:assoc.any_asymmetry--> of the
-  14 473 triples carry the asymmetry while only 456 mismatch, so a second cause
+  **14 473**<!--m:assoc.triples--> triples carry the asymmetry while only
+  **456**<!--m:assoc.structural_mismatches--> mismatch, so a second cause
   confined to asymmetric triples would satisfy the assertion unchanged. That
   denominator is printed so the gap is visible rather than inferable.
   Measured for context and **not** asserted, being a property of the retired
