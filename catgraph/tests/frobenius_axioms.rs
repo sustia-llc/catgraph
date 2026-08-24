@@ -495,9 +495,10 @@ fn frobenius_morphism_battery() {
 /// decider for that carrier.
 ///
 /// This is a record of a limitation, so it is written to go red when the
-/// limitation *improves*: `two_layer_simplify`'s four rules normalize identity
-/// layers, braiding pairs, `η`-into-`ε` loops and `Spider`-block chains, and
-/// none of them fires on a Def 2.5 equation between the lettered generators.
+/// limitation *improves*: `two_layer_simplify`'s three rules normalize identity
+/// layers, braiding pairs and `Spider`-block chains (the `η`-into-`ε` rule went
+/// at #350), and none of them fires on a Def 2.5 equation between the lettered
+/// generators.
 /// Anything that widens it lowers this count and should be met by narrowing the
 /// carrier's key, not by editing the number.
 #[test]
@@ -516,22 +517,28 @@ fn frobenius_structural_equality_decides_nothing_here() {
     );
 }
 
-/// One place [`frobenius_to_cospan`] does not commute with `FrobeniusMorphism`'s
-/// own composition, pinned with both values.
+/// The one place [`frobenius_to_cospan`] used **not** to commute with
+/// `FrobeniusMorphism`'s own composition, pinned the other way up (#350).
 ///
-/// `two_layer_simplify`'s unit/counit rule deletes an `η` feeding an `ε`, which
-/// is the *extra*-special axiom `η # ε = id_I`. `Cospan` is the theory of the
-/// **special** monoids and keeps that closed bubble as a genuine scalar. So the
-/// presented composite interprets to a cospan with **0** apex vertices while the
-/// two interpretations composed in `Cospan` give **1**, all of it a scalar.
+/// `two_layer_simplify` carried a unit/counit rule deleting an `η` feeding an
+/// `ε`, which is the *extra*-special axiom `ε ∘ η = id_I` — not one of the nine
+/// equations of Def 2.5. `Cospan` is the theory of the **special** monoids and
+/// keeps that closed bubble as a genuine scalar, so the presented composite
+/// interpreted to a cospan with **0** apex vertices while the two
+/// interpretations composed in `Cospan` gave **1**, all of it a scalar. Rule 3
+/// was deleted at #350 and both routes now give `(1, 1)`.
 ///
-/// Narrow by construction: this is the `η # ε` pattern at one wire type, not a
-/// survey of everything `two_layer_simplify` does — and "the only divergence"
-/// is a claim this test cannot make. It was in fact false when this file was
-/// written: see [`spider_fusion_needs_a_wire_between_the_two_spiders`], which
-/// covers a second one, in the spider-fusion rule, that changed *connectivity*.
+/// Narrow by construction: this is the `η # ε` pattern at one wire type, and
+/// agreement here is not commutation in general — the two routes are compared
+/// on exactly one composable pair. "The only divergence" is likewise a claim
+/// this test cannot make; it was in fact false when this file was written: see
+/// [`spider_fusion_needs_a_wire_between_the_two_spiders`], which covers a
+/// second one, in the spider-fusion rule, that changed *connectivity*.
+///
+/// Falsification: restoring rule 3 turns the first and third assertions red
+/// with `after_fm_compose` back at `(0, 0)`.
 #[test]
-fn frobenius_scalar_loop_is_erased_before_interpretation() {
+fn frobenius_scalar_loop_survives_to_interpretation() {
     let eta = FrobeniusMorphism::<char, String>::unit(Z);
     let eps = FrobeniusMorphism::<char, String>::counit(Z);
 
@@ -548,10 +555,9 @@ fn frobenius_scalar_loop_is_erased_before_interpretation() {
 
     assert_eq!(
         (after_fm_compose.apex_len(), after_fm_compose.scalar_count()),
-        (0, 0),
-        "FrobeniusMorphism::compose no longer erases the eta;eps bubble — if that is deliberate, \
-         this carrier is now sound for the special theory and the caveat on frobenius_to_cospan \
-         should go"
+        (1, 1),
+        "FrobeniusMorphism::compose erased the eta;eps bubble again (rule 3 gave (0, 0)); \
+         this carrier is the *special* theory since #350"
     );
     assert_eq!(
         (semantic.apex_len(), semantic.scalar_count()),
@@ -559,9 +565,9 @@ fn frobenius_scalar_loop_is_erased_before_interpretation() {
         "Cospan stopped keeping the eta;eps scalar; it is the theory of *special*, not \
          extra-special, commutative Frobenius monoids"
     );
-    assert_ne!(
+    assert_eq!(
         after_fm_compose, semantic,
-        "the two routes agree now, so the documented non-commutation is stale"
+        "the two routes disagree again on the eta;eps scalar — the divergence #350 closed"
     );
 }
 

@@ -6,6 +6,88 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed — BREAKING (#350: `FrobeniusMorphism` is the *special* theory)
+
+- **`two_layer_simplify`'s rule 3 is deleted**
+  ([#350](https://github.com/sustia-llc/catgraph/issues/350)). It cancelled
+  `Unit(z)` feeding directly into `Counit(z)` — the **extra-special** axiom
+  `ε ∘ η = id_I`, which is *not* among the nine equations of F&S 2019 Def 2.5
+  (verified against the cached paper: associativity, unitality, commutativity,
+  coassociativity, counitality, cocommutativity, Frobenius, special). Adding
+  that axiom is a **quotient**, not an extension, so normalizing by it made
+  `FrobeniusMorphism` a strictly smaller theory than the
+  [`Cospan`](https://docs.rs/catgraph) semantics `frobenius_to_cospan`
+  interprets it into — and that mismatch *was* the documented
+  "neither sound nor complete on scalars". Baez–Erbele describe the free
+  symmetric monoidal category on a commutative extra-special Frobenius monoid
+  as equivalence relations on `X ⊔ Y`, which **matches the description of**
+  this crate's `Corel`; nothing in-tree proves the identification, so read it
+  as a match of descriptions rather than a theorem.
+- **What breaks.** Anything relying on `η;ε` collapsing:
+  - `FrobeniusMorphism::compose` on an `η` meeting an `ε` now returns a
+    two-layer term (`depth() == 2`) instead of the emptied depth-1 identity,
+    and the derived `Eq`/`PartialEq` separates it from
+    `FrobeniusMorphism::identity(&vec![])`.
+  - `special_frobenius_morphism(0, 0, z)` returns that same two-layer `η;ε`
+    rather than the empty term.
+  - `cospan_to_frobenius` no longer discards an apex vertex neither leg
+    reaches: `Cospan::new(vec![], vec![], vec!['a'])` maps to `η;ε`, and
+    `Cospan::new(vec![0], vec![0], vec!['a','b'])` to a depth-2 term instead
+    of `identity(['a'])`. One bubble and two bubbles now have different terms.
+  - `frobenius_to_cospan` of a spelled `η;ε` is the bubble (`apex 1`, one
+    scalar class) instead of the empty cospan.
+  - **Downstream is unaffected in storage terms**: `catgraph-surreal` persists
+    cospans and mirrors `Cospan::canonical_form`, which rule 3 never touched,
+    so no stored row moves.
+- **The rule numbers keep their gap.** Rules 1, 2 and 4 are unchanged and keep
+  their numbers, so every "Rule 4" reference in tests, this CHANGELOG and
+  `docs/FS19-AUDIT.md` still points at spider fusion; the deleted number is
+  documented in `two_layer_simplify`'s rustdoc rather than reused.
+- **The `(0, 0)` carve-outs in `generator_to_cospan` and
+  `Frobenius::basic_interpret` are now measured redundant** — with rule 3 gone,
+  letting `(0, 0)` recurse leaves `cargo test -p catgraph` green. They are kept
+  so the bubble does not depend on the layer simplifier; expect cargo-mutants
+  to score their deletion MISSED, and read that as accurate.
+
+### Tests (#350)
+
+- **Six pins re-pointed, none deleted** — each was *about* the collapse, and
+  each inverts. `frobenius::operations::test::test_unit_counit_cancel` became
+  `test_unit_counit_does_not_cancel` (and absorbed the now-vacuous
+  `test_unit_counit_no_cancel_different_labels`);
+  `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions` became
+  `scalar_bubbles_survive_in_both_directions`, carrying the soundness *and*
+  completeness witnesses the old docs listed as failures;
+  `tests/frobenius_axioms.rs::frobenius_scalar_loop_is_erased_before_interpretation`
+  became `frobenius_scalar_loop_survives_to_interpretation`, where the two
+  routes now agree at `(1, 1)`; `tests/frobenius_laws.rs::unit_counit_scalar`
+  pins depth 2 and presentation equality with the factory's `(0, 0)` spider;
+  `tests/equivalence.rs::lemma_4_9_cospan_to_name_on_a_non_identity_morphism`
+  moves from depth 3 to 4; and
+  `tests/hypergraph_functor.rs::ctf_single_apex_cospan_round_trips_up_to_canonical_form`
+  **lifted its `(0,0)` exclusion** — all 25 single-apex cospans round-trip.
+- **Three pins stopped being vacuous**, and were sharpened to say so.
+  `test_unit_counit_cancel_via_compose` asserted only the `[] → []` boundary,
+  true under either theory, and stayed green with rule 3 disabled; it is now
+  `test_unit_counit_scalar_survives_compose` with a depth assertion.
+  `cospan_algebra::tests::cospan_to_frobenius_unhit_apex_node_is_total`
+  documented a known gap — it could not tell the #285 guard's route from the
+  old fast path, because rule 3 erased the difference; it is now
+  `cospan_to_frobenius_unhit_apex_node_keeps_the_bubble` and **reverting the
+  #285 guard reddens it** (measured: depth 1 against 2), so the gap is closed.
+  `tests/spider_theorem.rs::spider_0_0_via_eta_epsilon` compared two empty
+  terms and now compares two real two-layer ones (no assertion changed).
+- **`cospan_frobenius_cospan_round_trips` gained its two scalar cases** — a
+  bare bubble and `id_a` beside a bubble — which were excluded as unreachable
+  before.
+- **Falsified.** Restoring rule 3 and nothing else reddens all nine tests
+  above; the measured pre-#350 values are in each assertion message
+  (`depth 1` where 2 is wanted, `(0, 0)` where `(1, 1)` is, `apex 0` where the
+  original cospan has 1, and the two `0 → 0` cospans sharing one empty term).
+- **`tests/spider_theorem.rs` is unchanged in its assertions**: its `m = n = 0`
+  and component-closing exclusions stand, and lifting them is the #288
+  follow-up rather than part of this change.
+
 ### Tests (#343: the `CospanCanon` iff proptest now reaches the bubble dimension)
 
 - **`arb_cospan_and_perturbation` gained a third arm that changes the apex

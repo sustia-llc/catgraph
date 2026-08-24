@@ -12,8 +12,9 @@
 //! and `(2,1)`.
 //!
 //! **They do not verify Thm 6.55.** `FrobeniusMorphism`'s `Eq` is syntactic up
-//! to `two_layer_simplify`'s four rewrite rules (identity drop, σ;σ cancel,
-//! η;ε cancel, `Spider`;`Spider` fusion) — it is *not* the Frobenius quotient,
+//! to `two_layer_simplify`'s three rewrite rules (identity drop, σ;σ cancel,
+//! `Spider`;`Spider` fusion — the η;ε cancellation went at #350) — it is *not*
+//! the Frobenius quotient,
 //! so it cannot express "equals the spider" for a diagram the builder did not
 //! itself build. Measured on `d6c7bd5`: `(δ ⊗ id);(id ⊗ μ)`, `σ;μ;δ`,
 //! `(μ ⊗ id);(δ ⊗ id);(id ⊗ μ)`, `(δ ⊗ id);(id ⊗ σ);(μ ⊗ id)`, `(η ⊗ id);μ`
@@ -133,16 +134,21 @@
 //!   ([`MEASURED_EMPTY_RECIPES`]) and asserted to be exactly that shape, but no
 //!   claim test ranges over it.
 //!
-//! The first two sit on the *special* vs *extra-special* line, which is owned by nobody
-//! here and is not this file's to decide: `two_layer_simplify`'s rule 3 cancels
-//! `η;ε` outright (the extra-special axiom) while `Cospan` is the **special**
-//! theory, in which a closed bubble is a genuine `0 → 0` scalar. Measured on
-//! `d6c7bd5`: `(η ⊗ id);(id ⊗ id);(ε ⊗ id)` normalises to a depth-1 term with
-//! the bubble gone, whose canonical form is `apex_len = 1, scalars = 0`.
-//! Excluding the shape keeps this file out of that decision. Both tests
-//! additionally assert `scalar_count() == 0` on every term they *do* range
-//! over, so a surviving scalar class reddens the pin rather than being quietly
-//! absorbed.
+//! The first two sat on the *special* vs *extra-special* line, which this file
+//! deliberately stayed out of: `two_layer_simplify`'s rule 3 cancelled `η;ε`
+//! outright (the extra-special axiom) while `Cospan` is the **special** theory,
+//! in which a closed bubble is a genuine `0 → 0` scalar. Measured on `d6c7bd5`,
+//! before the rule was deleted: `(η ⊗ id);(id ⊗ id);(ε ⊗ id)` normalised to a
+//! depth-1 term with the bubble gone, whose canonical form is
+//! `apex_len = 1, scalars = 0`.
+//!
+//! **That line was decided at #350** — rule 3 is gone and `FrobeniusMorphism`
+//! is the special theory, so a closed component now keeps its scalar on both
+//! sides. Lifting these two exclusions is therefore possible and is tracked as
+//! a follow-up (#288); it is **not** done here, and the exclusions below stand
+//! exactly as they were. Both tests additionally assert `scalar_count() == 0`
+//! on every term they *do* range over, so a surviving scalar class reddens the
+//! pin rather than being quietly absorbed.
 //!
 //! ## What the corpus is, and what it is not
 //!
@@ -288,12 +294,15 @@ fn spider_1_3_via_double_delta() {
 ///
 /// The builder's `(0, 0)` arm is `sfm(0,1);sfm(1,0)` = `η;ε`.
 ///
-/// **Space:** one term, one arity, one label, at `char`/`String`. Note the
-/// asymmetry this pins and does not resolve: at the *term* level
-/// `two_layer_simplify` cancels `η;ε` (the extra-special axiom), so both sides
-/// here are the empty term; at the *cospan* level the same diagram is a
-/// non-identity scalar. That is why `(0, 0)` is excluded from
-/// [`connected_diagrams_denote_the_spider_in_cospan`] — see the module header.
+/// **Space:** one term, one arity, one label, at `char`/`String`.
+///
+/// ⚠ This assertion was **vacuous until #350**: `two_layer_simplify` cancelled
+/// `η;ε` (the extra-special axiom), so both sides were the empty term and the
+/// comparison held for a reason that had nothing to do with the builder. With
+/// rule 3 deleted both sides are two-layer terms and the equality is a real
+/// shape comparison. `(0, 0)` remains excluded from
+/// [`connected_diagrams_denote_the_spider_in_cospan`] — lifting that exclusion
+/// is the #288 follow-up, not this file's business here; see the module header.
 #[test]
 fn spider_0_0_via_eta_epsilon() {
     let z = 'z';
@@ -1665,9 +1674,11 @@ const MEASURED_EMPTY_RECIPES: usize = 47;
 /// It also pins that the **excluded** arms are non-empty: terms whose recipe
 /// closes a component do exist in the corpus, and so do component-free empty
 /// recipes, so the exclusions documented in the module header are clauses about
-/// something. Almost nothing is asserted *about* the closed terms — deciding
-/// whether a closed bubble survives is the special vs extra-special question
-/// this file deliberately does not answer. The empty ones are pinned to be
+/// something. Almost nothing is asserted *about* the closed terms — the
+/// special vs extra-special question was answered elsewhere (#350: the closed
+/// bubble survives), and widening this file's claims onto those terms is the
+/// #288 follow-up rather than something this census does. The empty ones are
+/// pinned to be
 /// exactly the empty term (`[] → []`, depth 0), which is the whole of what
 /// "no component at all" can mean.
 ///

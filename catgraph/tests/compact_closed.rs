@@ -30,26 +30,23 @@ type FM = FrobeniusMorphism<char, String>;
 // `Cospan`, the theory of special commutative Frobenius monoids (F&S 2019
 // Prop 3.8), and `canonical_form` decides isomorphism there.
 //
-// ⚠ **Incomparable with SCFM on scalars — neither direction is exact.** The
-// layer simplifier cancels `η;ε` (the *extra-special* axiom, which `Cospan` does
-// not satisfy), and that single fact breaks both directions. *Not complete:* a
-// spelled `η;ε` and `FM::identity(&vec![])` get the same image and are not
-// SCFM-equal. *Not sound:* that same spelled `η;ε` and `Spider('a', 0, 0)` —
-// which `generator_to_cospan` builds directly as the bubble — are SCFM-equal
-// with different images. Both measured and pinned in
-// `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions` and
-// `::scfm_equal_scalars_have_equal_images`.
+// ⚠ **The scalar gap this header used to describe is closed (#350).** The layer
+// simplifier carried a rule cancelling `η;ε` — the *extra-special* axiom, which
+// `Cospan` does not satisfy — and that single fact broke both directions of
+// exactness against SCFM: a spelled `η;ε` shared its image with
+// `FM::identity(&vec![])` though the two are not SCFM-equal (*not complete*),
+// and differed from `Spider('a', 0, 0)` though those two are (*not sound*).
+// The rule was deleted at #350 and both witnesses now come out the other way,
+// measured in `cospan_algebra::tests::scalar_bubbles_survive_in_both_directions`
+// and `::scfm_equal_scalars_have_equal_images`.
 //
-// The pins below are sound anyway, for a narrower reason than "SCFM-equal ⟹
-// equal images": none of them ranges over a term carrying a boundary-adjacent
-// `η;ε`, which is the only shape the gap touches.
+// The pins below never depended on that repair: none of them ranges over a term
+// carrying a boundary-adjacent `η;ε`, which was the only shape the gap touched.
 //
-// Consequence for everything below: `assert_same_cospan` is blind to precisely
-// the scalars the layer simplifier removes *before* `frobenius_to_cospan` sees
-// them — an `η(z);ε(z)` pair at a layer boundary. `CospanCanon` itself counts
-// bubbles (`scalar_count`), so a scalar that survives simplification IS caught;
-// what these pins cannot see is a regression whose only effect is to add or
-// drop an adjacent `η;ε`. What they do catch is any change to a term's
+// Consequence for everything below: `assert_same_cospan` compares apex classes
+// and bubble counts (`CospanCanon::scalar_count`), so a scalar reaching
+// `frobenius_to_cospan` IS caught — which, since #350, is every scalar the term
+// spells. What these pins do catch above all is any change to a term's
 // boundary-to-apex connectivity — which is what the audit's two measured
 // vacuity modes (discard-inputs/create-outputs junk, and dropping `f̂`/`ĝ` for
 // bare units) both are.
@@ -829,9 +826,10 @@ fn cup_cap_tensor_are_the_bent_identity() {
 /// are `id_I ; id_I` and nothing about cup/cap connectivity can fail there.
 /// The law itself is exercised at lengths 1–3.
 /// Specialness itself (`δ;μ = id`) is pinned in `frobenius_laws.rs`; this test
-/// claims only that the two zigzags reduce. A bubble that survives the layer
-/// simplifier *is* caught here, since it changes the apex size; an adjacent
-/// `η;ε` the simplifier cancels first is not — see the header.
+/// claims only that the two zigzags reduce. A bubble reaching
+/// `frobenius_to_cospan` *is* caught here, since it changes the apex size —
+/// and since #350 the simplifier no longer removes any before it gets there
+/// (see the header).
 #[test]
 fn zigzag_snakes_reduce_to_the_identity() {
     for types in [
