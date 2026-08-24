@@ -73,7 +73,10 @@
 //!   `Composable::compose` does differently from the wrapped value. Its own
 //!   contribution is
 //!   [`corel_battery_composites_stay_jointly_surjective`], the one claim
-//!   `Cospan` cannot make.
+//!   `Cospan` cannot make — though since #351 that claim reaches the battery's
+//!   **generators** and `monoidal`, not its composites, which `compose` now
+//!   re-establishes by construction. That test's docstring carries the
+//!   measurement.
 //! - [`CospanAlgebraMorphism`] over [`PartitionAlgebra`] — the same, **after
 //!   discarding scalar (bubble) classes**, because five of the eleven fail on
 //!   the nose: `multiplication_in` and `comultiplication_in` build their
@@ -429,9 +432,21 @@ fn corel_recomputes_the_cospan_battery() {
 /// `Corel::new` would have rejected.
 ///
 /// This is the one assertion in the file that `Cospan` cannot make, and so the
-/// one that earns `Corel` a row: `Corel::compose` and `Corel::monoidal` both go
-/// through `new_unchecked`, so nothing else in the crate would notice if a
-/// composite left the subcategory.
+/// one that earns `Corel` a row.
+///
+/// ⚠ **Its reach shrank at
+/// [#351](https://github.com/sustia-llc/catgraph/issues/351), and the previous
+/// wording is now inverted.** It used to read "`Corel::compose` and
+/// `Corel::monoidal` both go through `new_unchecked`, so nothing else in the
+/// crate would notice if a composite left the subcategory." `compose` no longer
+/// goes through `new_unchecked` — it ends in `from_cospan_dropping_bubbles`,
+/// which re-establishes joint surjectivity by construction, so a *composite*
+/// **cannot** leave the subcategory and this test cannot fail on one. Measured:
+/// with the bubble-drop short-circuited to a no-op the whole file still passes.
+/// What it still pins is the battery's **generators** — `unit` / `counit` /
+/// `multiplication` / `comultiplication` / `cup` / `cap` are hand-written
+/// `new_unchecked(Cospan::…)` literals with nothing re-establishing the
+/// invariant — and `monoidal`, which still goes through `new_unchecked`.
 #[test]
 fn corel_battery_composites_stay_jointly_surjective() {
     for (name, lhs, rhs) in equations::<Corel<char>>(Z) {

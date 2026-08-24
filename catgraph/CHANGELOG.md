@@ -233,10 +233,14 @@ All notable changes to `catgraph` are documented here. The format follows
   **5 048** have step (iii) firing somewhere — that last count is asserted
   non-zero, so the sweep cannot pass by being about the raw pushout. The 456 are
   the same `perform_pushout` apex-numbering artefact recorded above and not a
-  second phenomenon, and the test **asserts** that rather than claiming it in
-  prose: **456 of 456** carry an identity fast-path asymmetry between the two
+  second phenomenon, and the **correlate** of that is asserted rather than left
+  in prose: **456 of 456** carry an identity fast-path asymmetry between the two
   associations (**120** of them at the outer composition only — printed, not
-  asserted, since that split moves with the corpus).
+  asserted, since that split moves with the corpus). ⚠ Necessary, not
+  sufficient, and therefore not a proof of the diagnosis: **7 828** of the
+  14 473 triples carry the asymmetry while only 456 mismatch, so a second cause
+  confined to asymmetric triples would satisfy the assertion unchanged. That
+  denominator is printed so the gap is visible rather than inferable.
   Measured for context and **not** asserted, being a property of the retired
   composition: the pre-#351 pushout has 0 mismatches up to apex isomorphism and
   **512** structural ones on the same corpus, so #351 left associativity intact
@@ -255,12 +259,16 @@ All notable changes to `catgraph` are documented here. The format follows
   `corel_hypergraph_category.rs::left_unitality_via_cospan_delegation` — whose
   body routes through the one call that stopped delegating — were all false or
   stale as written. All corrected in place; the test is renamed
-  `left_unitality_arities_and_joint_surjectivity`. ⚠ No count is claimed here:
-  the first sweep found five sites and a later review found a sixth, so a
-  number would assert a completeness this was not able to establish. The check
-  that found them is `rg -i delegat` across the workspace, filtered to `Corel`;
-  every other hit is about `PetriNet`, `NamedCospan`, `DecoratedCospan` or
-  `MatKron`, which still delegate and are unaffected.
+  `left_unitality_arities`. ⚠ **No count and no completeness is claimed here.**
+  The first sweep found five sites, a second review found a sixth, and a third
+  found a seventh: `tests/frobenius_axioms.rs`'s
+  `corel_battery_composites_stay_jointly_surjective`, whose "both go through
+  `new_unchecked`" rationale #351 **inverts** — a composite can no longer leave
+  the subcategory, so that test now reaches the battery's generators and
+  `monoidal` rather than its composites. `rg -i delegat` found the first six and
+  is **not** a sufficient check: the seventh contains no form of the word. Any
+  claim about `Corel` delegating, in any wording, is suspect until read against
+  `src/corel.rs`.
 - ⚠ **`corel_recomputes_the_cospan_battery` is a sound-but-narrow pin, and its
   own docstring named the trigger it cannot see.** It claimed to be "written to
   go red if that ever stops being true — a `Corel` that overrides any of those

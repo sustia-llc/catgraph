@@ -845,13 +845,21 @@ fn quotient_functoriality_is_not_structural() {
 ///   not a weaker claim standing in for one that would have held on the nose.
 ///   That residual is the same `perform_pushout` apex-numbering artefact
 ///   [`quotient_functoriality_is_not_structural`] characterises, not a second
-///   phenomenon — and that is **asserted**, not asserted-in-prose: all **456
-///   of 456** carry an identity fast-path asymmetry between the two
-///   associations, where the fast path fires for one association's composition
-///   and not the other's. Of those, **120** have the asymmetry at the outer
-///   composition only (`(a;b);c` vs `a;(b;c)`) and not at the inner one; that
-///   split is printed rather than asserted, since it would move with a corpus
-///   retune while the 456-of-456 claim is the one the docstring above makes.
+///   phenomenon — and the **correlate** of that diagnosis is asserted rather
+///   than left in prose: all **456 of 456** carry an identity fast-path
+///   asymmetry between the two associations, where the fast path fires for one
+///   association's composition and not the other's. Of those, **120** have the
+///   asymmetry at the outer composition only (`(a;b);c` vs `a;(b;c)`) and not
+///   at the inner one; that split is printed rather than asserted, since it
+///   would move with a corpus retune while the 456-of-456 claim is the one the
+///   docstring above makes.
+///
+///   ⚠ **That is a necessary condition, not a proof.** The asymmetry holds on
+///   far more triples than mismatch (printed below), so a *second* cause
+///   confined to asymmetric triples would satisfy the assertion unchanged. It
+///   pins the correlation; the diagnosis rests on
+///   [`quotient_functoriality_is_not_structural`]'s analysis, which carries the
+///   same hedge.
 ///
 /// **Narrow-pin question.** The claim ranges over associativity of `Corel`
 /// composition; the assertions touch triples of jointly-surjective cospans with
@@ -860,8 +868,10 @@ fn quotient_functoriality_is_not_structural() {
 /// associativity **verdict** is decided on `canonical_form`s, never on
 /// structural equality, deliberately: a structural verdict would be red on the
 /// 456 triples counted below and would pin the artefact rather than the law.
-/// `as_cospan()` *is* used here, but only to count that residual — never to
-/// decide whether associativity holds.
+/// *Structural* (`==`) comparison of `as_cospan()` appears only where the
+/// residual is counted; the verdict compares its `canonical_form`. (`as_cospan()`
+/// itself is used throughout — it is the only way to reach the wrapped value —
+/// so "never `as_cospan()`" would be, and in one earlier revision was, false.)
 ///
 /// **Context, printed rather than asserted:** the pre-#351 composition (the raw
 /// pushout, no restriction) has 0 mismatches up to apex isomorphism and 512
@@ -872,6 +882,14 @@ fn quotient_functoriality_is_not_structural() {
 fn new_composition_is_associative_up_to_apex_isomorphism() {
     /// Does `perform_pushout`'s identity fast path fire for this composition?
     /// Same predicate [`quotient_functoriality_is_not_structural`] uses.
+    ///
+    /// ⚠ **Locally recomputed, not observed.** The crate's `leg_is_identity` is
+    /// private, so this is a copy of it; a rewrite of the crate's version would
+    /// not redden anything here, and the assertion below would go on reporting
+    /// "an identity fast-path asymmetry" about a predicate the crate no longer
+    /// uses. `cospan.rs` records four writers dropping the `len() == apex`
+    /// conjunct from this exact predicate, so the divergence is a live hazard
+    /// rather than a theoretical one.
     fn fast_path(left: &Cospan<char>, right: &Cospan<char>) -> bool {
         fn leg_is_identity(leg: &[usize], apex: usize) -> bool {
             leg.len() == apex && leg.iter().enumerate().all(|(i, &v)| v == i)
@@ -891,6 +909,10 @@ fn new_composition_is_associative_up_to_apex_isomorphism() {
     let mut triples_where_the_restriction_fired = 0usize;
     let mut structural_with_a_fast_path_asymmetry = 0usize;
     let mut structural_with_an_outer_asymmetry_only = 0usize;
+    // The denominator that makes 456-of-456 meaningful: how often the
+    // asymmetry holds at all. Without it a reader cannot tell a discriminating
+    // predicate from a near-universal one.
+    let mut triples_with_a_fast_path_asymmetry = 0usize;
 
     for a in &corels {
         for b in &corels {
@@ -938,6 +960,12 @@ fn new_composition_is_associative_up_to_apex_isomorphism() {
                 if lhs.as_cospan().canonical_form() != rhs.as_cospan().canonical_form() {
                     iso_mismatches += 1;
                 }
+                if fast_path(ab.as_cospan(), c) != fast_path(a, bc.as_cospan())
+                    || fast_path(a, b) != fast_path(b, c)
+                {
+                    triples_with_a_fast_path_asymmetry += 1;
+                }
+
                 if lhs.as_cospan() != rhs.as_cospan() {
                     structural_mismatches += 1;
                     // The two associations run different compositions: LHS
@@ -988,6 +1016,8 @@ fn new_composition_is_associative_up_to_apex_isomorphism() {
         "{triples} composable triples: {iso_mismatches} differ up to apex isomorphism, \
          {structural_mismatches} differ structurally ({structural_with_a_fast_path_asymmetry} \
          with a fast-path asymmetry, {structural_with_an_outer_asymmetry_only} at the outer \
-         composition only), {triples_where_the_restriction_fired} have step (iii) firing somewhere"
+         composition only), {triples_where_the_restriction_fired} have step (iii) firing \
+         somewhere, and {triples_with_a_fast_path_asymmetry} of {triples} carry the asymmetry at \
+         all — so it is necessary for a structural mismatch and far from sufficient"
     );
 }
