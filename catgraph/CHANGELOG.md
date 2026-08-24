@@ -61,15 +61,24 @@ All notable changes to `catgraph` are documented here. The format follows
   differing by one or more added scalar `ApexClass`. Distinct canonical forms
   go **172 → 175** over the 300 random terms and **209 → 212** over the whole
   space; that **+3 is the net change in distinct forms, not the number of terms
-  that moved** — eleven terms collapsing onto eight already-present forms is
-  why the two numbers differ. Both counts are floors in the pin, so it stayed
+  that moved**. Measured decomposition, each figure taken from the two trees
+  rather than derived from the others: the 289 unmoved random terms carry **169**
+  distinct forms; the eleven movers' old images were **9** distinct, **3** of
+  them carried by no unmoved term, so those 3 vanish (169 + 3 = 172); their new
+  images are **9** distinct, **3** already carried by an unmoved term, so **6**
+  are added (169 + 6 = 175). Whole-space the structure is identical from **206**
+  unmoved distinct forms. Both counts are floors in the pin, so it stayed
   green while its recorded figures went stale; the docstring figures and the
   assertion messages are updated. The count of random terms whose image has a
   `0 → 0` **boundary** is unchanged at **46**: rule 3 never changed which terms
   denote a scalar in that sense, only how many of those scalars are told apart
   (4 distinct scalar-shaped forms before, 6 now). ⚠ Under the *other* reading —
-  "carries a bubble" — it did change: `random_118`, `random_230` and
-  `random_263` go from `classes: []` to bubble-bearing while staying `0 → 0`.
+  "carries a bubble" — it did change: random terms carrying at least one scalar
+  class go **64 → 71**, i.e. **seven** newly carry one (`random_11`, `_118`,
+  `_124`, `_159`, `_217`, `_230`, `_263`; the remaining four movers `_30`,
+  `_63`, `_140`, `_271` already carried one and gained another). Of those
+  seven, three — `_118`, `_230`, `_263` — are the ones that also stay `0 → 0`,
+  going from `classes: []` to bubble-bearing.
 
 ### Tests (#350)
 
@@ -119,7 +128,7 @@ All notable changes to `catgraph` are documented here. The format follows
   move together under either theory — which is why the bullet above records "no
   assertion changed" for it.
 - **`tests/spider_theorem.rs` is unchanged in its assertions**: its `m = n = 0`
-  and component-closing exclusions stand, and lifting them is the #288
+  and component-closing exclusions stand, and lifting them is the [#353]
   follow-up rather than part of this change.
 
 ### Tests (#343: the `CospanCanon` iff proptest now reaches the bubble dimension)

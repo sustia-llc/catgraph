@@ -118,10 +118,20 @@ const SPACE_SIZE: usize = 83 + RANDOM_TERMS;
 /// term-by-term, **eleven** random terms changed image at #350 (`random_11`,
 /// `_30`, `_63`, `_118`, `_124`, `_140`, `_159`, `_217`, `_230`, `_263`,
 /// `_271`), each gaining one or more scalar `ApexClass` because the `η;ε` it
-/// carries is no longer cancelled at compose time; eight of them landed on
-/// forms already in the set. The floor sits a little below that so an
-/// incidental reshuffle of the draw does not red the pin, while a collapse
-/// cannot pass.
+/// carries is no longer cancelled at compose time.
+///
+/// The +3 decomposes as follows, every figure measured on the two trees rather
+/// than derived from the others: the **289 unmoved** random terms carry **169**
+/// distinct forms on both sides. The eleven movers' *old* images were **9**
+/// distinct, **3** of which no unmoved term also carried — those 3 vanish
+/// (169 + 3 = 172). Their *new* images are likewise **9** distinct, **3** of
+/// them already carried by an unmoved term, so **6** are added
+/// (169 + 6 = 175). Net −3 + 6 = **+3**. Whole-space the structure is
+/// identical, measured the same way: **206** unmoved distinct forms, the same
+/// 3 vanishing and 6 added (206 + 3 = 209, 206 + 6 = 212).
+///
+/// The floor sits a little below the measured value so an incidental reshuffle
+/// of the draw does not red the pin, while a collapse cannot pass.
 const MIN_RANDOM_DISTINCT: usize = 150;
 
 /// Floor on the number of distinct canonical forms over the **whole** space.
@@ -536,8 +546,10 @@ fn space() -> Vec<(String, FM)> {
 /// random ones; of the 300 random *terms*, 46 have scalar (`0 → 0`) images,
 /// spread over 6 distinct scalar-shaped forms. (Before #350: 209 and 172, the
 /// same 46 terms, 4 distinct forms — the term count is unchanged because
-/// deleting rule 3 does not change *which* terms denote a scalar, only how
-/// many of those scalars are told apart.)
+/// deleting rule 3 does not change which terms have a `0 → 0` **boundary**,
+/// only how many of those scalars are told apart. ⚠ That holds for *this*
+/// sentence's `0 → 0` reading of "scalar" and no other: under the "carries a
+/// scalar `ApexClass`" reading the count does move, 64 → 71 random terms.)
 /// The count alone would not notice that collapsing, so
 /// [`MIN_RANDOM_DISTINCT`] and [`MIN_TOTAL_DISTINCT`] are asserted beside
 /// [`SPACE_SIZE`].
