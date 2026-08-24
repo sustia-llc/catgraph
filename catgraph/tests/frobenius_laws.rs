@@ -183,12 +183,15 @@ fn spider_fusion() {
 /// identity(&[])` assertion are never reached, and quoting them as "red" would
 /// over-claim.
 ///
-/// ⚠ Not every assertion below is rule-3-dependent. The four opening
-/// `unit`/`counit` boundary assertions read bare generators, `scalar.domain()`
-/// and `scalar.codomain()` are `[] → []` under either theory (an emptied term
-/// has empty interfaces too), and the closing `scalar_via_factory == scalar`
-/// stays green because restoration collapses both sides together. Those are
-/// fixtures, not claims about rule 3.
+/// ⚠ Not every assertion below is rule-3-dependent — the full list of the ones
+/// that are not: the four opening `unit`/`counit` boundary assertions (they read
+/// bare generators); `scalar.domain()` and `scalar.codomain()`, which are
+/// `[] → []` under either theory because an emptied term has empty interfaces
+/// too; `scalar_via_factory.domain()` and `scalar_via_factory.codomain()`, for
+/// the same reason; and the closing `scalar_via_factory == scalar`, which stays
+/// green because restoration collapses both sides together. Those are fixtures,
+/// not claims about rule 3. Only the two `depth() == 2` assertions and the
+/// `!= identity(&[])` one carry the claim.
 #[test]
 fn unit_counit_scalar() {
     let unit: FM = FrobeniusOperation::Unit('z').into();

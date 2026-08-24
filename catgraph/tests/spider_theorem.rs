@@ -71,7 +71,7 @@
 //! #350 closed that gap — `two_layer_simplify`'s rule 3 is gone, both witnesses
 //! are now pinned the other way up, and the rustdoc says so. The exclusions
 //! therefore outlived their cause; lifting them is possible and tracked as
-//! #288, and is **not** done here (see "Excluded by design" below, which states
+//! #353, and is **not** done here (see "Excluded by design" below, which states
 //! the same thing at the point the exclusions are listed). Every term this file
 //! does range over is additionally asserted to carry no scalar class at all.
 //!
@@ -149,7 +149,7 @@
 //! **That line was decided at #350** — rule 3 is gone and `FrobeniusMorphism`
 //! is the special theory, so a closed component now keeps its scalar on both
 //! sides. Lifting these two exclusions is therefore possible and is tracked as
-//! a follow-up (#288); it is **not** done here, and the exclusions below stand
+//! a follow-up (#353); it is **not** done here, and the exclusions below stand
 //! exactly as they were. Both tests additionally assert `scalar_count() == 0`
 //! on every term they *do* range over, so a surviving scalar class reddens the
 //! pin rather than being quietly absorbed.
@@ -306,7 +306,7 @@ fn spider_1_3_via_double_delta() {
 /// rule 3 deleted both sides are two-layer terms and the equality is a real
 /// shape comparison. `(0, 0)` remains excluded from
 /// [`connected_diagrams_denote_the_spider_in_cospan`] — lifting that exclusion
-/// is the #288 follow-up, not this file's business here; see the module header.
+/// is the #353 follow-up, not this file's business here; see the module header.
 #[test]
 fn spider_0_0_via_eta_epsilon() {
     let z = 'z';
@@ -1681,7 +1681,7 @@ const MEASURED_EMPTY_RECIPES: usize = 47;
 /// something. Almost nothing is asserted *about* the closed terms — the
 /// special vs extra-special question was answered elsewhere (#350: the closed
 /// bubble survives), and widening this file's claims onto those terms is the
-/// #288 follow-up rather than something this census does. The empty ones are
+/// #353 follow-up rather than something this census does. The empty ones are
 /// pinned to be
 /// exactly the empty term (`[] → []`, depth 0), which is the whole of what
 /// "no component at all" can mean.

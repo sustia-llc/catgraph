@@ -54,14 +54,22 @@ All notable changes to `catgraph` are documented here. The format follows
   redundancy retires a falsification row: dropping `generator_to_cospan`'s
   carve-out used to redden **48 of 383** terms in `frobenius::to_cospan_pin`
   and now reddens **0** (measured control and treatment).
-- **Three terms in `to_cospan_pin`'s 383-term space now denote different
+- **Eleven terms in `to_cospan_pin`'s 383-term space now denote different
   cospans**, because the `η;ε` they carry is no longer cancelled at compose
-  time: distinct canonical forms go **172 → 175** over the 300 random terms and
-  **209 → 212** over the whole space. Both are floors in the pin, so it stayed
-  green while its recorded figures went stale; the figures are updated. The
-  count of random *terms* with scalar images is unchanged at **46** — rule 3
-  never changed *which* terms denote a scalar, only how many of those scalars
-  were told apart (4 distinct scalar-shaped forms before, 6 now).
+  time — measured term-by-term, control and treatment: `random_11`, `_30`,
+  `_63`, `_118`, `_124`, `_140`, `_159`, `_217`, `_230`, `_263`, `_271`, each
+  differing by one or more added scalar `ApexClass`. Distinct canonical forms
+  go **172 → 175** over the 300 random terms and **209 → 212** over the whole
+  space; that **+3 is the net change in distinct forms, not the number of terms
+  that moved** — eleven terms collapsing onto eight already-present forms is
+  why the two numbers differ. Both counts are floors in the pin, so it stayed
+  green while its recorded figures went stale; the docstring figures and the
+  assertion messages are updated. The count of random terms whose image has a
+  `0 → 0` **boundary** is unchanged at **46**: rule 3 never changed which terms
+  denote a scalar in that sense, only how many of those scalars are told apart
+  (4 distinct scalar-shaped forms before, 6 now). ⚠ Under the *other* reading —
+  "carries a bubble" — it did change: `random_118`, `random_230` and
+  `random_263` go from `classes: []` to bubble-bearing while staying `0 → 0`.
 
 ### Tests (#350)
 
@@ -308,7 +316,7 @@ All notable changes to `catgraph` are documented here. The format follows
     decide; 62 corpus terms fall in that arm. **That line was decided within this
     same release by [#350]** (rule 3 deleted; the carrier is the special theory),
     so the first two exclusions have outlived their cause — lifting them is
-    tracked as [#288] and they stand unchanged until then. The third is the empty term
+    tracked as [#353] and they stand unchanged until then. The third is the empty term
     (`[] → []`, depth 0), produced 47 times by walks that started at width 0 and
     never drew an η: on it `apex_len() == components` reads `0 == 0`, true and
     vacuous, and `apex_len() > 1` is simply false, so admitting it would make the
@@ -748,10 +756,12 @@ All notable changes to `catgraph` are documented here. The format follows
     `frobenius::to_cospan_pin::black_boxes_are_rejected_by_both`.
 
   The two docstrings were merged into the survivor, keeping every measured
-  claim: the blockwise-tensor/pushout-composite description and the Def 2.5
-  decision-procedure paragraph from #283, the Prop 3.8 licensing and the
-  incomparable-on-scalars analysis with both witnesses from #284. Both test sets
-  stay; neither is weakened. The README's two Feature Map rows for Prop 3.8
+  claim *as of this entry*: the blockwise-tensor/pushout-composite description
+  and the Def 2.5 decision-procedure paragraph from #283, the Prop 3.8 licensing
+  and the incomparable-on-scalars analysis with both witnesses from #284. ⚠ The
+  last of those was **inverted later in this same release by [#350]** — both
+  witnesses are now pinned the other way up — so the merged docstring no longer
+  carries it. Both test sets stay; neither is weakened. The README's two Feature Map rows for Prop 3.8
   collapse into one.
 
 ### Added
@@ -806,8 +816,9 @@ All notable changes to `catgraph` are documented here. The format follows
 - **`Frobenius::basic_interpret`'s default interpreted the bubble
   `Spider(z, 0, 0)` as `id_I`** ([#284]). Its `Spider` arm recursed into
   `special_frobenius_morphism(0, 0, z)`, which returns the **simplified** term —
-  `two_layer_simplify`'s rule 3, the *extra-special* axiom, has already cancelled
-  the `η;ε` — and `interpret_frob`ed the emptied result to `Self::identity(&[])`.
+  `two_layer_simplify`'s rule 3, the *extra-special* axiom, had already cancelled
+  the `η;ε` (rule 3 was deleted later in this same release by [#350]) — and
+  `interpret_frob`ed the emptied result to `Self::identity(&[])`.
   This is the same soundness break fixed in `generator_to_cospan` — see the
   final bullet under "Known discrepancy — scalars (bubbles)" below — on the
   other side of the twin: with only the `Cospan` side repaired, the two
@@ -823,8 +834,12 @@ All notable changes to `catgraph` are documented here. The format follows
   `frobenius::trait_impl::tests::basic_interpret_default_spider_zero_zero_is_the_bubble`.
   The pin needs a **`Cospan`-backed** probe implementor (`CospanBacked`), added
   in that test module beside the existing `Defaulting`: a `FrobeniusMorphism`-
-  backed implementor is structurally incapable of observing the fix, because its
-  carrier quotients by rule 3 and so identifies the bubble with `id_I`. Measured
+  backed implementor ~~is structurally incapable of observing the fix, because
+  its carrier quotients by rule 3 and so identifies the bubble with `id_I`~~ —
+  **superseded within this same release by [#350]**: it *was* incapable, while
+  rule 3 lived; that carrier is the special theory too now. The pin stays on
+  `CospanBacked` regardless, since that is the carrier whose theory the `(0, 0)`
+  arm exists for. Measured
   by reverting the new arm — each assertion falsified separately: apex 0 vs 1,
   scalars 0 vs 1, and both canonical-form equalities (`classes: []` vs
   `[ApexClass { label: 'a', … }]`) against the hand-built `η;ε` and against
@@ -1078,8 +1093,8 @@ All notable changes to `catgraph` are documented here. The format follows
   generator leaves the differential assertion green, and a diversity floor beside
   the size assert is what reddens (7 distinct canonical forms over the random
   terms against **175** measured; **212** over all 383 — 172 and 209 before
-  [#350], moved by three random terms whose `η;ε` is no longer cancelled at
-  compose time). One instantiation
+  [#350]; eleven random terms changed image, for a net **+3** distinct forms).
+  One instantiation
   (`char`/`String`), and a differential claim only: both sides fold with the same
   `Cospan::compose`, so a bug in the pushout moves them together.
 

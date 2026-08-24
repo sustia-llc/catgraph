@@ -113,16 +113,21 @@ const SPACE_SIZE: usize = 83 + RANDOM_TERMS;
 /// `SPACE_SIZE` still satisfied and the differential assertion still green.
 ///
 /// Measured on the pinned seed: **175** distinct canonical forms over the 300
-/// random terms (**172** before #350 — three random terms carry an `η;ε` that
-/// is no longer cancelled at compose time, so they now denote distinct
-/// cospans). The floor sits a little below that so an incidental reshuffle
-/// of the draw does not red the pin, while a collapse cannot pass.
+/// random terms (**172** before #350). ⚠ That **+3 is the net change in
+/// distinct forms, not the number of terms that moved**: measured
+/// term-by-term, **eleven** random terms changed image at #350 (`random_11`,
+/// `_30`, `_63`, `_118`, `_124`, `_140`, `_159`, `_217`, `_230`, `_263`,
+/// `_271`), each gaining one or more scalar `ApexClass` because the `η;ε` it
+/// carries is no longer cancelled at compose time; eight of them landed on
+/// forms already in the set. The floor sits a little below that so an
+/// incidental reshuffle of the draw does not red the pin, while a collapse
+/// cannot pass.
 const MIN_RANDOM_DISTINCT: usize = 150;
 
 /// Floor on the number of distinct canonical forms over the **whole** space.
 ///
 /// Measured on the pinned seed: **212** (**209** before #350, moved by the same
-/// three terms). Same rationale as
+/// eleven terms — again a net +3, not a count of terms). Same rationale as
 /// [`MIN_RANDOM_DISTINCT`]; this one additionally notices a hand-built block
 /// (the spider grid, the Def 2.5 battery, the compact-closed terms) degenerating
 /// without its length changing.
@@ -619,15 +624,16 @@ fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
     assert!(
         random_images.len() >= MIN_RANDOM_DISTINCT,
         "the random half of the space collapsed: {} distinct canonical forms over {} random \
-         terms, floor {} (measured 172 when this pin was written)",
+         terms, floor {} (measured 175 on this tree; 172 when this pin was written, before \
+         #350 stopped cancelling η;ε)",
         random_images.len(),
         RANDOM_TERMS,
         MIN_RANDOM_DISTINCT,
     );
     assert!(
         all_images.len() >= MIN_TOTAL_DISTINCT,
-        "the space collapsed: {} distinct canonical forms over {} terms, floor {} (measured 209 \
-         when this pin was written)",
+        "the space collapsed: {} distinct canonical forms over {} terms, floor {} (measured 212 \
+         on this tree; 209 when this pin was written, before #350 stopped cancelling η;ε)",
         all_images.len(),
         terms.len(),
         MIN_TOTAL_DISTINCT,
