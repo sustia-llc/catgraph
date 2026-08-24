@@ -160,9 +160,38 @@ fn spider_fusion() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Unit-counit scalar: Unit(z);Counit(z) produces a scalar (empty morphism)
+// 4. Unit-counit scalar: Unit(z);Counit(z) is a `0 → 0` non-identity
 // ---------------------------------------------------------------------------
 
+/// `η;ε` is a scalar the presentation **keeps**: `0 → 0`, two layers.
+///
+/// Until #350 the layer simplifier cancelled the pair (the extra-special
+/// axiom), and this test asserted `depth() <= 1`. `FrobeniusMorphism` is the
+/// **special** theory now, so the bubble stays spelled; the factory
+/// `special_frobenius_morphism(0, 0, 'z')` builds the same two-layer term
+/// rather than an emptied one.
+///
+/// **Space of the claim:** the single term `η('z') ; ε('z')` and the factory's
+/// `(0, 0)` spider, at one wire type, compared on boundary, depth and (for the
+/// pair) presentation equality. It says nothing about scalars beside other
+/// blocks, nor about the interpretation into `Cospan` — `frobenius_axioms.rs`
+/// and `cospan_algebra`'s tests carry those.
+///
+/// Falsification: restoring rule 3 gives depth 1 for both terms. The **first**
+/// assertion to redden is `scalar.depth() == 2` (measured: got 1); a test aborts
+/// there, so the later `scalar_via_factory.depth() == 2` and the `!=
+/// identity(&[])` assertion are never reached, and quoting them as "red" would
+/// over-claim.
+///
+/// ⚠ Not every assertion below is rule-3-dependent — the full list of the ones
+/// that are not: the four opening `unit`/`counit` boundary assertions (they read
+/// bare generators); `scalar.domain()` and `scalar.codomain()`, which are
+/// `[] → []` under either theory because an emptied term has empty interfaces
+/// too; `scalar_via_factory.domain()` and `scalar_via_factory.codomain()`, for
+/// the same reason; and the closing `scalar_via_factory == scalar`, which stays
+/// green because restoration collapses both sides together. Those are fixtures,
+/// not claims about rule 3. Only the two `depth() == 2` assertions and the
+/// `!= identity(&[])` one carry the claim.
 #[test]
 fn unit_counit_scalar() {
     let unit: FM = FrobeniusOperation::Unit('z').into();
@@ -180,18 +209,33 @@ fn unit_counit_scalar() {
     // Result has empty domain and empty codomain
     assert_eq!(scalar.domain(), Vec::<char>::new());
     assert_eq!(scalar.codomain(), Vec::<char>::new());
-    // The unit-counit cancellation rule removes both blocks. A single
-    // (vacuous) identity layer is retained to preserve the empty interface.
-    assert!(
-        scalar.depth() <= 1,
-        "Scalar loop should simplify to at most depth 1, got {}",
+    // Both blocks survive: `ε ∘ η = id_I` is the extra-special axiom, and this
+    // carrier stopped normalizing by it at #350.
+    assert_eq!(
+        scalar.depth(),
+        2,
+        "the scalar loop must keep both layers, got depth {}, want 2 (rule 3 gave 1)",
         scalar.depth()
     );
+    assert!(
+        scalar != FM::identity(&Vec::<char>::new()),
+        "η;ε is a genuine 0→0 non-identity: {scalar:?}"
+    );
 
-    // Also check via special_frobenius_morphism(0,0,z) which builds the same thing
+    // special_frobenius_morphism(0,0,z) builds the same term, block for block.
     let scalar_via_factory: FM = special_frobenius_morphism(0, 0, 'z');
     assert_eq!(scalar_via_factory.domain(), Vec::<char>::new());
     assert_eq!(scalar_via_factory.codomain(), Vec::<char>::new());
+    assert_eq!(
+        scalar_via_factory.depth(),
+        2,
+        "the (0,0) factory spider is η;ε, got depth {}, want 2 (rule 3 gave 1)",
+        scalar_via_factory.depth()
+    );
+    assert_eq!(
+        scalar_via_factory, scalar,
+        "special_frobenius_morphism(0, 0, 'z') must be the composed η;ε"
+    );
 }
 
 // ---------------------------------------------------------------------------

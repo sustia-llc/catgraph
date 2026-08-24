@@ -449,11 +449,12 @@ fn ctf_single_apex_cospan_is_the_spider() {
 /// (fusion) and `hflip` only rewrite ones already present — so on this input
 /// space the reference side shares no code with `special_frobenius_morphism`.
 ///
-/// Scope of the claim: the 24 single-apex cospans `(m, n) ∈ {0,…,4}² \ (0,0)`
-/// over `'a'`. `(0,0)` is excluded and asserted separately: the bubble is lost
-/// on the way back (`two_layer_simplify` rule 3 cancels `η;ε`), which is the
-/// discrepancy `cospan_algebra::tests::scalar_bubbles_are_lost_in_both_directions`
-/// pins as-is.
+/// Scope of the claim: all **25** single-apex cospans `(m, n) ∈ {0,…,4}²` over
+/// `'a'`. `(0,0)` — the bubble — was excluded until #350 and asserted
+/// separately at `apex 0`, because `two_layer_simplify`'s rule 3 cancelled the
+/// `η;ε` on the way back; with that rule deleted the bubble survives and the
+/// grid is uniform. Restoring rule 3 turns the `(0,0)` iteration red (back apex
+/// 0 against the original's 1).
 ///
 /// Falsified: under the pre-#285 guard the round trip disagreed at `(2,2)`,
 /// `(3,3)` and `(4,4)` (back apex 2, 3, 4 against the original's 1).
@@ -466,15 +467,6 @@ fn ctf_single_apex_cospan_round_trips_up_to_canonical_form() {
                 .expect("single-apex cospan is well formed for every (m, n)");
             let mapped: FM = f.map_mor(&c).unwrap();
             let back = frobenius_to_cospan(&mapped).unwrap().canonical_form();
-            if (m, n) == (0, 0) {
-                assert_eq!(
-                    back.apex_len(),
-                    0,
-                    "the (0,0) bubble is expected to be lost (rule 3), got apex {}",
-                    back.apex_len()
-                );
-                continue;
-            }
             let original = c.canonical_form();
             assert_eq!(
                 back,

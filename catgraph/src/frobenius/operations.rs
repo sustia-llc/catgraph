@@ -302,15 +302,23 @@ where
     ///
     /// Returns `(self_is_identity, next_is_identity, mutations_occurred)`.
     ///
+    /// **The rule numbers have a gap, deliberately.** Rule 3 — unit/counit
+    /// cancellation, `Unit(z)` feeding directly into `Counit(z)` — was
+    /// **deleted** at #350: it is the *extra-special* axiom `ε ∘ η = id_I`,
+    /// which is not one of the nine equations of F&S 2019 Def 2.5, so
+    /// normalizing by it made `FrobeniusMorphism` a strictly smaller theory
+    /// than the [`Cospan`](crate::cospan::Cospan) semantics it is interpreted
+    /// into. The surviving rules keep the numbers they always had, so every
+    /// "Rule 4" reference in this crate's tests, CHANGELOG and audit docs still
+    /// points at spider fusion; renumbering them would have silently
+    /// invalidated that prose.
+    ///
     /// **Rule 1 — Identity elimination**: layers consisting entirely of
     /// identity blocks are flagged so the caller can drop them.
     ///
     /// **Rule 2 — Braiding cancellation**: a `SymmetricBraiding(a, b)`
     /// followed by `SymmetricBraiding(b, a)` at matching wire positions
     /// collapses to two identity wires.
-    ///
-    /// **Rule 3 — Unit/Counit cancellation**: `Unit(z)` feeding directly
-    /// into `Counit(z)` (a scalar loop) removes both blocks.
     ///
     /// **Rule 4 — Spider fusion**: `Spider(z, m, n)` followed by
     /// `Spider(z, n, k)` fuses into `Spider(z, m, k)` — **only for `n >= 1`**.
@@ -430,19 +438,6 @@ where
                             FrobeniusOperation::Identity(*b2),
                         ],
                     );
-                    self_matched[i] = true;
-                    next_matched[j] = true;
-                    continue;
-                }
-
-                // Rule 3: Unit/Counit cancellation
-                // η(z) then ε(z) → both removed (scalar loop)
-                if let FrobeniusOperation::Unit(z1) = &self_block.op
-                    && let FrobeniusOperation::Counit(z2) = &next_block.op
-                    && z1 == z2
-                {
-                    self_replacements.insert(i, vec![]);
-                    next_replacements.insert(j, vec![]);
                     self_matched[i] = true;
                     next_matched[j] = true;
                     continue;
@@ -1662,9 +1657,36 @@ mod test {
         assert!(!mutations, "non-inverse braidings should not cancel");
     }
 
+    /// `η(z)` feeding `ε(z)` is **kept**: the simplifier normalizes by the nine
+    /// equations of Def 2.5, and `ε ∘ η = id_I` is not one of them (#350).
+    ///
+    /// This is the inverse of the assertion that stood here until #350
+    /// (`test_unit_counit_cancel`, which required `mutations` and two emptied
+    /// layers). Measured: restoring rule 3 and nothing else reddens this test at
+    /// its very first assertion, `!mutations` — the rule reports `true` there.
+    /// The block-count, block-shape and `right_type`/`left_type` assertions that
+    /// follow are rule-3-dependent in the same way and carry their falsified
+    /// values in their messages: both layers were emptied to 0 blocks and `[]`
+    /// interfaces.
+    ///
+    /// ⚠ Three assertions below are *not* rule-3-dependent and stay green under
+    /// restoration: `layer1.left_type.is_empty()` and
+    /// `layer2.right_type.is_empty()` (an emptied layer has empty interfaces on
+    /// both sides, so these hold either way), and the mismatched `a`/`b` pairing
+    /// at the end, which never fired even with rule 3 live — the docstring below
+    /// says so, and it is kept as a record, not as a claim.
+    ///
+    /// **Space of the claim:** two block pairings at the layer level — one
+    /// matched-label (`z`/`z`, the pairing rule 3 used to fire on, and the only
+    /// load-bearing one) and one mismatched (`a`/`b`, which never fired even
+    /// with rule 3 live and is here only so its now-vacuous predecessor
+    /// `test_unit_counit_no_cancel_different_labels` is not silently dropped).
+    /// It ranges over `two_layer_simplify` on a single-block layer pair, not
+    /// over `compose` (see `test_unit_counit_scalar_survives_compose`) and not
+    /// over `η`/`ε` embedded beside other blocks.
     #[test]
-    fn test_unit_counit_cancel() {
-        // Unit(z) then Counit(z) → both removed (scalar loop)
+    fn test_unit_counit_does_not_cancel() {
+        // Unit(z) then Counit(z) → both blocks survive (the scalar is real).
         let mut layer1: FrobeniusLayer<char, ()> = FrobeniusLayer::new();
         layer1.append_block(FrobeniusOperation::Unit('z'));
 
@@ -1672,34 +1694,54 @@ mod test {
         layer2.append_block(FrobeniusOperation::Counit('z'));
 
         let (_, _, mutations) = layer1.two_layer_simplify(&mut layer2);
-        assert!(mutations, "unit-counit should cancel");
-
-        // Both layers should now be empty
         assert!(
-            layer1.blocks.is_empty(),
-            "self should have no blocks after unit-counit cancel"
+            !mutations,
+            "η;ε must not cancel: ε∘η = id_I is the extra-special axiom, not a \
+             Def 2.5 equation (rule 3, deleted at #350, reported `true` here)"
         );
+
+        // Both layers keep their block and their interface.
+        assert_eq!(
+            layer1.blocks.len(),
+            1,
+            "self kept {} blocks, want the η block (rule 3 emptied it)",
+            layer1.blocks.len()
+        );
+        assert_eq!(
+            layer2.blocks.len(),
+            1,
+            "next kept {} blocks, want the ε block (rule 3 emptied it)",
+            layer2.blocks.len()
+        );
+        assert!(matches!(layer1.blocks[0].op, FrobeniusOperation::Unit('z')));
+        assert!(matches!(
+            layer2.blocks[0].op,
+            FrobeniusOperation::Counit('z')
+        ));
+        assert!(layer1.left_type.is_empty(), "η has an empty domain");
+        assert_eq!(
+            layer1.right_type,
+            vec!['z'],
+            "η's codomain is the wire rule 3 used to delete (it left `[]`)"
+        );
+        assert_eq!(
+            layer2.left_type,
+            vec!['z'],
+            "ε's domain is the wire rule 3 used to delete (it left `[]`)"
+        );
+        assert!(layer2.right_type.is_empty(), "ε has an empty codomain");
+
+        // Unit('a') then Counit('b') — never matched, with or without rule 3.
+        let mut mixed1: FrobeniusLayer<char, ()> = FrobeniusLayer::new();
+        mixed1.append_block(FrobeniusOperation::Unit('a'));
+        let mut mixed2: FrobeniusLayer<char, ()> = FrobeniusLayer::new();
+        mixed2.append_block(FrobeniusOperation::Counit('b'));
+        let (_, _, mixed_mutations) = mixed1.two_layer_simplify(&mut mixed2);
         assert!(
-            layer2.blocks.is_empty(),
-            "next should have no blocks after unit-counit cancel"
+            !mixed_mutations,
+            "unit(a) and counit(b) have never cancelled; this assertion is \
+             vacuous since #350 and is kept only as the predecessor's record"
         );
-        assert!(layer1.left_type.is_empty());
-        assert!(layer1.right_type.is_empty());
-        assert!(layer2.left_type.is_empty());
-        assert!(layer2.right_type.is_empty());
-    }
-
-    #[test]
-    fn test_unit_counit_no_cancel_different_labels() {
-        // Unit('a') then Counit('b') → no cancellation (different labels)
-        let mut layer1: FrobeniusLayer<char, ()> = FrobeniusLayer::new();
-        layer1.append_block(FrobeniusOperation::Unit('a'));
-
-        let mut layer2: FrobeniusLayer<char, ()> = FrobeniusLayer::new();
-        layer2.append_block(FrobeniusOperation::Counit('b'));
-
-        let (_, _, mutations) = layer1.two_layer_simplify(&mut layer2);
-        assert!(!mutations, "unit(a) and counit(b) should not cancel");
     }
 
     #[test]
@@ -1795,10 +1837,22 @@ mod test {
         );
     }
 
-    /// Integration test: Unit then Counit through compose should produce
-    /// an empty (scalar) morphism.
+    /// Integration test: `η ; ε` through `compose` is a `0 → 0` morphism that
+    /// still **spells** the scalar — two layers, not an emptied one (#350).
+    ///
+    /// Until #350 this test asserted the boundary only, and the boundary is
+    /// `[] → []` under either theory, so it stayed green when rule 3 was
+    /// disabled — a pin that could not see the thing it was named for. The
+    /// depth assertion is the part that moves: with rule 3 restored `depth()`
+    /// is 1 (a retained vacuous identity layer); without it, 2.
+    ///
+    /// **Space of the claim:** one term, `η('z') ; ε('z')`, at one wire type,
+    /// through `ComposableMutating::compose`. It says nothing about scalars
+    /// beside other blocks — `cospan_algebra::tests` covers `id_a` beside a
+    /// bubble — and nothing about the interpretation into `Cospan`, which
+    /// `tests/frobenius_axioms.rs` covers.
     #[test]
-    fn test_unit_counit_cancel_via_compose() {
+    fn test_unit_counit_scalar_survives_compose() {
         let unit: FrobeniusMorphism<char, ()> = FrobeniusOperation::Unit('z').into();
         let counit: FrobeniusMorphism<char, ()> = FrobeniusOperation::Counit('z').into();
 
@@ -1807,6 +1861,12 @@ mod test {
 
         assert_eq!(composed.domain(), Vec::<char>::new());
         assert_eq!(composed.codomain(), Vec::<char>::new());
+        assert_eq!(
+            composed.depth(),
+            2,
+            "η;ε must keep both layers; got depth {}, want 2 (rule 3 gave 1)",
+            composed.depth()
+        );
     }
 
     // ── hflip determinism / involution (rayon-site guard, #48) ──

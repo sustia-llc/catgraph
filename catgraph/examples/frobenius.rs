@@ -189,7 +189,10 @@ fn identity_and_simplification() {
         braid1.depth()
     );
 
-    // Unit-counit cancellation: eta(z) ; epsilon(z) simplifies (scalar loop)
+    // Unit-counit: eta(z) ; epsilon(z) does NOT simplify — the scalar loop is a
+    // genuine 0 -> 0 morphism, so the composite stays at depth 2. The
+    // extra-special axiom `epsilon . eta = id_I` is not a Def 2.5 equation, and
+    // the rule that applied it was deleted at #350.
     let mut unit_counit: FrobeniusMorphism<(), ()> = FrobeniusOperation::Unit(()).into();
     let counit: FrobeniusMorphism<(), ()> = FrobeniusOperation::Counit(()).into();
     let _ = unit_counit.compose(counit);

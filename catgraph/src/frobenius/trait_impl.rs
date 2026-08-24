@@ -47,10 +47,13 @@ pub trait Frobenius<
     ///
     /// `Spider(z, 0, 0)` — the bubble `η;ε` — is special-cased in **both**
     /// twins, for the same reason: [`special_frobenius_morphism`] hands back the
-    /// *simplified* term, and the simplifier's rule 3 cancels `η;ε` under the
-    /// extra-special axiom, which the special theories these functions interpret
-    /// into do not satisfy. Recursing there would return `id_I` for a
-    /// non-identity scalar. Every other arity recurses.
+    /// *simplified* term, and the simplifier's rule 3 used to cancel `η;ε` under
+    /// the extra-special axiom, which the special theories these functions
+    /// interpret into do not satisfy, so recursing returned `id_I` for a
+    /// non-identity scalar. Rule 3 was deleted at #350 and both carve-outs are
+    /// now **measured redundant** (`cargo test -p catgraph` is green with the
+    /// `(0, 0)` arms disabled); they are kept so the bubble does not depend on
+    /// the layer simplifier. Every other arity recurses.
     ///
     /// # Errors
     ///
@@ -82,17 +85,16 @@ pub trait Frobenius<
             FrobeniusOperation::UnSpecifiedBox(bbl, z1, z2) => black_box_interpreter(bbl, z1, z2)?,
             FrobeniusOperation::Spider(z, 0, 0) => {
                 // The bubble `η;ε`, built directly — the same carve-out
-                // `generator_to_cospan` takes, and for the same reason (#284).
+                // `generator_to_cospan` takes, and for the same reason (#284):
                 // `special_frobenius_morphism` returns the **simplified** term,
-                // and `two_layer_simplify`'s rule 3 cancels `η;ε` outright (the
-                // *extra-special* axiom), so the general arm below would recurse
-                // into an emptied term and hand back `Self::identity(&[])`. In
-                // the merely *special* theories this trait is meant to
-                // interpret into — `Cospan` is one — the bubble is a genuine
-                // `0 → 0` non-identity, so that answer is unsound. Pinned by
+                // and rule 3 used to cancel `η;ε` outright (the *extra-special*
+                // axiom), so the general arm below recursed into an emptied
+                // term and handed back `Self::identity(&[])` — unsound in the
+                // merely *special* theories this trait interprets into.
+                // Redundant since #350 deleted rule 3 (measured), kept so the
+                // bubble does not depend on the layer simplifier. Pinned by
                 // `tests::basic_interpret_default_spider_zero_zero_is_the_bubble`
-                // (which needs a `Cospan`-backed implementor: rule 3 makes the
-                // divergence invisible to `FrobeniusMorphism`-backed ones).
+                // on a `Cospan`-backed implementor.
                 let mut bubble = Self::interpret_unit(*z);
                 bubble.compose(Self::interpret_counit(*z))?;
                 bubble
@@ -252,11 +254,14 @@ mod tests {
     /// difference between the default and the override is a difference in the
     /// default, not in the carrier.
     ///
-    /// ⚠ **Blind at `Spider(z, 0, 0)`.** The carrier is a `FrobeniusMorphism`,
-    /// whose layer simplifier cancels `η;ε` (rule 3, the extra-special axiom),
-    /// so the bubble and `id_I` are the *same value* here and no assertion on
-    /// this type can separate the fixed `(0, 0)` arm from the broken one. That
-    /// generator is pinned on [`CospanBacked`] instead.
+    /// ⚠ **Was blind at `Spider(z, 0, 0)` until #350.** The carrier is a
+    /// `FrobeniusMorphism`, whose layer simplifier used to cancel `η;ε` (rule 3,
+    /// the extra-special axiom), so the bubble and `id_I` were the *same value*
+    /// here and no assertion on this type could separate the fixed `(0, 0)` arm
+    /// from the broken one. Rule 3 is gone and this carrier is the special
+    /// theory too, but that generator stays pinned on [`CospanBacked`]: it is
+    /// the carrier whose theory the `(0, 0)` arm exists for, and its answer is
+    /// a `Cospan` the pin can compare by apex and scalar count.
     #[derive(PartialEq, Eq, Clone)]
     struct Defaulting(Inner);
 
@@ -328,11 +333,12 @@ mod tests {
     /// A second `Frobenius` implementor that also runs the trait *defaults*, but
     /// over a [`Cospan`] carrier instead of a `FrobeniusMorphism` one.
     ///
-    /// [`Defaulting`] cannot see the `Spider(z, 0, 0)` arm at all — its carrier
-    /// quotients by the extra-special axiom, which identifies the bubble with
-    /// `id_I`. `Cospan` is the merely **special** theory: there the bubble is a
-    /// genuine `0 → 0` non-identity (apex 1, one scalar class), so the two
-    /// answers are distinguishable, and this is the carrier the crate's own
+    /// [`Defaulting`] could not see the `Spider(z, 0, 0)` arm at all before
+    /// #350 — its carrier quotiented by the extra-special axiom, which
+    /// identifies the bubble with `id_I`. `Cospan` has always been the merely
+    /// **special** theory: there the bubble is a genuine `0 → 0` non-identity
+    /// (apex 1, one scalar class), so the two answers are distinguishable by
+    /// apex and scalar count, and this is the carrier the crate's own
     /// `Cospan`-valued twin `frobenius_to_cospan` uses.
     ///
     /// The wrapper exists only because `Cospan` is
@@ -485,7 +491,7 @@ mod tests {
     /// `η;ε`, not to `id_I`.
     ///
     /// Until #284 this arm recursed into `special_frobenius_morphism(0, 0, z)`,
-    /// whose `η;ε` the layer simplifier's rule 3 has *already cancelled* under
+    /// whose `η;ε` the layer simplifier's rule 3 had *already cancelled* under
     /// the extra-special axiom; the resulting empty term then interpreted to
     /// `Self::identity(&[])`. The `Cospan`-valued twin `generator_to_cospan`
     /// had the identical bug and was fixed under #284 as well (see its `(0, 0)`
@@ -494,12 +500,16 @@ mod tests {
     /// [`basic_interpret`](Frobenius::basic_interpret)'s own "must agree
     /// generator-for-generator". Any *special-but-not-extra-special*
     /// implementor inheriting the default got `id_I` for a non-identity scalar.
+    /// Rule 3 itself was deleted at #350, which makes both carve-outs
+    /// redundant (measured) rather than load-bearing; they are kept so this
+    /// arm does not depend on what the layer simplifier does.
     ///
     /// **Why the carrier is a `Cospan` and not a `FrobeniusMorphism`:**
-    /// [`Defaulting`] is structurally incapable of observing this. Its carrier
-    /// quotients by rule 3, so the bubble and `id_I` are the same value there
-    /// and every assertion on it passes either way. `Cospan` is the merely
-    /// special theory, where the bubble is a genuine `0 → 0` non-identity.
+    /// [`Defaulting`] was structurally incapable of observing this before #350
+    /// — its carrier quotiented by rule 3, so the bubble and `id_I` were the
+    /// same value there and every assertion on it passed either way. `Cospan`
+    /// is the theory this arm exists for, and its apex and scalar counts are
+    /// what the assertions below read.
     ///
     /// **Space (narrow, stated honestly):** one generator, `Spider('a', 0, 0)`,
     /// on one label, through one `Cospan`-backed implementor. It does *not*
@@ -516,9 +526,9 @@ mod tests {
         assert_eq!(
             canon.apex_len(),
             1,
-            "Spider('a', 0, 0) apex: got {}, want 1. A 0 means the default \
-             recursed into special_frobenius_morphism(0, 0, 'a') — the term \
-             rule 3 has already emptied — and returned id_I.",
+            "Spider('a', 0, 0) apex: got {}, want 1. A 0 means the (0, 0) \
+             scalar was emptied on the way here — the answer rule 3 used to \
+             force by cancelling η;ε before the interpreter saw it.",
             canon.apex_len()
         );
         assert_eq!(

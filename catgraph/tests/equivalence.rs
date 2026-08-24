@@ -426,10 +426,12 @@ fn lemma_4_9_cospan_to_name_on_a_non_identity_morphism() {
     );
     assert_eq!(
         elem.depth(),
-        3,
-        "the epi-mono realisation of μ's name is three layers; the identity \
+        4,
+        "the epi-mono realisation of μ's name is four layers; the identity \
          witness this test used to rely on is a single layer, so depth alone \
-         could not tell the two apart"
+         could not tell the two apart. It read 3 until #350, when the layer \
+         simplifier stopped cancelling η;ε — this realisation carries one such \
+         pair, so exactly one layer that used to vanish now survives"
     );
 }
 
