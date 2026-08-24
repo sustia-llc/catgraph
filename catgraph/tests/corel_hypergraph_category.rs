@@ -1,9 +1,20 @@
 //! F&S 2018 Example 6.64: Corel is a hypergraph category.
 //!
-//! Verifies the special commutative Frobenius-structure generators on
-//! `Corel<char>`. Corel inherits its Frobenius structure from the underlying
-//! `Cospan`, so passing here corroborates that `Corel::new_unchecked` of each
-//! generator preserves joint surjectivity.
+//! Verifies the commutative Frobenius-structure *generators* on `Corel<char>`.
+//! Corel builds each generator from the underlying `Cospan` one, so passing
+//! here corroborates that `Corel::new_unchecked` of each generator preserves
+//! joint surjectivity.
+//!
+//! ⚠ **The generators are shared with `Cospan`; the composition is not.**
+//! `Corel` is the **extra-special** theory — `η ; ε == id_I` holds in it and
+//! fails in `Cospan` — because `Corel::compose` performs the F&S 2018 Ex 4.61
+//! fn. 2 restriction to the outer boundary on top of the pushout
+//! ([#351](https://github.com/sustia-llc/catgraph/issues/351)). The composites
+//! built below never birth a mid-composition bubble, so nothing here separates
+//! the two theories; the axiom that does is pinned in
+//! `tests/corel_quotient.rs::extra_special_axiom_unit_then_counit_is_id_i`.
+//! `Cospan` stays the *special*, not extra-special, theory
+//! ([#350](https://github.com/sustia-llc/catgraph/issues/350)).
 
 mod common;
 
@@ -42,9 +53,28 @@ fn comultiplication_1_to_2() {
     assert_eq!(delta.codomain(), vec!['a', 'a']);
 }
 
+/// `(id ⊗ η) ; μ` has identity's arities.
+///
+/// ⚠ Renamed at [#351](https://github.com/sustia-llc/catgraph/issues/351) from
+/// `left_unitality_via_cospan_delegation`. It routes through `Corel::compose`,
+/// which is precisely the operation that stopped delegating to `Cospan` —
+/// composition now restricts the pushout to the outer boundary. The name said
+/// "delegation" about the one call in the body that no longer delegates.
+///
+/// Arities only: this is a shape check, not the unitality *equation*, which the
+/// Def 2.5 battery in `frobenius_axioms.rs` decides.
+///
+/// ⚠ **The `is_jointly_surjective` assertion below cannot go red, and the name
+/// deliberately does not advertise it.** Since #351 `Corel::compose` ends in
+/// [`Corel::from_cospan_dropping_bubbles`], which re-establishes joint
+/// surjectivity *by construction* for every input — so the assertion is
+/// satisfied for free rather than by anything this composite does. Measured:
+/// with the bubble-drop short-circuited to a no-op, this test still passes. It
+/// is kept as a shape statement, not as a pin. The first rename attempt called
+/// this test `…_arities_and_joint_surjectivity`, which promoted exactly that
+/// unfalsifiable half into the name.
 #[test]
-fn left_unitality_via_cospan_delegation() {
-    // (id ⊗ η) ; μ has the same domain/codomain shape as identity on [a].
+fn left_unitality_arities() {
     let eta = Corel::<char>::unit('a');
     let mu = Corel::<char>::multiplication('a');
     let id_z = Corel::<char>::identity(&vec!['a']);

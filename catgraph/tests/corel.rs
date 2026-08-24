@@ -27,8 +27,35 @@ fn identity_corel_round_trips() {
     common::assert_corel_eq(&id, &composed);
 }
 
+/// One composite — `f : 1 → {a} ← 2` **then** `g : 2 → {a} ← 1`, both legs onto
+/// a one-vertex apex — is jointly surjective.
+///
+/// ⚠ **Order is diagrammatic.** [`Composable::compose`] is documented as
+/// `self ; other` ([`catgraph::category`]), so `f.compose(&g)` runs `f` first.
+/// `f` here is literally [`Cospan::comultiplication`] (δ, one wire *unfolded*
+/// to two) and `g` is [`Cospan::multiplication`] (μ, two wires *folded* to
+/// one), making this composite δ ; μ — an unfold **then** a fold. Reading it
+/// the classical `g ∘ f` way inverts it, which is how the first two attempts at
+/// this docstring got the order backwards.
+///
+/// ⚠ Renamed at [#351](https://github.com/sustia-llc/catgraph/issues/351) from
+/// `compose_preserves_joint_surjectivity`, which quantified universally over
+/// composition while asserting this single pair. The universal reading was
+/// **false**: `Cospan::new(vec![], vec![0], vec!['m'])` (that is η) **then**
+/// `Cospan::new(vec![0], vec![], vec!['m'])` (ε) is a pushout of two jointly
+/// surjective cospans that is not jointly surjective — measured
+/// `left=[] right=[] middle=['m']` — and `Corel::compose` wrapped it in
+/// `new_unchecked`. The order matters to the truth of that sentence: the other
+/// way round, `ε ; η` measures `left=[0] right=[1] middle=['m','m']`, which
+/// *is* jointly surjective. It is true now, because `Corel::compose` performs
+/// the F&S 2018 Ex 4.61 fn. 2 restriction — and it is pinned as a universal
+/// claim, over 4 803 pairs, by
+/// `tests/corel_quotient.rs::compose_result_is_always_a_corelation`.
+///
+/// This one stays as the readable single-composite smoke test its assertions
+/// actually support: one wire type, arities ≤ 2, an unfold followed by a fold.
 #[test]
-fn compose_preserves_joint_surjectivity() {
+fn compose_of_unfold_then_fold_is_jointly_surjective() {
     let f = Corel::<char>::new(Cospan::new(vec![0], vec![0, 0], vec!['a']).unwrap()).unwrap();
     let g = Corel::<char>::new(Cospan::new(vec![0, 0], vec![0], vec!['a']).unwrap()).unwrap();
     let fg = f.compose(&g).unwrap();
@@ -57,7 +84,9 @@ fn partition(c: &Corel<char>) -> Vec<Vec<usize>> {
 /// Composition in `Corel` produces the right **partition**, not merely a
 /// jointly-surjective one.
 ///
-/// [`compose_preserves_joint_surjectivity`] above and the rest of this file's
+/// [`compose_of_unfold_then_fold_is_jointly_surjective`] above (renamed at
+/// [#351](https://github.com/sustia-llc/catgraph/issues/351) from
+/// `compose_preserves_joint_surjectivity`) and the rest of this file's
 /// composition coverage assert only the invariant `Corel::new` checks, which a
 /// composite that merged the wrong wires would satisfy just as happily — every
 /// composite here is jointly surjective under a wrong μ too. These name the

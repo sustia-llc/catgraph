@@ -1,5 +1,6 @@
 //! Corel example: constructing a corelation, inspecting its equivalence classes,
-//! and composing two corelations via pushout.
+//! and composing two corelations — the pushout followed by the restriction to
+//! the outer boundary (F&S 2018 Ex 4.61 fn. 2 step (iii)).
 //!
 //! Run: `cargo run -p catgraph --example corel`
 

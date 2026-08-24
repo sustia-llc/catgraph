@@ -31,11 +31,18 @@
 //! not the same mechanism and an earlier revision of this paragraph merged
 //! them. See #272, whose ratified reading retains the boundary.)
 //!
-//! **The carrier count is three decision paths, not four.** `Corel` is a
-//! transparent newtype over `Cospan` and delegates everything the battery
-//! touches, so its row recomputes the `Cospan` row — measured in
-//! [`corel_recomputes_the_cospan_battery`], not asserted. A mutant that reddens
-//! both has been caught once, not twice. Nor are the remaining three fully
+//! **The carrier count is three decision paths, not four.** `Corel`'s row
+//! *agrees with* the `Cospan` row rather than deciding independently —
+//! measured in [`corel_recomputes_the_cospan_battery`], not asserted. A mutant
+//! that reddens both has been caught once, not twice. ⚠ The reason is narrower
+//! than delegation, and since
+//! [#351](https://github.com/sustia-llc/catgraph/issues/351) it has to be:
+//! `Composable::compose` **overrides** rather than delegates, restricting the
+//! pushout to the outer boundary. It agrees here only because none of the
+//! eleven composites births a mid-composition bubble — the sole input class on
+//! which the override differs — and
+//! [`corel_recomputes_the_cospan_battery`] records that measurement. Nor are
+//! the remaining three fully
 //! disjoint: `frobenius_to_cospan` interprets the battery's generators η, ε,
 //! μ, δ and `id` *as* the corresponding `Cospan` generator, so the
 //! `FrobeniusMorphism` row shares that half of its path with the `Cospan` row
@@ -61,10 +68,15 @@
 //!
 //! - [`Cospan`] — [`Cospan::canonical_form`], the complete invariant for
 //!   parallel-cospan equality, on the nose.
-//! - [`Corel`] — the *same* computation, reached through the newtype's
-//!   delegation. Its own contribution is
+//! - [`Corel`] — the *same* computation, because none of the eleven composites
+//!   births a mid-composition bubble, which is the only thing #351's
+//!   `Composable::compose` does differently from the wrapped value. Its own
+//!   contribution is
 //!   [`corel_battery_composites_stay_jointly_surjective`], the one claim
-//!   `Cospan` cannot make.
+//!   `Cospan` cannot make — though since #351 that claim reaches the battery's
+//!   **generators** and `monoidal`, not its composites, which `compose` now
+//!   re-establishes by construction. That test's docstring carries the
+//!   measurement.
 //! - [`CospanAlgebraMorphism`] over [`PartitionAlgebra`] — the same, **after
 //!   discarding scalar (bubble) classes**, because five of the eleven fail on
 //!   the nose: `multiplication_in` and `comultiplication_in` build their
@@ -346,12 +358,14 @@ fn cospan_battery_creates_no_scalars() {
 
 /// The eleven on `Corel`, which is **not** an independent verdict.
 ///
-/// See [`corel_recomputes_the_cospan_battery`]: `Corel` delegates every
-/// operation the battery uses, and its key is the wrapped `Cospan`'s key, so
-/// this test cannot go red unless [`cospan_battery`] does. It stays because the
-/// delegation is what makes that true, and a `Corel` that stopped delegating
-/// should be caught here rather than assumed. The `Corel`-specific content of
-/// this file is [`corel_battery_composites_stay_jointly_surjective`].
+/// See [`corel_recomputes_the_cospan_battery`]: on *these eleven equations*
+/// `Corel` computes what `Cospan` computes, and its key is the wrapped
+/// `Cospan`'s key, so this test cannot go red unless [`cospan_battery`] does.
+/// It stays because that coincidence is worth measuring rather than assuming.
+/// ⚠ It does **not** catch a `Corel` that stops delegating — that is measured,
+/// not speculated: #351 overrode `Composable::compose` and this test stayed
+/// green. The `Corel`-specific content of this file is
+/// [`corel_battery_composites_stay_jointly_surjective`].
 #[test]
 fn corel_battery() {
     run::<Corel<char>>();
@@ -359,9 +373,8 @@ fn corel_battery() {
 
 /// Measured: the `Corel` row of the battery is the `Cospan` row, key for key.
 ///
-/// `Corel<Lambda>` is a transparent newtype. `unit` / `counit` /
-/// `multiplication` / `comultiplication` / `cup` / `cap` are
-/// `new_unchecked(Cospan::…)`, `identity` / `compose` / `monoidal` /
+/// `unit` / `counit` / `multiplication` / `comultiplication` / `cup` / `cap`
+/// are `new_unchecked(Cospan::…)`, `identity` / `monoidal` /
 /// `from_permutation_on_domain` delegate to the wrapped value, and
 /// [`Carrier::key`] is `self.as_cospan().canonical_form()` — the same function
 /// `Cospan`'s key calls. So "eleven equations on four carriers" is really
@@ -369,9 +382,24 @@ fn corel_battery() {
 /// `cospan_battery` as two independent reds under one mutant double-counts one
 /// computation.
 ///
-/// Written to go red if that ever stops being true, which is the only way it
-/// could become news: a `Corel` that overrides any of those operations makes
-/// the row independent and this test is where that shows up.
+/// ⚠ **This is a sound-but-narrow pin, and its narrowness is measured rather
+/// than guessed.** An earlier version of this docstring claimed it was "written
+/// to go red if that ever stops being true — a `Corel` that overrides any of
+/// those operations makes the row independent and this test is where that shows
+/// up." That claim was falsified by
+/// [#351](https://github.com/sustia-llc/catgraph/issues/351), which overrode
+/// `Composable::compose` outright — `Corel` composition now restricts the
+/// pushout to the outer boundary — while this test, the whole file, and the
+/// whole workspace suite stayed green.
+///
+/// The reason is the corpus, not the assertion: #351's override changes a
+/// composite only when the pushout glues two vertices that no *outer* leg
+/// reaches, and none of the eleven equations' composites does that. So what
+/// this test actually pins is "`Corel` and `Cospan` agree **on these eleven
+/// equations**", which is what it is used for. It does not range over
+/// "`Corel` delegates", and it is not the place a future divergence will
+/// surface. That job belongs to `tests/corel_quotient.rs`, which sweeps
+/// composition over an exhaustive corpus that does birth such bubbles.
 #[test]
 fn corel_recomputes_the_cospan_battery() {
     let cospans = equations::<Cospan<char>>(Z);
@@ -404,9 +432,21 @@ fn corel_recomputes_the_cospan_battery() {
 /// `Corel::new` would have rejected.
 ///
 /// This is the one assertion in the file that `Cospan` cannot make, and so the
-/// one that earns `Corel` a row: `Corel::compose` and `Corel::monoidal` both go
-/// through `new_unchecked`, so nothing else in the crate would notice if a
-/// composite left the subcategory.
+/// one that earns `Corel` a row.
+///
+/// ⚠ **Its reach shrank at
+/// [#351](https://github.com/sustia-llc/catgraph/issues/351), and the previous
+/// wording is now inverted.** It used to read "`Corel::compose` and
+/// `Corel::monoidal` both go through `new_unchecked`, so nothing else in the
+/// crate would notice if a composite left the subcategory." `compose` no longer
+/// goes through `new_unchecked` — it ends in `from_cospan_dropping_bubbles`,
+/// which re-establishes joint surjectivity by construction, so a *composite*
+/// **cannot** leave the subcategory and this test cannot fail on one. Measured:
+/// with the bubble-drop short-circuited to a no-op the whole file still passes.
+/// What it still pins is the battery's **generators** — `unit` / `counit` /
+/// `multiplication` / `comultiplication` / `cup` / `cap` are hand-written
+/// `new_unchecked(Cospan::…)` literals with nothing re-establishing the
+/// invariant — and `monoidal`, which still goes through `new_unchecked`.
 #[test]
 fn corel_battery_composites_stay_jointly_surjective() {
     for (name, lhs, rhs) in equations::<Corel<char>>(Z) {
