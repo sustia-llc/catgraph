@@ -6,6 +6,39 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added — tooling
+
+- **`scripts/check_measured_claims.py`, a prose-consistency guard, wired into
+  CI.** A measured figure cited in a CHANGELOG or a docstring must equal what
+  the test actually measured. Tests emit `MEASURED <key> = <value>`; prose cites
+  a fact by placing `<!--m:<key>-->` immediately after the number, which is
+  invisible in rendered Markdown and in rustdoc. Digit-group separators are
+  normalised, so `14 473` and `14473` compare equal.
+
+  **Why.** The audit sweep's dominant defect class is prose about code that no
+  gate can see. On #351 all **fifteen** review findings across four rounds were
+  invisible to `cargo test`, clippy, fmt, rustdoc and the three existing guards,
+  while the production logic went unchanged after the first commit — 0
+  non-comment lines added *and* 0 deleted across the whole review arc. The
+  recurring sub-class is one figure restated in four or five places with nothing
+  checking the restatements still agree, or still name the same quantity: #350's
+  "three terms moved" was a distinct-form delta while eleven terms had moved;
+  #351's falsification record named one perturbation and reported another's
+  counts; and "320 at the outer composition alone" versus a measured 120 was two
+  predicates sharing one undifferentiated word.
+
+  **Failure modes it catches**, each falsified rather than assumed: a drifted
+  number (reports file, line, claimed and measured); a citation whose emitting
+  test was renamed or deleted; and a log containing no facts at all, which fails
+  rather than passing vacuously. That last one is `mutants-knowledge.md` §1.3's
+  lesson — exit 0 can mean "nothing was tested" — applied to this tool. It reads
+  a captured log rather than invoking cargo, so a build failure cannot read as a
+  pass, and the CI step sets `pipefail` explicitly because the default Actions
+  shell is `bash -e` without it (verified: `false | tee` exits 0 otherwise).
+
+  Six figures in the #351 entry below now carry markers. They are annotations,
+  not content changes — the numbers are unchanged and were already correct.
+
 ## [workspace-v0.16.0] - 2026-08-24
 
 ### Changed — BREAKING (#351: `Corel::compose` restricts to the outer boundary)
@@ -230,16 +263,21 @@ All notable changes to `catgraph` are documented here. The format follows
   *pairwise*; nothing pinned associativity of the operation #351 replaced, and a
   restriction step is exactly the kind of change that can break it — an inner
   composite can lose a vertex the outer composition would have merged. It does
-  not: over the **14 473** composable triples of corelations the apex ≤ 2 corpus
-  offers, **0** differ up to apex isomorphism, **456** differ structurally, and
-  **5 048** have step (iii) firing somewhere — that last count is asserted
+  not: over the **14 473**<!--m:assoc.triples--> composable triples of
+  corelations the apex ≤ 2 corpus
+  offers, **0**<!--m:assoc.iso_mismatches--> differ up to apex isomorphism,
+  **456**<!--m:assoc.structural_mismatches--> differ structurally, and
+  **5 048**<!--m:assoc.restriction_fired--> have step (iii) firing somewhere —
+  that last count is asserted
   non-zero, so the sweep cannot pass by being about the raw pushout. The 456 are
   the same `perform_pushout` apex-numbering artefact recorded above and not a
   second phenomenon, and the **correlate** of that is asserted rather than left
   in prose: **456 of 456** carry an identity fast-path asymmetry between the two
-  associations (**120** of them at the outer composition only — printed, not
+  associations (**120**<!--m:assoc.outer_asymmetry_only--> of them at the outer
+  composition only — printed, not
   asserted, since that split moves with the corpus). ⚠ Necessary, not
-  sufficient, and therefore not a proof of the diagnosis: **7 828** of the
+  sufficient, and therefore not a proof of the diagnosis:
+  **7 828**<!--m:assoc.any_asymmetry--> of the
   14 473 triples carry the asymmetry while only 456 mismatch, so a second cause
   confined to asymmetric triples would satisfy the assertion unchanged. That
   denominator is printed so the gap is visible rather than inferable.

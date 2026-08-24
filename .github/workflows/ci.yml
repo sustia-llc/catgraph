@@ -82,7 +82,23 @@ jobs:
       # because CI had no doc gate. `-D warnings` fails the build on any of them,
       # keeping docs.rs rendering clean now that the crates are public.
       - run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
-      - run: cargo test --workspace
+      # Captured, not plain, so the measured-claims guard below has a log to read.
+      # `set -o pipefail` is explicit and load-bearing: the default Actions shell is
+      # `bash -e {0}` WITHOUT pipefail, so `cargo test | tee` would report tee's exit
+      # status and a failing suite would land green. That is the same false-green
+      # class as the repo's never-pipe-a-gate rule.
+      - name: workspace tests (captured for the measured-claims guard)
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --workspace -- --nocapture | tee /tmp/workspace-tests.log
+      # Prose-consistency guard: a measured figure cited in a CHANGELOG or docstring
+      # must equal what the test actually measured. The audit sweep's dominant defect
+      # class is prose no gate can see — on #351 all fifteen review findings across
+      # four rounds were invisible to every existing gate while the production logic
+      # went unchanged. Restated figures drift silently; this recomputes them.
+      - name: measured-claims guard
+        run: python3 scripts/check_measured_claims.py /tmp/workspace-tests.log
       - run: cargo test -p catgraph --no-default-features
       # #43: slim-build exercise for catgraph-physics — proves the crate compiles
       # and tests green with both the `spectral` (nalgebra) and `rustworkx` gates

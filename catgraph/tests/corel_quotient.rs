@@ -1020,4 +1020,15 @@ fn new_composition_is_associative_up_to_apex_isomorphism() {
          somewhere, and {triples_with_a_fast_path_asymmetry} of {triples} carry the asymmetry at \
          all — so it is necessary for a structural mismatch and far from sufficient"
     );
+
+    // Machine-readable facts for `scripts/check_measured_claims.py`, which
+    // fails the build when prose citing them drifts. Emit the quantity, not
+    // the sentence: a key names what was counted, so a reader of the prose and
+    // a reader of the log are talking about the same thing.
+    println!("MEASURED assoc.triples = {triples}");
+    println!("MEASURED assoc.iso_mismatches = {iso_mismatches}");
+    println!("MEASURED assoc.structural_mismatches = {structural_mismatches}");
+    println!("MEASURED assoc.outer_asymmetry_only = {structural_with_an_outer_asymmetry_only}");
+    println!("MEASURED assoc.restriction_fired = {triples_where_the_restriction_fired}");
+    println!("MEASURED assoc.any_asymmetry = {triples_with_a_fast_path_asymmetry}");
 }
