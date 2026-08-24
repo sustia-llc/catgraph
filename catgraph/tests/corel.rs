@@ -73,7 +73,9 @@ fn partition(c: &Corel<char>) -> Vec<Vec<usize>> {
 /// Composition in `Corel` produces the right **partition**, not merely a
 /// jointly-surjective one.
 ///
-/// [`compose_preserves_joint_surjectivity`] above and the rest of this file's
+/// [`compose_of_fold_then_unfold_is_jointly_surjective`] above (renamed at
+/// [#351](https://github.com/sustia-llc/catgraph/issues/351) from
+/// `compose_preserves_joint_surjectivity`) and the rest of this file's
 /// composition coverage assert only the invariant `Corel::new` checks, which a
 /// composite that merged the wrong wires would satisfy just as happily — every
 /// composite here is jointly surjective under a wrong μ too. These name the

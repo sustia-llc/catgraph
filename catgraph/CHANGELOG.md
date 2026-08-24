@@ -25,6 +25,29 @@ All notable changes to `catgraph` are documented here. The format follows
   no outer leg reaches. The old composite was `left=[] right=[] middle=['m']`
   — `is_jointly_surjective() == false`, `scalar_count() == 1`. It is now the
   empty corelation.
+- **What that witness *is*: the extra-special axiom.** `a` is `Corel::unit('m')`
+  and `b` is `Corel::counit('m')` — the test asserts that identification rather
+  than assuming it — so the fixed composite `η ; ε == id_I` is the law
+  Baez–Erbele 2015
+  (*Categories in Control*, arXiv:1405.6881 §2, p. 11) name when they call a
+  special Frobenius monoid **extra-special**, and whose free symmetric monoidal
+  category they describe as having equivalence relations on `X ⊔ Y` for
+  morphisms, composed "by letting f and g generate an equivalence relation on
+  `X ⊔ Y ⊔ Z` and then restricting this to `X ⊔ Z`" — that description is
+  `Corel` with this composition. So #351 is not only a bug fix: it puts
+  `Cospan` and `Corel` on opposite sides of one equation, `Cospan` keeping the
+  bubble as a genuine non-identity (the **special** theory, which #350 made
+  `FrobeniusMorphism` match by deleting the rule that cancelled `η;ε`) and
+  `Corel` cancelling it. It is what makes #350's "the extra-special reading
+  remains available as a quotient" a measured fact; pinned as
+  `tests/corel_quotient.rs::extra_special_axiom_unit_then_counit_is_id_i`,
+  which asserts *both* sides. Two prose claims that predate #351 and described
+  behaviour `Corel` did not yet have — `src/cospan_canon.rs`'s "Corelations …
+  are the *extra-special* quotient that discards scalars" and
+  `catgraph-syntax`'s `cospan_functor.rs` "Corelations … would collapse it" —
+  become true with it; neither needed an edit. Nothing in-tree *proves* the
+  Baez–Erbele identification itself; it stays a match of descriptions, as
+  `src/cospan_algebra.rs` already says.
 - **What breaks.** Any consumer that composes corelations and **counts apex
   vertices** (or reads `as_cospan().middle()`, or hashes/compares the
   underlying `Cospan`) sees a smaller apex wherever a composition merged two
@@ -32,10 +55,31 @@ All notable changes to `catgraph` are documented here. The format follows
   `tests/corel_quotient.rs` (every cospan with apex ≤ 3, boundary ≤ 2, one wire
   type): of **4 803** composable pairs of genuine corelations, **2 154** had a
   raw pushout that was not jointly surjective, and each of those now composes
-  to a strictly smaller apex. **Nothing else moves**: the equivalence relation
-  the composite induces on `domain ⊔ codomain` is unchanged (a dropped class
-  contains no boundary element by definition), and `domain()` / `codomain()`
-  are untouched.
+  to a strictly smaller apex.
+- **What breaks, continued — the flat-index layout, not only the apex count.**
+  The **relation** on `domain ⊔ codomain` is unchanged (a dropped class contains
+  no boundary element by definition) and `domain()` / `codomain()` are
+  untouched. Its **encoding** is not, and that is the public surface:
+  `Corel::equivalence_classes()` lays flat indices out as `0..dom_len` │
+  `dom_len..dom_len + mid_len` │ `dom_len + mid_len..`, so a smaller apex
+  **shifts every codomain flat index down**. `Corel::merges(a, b)` takes flat
+  indices; `Corel::is_identity_partition` tests `middle().len() == dom.len()`;
+  `equivalence_classes().len()` counts apex classes. All three change on an
+  affected composite. Measured on `a : 1 → {a,a} ← 2` after `b : 2 → {a,a} ← 1`
+  (pinned as `compose_shifts_the_flat_index_layout`): raw pushout apex
+  `['a','a']` → classes `[{0,1,3}, {2}]`, `len 2`, `merges(0, 3) == true`,
+  `is_identity_partition() == false`; new composite apex `['a']` → classes
+  `[{0,1,2}]`, `len 1`, `merges(0, 3) == false` (`merges(0, 2) == true`
+  instead), `is_identity_partition() == true`. Do not read "the relation is
+  unchanged" as "nothing observable moves": the first is a statement about the
+  partition, the second would be one about its encoding, and only the first
+  holds.
+- ⚠ **Pre-existing looseness this makes more reachable.** `Corel::refines`
+  matches classes by flat index across two values and, as its own docs say,
+  silently skips elements not found in the other's classes. With composites now
+  systematically carrying smaller apexes than their operands, codomain offsets
+  disagree more often, so `refines` can skip the entire boundary and return
+  `true`. Not introduced by #351, and not fixed here.
 - **Nothing in-tree consumed the old behaviour.** The whole `-p catgraph`
   suite, `examples/corel.rs`, and every other workspace crate stayed green
   across the change without an edit — which is itself the audit finding: no
@@ -76,13 +120,26 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ### Tests (#351)
 
-- **`tests/corel_quotient.rs` (new, 7 tests)** over an **exhaustive** corpus:
+- **`tests/corel_quotient.rs` (new, 8 tests)** over an **exhaustive** corpus:
   every cospan with apex ≤ 3, domain ≤ 2, codomain ≤ 2 over one wire type —
   **228** cospans, **139** of them bubble-carrying (**166** bubble vertices),
   giving **25 616** ordered arity-matching pairs of which **6 896** grow a
-  bubble the operands did not already carry. `corpus_is_not_vacuous` asserts
-  each of those counts non-zero **first**, so no other test in the file can be
-  about nothing.
+  bubble the operands did not already carry. `corpus_is_not_vacuous` measures
+  all of those **first** and asserts non-zero the three that can independently
+  be zero (`bubbly`, `bubble_born`, `js_pairs_with_bubbly_pushout`), so no other
+  test in the file can be about nothing; `total_bubbles` is printed, not
+  asserted, since it is positive whenever `bubbly` is.
+- **Step (iii)'s *scope* is pinned, not just its effect.** The composite induces
+  the **same partition on `domain ⊔ codomain`** as the raw pushout does, and the
+  quotient induces the same one as its input — asserted over both sweeps via a
+  boundary-only flat-index reading (`0..dom_len` for the domain, `dom_len..` for
+  the codomain, apex vertices deliberately absent so the value survives the
+  apex renumbering). This is what "the restriction touches the apex only" means;
+  the `domain()` / `codomain()` assertions alongside it are **weak on a
+  one-wire-type corpus** — `Cospan::domain` reads leg entries through the apex,
+  so both sides are `vec!['a'; n]` whatever the legs do. The label-level claims
+  are earned on the heterogeneous witnesses in
+  `quotient_keeps_surviving_labels_in_their_original_order` instead.
 - **Functoriality was verified, not assumed — and it is *not* on the nose.**
   `q(a ; b)` and `q(a) ; q(b)` agree **up to apex isomorphism** on all 25 616
   pairs (equal `CospanCanon`, which is a complete invariant for
@@ -113,17 +170,28 @@ All notable changes to `catgraph` are documented here. The format follows
   `corel_quotient.rs::compose_result_is_always_a_corelation`. Measured: with
   the fix reverted the renamed test **stays green**, which is exactly the
   narrowness the rename records.
-- **Falsification.** Three perturbations, each applied and reverted.
-  (1) Restoring `map(Self::new_unchecked)` reddens 4 of the 7 new tests —
+- **Falsification.** Four perturbations, each applied, measured and reverted.
+  (1) Restoring `map(Self::new_unchecked)` reddens **5 of the 8** new tests —
   functoriality goes to **6 896** mismatching pairs (from 0) and structural
   mismatches to **8 204**, of which **2 154** now have two jointly-surjective
   operands (from 0). (2) Filtering the apex without reindexing the legs reddens
-  5 of 7. (3) Reindexing in-bounds but in the **wrong order** (survivors
-  reversed) reddens only **2** — the three uniform-label sweeps all stay green,
-  because with every vertex labelled `'a'` a wrong-but-in-bounds index is
-  unobservable. That is why
+  **5 of 8**. (3) Reindexing in-bounds but in the **wrong order** (the whole
+  apex renumbered in reverse, legs following) reddens only **2 of 8** —
+  `quotient_is_total_and_lands_in_corel`,
+  `compose_result_is_always_a_corelation` and
+  `quotient_is_functorial_up_to_apex_isomorphism` all stay green, because with
+  every vertex labelled `'a'` a consistently renumbered apex is unobservable on
+  everything except the label order itself. That is why
   `quotient_keeps_surviving_labels_in_their_original_order` uses heterogeneous
   labels, and that measurement is recorded in its doc comment.
+  (4) Reversing the composite's **left-leg vector** — which scrambles which
+  domain wire sits in which class while preserving the apex, the labels, every
+  length and joint surjectivity — reddens **5 of 8**, with
+  `quotient_is_total_and_lands_in_corel` and
+  `compose_result_is_always_a_corelation` failing *at the boundary-partition
+  assertion*. Both of those stayed green under this perturbation while their
+  step-(iii) claim was carried by `domain()` / `codomain()` alone; that is the
+  measurement that motivated the boundary-partition assertion above.
 
 ### Changed — BREAKING (#350: `FrobeniusMorphism` is the *special* theory)
 

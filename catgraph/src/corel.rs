@@ -462,10 +462,37 @@ where
     /// `new` would reject: apex `['m']`, both legs empty. With step (iii) in
     /// place the composite is the empty corelation.
     ///
-    /// Consumers that compose corelations and **count apex vertices** will see
-    /// smaller apexes wherever a composition merged two boundary-only vertices;
-    /// the induced partition on `domain ⊔ codomain` is unchanged, since a
-    /// dropped class contains no boundary element by definition.
+    /// # What moves for consumers
+    ///
+    /// The **relation** on `domain ⊔ codomain` is unchanged — a dropped class
+    /// contains no boundary element by definition. Its **encoding** is not, and
+    /// that is the public surface:
+    ///
+    /// - a smaller apex wherever a composition merged two boundary-only
+    ///   vertices, so anything counting apex vertices, reading
+    ///   [`as_cospan`](Self::as_cospan)`.middle()`, or hashing / comparing the
+    ///   underlying [`Cospan`] sees a different value;
+    /// - [`equivalence_classes`](Self::equivalence_classes) lays its flat
+    ///   indices out as `0..dom_len` │ `dom_len..dom_len + mid_len` │
+    ///   `dom_len + mid_len..`, so a smaller apex **shifts every codomain flat
+    ///   index down**, and the class count drops with the bubble;
+    /// - therefore [`merges`](Self::merges) (whose arguments are flat indices),
+    ///   [`is_identity_partition`](Self::is_identity_partition) and
+    ///   `equivalence_classes().len()` all change on such a composite.
+    ///
+    /// Worked witness, pinned in `tests/corel_quotient.rs`'s
+    /// `compose_shifts_the_flat_index_layout`: for `a : 1 → {a,a} ← 2` after
+    /// `b : 2 → {a,a} ← 1` the raw pushout gave classes `[{0,1,3}, {2}]`,
+    /// `len 2`, `merges(0, 3) == true`, `is_identity_partition() == false`; the
+    /// restricted composite gives `[{0,1,2}]`, `len 1`, `merges(0, 3) == false`
+    /// (`merges(0, 2) == true` instead), `is_identity_partition() == true`.
+    ///
+    /// ⚠ Pre-existing, and more reachable now: [`refines`](Self::refines)
+    /// matches classes by flat index across two values and, as its own docs
+    /// say, silently skips elements it cannot find in the other. With
+    /// composites now systematically carrying smaller apexes than their
+    /// operands, codomain offsets disagree more often, so `refines` can skip
+    /// the whole boundary and answer `true`. Not introduced here.
     ///
     /// # Errors
     ///

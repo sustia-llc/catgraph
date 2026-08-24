@@ -14,19 +14,37 @@
 //!
 //! [`corpus`] enumerates **every** cospan with apex size ≤ 3, domain ≤ 2 and
 //! codomain ≤ 2 over a single wire type — every leg map, not a sample. That is
-//! 228 cospans, of which 139 carry at least one bubble; every sweep below
-//! reports both figures on failure, and [`corpus_is_not_vacuous`] asserts the
-//! bubble count directly so that no other test in this file can be about
-//! nothing. A single wire type makes every arity-matching pair composable,
-//! which is what lets the pair sweeps range over all 25 616 of them.
+//! 228 cospans, of which 139 carry at least one bubble. Those two figures are
+//! measured and printed by [`corpus_is_not_vacuous`], which asserts the bubbly
+//! count non-zero so that no other test in this file can be about nothing.
+//! The sweeps below name the offending value on failure, and the pair sweeps
+//! their own pair counts — no sweep reports these two corpus-level figures.
+//! A single wire type makes every arity-matching pair composable, which is what
+//! lets the pair sweeps range over all 25 616 of them.
 //!
 //! What the corpus does **not** reach: heterogeneous `Lambda`, apexes above 3,
 //! boundaries above 2, and any `Lambda` whose `Eq` is coarser than its
 //! identity. Label handling and apex-order preservation are pinned separately,
 //! on explicit heterogeneous witnesses, in
 //! [`quotient_keeps_surviving_labels_in_their_original_order`].
+//!
+//! ⚠ **One wire type makes the label-level assertions in the *sweeps* weak.**
+//! `Cospan::domain` and `Cospan::codomain` read leg entries *through* the apex,
+//! so with every apex vertex labelled `'a'` they are `vec!['a'; n]` whatever
+//! the legs do, and the lengths are leg lengths the quotient never touches: a
+//! `domain() == domain()` assertion over this corpus cannot fail. The claim
+//! those assertions are shorthand for is the *partition* on `domain ⊔
+//! codomain`, and that is what [`boundary_partition`] measures and the sweeps
+//! assert. The heterogeneous witnesses in
+//! [`quotient_keeps_surviving_labels_in_their_original_order`] are where the
+//! label-level reading is earned.
 
-use catgraph::{category::Composable, corel::Corel, cospan::Cospan};
+use catgraph::{
+    category::{Composable, HasIdentity},
+    corel::Corel,
+    cospan::Cospan,
+    hypergraph_category::HypergraphCategory,
+};
 
 // ---------------------------------------------------------------------------
 // Corpus
@@ -81,6 +99,39 @@ fn bubble_count(c: &Cospan<char>) -> usize {
         .count()
 }
 
+/// The equivalence relation a cospan induces on its **boundary** —
+/// `domain ⊔ codomain` — as sorted classes of flat indices: `0..dom_len` is the
+/// domain, `dom_len..` the codomain.
+///
+/// Apex vertices are deliberately **absent**, and that is the whole point: it
+/// makes the value comparable across cospans whose apexes differ in size, which
+/// is exactly the comparison step (iii) needs.
+/// [`Corel::equivalence_classes`] cannot serve here — it interleaves `mid_len`
+/// flat indices *between* the two boundaries, so dropping a bubble shifts every
+/// codomain index even when the relation is untouched (that shift is itself
+/// pinned, as the breaking change it is, by
+/// [`compose_shifts_the_flat_index_layout`]).
+///
+/// Read off the argument's own legs, so it is an independent reading of a
+/// result rather than a second copy of the drop-bubbles logic it is used to
+/// check.
+fn boundary_partition(c: &Cospan<char>) -> Vec<Vec<usize>> {
+    let dom_len = c.left_to_middle().len();
+    let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); c.middle().len()];
+    for (i, &m) in c.left_to_middle().iter().enumerate() {
+        buckets[m].push(i);
+    }
+    for (k, &m) in c.right_to_middle().iter().enumerate() {
+        buckets[m].push(dom_len + k);
+    }
+    let mut classes: Vec<Vec<usize>> = buckets.into_iter().filter(|b| !b.is_empty()).collect();
+    for class in &mut classes {
+        class.sort_unstable();
+    }
+    classes.sort();
+    classes
+}
+
 /// Every arity-matching ordered pair drawn from [`corpus`], with the raw
 /// (un-quotiented) `Cospan` pushout of each.
 fn composable_pairs() -> Vec<(Cospan<char>, Cospan<char>, Cospan<char>)> {
@@ -106,9 +157,12 @@ fn composable_pairs() -> Vec<(Cospan<char>, Cospan<char>, Cospan<char>)> {
 ///
 /// Every sweep in this file is a claim about bubble-dropping. A corpus of
 /// jointly-surjective cospans, or a pair sweep whose pushouts never grow a
-/// bubble, would make all of them pass for free. This measures all four
-/// quantities the rest of the file leans on and asserts each is non-zero,
-/// naming the measured value in every message.
+/// bubble, would make all of them pass for free. This measures the four
+/// quantities the rest of the file leans on — `bubbly`, `total_bubbles`,
+/// `bubble_born`, `js_pairs_with_bubbly_pushout` — and asserts non-zero the
+/// **three** of them that can independently be zero. `total_bubbles` is
+/// reported, not asserted: it is positive whenever `bubbly` is, so an assertion
+/// on it would be a restatement rather than a check.
 ///
 /// Ranges over exactly the corpus described in the module docs, so the counts
 /// are properties of *that* enumeration; they move if it is retuned, and the
@@ -166,11 +220,25 @@ fn corpus_is_not_vacuous() {
 /// The quotient is **total**, its image is always a corelation, and it is the
 /// identity on inputs that already are one.
 ///
-/// Six claims, each checked on every one of the 228 corpus cospans:
-/// the image is jointly surjective; `Corel::new` *accepts* it (the codomain
-/// claim checked against the validator, not assumed); its canonical form has
-/// `scalar_count() == 0`; domain and codomain are untouched; the apex shrinks
-/// by exactly the bubble count; and `q` is idempotent.
+/// Checked on every corpus cospan, in the order the body asserts them:
+///
+/// 1. the image is jointly surjective;
+/// 2. `Corel::new` *accepts* it — the codomain claim checked against the
+///    validator, not assumed;
+/// 3. its canonical form has `scalar_count() == 0`;
+/// 4. `domain()` and `codomain()` are untouched. ⚠ **Weak on this corpus**:
+///    every apex label is `'a'` and `Cospan::domain` reads leg entries through
+///    the apex, so both sides are `vec!['a'; n]` whatever the legs do — this
+///    pair cannot fail here. It is kept as the label-level shape check and
+///    earned on heterogeneous witnesses in
+///    [`quotient_keeps_surviving_labels_in_their_original_order`]; the claim
+///    that carries weight here is (5).
+/// 5. the equivalence relation induced on `domain ⊔ codomain`
+///    ([`boundary_partition`]) is **unchanged** — step (iii) proper, and the
+///    claim a leg reindexed onto the wrong survivor breaks;
+/// 6. the apex shrinks by exactly the bubble count;
+/// 7. `q` is idempotent;
+/// 8. and, on the jointly-surjective members only, `q` is the identity.
 ///
 /// Ranges over the module-doc corpus only. It says nothing about heterogeneous
 /// labels (see [`quotient_keeps_surviving_labels_in_their_original_order`]),
@@ -204,6 +272,15 @@ fn quotient_is_total_and_lands_in_corel() {
             image.codomain(),
             c.codomain(),
             "quotient moved the codomain of {c:?}"
+        );
+        // What claim (4) is shorthand for, and what this corpus can actually
+        // falsify: dropping bubbles must not move which boundary wires share a
+        // class.
+        assert_eq!(
+            boundary_partition(image),
+            boundary_partition(&c),
+            "quotient of {c:?} moved the partition it induces on domain ⊔ codomain; \
+             image {image:?}"
         );
         assert_eq!(
             image.middle().len(),
@@ -257,25 +334,42 @@ fn quotient_is_total_and_lands_in_corel() {
 fn quotient_keeps_surviving_labels_in_their_original_order() {
     // Bubble first: apex ['z', 'p', 'q'], legs reach 1 and 2.
     let c = Cospan::new(vec![1], vec![2], vec!['z', 'p', 'q']).unwrap();
-    let q = Corel::from_cospan_dropping_bubbles(c);
+    let q = Corel::from_cospan_dropping_bubbles(c.clone());
     assert_eq!(q.as_cospan().middle(), &['p', 'q']);
     assert_eq!(q.as_cospan().left_to_middle(), &[0]);
     assert_eq!(q.as_cospan().right_to_middle(), &[1]);
+    // Distinct labels, so *these* domain/codomain assertions can fail — the
+    // same pair over the uniform-label corpus in
+    // `quotient_is_total_and_lands_in_corel` cannot.
+    assert_eq!(q.as_cospan().domain(), c.domain());
+    assert_eq!(q.as_cospan().domain(), vec!['p']);
+    assert_eq!(q.as_cospan().codomain(), c.codomain());
+    assert_eq!(q.as_cospan().codomain(), vec!['q']);
 
     // Bubble in the middle: apex ['p', 'z', 'q'].
     let c = Cospan::new(vec![0], vec![2], vec!['p', 'z', 'q']).unwrap();
-    let q = Corel::from_cospan_dropping_bubbles(c);
+    let q = Corel::from_cospan_dropping_bubbles(c.clone());
     assert_eq!(q.as_cospan().middle(), &['p', 'q']);
     assert_eq!(q.as_cospan().left_to_middle(), &[0]);
     assert_eq!(q.as_cospan().right_to_middle(), &[1]);
+    assert_eq!(q.as_cospan().domain(), c.domain());
+    assert_eq!(q.as_cospan().domain(), vec!['p']);
+    assert_eq!(q.as_cospan().codomain(), c.codomain());
+    assert_eq!(q.as_cospan().codomain(), vec!['q']);
 
     // Two bubbles at the end, and a leg with a repeated target:
     // apex ['p', 'q', 'z', 'z'], domain hits q then p.
     let c = Cospan::new(vec![1, 0], vec![1], vec!['p', 'q', 'z', 'z']).unwrap();
-    let q = Corel::from_cospan_dropping_bubbles(c);
+    let q = Corel::from_cospan_dropping_bubbles(c.clone());
     assert_eq!(q.as_cospan().middle(), &['p', 'q']);
     assert_eq!(q.as_cospan().left_to_middle(), &[1, 0]);
     assert_eq!(q.as_cospan().right_to_middle(), &[1]);
+    // Order-sensitive: `['q', 'p']`, not `['p', 'q']`. A leg reindexed onto
+    // the wrong survivor swaps these two entries.
+    assert_eq!(q.as_cospan().domain(), c.domain());
+    assert_eq!(q.as_cospan().domain(), vec!['q', 'p']);
+    assert_eq!(q.as_cospan().codomain(), c.codomain());
+    assert_eq!(q.as_cospan().codomain(), vec!['q']);
 
     // Every vertex a bubble: the image is the empty corelation.
     let c = Cospan::new(vec![], vec![], vec!['z', 'y']).unwrap();
@@ -288,25 +382,59 @@ fn quotient_keeps_surviving_labels_in_their_original_order() {
 // Half 2 — the composition it repairs
 // ---------------------------------------------------------------------------
 
-/// The witness from #351: two corelations whose pushout is **not** one.
+/// `η ; ε == id_I` in `Corel` — the **extra-special axiom**, and the paper-level
+/// payoff of #351 rather than a bug fix that happens to shrink an apex.
 ///
-/// `a : 0 → {m} ← 1` and `b : 1 → {m} ← 0` are both jointly surjective, so
-/// `Corel::new` accepts both. The pushout glues `a`'s right-leg-only vertex to
-/// `b`'s left-leg-only vertex into a class no *outer* leg reaches, so the raw
+/// The witness the issue names *is* the unit and the counit:
+/// `η : 0 → {m} ← 1` is `Corel::unit('m')`, `ε : 1 → {m} ← 0` is
+/// `Corel::counit('m')` (asserted below, so the axiom reading is not a claim
+/// about a lookalike pair). Both are jointly surjective, so `Corel::new`
+/// accepts both. The pushout glues `η`'s right-leg-only vertex to `ε`'s
+/// left-leg-only vertex into a class no *outer* leg reaches, so the raw
 /// composite carries one scalar and `Corel::new` would reject it — which is
-/// what the deleted comment at `corel.rs:310` asserted could not happen. Step
-/// (iii) of F&S 2018 Ex 4.61 fn. 2 drops it.
+/// what the comment deleted at #351 asserted could not happen. Step (iii) of
+/// F&S 2018 Ex 4.61 fn. 2 drops it, and what is left is `id_I`.
 ///
-/// Ranges over exactly this one pair. It is the *existence* witness — the
-/// universal claim it falsifies is pinned over the whole corpus by
-/// [`compose_result_is_always_a_corelation`].
+/// # Why the axiom, and why it matters here
+///
+/// Baez–Erbele 2015 (*Categories in Control*, arXiv:1405.6881 §2, p. 11) call a
+/// special Frobenius monoid **extra-special** when "the unit followed by the
+/// counit is the identity", and identify the free symmetric monoidal category
+/// on a commutative extra-special Frobenius monoid as the one whose morphisms
+/// `X → Y` are equivalence relations on `X ⊔ Y`, composed "by letting f and g
+/// generate an equivalence relation on `X ⊔ Y ⊔ Z` and then restricting this to
+/// `X ⊔ Z`" — that description is `Corel` with the composition #351 installed.
+/// `Cospan` is deliberately the **special**, not extra-special, theory (#350
+/// made `FrobeniusMorphism` match it by deleting the rule that cancelled `η;ε`),
+/// and this test is what makes #350's "the extra-special reading remains
+/// available as a quotient" a measured fact rather than an aspiration: the two
+/// theories now sit on opposite sides of exactly this equation, `Cospan` keeping
+/// the bubble as a genuine non-identity and `Corel` cancelling it.
+///
+/// Ranges over exactly this one pair — one wire type, arities ≤ 1. It is the
+/// *existence* witness for the composition break; the universal claim it
+/// falsifies is pinned over the whole corpus by
+/// [`compose_result_is_always_a_corelation`]. It says nothing about the other
+/// extra-special-vs-special consequences, and nothing in-tree proves the
+/// Baez–Erbele identification itself — that stays a match of descriptions.
 #[test]
-fn compose_restricts_to_the_outer_boundary() {
-    let a = Cospan::<char>::new(vec![], vec![0], vec!['m']).unwrap();
-    let b = Cospan::<char>::new(vec![0], vec![], vec!['m']).unwrap();
+fn extra_special_axiom_unit_then_counit_is_id_i() {
+    let a = Cospan::<char>::unit('m');
+    let b = Cospan::<char>::counit('m');
+    assert_eq!(
+        a,
+        Cospan::<char>::new(vec![], vec![0], vec!['m']).unwrap(),
+        "η is not the 0 → {{m}} ← 1 cospan #351 names"
+    );
+    assert_eq!(
+        b,
+        Cospan::<char>::new(vec![0], vec![], vec!['m']).unwrap(),
+        "ε is not the 1 → {{m}} ← 0 cospan #351 names"
+    );
     assert!(a.is_jointly_surjective() && b.is_jointly_surjective());
 
-    // (i) + (ii): the raw pushout. Not a corelation.
+    // (i) + (ii): the raw pushout. Not a corelation — and in `Cospan`, the
+    // *special* theory, this bubble is a genuine non-identity that stays.
     let raw = a.compose(&b).unwrap();
     assert_eq!(
         raw.middle(),
@@ -321,19 +449,115 @@ fn compose_restricts_to_the_outer_boundary() {
     );
     assert_eq!(raw.canonical_form().scalar_count(), 1);
     assert!(Corel::new(raw.clone()).is_err());
+    assert_ne!(
+        raw,
+        Cospan::<char>::identity(&Vec::<char>::new()),
+        "`Cospan` must keep η;ε apart from id_I — it is the special, not the \
+         extra-special, theory (#350)"
+    );
 
-    // (iii): Corel's own composition drops it.
-    let ca = Corel::new(a).unwrap();
-    let cb = Corel::new(b).unwrap();
+    // (iii): Corel's own composition drops it, and the result is id_I on the
+    // nose — ε ∘ η = id_I, the extra-special axiom.
+    let ca = Corel::<char>::unit('m');
+    let cb = Corel::<char>::counit('m');
     let composed = ca.compose(&cb).unwrap();
-    assert!(
-        composed.as_cospan().middle().is_empty(),
-        "Corel::compose kept a mid-born bubble: apex {:?} (raw pushout apex was {:?})",
+    assert_eq!(
+        composed.as_cospan(),
+        Corel::<char>::identity(&Vec::<char>::new()).as_cospan(),
+        "η ; ε is not id_I in Corel — the extra-special axiom fails: apex {:?} \
+         (raw pushout apex was {:?})",
         composed.as_cospan().middle(),
         raw.middle()
     );
+    // Implied by the equality above, kept because they say *what* id_I is here:
+    // a legitimate corelation with no scalar left over.
     assert!(composed.as_cospan().is_jointly_surjective());
     assert_eq!(composed.as_cospan().canonical_form().scalar_count(), 0);
+}
+
+/// What the #351 break moves on the **public surface** beyond the apex count:
+/// the flat-index layout of [`Corel::equivalence_classes`], and every predicate
+/// read off it.
+///
+/// The CHANGELOG entry has to enumerate the blast radius, so the enumeration is
+/// pinned here rather than asserted in prose. `equivalence_classes` lays the
+/// flat indices out as `0..dom_len` │ `dom_len..dom_len + mid_len` │
+/// `dom_len + mid_len..`, so **shrinking the apex shifts every codomain index**
+/// — and `merges`, `is_identity_partition` and `equivalence_classes().len()`
+/// shift with it. "A dropped class contains no boundary element by definition"
+/// is true, but it is a statement about the *partition*, not about its
+/// *encoding*, and the encoding is the public surface. The true half is
+/// asserted last and on its own, so the two cannot be conflated again.
+///
+/// `a : 1 → {a,a} ← 2` and `b : 2 → {a,a} ← 1`, both jointly surjective. Their
+/// raw pushout is `([0], [0], ['a','a'])` — apex vertex 1 reached by neither
+/// outer leg. The pre-#351 value is reconstructed with `Corel::new_unchecked`,
+/// which is exactly what `compose` used to wrap the pushout in.
+///
+/// Ranges over this one pair. It is the enumeration's witness, not a sweep.
+#[test]
+fn compose_shifts_the_flat_index_layout() {
+    /// Sorted flat-index classes, so the comparison is deterministic.
+    fn classes(c: &Corel<char>) -> Vec<Vec<usize>> {
+        let mut out: Vec<Vec<usize>> = c
+            .equivalence_classes()
+            .into_iter()
+            .map(|class| {
+                let mut members: Vec<usize> = class.into_iter().collect();
+                members.sort_unstable();
+                members
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    let a = Cospan::<char>::new(vec![0], vec![0, 1], vec!['a', 'a']).unwrap();
+    let b = Cospan::<char>::new(vec![0, 1], vec![0], vec!['a', 'a']).unwrap();
+    assert!(a.is_jointly_surjective() && b.is_jointly_surjective());
+
+    let raw = a.compose(&b).unwrap();
+    assert_eq!(
+        raw.middle().len(),
+        2,
+        "raw pushout apex: {:?}",
+        raw.middle()
+    );
+    assert_eq!(
+        bubble_count(&raw),
+        1,
+        "the raw pushout carries no bubble — this witness witnesses nothing"
+    );
+
+    // Pre-#351: `compose` was `pushout(…).map(Self::new_unchecked)`.
+    let before = Corel::new_unchecked(raw.clone());
+    // Post-#351.
+    let after = Corel::new(a)
+        .unwrap()
+        .compose(&Corel::new(b).unwrap())
+        .unwrap();
+    assert_eq!(after.as_cospan().middle().len(), 1);
+
+    // dom_len 1, mid_len 2 → codomain wire 0 sits at flat index 3.
+    assert_eq!(classes(&before), vec![vec![0, 1, 3], vec![2]]);
+    assert_eq!(before.equivalence_classes().len(), 2);
+    assert!(before.merges(0, 3));
+    assert!(!before.is_identity_partition());
+
+    // dom_len 1, mid_len 1 → the same codomain wire now sits at flat index 2.
+    assert_eq!(classes(&after), vec![vec![0, 1, 2]]);
+    assert_eq!(after.equivalence_classes().len(), 1);
+    assert!(!after.merges(0, 3));
+    assert!(after.merges(0, 2));
+    assert!(after.is_identity_partition());
+
+    // …while the relation on domain ⊔ codomain is the same throughout. That is
+    // the claim "nothing else moves" was reaching for, and it is this one only.
+    assert_eq!(
+        boundary_partition(before.as_cospan()),
+        boundary_partition(after.as_cospan()),
+        "the restriction moved the boundary relation, not merely its encoding"
+    );
 }
 
 /// `Corel::compose` returns something `Corel::new` accepts — over every
@@ -345,6 +569,14 @@ fn compose_restricts_to_the_outer_boundary() {
 /// the universal reading lives here, swept over 4 803 pairs; the count of
 /// pairs whose *raw* pushout is not jointly surjective is measured and asserted
 /// non-zero, so the sweep cannot pass by never meeting the case.
+///
+/// It also pins step (iii)'s *scope*: the composite induces the **same
+/// partition on `domain ⊔ codomain`** as the raw pushout does
+/// ([`boundary_partition`]), so the restriction is genuinely apex-only. The
+/// `domain()` / `codomain()` pair asserted alongside it is the label-level
+/// shape check and is **weak here** — one wire type makes both sides
+/// `vec!['a'; n]` whatever the legs do (see the module docs); the partition
+/// assertion is the one that can fail.
 ///
 /// Ranges over the module-doc corpus restricted to jointly-surjective members
 /// — every ordered arity-matching pair of them. Single wire type, apex ≤ 3,
@@ -390,7 +622,16 @@ fn compose_result_is_always_a_corelation() {
                 composed.as_cospan()
             );
             // The restriction touches the apex only: the partition the
-            // composite induces on domain ⊔ codomain is the pushout's.
+            // composite induces on domain ⊔ codomain is the raw pushout's,
+            // unchanged. This is the assertion that claim needs — `domain()`
+            // and `codomain()` below cannot carry it on a one-label corpus.
+            assert_eq!(
+                boundary_partition(composed.as_cospan()),
+                boundary_partition(&raw),
+                "compose({a:?}, {b:?}) moved the boundary partition: raw pushout {raw:?}, \
+                 composite {:?}",
+                composed.as_cospan()
+            );
             assert_eq!(
                 composed.as_cospan().domain(),
                 a.domain(),

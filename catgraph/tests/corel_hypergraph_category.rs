@@ -1,9 +1,20 @@
 //! F&S 2018 Example 6.64: Corel is a hypergraph category.
 //!
-//! Verifies the special commutative Frobenius-structure generators on
-//! `Corel<char>`. Corel inherits its Frobenius structure from the underlying
-//! `Cospan`, so passing here corroborates that `Corel::new_unchecked` of each
-//! generator preserves joint surjectivity.
+//! Verifies the commutative Frobenius-structure *generators* on `Corel<char>`.
+//! Corel builds each generator from the underlying `Cospan` one, so passing
+//! here corroborates that `Corel::new_unchecked` of each generator preserves
+//! joint surjectivity.
+//!
+//! ⚠ **The generators are shared with `Cospan`; the composition is not.**
+//! `Corel` is the **extra-special** theory — `η ; ε == id_I` holds in it and
+//! fails in `Cospan` — because `Corel::compose` performs the F&S 2018 Ex 4.61
+//! fn. 2 restriction to the outer boundary on top of the pushout
+//! ([#351](https://github.com/sustia-llc/catgraph/issues/351)). The composites
+//! built below never birth a mid-composition bubble, so nothing here separates
+//! the two theories; the axiom that does is pinned in
+//! `tests/corel_quotient.rs::extra_special_axiom_unit_then_counit_is_id_i`.
+//! `Cospan` stays the *special*, not extra-special, theory
+//! ([#350](https://github.com/sustia-llc/catgraph/issues/350)).
 
 mod common;
 
