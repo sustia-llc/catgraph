@@ -1032,10 +1032,19 @@ fn new_composition_is_associative_up_to_apex_isomorphism() {
     // fails the build when prose citing them drifts. Emit the quantity, not
     // the sentence: a key names what was counted, so a reader of the prose and
     // a reader of the log are talking about the same thing.
-    println!("MEASURED assoc.triples = {triples}");
-    println!("MEASURED assoc.iso_mismatches = {iso_mismatches}");
-    println!("MEASURED assoc.structural_mismatches = {structural_mismatches}");
-    println!("MEASURED assoc.outer_asymmetry_only = {structural_with_an_outer_asymmetry_only}");
-    println!("MEASURED assoc.restriction_fired = {triples_where_the_restriction_fired}");
-    println!("MEASURED assoc.any_asymmetry = {triples_with_a_fast_path_asymmetry}");
+    //
+    // The leading `\n` is load-bearing. CI captures
+    // `cargo test --workspace -- --nocapture` multi-threaded, and libtest writes
+    // `... ok` with NO trailing newline, so a bare `println!` can land in the
+    // log as `okMEASURED assoc.triples = 14473`. The guard's `(?:^|\s)MEASURED`
+    // then matches nothing and it fails on a citation of a fact "no test
+    // emitted" — with every test green. Observed on
+    // `catgraph-applied`'s emitters during #293. `println!` holds the stdout
+    // lock for the whole call, so a leading newline cannot itself be split off.
+    println!("\nMEASURED assoc.triples = {triples}");
+    println!("\nMEASURED assoc.iso_mismatches = {iso_mismatches}");
+    println!("\nMEASURED assoc.structural_mismatches = {structural_mismatches}");
+    println!("\nMEASURED assoc.outer_asymmetry_only = {structural_with_an_outer_asymmetry_only}");
+    println!("\nMEASURED assoc.restriction_fired = {triples_where_the_restriction_fired}");
+    println!("\nMEASURED assoc.any_asymmetry = {triples_with_a_fast_path_asymmetry}");
 }
