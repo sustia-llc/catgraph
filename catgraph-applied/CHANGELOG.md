@@ -13,6 +13,154 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Fixed — tests
+
+- **`LinearCombination`'s `Mul` parallel arm had no value oracle**
+  ([#293](https://github.com/sustia-llc/catgraph/issues/293)). Above
+  `PARALLEL_MUL_THRESHOLD` (32 terms on *both* operands) `Mul::mul` was covered
+  only by algebraic laws — commutativity at 64 terms, associativity at 33 — and
+  by `tests/rayon_parallel.rs`'s `assert_ne!(simplified, LinearCombination::default())`,
+  which every non-empty wrong answer satisfies. Both laws are invariant under a
+  uniform doubling of the result — the factor appears identically on each side
+  of the equation — so a mutant doubling each partial product on the parallel
+  path passed the entire crate suite. `Mul` is not a side surface:
+  `BrauerMorphism::compose` is its production call site, instantiated at the
+  `ExtendedPerfectMatching` basis.
+
+  Three fixtures now oracle the value against a nested-loop reference that
+  accumulates into a plain `HashMap` and calls no `LinearCombination`
+  arithmetic at all — it shares only `FromIterator` and the derived
+  `PartialEq`, so a wrong `Add`/`AddAssign`/`Mul<Coeffs>` moves the value under
+  test without moving the reference (the pre-existing
+  `linear_combine_reference` in the same file is built out of `singleton`,
+  `* coeff` and `+=`, and does not have that property).
+
+  - `rayon_equivalence::mul_matches_sequential_reference_across_dispatch_states`
+    — keys `1..=n` on both sides, `c_k = k` on the left against `c_k = k+1` on
+    the right so the operands are never equal, run at 16 × 16, 40 × 40, 40 × 16
+    and 16 × 40, i.e. all four cells of the
+    `self.len() >= 32 && rhs.len() >= 32` truth table. The two mixed cells put a
+    large operand through the serial arm, so an arm-confined defect is caught
+    whichever operand the gate keys on — they do *not* pin the gate itself (see
+    the limits below). Each cell also checks its own discriminating power before
+    asserting: `lhs * lhs` and `rhs * rhs` must both differ from the answer, or
+    the cell could not see an impl that read one operand twice. What bounds the
+    four-cell claim: both arms map the *same* `process` closure — what differs
+    is rayon's iterator and `collect`, not the mapped body — so any single-token
+    mutation of that closure moves both arms, and the three serial cells were
+    not observed to add detection over the pre-existing 2 × 2 unit test in any
+    perturbation run recorded in this entry — neither the five below nor the
+    `AddAssign` one named under the limits. They are insurance against a future
+    bespoke parallel body. Basis collisions are measured per case, not assumed:
+    256<!--m:mul.16x16.term_pairs--> term pairs give
+    97<!--m:mul.16x16.distinct_products--> distinct products with a top
+    multiplicity of 6<!--m:mul.16x16.max_multiplicity-->, and
+    1600<!--m:mul.40x40.term_pairs--> pairs give
+    517<!--m:mul.40x40.distinct_products--> products with a top multiplicity of
+    12<!--m:mul.40x40.max_multiplicity--> (each mixed cell:
+    287<!--m:mul.40x16.distinct_products--> products). The test fails loudly if
+    a case turns out to have no collisions.
+  - `rayon_equivalence::mul_on_a_non_commutative_basis_keeps_operand_order` —
+    a free-monoid `Word` basis under concatenation at 40 × 40, the first
+    directly-constructed `Mul` fixture in the crate whose basis product is not
+    commutative. It checks its own discriminating power first: the
+    swapped-order reference must differ from the true one, else the equality
+    assertion would be vacuous with respect to operand order.
+  - `rayon_parallel::linear_combination_above_threshold` — **sharpened in place
+    rather than deleted.** Its 64 × 64 fixture is the only `Mul` *test* fixture
+    in the crate whose basis contains the absorbing element `0`; two non-test
+    sites also key from `0` and assert nothing about the product — the bench in
+    `benches/rayon_thresholds.rs`, and `examples/wasi_smoke_applied.rs`, which
+    multiplies two 40-term combinations over `0..40` and only checks that the
+    basis stays non-negative. It is also the only directly-built fixture whose
+    basis products are formed in a *narrower* type than its coefficients
+    (`LinearCombination<i64, i32>`). `assert_ne!(…, default())` became a full
+    comparison against the same reference. The absorbing class is
+    127<!--m:mul_absorbing.pairs_at_zero--> of the
+    4096<!--m:mul_absorbing.term_pairs--> term pairs, summing to
+    2143<!--m:mul_absorbing.coeff_at_zero--> at basis `0`; since every
+    coefficient is positive, exactly
+    0<!--m:mul_absorbing.zero_coefficient_terms--> product terms carry a zero
+    coefficient, so `simplify` is pinned here as the identity on this input and
+    this fixture does **not** cover zero-coefficient removal after a collision.
+
+  Falsification, all figures from manual perturbation runs of the applied
+  package on the default feature set with `--no-fail-fast` (without it cargo
+  stops at the first failing binary and the totals do not reproduce) — recorded,
+  not guarded, and no gate re-checks them.
+
+  The mutant, stated once because two of the five runs below are variants of
+  it: both `CondIterator` arms map the *same* closure, so there is no parallel
+  branch to edit and no `else` branch either — the
+  `#[cfg(not(feature = "parallel"))]` binding is not compiled under the default
+  feature set. Confining a defect to one arm means introducing the split:
+
+  ```text
+      CondIterator::new(self.0, enable_parallel)
+          .map(process)
+          .map(|p| if enable_parallel { p.clone() + p } else { p })
+          .collect()
+  ```
+
+  with the two branches exchanged for the serial-confined variant.
+
+  - doubling confined to the **parallel** path (the mutant of the issue):
+    657 passed / 3 failed. All three new or sharpened tests reddened —
+    at 40 × 40 the coefficient at basis 120 read 3234 against a reference 1617,
+    at `Word("a0b0")` it read 2 against 1, and at 64 × 64 basis `0` it read
+    4286 against 2143. Both law tests stayed green, as did every
+    `linear_combine` test.
+  - doubling confined to the **serial** path: 648 passed / 12 failed,
+    including `linear_combination::test::multiplication` and four
+    `temperley_lieb` unit tests, because `compose` routes through this impl.
+    Of the new work only the 16 × 16 case reddened (basis 12: 200 against a
+    reference 100); the 40 × 40 `Word` test and the 64 × 64 test stayed green,
+    which is the arm confinement the sizes were chosen for.
+  - basis operands swapped (`k1 * k2` → `k2 * k1`): 659 passed / 1 failed. The
+    `Word` test was the only test in the whole package to see it — every
+    integer-basis fixture is blind to it by construction, and the
+    `temperley_lieb` fixtures, which reach the same impl through `compose`,
+    stayed green too.
+  - the dispatch gate's `&&` rewritten to `||`: 660 passed / **0 failed**, and
+    independently, the threshold widened by 2 so that 33-term operands fall to
+    the serial arm: 660 passed / **0 failed** as well. Both are recorded because
+    they *failed* to redden, and that is not a defect in the fixtures: both arms
+    compute the same value when neither is broken, and nothing in the crate
+    observes which arm ran, so no value oracle can see a dispatch decision on
+    its own. It is only visible in combination with an arm-confined defect —
+    which is what the four-cell sweep is for. An earlier draft of the docstring
+    claimed the mixed cells pinned the gate directly; the first run corrected
+    that, and the second showed the same blindness covers the threshold value.
+
+  One mechanical note on the `MEASURED` emission, because the reason for the
+  leading `\n` is not guessable from the code: CI captures
+  `cargo test --workspace -- --nocapture` multi-threaded, and libtest writes
+  `... ok` with no trailing newline, so a bare `println!("MEASURED …")` can land
+  in the log as `okMEASURED …` and the guard's `(?:^|\s)MEASURED` then matches
+  nothing at all. That happened here — `mul.word40x40.distinct_products` went
+  missing from a full workspace run and the guard failed on a *citation of a
+  fact no test emitted*, with every test green. `println!` holds the stdout lock
+  for the whole call, so a leading newline makes the fact start its own line
+  unconditionally.
+
+  **What the new pins cannot see.** Every coefficient ring the crate exercises
+  is commutative — `i64` in these fixtures, `num::Complex<i32>` in
+  `temperley_lieb`'s own unit tests, which reach this impl through `compose` —
+  so a swap of `c_k1 * c_k2` is invisible crate-wide. No fixture here uses a
+  negative or zero coefficient, or any ring but `i64`. Sizes are 16, 40 and 64
+  only, so no value oracle runs at 31, 32 or 33 terms, and per the two null runs
+  above an off-by-one in the threshold comparison is caught by **nothing**: the
+  associativity law test at 33 compares two dispatch-identical computations, so
+  it is in the same blind class rather than an exception to it. In the `1..=n`
+  and `Word` fixtures, `k2 ↦ k1 · k2` is injective for each fixed `k1`, so no
+  two products collide *within* one `process` call there and every collision
+  they measure is merged later by the fold's `Add`; `AddAssign`'s `and_modify`
+  branch is reached instead by `linear_combination::test::add_assign` and by the
+  64 × 64 fixture, whose `k1 = 0` partial merges 63 times (2206 at basis `0`
+  against a reference 2143 when that branch is doubled). And the `Word` fixture
+  says nothing about whether
+  `ExtendedPerfectMatching`'s own product is order-sensitive.
+
 ## [workspace-v0.16.0] - 2026-08-24
 
 ### Docs

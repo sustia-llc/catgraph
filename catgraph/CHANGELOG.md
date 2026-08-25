@@ -6,6 +6,21 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed — tests
+
+- **`corel_quotient`'s six `MEASURED` emitters could be swallowed by the
+  multi-threaded log capture** ([#293](https://github.com/sustia-llc/catgraph/issues/293),
+  found while adding emitters in `catgraph-applied`). CI captures
+  `cargo test --workspace -- --nocapture` with the default thread count, and
+  libtest writes `... ok` with no trailing newline — so a bare
+  `println!("MEASURED …")` can land in the log run together with it, as
+  `okMEASURED assoc.triples = 14473`. `check_measured_claims.py` requires the
+  fact to start a line or follow whitespace, so it then matches nothing and
+  fails the build on a citation of a fact "no test emitted", with every test
+  green. Observed on the applied crate's emitters. Each `println!` now carries a
+  leading `\n`; `println!` holds the stdout lock for the whole call, so the fact
+  always starts its own line.
+
 ### Added — tooling
 
 - **`scripts/check_measured_claims.py`, a prose-consistency guard, wired into

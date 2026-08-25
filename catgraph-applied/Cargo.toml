@@ -11,10 +11,11 @@ repository.workspace = true
 
 [features]
 default = ["parallel"]
-# `parallel` enables rayon + rayon_cond::CondIterator at the two HashMap
-# `into_par_iter` sites in linear_combination and the two `par_bridge` sites
-# in temperley_lieb::non_crossing. With the feature off, those sites fall
-# back to plain `.into_iter()`. Phase W.1.
+# `parallel` enables rayon + rayon_cond::CondIterator at the two sites in
+# linear_combination (a HashMap in Mul::mul, a Vec in linear_combine) and the
+# two combinations sites in temperley_lieb::non_crossing (those two were
+# `par_bridge` before they were unified onto rayon_cond). With the feature off,
+# those sites fall back to plain `.into_iter()`. Phase W.1.
 parallel = ["dep:rayon", "dep:rayon-cond", "catgraph/parallel"]
 # `f64-rig` exposes the mat_f64 module: nalgebra bridge for MatR<F64Rig>
 # (determinant, try_inverse, DMatrix roundtrip). Opt-in; off by default to
