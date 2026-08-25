@@ -554,7 +554,8 @@ mod test {
 
     use catgraph::errors::CatgraphError;
 
-    use super::BrauerMorphism;
+    use super::{BrauerMorphism, Pair, PerfectMatching};
+    use catgraph_testutil::Lcg;
     use either::Either;
     use num::{One, Zero};
 
@@ -865,6 +866,530 @@ mod test {
                     |j, k| !j.is_def_tl && !k.is_def_tl,
                     "s_i e_j = e_j s_i",
                 );
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // #294 — value oracles for `PerfectMatching::non_crossing` and for
+    // `Monoidal::monoidal` at a non-zero shift.
+    //
+    // These live beside the implementation rather than in
+    // `tests/temperley_lieb.rs` because the only public reader of `is_def_tl`
+    // is the `Debug` impl, and the pair set of a diagram has no public reader
+    // at all. A child module reads the fields; the integration suite would
+    // need a new accessor to say anything at all.
+    // ---------------------------------------------------------------------
+
+    /// `Pair::contains` against strict betweenness, over every `(a, b, x)` drawn
+    /// from `0..6` — 216 cases, both argument orders and `a == b` included.
+    ///
+    /// `contains` is public and its contract is order-agnostic, but no fixture
+    /// reaching it through `non_crossing` supplies a descending pair: deleting
+    /// the `(x < self.0 && x > self.1)` disjunct leaves the crate suite green.
+    /// This asserts the contract directly. The reference normalises with
+    /// `min`/`max` instead of case-splitting on the argument order, so it
+    /// shares no branch with production.
+    #[test]
+    fn pair_contains_is_strict_betweenness_in_either_order() {
+        for a in 0..6usize {
+            for b in 0..6usize {
+                for x in 0..6usize {
+                    let want = x > a.min(b) && x < a.max(b);
+                    assert_eq!(Pair(a, b).contains(x), want, "Pair({a}, {b}).contains({x})");
+                }
+            }
+        }
+    }
+
+    /// Planarity of a Brauer diagram, decided by walking its boundary.
+    ///
+    /// Draw Hom(`source`, `target`) in a rectangle with the domain points left
+    /// to right along the top edge and the codomain points left to right along
+    /// the bottom. Walking the rectangle's boundary once visits the domain in
+    /// ascending label order and then the codomain in *descending* label order;
+    /// `walk_position` is that walk. Arcs drawn inside the rectangle avoid each
+    /// other exactly when the walk reads as a balanced parenthesis string, so
+    /// cancelling adjacent partners off a stack empties it iff the diagram is
+    /// planar.
+    ///
+    /// This is a different algorithm from the one under test, not a paraphrase
+    /// of it. [`PerfectMatching::non_crossing`] splits planarity into four
+    /// special cases — cup/cup interleaving, cap/cap interleaving, through-lines
+    /// landing on an index some cup or cap blocks, and monotonicity of the
+    /// through-line map — and never builds the boundary order at all.
+    fn boundary_walk_planar(pairs: &[Pair], source: usize, target: usize) -> bool {
+        let points = source + target;
+        let walk_position = |v: usize| {
+            if v < source {
+                v
+            } else {
+                source + (points - 1 - v)
+            }
+        };
+        let mut partner = vec![usize::MAX; points];
+        for p in pairs {
+            let (a, b) = (walk_position(p.0), walk_position(p.1));
+            partner[a] = b;
+            partner[b] = a;
+        }
+        let mut stack: Vec<usize> = Vec::with_capacity(points);
+        for i in 0..points {
+            if stack.last().is_some_and(|&top| partner[top] == i) {
+                stack.pop();
+            } else {
+                stack.push(i);
+            }
+        }
+        stack.is_empty()
+    }
+
+    /// Every perfect matching on the point set `0..2k`.
+    fn all_matchings(k: usize) -> Vec<Vec<Pair>> {
+        fn go(remaining: &[usize], acc: &mut Vec<Pair>, out: &mut Vec<Vec<Pair>>) {
+            let Some((first, rest)) = remaining.split_first() else {
+                out.push(acc.clone());
+                return;
+            };
+            for (i, &other) in rest.iter().enumerate() {
+                acc.push(Pair(*first, other));
+                let mut narrowed: Vec<usize> = rest.to_vec();
+                narrowed.remove(i);
+                go(&narrowed, acc, out);
+                acc.pop();
+            }
+        }
+        let points: Vec<usize> = (0..2 * k).collect();
+        let mut out = Vec::new();
+        go(&points, &mut Vec::new(), &mut out);
+        out
+    }
+
+    /// `(2k - 1)!!`, the number of perfect matchings on `2k` points.
+    fn perfect_matching_count(k: usize) -> usize {
+        (1..=k).map(|i| 2 * i - 1).product()
+    }
+
+    /// `C_k`, from the Segner recurrence — the number of planar perfect
+    /// matchings of `2k` points arranged on a circle.
+    fn catalan(k: usize) -> usize {
+        let mut c = vec![0usize; k + 1];
+        c[0] = 1;
+        for i in 1..=k {
+            for j in 0..i {
+                c[i] += c[j] * c[i - 1 - j];
+            }
+        }
+        c[k]
+    }
+
+    /// `non_crossing` against the boundary walk on every perfect matching of up
+    /// to ten points, at every domain/codomain split of those points.
+    ///
+    /// Two oracles, because a pointwise check is only as good as its reference:
+    ///
+    /// * pointwise — production against [`boundary_walk_planar`];
+    /// * by count — a split `source + target = 2k` only relabels which of the
+    ///   `2k` boundary positions is which, so exactly `C_k` of the matchings are
+    ///   planar at *every* split, whatever the split. Neither constant can
+    ///   satisfy that for `k >= 2`, and neither can a `Pair::contains` that has
+    ///   stopped discriminating.
+    ///
+    /// Ten points is the ceiling of the exhaustive enumeration. It never reaches
+    /// the `parallel` arms, which need eight arcs on one side and so at least
+    /// sixteen domain points; `non_crossing_parallel_arms_public_api` and
+    /// `non_crossing_parallel_arms_seeded` cover those.
+    #[test]
+    fn non_crossing_exhaustive_to_ten_points() {
+        for k in 1..=5 {
+            let matchings: Vec<PerfectMatching> = all_matchings(k)
+                .into_iter()
+                .map(PerfectMatching::from)
+                .collect();
+            // "every matching" is the claim the two oracles below range over, so
+            // pin the enumeration itself: distinct, and all of them.
+            let distinct: std::collections::BTreeSet<&Vec<Pair>> =
+                matchings.iter().map(|m| &m.pairs).collect();
+            assert_eq!(
+                distinct.len(),
+                perfect_matching_count(k),
+                "the enumeration yielded {} distinct matchings on {} points, \
+                 not (2k-1)!! = {}",
+                distinct.len(),
+                2 * k,
+                perfect_matching_count(k)
+            );
+            let expected_planar = catalan(k);
+            for source in 0..=2 * k {
+                let target = 2 * k - source;
+                let mut planar = 0usize;
+                for m in &matchings {
+                    let got = m.non_crossing(source, target);
+                    let want = boundary_walk_planar(&m.pairs, source, target);
+                    assert_eq!(
+                        got, want,
+                        "non_crossing said {got} and the boundary walk said {want} \
+                         for {:?} in Hom({source}, {target})",
+                        m.pairs
+                    );
+                    planar += usize::from(got);
+                }
+                assert_eq!(
+                    planar,
+                    expected_planar,
+                    "{planar} of the perfect matchings on {} points passed non_crossing \
+                     in Hom({source}, {target}), but exactly C_{k} = {expected_planar} \
+                     of them are planar",
+                    2 * k
+                );
+            }
+        }
+    }
+
+    /// The number of arcs with both endpoints on the domain side, then on the
+    /// codomain side — the two counts `non_crossing` tests against
+    /// `PARALLEL_COMBINATIONS_THRESHOLD`.
+    #[cfg(feature = "parallel")]
+    fn same_side_arc_counts(pairs: &[Pair], source: usize) -> (usize, usize) {
+        (
+            pairs.iter().filter(|q| q.all(|x| x < source)).count(),
+            pairs.iter().filter(|q| q.all(|x| x >= source)).count(),
+        )
+    }
+
+    /// Assert both same-side arc counts reach the parallel threshold.
+    ///
+    /// The counts are the operands each `CondIterator` site's dispatch
+    /// condition is applied to, not the condition itself. Changing both sites'
+    /// comparison so neither arm dispatches leaves the crate suite green.
+    ///
+    /// A no-op without the feature, where neither site exists.
+    fn assert_parallel_arms_dispatch(pairs: &[Pair], source: usize, what: &str) {
+        #[cfg(feature = "parallel")]
+        {
+            let (domain_arcs, codomain_arcs) = same_side_arc_counts(pairs, source);
+            let threshold = super::PARALLEL_COMBINATIONS_THRESHOLD;
+            assert!(
+                domain_arcs >= threshold && codomain_arcs >= threshold,
+                "{what} has {domain_arcs} domain-side and {codomain_arcs} codomain-side arcs, \
+                 below the parallel threshold of {threshold}"
+            );
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            let _ = (pairs, source, what);
+        }
+    }
+
+    /// Collect a morphism's `(delta power, pairs)` basis, sorted.
+    ///
+    /// `LinearCombination` keeps its map private and exposes no iterator, so
+    /// this borrows `all_terms_satisfy`. The predicate is constantly true
+    /// because that method short-circuits on false.
+    fn terms(m: &BrauerMorphism<i64>) -> Vec<(usize, Vec<Pair>)> {
+        let collected = std::cell::RefCell::new(Vec::new());
+        m.diagram
+            .all_terms_satisfy(|(delta_pow, matching): &(usize, PerfectMatching)| {
+                collected
+                    .borrow_mut()
+                    .push((*delta_pow, matching.pairs.clone()));
+                true
+            });
+        let mut out = collected.into_inner();
+        out.sort();
+        out
+    }
+
+    /// Both parallel arms of `non_crossing`, in both polarities, over diagrams
+    /// built with nothing but the public API.
+    ///
+    /// Eight same-side arcs is the threshold, so the domain needs sixteen
+    /// points. One generator has a single cup; composition accumulates them, and
+    /// `e_0 ; e_2 ; … ; e_14` in Hom(16, 16) cups every domain point in pairs and
+    /// caps every codomain point in pairs — eight arcs a side, exactly at the
+    /// threshold.
+    ///
+    /// Getting `non_crossing` to run at all takes one more step: `set_is_tl`
+    /// early-returns while `is_def_tl` is true, and that product's flag is true.
+    /// `s_0 ; s_0` is the identity diagram, so composing with it leaves the
+    /// geometry bit-identical while `&&`-ing the flag down to false.
+    ///
+    /// The three cases put the two arms through all four of their outcomes:
+    /// the domain arm finds a crossing (`domain_crossing`) and does not
+    /// (`flag_cleared`, `codomain_crossing`); the codomain arm finds one
+    /// (`codomain_crossing`) and does not (`flag_cleared`).
+    #[test]
+    fn non_crossing_parallel_arms_public_api() {
+        use catgraph::category::Composable;
+        let n = 16;
+        let e = BrauerMorphism::<i64>::temperley_lieb_gens(n);
+        let s = BrauerMorphism::<i64>::symmetric_alg_gens(n);
+        let mut product = e[0].clone();
+        for k in 1..8 {
+            product = product
+                .compose(&e[2 * k])
+                .expect("e_0 ; e_2 ; … ; e_14 in Hom(16, 16)");
+        }
+        assert!(
+            product.is_def_tl,
+            "a product of TL generators is flagged TL by construction, which is \
+             why set_is_tl needs the flag knocked down before it will compute"
+        );
+
+        let flag_cleared = product
+            .compose(&s[0])
+            .and_then(|z| z.compose(&s[0]))
+            .expect("product ; s_0 ; s_0");
+        let domain_crossing = s[1].compose(&product).expect("s_1 ; product");
+        let codomain_crossing = product.compose(&s[1]).expect("product ; s_1");
+
+        assert_eq!(
+            terms(&flag_cleared),
+            terms(&product),
+            "s_0 ; s_0 is the identity, so this must be the same diagram as the product"
+        );
+
+        for (what, morphism, expected) in [
+            ("product ; s_0 ; s_0", &flag_cleared, true),
+            ("s_1 ; product", &domain_crossing, false),
+            ("product ; s_1", &codomain_crossing, false),
+        ] {
+            let mut subject = morphism.clone();
+            assert!(
+                !subject.is_def_tl,
+                "{what}: composing with a symmetric generator must clear the flag, \
+                 or set_is_tl early-returns and non_crossing never runs"
+            );
+            for (_, pairs) in terms(&subject) {
+                assert_parallel_arms_dispatch(&pairs, subject.source, what);
+                assert_eq!(
+                    boundary_walk_planar(&pairs, subject.source, subject.target),
+                    expected,
+                    "{what}: the boundary walk disagrees with the case's stated planarity"
+                );
+            }
+            subject.set_is_tl();
+            assert_eq!(
+                subject.is_def_tl, expected,
+                "{what}: set_is_tl computed {} where the geometry is planar = {expected}",
+                subject.is_def_tl
+            );
+        }
+    }
+
+    /// A matching of `points`, drawn by repeatedly pairing two of them at
+    /// random. Planar only by accident.
+    fn seeded_matching_on(points: &[usize], rng: &mut Lcg, out: &mut Vec<Pair>) {
+        let mut pool: Vec<usize> = points.to_vec();
+        while !pool.is_empty() {
+            let a = pool.swap_remove(rng.next_usize(0, pool.len() - 1));
+            let b = pool.swap_remove(rng.next_usize(0, pool.len() - 1));
+            out.push(Pair::sorted(a, b));
+        }
+    }
+
+    /// A planar matching of `points`, which must be given in boundary order —
+    /// either direction, since reversing a boundary preserves planarity. Pair
+    /// the first point with one at an odd offset, then recurse on the inside and
+    /// the outside: the standard planar decomposition.
+    fn seeded_planar_matching_on(points: &[usize], rng: &mut Lcg, out: &mut Vec<Pair>) {
+        if points.is_empty() {
+            return;
+        }
+        let partner_slot = 2 * rng.next_usize(0, points.len() / 2 - 1) + 1;
+        out.push(Pair::sorted(points[0], points[partner_slot]));
+        seeded_planar_matching_on(&points[1..partner_slot], rng, out);
+        seeded_planar_matching_on(&points[partner_slot + 1..], rng, out);
+    }
+
+    /// Seeded diagrams that keep both parallel arms dispatching, checked
+    /// against the boundary walk.
+    ///
+    /// Reaching the arm takes eight arcs on a side. At `source = target = 16`
+    /// that consumes the domain entirely, so those diagrams have no
+    /// through-lines and exercise the two combination arms alone. At
+    /// `source = target = 17` one domain point and one codomain point are left
+    /// over and pair with each other, so the *blocking* branch runs under the
+    /// parallel arms too — emptying either side's blocking set reddens these
+    /// fixtures. The monotonicity branch runs and cannot discriminate: one
+    /// through-line is always sorted, and reaching two while keeping eight
+    /// same-side arcs per side needs `source = target >= 18`. Each side is
+    /// drawn either planar by construction or unconstrained, independently of
+    /// the other.
+    #[test]
+    fn non_crossing_parallel_arms_seeded() {
+        let mut rng = Lcg::new(0x0002_945e_ed00_0001);
+        for _ in 0..64 {
+            for (domain_planar, codomain_planar) in
+                [(false, false), (false, true), (true, false), (true, true)]
+            {
+                for (source, target) in [(16usize, 16usize), (17, 17)] {
+                    let mut pairs: Vec<Pair> = Vec::new();
+                    let mut domain_points: Vec<usize> = (0..source).collect();
+                    let mut codomain_points: Vec<usize> = (source..source + target).collect();
+                    if source % 2 == 1 {
+                        let d = domain_points.remove(rng.next_usize(0, domain_points.len() - 1));
+                        let c =
+                            codomain_points.remove(rng.next_usize(0, codomain_points.len() - 1));
+                        pairs.push(Pair::sorted(d, c));
+                    }
+                    for (planar, block) in [
+                        (domain_planar, &domain_points),
+                        (codomain_planar, &codomain_points),
+                    ] {
+                        if planar {
+                            seeded_planar_matching_on(block, &mut rng, &mut pairs);
+                        } else {
+                            seeded_matching_on(block, &mut rng, &mut pairs);
+                        }
+                    }
+                    let matching = PerfectMatching::from(pairs);
+                    let what = format!(
+                        "Hom({source}, {target}) with domain_planar={domain_planar} \
+                         codomain_planar={codomain_planar}"
+                    );
+                    assert_parallel_arms_dispatch(&matching.pairs, source, &what);
+                    let got = matching.non_crossing(source, target);
+                    let want = boundary_walk_planar(&matching.pairs, source, target);
+                    if domain_planar && codomain_planar && source % 2 == 0 {
+                        // Two planar blocks occupy disjoint stretches of the
+                        // boundary and there is no through-line to bridge them,
+                        // so nothing can interleave. Pins the planar generator,
+                        // and keeps a planar sample in the corpus.
+                        assert!(want, "must be planar by construction — {what}");
+                    }
+                    assert_eq!(
+                        got, want,
+                        "non_crossing said {got} and the boundary walk said {want} \
+                         for {:?} — {what}",
+                        matching.pairs
+                    );
+                }
+            }
+        }
+    }
+
+    /// The pair set of `a ⊗ b`, read off the side-by-side placement.
+    ///
+    /// Tensoring draws `a` to the left of `b`, so the result's domain is `a`'s
+    /// domain block followed by `b`'s and its codomain is `a`'s codomain block
+    /// followed by `b`'s. On the flat point ids `0 .. n1 + n2 + m1 + m2` the two
+    /// factors therefore embed as
+    ///
+    /// * `a`: a domain point `v` stays put; a codomain point (`v >= n1`) moves
+    ///   past `b`'s domain block, to `v + n2`;
+    /// * `b`: a domain point moves past `a`'s domain block, to `v + n1`; a
+    ///   codomain point (`v >= n2`) moves past `a`'s domain *and* codomain
+    ///   blocks, to `v + n1 + m1`.
+    ///
+    /// `monoidal` arrives at the same place by a different route — it shifts
+    /// `a` once and `b` twice, the second time against the *new* domain width.
+    fn tensor_reference(a: &[Pair], n1: usize, m1: usize, b: &[Pair], n2: usize) -> Vec<Pair> {
+        let mut out: Vec<Pair> = a
+            .iter()
+            .map(|p| p.map(|v| if v < n1 { v } else { v + n2 }))
+            .chain(
+                b.iter()
+                    .map(|p| p.map(|v| if v < n2 { v + n1 } else { v + n1 + m1 })),
+            )
+            .map(|p| p.sort())
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// `monoidal` against the side-by-side placement, on the pair set rather
+    /// than on the arities.
+    ///
+    /// The arity assertions in `tests/temperley_lieb.rs::monoidal_tensor` cannot
+    /// see a mislabelling: a shift that destroys the matching trips
+    /// `PerfectMatching::from_iter`'s bijection assertion and the test panics
+    /// before reaching them, and a shift that preserves it leaves the arities
+    /// alone. This asserts the labels.
+    #[test]
+    fn monoidal_pair_set_at_nonzero_shift() {
+        use catgraph::{
+            category::{Composable, HasIdentity},
+            monoidal::Monoidal,
+        };
+        use std::collections::BTreeSet;
+
+        // Hand-derived from the placement, before running anything: e_0 in
+        // Hom(3, 3) is (0,1) (2,5) (3,4) and id_2 in Hom(2, 2) is (0,2) (1,3).
+        // Putting id_2 to the right of e_0 gives Hom(5, 5), whose domain block
+        // is 0..5 and codomain block 5..10. e_0's domain points 0, 1, 2 stay;
+        // its codomain points 3, 4, 5 shift past id_2's two domain points to
+        // 5, 6, 7. id_2's domain points 0, 1 shift past e_0's three domain
+        // points to 3, 4; its codomain points 2, 3 shift past e_0's three
+        // domain and three codomain points to 8, 9. So (0,1) stays, (2,5) →
+        // (2,7), (3,4) → (5,6), (0,2) → (3,8), (1,3) → (4,9).
+        let mut tensored = BrauerMorphism::<i64>::temperley_lieb_gens(3)[0].clone();
+        tensored.monoidal(BrauerMorphism::<i64>::identity(&2));
+        assert_eq!(tensored.domain(), 5);
+        assert_eq!(tensored.codomain(), 5);
+        assert_eq!(
+            terms(&tensored),
+            vec![(
+                0,
+                vec![Pair(0, 1), Pair(2, 7), Pair(3, 8), Pair(4, 9), Pair(5, 6)]
+            )],
+            "e_0 (3) ⊗ id_2 should place id_2's four points at 3, 4, 8, 9"
+        );
+
+        let tl2 = BrauerMorphism::<i64>::temperley_lieb_gens(2);
+        let factors: Vec<(&str, BrauerMorphism<i64>)> = vec![
+            ("id_1", BrauerMorphism::identity(&1)),
+            ("id_3", BrauerMorphism::identity(&3)),
+            (
+                "e_0 of 3",
+                BrauerMorphism::temperley_lieb_gens(3)[0].clone(),
+            ),
+            (
+                "e_1 of 4",
+                BrauerMorphism::temperley_lieb_gens(4)[1].clone(),
+            ),
+            ("s_0 of 3", BrauerMorphism::symmetric_alg_gens(3)[0].clone()),
+            ("s_2 of 4", BrauerMorphism::symmetric_alg_gens(4)[2].clone()),
+            (
+                "e_0 e_0 of 2",
+                tl2[0].compose(&tl2[0]).expect("e_0 ; e_0 in Hom(2, 2)"),
+            ),
+            (
+                "delta + delta^2",
+                BrauerMorphism::delta_polynomial(&[0, 1, 1]),
+            ),
+        ];
+        for (a_name, a) in &factors {
+            for (b_name, b) in &factors {
+                let mut got = a.clone();
+                got.monoidal(b.clone());
+                let what = format!("{a_name} ⊗ {b_name}");
+                assert_eq!(got.domain(), a.domain() + b.domain(), "{what}: domain");
+                assert_eq!(
+                    got.codomain(),
+                    a.codomain() + b.codomain(),
+                    "{what}: codomain"
+                );
+                // Side by side introduces no closed loop, so the delta powers add.
+                let mut want: BTreeSet<(usize, Vec<Pair>)> = BTreeSet::new();
+                for (a_delta, a_pairs) in terms(a) {
+                    for (b_delta, b_pairs) in terms(b) {
+                        want.insert((
+                            a_delta + b_delta,
+                            tensor_reference(
+                                &a_pairs,
+                                a.domain(),
+                                a.codomain(),
+                                &b_pairs,
+                                b.domain(),
+                            ),
+                        ));
+                    }
+                }
+                // A basis element is a set: two `(delta power, matching)` keys
+                // that coincide sum their coefficients and appear once.
+                let have: BTreeSet<(usize, Vec<Pair>)> = terms(&got).into_iter().collect();
+                assert_eq!(have, want, "{what}: basis");
             }
         }
     }
