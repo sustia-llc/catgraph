@@ -104,7 +104,7 @@ const BETWEENNESS_PARALLEL_THRESHOLD: usize = 50;
 const BETWEENNESS_PARALLEL_THRESHOLD: usize = usize::MAX;
 
 /// Brandes betweenness centrality, endpoints excluded, keyed by
-/// [`MultiwayNodeId`]. `normalized` divides by `(n-1)(n-2)`.
+/// [`MultiwayNodeId`]. `normalized` divides by `(n-1)(n-2)` for `n > 2`.
 ///
 /// From `BETWEENNESS_PARALLEL_THRESHOLD` (50) nodes with `parallel` on the
 /// sweep runs on rayon and scores are not bit-reproducible across runs.
@@ -149,10 +149,8 @@ pub fn multiway_betweenness<S, T>(
 /// `alpha`, `max_iter`, `tol` default to `0.1`, `1000`, `1e-6`.
 ///
 /// Returns `Some(empty)` on an empty graph. Returns `None` when the iteration
-/// does not converge within `max_iter` — reachable when `ρ(A) ≥ 1/alpha`,
-/// i.e. a cycle introduced via
-/// [`add_merge_edge`](MultiwayEvolutionGraph::add_merge_edge) — or the fixed
-/// point has zero norm.
+/// does not converge within `max_iter` (`ρ(A) ≥ 1/alpha`, which requires a
+/// cycle via [`add_merge_edge`](MultiwayEvolutionGraph::add_merge_edge)).
 ///
 /// # Examples
 ///
