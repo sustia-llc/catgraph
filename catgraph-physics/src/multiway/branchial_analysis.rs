@@ -506,13 +506,14 @@ mod tests {
         assert_eq!(scores.len(), 4);
     }
 
-    /// Two-node cycle, ρ(A) = 1: katz at α = 1.5 and at α = 0.25.
+    /// Fixture root→a, a→b, b→a (ρ(A) = 1): katz at α = 1.5, 0.25 and 0.5.
     #[test]
     fn katz_cycle_diverges_at_large_alpha_converges_at_small() {
         let mut graph: MultiwayEvolutionGraph<i32, ()> = MultiwayEvolutionGraph::new();
         let root = graph.add_root(0);
-        let kids = graph.add_fork(root, vec![(1, (), 0)]);
-        graph.add_merge_edge(kids[0], root, ());
+        let a = graph.add_fork(root, vec![(1, (), 0)])[0];
+        let b = graph.add_sequential_step(a, 2, ());
+        graph.add_merge_edge(b, a, ());
 
         assert_eq!(
             multiway_katz(&graph, Some(1.5), None, None),
@@ -520,21 +521,37 @@ mod tests {
             "α = 1.5 exceeds 1/ρ(A) = 1 and must not converge"
         );
 
-        // x = αAᵀx + 1 with Aᵀ = A symmetric: both entries equal 1/(1 - α) = 4/3,
-        // L2 norm (4/3)·√2, so each normalised entry is 1/√2.
-        let scores = multiway_katz(&graph, Some(0.25), None, None).expect("α = 0.25 converges");
-        let expected = 1.0 / 2.0_f64.sqrt();
-        assert!(
-            (scores[&root] - expected).abs() < 1e-9,
-            "root scored {}, expected {expected}",
-            scores[&root]
-        );
-        assert!(
-            (scores[&kids[0]] - expected).abs() < 1e-9,
-            "kid scored {}, expected {expected}",
-            scores[&kids[0]]
-        );
-        assert_eq!(scores.len(), 2);
+        // x = αAᵀx + 1 gives x_root = 1, x_a = α(x_root + x_b) + 1, x_b = α·x_a + 1,
+        // so x_a = (1 + 2α)/(1 - α²) and x_b = (1 + α + α²)/(1 - α²), then L2-normalise.
+        let expected = |alpha: f64| {
+            let d = 1.0 - alpha * alpha;
+            let raw = [
+                1.0,
+                (1.0 + 2.0 * alpha) / d,
+                (1.0 + alpha + alpha * alpha) / d,
+            ];
+            let norm = raw.iter().map(|v| v * v).sum::<f64>().sqrt();
+            raw.map(|v| v / norm)
+        };
+
+        for alpha in [0.25, 0.5] {
+            let scores = multiway_katz(&graph, Some(alpha), None, Some(1e-13))
+                .expect("α < 1/ρ(A) converges");
+            assert_eq!(scores.len(), 3);
+
+            let want = expected(alpha);
+            for (node, name, want) in [
+                (root, "root", want[0]),
+                (a, "a", want[1]),
+                (b, "b", want[2]),
+            ] {
+                let got = scores[&node];
+                assert!(
+                    (got - want).abs() < 1e-9,
+                    "α = {alpha}: {name} scored {got}, expected {want}"
+                );
+            }
+        }
     }
 
     /// Empty graph: `Some(empty)` from katz, empty map from betweenness.

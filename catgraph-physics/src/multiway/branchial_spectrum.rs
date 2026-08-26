@@ -218,25 +218,12 @@ impl BranchialSpectrum {
         Some(self.eigenvectors.column(1).into())
     }
 
-    /// Spectral clustering into `k` groups via k-means on the first `k`
-    /// eigenvectors of L (normalized cuts approximation).
-    ///
-    /// Returns a `Vec` mapping each node index to a cluster ID `(0..k)`.
-    ///
-    /// k-means is **fully deterministic** — no RNG is involved. Seeds come from
-    /// farthest-first traversal (the deterministic analogue of k-means++), every
-    /// tie is broken toward the lowest index, and the iteration stops on
-    /// assignment stability, on a centroid movement below `1e-24` (squared
-    /// distance), or after 100 sweeps. Clusters that go empty are reseeded onto
-    /// the point farthest from its own centroid rather than left parked at a
-    /// stale one.
-    ///
-    /// Reseeding keeps all `k` clusters populated **when the embedding has at
-    /// least `k` distinct points**. It cannot when it does not: with coincident
-    /// points every candidate donor is at distance zero, ties break toward the
-    /// lowest index, and the surplus clusters stay empty — so the returned
-    /// labels may span fewer than `k` values. That is inherent to k-means on
-    /// duplicate points, not a defect of the reseeding.
+    /// Spectral clustering: k-means on eigenvectors `1..=k` of L, returning a
+    /// cluster id in `0..k` per node index. Deterministic: farthest-first
+    /// seeds, ties to the lowest index, stop on stable assignment, centroid
+    /// movement below `1e-24` (squared), or 100 sweeps; empty clusters are
+    /// reseeded. Fewer than `k` labels may be returned when the embedding has
+    /// fewer than `k` distinct points.
     ///
     /// # Panics
     ///

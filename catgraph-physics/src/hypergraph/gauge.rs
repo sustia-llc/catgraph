@@ -1,38 +1,13 @@
-//! Gauge group implementation for hypergraph rewriting.
+//! Lattice-gauge reading of hypergraph rewriting: rewrite rules as gauge
+//! transformations, closed rewrite paths as Wilson loops, holonomy 1 as flat.
 //!
-//! This module connects hypergraph rewriting to gauge theory by implementing
-//! the `GaugeGroup` trait for lattice gauge field analysis.
-//!
-//! # Gauge-Theoretic Interpretation
-//!
-//! In gauge theory:
-//! - **Gauge transformations** are local symmetry operations
-//! - **Wilson loops** measure holonomy around closed paths
-//! - **Holonomy = 1** means the gauge field is "flat" (path-independent)
-//!
-//! For hypergraph rewriting:
-//! - **Rewrite rules** are gauge transformations
-//! - **Wilson loops** are closed paths in the evolution graph
-//! - **Causal invariance** ⟺ flat gauge field (holonomy = 1)
-//!
-//! This correspondence allows us to analyze multicomputational properties
-//! using the powerful machinery of gauge field theory.
-//!
-//! # Provenance
-//!
-//! The rewrite-rules-as-gauge-transformations reading is inspired by
-//! Gorard's causal-invariance-as-discrete-gauge-covariance result
-//! (\[Gor20a\] in `docs/ANCHORS.md`, uncached); the Wilson-loop / plaquette /
-//! holonomy vocabulary is standard lattice-gauge-theory machinery. The
-//! "causal invariance ⟺ flat gauge field (holonomy = 1)" equivalence as
-//! stated here is a catgraph interpretive gloss, not a theorem of any
-//! cached paper.
+//! Provenance (`docs/ANCHORS.md`): inspired by \[Gor20a\] (uncached); the
+//! Wilson-loop / plaquette / holonomy vocabulary is standard lattice gauge
+//! theory; "causal invariance ⟺ holonomy 1" is a catgraph gloss, not a cited
+//! theorem.
 
-/// Trait representing a gauge group in lattice gauge theory.
-///
-/// A gauge group describes the local symmetries of a physical system.
-/// In the context of hypergraph rewriting, gauge transformations correspond
-/// to rewrite rule applications.
+/// A gauge group: Lie-algebra dimension, abelianness, spacetime dimension,
+/// name, and structure constants.
 pub trait GaugeGroup {
     /// Dimension of the Lie algebra (number of generators).
     const LIE_ALGEBRA_DIM: usize;
@@ -46,24 +21,8 @@ pub trait GaugeGroup {
     fn structure_constant(a: usize, b: usize, c: usize) -> f64;
 }
 
-/// Gauge group for hypergraph rewriting systems.
-///
-/// This implements the `GaugeGroup` trait, treating hypergraph rewrite rules
-/// as local gauge transformations. The dimension of the Lie algebra corresponds
-/// to the number of independent rewrite rules.
-///
-/// # Mathematical Structure
-///
-/// - **Group elements**: Sequences of rewrite rule applications
-/// - **Multiplication**: Composition of rewrites
-/// - **Identity**: Empty rewrite sequence
-/// - **Inverse**: (Generally doesn't exist for irreversible rules)
-///
-/// # Abelian vs Non-Abelian
-///
-/// The group is **non-abelian** because the order of rule applications
-/// generally matters. This is precisely what causal invariance measures:
-/// if the group were abelian, causal invariance would be guaranteed.
+/// [`GaugeGroup`] whose generators are rewrite rules: `LIE_ALGEBRA_DIM` = rule
+/// count, non-abelian.
 ///
 /// # Example
 ///
@@ -209,28 +168,8 @@ impl GaugeGroup for HypergraphRewriteGroup {
 // Plaquette Action
 // ============================================================================
 
-/// Computes the plaquette action for a closed path in rewrite space.
-///
-/// The plaquette action is a gauge-invariant measure of "curvature"
-/// in the space of rewrites. It provides a complexity measure beyond
-/// simple step counting.
-///
-/// # Mathematical Definition
-///
-/// For a Wilson loop W, the plaquette action is:
-/// ```text
-/// S = -ln(|Tr(W)|)
-/// ```
-///
-/// where W is the holonomy around the loop.
-///
-/// # Arguments
-///
-/// * `holonomy` - The holonomy value from a Wilson loop (0.0 to 1.0)
-///
-/// # Returns
-///
-/// The plaquette action (non-negative, 0 = flat/trivial).
+/// Plaquette action `S = −ln(holonomy)`: `0.0` for `holonomy >= 1.0`,
+/// `f64::INFINITY` for `holonomy <= 0.0`.
 #[must_use]
 pub fn plaquette_action(holonomy: f64) -> f64 {
     if holonomy <= 0.0 {
@@ -242,9 +181,7 @@ pub fn plaquette_action(holonomy: f64) -> f64 {
     }
 }
 
-/// Computes the total action for an evolution (sum of plaquette actions).
-///
-/// Lower total action indicates more causal invariance.
+/// Sum of [`plaquette_action`] over `holonomies`.
 #[must_use]
 pub fn total_action(holonomies: &[f64]) -> f64 {
     holonomies.iter().map(|&h| plaquette_action(h)).sum()
@@ -259,22 +196,8 @@ use std::collections::HashMap;
 use super::hypergraph::Hypergraph;
 use super::rewrite_rule::RewriteRule;
 
-/// A D-dimensional lattice for hypergraph rewriting.
-///
-/// This structure represents a hypergraph rewriting system as a lattice gauge field,
-/// where each lattice site represents a hypergraph state and links represent transitions
-/// via rewrite rules.
-///
-/// # Lattice Structure
-///
-/// - **Sites**: D-dimensional lattice positions, each containing a hypergraph
-/// - **Links**: Connections between sites representing rewrite rule applications
-/// - **Gauge Field**: Assignment of gauge transformations to links
-/// - **Wilson Loops**: Closed paths in the lattice measuring causal invariance
-///
-/// # Type Parameters
-///
-/// * `D` - Dimension of the lattice (1D, 2D, 3D, etc.)
+/// `D`-dimensional lattice of hypergraph states; links carry rewrite
+/// transitions and their holonomies.
 ///
 /// # Example
 ///

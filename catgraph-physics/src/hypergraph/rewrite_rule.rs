@@ -71,11 +71,8 @@ impl RewriteSpan {
     }
 }
 
-/// A simplified rewrite rule for pattern-based replacement.
-///
-/// This is a more user-friendly interface that doesn't require
-/// explicit kernel specification. The kernel is inferred from
-/// shared variables between left and right patterns.
+/// Pattern rewrite rule `left → right` over variables; the kernel is the set
+/// of variables shared by both sides.
 ///
 /// # Example
 ///
@@ -108,15 +105,7 @@ pub struct RewriteRule {
 }
 
 impl RewriteRule {
-    /// Creates a rewrite rule from pattern specifications.
-    ///
-    /// Pattern variables are non-negative integers that can be matched
-    /// to any vertex in the host graph.
-    ///
-    /// # Arguments
-    ///
-    /// * `left` - Left-hand side pattern (list of hyperedges as vertex lists)
-    /// * `right` - Right-hand side pattern
+    /// Rule from `left` / `right` hyperedge lists over integer pattern variables.
     ///
     /// # Example
     ///

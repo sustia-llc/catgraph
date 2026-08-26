@@ -10,21 +10,9 @@ use super::hypergraph::Hypergraph;
 use super::rewrite_rule::{RewriteRule, RewriteSpan};
 
 impl RewriteRule {
-    /// Converts this rewrite rule to its categorical span representation.
-    ///
-    /// A rewrite rule L → R with shared variables K is naturally a span:
-    ///
-    /// ```text
-    ///     L ←── K ──→ R
-    /// ```
-    ///
-    /// - L elements = unique variables in the left pattern
-    /// - R elements = unique variables in the right pattern
-    /// - K elements = preserved variables (appear in both L and R)
-    /// - Each K element maps to its index in L and its index in R
-    ///
-    /// Labels are `u32` variable IDs, so the span carries which variables
-    /// are on each side (e.g., `left() = [0, 1, 2]` for variables 0, 1, 2).
+    /// Span `L ← K → R`: `L`/`R` = the distinct variables of each pattern as
+    /// `u32` labels, `K` = variables in both, each mapped to its index on
+    /// either side.
     ///
     /// # Example
     ///

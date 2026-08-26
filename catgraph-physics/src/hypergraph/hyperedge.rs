@@ -9,16 +9,7 @@
 use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 
-/// A hyperedge connecting multiple vertices.
-///
-/// Unlike regular graph edges that connect exactly two vertices, a hyperedge
-/// can connect any number of vertices. This is the fundamental building block
-/// of hypergraphs used in the Wolfram Physics model.
-///
-/// # Ordering
-///
-/// Hyperedges can be either ordered (sequence of vertices) or unordered (set of vertices).
-/// By default, we use ordered hyperedges as they're more common in Wolfram Physics rules.
+/// Ordered hyperedge over `usize` vertices; equality is sequence equality.
 ///
 /// # Example
 ///
