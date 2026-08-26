@@ -50,46 +50,10 @@ impl BranchialGraph {
 }
 
 impl<S, T> MultiwayEvolutionGraph<S, T> {
-    /// Convert to a petgraph directed graph for algorithm application.
-    ///
-    /// The directed sibling of [`BranchialGraph::to_petgraph`]. Nodes carry
-    /// [`MultiwayNodeId`], edges are unweighted and point parent → child.
-    /// Forward edges are exported in node order, including [merge
-    /// edges](MultiwayEvolutionGraph::add_merge_edge); the result is therefore
-    /// a multigraph exactly when the source is.
-    ///
-    /// Returns `(graph, order)` where `order[i]` is the [`MultiwayNodeId`]
-    /// stored at `NodeIndex::new(i)`.
-    ///
-    /// # Dangling edges are dropped
-    ///
-    /// An edge is exported only when **both** endpoints are registered nodes.
-    /// [`add_merge_edge`](MultiwayEvolutionGraph::add_merge_edge) validates
-    /// neither endpoint, so an edge to a stale or foreign
-    /// [`MultiwayNodeId`] is counted by
-    /// [`edge_count`](MultiwayEvolutionGraph::edge_count) but silently absent
-    /// here. Consequence worth stating plainly: on such a graph the
-    /// centralities below are computed over a **different topology than the
-    /// graph reports**, with no error and no diagnostic. If that matters,
-    /// check `pg.edge_count() == graph.edge_count()` at the call site.
-    ///
-    /// # Determinism
-    ///
-    /// Node order is deterministic: `(step, branch_id)` ascending. The
-    /// evolution graph stores nodes in a `HashMap`, so exporting in map order
-    /// would give a different index assignment on every run — and every
-    /// index-keyed centrality score computed downstream would move with it.
-    /// Sorting up front is what makes the *index assignment*, and hence
-    /// [`multiway_katz`], reproducible.
-    ///
-    /// ⚠ It does **not** make [`multiway_betweenness`] bit-reproducible once
-    /// the parallel path engages (≥ 50 nodes, `parallel` feature on):
-    /// rustworkx accumulates per-source Brandes partials into a shared
-    /// `RwLock`-guarded buffer from rayon workers, so the f64 summation order —
-    /// and the low bits of every score — varies run to run. Exactly-tied nodes
-    /// can therefore reorder between runs in a downstream ranking, and the
-    /// scores are not bit-pinnable. Build without `parallel` for a
-    /// bit-reproducible sweep at any size.
+    /// Directed petgraph export. Nodes carry [`MultiwayNodeId`] in ascending
+    /// `(step, branch_id)` order, `order[i]` at `NodeIndex::new(i)`; edges are
+    /// unweighted parent → child, multi-edges preserved; an edge is emitted
+    /// only when both endpoints are registered nodes.
     ///
     /// # Examples
     ///
@@ -103,7 +67,6 @@ impl<S, T> MultiwayEvolutionGraph<S, T> {
     /// let (pg, order) = graph.to_petgraph();
     /// assert_eq!(pg.node_count(), 3);
     /// assert_eq!(pg.edge_count(), 2);
-    /// // The root is at step 0, so it sorts first.
     /// assert_eq!(order[0], root);
     /// ```
     #[must_use]
@@ -132,64 +95,31 @@ impl<S, T> MultiwayEvolutionGraph<S, T> {
     }
 }
 
-/// Node count at which [`multiway_betweenness`] hands the Brandes sweep to
-/// rustworkx-core's parallel `CondIterator`.
-///
-/// 50 is the value rustworkx-core's own documentation recommends as the point
-/// where parallelism starts paying for itself.
-///
-/// **Gated on the `parallel` feature.** This is the crate's first rayon call
-/// site, and `parallel` is the crate's single-threading switch, so with the
-/// feature off the threshold is `usize::MAX` and `CondIterator` can never take
-/// the rayon path. Without that gate a consumer building
-/// `--no-default-features --features rustworkx` — a WASI or otherwise
-/// single-threaded target — would get rayon work spawned from inside
-/// `multiway_betweenness` on any evolution graph of ≥ 50 nodes, and on a
-/// no-threads wasm target rayon's global pool init fails at *runtime*.
+/// Node count from which [`multiway_betweenness`] runs on rayon (`parallel` on).
 #[cfg(feature = "parallel")]
 const BETWEENNESS_PARALLEL_THRESHOLD: usize = 50;
 
-/// Sequential stand-in for [`BETWEENNESS_PARALLEL_THRESHOLD`] when the
-/// `parallel` feature is off: no node count can reach it, so the Brandes sweep
-/// always runs on the calling thread.
+/// Unreachable threshold: the Brandes sweep is always sequential (`parallel` off).
 #[cfg(not(feature = "parallel"))]
 const BETWEENNESS_PARALLEL_THRESHOLD: usize = usize::MAX;
 
-/// Betweenness centrality of a multiway evolution graph — branching-junction
-/// load.
+/// Brandes betweenness centrality, endpoints excluded, keyed by
+/// [`MultiwayNodeId`]. `normalized` divides by `(n-1)(n-2)`.
 ///
-/// Scores each state by the fraction of shortest branch-paths that run through
-/// it, so the states that many distinct computational histories must pass
-/// through score highest. In multiway terms these are the bottlenecks of the
-/// evolution: fork points whose children reconverge, and merge points that
-/// several branches funnel into.
-///
-/// `normalized` divides by the number of node pairs, making scores comparable
-/// across graphs of different sizes. Endpoints are excluded from the path
-/// counts (the standard Brandes convention). At or above
-/// `BETWEENNESS_PARALLEL_THRESHOLD` (50) nodes — and only with the `parallel`
-/// feature on — the sweep runs on rayon via rustworkx-core's `CondIterator`;
-/// `RAYON_NUM_THREADS` controls the width. With `parallel` off the threshold is
-/// `usize::MAX`, so the sweep is always sequential.
-///
-/// Returns a map from [`MultiwayNodeId`] to score. The node *ordering* is
-/// deterministic, but on the parallel path the scores are **not**
-/// bit-reproducible — see the Determinism section of
-/// [`MultiwayEvolutionGraph::to_petgraph`] for why, and for the build that is.
+/// From `BETWEENNESS_PARALLEL_THRESHOLD` (50) nodes with `parallel` on the
+/// sweep runs on rayon and scores are not bit-reproducible across runs.
 ///
 /// # Examples
 ///
 /// ```
 /// use catgraph_physics::multiway::{MultiwayEvolutionGraph, multiway_betweenness};
 ///
-/// // root → a → leaf, with a second child `b` hanging off the root.
 /// let mut graph: MultiwayEvolutionGraph<i32, ()> = MultiwayEvolutionGraph::new();
 /// let root = graph.add_root(0);
 /// let kids = graph.add_fork(root, vec![(1, (), 0), (2, (), 1)]);
 /// graph.add_sequential_step(kids[0], 3, ());
 ///
 /// let scores = multiway_betweenness(&graph, false);
-/// // Only `root → a → leaf` has an interior node, so `a` carries it all.
 /// assert!((scores[&kids[0]] - 1.0).abs() < 1e-12);
 /// assert!(scores[&root].abs() < 1e-12);
 /// ```
@@ -213,76 +143,16 @@ pub fn multiway_betweenness<S, T>(
         .collect()
 }
 
-/// Katz centrality of a multiway evolution graph — α-damped inbound path
-/// count.
+/// Katz centrality `x = αAᵀx + β`, β = 1, L2-normalised, keyed by
+/// [`MultiwayNodeId`].
 ///
-/// Iterates `x ← αAᵀx + β` to a fixed point, so a state's score accumulates
-/// one α-damped contribution per distinct computational history reaching it:
-/// deep, heavily-reconverged states score high, and a root is floored at β
-/// rather than driven to zero.
+/// `alpha`, `max_iter`, `tol` default to `0.1`, `1000`, `1e-6`.
 ///
-/// # Why Katz and not eigenvector centrality
-///
-/// Issue #161 asked for eigenvector centrality. **It is undefined on the
-/// intended object.** A multiway evolution built only from
-/// [`add_root`](MultiwayEvolutionGraph::add_root) /
-/// [`add_fork`](MultiwayEvolutionGraph::add_fork) /
-/// [`add_sequential_step`](MultiwayEvolutionGraph::add_sequential_step) is a
-/// step-graded DAG — every edge runs from step `t` to step `t + 1` — so its
-/// adjacency matrix is nilpotent and its spectral radius is 0. There is no
-/// dominant eigenvector for power iteration to converge to: rustworkx-core's
-/// `eigenvector_centrality` returns `Ok(None)` at its defaults, and if forced
-/// to terminate it reports a *sink indicator* rather than a centrality — the
-/// branching junctions this function exists to score come out at ≈ 0, which is
-/// the exact opposite of the intended reading. Katz's `+ β` term is what makes
-/// it well-defined here: on a nilpotent adjacency the iteration terminates
-/// exactly, and the β floor keeps sources positive. This is not an
-/// approximation of eigenvector centrality on a DAG — it is the replacement
-/// for a quantity that does not exist.
-///
-/// # ⚠ The DAG grading is a convention, not an invariant
-///
-/// [`add_merge_edge`](MultiwayEvolutionGraph::add_merge_edge) takes an
-/// arbitrary `(from, to)` pair and validates neither the endpoints nor their
-/// steps, so a caller *can* introduce a same-step or backward edge — and its
-/// own documented workflow permits it, since
-/// [`add_fork`](MultiwayEvolutionGraph::add_fork) leaves every step-`t + 1`
-/// sibling in the active-state set, so a step-`t + 2` node may legally merge
-/// into a step-`t + 1` one.
-///
-/// With such a back-edge the adjacency is **no longer nilpotent** and the
-/// termination guarantee above does not hold. If `ρ(A) ≥ 1/alpha` the Katz
-/// iteration diverges, burns all `max_iter` rounds on values running to
-/// infinity or `NaN`, and yields `None`. Read a `None` on a graph carrying
-/// merge edges as *"α is too large for this spectral radius"* at least as
-/// readily as "needs more iterations"; retry with a smaller `alpha` before
-/// raising `max_iter`.
-///
-/// # Arguments
-///
-/// `alpha` (attenuation, default `0.1`), `max_iter` (default `1000`), and
-/// `tol` (default `1e-6`) pass straight through to rustworkx-core;
-/// `None` takes its default. β is left at the scalar `1.0`.
-///
-/// Note that rustworkx-core 0.18's own doc comment for `katz_centrality` says
-/// `max_iter` defaults to 100; the code reads `unwrap_or(1000)`. 1000 is the
-/// effective default and the one documented here.
-///
-/// # Returns
-///
-/// `Some(map)` from [`MultiwayNodeId`] to score, L2-normalized over all nodes.
-/// An empty graph returns `Some(empty map)`, matching
-/// [`multiway_betweenness`] — rustworkx's convergence test is
-/// `sum < node_count * tol`, which is `0.0 < 0.0` for an empty graph, so
-/// without the short-circuit it would spin `max_iter` times and report a
-/// non-convergence that never happened.
-///
-/// `None` when rustworkx-core declines to produce a vector on a **non-empty**
-/// graph: the iteration did not converge within `max_iter` (see the
-/// back-edge caveat above), or the converged vector had zero norm. That case
-/// is surfaced rather than collapsed to zeros or to an empty map, because
-/// "did not converge" and "every state scores 0" are different facts about
-/// the evolution.
+/// Returns `Some(empty)` on an empty graph. Returns `None` when the iteration
+/// does not converge within `max_iter` — reachable when `ρ(A) ≥ 1/alpha`,
+/// i.e. a cycle introduced via
+/// [`add_merge_edge`](MultiwayEvolutionGraph::add_merge_edge) — or the fixed
+/// point has zero norm.
 ///
 /// # Examples
 ///
@@ -294,10 +164,7 @@ pub fn multiway_betweenness<S, T>(
 /// let kids = graph.add_fork(root, vec![(1, (), 0), (2, (), 1), (3, (), 2)]);
 ///
 /// let scores = multiway_katz(&graph, None, None, None).expect("star fork converges");
-/// // The root is a source: floored at β, never ≈ 0 the way eigenvector
-/// // centrality would leave it.
 /// assert!(scores[&root] > 0.4);
-/// // Children pick up the root's α-damped contribution on top of their own β.
 /// assert!(scores[&kids[0]] > scores[&root]);
 /// ```
 #[must_use]
@@ -309,11 +176,7 @@ pub fn multiway_katz<S, T>(
 ) -> Option<HashMap<MultiwayNodeId, f64>> {
     let (pg, order) = graph.to_petgraph();
 
-    // rustworkx's convergence test is `sum < node_count as f64 * tol`, i.e.
-    // `0.0 < 0.0` — false — on an empty graph, so it would exhaust `max_iter`
-    // and hand back `Ok(None)`. Reporting "did not converge" for a graph with
-    // nothing to score is both wrong and asymmetric with `multiway_betweenness`,
-    // which returns an empty map here.
+    // rustworkx's convergence test `sum < n * tol` never fires at n = 0.
     if order.is_empty() {
         return Some(HashMap::new());
     }
@@ -328,9 +191,6 @@ pub fn multiway_katz<S, T>(
         tol,
     );
 
-    // Edges are unweighted and the weight closure above returns `Ok`
-    // unconditionally, so `E` is `Infallible` and the error arm is
-    // uninhabited — `match never {}` discharges it totally, no `unwrap`.
     let scores = match result {
         Ok(scores) => scores,
         Err(never) => match never {},
@@ -345,13 +205,8 @@ pub fn multiway_katz<S, T>(
     )
 }
 
-/// Graph coloring of a branchial graph.
-///
-/// Returns a map from [`MultiwayNodeId`] to color index (0-based).
-/// Uses rustworkx-core greedy coloring — the number of colors used
-/// is an upper bound on the chromatic number. For branchial graphs,
-/// this measures the minimum "dimensions of branching" needed to
-/// separate all causally-related branches.
+/// Greedy coloring, keyed by [`MultiwayNodeId`], colors 0-based; the color
+/// count is an upper bound on the chromatic number.
 #[must_use]
 pub fn branchial_coloring(graph: &BranchialGraph) -> HashMap<MultiwayNodeId, usize> {
     let (pg, _) = graph.to_petgraph();
@@ -366,12 +221,8 @@ pub fn branchial_coloring(graph: &BranchialGraph) -> HashMap<MultiwayNodeId, usi
     result
 }
 
-/// K-core decomposition of a branchial graph.
-///
-/// Returns a map from [`MultiwayNodeId`] to its core number.
-/// The k-core is the maximal subgraph where every vertex has degree ≥ k.
-/// High core numbers in branchial graphs indicate regions of dense
-/// computational interaction between branches.
+/// Core number (largest `k` whose k-core contains the node), keyed by
+/// [`MultiwayNodeId`].
 #[must_use]
 pub fn branchial_core_numbers(graph: &BranchialGraph) -> HashMap<MultiwayNodeId, usize> {
     let (pg, _) = graph.to_petgraph();
@@ -386,11 +237,7 @@ pub fn branchial_core_numbers(graph: &BranchialGraph) -> HashMap<MultiwayNodeId,
     result
 }
 
-/// Articulation points of a branchial graph.
-///
-/// Returns node IDs whose removal would disconnect the branchial graph.
-/// These are critical branching junctions — removing one disconnects
-/// the parallel computation structure.
+/// Nodes whose removal disconnects the graph.
 #[must_use]
 pub fn branchial_articulation_points(graph: &BranchialGraph) -> Vec<MultiwayNodeId> {
     let (pg, _) = graph.to_petgraph();
@@ -402,91 +249,22 @@ pub fn branchial_articulation_points(graph: &BranchialGraph) -> Vec<MultiwayNode
         .collect()
 }
 
-/// Node count at which [`branchial_distance_matrix`] hands its per-source BFS
-/// sweep to rayon.
-///
-/// 300 is the value rustworkx-core's own `distance_matrix` documentation names
-/// as a good default — six times the 50 used for the Brandes sweep, a BFS row
-/// being much the cheaper unit of work.
-///
-/// **Gated on the `parallel` feature**, for the same reason as
-/// `BETWEENNESS_PARALLEL_THRESHOLD`: `parallel` is this crate's
-/// single-threading switch, and once `node_count() >= parallel_threshold`
-/// `distance_matrix` branches straight onto rayon's `into_par_iter()`. Without
-/// the gate a consumer building `--no-default-features --features rustworkx` —
-/// a WASI or otherwise single-threaded target — would get rayon work spawned
-/// from inside [`OllivierRicciCurvature`] on any branchial graph of ≥ 300
-/// nodes, and on a no-threads wasm target rayon's global pool init fails at
-/// *runtime*. With the feature off the threshold is `usize::MAX`, which no node
-/// count reaches, so the sweep always runs on the calling thread.
-///
-/// (`distance_matrix` branches on a plain `if`, not the `rayon_cond`
-/// `CondIterator` the centrality functions use. Different mechanism, identical
-/// hazard.)
-///
-/// [`OllivierRicciCurvature`]: super::ollivier_ricci::OllivierRicciCurvature
+/// Node count from which [`branchial_distance_matrix`] runs on rayon (`parallel` on).
 #[cfg(feature = "parallel")]
 const APSP_PARALLEL_THRESHOLD: usize = 300;
 
-/// Sequential stand-in for `APSP_PARALLEL_THRESHOLD` when the `parallel`
-/// feature is off: no node count can reach it, so the all-pairs sweep always
-/// runs on the calling thread.
+/// Unreachable threshold: the all-pairs sweep is always sequential (`parallel` off).
 #[cfg(not(feature = "parallel"))]
 const APSP_PARALLEL_THRESHOLD: usize = usize::MAX;
 
-/// All-pairs shortest-path distances on a branchial graph, in node order.
-///
-/// `dist[i][j]` is the unweighted hop distance from `graph.nodes[i]` to
-/// `graph.nodes[j]`. The diagonal is `0.0` and an unreachable pair is
-/// `f64::INFINITY` — the convention
-/// [`OllivierRicciCurvature`](super::ollivier_ricci::OllivierRicciCurvature)
-/// reads, and the reason `null_value` is passed as `f64::INFINITY` rather than
-/// rustworkx's own `0.0` example value.
-///
-/// # Index alignment
-///
-/// [`BranchialGraph::to_petgraph`] adds nodes in `graph.nodes` order and never
-/// removes one, so `node_bound() == node_count()` and `to_index(i) == i`. That
-/// is exactly the case in which `distance_matrix` skips its internal node
-/// remapping and indexes by `to_index`, so row `i` of the result is
-/// `graph.nodes[i]` — no permutation to undo.
-///
-/// # Determinism
-///
-/// Bit-reproducible at any size, parallel path included — unlike
-/// [`multiway_betweenness`]. `distance_matrix` fills disjoint rows: each
-/// per-source BFS writes only into its own row view, and every value written is
-/// an integer-valued hop counter rather than an accumulated sum. There is no
-/// shared f64 buffer whose summation order could vary with thread scheduling,
-/// which is precisely what makes the Brandes accumulation non-reproducible.
-///
-/// # Cost
-///
-/// rustworkx expands the BFS frontier with `FixedBitSet` word operations, which
-/// is `O(n²/64)` per source regardless of edge count — a win over a queue-based
-/// `O(n + m)` sweep on dense graphs and a loss on very sparse ones. Branchial
-/// graphs sit on the dense end by construction: nodes are joined when they
-/// share *any* ancestor, so a foliation grown from a single root is complete or
-/// near-complete at every step
-/// ([`BranchialGraph::is_fully_connected`] exists to check exactly that).
-///
-/// # Allocation
-///
-/// `distance_matrix` hands back an `ndarray` 2-D array; this copies it into
-/// `Vec<Vec<f64>>` at the boundary. The copy is deliberate: it keeps `ndarray`
-/// out of both this signature and `Cargo.toml`. `ndarray` is present
-/// transitively beneath rustworkx-core, but *declaring* it would version-lock
-/// this crate to rustworkx-core's choice of it, and the slim/WASM feature story
-/// ("one gate drops the whole rustworkx-core → petgraph + ndarray chain") would
-/// stop being true. The copy is `O(n²)` against an `O(n³/64)` sweep, so it does
-/// not change the shape of the cost.
+/// All-pairs unweighted hop distances in `graph.nodes` order: `dist[i][j]`
+/// from `nodes[i]` to `nodes[j]`, `0.0` on the diagonal, `f64::INFINITY` when
+/// unreachable.
 pub(crate) fn branchial_distance_matrix(graph: &BranchialGraph) -> Vec<Vec<f64>> {
     let (pg, _) = graph.to_petgraph();
     let matrix = rustworkx_core::shortest_path::distance_matrix(
         &pg,
         APSP_PARALLEL_THRESHOLD,
-        // `pg` is already undirected, so `neighbors` yields both directions;
-        // `as_undirected` would only chain Incoming with Outgoing redundantly.
         false,
         f64::INFINITY,
     );
@@ -570,27 +348,13 @@ mod tests {
         }
     }
 
-    /// The all-pairs sweep behind `OllivierRicciCurvature` (#162).
-    ///
-    /// Three things have to hold at once, and each is a way the rustworkx swap
-    /// could have gone wrong silently:
-    ///
-    /// 1. **`null_value`.** An unreachable pair must read `f64::INFINITY`, the
-    ///    sentinel `from_branchial` skips on — not rustworkx's own doc-example
-    ///    `0.0`, which would read as "adjacent" and divide by zero.
-    /// 2. **The diagonal.** `distance_matrix` initialises every cell to
-    ///    `null_value` and only the traversal writes `0.0`, so the diagonal
-    ///    being `0.0` is a property of the traversal, not of the fill.
-    /// 3. **Index alignment.** The branch ids here are deliberately *not*
-    ///    ascending: any export that sorted or hashed nodes rather than keeping
-    ///    `graph.nodes` order would permute the rows and still look plausible.
+    /// Path 7-2-9 plus disjoint edge 4-1, branch ids non-ascending; then the
+    /// 0×0 and 1×1 shapes.
     #[test]
     fn distance_matrix_marks_unreachable_and_keeps_node_order() {
         use super::super::evolution_graph::BranchId;
 
         let id = |branch: usize| MultiwayNodeId::new(BranchId(branch), 0);
-        // Path 7-2-9, plus a disjoint edge 4-1. Branch ids are shuffled so that
-        // row order can only come from `nodes`, not from the ids themselves.
         let graph = BranchialGraph {
             step: 0,
             nodes: vec![id(7), id(2), id(9), id(4), id(1)],
@@ -609,9 +373,6 @@ mod tests {
             ]
         );
 
-        // Degenerate shapes the curvature entry point short-circuits on, pinned
-        // here because the matrix helper is what would panic if they were not
-        // handled: 0×0 and a lone 0.0 diagonal.
         let empty = BranchialGraph {
             step: 0,
             nodes: Vec::new(),
@@ -640,17 +401,9 @@ mod tests {
         assert!(artics.is_empty());
     }
 
-    // --- multiway (evolution-graph) centrality, issue #161 ------------------
+    // --- multiway (evolution-graph) centrality ------------------------------
 
-    /// Root → 2 children, both reconverging on one merge node.
-    ///
-    /// ```text
-    ///     root
-    ///     /  \
-    ///    a    b
-    ///     \  /
-    ///     merge
-    /// ```
+    /// root → {a, b} → merge.
     fn diamond() -> (
         MultiwayEvolutionGraph<i32, ()>,
         MultiwayNodeId,
@@ -668,8 +421,7 @@ mod tests {
 
     #[test]
     fn evolution_to_petgraph_is_faithful_and_deterministically_ordered() {
-        // Wide enough that a `HashMap`-order export would essentially never
-        // come out sorted by accident: 1 root + 5 forks + 5 sequential steps.
+        // 1 root + 5 forks + 5 sequential steps.
         let mut graph: MultiwayEvolutionGraph<i32, ()> = MultiwayEvolutionGraph::new();
         let root = graph.add_root(0);
         let kids = graph.add_fork(
@@ -686,19 +438,16 @@ mod tests {
         assert_eq!(pg.edge_count(), graph.edge_count());
         assert_eq!(order.len(), graph.node_count());
 
-        // `order[i]` really is the weight at index `i`.
         for (i, &id) in order.iter().enumerate() {
             assert_eq!(pg.node_weight(NodeIndex::new(i)), Some(&id));
         }
 
-        // Ascending `(step, branch_id)` — the property a `HashMap` export loses.
         let keys: Vec<(usize, usize)> = order.iter().map(|id| (id.step, id.branch_id.0)).collect();
         let mut sorted = keys.clone();
         sorted.sort_unstable();
         assert_eq!(keys, sorted, "node order must be canonical, not map order");
         assert_eq!(order[0], root, "the step-0 root sorts first");
 
-        // Every forward edge survived, directed parent → child.
         for &id in &order {
             let Some(edges) = graph.get_forward_edges(&id) else {
                 continue;
@@ -726,67 +475,26 @@ mod tests {
         let (graph, root, a, b, merge) = diamond();
         let raw = multiway_betweenness(&graph, false);
 
-        // The only (s, t) pair with an interior node is (root, merge), which
-        // has two shortest paths — root→a→merge and root→b→merge. Each of `a`
-        // and `b` lies on exactly one, so each scores 1/2. `root` and `merge`
-        // are endpoints of every path they touch, so both score 0.
+        // (root, merge) has two shortest paths, one through each of a, b: 1/2 each.
         assert!((raw[&a] - 0.5).abs() < 1e-12, "a scored {}", raw[&a]);
         assert!((raw[&b] - 0.5).abs() < 1e-12, "b scored {}", raw[&b]);
         assert!(raw[&root].abs() < 1e-12);
         assert!(raw[&merge].abs() < 1e-12);
 
-        // Normalization on a directed graph divides by (n-1)(n-2) = 6.
+        // (n-1)(n-2) = 6.
         let normalized = multiway_betweenness(&graph, true);
         assert!((normalized[&a] - 0.5 / 6.0).abs() < 1e-12);
         assert_eq!(normalized.len(), 4);
     }
 
+    /// Star fork, α = 0.1, β = 1: fixed point root = 1, child = 1.1;
+    /// L2-normalised root = 1/√(1 + 3·1.1²).
     #[test]
-    fn katz_floors_the_root_where_eigenvector_centrality_degenerates() {
-        // A star fork: the root is *the* branching junction, so any centrality
-        // worth the name must score it well above zero.
+    fn katz_star_fork_hand_values() {
         let mut graph: MultiwayEvolutionGraph<i32, ()> = MultiwayEvolutionGraph::new();
         let root = graph.add_root(0);
         let kids = graph.add_fork(root, vec![(1, (), 0), (2, (), 1), (3, (), 2)]);
-        let (pg, _) = graph.to_petgraph();
 
-        // (1) Eigenvector centrality is undefined here. The adjacency of a
-        //     step-graded DAG is nilpotent, so its spectral radius is 0 and
-        //     power iteration has no dominant eigenvector to find: at the
-        //     rustworkx-core defaults it simply declines to answer.
-        let default_eigen: Result<Option<Vec<f64>>, Infallible> =
-            rustworkx_core::centrality::eigenvector_centrality(&pg, |_| Ok(1.0), None, None);
-        assert_eq!(
-            default_eigen.expect("weight closure is infallible"),
-            None,
-            "eigenvector centrality must not converge on a nilpotent adjacency"
-        );
-
-        // (2) Forced to terminate, it reports a *sink indicator*: the root —
-        //     the very junction we want scored — decays toward 0 while the
-        //     leaves take everything. This is the behaviour #161 would have
-        //     shipped, and the reason the issue's `multiway_eigenvector` was
-        //     replaced by `multiway_katz`.
-        let forced: Result<Option<Vec<f64>>, Infallible> =
-            rustworkx_core::centrality::eigenvector_centrality(
-                &pg,
-                |_| Ok(1.0),
-                Some(100_000),
-                None,
-            );
-        let forced = forced
-            .expect("weight closure is infallible")
-            .expect("100k iterations converge");
-        assert!(
-            forced[0] < 1e-2,
-            "forced eigenvector centrality should collapse the root, got {}",
-            forced[0]
-        );
-        assert!(forced[1] > 0.5, "leaves absorb the whole vector");
-
-        // (3) Katz floors the root at β/‖x‖ instead. Unnormalized the fixed
-        //     point is root = β = 1 and each child = αβ + β = 1.1, so after L2
-        //     normalization root = 1/√(1 + 3·1.1²).
         let scores = multiway_katz(&graph, None, None, None).expect("star fork converges");
         let expected_root = 1.0 / (1.0 + 3.0 * 1.1_f64.powi(2)).sqrt();
         assert!(
@@ -794,27 +502,13 @@ mod tests {
             "root scored {}, expected {expected_root}",
             scores[&root]
         );
-        assert!(
-            scores[&root] > 0.4,
-            "the branching junction must stay well clear of zero"
-        );
         for &kid in &kids {
-            assert!(
-                scores[&kid] > scores[&root],
-                "children pick up the root's α-damped contribution on top of β"
-            );
+            assert!(scores[&kid] > scores[&root]);
         }
         assert_eq!(scores.len(), 4);
     }
 
-    /// An empty evolution has nothing to score — that is not a convergence
-    /// failure, and both centralities must say so the same way.
-    ///
-    /// Without the short-circuit in `multiway_katz`, rustworkx's convergence
-    /// test (`sum < node_count as f64 * tol`, i.e. `0.0 < 0.0`) never fires, so
-    /// it spins `max_iter` times and returns `Ok(None)` — reporting "did not
-    /// converge" for a graph with no nodes, and disagreeing with
-    /// `multiway_betweenness`, which returns an empty map.
+    /// Empty graph: `Some(empty)` from katz, empty map from betweenness.
     #[test]
     fn empty_graph_scores_empty_rather_than_failing_to_converge() {
         let graph: MultiwayEvolutionGraph<i32, ()> = MultiwayEvolutionGraph::new();
@@ -836,7 +530,6 @@ mod tests {
 
         assert_eq!(katz.len(), graph.node_count());
         assert_eq!(betweenness.len(), graph.node_count());
-        // Katz is L2-normalized over all nodes.
         let norm: f64 = katz.values().map(|v| v * v).sum::<f64>().sqrt();
         assert!((norm - 1.0).abs() < 1e-9, "‖x‖₂ = {norm}");
     }
