@@ -12,36 +12,12 @@
 //! | Full RNN (Mealy)   | `I → O × −`          | Coalgebra    |
 //! | Moore Machine NN   | `O × (I → −)`        | Coalgebra    |
 //!
-//! ## Unrollers
-//!
-//! Beyond the typed wrappers, each type has an **unrolling**
-//! method that turns a `cell` into a function over the corresponding
-//! inductive/coinductive carrier (CDL Examples J.1–J.5; uniqueness by
-//! Remark 2.13 for the algebra unrollers and Remark H.6 for the
-//! coalgebra unrollers):
-//!
-//! - [`FoldingRnn::unroll`] — right-fold over `Vec<A>`, the initial
-//!   algebra of `1 + A × −`.
-//! - [`RecursiveNn::unroll`] — post-order walk over
-//!   [`crate::free_monad::tree_endo::BinaryTree`], the initial algebra
-//!   of `A + (−)²`. **The one fallible unroller** since #231: being
-//!   tree-recursive it sits behind [`crate::depth`]'s pre-flight guard and
-//!   returns `Result<S, DepthError>`; the other four are loops/folds and
-//!   stay infallible.
-//! - [`UnfoldingRnn::unroll_to_vec`] — bounded-depth coalgebra unfolding
-//!   into `Vec<O>`.
-//! - [`MealyCell::run`] — left-to-right stream-process of inputs into
-//!   per-step outputs.
-//! - [`MooreCell::run`] — output-then-step Moore stream-process.
-//!
-//! Each unroller is the unique algebra (resp. coalgebra) homomorphism
-//! between the relevant initial / final carrier and the cell's
-//! (co)algebra (for `RecursiveNn` the homomorphism is the guarded walk's
-//! body — the pre-flight only decides whether it runs). The `tests/architecture_unrollers.rs` harness includes a
-//! direct *FreeMnd-equivalence* test (`unroll(cell, vec) ==
-//! unroll_via_free_mnd(cell, vec_to_free_mnd(vec, ()))`) demonstrating
-//! the central CDL claim that **the unroller IS the algebra
-//! homomorphism from the initial algebra of the free monad**.
+//! Unrollers (CDL Ex J.1–J.5; Remark 2.13 for algebras, Remark H.6 for
+//! coalgebras): [`FoldingRnn::unroll`] (right fold over `Vec<A>`),
+//! [`RecursiveNn::unroll`] (post-order over
+//! [`crate::free_monad::tree_endo::BinaryTree`]),
+//! [`UnfoldingRnn::unroll_to_vec`] / `unroll_iter`, [`MealyCell::run`],
+//! [`MooreCell::run`]. All infallible.
 
 mod folding_rnn;
 mod mealy_cell;

@@ -24,28 +24,8 @@ use crate::endofunctor::{DebugFunctor, EndoWitness, EqFunctor, HKT, Pure};
 const CELL: &str = "invariant: a live Free always holds its cell; it is emptied \
                     only by into_view/drop, which discard the husk immediately";
 
-/// One cell of the free monad on the operation functor `F`: `Pure(a)` or
-/// `Suspend(F(Free))`.
-///
-/// CDL Proposition B.18. This is the shape [`Free`] used to *be*, and it is
-/// still how a caller reads one: [`Free::into_view`] hands it over by value and
-/// [`Free::as_view`] by reference, so `match` remains the carrier's surface.
-/// What changed in the v0.14.0 window is that the shape is no longer the
-/// carrier itself — see [`Free`] for why.
-///
-/// The recursion indirection sits **inside** the functor hole
-/// (`Suspend(F::Type<Box<Free<F, A>>>)`), not around the applied functor, so a
-/// `Free` value costs exactly one `Box` per recursive hole. Dropping a
-/// `FreeView` therefore drops `Box<Free<F, A>>` values, and *their* `Drop` is
-/// iterative — one level of nesting here, none below it.
-///
-/// That is a property of *this* carrier, not a crate-wide rule: the slots sit
-/// inside an arbitrary witness's `F::Type<…>`, so there is nowhere else to put
-/// the indirection. The concrete
-/// [`BinaryTree`](crate::free_monad::tree_endo::BinaryTree), which owns its
-/// two-slot shape, boxes the subtree *pair* instead and so pays one `Box` per
-/// internal node — see
-/// [`TreeView`](crate::free_monad::tree_endo::TreeView) for the asymmetry.
+/// One cell of [`Free`]: `Pure(a)` or `Suspend(F::Type<Box<Free>>)`, read
+/// through [`Free::into_view`] / [`Free::as_view`] (CDL Prop B.18).
 pub enum FreeView<F, A>
 where
     F: EndoWitness,
@@ -56,66 +36,30 @@ where
     Suspend(F::Type<Box<Free<F, A>>>),
 }
 
-/// The free monad on the operation functor `F`: `Pure(a) | Suspend(F(Free))`.
+/// Free monad on `F` (CDL Prop B.18): construct with [`pure`](Free::pure) /
+/// [`suspend`](Free::suspend) or `From<FreeView<..>>`, read with
+/// [`into_view`](Free::into_view) / [`as_view`](Free::as_view), interpret with
+/// [`fold`](Free::fold). `fold`, `Drop`, `PartialEq` and `Debug` are heap
+/// worklists; `fold`, `==` and `{:?}` require `F: `[`Container`].
 ///
-/// CDL Proposition B.18. A *program* is a tree of `F`-shaped operation nodes
-/// terminated by pure leaves; a *handler* is an `F`-algebra that folds the tree
-/// into a result — [`fold`](Free::fold), the CDL Remark 2.13 catamorphism.
-///
-/// # Why a struct with a private cell (v0.14.0, issue [#200])
-///
-/// `Free` used to *be* the two-variant enum now called [`FreeView`], and its
-/// drop glue was the compiler's: a `Box` chain per recursive hole, dropped by
-/// recursion. A spine deep enough overflowed the stack **while dying** — an
-/// abort, uncatchable, and reachable even from a value some guard had just
-/// rejected. Fixing that needs a hand-written [`Drop`], and a hand-written
-/// `Drop` forbids moving out of the value (`error[E0509]`), which is precisely
-/// what a public-variant `match` does at every construction and consumer site.
-///
-/// So the variants moved behind an accessor. Construct with
-/// [`pure`](Free::pure) / [`suspend`](Free::suspend) (or `From<FreeView<..>>`),
-/// consume with [`into_view`](Free::into_view), inspect with
-/// [`as_view`](Free::as_view). The cell is an `Option` purely so `Drop` and
-/// `into_view` can take it without `unsafe` — the crate is
-/// `#![forbid(unsafe_code)]` — and it is `Some` for every observable value.
-///
-/// # What is iterative now
-///
-/// [`fold`](Free::fold), [`Drop`], [`PartialEq`] and [`Debug`] all walk the
-/// spine with an explicit heap worklist, so none of them can overflow on a
-/// degenerate spine. `fold`, `==` and `{:?}` reach the recursive slots through
-/// the [`Container`] capability, which is why they carry that bound.
-///
-/// `F` is an [`EndoWitness`] — the object map plus `fmap`, the latter being how
-/// [`Drop`] dismantles a cell without needing `Container`.
-///
-/// # The manual `Drop` tightens dropck for a borrowed payload
-///
-/// A `Drop` impl without `#[may_dangle]` makes the borrow checker require every
-/// lifetime in the type to **strictly outlive** the value, so a
-/// `Free<F, &'a T>` has to be declared *after* what it borrows:
+/// `Drop` is hand-written, so a borrowed payload must outlive the carrier:
 ///
 /// ```compile_fail,E0597
 /// # use catgraph_dl::endofunctor::OptionWitness;
 /// # use catgraph_dl::free_monad::Free;
-/// let free: Free<OptionWitness, &str>;         // dropped last…
-/// let payload = String::from("x");             // …but this dies first
-/// free = Free::pure(payload.as_str());         // error[E0597]
+/// let free: Free<OptionWitness, &str>;
+/// let payload = String::from("x");
+/// free = Free::pure(payload.as_str());
 /// # let _ = &free;
 /// ```
 ///
 /// ```
 /// # use catgraph_dl::endofunctor::OptionWitness;
 /// # use catgraph_dl::free_monad::Free;
-/// let payload = String::from("x");             // outlives the carrier
+/// let payload = String::from("x");
 /// let free: Free<OptionWitness, &str> = Free::pure(payload.as_str());
 /// # let _ = &free;
 /// ```
-///
-/// Owned payloads are unaffected. The compiler's message names the borrow
-/// rather than the declaration order, which is why it is worth stating here.
-///
-/// [#200]: https://github.com/sustia-llc/catgraph/issues/200
 pub struct Free<F, A>
 where
     F: EndoWitness,
@@ -232,27 +176,9 @@ impl<F, A> Free<F, A>
 where
     F: EndoWitness,
 {
-    /// Interpret the program with a handler: `pure_case` for leaves and an
-    /// `algebra : F::Type<X> → X` for operation nodes.
-    ///
-    /// This is the catamorphism that gives the operations meaning — CDL
-    /// Remark 2.13's algebra-hom unroller, and the "handler" of the
-    /// algebraic-effect reading.
-    ///
-    /// # Iterative since v0.14.0 (issue [#200])
-    ///
-    /// The walk is an explicit heap worklist, so **no spine is too deep**: the
-    /// former recursive body overflowed the stack on a degenerate caterpillar,
-    /// which is what the #231 pre-flight guard existed to bound. The bound this
-    /// costs is [`Container`]: heapifying a walk over a *generic* witness needs
-    /// `decompose`/`recompose` to pull the recursive slots out and put the
-    /// folded results back — `fmap` alone cannot, because rebuilding
-    /// `F::Type<X>` from already-folded children *is* the recursive step.
-    ///
-    /// Children are folded in position order, left to right, matching the order
-    /// the recursive body's `fmap` visited them.
-    ///
-    /// [#200]: https://github.com/sustia-llc/catgraph/issues/200
+    /// Catamorphism (CDL Remark 2.13): `pure_case` on leaves,
+    /// `algebra : F::Type<X> → X` on nodes; iterative over a heap worklist,
+    /// children folded left to right.
     pub fn fold<X, P, Alg>(self, pure_case: &P, algebra: &Alg) -> X
     where
         F: Container,
@@ -354,15 +280,8 @@ where
 /// itself quadratic in the depth of a spine, because a pretty rendering indents
 /// every line by its nesting depth.
 ///
-/// # Format spec
-///
-/// A cell is laid out by a *fresh* formatter over a scratch buffer, so only the
-/// part of the caller's spec that can be re-expressed in a format string is
-/// carried: **alternate, precision and width**. Fill, alignment, the
-/// sign/zero-pad flags and `{:x?}` / `{:X?}` are **dropped** — a carrier under
-/// one of those renders as if the flag were absent, where a `#[derive(Debug)]`
-/// type of the same shape would honour it. See
-/// [the module's rendering note](crate::free_monad#what-a-carriers-debug-does-with-your-format-spec).
+/// Carries alternate, precision and width; fill, alignment, sign, zero-pad
+/// and debug-hex flags render as if absent.
 impl<F, A> fmt::Debug for Free<F, A>
 where
     F: DebugFunctor + Container,

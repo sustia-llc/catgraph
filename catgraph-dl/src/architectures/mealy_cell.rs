@@ -1,25 +1,8 @@
 //! Full RNN / Mealy cell — coalgebra of `Para(I → O × −)`.
 //!
-//! CDL Example I.4. Carrier `S`; parametric coalgebra
-//! `(P, cell) : S → I → O × S`. Veličković: "recurrent neural networks
-//! can be thought of as **learnable Mealy machines**, a perspective
-//! seldom advocated for in the literature."
-//!
-//! Unrolling builds a `Mealy_{O,I}` element with shared parameter `P`
-//! (CDL Example J.4).
-//!
-//! ## `run`
-//!
-//! [`MealyCell::run`] is the *stream-process* projection of the unique
-//! coalgebra homomorphism into the final `Mealy_{O,I}` coalgebra. Semantics:
-//!
-//! ```text
-//! run(s_0, [i_1, i_2, …, i_n]) = [o_1, o_2, …, o_n]
-//! where (o_k, s_k) = (cell(p, s_{k−1}))(i_k)
-//! ```
-//!
-//! State is threaded left-to-right through the input sequence; outputs
-//! are collected in order.
+//! CDL Ex I.4 / Ex J.4. Carrier `S`; `cell : (P, S) → (I → (O, S))`.
+//! [`MealyCell::run`]: `run(s_0, [i_1, …, i_n]) = [o_1, …, o_n]` with
+//! `(o_k, s_k) = (cell(p, s_{k−1}))(i_k)`.
 
 use core::marker::PhantomData;
 
@@ -52,26 +35,8 @@ impl<P, S, Cell, I, O> MealyCell<P, S, Cell, I, O>
 where
     P: Clone,
 {
-    /// Run the cell over a sequence of inputs from `initial_state`,
-    /// collecting outputs in order.
-    ///
-    /// CDL Remark H.6 / Example J.4 (iterated Mealy). The Mealy unfolding: each
-    /// input step produces an output and a fresh state; state threads
-    /// left-to-right through the sequence.
-    ///
-    /// ```text
-    /// run(s_0, [i_1, …, i_n]) = [o_1, …, o_n]
-    /// where (o_k, s_k) = (cell(p, s_{k−1}))(i_k)
-    /// ```
-    ///
-    /// # Closure shape
-    ///
-    /// The cell is two-stage by CDL convention: outer `cell : (P, S) →
-    /// (I → O × S)` returns a fresh per-step closure; the inner closure
-    /// then consumes one input. We model the inner stage with a separate
-    /// generic `Step: FnOnce(I) -> (O, S)` so each call site can use a
-    /// fresh closure (the standard Rust workaround for "functions
-    /// returning closures" without naming the closure type).
+    /// `[o_1, …, o_n]` with `(o_k, s_k) = (cell(p, s_{k−1}))(i_k)` (CDL Remark
+    /// H.6 / Ex J.4); `Step` is the per-step inner closure.
     ///
     /// # Examples
     ///
@@ -99,23 +64,12 @@ where
         out
     }
 
-    /// Lazily run the cell over any input iterable, yielding one output per
-    /// input pulled — an `impl Iterator<Item = O>` that consumes `inputs` on
-    /// demand.
-    ///
-    /// CDL Remark H.6 / Example J.4. The pull-based dual of [`run`]: pulling one
-    /// item from `inputs` produces exactly one Mealy step (`(cell(p, s))(i)`),
-    /// threading the state left-to-right, identical two-stage closure shape.
-    /// `run_iter(s_0, inputs).collect()` equals [`run`]`(s_0, inputs)` for any
-    /// `inputs` (empty included); the iterator is finite, ending when `inputs`
-    /// is exhausted. It borrows `cell` for the lifetime of the returned
-    /// iterator.
+    /// Lazy [`run`]: one Mealy step per input pulled, borrowing `cell`;
+    /// `.collect()` equals [`run`]`(s_0, inputs)`.
     ///
     /// # Panics
     ///
-    /// If a cell/step call panics and the unwind is caught, the iterator is
-    /// **poisoned**: any further `.next()` call panics rather than silently
-    /// reporting the stream as exhausted.
+    /// After a caught panic in the cell or step, every further `.next()` panics.
     ///
     /// [`run`]: MealyCell::run
     ///

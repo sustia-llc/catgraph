@@ -42,94 +42,32 @@ where
     tail: F::Type<Box<Cofree<F, A>>>,
 }
 
-/// The cofree comonad on the functor `F`: a `head` label and an `F`-structure of
-/// child sub-trees.
+/// Cofree comonad on `F` (CDL Prop B.18): a `head` label and an
+/// `F`-structure of children, through [`new`](Cofree::new) /
+/// [`head`](Cofree::head) / [`tail`](Cofree::tail) /
+/// [`into_parts`](Cofree::into_parts). One machine word larger than its cell.
+/// Finitely constructible only over functors with an empty shape;
+/// [`unfold`](Cofree::unfold) terminates iff the coalgebra's `F`-structure is
+/// eventually empty.
 ///
-/// CDL Proposition B.18, the dual of [`Free`](crate::free_monad::Free): where
-/// `Free` is a coproduct (an operation tree terminated by pure leaves), `Cofree`
-/// is a product. It is the carrier for annotated trees and, over
-/// [`OptionWitness`](crate::endofunctor::OptionWitness), for bounded stream
-/// prefixes (CDL Remark H.6).
-///
-/// Fields are private — the shape is an invariant of the carrier, not a place to
-/// edit. Use [`new`](Cofree::new) / [`head`](Cofree::head) /
-/// [`tail`](Cofree::tail) / [`into_parts`](Cofree::into_parts).
-///
-/// # The private cell (v0.14.0, issue [#200])
-///
-/// The label and children now sit behind one `Option`-wrapped cell rather than
-/// being two bare fields. The reason is [`Drop`]: the compiler's drop glue
-/// recursed down the `Box` chain, so a deep spine — the ordinary output of
-/// [`unfold`](Cofree::unfold) — aborted the process while dying. A hand-written
-/// iterative `Drop` fixes that, but it forbids moving out of the value
-/// (`error[E0509]`), and [`into_parts`](Cofree::into_parts) moves *both* fields
-/// out. Taking the cell out of an `Option` is the `unsafe`-free way to do both
-/// (the crate is `#![forbid(unsafe_code)]`). [`into_parts`](Cofree::into_parts)'
-/// signature is unchanged; the cell is `Some` for every observable value.
-///
-/// ## The extra word is a known, accepted cost
-///
-/// That `Option` costs `Cofree` **one machine word** over its cell, at every
-/// instantiation measured (`Cofree<OptionWitness, u32>` = 24 over a 16-byte
-/// cell; `Cofree<TreeEndo<u8>, f64>` = 32 over a 24-byte cell). Its two sibling
-/// carriers pay nothing: [`Free`](crate::free_monad::Free)'s cell is an enum
-/// whose tag always had spare discriminants, and
-/// [`BinaryTree`](crate::free_monad::tree_endo::BinaryTree)'s view was
-/// *reshaped* to have one — `TreeView::Node` boxes its subtree **pair**, which
-/// both halves the tree's allocation count and gives the view a real tag byte
-/// for `Option` to niche into.
-///
-/// **There is no analogue of that move here, by construction.** `CofreeCell` is
-/// a struct: it has no discriminant of its own to widen or leave spare, and its
-/// only candidate niche lives inside `F::Type<Box<Cofree<F, A>>>` — the
-/// *witness's* type, which `Cofree` neither owns nor may reshape. (For the
-/// shipped witnesses that niche is spent already: `Option<Box<…>>` consumes the
-/// null pointer for `None`, and `Either<A, (Box<…>, Box<…>)>` consumes it for
-/// `Left`.) Nor is the word reclaimable by `mem::replace`, which would need an
-/// inhabitant of the cell type, and there is none without an `A`.
-///
-/// So this is a recorded cost with a reason, not an oversight — please do not
-/// re-open it without a new mechanism. The relation is pinned by
-/// `crate::free_monad::tests::the_private_cell_costs_at_most_one_word`, which
-/// measures `Cofree` against `CofreeCell` directly.
-///
-/// ## The manual `Drop` also tightens dropck for a borrowed payload
-///
-/// A `Drop` impl without `#[may_dangle]` makes the borrow checker require every
-/// lifetime in the type to **strictly outlive** the value, so a
-/// `Cofree<F, &'a T>` has to be declared *after* what it borrows:
+/// `Drop` is hand-written, so a borrowed payload must outlive the carrier:
 ///
 /// ```compile_fail,E0597
 /// # use catgraph_dl::endofunctor::OptionWitness;
 /// # use catgraph_dl::free_monad::Cofree;
-/// let cofree: Cofree<OptionWitness, &str>;     // dropped last…
-/// let payload = String::from("x");             // …but this dies first
-/// cofree = Cofree::new(payload.as_str(), None); // error[E0597]
+/// let cofree: Cofree<OptionWitness, &str>;
+/// let payload = String::from("x");
+/// cofree = Cofree::new(payload.as_str(), None);
 /// # let _ = &cofree;
 /// ```
 ///
 /// ```
 /// # use catgraph_dl::endofunctor::OptionWitness;
 /// # use catgraph_dl::free_monad::Cofree;
-/// let payload = String::from("x");             // outlives the carrier
+/// let payload = String::from("x");
 /// let cofree: Cofree<OptionWitness, &str> = Cofree::new(payload.as_str(), None);
 /// # let _ = &cofree;
 /// ```
-///
-/// Owned payloads are unaffected. The compiler's message names the borrow
-/// rather than the declaration order, which is why it is worth stating here;
-/// the same applies to [`Free`](crate::free_monad::Free) and
-/// [`BinaryTree`](crate::free_monad::tree_endo::BinaryTree).
-///
-/// # Finiteness
-///
-/// In pure theory `Cofree` is coinductive (infinite). In strict Rust it is
-/// *finitely constructible* only over functors admitting an **empty** shape —
-/// `Option`, a list functor that bottoms out. [`unfold`](Cofree::unfold) is the
-/// generator; it terminates iff the coalgebra's `F`-structure is eventually
-/// empty.
-///
-/// [#200]: https://github.com/sustia-llc/catgraph/issues/200
 pub struct Cofree<F, A>
 where
     F: EndoWitness,
@@ -218,29 +156,9 @@ impl<F, A> Cofree<F, A>
 where
     F: EndoWitness,
 {
-    /// The anamorphism, dual of [`Free::fold`](crate::free_monad::Free::fold):
-    /// grow a tree from a `seed` and a `coalg`ebra producing, at each step, this
-    /// node's label and the `F`-structure of child seeds —
-    /// `unfold c x = let (a, fx) = c x in a :< fmap (unfold c) fx`.
-    ///
-    /// Terminates iff `coalg`'s `F`-structure is eventually empty (see
-    /// [`Cofree`]'s finiteness note); `coalg` is borrowed and threaded through
-    /// every hole, so it needs no `Clone`.
-    ///
-    /// # Iterative since v0.14.0 (issue [#200])
-    ///
-    /// The growth is driven by an explicit heap worklist, so a spine of any
-    /// depth can be grown — the former recursive body overflowed the stack on a
-    /// deep caterpillar, and unlike the bijection helpers it never had a
-    /// pre-flight guard in front of it. The bound this costs is [`Container`],
-    /// for the same reason [`fold`](crate::free_monad::Free::fold) pays it:
-    /// `decompose`/`recompose` is what lets a generic witness's slots be pulled
-    /// out and put back without recursion.
-    ///
-    /// Seeds are expanded in position order, left to right, matching the order
-    /// the recursive body's `fmap` visited them.
-    ///
-    /// [#200]: https://github.com/sustia-llc/catgraph/issues/200
+    /// Anamorphism `unfold c x = let (a, fx) = c x in a :< fmap (unfold c) fx`;
+    /// iterative over a heap worklist, seeds expanded left to right.
+    /// Terminates iff `coalg`'s `F`-structure is eventually empty.
     pub fn unfold<X, C>(seed: X, coalg: &C) -> Cofree<F, A>
     where
         F: Container,
@@ -334,13 +252,8 @@ where
 /// Θ(total output) too — but a pretty rendering indents every line by its
 /// nesting depth, so that output is itself quadratic in the depth of a spine.
 ///
-/// # Format spec
-///
-/// **Alternate, precision and width are carried; fill, alignment, the
-/// sign/zero-pad flags and `{:x?}` / `{:X?}` are dropped** — a cell is laid out
-/// by a fresh formatter over a scratch buffer, and only what a format string
-/// can express dynamically survives that. See
-/// [the module's rendering note](crate::free_monad#what-a-carriers-debug-does-with-your-format-spec).
+/// Carries alternate, precision and width; fill, alignment, sign, zero-pad
+/// and debug-hex flags render as if absent.
 impl<F, A> fmt::Debug for Cofree<F, A>
 where
     F: DebugFunctor + Container,

@@ -1,37 +1,9 @@
 //! Group-action endofunctor `F = G × −` and the `Z2` recovery example.
 //!
-//! CDL Example 2.4 / Example 2.6. Given a group `G`, the endofunctor
-//! `F(X) = G × X` carries the structure of a *monad* whose algebras are
-//! exactly **`G`-sets** (sets equipped with a left action of `G`). An
-//! F-algebra homomorphism between two such algebras is then exactly a
-//! **`G`-equivariant map** — the central concept of Geometric Deep
-//! Learning.
-//!
-//! This module provides:
-//!
-//! - [`Group`] — abelian-or-otherwise group operation surface.
-//! - [`Z2Group`] — the cyclic group of order 2 as a unit struct
-//!   (`identity = false`, `compose = XOR`).
-//! - [`GroupActionEndo<G>`] — the type-level witness for the endofunctor
-//!   `F(X) = G × X`.
-//!
-//! ## CDL Example 2.6 (GDL recovery, in code)
-//!
-//! Two `Z2`-actions on `Vec<f64>` —
-//!
-//! - the canonical action `g ▶ x = if g { −x } else { x }`,
-//! - and the *trivial* action `g ▶ x = x`.
-//!
-//! An F-algebra homomorphism between them is precisely a `Z2`-equivariant
-//! map. The acceptance test [`tests/algebra_homomorphisms.rs`][test]
-//! exhibits two concrete maps:
-//!
-//! - `f(x) = x[0]` — coordinate projection — fails the equivariance
-//!   square (asymmetric under negation).
-//! - `f(x) = x.iter().map(|v| v.abs()).collect()` — pointwise absolute
-//!   value — satisfies the equivariance square because `|−x_i| = |x_i|`.
-//!
-//! [test]: ../../../../tests/algebra_homomorphisms.rs
+//! CDL Ex 2.4 / Ex 2.6: `F(X) = G × X` is a monad whose algebras are
+//! `G`-sets and whose algebra homomorphisms are `G`-equivariant maps.
+//! [`Group`], [`Z2Group`] (`identity = false`, `compose = XOR`),
+//! [`GroupActionEndo<G>`].
 
 use core::marker::PhantomData;
 
@@ -135,28 +107,9 @@ impl<G: Group> Pure<Self> for GroupActionEndo<G> {
     }
 }
 
-/// The **writer monad** over the monoid `(G, ·, e)`: `F(X) = G × X` with unit
-/// `η = pure` (`x ↦ (e, x)`) and multiplication `μ = join` collapsing a nested
-/// group pair via `compose` — `join((g1, (g2, x))) == (g1 · g2, x)`, exactly the
-/// μ documented in `monad_algebra.rs`'s CDL Example 2.6 note (CDL Def 2.1 /
-/// Ex 2.2). `bind((g, x), f)` runs `f(x) = (g2, y)` and accumulates the group
-/// slot: `(g · g2, y)`.
-///
-/// The monad laws are discharged by the [`Group`] contract:
-///
-/// - **Left unit** `bind(pure(x), f) == f(x)` — `pure(x) = (e, x)`, so
-///   `bind` yields `(e · g2, y) = (g2, y) = f(x)` by `G`'s left-identity law.
-/// - **Right unit** `bind(m, pure) == m` — `bind((g, x), pure) = (g · e, x) =
-///   (g, x)` by `G`'s right-identity law.
-/// - **Associativity** `bind(bind(m, f), h) == bind(m, |x| bind(f(x), h))` —
-///   both legs accumulate `g · g2 · g3` in the group slot; equality is `G`'s
-///   associativity law.
-///
-/// These are the monad-algebra coherence obligations that
-/// [`crate::algebra::MonadAlgebra::verify_unit_law`] /
-/// [`verify_assoc_law`](crate::algebra::MonadAlgebra::verify_assoc_law) and the
-/// [`MonadAlgebraHom`](crate::algebra::MonadAlgebraHom) verifiers machine-check
-/// against concrete samples.
+/// Writer monad over `(G, ·, e)` (CDL Def 2.1 / Ex 2.2): `pure(x) = (e, x)`,
+/// `join((g1, (g2, x))) = (g1 · g2, x)`, `bind((g, x), f) = (g · g2, y)` where
+/// `f(x) = (g2, y)`. The monad laws follow from the [`Group`] laws.
 impl<G: Group> Monad<Self> for GroupActionEndo<G> {
     fn bind<X, Y, Func>(m_a: (G, X), mut f: Func) -> (G, Y)
     where

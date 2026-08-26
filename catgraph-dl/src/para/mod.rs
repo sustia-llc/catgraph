@@ -12,40 +12,16 @@
 //! h : (Q ⊗ P) ▶ X --μ--> Q ▶ (P ▶ X) --Q ▶ f--> Q ▶ Y --g--> Z
 //! ```
 //!
-//! Weight tying is the special case of reparameterization by the diagonal
-//! comonoid `Δ_P : P → P × P` (CDL Theorem G.10 — lax algebras for `Para(T)`
-//! induce comonoids).
+//! Weight tying is reparameterization by the diagonal comonoid
+//! `Δ_P : P → P × P` (CDL Thm G.10).
 //!
-//! ## Status
+//! Instances: `(Set, ×, 1)` — [`SetMonoidal`] / [`SetActegory`]; the R-module
+//! actegory `(FinReal, ⊕, R⁰)` — [`RMonoidal`] / [`RActegory`] / [`RModule`] /
+//! [`DirectSum`] with `f64` aliases [`F64Monoidal`] / [`F64Actegory`] /
+//! [`F64Module`]. [`ParaMorphism::compose`] and [`Reparameterization::apply`]
+//! are `SetMonoidal`-specialised. Feature `ad` adds `Dual<f64>` as a scalar.
 //!
-//! Bodies present for the concrete `M = (Set, ×, 1)` actegory acting on
-//! `Set` by Cartesian product — see [`SetMonoidal`] / [`SetActegory`].
-//! [`ParaMorphism::compose`] and [`Reparameterization::apply`] have
-//! Set-specialised implementations.
-//!
-//! A second, non-`(Set, ×, 1)` instance is also shipped: the R-module actegory
-//! `(FinReal, ⊕, R⁰)` — see [`RMonoidal`] / [`RActegory`] / [`RModule`], with
-//! the scalar ring as a type parameter and [`F64Monoidal`] / [`F64Actegory`] /
-//! [`F64Module`] the `S = f64` aliases (issue #36). It is the direct-sum
-//! monoidal category of finite-dimensional
-//! modules acting on itself; its object-level tensor is the dedicated
-//! [`DirectSum`] carrier rather than the `(Set, ×, 1)` tuple, so it does not
-//! opt into [`SetCategoryDefaults`]. `ParaMorphism` / `Reparameterization`
-//! composition remains Set-specialised; other monoidal categories
-//! (hyperdoctrine, vector-bundle, fibration) are still deferred.
-//!
-//! Behind the off-by-default `ad` feature, the `ad` submodule adds one more
-//! scalar for that generic stack — the crate's own `Dual<f64>`, giving
-//! forward-mode automatic differentiation (issue #74; the type became
-//! catgraph-owned in #221). It is compiled away entirely in the default build,
-//! so it is not linked here.
-//!
-//! ## Closure convention
-//!
-//! Underlying maps `f : P ▶ X → Y` use the tuple-input convention
-//! `Fn((P, X)) -> Y`. This matches `architectures::*` (e.g.
-//! `fn((f32, u8, u32)) -> u32`) and lets the composed/reparameterised
-//! actions compose without intermediate adapters.
+//! Closure convention: `Fn((P, X)) -> Y`.
 
 mod actegory;
 #[cfg(feature = "ad")]

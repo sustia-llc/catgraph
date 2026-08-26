@@ -1,42 +1,14 @@
-//! The forward-mode dual number `a + b·ε`, `ε² = 0` — **feature `ad`**.
-//!
-//! Catgraph-owned (#221): the type used to come from `deep_causality_num_dual`,
-//! and moved in-crate when the rig identity traits became catgraph's own
-//! ([#219](https://github.com/sustia-llc/catgraph/issues/219)). That was not a
-//! preference — [`Zero`] and [`One`] live in `catgraph-applied` and `Dual` lived
-//! upstream, so no impl of the former for the latter could be written anywhere:
-//! the orphan rule forbids a foreign trait on a foreign type. Owning `Dual` is
-//! what lets it satisfy the [`RModule<S>`](super::RModule) scalar bounds at all.
-//!
-//! ## Surface
-//!
-//! Deliberately smaller than the upstream type: the arithmetic `RModule<S>` and
-//! the `ad` API actually ask for, and nothing else. `Sum`/`Product`,
-//! `FromPrimitive`, `Display`, `Default`, and the upstream analytic-scalar
-//! marker traits are **not** carried over — nothing in the workspace used them,
-//! and an unused trait impl is a claim we would then have to keep true. `Dual`
-//! also does not nest (`Dual<Dual<T>>` for second derivatives) — forward-mode
-//! first partials are the whole of what `ad` ships.
-//!
-//! ## Why the bounds are per-impl
-//!
-//! There is no `T` bound on the struct itself, matching
-//! [`RModule<S>`](super::RModule): a bound on the type would propagate into
-//! every downstream signature that merely *names* `Dual<T>`. Each impl states
-//! exactly what its own operation needs.
+//! The forward-mode dual number `a + b·ε`, `ε² = 0` (feature `ad`):
+//! `Add`/`Sub`/`Mul`/`Div`/`Neg`, [`Zero`], [`One`], `Clone`; bounds per impl;
+//! no nesting for higher derivatives.
 
 use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub};
 
 use catgraph_applied::rig::{One, Zero};
 
-/// A dual number `a + b·ε`, where the infinitesimal `ε` satisfies `ε² = 0`.
-///
-/// This is the type-level primitive of **forward-mode automatic
-/// differentiation**. Evaluate any function built from the arithmetic below at
-/// [`Dual::variable(x₀)`](Dual::variable) — which is `x₀ + 1·ε` — and the result
-/// carries `f(x₀)` in [`value`](Dual::value) and `f'(x₀)` in
-/// [`derivative`](Dual::derivative), exact to machine precision. The chain rule
-/// is not implemented anywhere; it *is* the [`Mul`] impl.
+/// Dual number `a + b·ε`, `ε² = 0`: evaluating at
+/// [`Dual::variable(x₀)`](Dual::variable) `= x₀ + 1·ε` gives `f(x₀)` in
+/// [`value`](Dual::value) and `f'(x₀)` in [`derivative`](Dual::derivative).
 ///
 /// # Examples
 ///
@@ -50,20 +22,12 @@ use catgraph_applied::rig::{One, Zero};
 /// assert_eq!(y.derivative(), 29.0); // 3·3² + 2
 /// ```
 ///
-/// # Serde (features `serde` **and** `ad`)
+/// # Serde (features `serde` and `ad`)
 ///
-/// Under `--features "serde ad"` a dual round-trips as its two components
-/// ([#230](https://github.com/sustia-llc/catgraph/issues/230)) — the derives are
-/// inherently gated on both, since this whole module exists only under `ad`.
-/// Both fields are public and independent; `re + du·ε` is well-formed for any
-/// pair, so deserialization admits nothing [`Dual::new`] would not. The one
-/// thing a document *carries* rather than derives is the tangent: a value
-/// deserialized with `du = 0` is a constant, not a seeded
-/// [`variable`](Dual::variable), so re-seed at the entry point rather than
-/// trusting a persisted derivative channel to still mean what it did upstream.
-/// The untagged-wire-shape and non-finite-`null` caveats on
-/// [`RModule`](super::RModule)'s Serde section apply here too — a `du` that
-/// went `NaN`/`±∞` serializes as `null` and will not load back.
+/// Round-trips as its two public components; a loaded `du` is whatever the
+/// document says, not a seeded [`variable`](Dual::variable). The wire shape
+/// carries no type tag and `serde_json` writes non-finite components as
+/// `null`, which does not read back.
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Dual<T> {

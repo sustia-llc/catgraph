@@ -1,39 +1,7 @@
-//! Forward-mode automatic differentiation over the scalar-generic module stack
-//! — **feature `ad`**, off by default
-//! ([#74](https://github.com/sustia-llc/catgraph/issues/74)).
-//!
-//! ## What this module is, and what it is not
-//!
-//! [`RModule<S>`](super::RModule) became generic in its scalar ring in #74 PR1.
-//! This module supplies one more `S`: [`Dual<T>`], the forward-mode dual number
-//! `a + b·ε` with `ε² = 0`. Evaluating a function at
-//! `Dual::variable(x₀) = x₀ + 1·ε` returns `f(x₀)` in the real part and `f'(x₀)`
-//! in the `ε` part, exact to machine precision — the chain rule falls out of
-//! `Dual`'s arithmetic impls.
-//!
-//! `Dual` drops in with **no adapter**: it implements catgraph's own
-//! [`Zero`](catgraph_applied::rig::Zero) / [`One`](catgraph_applied::rig::One)
-//! plus `Add` / `Mul` and derives `Clone` — exactly the per-method bound set
-//! PR1's `RModule<S>` signatures ask for. Nothing here re-implements the module
-//! structure; it parameterises it.
-//!
-//! **Honesty note on anchors.** Dual numbers are *not* a CDL construction — the
-//! paper's differentiation content is a citation to the gradient-based-learning
-//! literature, not a definition it develops. So this module claims no anchor of
-//! its own: the paper anchors stay where they belong, on the module/actegory
-//! layer it plugs into ([`RModule`] /
-//! [`RMonoidal`](super::RMonoidal) — CDL
-//! Definition E.2 / Example E.4 / Example G.3). The `examples/gradient_descent_para.rs`
-//! walkthrough is where the CDL §3.1 `Para` reading of a gradient step is spelled
-//! out.
-//!
-//! ## Where `Dual` lives
-//!
-//! [`Dual`] is defined in the sibling `para::dual` module and re-exported here,
-//! so `para::ad` stays the single public entry point for the whole feature —
-//! the path `catgraph_dl::para::ad::Dual` is unchanged from when the type came
-//! from `deep_causality_num_dual` (#221). There is no longer an upstream crate
-//! to seam against: the `ad` feature adds no dependency at all.
+//! Forward-mode automatic differentiation (feature `ad`, no dependency):
+//! [`Dual<T>`] `a + b·ε`, `ε² = 0`, as a scalar for [`RModule<S>`](super::RModule).
+//! Evaluating at `Dual::variable(x₀)` yields `f(x₀)` and `f'(x₀)`. Not a CDL
+//! construction; `examples/gradient_descent_para.rs` gives the `Para` reading.
 
 pub use super::dual::Dual;
 

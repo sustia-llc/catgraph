@@ -5,21 +5,9 @@
 //! is the special case `r = Δ_P : P → P × P` (diagonal comonoid; CDL
 //! Theorem G.10).
 //!
-//! ## Body shape
-//!
-//! [`Reparameterization`] carries the underlying morphism `r : P' → P` as
-//! a closure `Fn(P_new) -> P_old`. The [`Reparameterization::apply`]
-//! method takes a `ParaMorphism<…, P_old, F>` and produces
-//! `ParaMorphism<…, P_new, F'>` where
-//!
-//! ```text
-//! F'((p_new, x)) = F((r(p_new), x))
-//! ```
-//!
-//! For the diagonal `Δ : P → P × P` carrying `Δ(p) = (p, p)`, applying it
-//! to `(P × P, f)` produces `(P, λ(p, x). f(((p, p), x)))` — the weight-
-//! tied morphism. This is the categorical content of weight tying: the
-//! 2-cell `Δ` collapses two parameter slots into one.
+//! [`Reparameterization`] carries `r` as `Fn(P_new) -> P_old`;
+//! [`Reparameterization::apply`] sends `(P_old, F)` to `(P_new, F')` with
+//! `F'((p_new, x)) = F((r(p_new), x))`.
 
 use core::marker::PhantomData;
 
@@ -56,51 +44,9 @@ where
 }
 
 impl<R> Reparameterization<SetMonoidal, R> {
-    /// Apply this reparameterization to a `Para(SetMonoidal, C)` 1-morphism
-    /// for any `C: Actegory<SetMonoidal>`, pre-composing the parameter
-    /// substitution.
-    ///
-    /// CDL §3.1. Given `r : P' → P` (this object) and a `Para` 1-morphism
-    /// `(P, f) : X → Y`, produces `(P', f') : X → Y` where
-    ///
-    /// ```text
-    /// f'((p', x)) = f((r(p'), x))
-    /// ```
-    ///
-    /// The new morphism carries `parameter = parameter_new` directly
-    /// (caller-supplied), since `r` is a function from `P'` to `P` and the
-    /// `Para` morphism carries its parameter object at the value level.
-    ///
-    /// The current API widens this from the earlier `SetActegory`-bound impl to
-    /// `C: Actegory<SetMonoidal>`. The body is structurally agnostic to the
-    /// actegory — it threads the user-supplied substitution closure through
-    /// the action's parameter slot without re-touching the actegory's
-    /// tensor structure.
-    ///
-    /// # Examples
-    ///
-    /// Weight tying via the diagonal `Δ : P → (P, P)`. Given
-    /// `(P × P, f : (P, P) × X → Y)`, the diagonal reparameterization
-    /// `Δ(p) = (p, p)` collapses the two parameter slots into one and the
-    /// resulting `Para` 1-morphism has parameter `P` and action
-    /// `λ(p, x). f(((p, p), x))`.
-    ///
-    /// # Type parameters
-    ///
-    /// - `C` — the actegory of `Para(SetMonoidal, C)`. The current API accepts
-    ///   any `C: Actegory<SetMonoidal>`; the earlier surface was hardcoded
-    ///   to `SetActegory`.
-    /// - `PNew` — the new (codomain-of-`r` upstream, domain-of-the-result)
-    ///   parameter type `P'`.
-    /// - `POld` — the original parameter type `P`. Carried by the input
-    ///   `ParaMorphism`.
-    /// - `F` — the original action `f : P × X → Y`.
-    /// - `X`, `Y` — carrier types in the category `C` acts on.
-    ///
-    /// # Returns
-    ///
-    /// A `ParaMorphism` whose parameter is `parameter_new` and whose
-    /// action is the pre-composition closure.
+    /// `(P, f) : X → Y` to `(P', f') : X → Y` with `f'((p', x)) = f((r(p'), x))`
+    /// and parameter `parameter_new`, for any `C: Actegory<SetMonoidal>`
+    /// (CDL §3.1).
     #[allow(
         clippy::type_complexity,
         reason = "the fully-qualified return ParaMorphism<SetMonoidal, C, PNew, impl Fn((PNew, X)) -> Y> has every parameter load-bearing — a type alias would still need every parameter"

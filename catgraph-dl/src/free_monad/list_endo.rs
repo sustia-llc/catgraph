@@ -7,38 +7,10 @@
 //! FreeMnd(1 + A × −)(Z) ≅ List_{Z+1}(A)
 //! ```
 //!
-//! In Rust we encode `1 + A × X` as `Option<(A, X)>`: `None` is the unit
-//! summand `1` (the cons-list `Nil`), `Some((a, x))` is the product
-//! summand `A × X` (the cons-cell `Cons(a, x)`). With `Z = ()` the encoding
-//! collapses to `Free<ListEndo<A>, ()> ≅ Vec<A>`; with general `Z` the
-//! bijection is to `(Vec<A>, Z)` — the list is built up from `A`s until a
-//! terminator `Z` is reached.
-//!
-//! ## Bijection
-//!
-//! The two helpers below witness the iso:
-//!
-//! - [`free_mnd_to_vec`] — destruct: walk down the cons-cells, collecting
-//!   the `A` values; when the terminator `Pure(z)` is reached, return
-//!   `(items, z)`. Cells are read through
-//!   [`Free::into_view`](crate::free_monad::Free::into_view) — the carrier's
-//!   variants moved behind an accessor in the v0.14.0 window (issue
-//!   [#200](https://github.com/sustia-llc/catgraph/issues/200)).
-//! - [`vec_to_free_mnd`] — construct: build the cons-cell tower right-to-
-//!   left, with the supplied `terminator` at the deepest `Pure`.
-//!
-//! Properties (verified in `tests/free_monad_bijections.rs`):
-//!
-//! - `free_mnd_to_vec(vec_to_free_mnd(items, z)) = (items, z)`.
-//! - `vec_to_free_mnd(free_mnd_to_vec(t)) = t` (where `t :
-//!   Free<ListEndo<A>, Z>`).
-//!
-//! ## Iteration discipline
-//!
-//! `free_mnd_to_vec` walks the input loop-style with an explicit
-//! `current` rebound on each iteration. Recursive walks of `Free` would
-//! consume O(n) stack per layer; tests probe up to ~100-element vectors
-//! and would blow the default test stack on a recursive walk.
+//! `1 + A × X` is `Option<(A, X)>`. [`free_mnd_to_vec`] / [`vec_to_free_mnd`]
+//! witness `Free<ListEndo<A>, Z> ≅ (Vec<A>, Z)`, both loops:
+//! `free_mnd_to_vec(vec_to_free_mnd(items, z)) = (items, z)` and
+//! `vec_to_free_mnd(free_mnd_to_vec(t)) = t`.
 
 use core::marker::PhantomData;
 

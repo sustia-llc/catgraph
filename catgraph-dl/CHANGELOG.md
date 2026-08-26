@@ -1,1512 +1,264 @@
 # Changelog — catgraph-dl
 
-All notable changes to this crate are documented here. Format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); semver per
-[SemVer 2.0.0](https://semver.org/spec/v2.0.0.html).
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [SemVer](https://semver.org/spec/v2.0.0.html).
 
-> **Lineage note:** pre-reboot version links below (`catgraph-dl-v0.x` tags)
-> point at the private predecessor repo `tsondru/catgraph` and will not
-> resolve publicly; they are kept as an honest record of the crate's history.
-> In-tree paper PDFs mentioned in historical entries were removed from the
-> tree on 2026-07-10 (arXiv licensing); fetch papers from the arXiv links in
-> `docs/`.
+> Pre-reboot version links (`catgraph-dl-v0.x`) point at the private
+> predecessor repo `tsondru/catgraph` and do not resolve publicly. Paper PDFs
+> named in historical entries were removed from the tree on 2026-07-10.
 
 ## [Unreleased]
+
+### Changed
+
+- Rustdoc reduced to contract statements crate-wide; this CHANGELOG rewritten
+  to one line per change. `architectures` module doc no longer describes
+  `RecursiveNn::unroll` as fallible (it has returned `S` since v0.15.0).
 
 ## [workspace-v0.15.0] - 2026-08-16
 
 ### Changed
 
-- **BREAKING: every carrier walk is iterative; the three guarded entries are
-  infallible again** ([#200](https://github.com/sustia-llc/catgraph/issues/200),
-  closing it). `Free::fold`, `Cofree::unfold`, both tree bijection helpers,
-  `RecursiveNn::unroll`, all three carriers' `Drop`, their `PartialEq` and
-  `Debug`, and `BinaryTree`'s `Clone` walk their spine with an **explicit heap
-  worklist**. None can overflow the stack at any depth. #231's pre-flight guard
-  bounded the failure mode at three entries; this removes it, including the half
-  no guard could reach — a value the guard *rejected* was still dropped by
-  value, and the drop glue recursed.
-
-  What breaks, and the migration:
-  - **`Free`'s variants moved behind an accessor.** A hand-written `Drop` is
-    what makes drop iterative, and it forbids moving out of the value
-    (`error[E0509]`) — which a public-variant by-value `match` does. `Free` is
-    now a struct over a private cell; the two shapes live on the new public
-    `FreeView` enum (`Pure` / `Suspend`, re-exported at the crate root and
-    through `endofunctor`).
-    - `Free::Pure(a)` → `Free::pure(a)`; `Free::Suspend(fx)` →
-      `Free::suspend(fx)`; `Free::from_view(v)` / `From<FreeView<..>>` wrap a
-      cell directly.
-    - `match free { Free::Pure(a) => … }` → `match free.into_view() {
-      FreeView::Pure(a) => … }` (by value) or `match free.as_view() { … }` (by
-      reference — match ergonomics bind the payloads by reference).
-  - **`BinaryTree` takes the same reshape**, for the same reason, with the same
-    shape: `BinaryTree::leaf` / `BinaryTree::node` (both already existed) build,
-    the new public `TreeView` enum (`Leaf` / `Node`) is what `into_view()` /
-    `as_view()` hand back, and `from_view` wraps.
-  - **`Free::fold`, `Cofree::unfold`, and the carriers' `PartialEq`/`Debug` gain
-    a `Container` bound.** Heapifying a walk over a *generic* witness needs
-    `decompose`/`recompose` to pull the recursion slots out and put results
-    back; `fmap` cannot, because rebuilding `F::Type<X>` from already-computed
-    children *is* the recursive step. Every in-tree witness satisfies it —
-    `OptionWitness` gained a `Container` impl in this window precisely so
-    `Cofree<OptionWitness, O>`, the bounded-stream carrier, would keep `unfold`.
-  - **`tree_to_free_mnd`, `free_mnd_to_tree` and `RecursiveNn::unroll` drop their
-    `Result`.** They return `Free<TreeEndo<A>, Infallible>`, `BinaryTree<A>` and
-    `S` again, as before #231. Delete the `?` / `.unwrap()` at call sites.
-  - **`EqFunctor` / `DebugFunctor` are shape-level.** `eq_type<T: PartialEq>` is
-    replaced by `eq_shape<T>`, which compares constructor and labels and
-    **ignores** the contents; `fmt_type(fa, f)` is replaced by
-    `fmt_shape(fa, f, contents)`, which formats with the contents supplied
-    already-rendered, in position order. The carrier pairs and renders the
-    recursion slots itself, on its worklist — the previous signatures let the
-    recursion run *inside* the witness, where the carrier could not heapify it.
-    Witness authors reimplement two small methods; callers are unaffected.
-  - **`Container::Shape` lost its `PartialEq + Debug` bound**, so a
-    label-carrying shape (`ListEndo<A>`'s `Option<A>`, `TreeEndo<A>`'s
-    `Either<A, ()>`) no longer forces those bounds onto every `Free<F, _>` walk.
-    The law helper asks for them where it needs them. `Container` also gained
-    one required method, `contents`, the borrowing half of `decompose` (law 4).
-  - **A borrowed payload must now be declared *before* the carrier that holds
-    it.** A hand-written `Drop` without `#[may_dangle]` makes dropck require
-    every lifetime parameter to strictly outlive the value, so
-    `BinaryTree<&'a T>`, `Free<F, &'a T>` and `Cofree<F, &'a T>` all reject a
-    binding order that used to compile:
-
-    ```rust,ignore
-    let tree;                                    // dropped last…
-    let payload = String::from("x");             // …but this dies first
-    tree = BinaryTree::leaf(payload.as_str());   // error[E0597]
-    ```
-
-    The fix is to swap the two bindings so the payload outlives the carrier.
-    Worth calling out because the compiler's message (`` `payload` does not
-    live long enough … when `tree` is dropped and runs the Drop code ``) names
-    the borrow rather than the ordering. Owned payloads are unaffected. Pinned
-    by `compile_fail,E0597` doctests on all three carriers.
-  - **A witness whose `DebugFunctor::fmt_shape` never writes a recursion slot
-    into the `Formatter` it was handed is now an error**, not a silently
-    truncated rendering. Such a slot has no measurable position, so the child
-    and its whole subtree used to disappear from the output while `{:?}`
-    returned `Ok` — the one out-of-contract path in this crate that failed
-    silently. Write each `contents` entry into `f` (`.field(inner)` and
-    friends), never into a buffer of your own; the shipped witnesses already
-    do, so this affects out-of-tree witnesses only.
-
-  Cost, re-measured with `benches/free_cofree_shapes.rs`: the walks moved onto
-  the heap, so they allocate there. `list construct` is unchanged (`1·n`, zero
-  `realloc`); every other carrier row now pays a growing worklist `Vec`, and
-  `fold`/`unfold` pay two allocations per node with children (`decompose`'s
-  contents `Vec` and the results `split_off`). `Free::fold` used to allocate
-  nothing and now reads `2·n + 2` on lists / `2·(L − 1) + 2` on trees. The
-  bench's "zero `realloc`s anywhere" headline is retired with it.
-
-  Not breaking, and unchanged: `Cofree::new` / `head` / `tail` / `into_parts`
-  keep their signatures (the cell moved behind an `Option`, so `into_parts` can
-  still move both fields out under a manual `Drop`).
-
-  `Debug` renders **top-down and streaming**: each cell's shape is laid out once
-  into a small scratch buffer and its segments written straight to the caller's
-  formatter, so every byte of the output is written exactly once and `{:?}` is
-  Θ(total output). `{:#?}` is Θ(total output) too — but a pretty rendering
-  indents every line by its nesting depth, so *that output* is inherently
-  quadratic in the depth of a spine. Neither aborts, which the derive did, and
-  neither panics on an inner `Debug` that returns `Err`: the error propagates,
-  as `DebugFunctor::fmt_shape` documents.
-
-  **`Debug` output is byte-identical to the derived/previous text under the
-  default spec, `{:#?}`, `{:.N?}` and `{:N?}` — and *not* under fill,
-  alignment, the sign/zero-pad flags or `{:x?}` / `{:X?}`.** The scratch buffer
-  is written by a *fresh* `Formatter`, and stable Rust cannot build one from
-  another's options (`fmt::FormattingOptions` + `Formatter::new` are unstable —
-  `formatting_options`, rust-lang/rust#118117), so the spec is re-expressed in
-  the scratch `write!`'s own format string. `alternate` is a distinct literal
-  string, `precision` and `width` go through the dynamic `{:.p$?}` / `{:w$?}`
-  forms; fill and alignment can only be spelled literally, and the debug-hex
-  flags have no stable accessor to be read from in the first place. A dropped
-  flag renders as if it were absent, so a carrier under `{:+?}` or `{:x?}`
-  prints what it prints under `{:?}` where a derive would honour the flag, and
-  `{:*>12?}` applies the width but not the fill. Both halves are pinned against
-  plain `#[derive(Debug)]` twins of all three carriers — the carried specs by
-  `every_carrier_debug_is_byte_identical_to_a_derived_twin` (at an `f64`
-  payload, the only one that can see `precision` go missing), the dropped ones
-  by `dropped_format_specs_render_as_if_the_flag_were_absent`.
-
-  Node sizes, measured (x86-64). The private cell is an `Option` so `Drop` and
-  the by-value accessors can *take* it without `unsafe`, and that wrapper is
-  free only where the cell's discriminant has spare values: `Free` pays nothing
-  (`Free<OptionWitness, u64>` = 16 = `FreeView<OptionWitness, u64>`;
-  `Free<TreeEndo<u8>, u8>` = 24 = its view), `BinaryTree` pays nothing either
-  since the boxed-pair `TreeView::Node` below (`BinaryTree<u8>` =
-  `BinaryTree<f64>` = 16 = their views), and `Cofree` pays **one word** —
-  `Cofree<OptionWitness, u32>` = `Cofree<OptionWitness, f64>` = 24 over a
-  16-byte cell (was 16), `Cofree<TreeEndo<u8>, f64>` = 32 over a 24-byte cell
-  (was 24). `Cofree`'s word is not reclaimable: its cell is a *struct*, so it
-  has no discriminant of its own to leave spare, and its only candidate niche
-  lives inside `F::Type<…>` — the witness's type, which `Cofree` does not own;
-  `mem::replace` cannot help either, needing an inhabitant of the cell type that
-  cannot be built without an `A`. That is an accepted cost, written up on
-  `Cofree`. Every size above is pinned by a unit test, `Cofree` against its real
-  cell type.
-
-- **`TreeView::Node` holds one boxed pair, halving `BinaryTree`'s allocations
-  and reclaiming its extra word**
-  ([#200](https://github.com/sustia-llc/catgraph/issues/200) follow-up). The
-  variant is now `Node(Box<(BinaryTree<A>, BinaryTree<A>)>)` rather than
-  `Node(Box<BinaryTree<A>>, Box<BinaryTree<A>>)`.
-
-  - **Allocations halve**: an internal node costs **one** `Box`, so a tree of
-    `L` leaves allocates `L − 1` boxes instead of `2·(L − 1)`. Measured with
-    `benches/free_cofree_shapes.rs`: the tree `construct` rows, whose window
-    frees the source `BinaryTree`, drop from 128 / 2 048 / 8 192 `dealloc`s to
-    65 / 1 025 / 4 097 at `L` = 64 / 1 024 / 4 096, on both the balanced and the
-    caterpillar shape. (Their `alloc` column is unchanged — it counts the `Free`
-    side, which still boxes per hole.)
-  - **`BinaryTree<A>` narrows from 24 to 16 bytes**, equal to its view. Two
-    `Box`es let the compiler niche `TreeView`'s discriminant into the first
-    one's null, leaving the view with no spare value and the `Option`-wrapped
-    cell costing a full word. One `Box` plus a `Leaf(A)` payload that cannot be
-    packed into a pointer niche gives the view a real tag byte with 254 spare
-    discriminants, and `Option` niches into it for free. This supersedes the
-    "that word is not reclaimable" claim in the entry above, which was true only
-    of the shapes considered at the time.
-  - **Per-hole boxing is now a `Free`/`Cofree` property, not a crate-wide one.**
-    Those two carriers keep it because their recursive slots live inside an
-    arbitrary witness's `F::Type<…>` — there is nowhere else to put the
-    indirection — and because `FreeView`'s tag always had spare discriminants,
-    so nothing was there to reclaim. `Cofree` has **no** analogue of this move
-    by construction: its cell is a struct with no discriminant of its own, so
-    its extra word stands as an accepted cost. The asymmetry is documented on
-    `TreeView`, on `Cofree`, and in the `free_monad` module docs.
-
-  **Breaking for anyone matching the variant by hand**:
-  `TreeView::Node(left, right)` → `TreeView::Node(children)` with
-  `&children.0` / `&children.1` (or `let (left, right) = *children;` by value).
-  `BinaryTree::leaf` / `BinaryTree::node` / `into_view` / `as_view` /
-  `from_view` are unchanged, as are `tree_to_free_mnd` / `free_mnd_to_tree`,
-  `Free<TreeEndo<A>, _>` (untouched — `TreeEndo::Type<X>` is still
-  `Either<A, (X, X)>`, so `Container for TreeEndo` still reports arity 2), and
-  `TreeEndo`'s two-slot `Container`/`EqFunctor`/`DebugFunctor` behaviour.
-
-  **`Debug` output is unchanged by this reshape**, on both `BinaryTree` and
-  `TreeView` itself: `Node` still renders as a **two-field** tuple variant,
-  `Node(<left>, <right>)`, in `{:?}` and `{:#?}` alike. `TreeView`'s `Debug` is
-  hand-written for exactly that reason — a derive on the boxed pair would print
-  `Node((<left>, <right>))`. Pinned by the existing derived-twin oracle and by a
-  new view-level test. (The format-spec caveat in the entry above applies to
-  `TreeView` too, transitively: its subtrees are rendered by `BinaryTree`'s
-  streaming `Debug`.)
-
-- **`depth` is an opt-in, caller-facing measure.** `MAX_TREE_DEPTH`,
-  `guard_tree_depth`, `guard_free_mnd_depth`, `tree_depth`, `free_mnd_depth` and
-  `DepthError` all stay published, but **nothing in the crate calls them any
-  more** — there is no crate-owned recursion left to guard. They remain for a
-  caller whose *own* code walks these carriers recursively, which is the residual
-  use #231's own review anticipated. `DepthError` is consequently returned by no
-  entry; `guard_*` borrow, so the rejection-path drop hazard #231 had to document
-  is gone with it.
+- **BREAKING:** every carrier walk is an explicit heap worklist — `Free::fold`,
+  `Cofree::unfold`, the tree bijections, `RecursiveNn::unroll`, and the
+  carriers' `Drop`/`PartialEq`/`Debug`/`Clone`
+  ([#200](https://github.com/sustia-llc/catgraph/issues/200)):
+  - `Free` and `BinaryTree` are structs over a private cell; their shapes are
+    the new `FreeView` (`Pure`/`Suspend`) and `TreeView` (`Leaf`/`Node`),
+    reached via `pure`/`suspend`/`leaf`/`node`, `into_view`, `as_view`,
+    `from_view` / `From<…View>`.
+  - `Free::fold`, `Cofree::unfold` and the carriers' `PartialEq`/`Debug` gain a
+    `Container` bound; `OptionWitness` gains a `Container` impl.
+  - `tree_to_free_mnd`, `free_mnd_to_tree`, `RecursiveNn::unroll` return
+    plain values again (no `Result`).
+  - `EqFunctor::eq_type` → `eq_shape`; `DebugFunctor::fmt_type` →
+    `fmt_shape(fa, f, contents)`; `Container::Shape` loses its
+    `PartialEq + Debug` bound; `Container` gains `contents`.
+  - A borrowed payload must be declared before the carrier holding it
+    (hand-written `Drop`, `error[E0597]` otherwise).
+  - A `DebugFunctor` that renders a recursion slot outside the `Formatter`
+    it was handed is a `fmt::Error`, not a truncated rendering.
+  - `Debug` carries `{:#?}`, precision and width; fill, alignment,
+    sign/zero-pad and debug-hex flags render as if absent.
+  - `Free::fold` now allocates (`2·n + 2` on lists, `2·(L − 1) + 2` on trees).
+  - Sizes: `Free` and `BinaryTree` equal their views; `Cofree` is one word
+    larger than its cell.
+- `TreeView::Node` holds one boxed pair (`Node(Box<(BinaryTree, BinaryTree)>)`):
+  `L − 1` allocations per tree, `BinaryTree<A>` 24 → 16 bytes; `Debug` output
+  unchanged (`Node(<left>, <right>)`). Breaking for by-hand matches on the
+  variant (#200).
+- `depth` is opt-in: `MAX_TREE_DEPTH`, `guard_*`, `tree_depth`,
+  `free_mnd_depth`, `DepthError` stay published; no crate entry calls them.
 
 ## [workspace-v0.11.0] - 2026-08-10
 
 ### Changed
 
-- **`rand` leaves this crate's normal-dependency graph**
-  ([#239](https://github.com/sustia-llc/catgraph/issues/239), changed in
-  `catgraph-applied`). This crate's only path to `rand` was
-  catgraph-applied's lib edge, which now carries `rand_core` alone
-  (`E1::random` takes a caller-supplied generator; sampling in-tree) — so
-  `rand` no longer appears in this crate's lib graph at all. See
-  catgraph-applied's #239 entry for the supply contract and caveats (the
-  catgraph-physics feature-unification caveat is unchanged).
-- **BREAKING: the endofunctor / carrier substrate is crate-owned;
-  `deep_causality_haft` leaves this crate's dependencies**
-  ([#222](https://github.com/sustia-llc/catgraph/issues/222)).
-  `crate::endofunctor` now *defines* `HKT`, `Functor`, `Pure`, `Monad`,
-  `Either`, `NaturalIso` (+ the `#[doc(hidden)]` iso law helpers),
-  `EqFunctor`/`DebugFunctor`, and `OptionWitness`; `crate::free_monad` defines
-  the `Free`/`Cofree` carriers (+ `FreeWitness`/`CofreeWitness`). Every public
-  path that resolved before keeps resolving — seam paths and crate-root
-  mirrors alike — and the carrier shapes are haft-parity (`Free` =
-  `Pure(A) | Suspend(F::Type<Box<Free>>)`, box inside the functor hole), so
-  construction/match sites compile unchanged. What breaks:
-  - **`Satisfies` and `NoConstraint` are gone.** The owned `HKT` has no
-    constraint slot — the ambient category is `Set` by construction (CDL), and
-    no witness ever used another constraint. `EndoWitness` is now
-    `HKT + Functor<Self>`; witness impls simply delete their
-    `type Constraint = NoConstraint;` line.
-  - The 15 re-exported names change nominal identity (they are no longer
-    haft's types) even where shapes are identical.
-  - The carrier method surface is the deliberately minimal consumed set
-    (the #76 precedent): `Free` = public variants + `fold` (the Rem 2.13
-    catamorphism); `Cofree` = `new`/`head`/`tail`/`into_parts` + `unfold`
-    (the Rem H.6 anamorphism); opt-in `PartialEq`/`Debug` via the
-    capability traits. Enumerating everything previously reachable through
-    the re-exported names that the owned surface does NOT provide:
-    `Free::{bind, map, lift}` and the `Free::pure` inherent (use the public
-    `Pure` variant or `FreeWitness`'s `Pure` impl);
-    `Cofree::{map, extend, extract, duplicate}`; carrier `Clone` (upstream,
-    `Cofree<OptionWitness, _>: Clone` was reachable via haft's
-    `CloneFunctor` — #154's decline now extends to that route too);
-    `CofreeWitness`'s `Functor` impl (upstream it existed as `CoMonad`'s
-    supertrait, so `CofreeWitness` is no longer an `EndoWitness`);
-    `OptionWitness`'s `Monad` impl (the in-tree `Monad` inhabitant is
-    `GroupActionEndo`); and the carriers' `Eq` markers — deliberately
-    dropped, not just unported: `EqFunctor` is PartialEq-strength over the
-    witness's own label slots, so a carrier-level `Eq` violated `Eq`'s
-    totality contract for float-labelled witnesses (`NaN`-labelled values
-    compared unequal to themselves under a claimed total equivalence).
-    All of these had zero in-tree consumers.
-  - `fold`/`unfold` are faithful recursive ports; the #231 pre-flight depth
-    guards and the guarded walker entries stand unchanged. The #200
-    residual ("haft-blocked" recursion items) is now fully crate-owned and
-    fixable in-tree — re-recorded on that issue.
-  - The behavior pins pass unchanged: the `free_monad_bijections` suite,
-    the five unroller-equivalence suites, and all five self-checking
-    examples run against the owned carriers with no assertion changes.
-  - The owned trait and carrier shapes are derived from
-    `deep_causality_haft` 0.4.2 (MIT) — attributed in each defining file's
-    license header.
-  - This crate's unconditional external dependency set is now `thiserror`
-    alone; `deep_causality_algebra`/`deep_causality_num` leave the lock with
-    the workspace sweep.
+- `rand` leaves this crate's lib graph
+  ([#239](https://github.com/sustia-llc/catgraph/issues/239), via catgraph-applied).
+- **BREAKING:** the endofunctor/carrier substrate is crate-owned;
+  `deep_causality_haft` removed
+  ([#222](https://github.com/sustia-llc/catgraph/issues/222)). `Satisfies` /
+  `NoConstraint` gone (`EndoWitness = HKT + Functor<Self>`); the 15 re-exported
+  names change nominal identity; not carried: `Free::{bind, map, lift, pure}`
+  (inherent), `Cofree::{map, extend, extract, duplicate}`, carrier `Clone`,
+  `CofreeWitness: Functor`, `OptionWitness: Monad`, carrier `Eq`. Trait and
+  carrier shapes derive from haft 0.4.2 (MIT, attributed in each file).
+  Unconditional external dependency set is now `thiserror` alone.
 
 ## [workspace-v0.10.0] - 2026-08-09
 
 ### Added
 
-- **Optional `serde` feature** ([#230](https://github.com/sustia-llc/catgraph/issues/230)):
-  `Serialize`/`Deserialize` derives on the parameter carriers — `RModule<S>`,
-  `DirectSum<A, B>`, and (only when `ad` is also enabled, since `para::ad` is
-  `ad`-gated) `Dual<T>`. Each is generic over its payload's own serde impls.
-  **Off by default**, so the default build takes no direct serde edge. This is
-  the dl mirror of `catgraph-applied`'s #81 feature and the other half of the
-  persistence track ([#72](https://github.com/sustia-llc/catgraph/issues/72)/[#73](https://github.com/sustia-llc/catgraph/issues/73)):
-  applied/syntax persist *terms*, while `RModule<S>` is the plain `Vec<S>`
-  parameter data those terms act on, which nothing could persist before.
-  ("Off by default" precisely: the feature adds no *direct* serde edge to the
-  default build — serde already appears there transitively, under
-  `catgraph-applied → rust_decimal`.)
-  - **Trust boundary** (the statement of record is `RModule`'s Serde rustdoc
-    section — this is the summary): a deserialized module's `dim()` is
-    whatever the payload's coordinate count says, exactly as with
-    `RModule::new`; nothing checks it against the dimension the caller
-    expected, and of the module's operations only `add` rejects a mismatch
-    (with `None`) — `scale`/`direct_sum`/`flatten` and the slice accessors
-    operate at whatever dimension was loaded. **Check `dim()` at your entry
-    point.** The wire shape carries no type tag, and non-finite floats
-    serialize to JSON `null` (save succeeds, load fails) — both pinned by
-    `tests/serde_roundtrip.rs`.
-  - CI: dl joins the applied/syntax serde **clippy** lane whole; its test runs
-    are scoped to `--test serde_roundtrip` under `--features serde` and
-    `--features "serde ad"` (the only lane reaching the `Dual` derives), plus
-    a `cargo doc --features "serde ad"` pass — the workspace doc gate runs
-    default features only, so the feature-gated rustdoc was otherwise never
-    link-checked.
-- **`depth` and `errors` — a pre-flight recursion guard at the crate's own
-  tree entries** ([#231](https://github.com/sustia-llc/catgraph/issues/231),
-  adopting option 2 of
-  [#200](https://github.com/sustia-llc/catgraph/issues/200)). Two new modules,
-  following the `MAX_TREE_DEPTH` / `MAX_TERM_DEPTH` precedent
-  [catgraph-syntax set in #99](https://github.com/sustia-llc/catgraph/issues/99)
-  down to the `{ depth, limit }` payload:
-  - `depth::MAX_TREE_DEPTH = 256` — deliberately equal to syntax's
-    `MAX_TERM_DEPTH`, so the workspace has one recursion ceiling. The
-    measurement of record (`benches/free_cofree_shapes.rs`) walks a 4 096-deep
-    caterpillar fine on an 8 MiB main-thread stack; 256 sits 16× below that,
-    which leaves margin for a 2 MiB Rust test thread and for wasm targets, whose
-    shadow stack is around a megabyte and may be configured smaller. The full
-    argument is on the constant.
-  - `depth::tree_depth` / `depth::free_mnd_depth` — **iterative** (explicit
-    worklist) depth measures for `BinaryTree<A>` and `Free<TreeEndo<A>,
-    Infallible>`, so measuring a carrier that is too deep never overflows on the
-    way to saying so. `depth::guard_tree_depth` / `depth::guard_free_mnd_depth`
-    are the pre-flight checks.
-  - `errors::DepthError` (also re-exported at the crate root) — the crate's
-    first error type, a `#[non_exhaustive]` **enum** (match with a wildcard
-    arm from outside the crate) whose one variant today is
-    `TreeDepthExceeded { depth, limit }`; the variant's fields destructure
-    normally. `thiserror` joins the manifest for it; no new lockfile entry,
-    since core, applied, and syntax already carry it.
-
-  Motivation: a *programmatic* driver (a genome, a generator, a parser) can
-  build a degenerate spine of any depth, which #200's "no dl consumer builds
-  deep spines" premise did not anticipate, and a deep enough one aborts the
-  process rather than returning an error.
+- Optional `serde` feature: derives on `RModule<S>`, `DirectSum<A, B>` and
+  (with `ad`) `Dual<T>` ([#230](https://github.com/sustia-llc/catgraph/issues/230)).
+  Deserialization checks nothing beyond the constructors; non-finite floats
+  serialize as JSON `null` and do not load back.
+- `depth` and `errors` modules: `MAX_TREE_DEPTH = 256`, `tree_depth` /
+  `free_mnd_depth`, `guard_tree_depth` / `guard_free_mnd_depth`,
+  `DepthError::TreeDepthExceeded { depth, limit }` (`#[non_exhaustive]`);
+  `thiserror` dependency
+  ([#231](https://github.com/sustia-llc/catgraph/issues/231)).
 
 ### Changed
 
-- **BREAKING — the three depth-recursive tree entries are now fallible**
-  (#231). Each pre-flights the guard and returns `Result<_, DepthError>`:
-  - `free_monad::tree_endo::tree_to_free_mnd` → `Result<Free<TreeEndo<A>,
-    Infallible>, DepthError>`
-  - `free_monad::tree_endo::free_mnd_to_tree` → `Result<BinaryTree<A>,
-    DepthError>`
-  - `architectures::RecursiveNn::unroll` → `Result<S, DepthError>`
-
-  Callers add `?` / `.expect(…)`; nothing else changes. This is a **pre-flight
-  rejection, not a semantic change** — every carrier at or below the limit
-  produces exactly the value it did before, and the CDL Example B.20 bijection
-  and Example J.3 unrolling are untouched. The list-shaped siblings
-  (`vec_to_free_mnd`, `free_mnd_to_vec`, `FoldingRnn::unroll`) are loops and
-  folds and stay infallible, as do the three `from_fn` coalgebra unrollers.
-- **Documented residual, tracked by #200.** The guard reaches this crate's own
-  walker entries only. Two residual classes stay unguarded, split by who could
-  fix them: direct `deep_causality_haft` `Free::fold` / `Cofree::unfold` calls
-  and `Free`'s drop glue are **haft-blocked** (closing them would mean changing
-  haft, which #231 does not do); `BinaryTree`'s drop glue — including a
-  *rejected* value's — and its derived `Clone`/`PartialEq`/`Debug` are
-  **crate-owned** and fixable here with iterative impls, an option #200 now
-  records. The canonical account is `depth`'s Scope section; the `free_monad`
-  and `endofunctor` module docs point to it, and #200 remains open as the
-  tracker.
-- **`benches/free_cofree_shapes.rs` caterpillar axis re-based to the guard.**
-  A caterpillar's structural depth *is* its leaf count, so the pre-#231 shared
-  axis `[64, 1024, 4096]` is no longer constructible through the now-guarded
-  `tree_to_free_mnd`. The balanced fixture keeps `TREE_LEAVES = [64, 1024,
-  4096]` (a balanced tree of 4 096 leaves is only 13 deep); the caterpillar runs
-  a new `SPINE_LEAVES = [16, 64, MAX_TREE_DEPTH]` — the ceiling is the guard
-  constant itself, so the axis cannot drift from the boundary. `L = 64` is in
-  both, so the equal-leaf-count shape comparison still has a common size. The
-  recorded baseline in `.claude/docs/2026-08-01-156-dl-bench-baseline.md` is a
-  pre-guard record: its two deepest `tree_spine` rows per operation are
-  retired, the tree `construct` latencies are no longer like-for-like (the
-  guard's pre-flight walk is now inside their measured window), and the
-  *widening* half of the shape-costs-latency headline rested on the retired
-  pairs — the bench module docs carry the row-by-row accounting. The guard
-  adds exactly one pre-sized worklist `Vec` per tree construct (no regrowth on
-  accepted fixtures), so the "zero reallocs anywhere" allocation headline
-  still holds.
+- **BREAKING:** `tree_to_free_mnd`, `free_mnd_to_tree`, `RecursiveNn::unroll`
+  return `Result<_, DepthError>` (#231; reverted in v0.15.0).
+- `benches/free_cofree_shapes.rs` caterpillar axis is
+  `SPINE_LEAVES = [16, 64, MAX_TREE_DEPTH]`.
 
 ### Fixed
 
-- **Browser-wasm lib builds no longer fail in `getrandom`**
-  ([#232](https://github.com/sustia-llc/catgraph/issues/232), fixed in
-  `catgraph-applied`). This crate's only path to `getrandom` was
-  `catgraph-applied`'s `rand` edge; with the workspace `rand` entry slimmed to
-  no default features, `cargo check --lib -p catgraph-dl --target
-  wasm32-unknown-unknown` now passes. Dev graphs still reach `getrandom` via
-  `proptest`, and any build graph containing `catgraph-physics` re-enables
-  rand's defaults by feature unification — see `catgraph-applied`'s #232 entry
-  for the full caveats.
+- Browser-wasm lib builds no longer fail in `getrandom`
+  ([#232](https://github.com/sustia-llc/catgraph/issues/232), via catgraph-applied).
 
 ## [workspace-v0.9.0] - 2026-08-04
 
 ### Added
 
-- **`para::dual` — the forward-mode `Dual<T>` is now catgraph's own**
-  ([#221](https://github.com/sustia-llc/catgraph/issues/221), D3 of the
-  [#218](https://github.com/sustia-llc/catgraph/issues/218) dependency
-  streamlining). Same `a + b·ε`, `ε² = 0` semantics as the type it replaces:
-  `new` / `constant` / `variable` / `value` / `derivative`, `Add` / `Sub` /
-  `Mul` (the chain rule) / `Neg` / `Div` (the quotient rule, no `DivAssign` —
-  `ε` is a zero divisor) / `AddAssign` / `MulAssign` / the `Mul<T>` scalar
-  action, and `Zero` / `One`. Bounds are per-impl rather than on the struct,
-  matching `RModule<S>`. Re-exported through `para::ad`, so the public path
-  `catgraph_dl::para::ad::Dual` is unchanged.
-  - This was **forced by #219**, not merely convenient: with `Zero`/`One`
-    catgraph-owned and `Dual` upstream, the orphan rule left nowhere to write
-    the impl — a foreign trait cannot be implemented for a foreign type.
-  - **Surface reduction.** `Sum`, `Product`, `FromPrimitive`, `Display`,
-    `Default`, and the upstream analytic-scalar marker traits are not carried
-    over; nothing in the workspace used them. `Dual` also no longer nests, so
-    `Dual<Dual<T>>` second derivatives are not available. File an issue if you
-    want any of these back.
+- `para::dual::Dual<T>` is crate-owned: `new`/`constant`/`variable`/`value`/
+  `derivative`, `Add`/`Sub`/`Mul`/`Neg`/`Div`/`AddAssign`/`MulAssign`,
+  `Mul<T>`, `Zero`/`One`; re-exported at `para::ad::Dual`. Not carried from
+  the replaced type: `Sum`, `Product`, `FromPrimitive`, `Display`, `Default`,
+  nesting ([#221](https://github.com/sustia-llc/catgraph/issues/221)).
 
 ### Changed
 
-- **Both DeepCausality numeric dependencies are gone**
-  (#219 + #221). `deep_causality_num` is no longer a dependency — the
-  `RModule<S>` scalar bounds resolve to `catgraph_applied::rig::{Zero, One}`,
-  re-exported at this crate's root — and `deep_causality_num_dual` is no longer
-  a dependency either. **The `ad` feature now declares no dependency at all**
-  (`ad = []`): `cargo tree -p catgraph-dl` and
-  `cargo tree -p catgraph-dl --features ad` print the same tree, where they
-  previously differed by `deep_causality_num_dual`. `deep_causality_haft` (#12,
-  `src/endofunctor.rs`) is untouched and is now the crate's only external
-  algebraic dependency — `deep_causality_algebra` and `deep_causality_num` stay
-  in the lockfile beneath it, unnamed anywhere in catgraph source.
+- `deep_causality_num` and `deep_causality_num_dual` removed; `ad = []`
+  declares no dependency ([#219](https://github.com/sustia-llc/catgraph/issues/219), #221).
 
 ## [workspace-v0.6.0] - 2026-08-02
 
 ### Added
 
-- **First benchmarks in the crate — shape-axis baseline for the `Free` /
-  `Cofree` carriers** ([#156](https://github.com/sustia-llc/catgraph/issues/156)
-  Phase 1). New `benches/free_cofree_shapes.rs` (`harness = false`, criterion +
-  `catgraph-testutil`'s seeded LCG), measuring construction via the bijection
-  helpers, `Free::fold` (CDL Remark 2.13), `Cofree::unfold` (the #64
-  anamorphism) and the #36 / PR #151 lazy `unroll_iter` / `run_iter` surfaces
-  across three shapes: `ListEndo` (single hole), and `TreeEndo` (two holes)
-  balanced vs left-caterpillar. Because haft boxes *inside* the functor hole,
-  allocation count is the shape-determined hole count, so the harness installs a
-  counting `#[global_allocator]` and reports exact allocation tallies from an
-  explicit pass that runs before criterion is constructed; criterion measures
-  latency only. Recorded numbers and the finding that `TreeEndo`'s `Left(A)`
-  leaf ratio is *not* a tunable parameter (a strict binary tree always has
-  `leaves = internal + 1`, so allocation count is shape-independent at equal
-  leaf count) are in `.claude/docs/2026-08-01-156-dl-bench-baseline.md`. Phase 2
-  of #156 did not run — nothing here is a native-vs-haft comparison.
+- `benches/free_cofree_shapes.rs` — construction, `fold`, `unfold` and the
+  lazy iterators across list, balanced-tree and caterpillar shapes, with a
+  counting allocator ([#156](https://github.com/sustia-llc/catgraph/issues/156)).
 
 ## [workspace-v0.5.0] - 2026-07-30
 
 ### Added
 
-- **Opt-in `ad` feature — forward-mode automatic differentiation**
-  ([#74](https://github.com/sustia-llc/catgraph/issues/74) PR2). Off by default;
-  the default build is unchanged and never compiles the new dependency.
-  - New optional dependency `deep_causality_num_dual`, pinned `=0.1.4` (the
-    num-0.4.1 alignment release). It is the **third** DC crate in the workspace
-    and the first that is opt-in. Only its `Dual<T>` type is consumed. Its own
-    `deep_causality_algebra "0.2"` dependency is already in the lockfile at
-    0.2.0 via haft, so the `ad` build adds no duplicate; catgraph code never
-    names `deep_causality_algebra` (every use site is the concrete `Dual<f64>`).
-  - New feature-gated submodule **`para::ad`** — the single import seam for
-    `deep_causality_num_dual`, mirroring `src/endofunctor.rs` for haft. It
-    re-exports `Dual`, defines `DualF64Module = RModule<Dual<f64>>`, and adds two
-    forward-mode helpers: `seed` (lift a real module to duals with one coordinate
-    marked as the independent variable) and `gradient` (`∇f` by one seeded pass
-    per coordinate). It is a submodule, deliberately **not** flattened into
-    `para`, so the optional surface stays visibly delimited.
-  - `Dual<f64>` needs **no adaptation** to be an `RModule<S>` scalar: it already
-    implements the `deep_causality_num` `Zero` / `One` this crate re-sources plus
-    `Add` / `Mul`, and derives `Clone` — exactly the per-method bound set the
-    PR1 signatures ask for. The feature therefore adds a dependency and a module,
-    not a code path; nothing behind `#[cfg(feature = "ad")]` alters existing
-    behaviour.
-  - New feature-gated tests `tests/ad_module_laws.rs`: the R-module axioms and
-    `⊕`-monoid laws re-checked at `S = Dual<f64>` (registered in
-    `tests/THEOREM_MAP.md` against CDL Def E.2 / Ex E.4 / Ex G.3), plus
-    derivative-correctness checks against hand-computed analytic partials (these
-    are deliberately *not* in the theorem map — dual-number AD has no CDL anchor).
-  - New feature-gated example `gradient_descent_para` (`required-features =
-    ["ad"]`): a least-squares fit whose gradient comes from forward-mode AD and
-    whose descent step is expressed as a `Para` 2-morphism via
-    `Reparameterization::apply` (`f'((w, x)) = f((r(w), x))` with
-    `r(w) = w ⊖ lr·∇L(w)`). Asserts AD agrees with the analytic gradient, that
-    the loss decreases strictly at every step, and that the run converges to the
-    known optimum. CDL §3.1 + Example G.3.
-  - CI gains a targeted `ad` lane (test + clippy + the example run), matching the
-    shape of the #81 serde lane.
+- Off-by-default `ad` feature: `para::ad` with `Dual` (then from
+  `deep_causality_num_dual =0.1.4`), `DualF64Module`, `seed`, `gradient`;
+  `tests/ad_module_laws.rs`; example `gradient_descent_para`; CI `ad` lane
+  ([#74](https://github.com/sustia-llc/catgraph/issues/74)).
 
 ### Changed
 
-- **Scalar genericization of the R-module actegory**
-  ([#74](https://github.com/sustia-llc/catgraph/issues/74) PR1) —
-  `src/para/module_actegory.rs` is now generic in the scalar ring:
-  `F64Module(Vec<f64>)` became `RModule<S>(Vec<S>)`, and the markers /
-  monoidal / actegory types became `RObject<S>` / `RMorphism<S>` /
-  `RMonoidal<S>` / `RActegory<S>`, with `MonoidalCategory` and
-  `Actegory<RMonoidal<S>>` implemented for every `S`. Scalar bounds are stated
-  **per method**, not on the struct: `zeros` needs `S: Zero + Clone`, `basis`
-  needs `S: Zero + One + Clone`, `add` needs `S: Clone + Add<Output = S>`,
-  `scale` needs `S: Clone + Mul<Output = S>`; `new` / `zero_dim` / `dim` /
-  `as_slice` / `into_vec` / `direct_sum` stay bound-free.
-  `DirectSum::flatten` is likewise generic over `DirectSum<RModule<S>, RModule<S>>`.
-  **API-compatible**: `pub type F64Module = RModule<f64>` (and the matching
-  `F64Object` / `F64Morphism` / `F64Monoidal` / `F64Actegory` aliases) keep
-  every existing call site compiling unchanged, and the new `R*` names are
-  re-exported from `para` alongside them. Two breaking edges: all four
-  former unit structs (`F64Object` / `F64Morphism` / `F64Monoidal` /
-  `F64Actegory`) lose bare-value construction (`let x = F64Object;` no
-  longer compiles — use `::default()`, or `::new()` on
-  `F64Monoidal`/`F64Actegory`; nothing in-tree constructed the markers),
-  and their `Debug` output now prints the generic names
-  (`"RObject"`/`"RMorphism"`/`"RMonoidal"`/`"RActegory"`) instead of the
-  former struct names. No new dependency, no feature flag, no other
-  behavior change — this was the groundwork for the forward-mode-AD `Dual`
-  scalar, which landed behind the `ad` feature in #74 PR2 (the Added entry
-  above).
+- R-module actegory generic in the scalar: `RModule<S>`, `RObject<S>`,
+  `RMorphism<S>`, `RMonoidal<S>`, `RActegory<S>` with per-method bounds;
+  `F64*` become aliases. Breaking: the four former unit structs lose
+  bare-value construction and their `Debug` names change (#74).
 
 ## [workspace-v0.4.0] - 2026-07-25
 
 ### Changed
 
-- **`deep_causality_haft` pin bumped `=0.4.1` → `=0.4.2`** (purely additive
-  upstream; no API change here). 0.4.2 adds the `CloneFunctor` capability trait
-  (the `Clone` sibling of `EqFunctor` / `DebugFunctor`, requested as
-  deepcausality-rs/deep_causality#718), opt-in `Clone` for `Free` / `Cofree`,
-  `Cofree::duplicate`, and `Functor` + `CoMonad` **trait** impls on
-  `CofreeWitness` (previously the comonad surface was inherent methods only).
-  **Carrier `Clone` remains unadopted** — the #93 owner decision declined it on
-  grounds independent of upstream availability: the one site that forced it was
-  incidental (`cofree_cmnd_smoke`'s `.clone()` was never part of what that test
-  certifies), and heap sharing is `Arc`'s job (the #42 pattern). The #93 spike
-  then *confirmed* no need — `into_parts()` walkers never require a clone, and
-  adopting `Cofree::unfold` even dropped the native `S: Clone` seed bound. So
-  0.4.2's arrival does not reverse that. Adopting `CloneFunctor` and
-  the new `CofreeWitness` trait instances is tracked as
-  [#154](https://github.com/sustia-llc/catgraph/issues/154). Note: the pin
-  must resolve from crates.io — DC `main` still reads 0.4.1 in its own manifest
-  (deepcausality-rs/deep_causality#720).
-- **BREAKING — `free_monad` adopts `deep_causality_haft` 0.4.1 `Free` / `Cofree`**
-  ([#93](https://github.com/sustia-llc/catgraph/issues/93); reverses the #76
-  keep-native decision now that haft 0.4.1 ships a `Cofree` twin and opt-in
-  `Eq`/`Debug`). The native `FreeMnd` / `CofreeCmnd` carriers are removed;
-  `catgraph_dl::free_monad::{FreeMnd, CofreeCmnd}` become `{Free, Cofree}` (also
-  re-exported at the crate root, alongside `FreeWitness` / `CofreeWitness` and
-  the `EqFunctor` / `DebugFunctor` capability traits). This is a re-derivation,
-  not a rename: the recursion box now sits **inside** the functor hole
-  (`Suspend(F::Type<Box>)` rather than the old `Roll(Box<F::Type>)`), so the
-  enum variants are `Pure` / `Suspend` (not `Pure` / `Roll`); `Cofree` fields are
-  private (use `new` / `head` / `tail` / `into_parts`); and there is **no**
-  `Clone` on either carrier (deliberately unadopted per the #93 owner decision —
-  construct twice instead). `Eq`/`Debug` are opt-in via the capability traits: `ListEndo` /
-  `TreeEndo` gain `EqFunctor` / `DebugFunctor` impls (bounded `A: PartialEq` /
-  `A: Debug`). Gains the library recursion schemes `Free::fold` (the
-  catamorphism — the previously-deferred CDL Remark 2.13 `foldr`/`foldl`
-  algebra-hom unroller) and `Cofree::unfold` (the anamorphism — the #64
-  coalgebra-direction unroller). No paper anchors change: `Free` realises the
-  paper's `FreeMnd(F)` (CDL Def B.8); bijection helper names
-  (`vec_to_free_mnd`, `free_mnd_to_vec`, `tree_to_free_mnd`, `free_mnd_to_tree`)
-  are unchanged.
-- **Paper-audit citation reconciliation (Phase 5)** — verified every CDL / FE /
-  cocycles anchor in `src/**`, `tests/**`, `examples/**`, docs, and README
-  against the cached papers. Fixes: phantom **"Appendix K"** at
-  `architectures/mod.rs:3` → Appendix J (appendices run A–J only); the
-  THEOREM_MAP functor-laws row **Def 1.5 → Def 1.4** (1.4 = Functor, 1.5 =
-  natural transformation; the naturality row drops its stray 1.4);
-  `container.rs` + AUDIT doc cited a fabricated 'Discussion §"Containers and
-  Type-Safe Design"' section — the passage is unnamed prose in **§4 "New
-  Horizons"**; the unroller catalogue now cites **Examples J.1–J.5** (J.1
-  folding and J.5 Moore were missing) with uniqueness split Remark 2.13
-  (algebra) / Remark H.6 (coalgebra); Moore/Mealy `run` docstrings drop the
-  residual "Remark 2.13 dual" for **Remark H.6** and Moore's `run` cites
-  **Example J.5** (iterated; the cell stays I.5) matching the audit table; the
-  AUDIT doc's blanket "all citations are accurate" claim is scoped to the
-  `src/**` numbered anchors its tables actually walk. Adversarially re-verified
-  as correct: Thm G.10, Prop B.18 + Ex B.19/B.20, Rem H.6 quote, Def E.2
-  Eq (7)/(8) + Ex E.4/G.3, Def B.3, Defs 2.3/2.5/2.8/B.2, Ex 2.6/2.12,
-  Rem 2.13, the I.1–I.5/J.1–J.5 catalogues, the FE §6 ripple-carry quote
-  (verbatim), the CDL §3.2 Dudzik cite, [DvGPV24] = arXiv 2306.15632 (by exact
-  title/author match — FE's bibliography prints no arXiv id), the H.1/H.3
-  convention caveat, and all #98/#103 surfaces. 2104.13478 / 2403.13001
-  confirmed bibliography-only.
+- `deep_causality_haft` pin `=0.4.1` → `=0.4.2`; carrier `Clone` unadopted
+  ([#154](https://github.com/sustia-llc/catgraph/issues/154)).
+- **BREAKING:** `free_monad` adopts haft's `Free`/`Cofree`: `FreeMnd` /
+  `CofreeCmnd` → `Free` / `Cofree`, variants `Pure`/`Suspend` with the box
+  inside the functor hole, private `Cofree` fields, no carrier `Clone`,
+  opt-in `Eq`/`Debug` via `EqFunctor` / `DebugFunctor`; gains `Free::fold`
+  and `Cofree::unfold` ([#93](https://github.com/sustia-llc/catgraph/issues/93)).
+- Paper-audit phase 5: "Appendix K" → J; THEOREM_MAP functor-laws row Def
+  1.5 → 1.4; `container.rs` cites §4 "New Horizons"; unroller catalogue
+  cites Ex J.1–J.5 with Remark 2.13 / Remark H.6.
+- **BREAKING:** `MonoidalCategory::tensor_morphisms` required
+  ([#65](https://github.com/sustia-llc/catgraph/issues/65)).
+- **BREAKING:** `EndoFunctor` replaced by haft `HKT` + `Functor` witnesses;
+  `EndoWitness` alias; `Either` from haft, `either` dependency dropped
+  ([#12](https://github.com/sustia-llc/catgraph/issues/12)).
+- `deep_causality_num` reservation re-anchored to #36.
 
 ### Added
 
-- **Lazy iterator unrollers for the three coalgebraic architecture wrappers
-  ([#36](https://github.com/sustia-llc/catgraph/issues/36), lazy-unrolling
-  bullet).** Each of `UnfoldingRnn` / `MealyCell` / `MooreCell` gains an
-  additive, `Iterator`-returning surface alongside its eager `Vec` method — a
-  plain pull-based Rust `Iterator` is the pragmatic lazy carrier for the
-  conceptually-infinite `Stream(O)` (a final `(O × −)`-coalgebra, CDL Remark
-  H.6), so no `Lazy` / `Thunk` carrier and no async `tokio_stream::Stream`
-  dependency are needed. Strictly additive; the eager `unroll_to_vec` / `run`
-  signatures and behaviour are unchanged.
-  - **`architectures::UnfoldingRnn::unroll_iter(cell, initial_state) ->
-    impl Iterator<Item = O>`** — a **genuinely infinite** stream, stepping the
-    `(cell_o, cell_n)` coalgebra on demand (`core::iter::from_fn` over the
-    threaded state, same output-then-advance sequencing as `unroll_to_vec`).
-    Callers bound it with `.take(n)`; `unroll_iter(s_0).take(n)` agrees with
-    `unroll_to_vec(s_0, n)` elementwise. Every "lazy carrier is deferred"
-    claim is reframed accordingly (unfolding_rnn module doc + "Why bounded?"
-    note, crate-root lib.rs deferred-surfaces list, README deferred-surfaces
-    section, `docs/2402.15332v2-AUDIT.md` open items, and the
-    architecture_unrollers test-module doc): the deferred "lazy
-    `Lazy`/`Thunk`/`Stream` carrier" is now the shipped `Iterator`; a
-    `tokio_stream::Stream` adapter remains unbuilt by design (no async deps).
-    After a caught panic in a cell closure the iterators are **poisoned**
-    (further `.next()` calls panic loudly instead of reporting exhaustion).
-  - **`architectures::MealyCell::run_iter(cell, initial_state, inputs) ->
-    impl Iterator<Item = O>`** — consumes any `IntoIterator<Item = I>` lazily,
-    one Mealy step per pulled item; same two-stage closure shape as `run`.
-    `run_iter(s_0, inputs).collect()` equals `run(s_0, inputs)`.
-  - **`architectures::MooreCell::run_iter(cell, initial_state, inputs) ->
-    impl Iterator<Item = O>`** — same, preserving the Moore output-then-step
-    order (output is a function of state alone, emitted before the step).
-  - **Law tests** — `tests/architecture_unrollers.rs` gains three deterministic
-    tests (+ three proptest lifts): `.take(n)` / full-consumption prefix
-    agreement with the eager method and with the `Cofree<OptionWitness, O>`
-    unfold walk (empty / depth-0 edges included), plus an `UnfoldingRnn`
-    laziness witness — a `cell_n` that panics past a bound is never tripped by
-    a bounded `.take`, proving the infinite tail is not eagerly over-evaluated.
-    `THEOREM_MAP.md` rows added (anchored CDL Remark H.6 / App I.3–I.5, matching
-    the sibling `Cofree`-equivalence rows).
-- **`examples/` directory** ([#34](https://github.com/sustia-llc/catgraph/issues/34)):
-  four runnable, self-checking walkthroughs closing the last workspace crate with
-  no examples — `para_walkthrough` (Para build/compose/reparameterize, CDL §3.1),
-  `weight_tying` (diagonal comonoid + `tie_weights`, Thm G.10), `free_monad_basics`
-  (`FreeMnd`/`CofreeCmnd` construction + bijections + an `FAlgebra` catamorphism,
-  App B), and `architecture_unrollers` (the five (co)algebra unrollers + GDL
-  invariance, App I/J). Public-API only; a per-directory `README.md` maps each to
-  its CDL anchor. Each `main()` self-checks with assertions and **CI runs all
-  four** (the acceptance criterion). `cargo run -p catgraph-dl --example <name>`.
-- **`F64Module` R-module actegory — first non-`(Set, ×, 1)` `MonoidalCategory`
-  ([#36](https://github.com/sustia-llc/catgraph/issues/36), first bullet).**
-  Lands the direct-sum monoidal category `(FinReal, ⊕, R⁰)` of
-  finite-dimensional real modules and its self-action, and **activates the
-  reserved `deep_causality_num` dependency** (previously deps-only): the crate
-  now imports num's root `Zero` / `One`. The umbrella #36 stays open for the
-  still-deferred non-Set surfaces (hyperdoctrine / vector-bundle / fibration
-  actegories; lazy final-coalgebra unrolling).
-  - **`para::F64Module`** (`src/para/module_actegory.rs`) — a
-    finite-dimensional real module `Rⁿ` over the scalar ring `R = f64`,
-    `Vec<f64>`-backed, the free `R`-module on `n` generators. Carries genuine
-    `R`-module structure: `zeros` (additive identity `0 ∈ Rⁿ`, each entry
-    `<f64 as Zero>::zero()`), `basis` (standard basis `eᵢ` with
-    `<f64 as One>::one()` at position `i`), `add` (dimension-guarded, `Option`),
-    `scale` (`r · v`), and `direct_sum` (`⊕`, coordinate concatenation
-    `Rᵐ ⊕ Rⁿ = Rᵐ⁺ⁿ`). Plus `zero_dim` (the monoidal unit `R⁰`).
-  - **`para::DirectSum<A, B>`** — the object-level tensor carrier `A ⊕ B`, a
-    dedicated newtype (**not** the `(Set, ×, 1)` tuple), with
-    `DirectSum::<F64Module, F64Module>::flatten` realising `V ⊕ W` as one
-    concatenated module.
-  - **`para::F64Monoidal`** — the `MonoidalCategory` `(FinReal, ⊕, R⁰)`. The
-    first non-`(Set, ×, 1)` instance: **hand-written** `MonoidalCategory` impl
-    with `Tensor<A, B> = DirectSum<A, B>` and `Unit = ()` (the one-element
-    module `R⁰`); it does **not** opt into `SetCategoryDefaults`. Kind markers
-    **`para::F64Object`** / **`para::F64Morphism`**. Zero-sized — the base ring
-    `f64` is a compile-time type, so the `&self` runtime-payload slot stays
-    reserved for a runtime-ring instance (documented).
-  - **`para::F64Actegory`** — the self-action `▶ = ⊕` of `F64Monoidal` on
-    itself (`Actegory<F64Monoidal>`), with `act(p, x) = p ⊕ x`, the
-    multiplicator `µ : Q ▶ (P ▶ X) → (Q ⊗ P) ▶ X` as the exact `DirectSum`
-    re-association; the concrete concatenation is realised by
-    `DirectSum::flatten` on the action result.
-  - **Paper anchors (verified against [arXiv:2402.15332v2](https://arxiv.org/abs/2402.15332)).** The formal
-    actegory definition is **Definition E.2** (`η_X : I ▶ X ≅ X`,
-    `µ_{M,N} : (M ⊗ N) ▶ X ≅ M ▶ (N ▶ X)`, pentagonator Eq. 7 + unitors Eq. 8),
-    **not** §3.1 (which is the main-body `Para` section). The self-action is
-    **Example E.4**. The monoidal product is the **direct sum `⊕`**, not the
-    tensor `⊗_R`: **Example G.3** forms `Para(Smooth)` over the *cartesian*
-    structure of real vector spaces, and for finite-dimensional modules the
-    categorical product is the biproduct `Rᵐ × Rⁿ ≅ Rᵐ⁺ⁿ = Rᵐ ⊕ Rⁿ`. The
-    tensor `⊗_R` is a different (closed) monoidal structure (unit `R¹`), not the
-    parameter-concatenation gradient-based-learning `Para` uses.
-  - **Law tests** — `tests/module_actegory_laws.rs` (deterministic + proptest):
-    Mac Lane pentagon / triangle / unitor coherence on `DirectSum` via
-    `common::assert_monoidal_coherence` (generic over `MonoidalCategory` since
-    [#65](https://github.com/sustia-llc/catgraph/issues/65); the initially-added
-    `DirectSum`-specific `assert_direct_sum_coherence` was folded into it);
-    the `R`-module axioms (`v + 0 = v`, `1 · v = v`, `0 · v = 0`,
-    basis coherence) via `common::assert_f64_module_axioms` — the identities
-    where `Zero` / `One` are load-bearing; and the concrete `⊕`-monoid laws
-    (dimensions add, `R⁰` unit, associativity, `flatten`/`act` agreement) via
-    `common::assert_direct_sum_monoid`. Float honesty: the identity asserts
-    (`1 · v`, `0 · v`, `v + 0`) hold under `f64` `PartialEq` (which identifies
-    `±0.0`) for finite inputs — signed-zero bit patterns are **not** preserved
-    (`0.0 · (-1.0) = -0.0`; `-0.0 + 0.0 = +0.0`; cf. #58); samples use the
-    NaN-free `finite_f64` strategy.
-- **Coalgebra-direction unroller equivalence tests ([#64](https://github.com/sustia-llc/catgraph/issues/64)).**
-  `tests/architecture_unrollers.rs` gains three `CofreeCmnd`-equivalence tests
-  (+3 proptest lifts) for `UnfoldingRnn`/`MealyCell`/`MooreCell`: each bounded
-  unroll equals the walk of a `CofreeCmnd<OptionWitness, O>` stream prefix
-  unfolded from the same seed — witnessing the wrapper as the finite prefix of
-  the unique coalgebra hom into the terminal `(O × −)`-coalgebra (CDL Remark
-  H.6, App I.3/I.4/I.5). Test-only; no API change.
-- **`tests/THEOREM_MAP.md` law-test → paper-anchor registry ([#70](https://github.com/sustia-llc/catgraph/issues/70), Part 1).**
-  The correctness spine: every law test mapped to its paper anchor (the paper is
-  the proof layer; Kani deferred). New law tests update their row in the same PR.
-- **Full monad-algebra-hom certification recipe test ([#67](https://github.com/sustia-llc/catgraph/issues/67)).**
-  `monad_algebra_laws::full_monad_algebra_hom_certification_recipe` exercises the
-  three-part recipe end to end — source algebra lawful ∧ target algebra lawful ∧
-  hom square (CDL Def 2.3 + Def 2.5) — positively (abs-value hom) and against
-  three negatives each failing exactly one part. A recipe paragraph was added to
-  the `MonadAlgebraHom` rustdoc; no `verify_all` convenience (minimal-ceremony).
-  Test/doc-only; no API change.
+- `UnfoldingRnn::unroll_iter`, `MealyCell::run_iter`, `MooreCell::run_iter`
+  — lazy iterators; poisoned after a caught panic
+  ([#36](https://github.com/sustia-llc/catgraph/issues/36)).
+- `examples/`: `para_walkthrough`, `weight_tying`, `free_monad_basics`,
+  `architecture_unrollers`, run in CI
+  ([#34](https://github.com/sustia-llc/catgraph/issues/34)).
+- `F64Module` R-module actegory `(FinReal, ⊕, R⁰)`: `F64Module`,
+  `DirectSum<A, B>`, `F64Monoidal`, `F64Actegory`, `F64Object`,
+  `F64Morphism`; `tests/module_actegory_laws.rs` (#36).
+- Coalgebra-direction unroller equivalence tests against
+  `Cofree<OptionWitness, O>` ([#64](https://github.com/sustia-llc/catgraph/issues/64)).
+- `tests/THEOREM_MAP.md` ([#70](https://github.com/sustia-llc/catgraph/issues/70)).
+- `full_monad_algebra_hom_certification_recipe` test
+  ([#67](https://github.com/sustia-llc/catgraph/issues/67)).
+- `GroupActionEndo<G>: Monad` (writer monad); `MonadAlgebra::verify_unit_law`
+  / `verify_assoc_law`, `MonadAlgebraHom::verify_unit_coherence` /
+  `verify_mult_coherence`; pentagon/triangle equations on `MonoidalCategory`;
+  `tests/monoidal_coherence_laws.rs`, `tests/monad_algebra_laws.rs`, proptests
+  for `verify_commutes` and `FreeMnd`-equivalence
+  ([#40](https://github.com/sustia-llc/catgraph/issues/40)).
+- `natural::NaturalTransformation`, `natural::IsoForward` / `IsoBackward`,
+  `natural::Pointed` (`GroupActionEndo: Pure`), `container::Container` with
+  `ListEndo` / `TreeEndo` / `GroupActionEndo` instances;
+  `tests/natural_pointed_laws.rs`, `tests/container_laws.rs`
+  ([#41](https://github.com/sustia-llc/catgraph/issues/41)).
+- `EndoWitness` supertrait alias; `tests/functor_laws.rs`.
 
 ### Documentation
 
-- **`FreeMnd`/`CofreeCmnd` kept native vs haft 0.4.0's `Free`/`FreeWitness`
-  ([#76](https://github.com/sustia-llc/catgraph/issues/76)).** Decision recorded
-  in the `free_monad` module doc: the native carriers stay (haft `Free` ships no
-  `Eq`/`Debug`, has no `CofreeCmnd` twin, and the minimal `pure`/`roll`/`new`
-  surface is deliberate); the seam does not re-export haft's `Free`. No API change.
-- **Ergonomics-batch verdicts ([#42](https://github.com/sustia-llc/catgraph/issues/42)).**
-  Three "small ergonomics" items triaged; all resolve to documentation, no
-  API change:
-  - `tie_weights`'s `P: Clone` bound documented as **semantic, not
-    incidental** — `Clone` is the Rust witness of the comonoid comultiplication
-    `δ(p) = (p, p)` in `(Set, ×, 1)` (CDL Theorem G.10); a `P` that cannot be
-    duplicated has no diagonal comonoid, so relaxing the bound would change
-    what `tie_weights` means. The canonical statement lives on the `Comonoid`
-    trait (the bound's home); `tie_weights` links to it, and the audit doc's
-    forward-look item is annotated resolved-won't-do (`Arc<T>` is cheaply
-    `Clone`, so the motivating heap-shared case was already served).
-  - `#[doc(hidden)]` on `private::Sealed` verified **already structural** — the
-    `private` module lives inside the private `monoidal_category` module, so
-    `para::private::Sealed` is unreachable; the only public path is the
-    deliberate `para::Sealed` re-export, which downstream must name for the
-    dual-impl soft-seal opt-in. No change.
-  - Documented dual-impl pattern chosen over a `#[derive(SetCategoryDefaults)]`
-    proc-macro (two impl lines don't justify a macro crate — alpha /
-    minimal-ceremony posture); the concrete opt-in snippet (imports included,
-    mirroring the compile-checked doctest) is now inlined in the README `para`
-    section, and the design-history note in `monoidal_category.rs` cross-links
-    the re-affirmed rejection of option (β). Stale "sub-trait" wording for
-    `SetCategoryDefaults` in `lib.rs`/`README.md` corrected to "opt-in marker
-    trait".
+- `FreeMnd`/`CofreeCmnd` kept native ([#76](https://github.com/sustia-llc/catgraph/issues/76));
+  `tie_weights`' `P: Clone` bound and the `SetCategoryDefaults` dual-impl
+  pattern documented ([#42](https://github.com/sustia-llc/catgraph/issues/42)).
 
-### Changed
-
-- **DC substrate pins bumped `=0.3.3` → `=0.4.0` ([#69](https://github.com/sustia-llc/catgraph/issues/69)).**
-  `deep_causality_haft` 0.4.0 / `deep_causality_num` 0.4.0 (DeepCausality
-  v0.14.0, released 2026-07-08). Version-only for this crate: the consumed
-  seam surface was re-verified against the released crate sources — the
-  `crate::endofunctor` re-export root paths, `HKT`/`Functor`/`Pure`/`Monad`
-  (+provided `join`)/`NaturalIso` signatures, the `iso::test_support` helper
-  path, the `Satisfies<NoConstraint>` blanket, `Either`, `OptionWitness`, and
-  num's root `{Zero, One}` are all unchanged. haft 0.4.0 still ships no
-  `Pointed`/`NaturalTransformation` (the upstream proposal remains
-  [#62](https://github.com/sustia-llc/catgraph/issues/62)). Workspace fallback
-  git rev updated to the 0.4.0 release commit `3280cb844`.
-
-### Changed — BREAKING
-
-- **`MonoidalCategory::tensor_morphisms` added ([#65](https://github.com/sustia-llc/catgraph/issues/65)).**
-  The `MonoidalCategory` trait gains a required applying-form morphism-tensor
-  method `fn tensor_morphisms<A, B, C, D>(&self, Self::Tensor<A, B>,
-  impl FnMut(A) -> C, impl FnMut(B) -> D) -> Self::Tensor<C, D>` (CDL §3.1 — the
-  morphism map of `⊗`). Breaking for any external implementor (no generic
-  default body is possible; the two in-tree impls — the `SetCategoryDefaults`
-  blanket `(a, b) ↦ (f(a), g(b))` and the direct `F64Monoidal` impl
-  `DirectSum(a, b) ↦ DirectSum(f(a), g(b))` — supply it). With the `α ⊗ id` /
-  `id ⊗ α` legs now expressible on the trait surface, the two per-instance
-  coherence checkers collapse into one generic
-  `common::assert_monoidal_coherence<M: MonoidalCategory>` exercising both the
-  `(Set, ×, 1)` tuple and `DirectSum` carriers, and the "spelled manually"
-  per-instance caveats are dropped.
-- **EndoFunctor→haft migration ([#12](https://github.com/sustia-llc/catgraph/issues/12)).**
-  The hand-rolled `EndoFunctor` trait (a GAT `type Apply<X>` plus `fmap`) is
-  removed in favour of `deep_causality_haft` v0.3.3's `HKT` (object map
-  `HKT::Type<X>`) + `Functor<F>` (morphism map `fmap`) witnesses. The witnesses
-  `ListEndo<A>`, `TreeEndo<A>`, and `GroupActionEndo<G>` now `impl HKT + Functor<Self>`
-  with `type Constraint = NoConstraint`; `FreeMnd<F, Z>` / `CofreeCmnd<F, Z>` and
-  the `FAlgebraHom` / `FCoalgebraHom` verifiers are bounded `F: EndoWitness` (the
-  new supertrait alias — see Added), and the recursive `Roll` / `tail` payloads
-  project through `F::Type<…>`.
-  - **Removed public paths** (all five cease to exist — alpha posture, no
-    deprecation shim): `catgraph_dl::EndoFunctor`,
-    `catgraph_dl::endofunctor::EndoFunctor`, `catgraph_dl::algebra::EndoFunctor`,
-    `catgraph_dl::free_monad::EndoFunctor`, and
-    `catgraph_dl::free_monad::free_mnd::EndoFunctor` (`free_mnd` is a `pub mod`
-    and carried its own `pub use`).
-  - **New public paths**: `catgraph_dl::{HKT, Functor, EndoWitness, NoConstraint, Satisfies, Either}`
-    re-exported at the crate root and through `crate::endofunctor` (the single
-    import seam), plus `{HKT, Functor, EndoWitness}` through `algebra` and
-    `free_monad`.
-- `TreeEndo`'s `A + (−)²` sum is now `deep_causality_haft::Either` (was the
-  external `either` crate). The `either` dependency is dropped from
-  `catgraph-dl` (the workspace entry stays — `catgraph` core / applied still use
-  it).
-
-### Added
-
-- **Machine-checked coherence laws + property-based verification
-  ([#40](https://github.com/sustia-llc/catgraph/issues/40)).** Discharges the
-  two deferred surfaces "machine-checked `MonadAlgebraHom` coherence laws" and
-  "property-based exhaustive testing of `verify_commutes` / `FreeMnd`-equivalence".
-  - **`Monad` seam extension** (`src/endofunctor.rs`): the single import seam now
-    also re-exports haft's `Monad`; `GroupActionEndo<G>` gains an
-    `impl Monad<Self>` — the writer monad over the monoid `G`
-    (`bind((g, x), f) = { let (g2, y) = f(x); (g · g2, y) }`, so
-    `join((g1, (g2, x))) = (g1 · g2, x)` = the μ documented in
-    `monad_algebra.rs`). Monad laws discharged by the `Group` contract
-    (CDL Def 2.1 / Ex 2.2).
-  - **Monad-algebra coherence verifiers** (`src/algebra/monad_algebra.rs`), all
-    sample-based (mirroring `FAlgebraHom::verify_commutes`'s caller-sampled
-    honesty; `η = ` haft's `Pure`, `μ = ` haft's provided `Monad::join`):
-    `MonadAlgebra::verify_unit_law` (`a ∘ η = id`) /
-    `MonadAlgebra::verify_assoc_law` (`a ∘ M(a) = a ∘ μ`), both CDL Def 2.3,
-    and `MonadAlgebraHom::verify_unit_coherence` (`M(f) ∘ η_A = η_B ∘ f` —
-    η-naturality, CDL Def 1.5 applied to `η`) /
-    `MonadAlgebraHom::verify_mult_coherence` (`f ∘ a ∘ M(a) = f ∘ a ∘ μ_A` —
-    Def 2.3's associativity post-composed with `f`). The two hom-side checks
-    hold for *any* `f` between lawful algebras of a lawful monad and cannot
-    reject a non-homomorphism — the discriminating condition stays
-    `verify_commutes` (CDL Def 2.5); documented as a ⚠️ scope note on
-    `MonadAlgebraHom`. Law-tested in `tests/monad_algebra_laws.rs`: positive
-    deterministic + proptest over the `Z2` action on `Vec<f64>`, negative
-    unlawful-algebra cases, a non-hom boundary demonstration, and exhaustive
-    writer-monad laws over a non-abelian test-local `S3` pinning the
-    `g1 · g2` accumulation order.
-  - **Pentagon / triangle coherence** for the monoidal surface. The
-    `MonoidalCategory` trait rustdoc gains the Mac Lane pentagon + triangle
-    equations as implementor obligations (previously absent); the `(Set, ×, 1)`
-    blanket bodies are machine-checked against `SetMonoidal` and a fresh
-    downstream-style ZST in `tests/monoidal_coherence_laws.rs`, driven by a new
-    witness-generic `assert_monoidal_coherence` helper in `tests/common/mod.rs`
-    (the `α ⊗ id` / `id ⊗ α` legs spelled manually — the trait currently has no
-    morphism-tensor operation; adding one is
-    [#65](https://github.com/sustia-llc/catgraph/issues/65)). Mac Lane; CDL §3.1.
-  - **Proptest coverage for `verify_commutes` + `FreeMnd`-equivalence.**
-    `tests/algebra_homomorphisms.rs` proptests the abs-value equivariance square
-    (holds for all samples) and the projection failure (fails for all `x[0] ≠ 0`
-    under `g = true`); `tests/architecture_unrollers.rs` proptests the list- and
-    tree-direction `FreeMnd`-equivalence over generated inputs (bounded `Vec<i64>`
-    ≤ 16, bounded `BinaryTree<u8>`), reusing hoisted module-level walk helpers.
-- **`NaturalTransformation` / `Pointed` / `Container` first-class surfaces
-  ([#41](https://github.com/sustia-llc/catgraph/issues/41)).** The three
-  surfaces cg-dl previously documented as deferred obligations are now shipped,
-  built on the haft witness substrate:
-  - **`natural::NaturalTransformation<F, G>`** (`src/natural.rs`) — the
-    component family `α_X : F(X) → G(X)` of a natural transformation `α : F ⇒ G`
-    (Gavranović et al., ICML 2024, Def 1.5), a static method on a zero-sized
-    witness. Adapter witnesses **`natural::IsoForward`** / **`natural::IsoBackward`**
-    lift any haft `NaturalIso<F, G>` to its two directions (separate types
-    because a pair of blanket impls would overlap).
-  - **`natural::Pointed`** — blanket marker for a pointed endofunctor `(F, σ)`
-    with `σ = ` haft's `Pure` (CDL Def B.3). `GroupActionEndo<G>` gains a
-    `Pure<Self>` impl (`σ(x) = (G::identity(), x)`, the writer-functor point) as
-    the crate's own inhabitant; haft witnesses reachable through the seam
-    (e.g. `OptionWitness`) are also pointed via their upstream `Pure` impls and
-    are law-tested alongside. `ListEndo` / `TreeEndo` are documented
-    non-instances — the former's only natural point (constant `None`)
-    trivialises every pointed-algebra; the latter's diagonal point is natural
-    but not representable under `Pure`'s no-`Clone` signature.
-  - **`container::Container`** (`src/container.rs`) — the shape/position
-    presentation of a polynomial endofunctor `⟦S ◁ P⟧(X) = Σ_{s} X^{P(s)}`
-    (Abbott–Altenkirch–Ghani 2003, via CDL), finitary (`Vec`-of-contents)
-    presentation. Instances for `ListEndo<A>`, `TreeEndo<A>`, `GroupActionEndo<G>`
-    live next to each witness definition.
-  - **Seam extension** (`src/endofunctor.rs`): the single import seam now also
-    re-exports haft's `Pure`, `NaturalIso`, `OptionWitness`, and the public
-    natural-iso law helpers `assert_natural_iso_round_trip` /
-    `assert_natural_iso_naturality` (reachable only via `iso::test_support`).
-  - **Law tests** — `tests/natural_pointed_laws.rs` (NT naturality via iso
-    adapters over a genuine `ListEndo<()> ≅ OptionWitness` iso, plus a
-    hand-written non-iso `ListEndo<i32> ⇒ ListEndo<i64>` NT, plus `Pointed`
-    σ-naturality) and `tests/container_laws.rs` (round-trip, arity coherence
-    including recompose rejection, `fmap` coherence over every witness shape),
-    driven by new witness-generic helpers in `tests/common/mod.rs`.
-  - The upstream proposal to add `Pointed` / `NaturalTransformation` to haft
-    itself is tracked as [#62](https://github.com/sustia-llc/catgraph/issues/62).
-- **`EndoWitness`** (`src/endofunctor.rs`) — a blanket-implemented supertrait
-  alias `HKT<Constraint = NoConstraint> + Functor<Self>` packaging "endofunctor
-  on Set". Restores the type-level invariant the old fused `EndoFunctor` trait
-  carried: a bare `HKT` bound would admit an fmap-less carrier, whereas
-  `EndoWitness` requires both the object map and the morphism map. All carriers
-  (`FreeMnd` / `CofreeCmnd` / the F-(co)algebra verifiers) bound on it;
-  witnesses never name it (blanket impl).
-- Functor-law tests (identity + composition) for all three witnesses, in a new
-  `tests/functor_laws.rs`, driven by a single witness-generic
-  `assert_functor_laws<F: EndoWitness>` helper in `tests/common/mod.rs` (proptest
-  strategies for `ListEndo` / `TreeEndo`, sample values for `GroupActionEndo`).
-  These reify the previously documentation-only law obligations (haft `Functor`
-  law docs; Gavranović et al., ICML 2024). The four byte-identical trivial
-  unit-projection test witnesses were collapsed into one generic
-  `common::UnitEndo<Tag>`.
-
-### Changed
-
-- `deep_causality_num` reservation re-anchored from #12 to
-  [#36](https://github.com/sustia-llc/catgraph/issues/36) (R-module / `F64Module`
-  surfaces need `Zero` / `One`); it remains deps-only. `deep_causality_haft` is
-  now in use, not deps-only.
-
-> **Reconciliation note
-> ([#158](https://github.com/sustia-llc/catgraph/issues/158)).** This crate's
-> first workspace-era section is `[workspace-v0.4.0]` above: workspace tags
-> `v0.1.0` through `v0.3.0` (2026-07-01 → 2026-07-11, including `v0.1.1`) were
-> cut without any sections here, although the crate was a workspace member from
-> `v0.1.0`. Changes across them are recorded only in git history
-> (`git log v0.3.0 -- catgraph-dl/` — no `v0.1.0..` lower bound, since
-> `v0.1.0`'s own slice is unrecorded here too) and the workspace-level release
-> record; backfill was deferred out of the v0.4.0 release (owner, 2026-07-25)
-> and resolved as this note (#158, option 2). The `[0.4.1]` / `[0.4.0]`
-> headings below are **pre-reboot crate-local versions** (2026-05), not
-> workspace tags — do not read them as workspace releases.
+> Workspace tags `v0.1.0`–`v0.3.0` have no sections here
+> ([#158](https://github.com/sustia-llc/catgraph/issues/158)). The `[0.4.1]` /
+> `[0.4.0]` headings below are pre-reboot crate-local versions.
 
 ## [0.4.1] - 2026-05-10
 
-Patch release applying review findings on top of v0.4.0. Strictly additive; no API break; no behaviour change.
-
 ### Fixed
 
-- CHANGELOG footer was missing the `[0.4.0]` link reference and `[Unreleased]` comparator still pointed at `catgraph-dl-v0.3.1`. Added `[0.4.1]` + `[0.4.0]` link refs; updated `[Unreleased]` to compare against `catgraph-dl-v0.4.1`.
+- CHANGELOG link references.
 
 ### Changed
 
-- `tests/coalition_consumption_simulation.rs:23` module-level rustdoc updated from stale 4-param `tie_weights::<P, _, X, Y>(...)` example to 5-param explicit form matching the v0.4.0-widened signature.
-- `tests/coalition_consumption_simulation.rs:28-44` rationale comment block updated: v0.3.x "SetActegory-bound" language replaced with v0.4.0 "test uses SetActegory as a conservative caller choice; v0.4.0+ permits any `Actegory<SetMonoidal>`" framing.
-- `src/lib.rs` "Deferred surfaces" bullet removed: `tie_weights` actegory-generalisation is the headline of v0.4.0, no longer deferred.
-- `docs/2402.15332v2-AUDIT.md` row 115 (`Reparameterization::apply`) gains v0.4.0 widening note.
-- `docs/2402.15332v2-AUDIT.md` row 116 (`ParaMorphism::compose`) gains v0.4.0 widening note.
-- `docs/2402.15332v2-AUDIT.md` row 117 (Theorem G.10) pinned: comonoid lives in `M`, NOT in `C` (explicit paper-fidelity statement).
-- `src/para/monoidal_category.rs:43-50` rustdoc citation tightened to clarify the static-vs-runtime dispatch distinction.
-
-### Verification
-
-- `cargo test -p catgraph-dl`: 42 tests + 3 doctests + 5 ignored, all green.
-- `cargo clippy -p catgraph-dl --all-targets -- -W clippy::pedantic`: zero new warnings.
-- `cargo doc -p catgraph-dl --no-deps`: zero warnings.
+- Test and doc text updated for the v0.4.0 `tie_weights` signature.
 
 ## [0.4.0] - 2026-05-10
 
-Minor release closing four architectural items from the v0.4.0 forward-look. Headline: `tie_weights` actegory-genericity widening enabling downstream consumers to consume `tie_weights` against their own `Actegory<SetMonoidal>` ZSTs directly. Strictly additive for inference-relying callers; explicit-turbofish callers move from 4-parameter to 5-parameter on `tie_weights`.
-
 ### Added
 
-- **`§1.1`** `tie_weights<C: Actegory<SetMonoidal>>` widening at `src/para/comonoid.rs`. v0.3.1's `SetActegory`-bound signature is generalised to `C: Actegory<SetMonoidal>` at the leftmost generic position. Body untouched (the diagonal collapse delegates to `Reparameterization::apply`, which is itself widened — see below).
-- **`§1.1`** `Reparameterization::apply<C, PNew, POld, F, X, Y>` widening at `src/para/reparameterization.rs`. Threads `C: Actegory<SetMonoidal>` through the input morphism + return type.
-- **`§1.1`** `ParaMorphism::compose<C, P, F>` widening at `src/para/morphism.rs` (impl-block-level generic + return type).
-- **`§1.2`** HKT `&self` rationale validation paragraph at `src/para/monoidal_category.rs` "## Why methods take `&self`" + `src/para/actegory.rs` "## Why methods take `&self`". Cites coalition v0.5.0 as the validating consumer.
-- **`§1.2`** `docs/AUDIT-CHECKPOINT-v0.4.0.md` — three concrete predicates for the coalition v0.5.0 post-shipping `&self` audit + verdict skeleton (ratify / open follow-up).
-- **`§1.4`** `pub mod private { pub trait Sealed {} }` soft-seal at `src/para/monoidal_category.rs`. `SetCategoryDefaults: private::Sealed + Sized` bound forces downstream commitment-signal via dual impl (`impl Sealed for X` + `impl SetCategoryDefaults for X`). `Sealed` re-exported at `catgraph_dl::para::Sealed` for downstream access.
-- **`§1.6`** Pin-bump chain forward-planning section at `CLAUDE.md` documenting the v0.13.0 → v0.13.5 trajectory + coalition's pin trajectory.
-- "## Audit checkpoints" section at `CLAUDE.md` registering the v0.4.0 audit-checkpoint as OPEN pending coalition v0.5.0 review.
-- Workspace `CLAUDE.md` umbrella tag table gains `v0.13.5` row.
-
-### Changed
-
-- `Cargo.toml` version `0.3.1 → 0.4.0`.
-- `SetCategoryDefaults` trait bound widened from `: Sized {}` to `: private::Sealed + Sized {}` — downstream that already opted in at v0.3.1 (none known) must add `impl Sealed for X` alongside the existing `impl SetCategoryDefaults for X {}`. Zero-impact migration: no external downstream consumer exists at v0.4.0 design time; coalition v0.5.0 (slot 2) is the first.
-- `SetMonoidal` (in-tree consumer) adopts the dual-impl: `impl private::Sealed for SetMonoidal {}` + the existing `impl SetCategoryDefaults for SetMonoidal {}`.
-- `tests/coalition_consumption_simulation.rs` turbofish updated: `tie_weights::<i64, _, i64, i64>(...)` → `tie_weights::<SetActegory, i64, _, i64, i64>(...)` (5-parameter explicit form). Same for `tests/comonoid_laws.rs` and `tests/para_composition.rs` (the `apply` turbofish in para_composition is 6-param post-widening). Pointwise-identical test behaviour.
-- `docs/2402.15332v2-AUDIT.md` Theorem G.10 row + `SetCategoryDefaults` row updated to reflect v0.4.0 deltas.
-- `src/para/comonoid.rs` module-level rustdoc example turbofish updated from stale 4-param `tie_weights::<P, _, X, Y>` to 5-param `tie_weights::<C, P, _, X, Y>` (B.4 code-quality ride-along M-3).
-- `src/para/morphism.rs` module-level `clippy::type_complexity` rationale updated from `SetActegory` → `C` (B.3 code-quality ride-along Minor #1).
-- `src/para/reparameterization.rs` adopts `use super::actegory::Actegory;` (B.2 code-quality ride-along Minor #1) and the `X, Y` rustdoc wording polish to "carrier types in the category `C` acts on" (B.2 Minor #2).
-
-### Migration
-
-- **Inference-relying callers** (`let tied = tie_weights(p, untied);`): no change. The widened signature still infers to `SetActegory` when the input `ParaMorphism`'s second type parameter is `SetActegory`.
-- **Explicit-turbofish callers** (`tie_weights::<P, F, X, Y>(...)`): add `SetActegory` (or your actegory) at the leftmost position: `tie_weights::<SetActegory, P, F, X, Y>(...)`. Three in-tree test callers updated.
-- **`SetCategoryDefaults` adopters** (none known external): add `impl Sealed for X {}` alongside the existing impl.
-
-### Verification
-
-- `cargo test -p catgraph-dl`: 42 tests + 3 doctests + 5 ignored, all green at v0.3.1 counts.
-- `cargo clippy -p catgraph-dl --all-targets -- -W clippy::pedantic`: zero new warnings.
-- `cargo doc -p catgraph-dl --no-deps`: zero warnings.
-- Examples-coverage audit: cg-dl v0.4.0 ships one new public item (`pub trait Sealed`); gap rationale: "sealing trait with no consumer-facing example pattern."
-- Examples-coverage baseline: full-surface cross-walk against `catgraph-dl/examples/*.rs` records 10+ items uncovered with 4 example-file recommendations folded to the v0.5.0+ forward-look.
+- `tie_weights`, `Reparameterization::apply`, `ParaMorphism::compose`
+  generic over `C: Actegory<SetMonoidal>` (explicit turbofish callers add
+  `C` at the leftmost position).
+- `para::Sealed`: `SetCategoryDefaults: private::Sealed + Sized` (dual-impl
+  opt-in).
+- `docs/AUDIT-CHECKPOINT-v0.4.0.md`.
 
 ## [0.3.1] - 2026-05-06
 
-Patch release covering 8 Important findings + ride-along Minors from the
-first cg-dl post-shipping multi-reviewer pass. Strictly additive on the
-v0.3.0 surface — no API break; behaviour unchanged for all v0.3.0 callers;
-the only bound widening is `SetCategoryDefaults: Sized` which is satisfied
-by every shipping caller (`SetMonoidal` and the doctest's `MyMonoidal` are
-unit structs).
+### Changed
 
-### Important — Rust language correctness
+- `SetCategoryDefaults: Sized`; coherence-conflict caveat documented;
+  `SetCategoryDefaults` doctest covers all five methods.
 
-- **Surface b hardening.** `para::SetCategoryDefaults`
-  trait now carries a `: Sized` supertrait bound (was: empty bound list)
-  and a new `## ⚠️ Conflict-guard caveat` rustdoc section explaining that
-  implementing `SetCategoryDefaults` commits the type to the canonical
-  `(Set, ×, 1)` `MonoidalCategory` body via the blanket impl, so a
-  downstream user who *also* writes a hand-rolled `impl MonoidalCategory
-  for MyType { ... }` will hit a `conflicting implementations` compile
-  error. The convention is "don't combine the two": opt into
-  `SetCategoryDefaults` for `(Set, ×, 1)` flavour, or write
-  `impl MonoidalCategory` directly for non-`(Set, ×, 1)` flavour. The
-  `: Sized` bound is satisfied by every shipping caller (every ZST is
-  `Sized`); a downstream attempt at `impl SetCategoryDefaults for &'a [u8]`
-  will fail at the bound site rather than silently picking up the blanket.
-
-### Important — Documentation clarity
-
-- `src/lib.rs` "Scope" header + "Out of scope" bullets refreshed to cite
-  v0.2.0 + v0.3.0 surfaces, with a forward-looking "Deferred surfaces"
-  bulleted list.
-- `comonoid.rs` "Consumption pathway" rustdoc cross-linked from the
-  in-tree integration test + the project-level Para-vs-Quantale layering
-  note.
-- `para::SetCategoryDefaults` doctest extended from 2 method assertions
-  to all 5 (`tensor_objects`, `unit`, `associate`, `left_unitor`,
-  `right_unitor`). Downstream users opening `cargo doc` now see a
-  runnable demonstration that the blanket impl handles the coherence
-  isomorphisms correctly, not just the trivial pair operations.
-
-### Minor — ride-along
-
-- `src/para/actegory.rs` now carries a "Why methods take `&self`"
-  cross-link to the `monoidal_category` module's full rationale section.
-- Audit doc `2402.15332v2-AUDIT.md` "## 3. Out of scope" header
-  relabelled from `(v0.2.x)` to `(v0.3.x)`.
-- Module-level `monoidal_category.rs` "Implementation note (option
-  (γ-ii))" paragraph trimmed to a one-line pointer at the trait-level
-  home; the discussion lives at exactly one canonical site.
-- Both this v0.3.1 entry and the v0.3.0 entry now use the
-  Keep-a-Changelog `[X.Y.Z] - YYYY-MM-DD` format with hyphen-space
-  separators.
-
-### Architectural — folded forward to v0.4.0
-
-The post-shipping pass surfaced architectural findings folded into the
-v0.4.0 forward-look:
-
-- **`tie_weights` actegory generalisation.** v0.3.x `tie_weights` is
-  hardcoded to `ParaMorphism<SetMonoidal, SetActegory, …>`; v0.4.0+
-  relaxes to `<C: Actegory<SetMonoidal>>`.
-- **HKT `&self` runtime-payload audit.** When a non-trivial actegory
-  carrying runtime data lands, the future-proofing slot should be
-  validated as load-bearing.
-- **`tie_weights` `P: Clone` bound.** May become too strict for
-  substitution-grammar cases where parameters are heap-shared `Arc<...>`.
-- **External-user coherence footgun rustdoc.** Tighten coherence-error
-  note on `SetCategoryDefaults` for downstream consumers combining the
-  opt-in marker with a hand-rolled `MonoidalCategory` impl.
-
-### Test counts
-
-- 42 unit + integration tests (unchanged from v0.3.0).
-- 3 doctests + 5 ignored (unchanged from v0.3.0; the `SetCategoryDefaults`
-  doctest body grew but the doctest count is unchanged).
-- 0 clippy pedantic warnings (`cargo clippy --lib --tests -- -W clippy::pedantic`).
-- 0 doc warnings (`cargo doc --no-deps`).
-
-## [0.3.0] - 2026-05-06 - Phase DL-3 flagged surfaces + Hopf evidence note
-
-Phase DL-3: three flagged surfaces from the v0.2.0 Phase DL-2 Agent A-E
-notes plus a Hopf-fibration evidence-note update. Strictly additive on the
-v0.2.0 surface — no API break externally observable; the only internal
-change is that `impl MonoidalCategory for SetMonoidal { ... }` (v0.2.0) was
-hoisted into a blanket impl on the new `SetCategoryDefaults` opt-in marker
-trait. Behaviour pointwise identical for `SetMonoidal`.
-
-This is the first cg-dl release through the full multi-reviewer pass
-(language correctness, project-mechanics, paper-audit).
+## [0.3.0] - 2026-05-06
 
 ### Added
 
-- `para::SetCategoryDefaults` (Surface b) — opt-in marker trait carrying a
-  blanket `impl<T: SetCategoryDefaults> MonoidalCategory for T` with the
-  five canonical `(Set, ×, 1)`-flavoured method bodies. Downstream
-  `(Set, ×, 1)`-flavoured ZSTs (e.g., a future `MyMonoidal: SetCategoryDefaults`)
-  now get `MonoidalCategory` for free with an empty trait body, instead of
-  reproducing `tensor_objects` / `unit` / `associate` / `left_unitor` /
-  `right_unitor` pointwise. Re-exported at `catgraph_dl::para::SetCategoryDefaults`.
-- `tests/coalition_consumption_simulation.rs` (Surface c) — integration
-  test simulating the future `catgraph-coalition` v0.4.0 caller. Defines
-  a local `MockQuantale: Actegory<SetMonoidal>` ZST playing the role of
-  v0.4.0's actegory, and exercises `tie_weights::<i64, _, i64, i64>(3, untied)`
-  end-to-end. Cross-validates that `MockQuantale::act` and `SetActegory::act`
-  agree pointwise on the Cartesian-action shape, demonstrating the
-  consumption pathway is structure-agnostic.
+- `para::SetCategoryDefaults` opt-in blanket `MonoidalCategory`;
+  `SetMonoidal` opts in.
+- `tests/coalition_consumption_simulation.rs`.
+- `docs/2402.15332v2-SUMMARY.md`, `docs/2402.15332v2-AUDIT.md`; Hopf-fibration
+  evidence note (no preprint as of 2026-05-06).
 
-### Documentation
-
-- **Paper anchor in-tree** — `docs/2402.15332v2.pdf` (Gavranović-Lessard-
-  Dudzik et al., ICML 2024, 539 KB).
-- **Merged primer** `docs/2402.15332v2-SUMMARY.md` (1295 lines) — Part I
-  transcript-vs-paper comparison (flags Hopf-fibration / carry / pathfinding
-  / synthetic-vs-analytic / multi-sorted-syntax as transcript-only) +
-  Part II faithful paper rendering with ⚠️ CAREFUL cross-checking caveats
-  on Appendix H.1 / H.3 worked-example arithmetic. Sourced from two
-  pre-existing companion artefacts and merged for full in-tree
-  self-containment.
-- **Paper-coverage audit** `docs/2402.15332v2-AUDIT.md` — 76 audited items
-  across §1-§4 + Appendices A/B/C/H/I/J/K. Headline at v0.2.0 baseline:
-  **84% DONE on the implementable surface** (47 DONE / 6 PARTIAL /
-  3 DEFERRED out of 56 implementable; 20 N/A motivational). Mirrors
-  `BV25-AUDIT.md` + `GORARD23-AUDIT.md` structure; v0.3.0 deltas section
-  populated by the post-shipping multi-reviewer pass.
-- **`MonoidalCategory` `&self` rationale** (Surface a) — new module-level
-  rustdoc paragraph in `src/para/monoidal_category.rs` headed "Why methods
-  take `&self`" explaining the deliberate divergence from HAFT v0.3.1's
-  static-dispatch convention. The `&self` slot is reserved for DL-3+
-  instances over richer monoidal categories (R-module, hyperdoctrine,
-  vector-bundle) that will carry runtime data — freezing the trait at
-  static methods today would force a breaking change later.
-- **`tie_weights` consumption pathway** (Surface c) — three new
-  module-level rustdoc paragraphs in `src/para/comonoid.rs` covering
-  (i) the layering invariant ("Para is upstream of Quantale";
-  `catgraph-coalition` v0.4.0 imports `Actegory`, never re-defines it),
-  (ii) what the v0.4.0 call site will look like end-to-end,
-  (iii) what the actegory ▶ widening means for `tie_weights` in non-
-  `(Set, ×, 1)` actegories.
-- **Hopf-fibration evidence-note update** (Surface 2.4) — `src/hopf_fibration/mod.rs`
-  + `src/lib.rs` ⚠️ CAREFUL section + `CLAUDE.md` ⚠️ CAREFUL section
-  updated with the 2026-05-06 evidence note: the Filter Equivariants
-  follow-up paper ([arXiv:2507.08796v1](https://arxiv.org/abs/2507.08796),
-  Lewis-Ghani-Dudzik-Perivolaropoulos-Pascanu-Veličković, July 2025) §6
-  explicitly puts ripple-carry addition **outside** the FE framework. As of
-  2026-05-06 no Hopf-fibration / carry-operation preprint exists; the
-  `hopf_fibration` private namespace stub is therefore kept reserved with
-  no public API. The cited `[DvGPV24]` reference in FE is the existing
-  Dudzik-von Glehn-Pascanu-Veličković *Asynchronous algorithmic alignment
-  with cocycles* (LoG 2024) already cited in CDL §3.2, not a new Hopf
-  paper.
-
-### Changed (internal — no externally observable behaviour change)
-
-- `para::SetMonoidal` now opts into the new `SetCategoryDefaults` blanket
-  via an empty `impl SetCategoryDefaults for SetMonoidal {}` rather than
-  carrying its own `impl MonoidalCategory for SetMonoidal { ... }`. The
-  blanket supplies pointwise-identical method bodies (Cartesian product +
-  tuple re-association). All v0.2.0 tests + doctests continue to pass
-  without modification — this is purely a code-organisation hoist, not a
-  behaviour change.
-
-### Notes — Phase DL-3 design rationale
-
-- **Surface (b) path taken: option (γ-ii) blanket impl on opt-in marker
-  trait.** Original design-doc option (γ-i) (sub-trait with default-method
-  bodies inherited by supertrait impls) does not type-check on stable
-  Rust: a sub-trait cannot override a supertrait's method bodies. (γ-ii)
-  is the closest stable-Rust equivalent and is functionally a renamed
-  option (α) (marker trait + blanket impl) from the design doc. The
-  `SetCategoryDefaults` name better signals the "(Set, ×, 1)-flavoured
-  defaults" intent than a generic `Marker` would.
-- **Surface (c) integration-test scope.** v0.2.0's `tie_weights` signature
-  is hardcoded to `ParaMorphism<SetMonoidal, SetActegory, …>` — the
-  actegory parameter is **not yet generic**. The simulation therefore
-  defines `MockQuantale` to demonstrate the actegory-impl shape v0.4.0
-  will write, and uses `SetActegory` for the actual `tie_weights` call.
-  Cross-validates that both actegories agree pointwise on the Cartesian
-  action shape, demonstrating the consumption pathway is structure-
-  agnostic. **Surfacing an Architectural finding for v0.4.0 planning:**
-  generalising `tie_weights` to take an `<C: Actegory<SetMonoidal>>`
-  parameter is a v0.4.0-time design decision; coalition v0.4.0 will need
-  either (a) a cg-dl-side `tie_weights` generalisation or (b) a coalition-
-  side wrapper around `SetActegory`. Captured for the v0.3.0 multi-reviewer
-  pass to confirm.
-- **Hopf-fibration body remains DEFERRED** with **option (i) keep-stub**
-  locked at design phase. Three options were considered: (i) keep, (ii)
-  remove, (iii) promote to `forward_pointers/`. Rationale for (i): the
-  stub is a useful research-direction-tracking signal in a Dudzik-flavoured
-  workspace; FE §6 evidence confirms no preprint exists yet, so the
-  namespace remains reserved.
-
-### Test counts
-
-- 42 unit + integration tests (v0.2.0: 41; +1 `tie_weights_consumption_pathway_simulation`).
-- 3 doctests + 5 ignored (v0.2.0: 2 + 5; +1 `SetCategoryDefaults` doctest).
-- 0 clippy pedantic warnings (`cargo clippy --lib --tests -- -W clippy::pedantic`).
-- 0 doc warnings (`cargo doc --no-deps`).
-
-## [0.2.0] — 2026-05-02 — Phase DL-2 bodies
-
-Phase DL-2: trait surfaces from v0.1.0 widened with bodies. Bodies cover
-the `Para(SetMonoidal, SetActegory)` 2-category, the `Comonoid` weight-
-tying surface, F-(co)algebra homomorphisms with the GDL recovery test,
-recursive `FreeMnd` / `CofreeCmnd` with `List` / `Tree` bijections, and
-the five architecture unrollers with `FreeMnd`-equivalence verification.
-
-**Public-surface widening (semver minor bump from v0.1.0):**
-- `MonoidalCategory` trait: gained `Unit`, `Tensor<A, B>` GATs and 5
-  coherence methods.
-- `Actegory<M>` trait: gained `ActionResult<P, X>` GAT, `act`,
-  `compose_action`.
-- `Comonoid` trait: gained `comultiply`, `counit` methods (parameterised
-  over `M: MonoidalCategory`).
-- New trait `crate::endofunctor::EndoFunctor` with `Apply<X>` GAT and
-  `fmap<X, Y, G: Fn(X) -> Y>`.
-- New trait `algebra::Group` + `algebra::Z2Group` instance.
-- New types: `para::SetMonoidal`, `para::SetActegory`, `para::SetObject`,
-  `para::SetMorphism`, `para::DiagonalComonoid`, `algebra::FAlgebraHom`,
-  `algebra::FCoalgebraHom`, `algebra::MonadAlgebraHom`,
-  `algebra::GroupActionEndo<G>`, `free_monad::list_endo::ListEndo<A>`,
-  `free_monad::tree_endo::TreeEndo<A>`,
-  `free_monad::tree_endo::BinaryTree<A>`.
-- New constructors / converters: `para::tie_weights`,
-  `ParaMorphism::compose`, `ParaMorphism::apply`,
-  `Reparameterization::apply`, `FoldingRnn::unroll`,
-  `RecursiveNn::unroll`, `UnfoldingRnn::unroll_to_vec`,
-  `MealyCell::run`, `MooreCell::run`,
-  `vec_to_free_mnd` / `free_mnd_to_vec`,
-  `tree_to_free_mnd` / `free_mnd_to_tree`.
-
-### Added — Phase DL-2 Agent E (architecture unrollers + FreeMnd-equivalence)
-
-- `architectures::FoldingRnn::unroll(cell, inputs: Vec<A>) -> S` —
-  CDL Remark 2.13 / Example 2.12. Right-fold semantics: the unique
-  algebra homomorphism `(P, List(A)) → S` from the initial algebra of
-  the free monad on `1 + A × −` into the cell's algebra. Implemented
-  via `inputs.into_iter().rev().fold(cell_0(p), step)` so the
-  rightmost CDL element is the innermost call (Haskell `foldr`
-  convention). Closure bounds: `P: Clone, Cell0: Fn(P) -> S, Cell1:
-  Fn((P, A, S)) -> S`.
-- `architectures::RecursiveNn::unroll(cell, tree: BinaryTree<A>) -> S`
-  — CDL Example J.3. Post-order tree walk: `Leaf(_)` discharges
-  through `cell_0(p)`; `Node(l, r)` recurses into both subtrees and
-  combines via `cell_1((p, a, l_val, r_val))`. The four-arg `cell_1`
-  shape (`(P, A, S, S)`) needs an `A` payload at internal-node
-  combination — `BinaryTree::Node` carries no node payload, so the
-  unroller takes the leftmost-leaf payload by convention. Tests use
-  payload-agnostic cells so this choice is unobservable.
-- `architectures::UnfoldingRnn::unroll_to_vec(cell, initial_state, depth) -> Vec<O>`
-  — CDL Example J.2. Bounded-depth coalgebra unfolding: produce
-  `depth` outputs by repeatedly applying `(cell_o, cell_n)` to advance
-  the state. Infinite (lazy) unrolling is deferred to DL-3+ (would
-  need `Lazy`/`Thunk` carrier or `tokio_stream::Stream`).
-- `architectures::MealyCell::run<Step>(cell, initial_state, inputs: Vec<I>) -> Vec<O>`
-  — CDL Example J.4. Mealy stream-process: thread state left-to-right
-  through inputs, collect per-step outputs. The two-stage closure
-  shape (`Cell: Fn((P, S)) -> Step`, `Step: FnOnce(I) -> (O, S)`) is
-  the standard Rust workaround for "function returning closure" — the
-  outer cell produces a fresh per-step closure each call.
-- `architectures::MooreCell::run(cell, initial_state, inputs: Vec<I>) -> Vec<O>`
-  — CDL Example I.5. Moore output-then-step: at each step, emit
-  `cell_o(p, s)` *before* consuming the next input `i` and advancing
-  via `cell_n((p, s, i))`. The first emitted output is from the
-  initial state — distinguishes Moore from Mealy.
-- `tests/architecture_unrollers.rs` — 10 acceptance tests:
-  `FoldingRnn` sum-with-bias and length-counter, `RecursiveNn`
-  three-tree post-order combine, `UnfoldingRnn` counter-unroll
-  including `depth = 0`, `MealyCell` passthrough and stateful
-  counter, `MooreCell` output-then-step (concrete `[0, 2, 4]` case),
-  GDL recovery via `Z2`-invariant absolute-value folding (with a
-  non-invariant discriminator), and **two `FreeMnd`-equivalence
-  tests** — one each for the list and tree directions — proving
-  `unroll(cell, x) == unroll_via_free_mnd(cell, to_free_mnd(x))` for
-  several samples. The latter is the reification of the central CDL
-  claim that the architecture unroller IS the unique algebra
-  homomorphism from the initial algebra of the free monad.
-
-### Notes — Phase DL-2 Agent E
-
-- Closure bounds use the named-generic form (`Cell0: Fn(P) -> S, …`)
-  rather than `impl Fn` to maximise downstream flexibility — consistent
-  with the `EndoFunctor::fmap` named-generic decision (per
-  `crate::endofunctor::EndoFunctor` module docs).
-- The `RecursiveNn` unroller's leftmost-leaf convention for `cell_1`'s
-  `A` argument is a Phase DL-2 implementation choice. CDL §J.3
-  describes the recursive-NN architecture in terms of the algebraic
-  shape `A + (−)²` where `A` is an *attribute* of internal nodes; our
-  `BinaryTree::Node` is payload-free. Two semver-equivalent options
-  for DL-3+: (a) widen `BinaryTree::Node` to carry an `A` payload, or
-  (b) re-express the cell-1 closure as `Fn((P, S, S)) -> S` (3-arg)
-  and drop the `A` from the internal-node side. The current 4-arg
-  shape is what the DL-1 scaffold smoke test fixed; preserving it is
-  source-compat.
-- `UnfoldingRnn::unroll_to_vec` is *bounded*; truly-infinite final-
-  coalgebra semantics is deferred. This is documented inline; no
-  `unroll_into_iter` was added because the tests don't need lazy
-  semantics yet.
-- The two `FreeMnd`-equivalence tests are caller-sampled, not
-  exhaustive (same caveat as Agent D's `verify_commutes`). Property-
-  based testing is deferred to DL-3+ when generators for arbitrary
-  `BinaryTree<u8>` and bounded `Vec<i64>` are in place.
-
-### Added — Phase DL-2 Agent D (F-algebra/coalgebra homomorphisms + GDL recovery)
-
-- `algebra::FAlgebraHom<F, A, B, FromS, ToS, MapS>` — F-algebra
-  homomorphism (CDL Definition 2.5). Caller-driven `verify_commutes`
-  evaluates the square `f ∘ a = b ∘ F(f)` on a sample `fa: F(A)`.
-- `algebra::FCoalgebraHom<F, A, B, FromS, ToS, MapS>` — F-coalgebra
-  homomorphism with the dual square `F(f) ∘ a = b ∘ f` (CDL Definition
-  B.2 dual).
-- `algebra::MonadAlgebraHom<M, A, B, FromS, ToS, MapS>` — monad-algebra
-  homomorphism wrapping `FAlgebraHom`. Phase DL-2 machine-checks only
-  the F-algebra square; the additional monad-unit and multiplication
-  coherence is a **documented obligation** (CDL Definition 2.3) — see
-  the doc comment on `MonadAlgebraHom::new`.
-- `algebra::EndoFunctor` trait — `Apply<X>` GAT + `fmap`. **Local to
-  `algebra/`**; Agent C is defining a sibling trait of the same shape
-  in `free_monad/`. The
-  `// TODO Phase DL-2 cleanup: deduplicate EndoFunctor with free_monad
-  after both agents land` comment in `algebra/group_action.rs` documents
-  the reconciliation contract for the parent agent.
-- `algebra::Group` trait + `algebra::Z2Group` (cyclic group of order 2 —
-  XOR-on-`bool`) + `algebra::GroupActionEndo<G>` (the endofunctor
-  `F(X) = G × X`). CDL Example 2.4.
-- `tests/algebra_homomorphisms.rs` — 5 acceptance tests covering
-  identity-as-hom, non-equivariant projection failure, **CDL Example 2.6
-  Geometric-Deep-Learning recovery** (absolute value as a `Z2`-invariant
-  F-algebra homomorphism between the negation action and the trivial
-  action), coalgebra-hom identity smoke (with non-commuting structure-
-  map mismatch), and `MonadAlgebraHom` construction smoke.
-
-### Notes — Phase DL-2 Agent D
-
-- The GDL recovery test pairs the source algebra `(Vec<f64>, negation)`
-  with the target `(Vec<f64>, trivial)`. An F-algebra homomorphism in
-  this setting is exactly a `Z2`-**invariant** map. `|·|` satisfies it;
-  `vec![x[0]]` does not — `verify_commutes` distinguishes the two.
-- `verify_commutes` is **caller-sampled, not exhaustive** — the
-  acceptance tests sweep a small representative grid (both group
-  elements; positive, negative, and zero coordinates; the empty
-  vector). Property-based testing is deferred to DL-3+ when enough
-  algebraic infrastructure exists for a useful generator.
-- `MonadAlgebraHom`'s monad-coherence laws (`M(f) ∘ η_A = η_B ∘ f`,
-  associativity with `μ`) are **caller-attested**. A `Monad` trait
-  carrying `η`/`μ` and the corresponding verifiers lands in DL-3+.
-
-### Added — Phase DL-2 Agent C (recursive `FreeMnd`/`CofreeCmnd` + List/Tree bijections)
-
-- `free_monad::EndoFunctor` — GAT-based functor trait. The object map is
-  `type Apply<X>` (same GAT-as-HKT pattern Agent A used for
-  `MonoidalCategory::Tensor`); the morphism map is
-  `fn fmap<X, Y, G: Fn(X) -> Y>(fx: Self::Apply<X>, f: G) -> Self::Apply<Y>`.
-  Functor laws (identity, composition) are documented as caller obligations
-  rather than runtime-checked. **Local to `free_monad/`** — Agent D's
-  `algebra/group_action.rs` defines a sibling trait of the same shape
-  pending parent-agent reconciliation.
-- `free_monad::FreeMnd<F, Z>` — recursive enum body. Two constructors:
-  `Pure(Z)` (unit / terminator) and `Roll(Box<F::Apply<FreeMnd<F, Z>>>)`
-  (functorial node). The `Box` indirection through the GAT projection
-  compiled cleanly under Rust 1.95 + Edition 2024 — no workaround needed.
-  Hand-rolled `Clone`/`Debug`/`PartialEq`/`Eq` impls with explicit
-  `where F::Apply<Self>: Clone/Debug/...` bounds (the `derive` macros
-  emit bounds the trait-resolution machinery can't always discharge
-  through GAT projection). A `Default`-bounded `new()` retains
-  source-compat with the DL-1 scaffold smoke test.
-- `free_monad::CofreeCmnd<F, Z>` — recursive struct body. Fields
-  `head: Z` and `tail: Box<F::Apply<CofreeCmnd<F, Z>>>`. Same manual
-  trait-impl pattern as `FreeMnd`. Constructor `new(head, tail)` boxes
-  the tail.
-- `free_monad::list_endo::ListEndo<A>` — concrete `EndoFunctor` for
-  `1 + A × −` with `Apply<X> = Option<(A, X)>`. CDL Example B.19.
-- `free_monad::list_endo::vec_to_free_mnd` /
-  `free_monad::list_endo::free_mnd_to_vec` — bijection witnesses for
-  `FreeMnd<ListEndo<A>, Z> ≅ (Vec<A>, Z)`. Destruction walks
-  iteratively (loop, not recursion) to keep stack usage bounded on long
-  inputs.
-- `free_monad::tree_endo::TreeEndo<A>` — concrete `EndoFunctor` for
-  `A + (−)²` with `Apply<X> = Either<A, (X, X)>` (using the workspace
-  `either` crate). CDL Example B.20.
-- `free_monad::tree_endo::BinaryTree<A>` — explicit carrier for binary
-  trees with leaves in `A`. `Leaf(A)` / `Node(Box, Box)` constructors.
-- `free_monad::tree_endo::tree_to_free_mnd` /
-  `free_monad::tree_endo::free_mnd_to_tree` — bijection witnesses for
-  `BinaryTree<A> ≅ FreeMnd<TreeEndo<A>, Infallible>`. The `Infallible`
-  terminator (stable proxy for the never type `!`) statically forbids
-  `Pure`-shaped leaves; all leaves come through the `Left(a)` summand.
-- `tests/free_monad_bijections.rs` — 5 acceptance tests:
-  proptest-driven `Vec<u32>` round-trip (64 cases per direction),
-  empty-list-to-`Pure(())` corner case, hand-built cons-cell tower for
-  `[1, 2]`, three hand-built `BinaryTree` instances (leaf, single
-  internal node, depth-3) round-tripping via `FreeMnd<TreeEndo,
-  Infallible>`, and a `CofreeCmnd<TrivialEndo, u32>` smoke test
-  confirming the GAT-bounded recursive struct constructs and clones.
-- `Cargo.toml` — added `either.workspace = true` to dependencies (the
-  workspace pin is `1.15`, already used by `catgraph` and
-  `catgraph-applied`).
-
-### Notes — Phase DL-2 Agent C
-
-- Bijection helpers (`vec_to_free_mnd` etc.) are *not* re-exported at
-  the crate root — they live at the qualified paths
-  `catgraph_dl::free_monad::list_endo::*` and
-  `catgraph_dl::free_monad::tree_endo::*`. The crate-root surface stays
-  focused on the categorical primitives `FreeMnd`, `CofreeCmnd`, and
-  `EndoFunctor`.
-- `tests/scaffold_smoke.rs` updated for the new `EndoFunctor`-bounded
-  type constructors. Endofunctor placeholders for `StreamEndo`,
-  `MealyEndo`, `GroupActionEndo` get trivial `Apply<X> = ()` impls
-  locally in the test file — semantics are exercised in
-  `tests/free_monad_bijections.rs`.
-- `EndoFunctor` is currently defined twice (here and in
-  `algebra::group_action`, Agent D). Reconciliation is a follow-up
-  parent-agent commit per the TODO note in
-  `algebra/group_action.rs`.
-
-### Added — Phase DL-2 Agent B (Comonoid coherence laws + diagonal weight-tying)
-
-- `para::Comonoid<M>` — trait widened from a marker-only scaffold to a
-  uniform-structure trait carrying value-level methods
-  `comultiply : P → P ⊗ P` and `counit : P → I`. Generic over the carrier
-  `P` (with the per-method bounds the implementor needs); the parameter
-  category `M: MonoidalCategory` threads in Agent A's `Tensor<A, B>` and
-  `Unit` GATs.
-- `para::DiagonalComonoid<M>` — zero-sized witness for the canonical
-  comonoid in `(Set, ×, 1)`. Implements `Comonoid<SetMonoidal>` with
-  `δ(p) = (p.clone(), p)` and `ε(p) = ()`. Coassociativity, left counit,
-  and right counit are exact equalities (not "up to iso"), per CDL §3.1.
-- `para::tie_weights` — consumer-facing weight-tying API. Takes a
-  `ParaMorphism<SetMonoidal, SetActegory, (P, P), F>` and returns a
-  `ParaMorphism<…, P, impl Fn((P, X)) -> Y>` whose action is
-  `λ(p, x). f(((p, p), x))`. Targeted by `catgraph-coalition` v0.4.0.
-- `tests/comonoid_laws.rs` — 6 acceptance tests: coassociativity smoke
-  (`bool`), proptest-driven coassociativity on `i32` and `String`,
-  proptest left counit and right counit laws on `i32`, and the headline
-  end-to-end weight-tying smoke (`(P × P, p1 + p2 + x)` tied at `p = 3`,
-  `x = 5` ↦ `11`).
-
-### Notes — Phase DL-2 Agent B
-
-- Comonoid laws are exercised against `SetMonoidal::associate` /
-  `left_unitor` / `right_unitor` (Agent A's coherence isomorphisms),
-  closing the loop between the two agents' surfaces.
-- `tie_weights` is implemented in terms of `Reparameterization::apply`
-  rather than calling `Comonoid::comultiply` directly — the
-  `Reparameterization` carrier wants a `Fn(PNew) -> POld` closure, not a
-  method invocation borrowing `&self`. The trait body and the helper are
-  semantically equivalent on `SetMonoidal`; a future DL-3+ enrichment
-  can refactor in either direction without breaking the public surface.
-
-### Added — Phase DL-2 Agent A (Para 2-category composition + Actegory action body)
-
-- `para::SetMonoidal` — concrete monoidal category `(Set, ×, 1)`. Object-
-  level tensor projects to Rust tuple `(A, B)`; unit projects to `()`.
-  Coherence isomorphisms (associator, left/right unitor) implemented as
-  exact tuple re-associations (CDL §3.1 default).
-- `para::SetActegory` — concrete `M`-actegory of `SetMonoidal` acting on
-  `Set` by Cartesian product. `▶ : (P, X) ↦ (P, X)`; coherence
-  `μ : Q ▶ (P ▶ X) → (Q ⊗ P) ▶ X` is the canonical tuple re-association
-  `(q, (p, x)) ↦ ((q, p), x)`.
-- `para::SetObject`, `para::SetMorphism` — kind-of-objects/morphisms
-  markers for `SetMonoidal`. Type-level witnesses; not instantiated at
-  runtime.
-- `MonoidalCategory` trait widened with `Unit` / `Tensor<A, B>` GATs and
-  the `tensor_objects` / `unit` / `associate` / `left_unitor` /
-  `right_unitor` methods. Required for the Phase DL-2 body but
-  semver-acceptable since DL-1 (v0.1.0) was unreleased.
-- `Actegory<M>` trait widened with `ActionResult<P, X>` GAT and the
-  `act` / `compose_action` methods. Same semver caveat as
-  `MonoidalCategory`.
-- `ParaMorphism::compose` — sequential composition body for
-  `Para(SetMonoidal, SetActegory)`. Returns
-  `ParaMorphism<…, (Q, P), impl Fn(((Q, P), X)) -> Z>` whose action
-  composes via `h((q, p), x) = g((q, f((p, x))))`.
-- `ParaMorphism::apply` — convenience evaluator for
-  `f((self.parameter.clone(), x))`.
-- `Reparameterization::apply` — pre-composition for
-  `Para(SetMonoidal, SetActegory)`. Given `r : P' → P`, produces a new
-  `ParaMorphism<…, P', impl Fn((P', X)) -> Y>` whose action substitutes
-  `r(p')` for `p` in the original `f`. Diagonal `Δ : P → (P, P)`
-  specialises to weight tying.
-- `tests/para_composition.rs` — 5 acceptance tests covering left unit,
-  right unit, sequential composition (numeric), reparameterization
-  triangle (diagonal weight tying), and direct sanity of
-  `SetActegory::compose_action`'s μ.
-
-### Notes — Phase DL-2 Agent A
-
-- Closure convention frozen: `Fn((P, X)) -> Y` (tuple-as-single-argument)
-  matches the `architectures::*` scaffold.
-- Bodies restricted to `M = (Set, ×, 1)` per CDL default. Other monoidal
-  categories deferred to DL-3+.
-- HKT-like behaviour for the action result encoded via Generic
-  Associated Types (`ActionResult<P, X>`) — same shape as the
-  `deep_causality_haft` GAT-witness pattern.
-
-## [0.1.0] — 2026-05-02 — Phase DL-1 scaffold
-
-Initial scaffold release. Types-only surface; bodies land in Phase DL-2.
+## [0.2.0] - 2026-05-02
 
 ### Added
 
-- `para::Para<M, C>` — type-level handle for the 2-category of parametric
-  morphisms (CDL §3.1).
-- `para::ParaMorphism<M, C, P, F>` — 1-morphism `(P, f : P ▶ X → Y)`.
-- `para::Reparameterization<M, R>` — 2-morphism `(P, f) ⇒ (P', f')` via
-  `r : P' → P`.
-- `para::Comonoid` — trait surface for weight-tying-as-comonoid (CDL
-  Theorem G.10).
-- `para::MonoidalCategory` and `para::Actegory<M>` — trait surfaces for
-  the parameter category and its action.
-- `algebra::FAlgebra<F, A, S>` — F-algebra `(A, a : F(A) → A)` (CDL
-  Definition 2.8).
-- `algebra::FCoalgebra<F, A, S>` — F-coalgebra `(A, a : A → F(A))` (CDL
-  Definition B.2).
-- `algebra::MonadAlgebra<M, A, S>` — monad algebra `(A, a : M(A) → A)`
-  with unit + associativity coherence (CDL Definition 2.3).
-- `free_monad::FreeMnd<F, Z>` — type witness for
-  `FreeMnd(F)(Z) = Fix(X ↦ F(X) + Z)` (CDL Proposition B.18).
-- `free_monad::CofreeCmnd<F, Z>` — cofree-comonad dual.
-- `architectures::FoldingRnn` — algebra of `Para(1 + A × −)`.
-- `architectures::UnfoldingRnn` — coalgebra of `Para(O × −)`.
-- `architectures::RecursiveNn` — algebra of `Para(A + (−)²)`.
-- `architectures::MealyCell` — coalgebra of `Para(I → O × −)`.
-- `architectures::MooreCell` — coalgebra of `Para(O × (I → −))`.
-- Re-exports of the Tier 3 enrichment substrate from `catgraph-applied`:
-  `Rig`, `UnitInterval`, `Tropical`, `F64Rig`, `BoolRig`,
-  `EnrichedCategory`, `HomMap`, `LawvereMetricSpace`.
-- `tests/scaffold_smoke.rs` — structural guard for the v0.1.0 public surface.
+- `MonoidalCategory` gains `Unit`, `Tensor<A, B>`, `tensor_objects`, `unit`,
+  `associate`, `left_unitor`, `right_unitor`; `Actegory<M>` gains
+  `ActionResult<P, X>`, `act`, `compose_action`; `Comonoid` gains
+  `comultiply`, `counit`.
+- `para::SetMonoidal`, `SetActegory`, `SetObject`, `SetMorphism`,
+  `DiagonalComonoid`, `tie_weights`, `ParaMorphism::compose` / `apply`,
+  `Reparameterization::apply`.
+- `algebra::EndoFunctor`, `Group`, `Z2Group`, `GroupActionEndo<G>`,
+  `FAlgebraHom`, `FCoalgebraHom`, `MonadAlgebraHom` with `verify_commutes`.
+- `free_monad::FreeMnd` / `CofreeCmnd` bodies, `ListEndo<A>`, `TreeEndo<A>`,
+  `BinaryTree<A>`, `vec_to_free_mnd` / `free_mnd_to_vec`,
+  `tree_to_free_mnd` / `free_mnd_to_tree`; `either` dependency.
+- `FoldingRnn::unroll`, `RecursiveNn::unroll`, `UnfoldingRnn::unroll_to_vec`,
+  `MealyCell::run`, `MooreCell::run`.
+- Tests: `para_composition`, `comonoid_laws`, `algebra_homomorphisms`,
+  `free_monad_bijections`, `architecture_unrollers`.
 
-### Notes
+## [0.1.0] - 2026-05-02
 
-- Private `hopf_fibration` module reserved for Andrew Dudzik's
-  pre-publication carry-operation conjecture; not exposed.
-- This release is intentionally body-less. Composition operators,
-  coherence verification, and the algebra-homomorphism unroller arrive in
-  Phase DL-2 with the `catgraph-coalition` v0.4.0 enriched-actegory body.
+### Added
+
+- Scaffold: `para::{Para, ParaMorphism, Reparameterization, Comonoid,
+  MonoidalCategory, Actegory}`, `algebra::{FAlgebra, FCoalgebra,
+  MonadAlgebra}`, `free_monad::{FreeMnd, CofreeCmnd}`, the five
+  `architectures` cells, re-exports of `Rig`, `UnitInterval`, `Tropical`,
+  `F64Rig`, `BoolRig`, `EnrichedCategory`, `HomMap`, `LawvereMetricSpace`;
+  private `hopf_fibration` stub.
 
 [Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...HEAD
 [workspace-v0.15.0]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...v0.15.0

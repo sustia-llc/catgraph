@@ -12,39 +12,9 @@
 //!
 //! used in the sequential composition rule for `Para(M, C)`.
 //!
-//! ## HKT shape
-//!
-//! The result of acting on an object is a Generic Associated Type
-//! [`Actegory::ActionResult`]. For [`SetActegory`] (the only instance
-//! currently shipped), `▶` is Cartesian product, so `ActionResult<P, X> = (P, X)`.
-//! Other instances may project differently — e.g. an `R`-module
-//! actegory would project `(P, X) ↦ P · X` for some scalar action.
-//!
-//! Closure convention: `Fn((P, X)) -> Y` (tuple-as-single-argument). See the
-//! `monoidal_category` module for the rationale.
-//!
-//! ## Why methods take `&self`
-//!
-//! [`Actegory::act`] and [`Actegory::compose_action`] take `&self` for the
-//! same future-proofing reason as [`MonoidalCategory`] — see the
-//! [`super::monoidal_category`] "Why methods take `&self`" section. Future
-//! instances over richer actegories (R-module action carrying a base ring;
-//! vector-bundle action carrying a connection; coalition's `QuantaleActegory`
-//! carrying Tropical-flavoured min-weight semantics) will use the `&self`
-//! slot for runtime data. [`SetActegory`] is a ZST so the receiver is
-//! unobservable today, but freezing the trait at static methods would force
-//! a breaking change later.
-//!
-//! **Rationale validation:** a downstream coalition
-//! `impl Actegory<SetMonoidal>` for the three quantale ZSTs is the first
-//! consumer expected to carry runtime data (Tropical zero / one
-//! for the underlying min-plus semiring; BTV21 free-monoid generator
-//! references; Lawvere-metric embedding parameter). The shipped surface commits to the
-//! `&self` slot for future-proofing; the audit checkpoint fires at that
-//! consumer's post-shipping review and either ratifies the choice
-//! or opens a follow-up to consider static dispatch. See
-//! [`AUDIT-CHECKPOINT-v0.4.0.md`](../../docs/AUDIT-CHECKPOINT-v0.4.0.md)
-//! for audit criteria.
+//! The action result is the GAT [`Actegory::ActionResult`]; for
+//! [`SetActegory`] it is `(P, X)`, for [`RActegory`](super::RActegory) it is
+//! [`DirectSum`](super::DirectSum). Closure convention: `Fn((P, X)) -> Y`.
 
 use super::monoidal_category::{MonoidalCategory, SetMonoidal};
 

@@ -7,38 +7,10 @@
 //! FreeMnd(A + (−)²)(Z) ≅ Tree(A + Z)
 //! ```
 //!
-//! With `Z = !` (the never type, modelled here as `core::convert::Infallible`)
-//! the encoding collapses to leaves drawn purely from `A`. With `Z = ()`
-//! leaves are `A + ()` — either an actual `A` or a "hole" placeholder.
-//!
-//! In Rust we encode `A + X²` as [`Either<A, (X, X)>`], the crate's own sum.
-//! The `Left(a)` summand is a tree leaf with payload `a : A`; the
-//! `Right((l, r))` summand is an internal node with left/right subtrees.
-//!
-//! ## Carrier type
-//!
-//! [`BinaryTree<A>`] is the explicit carrier exposed for ergonomics —
-//! constructing a `BinaryTree::leaf(0)` is friendlier than spelling out
-//! `Free::suspend(Either::Left(0))`. The two helpers
-//! [`tree_to_free_mnd`] and [`free_mnd_to_tree`] witness the iso to
-//! `Free<TreeEndo<A>, Infallible>`.
-//!
-//! ## Iteration discipline (v0.14.0, issue [#200])
-//!
-//! Every walk in this module is an **explicit heap worklist**. That is a change
-//! of posture: tree walks here used to be recursive on the grounds that trees
-//! are tree-shaped, with the [`crate::depth`] pre-flight guard (#231) bounding
-//! how deep a caller could go before the recursion aborted the process. The
-//! guard could never cover the whole surface — a *rejected* tree was still
-//! dropped by value, and [`BinaryTree`]'s own drop glue recursed — so the
-//! walkers were rewritten instead of bounded.
-//!
-//! Consequently [`tree_to_free_mnd`] and [`free_mnd_to_tree`] are **infallible
-//! again**: there is no depth at which they can fail. [`crate::depth`]'s
-//! measures and guard remain as an opt-in service for callers whose *own* code
-//! walks these carriers recursively.
-//!
-//! [#200]: https://github.com/sustia-llc/catgraph/issues/200
+//! `A + X²` is [`Either<A, (X, X)>`]: `Left(a)` a leaf, `Right((l, r))` a
+//! node. [`BinaryTree<A>`] is the concrete carrier; [`tree_to_free_mnd`] /
+//! [`free_mnd_to_tree`] witness the iso to `Free<TreeEndo<A>, Infallible>`.
+//! Every walk in this module is an explicit heap worklist.
 //!
 //! # Why `Infallible`?
 //!
@@ -178,58 +150,10 @@ impl<A> Container for TreeEndo<A> {
     }
 }
 
-/// One cell of a [`BinaryTree<A>`]: a labelled leaf, or an internal node
-/// holding its left and right subtrees as one boxed pair.
-///
-/// This is the shape [`BinaryTree`] used to *be*; it is still how a caller
-/// reads one, through [`BinaryTree::into_view`] (by value) and
-/// [`BinaryTree::as_view`] (by reference). See [`BinaryTree`] for why the shape
-/// is no longer the carrier itself.
-///
-/// `Box` indirection on `Node` is required by the standard recursive-type
-/// finite-size discipline. Dropping a `TreeView` drops one
-/// `Box<(BinaryTree<A>, BinaryTree<A>)>`, and the two carriers inside it have
-/// iterative `Drop` — one level of nesting here, none below it.
-///
-/// # One `Box` per internal *node* — the deliberate asymmetry with `Free`
-///
-/// [`crate::free_monad`]'s module docs state the box-placement property of the
-/// two *carriers*: `Free<F, A>` and `Cofree<F, A>` cost exactly **one `Box` per
-/// recursive hole**, because the indirection sits inside the functor hole
-/// (`Suspend(F::Type<Box<Free<F, A>>>)`). `BinaryTree` deliberately does **not**
-/// follow that rule: `Node` boxes the *pair*, so an internal node costs **one
-/// allocation, not two**, and a whole tree allocates `L − 1` boxes for `L`
-/// leaves rather than `2·(L − 1)`.
-///
-/// The two differ because of where each type's spare discriminants live, not
-/// because one shape is tidier:
-///
-/// - **`TreeView` is an enum whose niche was spent on its own tag.** With two
-///   `Box` fields, the compiler niched `TreeView`'s discriminant into the first
-///   `Box`'s null — a 16-byte view with *no* spare value left, so the
-///   `Option`-wrapped cell [`BinaryTree`] needs for its hand-written `Drop`
-///   cost a full extra word (24 vs 16). Boxing the pair leaves a single pointer
-///   field and a `Leaf(A)` payload that cannot be packed into a pointer niche,
-///   so the view carries a real **tag byte** with 254 spare discriminants —
-///   and `Option` niches straight into it. `BinaryTree<A>` and `TreeView<A>`
-///   are now the same size.
-/// - **[`Free`]'s tag has spare discriminants and was never widened.**
-///   `FreeView`'s `Suspend` payload is the opaque projection `F::Type<…>`, so
-///   its discriminant was always a real tag with room to spare and `Option`
-///   was already free there. There is no word to reclaim, so `Free` keeps the
-///   per-hole property — and with it the ability to place the indirection
-///   *inside* an arbitrary witness's hole, which is the whole point of the
-///   encoding.
-/// - **[`Cofree`](crate::free_monad::Cofree) has no analogue at all**, by
-///   construction: its cell is a *struct*, so it has no discriminant of its
-///   own, and its only candidate niche lives inside `F::Type<…>` — the
-///   witness's type, which `Cofree` does not own. Its extra word is a known,
-///   accepted cost, recorded on the carrier itself.
-///
-/// The `Debug` rendering is unaffected: `Node` still prints as a **two-field**
-/// tuple variant, `Node(<left>, <right>)`, exactly as the two-`Box` shape did.
-/// That is why this type's `Debug` is hand-written rather than derived — a
-/// derive on the boxed pair would print `Node((<left>, <right>))`.
+/// One cell of a [`BinaryTree<A>`], read through [`BinaryTree::into_view`] /
+/// [`BinaryTree::as_view`]: a leaf, or a node boxing its subtree pair (one
+/// allocation per internal node; `BinaryTree<A>` and `TreeView<A>` are the
+/// same size). `Debug` prints `Node(<left>, <right>)`.
 #[derive(Clone, PartialEq, Eq)]
 pub enum TreeView<A> {
     /// A leaf labelled by `A`.
@@ -238,16 +162,8 @@ pub enum TreeView<A> {
     Node(Box<(BinaryTree<A>, BinaryTree<A>)>),
 }
 
-/// Byte-identical to the `#[derive(Debug)]` this type carried while `Node` held
-/// two separate boxes: a **two-field** tuple variant, `Node(<left>, <right>)`.
-///
-/// Deriving on the boxed pair would print the pair as one field —
-/// `Node((<left>, <right>))` — a silent change to public output. The subtrees'
-/// own `Debug` is [`BinaryTree`]'s iterative one, so this stays one level of
-/// nesting deep however deep the trees are — and inherits its format-spec
-/// caveat: alternate, precision and width reach the leaves; fill, alignment,
-/// the sign/zero-pad flags and `{:x?}` do not. See
-/// [the module's rendering note](crate::free_monad#what-a-carriers-debug-does-with-your-format-spec).
+/// `Leaf(<a>)` / `Node(<left>, <right>)`, subtrees through [`BinaryTree`]'s
+/// iterative `Debug`.
 impl<A: fmt::Debug> fmt::Debug for TreeView<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -261,55 +177,26 @@ impl<A: fmt::Debug> fmt::Debug for TreeView<A> {
     }
 }
 
-/// Carrier type for binary trees with leaves in `A`.
-///
-/// CDL Example B.20. Build with [`leaf`](BinaryTree::leaf) /
-/// [`node`](BinaryTree::node), read with [`into_view`](BinaryTree::into_view) /
-/// [`as_view`](BinaryTree::as_view) — see [`TreeView`] for the two shapes.
-///
-/// # Why a struct with a private cell (v0.14.0, issue [#200])
-///
-/// `BinaryTree` used to be the two-variant enum now called [`TreeView`], with
-/// derived `Clone`/`PartialEq`/`Debug` and the compiler's drop glue. All four
-/// recursed over the `Box` spine, so cloning, comparing, printing **or merely
-/// dropping** a degenerate caterpillar aborted the process — and the abort on
-/// drop was reachable from a value the #231 depth guard had just *rejected*,
-/// since the fallible entries took their input by value. The four impls below
-/// are hand-written and iterative instead.
-///
-/// A hand-written [`Drop`] is what forces the reshape: it forbids moving out of
-/// the value (`error[E0509]`), which a public-variant by-value `match` does.
-/// The cell is an `Option` so `Drop` and `into_view` can take it without
-/// `unsafe` (the crate is `#![forbid(unsafe_code)]`), and it is `Some` for every
-/// observable value.
-///
-/// ## …and it tightens dropck for a borrowed payload
-///
-/// A manual `Drop` without `#[may_dangle]` makes the borrow checker require
-/// every lifetime in the type to **strictly outlive** the value. A
-/// `BinaryTree<&'a T>` therefore has to be declared *after* what it borrows:
+/// Binary tree with leaves in `A` (CDL Ex B.20): [`leaf`](BinaryTree::leaf) /
+/// [`node`](BinaryTree::node), read through [`into_view`](BinaryTree::into_view)
+/// / [`as_view`](BinaryTree::as_view). `Clone`, `PartialEq`, `Debug` and
+/// `Drop` are iterative. `Drop` is hand-written, so a borrowed payload must
+/// outlive the carrier:
 ///
 /// ```compile_fail,E0597
 /// # use catgraph_dl::free_monad::tree_endo::BinaryTree;
-/// let tree;                                    // dropped last…
-/// let payload = String::from("x");             // …but this dies first
-/// tree = BinaryTree::leaf(payload.as_str());   // error[E0597]
+/// let tree;
+/// let payload = String::from("x");
+/// tree = BinaryTree::leaf(payload.as_str());
 /// # let _ = &tree;
 /// ```
 ///
 /// ```
 /// # use catgraph_dl::free_monad::tree_endo::BinaryTree;
-/// let payload = String::from("x");             // outlives the carrier
+/// let payload = String::from("x");
 /// let tree = BinaryTree::leaf(payload.as_str());
 /// # let _ = &tree;
 /// ```
-///
-/// Owned payloads are unaffected, and so is every other use. The compiler's
-/// message names the borrow rather than the declaration order, which is why it
-/// is worth stating here; the same applies to [`Free`] and
-/// [`Cofree`](crate::free_monad::Cofree).
-///
-/// [#200]: https://github.com/sustia-llc/catgraph/issues/200
 pub struct BinaryTree<A> {
     /// `Some` for every observable value; see [`CELL`].
     cell: Option<TreeView<A>>,
@@ -459,16 +346,8 @@ impl<A: Eq> Eq for BinaryTree<A> {}
 /// line by its nesting depth, so *that* output is quadratic in the depth of a
 /// caterpillar. Neither aborts on a degenerate spine, which the derive did.
 ///
-/// # Format spec
-///
-/// Byte-identity to the derive holds for the default spec and for
-/// **alternate, precision and width**, which are carried down to every leaf.
-/// Fill, alignment, the sign/zero-pad flags and `{:x?}` / `{:X?}` are
-/// **dropped**: a cell is laid out by a fresh formatter over a scratch buffer,
-/// and only what a format string can express dynamically survives that. So
-/// `{:.2?}` and `{:12?}` agree with the derive character for character, while
-/// `{:+?}` and `{:x?}` render as `{:?}` does. See
-/// [the module's rendering note](crate::free_monad#what-a-carriers-debug-does-with-your-format-spec).
+/// Carries alternate, precision and width; fill, alignment, sign, zero-pad
+/// and debug-hex flags render as if absent.
 impl<A: fmt::Debug> fmt::Debug for BinaryTree<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         super::write_debug(self, f)

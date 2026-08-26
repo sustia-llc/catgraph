@@ -1,86 +1,8 @@
-//! Comonoid structure on parameter objects — the formal face of weight tying.
-//!
-//! CDL Theorem G.10: lax (co)algebras for `Para(T)` induce comonoids in the
-//! parameter category `M`. The ability to **duplicate** entries in vectors
-//! (`δ : P → P ⊗ P`, the comultiplication) or **delete** them
-//! (`ε : P → I`, the counit) — the essence of weight tying — *is* the
-//! comonoid structure on the parameter object.
-//!
-//! ## Consumption pathway (catgraph-coalition)
-//!
-//! **Layering invariant — `Para` is upstream of Quantale.**
-//! `catgraph-coalition`'s `Quantale` marker trait
-//! widens to a full actegory action by **importing**
-//! [`catgraph_dl::para::Actegory`](super::Actegory) — never by defining
-//! `Actegory` inside `catgraph-coalition`. Any pressure to define
-//! `Actegory` downstream is a layering violation: `Para` is upstream of the
-//! BTV21 transport layer. The coalition crate widens the marker into an
-//! action by writing `impl Actegory<SetMonoidal> for QuantaleActegory` in
-//! its own source tree, pulling the trait from this crate.
-//!
-//! **What a coalition caller will look like at the call site.** A
-//! coalition-flavoured caller defines an `impl Actegory<SetMonoidal> for
-//! QuantaleActegory` (with non-trivial action semantics in the coalition's
-//! mental model — Tropical-flavoured min-weights, free-monoid concatenation,
-//! whatever the BTV21 substrate calls for), builds a
-//! `ParaMorphism<SetMonoidal, QuantaleActegory, (P, P), F>` whose action
-//! `f(((p1, p2), x))` consumes a paired parameter, and calls
-//! [`tie_weights::<C, P, _, X, Y>(parameter_tied, untied)`](tie_weights) to
-//! collapse the paired parameter into a single shared `P` (where `C` is the
-//! actegory — e.g. `QuantaleActegory` in a coalition caller). The cg-dl
-//! `tie_weights` is parametric over the actegory; the coalition
-//! caller does not need any cg-dl change to consume it.
-//!
-//! **What the [`Actegory`](super::Actegory) ▶ widening means for
-//! `tie_weights`.** The diagonal `Δ : P → (P, P)` is exact in `(Set, ×, 1)`
-//! — the canonical [`DiagonalComonoid`] in this module. In a non-`(Set, ×,
-//! 1)` actegory the diagonal is whatever the actegory's [`Comonoid`]
-//! gives; `tie_weights` does not care because it consumes via
-//! [`Reparameterization::apply`], which threads the user-supplied
-//! parameter-substitution closure through the action without re-touching
-//! the actegory's tensor structure. Cross-reference to
-//! `tests/coalition_consumption_simulation.rs` (in the cg-dl crate) for the
-//! in-tree end-to-end simulation of the coalition caller —
-//! defines a local `MockQuantale` ZST playing the role of the future
-//! `QuantaleActegory` and exercises the full `tie_weights` pipeline
-//! without a coalition dep.
-//!
-//! ## Trait surface
-//!
-//! [`Comonoid<M>`] is a uniform-structure trait: an implementor witnesses
-//! that *every* object of the parameter category `M` carries the same shape
-//! of comonoid (e.g. the diagonal in `Set`). For a one-off comonoid on a
-//! specific object, downstream consumers can wrap with their own newtype.
-//!
-//! Methods are generic in the carrier type `P` so a single implementor
-//! (e.g. [`DiagonalComonoid`]) covers the whole "diagonal across `Set`"
-//! family without reflection or `dyn`.
-//!
-//! ## Diagonal in `Set`
-//!
-//! In `(Set, ×, 1)` the canonical comonoid on every object `P` is the
-//! diagonal:
-//!
-//! ```text
-//! δ : P → P × P,  δ(p) = (p, p)
-//! ε : P → 1,      ε(p) = ()
-//! ```
-//!
-//! Coassociativity, left counit, and right counit are exact equalities in
-//! `Set` (not "up to iso"). The regression tests in
-//! `tests/comonoid_laws.rs` are proptest-driven and exercise the laws on
-//! several carrier types.
-//!
-//! ## Weight tying
-//!
-//! The free function [`tie_weights`] is the consumer-facing API (used by
-//! `catgraph-coalition`). It takes a
-//! `ParaMorphism<SetMonoidal, C, (P, P), F>` for any
-//! `C: Actegory<SetMonoidal>` (the current API; the earlier surface was hardcoded to
-//! `SetActegory`) — a 1-morphism whose parameter object is a tensor pair —
-//! and returns the diagonal-tied 1-morphism with parameter `P` and action
-//! `λ(p, x). f(((p, p), x))`. The categorical content is exactly applying
-//! the diagonal `Δ : P → P × P` as a `Reparameterization` 2-morphism.
+//! Comonoids on parameter objects (CDL Thm G.10): comultiplication
+//! `δ : P → P ⊗ P` and counit `ε : P → I`. [`Comonoid<M>`] is uniform over
+//! every carrier `P`; [`DiagonalComonoid`] is `δ(p) = (p, p)`, `ε(p) = ()` in
+//! `(Set, ×, 1)`; [`tie_weights`] applies `δ` as a [`Reparameterization`]
+//! 2-morphism to a `ParaMorphism` with paired parameter `(P, P)`.
 
 use core::marker::PhantomData;
 
@@ -88,31 +10,13 @@ use super::monoidal_category::{MonoidalCategory, SetMonoidal};
 use super::morphism::ParaMorphism;
 use super::reparameterization::Reparameterization;
 
-/// A comonoid structure in a monoidal category `(M, ⊗, I)`.
+/// Uniform comonoid structure in `(M, ⊗, I)` (CDL Thm G.10):
+/// `δ` = [`comultiply`](Self::comultiply) (bound `P: Clone`), `ε` =
+/// [`counit`](Self::counit). Laws, with `α`, `λ`, `ρ` the coherence maps of `M`:
 ///
-/// CDL Theorem G.10. The implementor witnesses a uniform comonoid structure
-/// across the objects of `M`: a comultiplication `δ : P → P ⊗ P` and a
-/// counit `ε : P → I` defined for every carrier type `P`. The
-/// [`comultiply`](Self::comultiply) signature carries `P: Clone` for **every**
-/// implementor — this is the canonical home of that bound, and it is
-/// **semantic, not incidental**: `Clone` is the Rust witness of duplication
-/// `δ : P → P ⊗ P` in `(Set, ×, 1)`; a carrier that cannot be duplicated has
-/// no comonoid here, and consumers of the structure (e.g. [`tie_weights`])
-/// inherit the bound for the same reason.
-///
-/// ## Laws (must hold for every implementor)
-///
-/// Let `δ`, `ε` denote `comultiply` and `counit` respectively, and let
-/// `α`, `λ`, `ρ` denote the associator and left/right unitors of `M`.
-///
-/// - **Coassociativity:** `α ∘ (δ ⊗ id_P) ∘ δ = (id_P ⊗ δ) ∘ δ`
-///   (i.e. `δ` followed by duplicating either the left or the right slot
-///   gives the same triply-tagged tuple, modulo re-association).
-/// - **Left counit:** `λ ∘ (ε ⊗ id_P) ∘ δ = id_P`.
-/// - **Right counit:** `ρ ∘ (id_P ⊗ ε) ∘ δ = id_P`.
-///
-/// For [`DiagonalComonoid`] in `(Set, ×, 1)` these are exact equalities,
-/// verified by `tests/comonoid_laws.rs`.
+/// - coassociativity `α ∘ (δ ⊗ id_P) ∘ δ = (id_P ⊗ δ) ∘ δ`
+/// - left counit `λ ∘ (ε ⊗ id_P) ∘ δ = id_P`
+/// - right counit `ρ ∘ (id_P ⊗ ε) ∘ δ = id_P`
 pub trait Comonoid<M: MonoidalCategory> {
     /// Comultiplication `δ : P → P ⊗ P`.
     ///
@@ -128,12 +32,8 @@ pub trait Comonoid<M: MonoidalCategory> {
     fn counit<P>(&self, p: P) -> M::Unit;
 }
 
-/// The diagonal comonoid `(δ_P = (p, p), ε_P = ())` on every object of
-/// [`SetMonoidal`].
-///
-/// CDL Theorem G.10's canonical comonoid in `(Set, ×, 1)`. Zero-sized — the
-/// instance carries no runtime data; it is a *witness* that every Rust type
-/// carries the diagonal comonoid structure for the Cartesian product.
+/// The diagonal comonoid `δ(p) = (p, p)`, `ε(p) = ()` on every object of
+/// [`SetMonoidal`]; zero-sized.
 ///
 /// # Examples
 ///
@@ -170,66 +70,10 @@ impl Comonoid<SetMonoidal> for DiagonalComonoid<SetMonoidal> {
     fn counit<P>(&self, _p: P) -> <SetMonoidal as MonoidalCategory>::Unit {}
 }
 
-/// Tie weights of a `Para(SetMonoidal, C)` 1-morphism via the diagonal
-/// comonoid, for any `C: Actegory<SetMonoidal>`.
-///
-/// CDL Theorem G.10 in concrete form. Given `(P × P, f) : X → Y` with
-/// action `f(((p1, p2), x)) → y`, returns the diagonal-tied 1-morphism
-/// `(P, f') : X → Y` with action `f'((p, x)) = f(((p, p), x))`. The
-/// resulting morphism has both formerly-independent parameter slots driven
-/// by a single `p`.
-///
-/// The current API widens this from the earlier `SetActegory`-bound function to
-/// `C: Actegory<SetMonoidal>`. The diagonal `Δ : P → (P, P)` is exact in
-/// `(Set, ×, 1)`; for richer actegories `C` the body is structurally
-/// agnostic — it constructs `Δ` as a `Reparameterization<SetMonoidal, …>`
-/// and delegates to [`Reparameterization::apply`], which carries the
-/// actegory through the parameter substitution without re-touching the
-/// actegory's tensor structure.
-///
-/// This is the *consumer-facing* weight-tying API used by
-/// `catgraph-coalition` (per workspace plan slot 2). The
-/// `catgraph-coalition` caller defines an
-/// `impl Actegory<SetMonoidal> for {UnitIntervalQ, TropicalQ,
-/// QuantaleDefault}` and calls
-/// `tie_weights::<UnitIntervalQ, P, F, X, Y>(p, untied)`. Internally
-/// `tie_weights` constructs the diagonal `Δ : P → (P, P)` as a
-/// [`Reparameterization`] and delegates to
-/// [`Reparameterization::apply`].
-///
-/// # Type parameters
-///
-/// - `C` — the actegory of `Para(SetMonoidal, C)`. The current API accepts any
-///   `C: Actegory<SetMonoidal>`; the earlier surface was hardcoded to
-///   `SetActegory`. Placed at LEFTMOST position so callers using inference
-///   (`tie_weights(p, untied)` with full inference) work unchanged; callers
-///   using explicit turbofish move from 4-parameter
-///   `tie_weights::<P, F, X, Y>` to 5-parameter
-///   `tie_weights::<C, P, F, X, Y>`.
-/// - `P` — the (collapsed) parameter type. The `P: Clone` bound is
-///   **semantic, not incidental** — `Clone` witnesses the comultiplication
-///   `δ(p) = (p, p)` this function applies, so a `P` with no duplication has
-///   no tied form and relaxing the bound would change what `tie_weights`
-///   means. See [`Comonoid`] (the bound's canonical home) for the full
-///   rationale (CDL Theorem G.10). Heap-shared parameters compose fine:
-///   `Arc<T>` is cheaply `Clone`, satisfying `δ` without a deep copy.
-/// - `F` — the original action `f : (P, P) × X → Y`.
-/// - `X`, `Y` — carrier types in the category `C` acts on.
-///
-/// # Arguments
-///
-/// - `parameter_tied` — the value of the new (single) parameter. The
-///   `Para` morphism carries its parameter at the value level, so the
-///   caller supplies one here. This corresponds to the observation that
-///   *applying* a 2-morphism in CDL §3.1 is a substitution of parameter
-///   value, not just type.
-/// - `untied` — the original 1-morphism with paired-parameter object
-///   `(P, P)`.
-///
-/// # Returns
-///
-/// A `ParaMorphism` whose parameter is `parameter_tied: P` and whose
-/// action is `λ(p, x). untied.action(((p, p), x))`.
+/// Weight tying (CDL Thm G.10): from `(P × P, f) : X → Y` with action
+/// `f(((p1, p2), x))` to `(P, f') : X → Y` with parameter `parameter_tied`
+/// and `f'((p, x)) = f(((p, p), x))`, for any `C: Actegory<SetMonoidal>`.
+/// `P: Clone` is the comultiplication.
 ///
 /// # Examples
 ///
