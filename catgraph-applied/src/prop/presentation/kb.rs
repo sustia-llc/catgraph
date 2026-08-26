@@ -313,8 +313,8 @@ where
     /// Post-merge SMC refinement pass. For each currently-existing term,
     /// rebuilds its [`PropExpr`] using *atom-canonical* substitutions (see
     /// [`Self::atom_canonical`]) at every sub-term position whose class contains
-    /// an atom, runs [`smc_nf::nf`] on the result, folds back via
-    /// [`smc_nf::from_string_diagram`], and merges the NF into the term's class
+    /// an atom, runs [`super::smc_nf::nf`] on the result, folds back via
+    /// [`super::smc_nf::from_string_diagram`], and merges the NF into the term's class
     /// if it differs. Returns `true` iff any new merge was performed.
     fn smc_refine(&mut self) -> bool {
         let term_count = self.reverse.len();
