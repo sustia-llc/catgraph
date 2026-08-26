@@ -15,9 +15,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed
 
-- `E1::operadic_substitution` keeps `sub_intervals` sorted when a ≥2-ary inner
-  is substituted into a non-final slot; images now occupy the substituted
-  slot's position
+- `E1::operadic_substitution` keeps `sub_intervals` sorted for every inner
+  arity and slot: images occupy the substituted slot's position, and a nullary
+  inner removes the slot in place instead of `swap_remove`
   ([#360](https://github.com/sustia-llc/catgraph/issues/360)).
 
 ### Fixed — tests

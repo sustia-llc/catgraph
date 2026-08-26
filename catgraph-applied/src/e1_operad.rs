@@ -343,7 +343,7 @@ impl Operadic<usize> for E1 {
             }
             self.arity += other_obj.arity - 1;
         } else {
-            _ = self.sub_intervals.swap_remove(which_input);
+            _ = self.sub_intervals.remove(which_input);
             self.arity -= 1;
         }
         Ok(())
@@ -625,6 +625,41 @@ mod test {
             outer.sub_intervals(),
             expected.as_slice(),
             "images must occupy the substituted slot's position"
+        );
+    }
+
+    /// Nullary inner into slot 0 of `[(1/8, 1/4), (1/2, 5/8), (3/4, 7/8)]`:
+    /// `[(1/2, 5/8), (3/4, 7/8)]`, `min_closeness = 1/8`. Ternary inner
+    /// `[(1/8, 1/4), (1/2, 5/8), (3/4, 7/8)]` into slot 0 of
+    /// `[(1/8, 1/4), (1/2, 3/4)]` (`x ↦ x/8 + 1/8`):
+    /// `[(9/64, 5/32), (3/16, 13/64), (7/32, 15/64), (1/2, 3/4)]`,
+    /// gaps `1/32`, `1/64`, `17/64`, `min_closeness = 1/64`.
+    #[test]
+    fn e1_substitution_nullary_and_ternary_keep_canonical_order() {
+        use super::E1;
+        use catgraph::assert_ok;
+        use catgraph::operadic::Operadic;
+
+        let mut outer = E1::new(vec![(0.125, 0.25), (0.5, 0.625), (0.75, 0.875)], true).unwrap();
+        let nullary = E1::new(vec![], true).unwrap();
+        assert_ok!(outer.operadic_substitution(0, nullary));
+        assert_eq!(outer.min_closeness(), Some(0.125));
+        assert_eq!(outer.arity(), 2);
+        assert_eq!(outer.sub_intervals(), &[(0.5, 0.625), (0.75, 0.875)]);
+
+        let mut outer = E1::new(vec![(0.125, 0.25), (0.5, 0.75)], true).unwrap();
+        let ternary = E1::new(vec![(0.125, 0.25), (0.5, 0.625), (0.75, 0.875)], true).unwrap();
+        assert_ok!(outer.operadic_substitution(0, ternary));
+        assert_eq!(outer.min_closeness(), Some(0.015625));
+        assert_eq!(outer.arity(), 4);
+        assert_eq!(
+            outer.sub_intervals(),
+            &[
+                (0.140625, 0.15625),
+                (0.1875, 0.203125),
+                (0.21875, 0.234375),
+                (0.5, 0.75),
+            ]
         );
     }
 }
