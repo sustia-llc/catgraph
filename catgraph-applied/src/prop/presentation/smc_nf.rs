@@ -258,7 +258,8 @@ fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDi
     //   interval-level analogue over the pairs passing the guards with distinct
     //   keys. Each transposition flips every position pair between the two runs
     //   and leaves all other pairs alone; neither changes a layer's membership or
-    //   rewrites an atom, so every earlier component is invariant;
+    //   rewrites an atom, and Step 6½ shares Step 7's `component_key_order`
+    //   core, so every earlier component is invariant;
     // - `reorder_tied_zero_arity` (Step 6) shrinks tied_inversion_count — each
     //   swap flips exactly one order-inverted pair. Its order reads the two atoms
     //   and nothing else, so the count is well-defined without an invariance
@@ -268,14 +269,14 @@ fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDi
     //   component order, the rewriting pass moves it back, and the loop exits on
     //   exact cancellation via the whole-pass `sd == prev` check.
     //
-    // Three steps can *raise* a later component while strictly shrinking an
+    // Four steps can *raise* a later component while strictly shrinking an
     // earlier one, so the tuple still drops lexicographically and the later pass
     // repairs the ordering on the same fixpoint pass: `try_unitor_merge` raises
     // tied_inversion_count while shrinking layer_count; the point-span sift raises
     // tied_inversion_count and can raise column_inversion_count while shrinking
-    // generator_position_sum; a Step-7 block move raises tied_inversion_count
-    // while shrinking block_inversion_count.
-    // See `docs/SMC-NF-RECONCILIATION.md` §2.4.
+    // generator_position_sum; a Step-7 block move and a Step-6½ column
+    // transposition each raise tied_inversion_count while shrinking their own
+    // component. See `docs/SMC-NF-RECONCILIATION.md` §2.4.
     loop {
         let prev = sd.clone();
         sd = normalize_empty_braids(sd);
@@ -1764,11 +1765,7 @@ fn find_sift<G: PropSignature>(sd: &StringDiagram<G>, start: usize) -> Option<Si
                 } else {
                     // Zero-source generator (η): empty consumed span, so its
                     // placement is fixed by the wire coordinate `src_pos` alone —
-                    // the leftmost slot that realizes it. The component-anchored
-                    // slot walk that used to refine this choice was retired in
-                    // the #174 design round (§2.6): the `η`'s slot among a run of
-                    // target-0 atoms is a *free* choice, and rule (i)'s
-                    // coordinates are not writing-invariant there.
+                    // the leftmost slot that realizes it (§2.6).
                     if let Some(place) = point_placement(prev, src_pos) {
                         return Some(Sift { j, idx, place });
                     }

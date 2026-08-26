@@ -4,8 +4,7 @@
 //! `Z` wraps [`num::BigInt`] for unbounded integer arithmetic. It picks up the
 //! [`crate::rig::Rig`] blanket impl via `Clone + PartialEq + Zero + One + Add +
 //! Mul`, and [`crate::integer::ZAlgebra`] via `Neg + Sub + from_i64` plus the
-//! crate-private `Sealed` seal in `crate::integer::private`. Arithmetic
-//! heap-allocates per operation.
+//! crate-private `Sealed` seal in `crate::integer::private`.
 
 use crate::integer::{ZAlgebra, private::Sealed};
 // catgraph's `Zero`/`One` for `Z` itself; `num`'s, aliased, drive the inner BigInt.

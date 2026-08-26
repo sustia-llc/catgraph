@@ -14,9 +14,9 @@
 //! keeps the Thm 5.60 equation set defined on primitives.
 //!
 //! [`SfgGenerator<R>`] derives the whole [`PropSignature`] bound set uniformly
-//! and therefore requires `R: Rig + Eq + Hash + Ord + Debug`. All four shipped
-//! rigs ([`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
-//! [`crate::rig::Tropical`], [`crate::rig::F64Rig`]) satisfy it.
+//! and therefore requires `R: Rig + Eq + Hash + Ord + Debug + 'static`.
+//! [`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
+//! [`crate::rig::Tropical`], [`crate::rig::F64Rig`] and `Checked<T>` satisfy it.
 //!
 //! `SFG_R` is single-sorted: [`SfgGenerator`]'s
 //! [`Color`](PropSignature::Color) is `()` and its interface words are

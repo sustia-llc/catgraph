@@ -35,7 +35,7 @@
 //!
 //! ## Features
 //!
-//! - `parallel` (default) — rayon arms in [`linear_combination`] and [`temperley_lieb`]
+//! - `parallel` (default) — rayon arms in [`linear_combination`] and [`temperley_lieb`]; forwards `catgraph/parallel`
 //! - `f64-rig` — exposes the `mat_f64` nalgebra bridge
 //! - `serde` — `Serialize`/`Deserialize` on the term, rewrite-trace, and content-key types
 //! - `internal-bench`, `internal-probes` — hooks for benches and tests; not public API

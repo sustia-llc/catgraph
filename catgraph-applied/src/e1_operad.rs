@@ -107,7 +107,7 @@ impl E1 {
     /// pairs consecutive values into intervals `(s0, s1), (s2, s3), …`,
     /// resampling the whole batch until every adjacent pair of sorted
     /// coordinates is separated by more than `MIN_SEPARATION`
-    /// (`2·F32_EPSILON`). The result has exactly `cur_arity` intervals, each of
+    /// (`2·F32_EPSILON` = `2e-6`). The result has exactly `cur_arity` intervals, each of
     /// width greater than `MIN_SEPARATION`, pairwise disjoint with gaps greater
     /// than `MIN_SEPARATION`. There is no iteration cap, so termination is
     /// probabilistic in the arity: the accept probability for `m = 2 *

@@ -47,9 +47,10 @@ use super::colored::ColoredExpr;
 /// - [`NormalizeEngine::Structural`]: normalize both sides via bounded structural
 ///   rewriting and compare. May yield false negatives (`None`) on overlapping
 ///   equations (e.g. the 18 Thm 5.60 scalar D-group equations).
-/// - [`NormalizeEngine::CongruenceClosure`] (default): decide equality via
-///   bounded congruence closure over [`kb::CongruenceClosure`], which is correct
-///   for any equational theory without binders, overlapping equations included.
+/// - [`NormalizeEngine::CongruenceClosure`] (default): bounded congruence
+///   closure over [`kb::CongruenceClosure`] — sound; complete on the seeded
+///   ground equations up to `smc_refine`, so a `Some(false)` is only as
+///   complete as that closure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum NormalizeEngine {

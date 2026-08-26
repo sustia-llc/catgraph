@@ -110,7 +110,7 @@ pub trait Decoration: Sized {
 /// `PartialEq` compares both fields — the underlying cospan and the decoration
 /// — and is hand-written so that it asks only for `D: Decoration`, not the
 /// `D: PartialEq` a derive would demand of the marker type. There is no `Eq`:
-/// [`Decoration::Apex`] is bounded by `PartialEq` only, so nothing here can
+/// [`Decoration::Apex`] is bounded by `PartialEq`, not `Eq`, so nothing here can
 /// promise reflexivity. Comparing the `cospan` field alone still works through
 /// [`Cospan::structurally_equal`] (equivalently `==`) or the public leg/middle
 /// accessors.

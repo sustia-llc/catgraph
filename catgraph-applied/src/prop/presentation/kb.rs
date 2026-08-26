@@ -1,18 +1,16 @@
-//! Bounded congruence-closure decision procedure for [`super::Presentation`]-modulo equality.
+//! Bounded congruence closure for [`super::Presentation`]-modulo equality.
 //!
 //! Given a term graph over [`PropExpr<G>`] and a seed set of equations,
 //! computes the smallest congruence relation containing the seed, then
 //! answers `are_equal` queries by union-find root comparison.
 //!
 //! Based on the Downey-Sethi-Tarjan 1980 algorithm using a signature table
-//! indexed by canonical child-class IDs. Correct for finitely-presented
-//! equational theories without binders. This engine is **not** full
-//! Knuth-Bendix completion with critical-pair discovery — it seeds a term graph
-//! with the user's equations as-is, then propagates congruence through
-//! `Compose` / `Tensor`. On the 18 F&S Thm 5.60 equations, which present Mat(R)
-//! (Baez-Erbele 2015 for fields; Wadsley–Woods arXiv:1505.00048 for commutative
-//! rigs, cf. BE15 §6), congruence closure with this seed decides Mat(R)-equality
-//! on SFG expressions.
+//! indexed by canonical child-class IDs. Sound for equational theories without
+//! binders; complete only on the seeded ground equations closed under
+//! `Compose` / `Tensor` congruence and `smc_refine` — not
+//! Knuth-Bendix completion with critical-pair discovery. The 18 F&S Thm 5.60
+//! equations present Mat(R) (Baez-Erbele 2015 for fields; Wadsley–Woods
+//! arXiv:1505.00048 for commutative rigs, cf. BE15 §6).
 //!
 //! # Complexity
 //!
@@ -111,10 +109,9 @@ where
 /// Congruence-closure engine seeded with a fixed set of equations, answering
 /// [`Self::are_equal`] queries over [`PropExpr<G>`]. Equality is **modulo the
 /// seeded equations only** — associativity, unitality, interchange, braiding
-/// naturality, and other SMC axioms are *not* assumed unless explicitly seeded;
-/// an SMC-aware decision procedure needs the 18 F&S Thm 5.60 equations
-/// pre-seeded (Baez-Erbele 2015 for fields, Wadsley–Woods arXiv:1505.00048 for
-/// commutative rigs, cf. BE15 §6).
+/// naturality, and other SMC axioms are *not* assumed unless explicitly seeded.
+/// A `false` from [`Self::are_equal`] means the seed's congruence closure did
+/// not merge the two terms, not that they are unequal in the theory.
 pub struct CongruenceClosure<G>
 where
     G: PropSignature,
@@ -318,8 +315,8 @@ where
     /// Post-merge SMC refinement pass. For each currently-existing term,
     /// rebuilds its [`PropExpr`] using *atom-canonical* substitutions (see
     /// [`Self::atom_canonical`]) at every sub-term position whose class contains
-    /// an atom, runs [`smc_nf::nf`] on the result, folds back via
-    /// [`smc_nf::from_string_diagram`], and merges the NF into the term's class
+    /// an atom, runs `smc_nf::nf` on the result, folds back via
+    /// `smc_nf::from_string_diagram`, and merges the NF into the term's class
     /// if it differs. Returns `true` iff any new merge was performed.
     fn smc_refine(&mut self) -> bool {
         let term_count = self.reverse.len();

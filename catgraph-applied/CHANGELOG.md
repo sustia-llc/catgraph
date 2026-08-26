@@ -76,8 +76,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 ### Changed — BREAKING
 
 - `WiringDiagram::add_boundary_node_unconnected` returns
-  `Result<(), CatgraphError>` — `ConstructionDuplicatePortName` on a duplicate
-  port name, diagram untouched on `Err`
+  `Result<(), CatgraphError>` — `ConstructionDuplicatePortName` (carrying the
+  leg and position of the existing port) on a duplicate port name, diagram
+  untouched on `Err`
   ([#289](https://github.com/sustia-llc/catgraph/issues/289)).
 - `WiringDiagram::connect_pair` merges the two ports in every argument order
   (signature unchanged; inherited from `Cospan::connect_pair`) (#289).
@@ -152,9 +153,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 - `verify_sfg_to_mat_is_full_and_faithful` buckets by
   `(rows, cols, Vec<Vec<R>>)` instead of a `Debug` string, so `F64Rig(-0.0)`
-  and `F64Rig(0.0)` share a bucket; the depth-2 baselines (748 / 1114 / 1594 /
-  1590) are unmoved; pinned by `signed_zero_is_one_matrix_bucket_not_two`
-  (#167).
+  and `F64Rig(0.0)` share a bucket, and a NaN-imaged expression lands in a
+  bucket of one; the depth-2 baselines (748 / 1114 / 1594 / 1590) are unmoved;
+  pinned by `signed_zero_is_one_matrix_bucket_not_two` (#167).
 
 ## [workspace-v0.13.0] - 2026-08-15
 
@@ -163,8 +164,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 - `RewriteStep` and `RewriteOutcome<G>` derive `Serialize`/`Deserialize`
   behind the `serde` feature; `replay` re-validates every step;
   `RewriteRule<G>` gains no derive; `initial_cost`, `best_cost`,
-  `states_explored`, `fuel_exhausted` and `best` are not validated
-  (`tests/serde_roundtrip.rs`)
+  `states_explored`, `fuel_exhausted` and `best` are not validated;
+  `RewriteOutcome` carries no start state; neither type is a stable wire
+  format (`tests/serde_roundtrip.rs`)
   ([#249](https://github.com/sustia-llc/catgraph/issues/249)).
 - `prop::presentation::content::ContentKey<G>` derives
   `Serialize`/`Deserialize` behind `serde`; `Option` colors are written as an
@@ -177,10 +179,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Added
 
-- `prop::presentation::rewrite` match-site surface: `match_sites`, `apply_at`
-  (re-validates the site's content fingerprint and the convex match),
-  `MatchSite::{matched_edges, matched_nodes, into_step}`, and the
-  expression-level `match_sites_of` / `rewrite_at`
+- `prop::presentation::rewrite` match-site surface: `match_sites(…, limit)`
+  (`limit` truncates, never ranks), `apply_at` (a stale site and a non-convex
+  assignment are two distinct `CatgraphError::Presentation`s),
+  `MatchSite::{matched_edges, matched_nodes, into_step}` (no serde impl), and
+  the expression-level `match_sites_of` / `rewrite_at`, which return `Err` on
+  a malformed term, never an empty `Vec`
   ([#250](https://github.com/sustia-llc/catgraph/issues/250)).
 - `Presentation::rewrite_depth()` accessor; rebuild a stored presentation via
   `with_depth(depth)` then `set_engine(engine)`.
@@ -207,7 +211,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   generator (engines must be on the 0.10 line); `[dependencies]` carry
   `rand_core` instead of `rand` (`rand` dev-only workspace-wide, guarded by
   `scripts/check_rand_dev_only.py`); `catgraph_applied::{Rng, TryRng}` are
-  re-exported; the seeded draw stream is not bit-identical to before
+  re-exported, so rand_core's major version is public API (a 0.11 adoption is
+  breaking); `rand 0.10` `RngExt` call sites compile unchanged; the seeded
+  draw stream is not bit-identical to before
   ([#239](https://github.com/sustia-llc/catgraph/issues/239)).
 
 ## [workspace-v0.10.0] - 2026-08-09
@@ -217,7 +223,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 - Browser-wasm lib builds no longer fail in `getrandom`: the workspace `rand`
   entry drops its default features and this crate's lib edge carries none;
   `cargo check --lib -p <crate> --target wasm32-unknown-unknown` passes for
-  applied, magnitude, dl and syntax. Any graph containing `catgraph-physics`
+  applied, magnitude, dl and syntax (`--all-targets`/`--tests` still reach
+  `getrandom` through `proptest`); downstream lib graphs also shed
+  `chacha20`. Any graph containing `catgraph-physics`
   (`rustworkx-core`) re-enables them (CI lane
   [#233](https://github.com/sustia-llc/catgraph/issues/233)); consumers enable
   `thread_rng`/`sys_rng` themselves; browser builds should use
@@ -250,9 +258,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   non-parallel or ill-formed sides, an edge-free lhs, a non-mono left
   interface), `optimize` (best-first over `canonical_key`, convex DPO per
   BGKSZ [arXiv:1602.06771](https://arxiv.org/abs/1602.06771) Thm 5.6,
-  fuel-bounded, no termination or confluence claim), `replay`,
-  `RewriteOutcome`; every entry re-validates its `ColoredExpr` inputs on arity
-  and words ([#214](https://github.com/sustia-llc/catgraph/issues/214),
+  fuel-bounded, no termination or confluence claim; the best state's readback
+  is re-checked via `ColoredExpr::new` + `content_eq`, `Err` on a lost
+  readback), `replay`, `RewriteOutcome`; every entry re-validates its
+  `ColoredExpr` inputs on arity and words
+  ([#214](https://github.com/sustia-llc/catgraph/issues/214),
   [#57](https://github.com/sustia-llc/catgraph/issues/57) a2).
 
 ### Changed
@@ -290,8 +300,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 - Step 6½ column cuts are symmetric: `adjacent_column_cuts` →
   `adjacent_column_cuts_at`, both columns maximal local runs, widening scans
   leftmost-first via `cuts_meet` (pinned by
-  `column_widening_picks_the_interval_aligned_adjacency`); new probe
-  `split_presence_both_readings_pair_is_newly_seeded`; F1 witness renamed
+  `column_widening_picks_the_interval_aligned_adjacency`); ablation table
+  5 → 7 (`column_pass_decides_exactly_the_seven_documented_witnesses`); new
+  probe `split_presence_both_readings_pair_is_newly_seeded`; F1 witness renamed
   `split_presence_nesting_converges_with_free_writing` (`assert_eq!`).
   Re-pins: sweep 253 / 128 / 23 → 183 / 93 / 23 (default), 1162 / 634 / 237 →
   1153 / 630 / 237 (braid), smoke prefix 16 → 14; `content_equality_corpus`
@@ -308,10 +319,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   `PropExpr::checked_arities` / `arities_fit`; `content::is_arity_well_formed`
   is `false` on an overflowing `Braid`/`Tensor`; `smc_nf::nf` documents
   `# Panics`; `Presentation::add_equation` reports `CompositionSizeMismatch`
-  on a `usize::MAX` LHS arity; `sfg_to_mat` reports `SfgFunctor`;
-  `Presentation::eq_mod` answers `Ok(Some(true))` on identical trees and
-  `Ok(None)` otherwise, `ColoredExpr::eq_colored` falls back to structural
-  equality (both previously panicked). A literal huge arity stays the
+  on a `usize::MAX` LHS arity; `sfg_to_mat` reports `SfgFunctor` on an
+  overflowing braid width; `Presentation::eq_mod` screens the overflow class
+  ahead of either engine — `Ok(Some(true))` on identical trees, `Ok(None)`
+  otherwise — and `ColoredExpr::eq_colored` falls back to structural equality
+  there (both previously panicked). A literal huge arity stays the
   caller's obligation (#197)
   ([#196](https://github.com/sustia-llc/catgraph/issues/196)).
 
@@ -334,8 +346,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   `CatgraphError::Presentation`; hand-built ill-composed trees are rejected
   even at `Color = ()`; `Deserialize` still does not re-run the check
   ([#79](https://github.com/sustia-llc/catgraph/issues/79) P2).
-- **BREAKING:** `PropSignature` gains `type Color` and required
-  `source_word` / `target_word` (`Cow<'_, [Self::Color]>`); `source()` /
+- **BREAKING:** `PropSignature` gains `type Color: Clone + Eq + Hash + Debug`
+  and required `source_word` / `target_word` (`Cow<'_, [Self::Color]>`); `source()` /
   `target()` are provided; supertraits gain `Ord`; `mono_word` helper;
   `SfgGenerator<R>` requires `R: Ord`; `UnitInterval`, `Tropical`, `F64Rig`
   gain `-0.0`-normalized `total_cmp` total orders; `Checked<T>` derives
@@ -388,7 +400,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   SMC-equality), Lemma 4.2 (`nf` preserves content); §1 gains three invariant
   clauses (#55 proof phase).
 - `Checked<T>` poison-on-overflow rig wrapper (`Value(T) | Poison`; `⊥` fully
-  absorbing, `⊥ × 0 = ⊥`; `Display`/`FromStr` read `⊥` as one atom; no serde)
+  absorbing, `⊥ × 0 = ⊥`; `is_poisoned()`; `verify_rig_axioms` fails with
+  exactly `"absorbing zero"` on a poisoned sample; `Display`/`FromStr` read
+  `⊥` as one atom; no serde)
   ([#88](https://github.com/sustia-llc/catgraph/issues/88)).
 - `CheckedOps` trait (`checked_add` / `checked_mul`) for the twelve primitive
   integer types (#88).
@@ -479,7 +493,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   ([#58](https://github.com/sustia-llc/catgraph/issues/58)).
 - `try_unitor_merge` prepends a zero-source `X`; `hexagon_expand` decomposes
   wide braids in identity-padded layers; the braid+generator merge guard moved
-  to `reduce_involution`; the #14 interchange proptest is un-ignored (#14).
+  to `reduce_involution`; the #14 interchange proptest is un-ignored;
+  mid-layer zero-source (η) scheduling stays an ignored known-gap test (#14).
 
 ### Added
 
@@ -508,7 +523,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   yamafaktory `hypergraph` v4.2.0 for koalisi — never-reused monotonic
   `VertexIndex` / `HyperedgeIndex`, ordered hyperedges with duplicates, no-op
   updates return `Ok`, infallible clears, bounds `Copy + Eq + Debug`, no
-  serde, idempotent `add_hyperedge`, cascading `remove_vertex`, and
+  serde, `Copy` weights returned by value; `add_hyperedge` is idempotent and
+  returns the smallest matching index; `remove_vertex` cascades;
+  `reverse_hyperedge`, `join_hyperedges` (keeps the first edge's weight),
+  `contract_hyperedge_vertices` (collapses adjacent `target` runs),
+  `hyperedge_vertices`, counts and sorted iteration accessors; and
   `hyperedge_as_cospan(idx)` (identity cospan over the member list);
   re-exported at the crate root as
   `catgraph_applied::{Hypergraph, HypergraphError, VertexIndex, HyperedgeIndex}`;
@@ -701,6 +720,10 @@ Co-released with catgraph v0.12.2 and catgraph-magnitude v0.1.1.
   `E2::sub_circles`; `Clone` on `E1` and `E2<Name: Clone>`.
 - Examples `free_prop`, `operad_algebra_circ`, `operad_functor_e1_to_e2`;
   tests `prop.rs`, `operad_algebra.rs`, `operad_functor.rs`.
+
+### Requires
+
+- catgraph v0.11.4.
 
 ## [0.3.3] - 2026-04-19
 

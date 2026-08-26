@@ -940,13 +940,9 @@ mod tests {
         }
     }
 
-    // #58: `-0.0` and `0.0` are `==` under the derived IEEE `PartialEq`, so the
-    // `Eq`/`Hash` contract requires them to hash alike. Before the fix they
-    // hashed differently (`(-0.0).to_bits() != (0.0).to_bits()`), splitting
-    // congruence classes keyed on these rigs. Each rig asserts both halves:
-    // the `==` (documents the contract) and the equal hashes (the fix).
-    // Both values are hashed with the SAME `BuildHasher` — a per-call
-    // `RandomState` reseeds and would make even identical values disagree.
+    // `-0.0 == 0.0` under IEEE `PartialEq`, so `Eq`/`Hash` must hash them
+    // alike; each rig asserts both. Both values are hashed with the SAME
+    // `BuildHasher` — a per-call `RandomState` reseeds.
     fn hashes_agree<T: std::hash::Hash>(a: &T, b: &T) -> bool {
         use std::hash::{BuildHasher, RandomState};
         let state = RandomState::new();

@@ -59,6 +59,12 @@ pub fn mono_word(n: usize) -> Cow<'static, [()]> {
 /// `target_word().len()`. An impl may override them — every single-sorted impl
 /// does, and then derives its words from them — but an override must stay equal
 /// to the corresponding word length.
+///
+/// # Invariant: `Eq`, `Hash` and `Ord` agree
+///
+/// A signature carrying an `f64` must implement `Eq`/`Hash` on the same
+/// `to_bits` payload with `-0.0` normalized to `0.0`, and `Ord` via
+/// `f64::total_cmp` on that payload, as the shipped rigs in [`crate::rig`] do.
 pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Ord {
     /// The color alphabet `Λ`. `()` recovers the single-sorted prop.
     type Color: Clone + Eq + std::hash::Hash + std::fmt::Debug;
@@ -93,7 +99,7 @@ pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::De
 /// produce only well-formed expressions; raw variant construction is available
 /// but callers must uphold the composition-arity invariant themselves.
 ///
-/// In that fold and in the colored `check`/`infer` interpreters, arity sums
+/// In the `source`/`target` walk and in the colored `check`/`infer` interpreters, arity sums
 /// that would overflow `usize` saturate to `usize::MAX` — a sentinel no real
 /// wire bundle can have, so length checks report
 /// [`CatgraphError::CompositionSizeMismatch`] instead of wrapping. Passes that

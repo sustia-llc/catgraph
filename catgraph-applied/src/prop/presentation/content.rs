@@ -1224,8 +1224,7 @@ fn content_of_key<G: PropSignature>(key: &ContentKey<G>) -> Content<G> {
 /// implies the two representatives are equal field for field. The result is
 /// isomorphic to `c` under both feet, so monogamy, acyclicity and the boundary
 /// conditions of BGKSZ Thm 3.12 transport across unchanged. It does *not*
-/// preserve the node indices, nor the colors [`content_of_colored`] pins on a
-/// wire no generator touches outside the anchored part, which the key records.
+/// preserve the node indices.
 pub(super) fn canonical_content<G: PropSignature>(c: &Content<G>) -> Content<G> {
     let canonical = content_of_key(&canonical_key(c));
     debug_assert!(

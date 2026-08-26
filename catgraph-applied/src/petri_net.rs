@@ -479,7 +479,8 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if any arc weight is not representable as `u64`.
+    /// Panics if `transition >= self.transitions.len()` or if any arc weight
+    /// is not representable as `u64`.
     ///
     /// The legs are arc place indices, so they must index this net's places —
     /// [`PetriNet::new`] establishes that, and a net built with
@@ -635,7 +636,7 @@ where
     /// both boundary legs are the identity map onto the full place set and the
     /// net's semantic content lives entirely in the decoration. No information
     /// is quotiented or projected, and [`PetriNet::from_decorated_cospan`] is
-    /// its exact inverse (modulo transition ordering, which is preserved). The
+    /// its exact inverse, transition order included. The
     /// identity cospan produces the identity quotient, on which
     /// [`PetriDecoration::pushforward`] is itself the identity.
     #[must_use]
