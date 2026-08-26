@@ -338,10 +338,12 @@ impl Operadic<usize> for E1 {
         let first_new_subs = new_subs.next();
         if let Some(actual_first) = first_new_subs {
             self.sub_intervals[which_input] = actual_first;
-            self.sub_intervals.extend(new_subs);
+            for (offset, image) in new_subs.enumerate() {
+                self.sub_intervals.insert(which_input + 1 + offset, image);
+            }
             self.arity += other_obj.arity - 1;
         } else {
-            _ = self.sub_intervals.swap_remove(which_input);
+            _ = self.sub_intervals.remove(which_input);
             self.arity -= 1;
         }
         Ok(())
@@ -588,11 +590,76 @@ mod test {
         assert_ok!(composed);
 
         let expected: Vec<(f32, f32)> = vec![
-            (0.15625, 0.1875),   // image of inner (1/4, 1/2), in place at slot 0
+            (0.15625, 0.1875),   // image of inner (1/4, 1/2), at the substituted slot
+            (0.21875, 0.234375), // image of inner (3/4, 7/8), directly after it
             (0.5, 0.75),         // slot 1, geometry unchanged
-            (0.21875, 0.234375), // image of inner (3/4, 7/8), appended
         ];
         assert_eq!(outer.arity(), 3);
         assert_eq!(outer.sub_intervals(), expected.as_slice());
+    }
+
+    /// Outer `[(1/8, 1/4), (1/2, 3/4)]`, inner `[(1/4, 1/2), (3/4, 7/8)]` into
+    /// slot 0 (`x ↦ x/8 + 1/8`): result `[(5/32, 3/16), (7/32, 15/64), (1/2, 3/4)]`,
+    /// gaps `1/32`, `17/64`, `min_closeness = 1/32`. All dyadic, exact in `f32`.
+    #[test]
+    fn e1_substitution_into_non_final_slot_keeps_canonical_order() {
+        use super::E1;
+        use catgraph::assert_ok;
+        use catgraph::operadic::Operadic;
+
+        let mut outer = E1::new(vec![(0.125, 0.25), (0.5, 0.75)], true).unwrap();
+        let inner = E1::new(vec![(0.25, 0.5), (0.75, 0.875)], true).unwrap();
+
+        let composed = outer.operadic_substitution(0, inner);
+        assert_ok!(composed);
+
+        assert_eq!(outer.min_closeness(), Some(0.03125));
+
+        let expected: Vec<(f32, f32)> = vec![
+            (0.15625, 0.1875),   // 5/32, 3/16
+            (0.21875, 0.234375), // 7/32, 15/64
+            (0.5, 0.75),
+        ];
+        assert_eq!(outer.arity(), 3);
+        assert_eq!(
+            outer.sub_intervals(),
+            expected.as_slice(),
+            "images must occupy the substituted slot's position"
+        );
+    }
+
+    /// Nullary inner into slot 0 of `[(1/8, 1/4), (1/2, 5/8), (3/4, 7/8)]`:
+    /// `[(1/2, 5/8), (3/4, 7/8)]`, `min_closeness = 1/8`. Ternary inner
+    /// `[(1/8, 1/4), (1/2, 5/8), (3/4, 7/8)]` into slot 0 of
+    /// `[(1/8, 1/4), (1/2, 3/4)]` (`x ↦ x/8 + 1/8`):
+    /// `[(9/64, 5/32), (3/16, 13/64), (7/32, 15/64), (1/2, 3/4)]`,
+    /// gaps `1/32`, `1/64`, `17/64`, `min_closeness = 1/64`.
+    #[test]
+    fn e1_substitution_nullary_and_ternary_keep_canonical_order() {
+        use super::E1;
+        use catgraph::assert_ok;
+        use catgraph::operadic::Operadic;
+
+        let mut outer = E1::new(vec![(0.125, 0.25), (0.5, 0.625), (0.75, 0.875)], true).unwrap();
+        let nullary = E1::new(vec![], true).unwrap();
+        assert_ok!(outer.operadic_substitution(0, nullary));
+        assert_eq!(outer.min_closeness(), Some(0.125));
+        assert_eq!(outer.arity(), 2);
+        assert_eq!(outer.sub_intervals(), &[(0.5, 0.625), (0.75, 0.875)]);
+
+        let mut outer = E1::new(vec![(0.125, 0.25), (0.5, 0.75)], true).unwrap();
+        let ternary = E1::new(vec![(0.125, 0.25), (0.5, 0.625), (0.75, 0.875)], true).unwrap();
+        assert_ok!(outer.operadic_substitution(0, ternary));
+        assert_eq!(outer.min_closeness(), Some(0.015625));
+        assert_eq!(outer.arity(), 4);
+        assert_eq!(
+            outer.sub_intervals(),
+            &[
+                (0.140625, 0.15625),
+                (0.1875, 0.203125),
+                (0.21875, 0.234375),
+                (0.5, 0.75),
+            ]
+        );
     }
 }
