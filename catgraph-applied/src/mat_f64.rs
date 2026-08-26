@@ -49,9 +49,7 @@ pub fn mat_from_nalgebra(m: &DMatrix<f64>) -> MatR<F64Rig> {
     MatR::<F64Rig>::new(rows, cols, entries).expect("shape derived from source DMatrix")
 }
 
-/// Determinant of a square matrix via nalgebra's LU decomposition.
-///
-/// Returns `None` if the matrix is non-square.
+/// The determinant of a square matrix, or `None` if the matrix is non-square.
 #[must_use]
 pub fn determinant(m: &MatR<F64Rig>) -> Option<f64> {
     if m.rows() != m.cols() {

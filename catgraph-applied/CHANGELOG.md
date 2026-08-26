@@ -22,6 +22,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed — tests
 
+- `mat_f64::determinant`: value pins at n = 0, 1, 2, 3, 4 (sign, singular,
+  block-diagonal); the rustdoc's "via nalgebra's LU decomposition" claim
+  removed, and the same claim in `examples/mat_operations.rs`; CI
+  gains an `f64-rig` test + clippy lane
+  ([#296](https://github.com/sustia-llc/catgraph/issues/296)).
+
 - **`LinearCombination`'s `Mul` parallel arm had no value oracle**
   ([#293](https://github.com/sustia-llc/catgraph/issues/293)). Above
   `PARALLEL_MUL_THRESHOLD` (32 terms on *both* operands) `Mul::mul` was covered
