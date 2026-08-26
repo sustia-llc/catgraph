@@ -561,4 +561,38 @@ mod test {
             }
         }
     }
+
+    /// Numeric oracle for [`E1::operadic_substitution`] at one point of its
+    /// input space: outer `[(1/8, 1/4), (1/2, 3/4)]`, slot `0`, inner
+    /// `[(1/4, 1/2), (3/4, 7/8)]`.
+    ///
+    /// Asserts the resulting arity and every output interval as a literal, in
+    /// order.
+    ///
+    /// Every coordinate here, and every product and sum reaching it, is a
+    /// dyadic rational with denominator at most 64, hence exact in `f32`: the
+    /// assertions are exact equalities.
+    ///
+    /// One `(outer, slot, inner)` triple is one point of that space. No other
+    /// slot, arity, or configuration is covered here.
+    #[test]
+    fn e1_substitution_numeric_oracle() {
+        use super::E1;
+        use catgraph::assert_ok;
+        use catgraph::operadic::Operadic;
+
+        let mut outer = E1::new(vec![(0.125, 0.25), (0.5, 0.75)], true).unwrap();
+        let inner = E1::new(vec![(0.25, 0.5), (0.75, 0.875)], true).unwrap();
+
+        let composed = outer.operadic_substitution(0, inner);
+        assert_ok!(composed);
+
+        let expected: Vec<(f32, f32)> = vec![
+            (0.15625, 0.1875),   // image of inner (1/4, 1/2), in place at slot 0
+            (0.5, 0.75),         // slot 1, geometry unchanged
+            (0.21875, 0.234375), // image of inner (3/4, 7/8), appended
+        ];
+        assert_eq!(outer.arity(), 3);
+        assert_eq!(outer.sub_intervals(), expected.as_slice());
+    }
 }
