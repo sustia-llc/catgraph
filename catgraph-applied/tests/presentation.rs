@@ -333,8 +333,9 @@ fn presentation_cc_handles_both_smc_interchange_and_overlapping_user_equations()
 
 #[test]
 fn presentation_structural_engine_decides_true_on_paired_inverse_equations() {
-    // A = B, B = A under Structural at depth 16: normalize(A) = (A, 1 step),
-    // normalize(B) = (A, 2 steps), eq_mod(A, B) = Some(true).
+    // A = B, B = A under Structural at depth 16: normalize(A) converged, expr A,
+    // steps_taken 1; normalize(B) converged, expr A, steps_taken 2;
+    // eq_mod(A, B) = Some(true).
     let mut pres = Presentation::<TestGen>::with_depth(16);
     pres.set_engine(NormalizeEngine::Structural);
     pres.add_equation(g(TestGen::A), g(TestGen::B)).unwrap();
@@ -359,8 +360,10 @@ fn presentation_structural_engine_decides_true_on_paired_inverse_equations() {
 #[test]
 fn presentation_structural_engine_returns_none_only_when_a_side_hits_the_bound() {
     // A = A;A under Structural at depth 4: normalize(A) converged false,
-    // steps_taken 4; normalize(B) = (B, 1 step); eq_mod(A, B) = None;
-    // eq_mod(B ⊗ Identity(0), B) = Some(true); eq_mod(B, C) = Some(false).
+    // steps_taken 4; normalize(B) converged, expr B, steps_taken 1;
+    // normalize(B ⊗ Identity(0)) converged, expr B, steps_taken 2;
+    // eq_mod(A, B) = None; eq_mod(B ⊗ Identity(0), B) = Some(true);
+    // eq_mod(B, C) = Some(false).
     let mut pres = Presentation::<TestGen>::with_depth(4);
     pres.set_engine(NormalizeEngine::Structural);
     let a_then_a = Free::<TestGen>::compose(g(TestGen::A), g(TestGen::A)).unwrap();

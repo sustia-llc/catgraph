@@ -87,8 +87,9 @@ fn normalize_result_performs_no_iterations_at_depth_zero() {
 
 #[test]
 fn normalize_result_steps_taken_tracks_depth_on_the_growing_rewrite() {
-    // A → A;A: depth 1 → steps_taken 1, expr `A;A`; depth 2 → steps_taken 2,
-    // expr `(A;A);(A;A)` (as `rewrite_once_top` produced it, not re-associated).
+    // A → A;A, converged false at both depths: depth 1 → steps_taken 1, expr
+    // `A;A`; depth 2 → steps_taken 2, expr `(A;A);(A;A)` (as `rewrite_once_top`
+    // produced it, not re-associated).
     let a_then_a = Free::<G>::compose(a(), a()).unwrap();
 
     let mut p1 = Presentation::<G>::with_depth(1);
