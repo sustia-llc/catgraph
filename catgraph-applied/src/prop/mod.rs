@@ -60,11 +60,12 @@ pub fn mono_word(n: usize) -> Cow<'static, [()]> {
 /// does, and then derives its words from them — but an override must stay equal
 /// to the corresponding word length.
 ///
-/// # Invariant: `Eq`, `Hash` and `Ord` agree
+/// # Invariant: `Eq`, `Hash` and `Ord` agree on non-NaN payloads
 ///
 /// A signature carrying an `f64` must implement `Eq`/`Hash` on the same
 /// `to_bits` payload with `-0.0` normalized to `0.0`, and `Ord` via
-/// `f64::total_cmp` on that payload, as the shipped rigs in [`crate::rig`] do.
+/// `f64::total_cmp` on that payload, as the shipped rigs in [`crate::rig`] do;
+/// a NaN payload is non-reflexive under `==` while `Ord` still orders it.
 pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Ord {
     /// The color alphabet `Λ`. `()` recovers the single-sorted prop.
     type Color: Clone + Eq + std::hash::Hash + std::fmt::Debug;

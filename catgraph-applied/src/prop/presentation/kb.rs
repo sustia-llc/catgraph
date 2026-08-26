@@ -8,9 +8,7 @@
 //! indexed by canonical child-class IDs. Sound for equational theories without
 //! binders; complete only on the seeded ground equations closed under
 //! `Compose` / `Tensor` congruence and `smc_refine` — not
-//! Knuth-Bendix completion with critical-pair discovery. The 18 F&S Thm 5.60
-//! equations present Mat(R) (Baez-Erbele 2015 for fields; Wadsley–Woods
-//! arXiv:1505.00048 for commutative rigs, cf. BE15 §6).
+//! Knuth-Bendix completion with critical-pair discovery.
 //!
 //! # Complexity
 //!
@@ -315,8 +313,8 @@ where
     /// Post-merge SMC refinement pass. For each currently-existing term,
     /// rebuilds its [`PropExpr`] using *atom-canonical* substitutions (see
     /// [`Self::atom_canonical`]) at every sub-term position whose class contains
-    /// an atom, runs `smc_nf::nf` on the result, folds back via
-    /// `smc_nf::from_string_diagram`, and merges the NF into the term's class
+    /// an atom, runs [`smc_nf::nf`] on the result, folds back via
+    /// [`smc_nf::from_string_diagram`], and merges the NF into the term's class
     /// if it differs. Returns `true` iff any new merge was performed.
     fn smc_refine(&mut self) -> bool {
         let term_count = self.reverse.len();

@@ -16,7 +16,8 @@
 //! [`SfgGenerator<R>`] derives the whole [`PropSignature`] bound set uniformly
 //! and therefore requires `R: Rig + Eq + Hash + Ord + Debug + 'static`.
 //! [`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
-//! [`crate::rig::Tropical`], [`crate::rig::F64Rig`] and `Checked<T>` satisfy it.
+//! [`crate::rig::Tropical`], [`crate::rig::F64Rig`] and [`crate::rig::Checked<T>`]
+//! (for `T: CheckedOps + Copy + Eq + Hash + Ord + Debug + 'static`) satisfy it.
 //!
 //! `SFG_R` is single-sorted: [`SfgGenerator`]'s
 //! [`Color`](PropSignature::Color) is `()` and its interface words are

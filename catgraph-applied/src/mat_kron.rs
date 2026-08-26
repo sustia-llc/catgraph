@@ -9,7 +9,7 @@
 //! |---|---|---|
 //! | Tensor `a ⊗ b` | `a + b` (block-diagonal ⊕) | `a · b` (Kronecker) |
 //! | Monoidal unit | object `0` | object `1` |
-//! | SCFM | none (copy/add is a bialgebra, not Frobenius) | **Hadamard** (special) |
+//! | SCFM | none | **Hadamard** (special) |
 //! | Hypergraph category? | no | **yes** |
 //!
 //! **Row-vector convention**, inherited from [`MatR`]: a morphism `a → b` is an

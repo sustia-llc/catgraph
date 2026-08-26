@@ -259,7 +259,7 @@ fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDi
     //   keys. Each transposition flips every position pair between the two runs
     //   and leaves all other pairs alone; neither changes a layer's membership or
     //   rewrites an atom, and Step 6½ shares Step 7's `component_key_order`
-    //   core, so every earlier component is invariant;
+    //   core, so no earlier component rises;
     // - `reorder_tied_zero_arity` (Step 6) shrinks tied_inversion_count — each
     //   swap flips exactly one order-inverted pair. Its order reads the two atoms
     //   and nothing else, so the count is well-defined without an invariance

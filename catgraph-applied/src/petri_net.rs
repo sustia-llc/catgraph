@@ -479,8 +479,8 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if `transition >= self.transitions.len()` or if any arc weight
-    /// is not representable as `u64`.
+    /// Panics if `transition >= self.transitions.len()`, or if an arc weight
+    /// is negative or at least 2⁶⁴ once its fraction is truncated.
     ///
     /// The legs are arc place indices, so they must index this net's places —
     /// [`PetriNet::new`] establishes that, and a net built with
