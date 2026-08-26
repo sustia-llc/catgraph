@@ -11,31 +11,8 @@
 //! where  h : (Q ⊗ P) ▶ X --μ--> Q ▶ (P ▶ X) --Q ▶ f--> Q ▶ Y --g--> Z
 //! ```
 //!
-//! For the [`super::SetActegory`] instance, `▶` is Cartesian product, so
-//! every action is a tuple constructor and the compiled `h` is a closure
-//! that destructures `((q, p), x)`, applies `f((p, x)) → y`, then applies
-//! `g((q, y)) → z`.
-//!
-//! ## Closure convention
-//!
-//! Underlying maps `f : P ▶ X → Y` are encoded as `Fn((P, X)) -> Y`
-//! (tuple-as-single-argument). This matches the `architectures::*`
-//! scaffold convention (`fn((f32, u8, u32)) -> u32`). The composed action
-//! [`ParaMorphism::compose`] returns is itself a closure of the same shape
-//! — `Fn(((Q, P), X)) -> Z` — so chains compose without ceremony.
-//!
-//! ## Lints
-//!
-//! - `clippy::many_single_char_names` is allowed inside [`ParaMorphism::compose`]:
-//!   the names `p`, `q`, `f`, `g`, `h`, `x`, `y`, `z` are the standard
-//!   mathematical letters from CDL §3.1; renaming them would obscure the
-//!   correspondence with the paper.
-//! - `clippy::type_complexity` is allowed at the module level for the
-//!   `ParaMorphism<SetMonoidal, C, (Q, P), impl Fn(((Q, P), X)) -> Z>`
-//!   return type of [`ParaMorphism::compose`]: every type parameter is
-//!   load-bearing (the GAT-style HKT encoding has no kind machinery to
-//!   abbreviate them), and a `type` alias would still need every
-//!   parameter.
+//! Closure convention: `Fn((P, X)) -> Y`; [`ParaMorphism::compose`] returns
+//! `Fn(((Q, P), X)) -> Z`.
 
 use core::marker::PhantomData;
 
@@ -108,37 +85,8 @@ impl<C, P, F> ParaMorphism<super::monoidal_category::SetMonoidal, C, P, F>
 where
     C: super::actegory::Actegory<super::monoidal_category::SetMonoidal>,
 {
-    /// Sequential composition `(P, f) ; (Q, g) = (Q ⊗ P, h)` in
-    /// `Para(SetMonoidal, C)` for any `C: Actegory<SetMonoidal>`.
-    ///
-    /// CDL §3.1. Takes `self : X → Y` (parameter `P`, action
-    /// `f : P × X → Y`) and `other : Y → Z` (parameter `Q`, action
-    /// `g : Q × Y → Z`); returns the composite `X → Z` whose parameter is
-    /// `(Q, P)` (the `SetMonoidal` tensor) and whose action `h` is the
-    /// composite
-    ///
-    /// ```text
-    /// h((q, p), x) = g((q, f((p, x))))
-    /// ```
-    ///
-    /// Identical to threading through the explicit μ on the actegory `C`.
-    /// For `C = SetActegory` this is the tuple-action μ:
-    /// `μ((q, p), x) = (q, (p, x))`. The current API widens from the earlier
-    /// `SetActegory`-bound impl; the body is structurally agnostic.
-    ///
-    /// # Type parameters
-    ///
-    /// - `Q` — parameter type of the second morphism.
-    /// - `G` — closure type of `g : Q × Y → Z`.
-    /// - `X`, `Y`, `Z` — carrier types in the underlying category of `C`.
-    ///
-    /// # Returns
-    ///
-    /// A `ParaMorphism` with parameter `(Q, P)` and action of type
-    /// `impl Fn(((Q, P), X)) -> Z`. Returned via `impl Trait` in struct-
-    /// position is impossible, so the closure type is exposed as a fresh
-    /// generic on the returned struct (Rust monomorphizes it; the caller
-    /// never names it).
+    /// `(P, f) ; (Q, g) = ((Q, P), h)` with `h(((q, p), x)) = g((q, f((p, x))))`
+    /// (CDL §3.1), for any `C: Actegory<SetMonoidal>`.
     #[allow(
         clippy::many_single_char_names,
         clippy::type_complexity,

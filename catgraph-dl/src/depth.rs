@@ -1,51 +1,8 @@
-//! Structural depth of the tree carriers, and an **opt-in** recursion guard for
-//! callers who walk them recursively themselves (issues
-//! [#231](https://github.com/sustia-llc/catgraph/issues/231) and
-//! [#200](https://github.com/sustia-llc/catgraph/issues/200)).
-//!
-//! # This module no longer guards anything inside the crate
-//!
-//! It once did. Three of this crate's entries —
-//! [`tree_to_free_mnd`](crate::free_monad::tree_endo::tree_to_free_mnd),
-//! [`free_mnd_to_tree`](crate::free_monad::tree_endo::free_mnd_to_tree) (the CDL
-//! Example B.20 bijection witnesses) and
-//! [`RecursiveNn::unroll`](crate::architectures::RecursiveNn::unroll) (the CDL
-//! Example J.3 tree unroller) — walked a tree carrier by **recursing** over its
-//! structure, so a degenerate left caterpillar deep enough overflowed the stack:
-//! an abort, not a catchable error. #231 made those three fallible, pre-flighting
-//! [`guard_tree_depth`] / [`guard_free_mnd_depth`] against [`MAX_TREE_DEPTH`]
-//! and returning [`DepthError::TreeDepthExceeded`] rather than recursing.
-//!
-//! That was option 2 of #200 — bounding the failure mode rather than removing
-//! it. The v0.14.0 window took option 1 instead: **every walk in the crate is
-//! now an explicit heap worklist**, including [`Free::fold`],
-//! [`Cofree::unfold`](crate::endofunctor::Cofree::unfold), the three entries
-//! above, and — the half no pre-flight guard could ever have covered — the
-//! carriers' `Drop`, `Clone`, `PartialEq` and `Debug`. Nothing in the crate can
-//! overflow on a deep carrier any more, so the three entries are **infallible
-//! again** and nothing here is called on their behalf.
-//!
-//! # What this module is for now
-//!
-//! Two things, both caller-facing:
-//!
-//! - [`tree_depth`] / [`free_mnd_depth`] are the plain structural measure of a
-//!   carrier — a useful observation in its own right, and iterative, so
-//!   measuring an arbitrarily deep carrier never overflows.
-//! - [`MAX_TREE_DEPTH`] and the two `guard_*` helpers are a ready-made ceiling
-//!   for a caller whose *own* code recurses over these carriers: a hand-written
-//!   `match` walk, a `fold` algebra that recurses, a serializer. The crate's own
-//!   tests used to write exactly such walks. Applying the guard is now the
-//!   caller's decision, and [`crate::errors::DepthError`] is the
-//!   vocabulary for the rejection — the same `{ depth, limit }` payload
-//!   `catgraph-syntax`'s `MAX_TERM_DEPTH` guard (#99) reports.
-//!
-//! Because the guards no longer stand in front of a by-value entry, the
-//! rejection-path hazard #231 documented is gone too: `guard_tree_depth` takes
-//! its argument **by reference**, and dropping the rejected value afterwards is
-//! iterative.
-//!
-//! [#200]: https://github.com/sustia-llc/catgraph/issues/200
+//! Iterative structural depth of the tree carriers ([`tree_depth`] /
+//! [`free_mnd_depth`]) and an opt-in ceiling ([`MAX_TREE_DEPTH`],
+//! [`guard_tree_depth`] / [`guard_free_mnd_depth`] →
+//! [`DepthError::TreeDepthExceeded`]) for callers whose own code walks the
+//! carriers recursively. No entry in this crate calls the guard.
 
 use core::convert::Infallible;
 
@@ -53,49 +10,9 @@ use crate::endofunctor::{Either, Free, FreeView};
 use crate::errors::DepthError;
 use crate::free_monad::tree_endo::{BinaryTree, TreeEndo, TreeView};
 
-/// A recursion ceiling for callers who walk the tree carriers recursively.
-///
-/// No longer enforced by any entry in this crate (see the module docs): every
-/// crate-owned walk is iterative since the v0.14.0 window. It stays published
-/// because a caller's own recursive walk still needs a number, and this one is
-/// justified below.
-///
-/// **Why 256.** Deliberately equal to `catgraph-syntax`'s `MAX_TERM_DEPTH`
-/// (#99), so the workspace keeps one recursion ceiling by convention — a
-/// *prose* convention: the two constants are independent `pub const`s justified
-/// differently (syntax budgets heavy interpreter frames on a 2 MiB stack; this
-/// one budgets light walker frames with wasm margin), and nothing ties them at
-/// compile time. The value is safe by a wide margin rather than by a fine
-/// measurement, and the margin is the point — a ceiling that sits just under the
-/// overflow threshold on *one* machine is no ceiling on a smaller stack:
-///
-/// - **The measurements of record.** Recorded 2026-08-01 with the
-///   `benches/free_cofree_shapes.rs` harness, while the walks were still
-///   recursive: a 4 096-leaf left caterpillar (~4 095 nested frames per walk, in
-///   every one of construction, `fold`, `unfold` and drop glue) ran comfortably
-///   on the 8 MiB stack criterion's main thread gets. Re-measured 2026-08-16 on
-///   a **2 MiB** thread, by reverting each impl in turn: the recursive drop glue
-///   survived 8 192 and aborted at 16 384; the recursive `Debug`, whose frames
-///   are much fatter, survived 4 096 and aborted at 8 192. 256 sits 16× below
-///   the first figure and 32× below the tightest of the second set.
-/// - **Rust test threads default to 2 MiB**, a quarter of an 8 MiB main thread —
-///   which is exactly the gap the re-measurement above quantifies. (#99 learned
-///   it the hard way from the other side: a 1 024-deep `to_cospan` *did*
-///   overflow a 2 MiB test thread, because its frames were heavy.) A caller's
-///   own walk may have frames heavier than any of the ones measured here, which
-///   is the second reason for the margin.
-/// - **wasm targets are smaller again.** `wasm32-*` links a shadow stack
-///   defaulting to about a megabyte, and an embedder may configure less. 256
-///   light frames costs tens of kilobytes there, not hundreds. (This crate's own
-///   walks are iterative and so bounded by heap, not by that shadow stack.)
-///
-/// Legitimate CDL-shaped inputs are nowhere near it. The crate's own fixtures
-/// top out at depth 4; a *balanced* tree at depth 256 would hold 2²⁵⁵ leaves
-/// (leaf depth is 1, so depth `d` holds `2^(d−1)`), and no tree that fits in
-/// memory reaches the limit except a near-degenerate spine — which is exactly
-/// what [#200] was about.
-///
-/// [#200]: https://github.com/sustia-llc/catgraph/issues/200
+/// Recursion ceiling for callers' own recursive walks; equal to
+/// `catgraph-syntax`'s `MAX_TERM_DEPTH` by convention, not enforced by any
+/// entry in this crate.
 pub const MAX_TREE_DEPTH: usize = 256;
 
 /// Shared iterative walk behind both public measures: a DFS worklist, popped

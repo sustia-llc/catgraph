@@ -5,148 +5,32 @@
 //! Deep Learning is an Algebraic Theory of All Architectures*, ICML 2024
 //! ([arXiv:2402.15332v2](https://arxiv.org/abs/2402.15332)).
 //!
-//! ## Scope
-//!
-//! Nine public modules. The crate is types + (co)algebra wrappers
-//! over `(Set, ×, 1)` by default, plus the first non-`(Set, ×, 1)`
-//! `MonoidalCategory` / `Actegory` instance — the R-module actegory
-//! `(FinReal, ⊕, R⁰)` ([`para::F64Monoidal`] / [`para::F64Actegory`],
-//! issue #36); further non-Set instances (hyperdoctrine, vector-bundle,
-//! fibration-based) remain deferred.
-//!
-//! - [`para`] — the 2-category `Para`(M, C). Objects of `C`, 1-morphisms
-//!   `(P ∈ M, f : P ▶ X → Y)`, 2-morphisms = reparameterizations
-//!   `r : P' → P`. CDL §3.1. Concrete `(Set, ×, 1)` instance via
-//!   [`para::SetMonoidal`] / [`para::SetActegory`]; downstream `(Set, ×, 1)`-
-//!   flavoured ZSTs opt into the canonical bodies via
-//!   [`para::SetCategoryDefaults`]. Concrete R-module instance
-//!   `(FinReal, ⊕, R⁰)` via [`para::F64Monoidal`] / [`para::F64Actegory`]
-//!   on the [`para::F64Module`] carrier (CDL Def E.2 / Ex E.4 / Ex G.3,
-//!   issue #36) — these are the `S = f64` aliases of the scalar-generic
-//!   [`para::RMonoidal`] / [`para::RActegory`] / [`para::RModule`], which
-//!   carry the base ring as a type parameter. Under the off-by-default `ad`
-//!   feature, the `para::ad` submodule adds `Dual<f64>` as a second scalar,
-//!   giving forward-mode automatic differentiation over the same stack
-//!   (issue #74). A second off-by-default feature, `serde`, adds
-//!   `Serialize`/`Deserialize` derives on the parameter carriers
-//!   ([`para::RModule`], [`para::DirectSum`], and — with `ad` too — `Dual`)
-//!   for the #72/#73 persistence track; the trust-boundary statement of
-//!   record is `RModule`'s Serde section (issue #230).
-//! - [`algebra`] — `FAlgebra<F>`, `FCoalgebra<F>`, `MonadAlgebra<M>` plus
-//!   homomorphism wrappers `FAlgebraHom` / `FCoalgebraHom` /
-//!   `MonadAlgebraHom` with caller-sampled `verify_commutes`, and (issue #40)
-//!   machine-checked monad-algebra coherence verifiers (`verify_unit_law` /
-//!   `verify_assoc_law` on `MonadAlgebra`; `verify_unit_coherence` /
-//!   `verify_mult_coherence` on `MonadAlgebraHom`) built on [`Monad`]
-//!   (`η = Pure`, `μ = join`). The `Z2Group`-action GDL recovery test in
-//!   `tests/algebra_homomorphisms.rs` is the headline reification of CDL §2.1
-//!   Ex 2.6 (equivariant maps as monad-algebra homomorphisms). CDL §2.
-//! - [`free_monad`] — the free monad `FreeMnd(F)(Z) = Fix(X ↦ F(X) + Z)` and
-//!   its cofree-comonad dual, the crate-owned [`Free`] / [`Cofree`] carriers
-//!   (issues #93, #222). `ListEndo<A>` / `TreeEndo<A>` bijection witnesses for
-//!   CDL Examples B.19 / B.20. CDL Proposition B.18.
-//! - [`architectures`] — five typed (co)algebra-as-architecture unrollers
-//!   (Folding RNN, Unfolding RNN, Recursive NN, Mealy cell, Moore cell). The
-//!   two algebra-direction unrollers (Folding RNN, Recursive NN) ship
-//!   `FreeMnd`-equivalence tests (deterministic + proptest) in
-//!   `tests/architecture_unrollers.rs` reifying CDL Remark 2.13; the three
-//!   coalgebra-direction unrollers have behavioural tests only —
-//!   final-coalgebra equivalence is tracked in
-//!   [#64](https://github.com/sustia-llc/catgraph/issues/64). CDL
-//!   Appendix I + Appendix J.
-//! - [`endofunctor`] — the crate-owned `HKT` / `Functor` witness substrate
-//!   (single import seam), shared by `algebra::` and `free_monad::`. Replaces
-//!   the former hand-rolled `EndoFunctor` trait (issue #12); brought in-tree
-//!   whole by issue #222.
-//! - [`natural`] — first-class [`natural::NaturalTransformation<F, G>`]
-//!   (component family `α_X : F(X) → G(X)`; Gavranović et al. Def 1.5) with
-//!   [`natural::IsoForward`] / [`natural::IsoBackward`] adapters over
-//!   [`NaturalIso`], and the blanket [`natural::Pointed`] endofunctor marker
-//!   `(F, σ)` with `σ = ` [`Pure`] (CDL Def B.3). Issue #41.
-//! - [`container`] — the [`container::Container`] shape/position presentation of
-//!   a polynomial endofunctor `⟦S ◁ P⟧(X) = Σ_{s} X^{P(s)}`
-//!   (Abbott–Altenkirch–Ghani 2003, via CDL), finitary (`Vec`-of-contents)
-//!   presentation. Issue #41.
-//! - [`depth`] — iterative depth measures for the tree carriers
-//!   ([`depth::tree_depth`] / [`depth::free_mnd_depth`]) plus the
-//!   [`depth::MAX_TREE_DEPTH`] ceiling and its two `guard_*` helpers.
-//!   Engineering, not a CDL surface, and **opt-in since v0.14.0**: the crate's
-//!   own walks became explicit heap worklists
-//!   ([#200](https://github.com/sustia-llc/catgraph/issues/200)), so nothing
-//!   here is called on their behalf and the three formerly-guarded entries are
-//!   infallible again. The guard remains published for callers whose *own* code
-//!   walks these carriers recursively
-//!   (issue [#231](https://github.com/sustia-llc/catgraph/issues/231)).
-//! - [`errors`] — [`errors::DepthError`], the opt-in guard's rejection. The
-//!   crate's only error type.
+//! - [`para`] — the 2-category `Para(M, C)` (CDL §3.1): `(Set, ×, 1)` via
+//!   [`para::SetMonoidal`] / [`para::SetActegory`] / [`para::SetCategoryDefaults`];
+//!   the R-module actegory `(FinReal, ⊕, R⁰)` via [`para::RMonoidal`] /
+//!   [`para::RActegory`] / [`para::RModule`] and their `f64` aliases
+//!   (CDL Def E.2 / Ex E.4 / Ex G.3). Feature `ad`: `Dual<f64>` scalar
+//!   (forward-mode AD). Feature `serde`: derives on the parameter carriers.
+//! - [`algebra`] — `FAlgebra<F>`, `FCoalgebra<F>`, `MonadAlgebra<M>`, their
+//!   homomorphism wrappers with sampled `verify_*` checks (CDL §2).
+//! - [`free_monad`] — `FreeMnd(F)`, `CofreeCmnd(F)`, [`Free`] / [`Cofree`],
+//!   `ListEndo` / `TreeEndo` bijections (CDL Prop B.18, Ex B.19 / B.20).
+//! - [`architectures`] — Folding RNN, Unfolding RNN, Recursive NN, Mealy and
+//!   Moore cells as (co)algebra unrollers (CDL App I, App J).
+//! - [`endofunctor`] — the `HKT` / `Functor` witness substrate.
+//! - [`natural`] — [`natural::NaturalTransformation<F, G>`] (Def 1.5),
+//!   [`natural::Pointed`] with `σ = ` [`Pure`] (CDL Def B.3).
+//! - [`container`] — [`container::Container`], polynomial endofunctor
+//!   `⟦S ◁ P⟧(X) = Σ_{s} X^{P(s)}` (Abbott–Altenkirch–Ghani 2003).
+//! - [`depth`] — opt-in depth measures and guards for the tree carriers.
+//! - [`errors`] — [`errors::DepthError`].
 //! - `hopf_fibration` (private) — namespace stub for Dudzik's carry-operation
-//!   conjecture. Pre-publication research; not in CDL ICML 2024. Not part
-//!   of the public surface. See ⚠️ CAREFUL section below for the 2026-05-06
-//!   Filter Equivariants follow-up evidence update.
+//!   conjecture; not in CDL ICML 2024, no public API, no preprint as of
+//!   2026-05-06 (see `src/hopf_fibration/mod.rs`).
 //!
-//! ## Substrate
-//!
-//! Re-exports the Tier 3 enrichment infrastructure from `catgraph-applied`
-//! — [`Rig`], [`UnitInterval`], [`Tropical`], [`F64Rig`], [`BoolRig`],
+//! Re-exports from `catgraph-applied`: [`Rig`], [`Zero`], [`One`],
+//! [`UnitInterval`], [`Tropical`], [`F64Rig`], [`BoolRig`],
 //! [`EnrichedCategory`], [`HomMap`], [`LawvereMetricSpace`].
-//!
-//! ## Relationship to other workspace members
-//!
-//! - **`catgraph-applied`** — provides `Rig` and the `EnrichedCategory<V>`
-//!   substrate. `catgraph-dl::para::Actegory<M, C>` is the 2-categorical
-//!   refinement: `Rig` gives elements; `Actegory` gives morphisms and the
-//!   coherence witness `μ : Q ⊗ (P ▶ X) → (Q ⊗ P) ▶ X`.
-//! - **`catgraph-magnitude`** — orthogonal; magnitude is a scalar invariant
-//!   (Möbius sum over a `Ring`-enriched category), Para is the 2-category of
-//!   parametric morphisms. Future bridge: `catgraph-magnitude`
-//!   Para-over-Rig actegory-enriched magnitude (deferred).
-//! - **`catgraph-physics`** — `evolution_cospan` is a *deterministic
-//!   projection* of a Para F-algebra trajectory; `FreeMnd(F)` specialises to
-//!   cospan chains when `F` is the cospan-step endofunctor. Cross-reference
-//!   only; no code shared.
-//!
-//! ## Deferred surfaces
-//!
-//! Surfaces explicitly held until a downstream consumer surfaces a need.
-//! See the "Deferred surfaces" section of the crate README for the full
-//! list. Highlights:
-//!
-//! - **Remaining non-`(Set, ×, 1)` `MonoidalCategory` instances** —
-//!   hyperdoctrine, vector-bundle, fibration-based. The trait surface admits
-//!   them; the R-module actegory shipped as [`para::F64Monoidal`] /
-//!   [`para::F64Actegory`] (issue #36 first bullet — the umbrella stays
-//!   open). The [`para::SetCategoryDefaults`] opt-in marker trait closes the
-//!   boilerplate gap for `(Set, ×, 1)`-flavoured ZSTs only.
-//! - **The Hopf-fibration / carry-operation construction** — private
-//!   namespace stub only; held until a Dudzik preprint exists. See ⚠️
-//!   CAREFUL section below for the 2026-05-06 evidence update.
-//! - ~~**Truly-infinite final-coalgebra semantics** for
-//!   [`architectures::UnfoldingRnn`]~~ — **shipped** (#36):
-//!   `UnfoldingRnn::unroll_iter` is a genuinely infinite pull-based
-//!   `Iterator` carrier (with lazy `MealyCell::run_iter` /
-//!   `MooreCell::run_iter` siblings); `unroll_to_vec` stays the bounded
-//!   eager surface. No `tokio_stream::Stream` adapter (no async deps) —
-//!   that variant remains unbuilt by design.
-//! - **Symbiogenesis / Levin bioelectric / active inference / cellular-
-//!   automata coalitions** — ambitious tier; lands in a future external
-//!   sibling `catgraph-coalition-dl`, not here.
-//!
-//! ## ⚠️ CAREFUL — provenance of the Hopf-fibration claim
-//!
-//! The private `hopf_fibration` module reserves namespace for Andrew
-//! Dudzik's transcript-only conjecture about modular-arithmetic carry as a
-//! non-trivial `S¹`-fibration of `S³ → S²`. **This is not a result of the
-//! published CDL ICML 2024 paper.** Treat as pre-publication research; do
-//! not cite the Hopf-fibration claim as co-authored by Gavranović et al.
-//! until a preprint exists.
-//!
-//! **2026-05-06 evidence update.** The most recent published Dudzik-co-authored
-//! work, *Filter Equivariant Functions* ([arXiv:2507.08796v1](https://arxiv.org/abs/2507.08796),
-//! July 2025), §6 explicitly puts ripple-carry addition **outside** the FE
-//! framework. As of 2026-05-06 no Hopf-fibration / carry-operation preprint
-//! exists. The `hopf_fibration` private namespace stub is therefore kept
-//! reserved with no public API. See `src/hopf_fibration/mod.rs` for the full
-//! evidence trail.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -186,9 +70,7 @@ pub use endofunctor::{
 pub use container::Container;
 pub use natural::{IsoBackward, IsoForward, NaturalTransformation, Pointed};
 
-// The recursion guard's rejection (issue #231). Mirrored at the crate root on
-// the same convention as the surfaces above: three public entries return it, so
-// callers should not have to reach into `errors::` to name it.
+// Returned by the two `depth::guard_*` helpers.
 pub use errors::DepthError;
 
 // Re-exports of the Tier 3 enrichment substrate from catgraph-applied. Same

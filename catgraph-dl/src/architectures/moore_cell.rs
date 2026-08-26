@@ -5,20 +5,9 @@
 //! - `cell_o : P × S → O` — output (no `I` dependency).
 //! - `cell_n : P × S × I → S` — next-state.
 //!
-//! ## `run`
-//!
-//! [`MooreCell::run`] projects the unique coalgebra homomorphism into the
-//! final Moore coalgebra `Moore_{O,I}`. Distinctive trait vs. Mealy:
-//! **output happens BEFORE consuming the next input**. Concretely:
-//!
-//! ```text
-//! run(s_0, [i_1, …, i_n]) = [o_0, o_1, …, o_{n−1}]
-//! where o_k = cell_o(p, s_k)            (output is a function of state alone)
-//!       s_{k+1} = cell_n(p, s_k, i_{k+1})
-//! ```
-//!
-//! The first output `o_0 = cell_o(p, s_0)` is emitted *before any input
-//! is consumed* — exactly the Moore vs. Mealy distinction.
+//! [`MooreCell::run`]: `run(s_0, [i_1, …, i_n]) = [o_0, …, o_{n−1}]`,
+//! `o_k = cell_o(p, s_k)`, `s_{k+1} = cell_n(p, s_k, i_{k+1})` — output
+//! before the input is consumed.
 
 use core::marker::PhantomData;
 
@@ -57,28 +46,9 @@ where
     CellO: Fn((P, S)) -> O,
     CellN: Fn((P, S, I)) -> S,
 {
-    /// Run the cell over a sequence of inputs from `initial_state`.
-    ///
-    /// CDL Remark H.6 / Example J.5 (iterated Moore; the cell itself is
-    /// Example I.5). Moore semantics:
-    ///
-    /// ```text
-    /// run(s_0, [i_1, …, i_n]) = [o_0, o_1, …, o_{n−1}]
-    /// where o_k       = cell_o(p, s_k)
-    ///       s_{k+1}   = cell_n(p, s_k, i_{k+1})
-    /// ```
-    ///
-    /// **Output-then-step ordering:** at step `k` we read out `o_k =
-    /// cell_o(p, s_k)` *before* consuming `i_{k+1}` to advance the state.
-    /// This is the Moore signature — the output is a function of state
-    /// alone, independent of the next input. Contrast Mealy
-    /// ([`crate::architectures::MealyCell::run`]) where each input
-    /// produces its own output and the inner closure has access to the
-    /// input.
-    ///
-    /// The returned vector has length `inputs.len()`: there are exactly
-    /// as many outputs as inputs, with the first output emitted from the
-    /// initial state.
+    /// `[o_0, …, o_{n−1}]` with `o_k = cell_o(p, s_k)`,
+    /// `s_{k+1} = cell_n(p, s_k, i_{k+1})` (CDL Remark H.6 / Ex J.5); one
+    /// output per input, the first from `initial_state`.
     ///
     /// # Examples
     ///
@@ -111,24 +81,13 @@ where
         out
     }
 
-    /// Lazily run the cell over any input iterable, yielding one output per
-    /// input pulled — an `impl Iterator<Item = O>` that consumes `inputs` on
-    /// demand.
-    ///
-    /// CDL Remark H.6 / Example J.5. The pull-based dual of [`run`], preserving
-    /// the Moore **output-then-step** ordering: pulling one input `i` emits
-    /// `cell_o(p, s)` from the *current* state *before* `cell_n(p, s, i)`
-    /// advances it — the output is a function of state alone, exactly as in
-    /// [`run`]. `run_iter(s_0, inputs).collect()` equals [`run`]`(s_0, inputs)`
-    /// for any `inputs` (empty included); the iterator is finite, ending when
-    /// `inputs` is exhausted. It borrows `cell` for the lifetime of the
-    /// returned iterator.
+    /// Lazy [`run`]: one output per input pulled, `cell_o` before `cell_n`,
+    /// ending with `inputs`, borrowing `cell`; `.collect()` equals
+    /// [`run`]`(s_0, inputs)`.
     ///
     /// # Panics
     ///
-    /// If a `cell_o`/`cell_n` call panics and the unwind is caught, the
-    /// iterator is **poisoned**: any further `.next()` call panics rather than
-    /// silently reporting the stream as exhausted.
+    /// After a caught panic in `cell_o`/`cell_n`, every further `.next()` panics.
     ///
     /// [`run`]: MooreCell::run
     ///

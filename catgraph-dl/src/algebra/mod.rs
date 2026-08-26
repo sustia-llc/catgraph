@@ -1,30 +1,10 @@
 //! F-algebras, F-coalgebras, and monad algebras.
 //!
-//! CDL §2 — the unifying observation that a neural-network layer can be
-//! viewed as an F-algebra homomorphism between two algebras for the same
-//! endofunctor `F`. When `F = G × −` for a group `G`, this recovers
-//! Geometric Deep Learning's equivariant maps as monad-algebra
-//! homomorphisms (CDL Example 2.6). When `F = 1 + A × −`, list folds
-//! emerge as the unique algebra homomorphism from the initial algebra
-//! `List(A)` (CDL Remark 2.13).
-//!
-//! ## Status
-//!
-//! - [`FAlgebra`], [`FCoalgebra`], [`MonadAlgebra`] — structure-map
-//!   wrappers.
-//! - [`FAlgebraHom`] / [`FCoalgebraHom`] / [`MonadAlgebraHom`] —
-//!   homomorphism types with caller-driven `verify_commutes`
-//!   entry points (CDL Definition 2.5 + dual).
-//! - [`Group`] / [`Z2Group`] / [`GroupActionEndo`] plus the
-//!   [`HKT`]/[`Functor`] witnesses — the group-action monad witness for the
-//!   **CDL Example 2.6 Geometric-Deep-Learning recovery**: F-algebra
-//!   homomorphisms over `F = G × −` are exactly `G`-equivariant maps.
-//!
-//! ## Endofunctor witnesses
-//!
-//! The endofunctor abstraction is [`HKT`] (object map [`HKT::Type`]) +
-//! [`Functor`] (morphism map). Both are defined in [`crate::endofunctor`], the
-//! substrate seam, and surfaced here for this module's consumers (issue #12).
+//! CDL §2: [`FAlgebra`], [`FCoalgebra`], [`MonadAlgebra`] structure-map
+//! wrappers; [`FAlgebraHom`] / [`FCoalgebraHom`] / [`MonadAlgebraHom`] with
+//! sampled `verify_commutes` (CDL Def 2.5); [`Group`] / [`Z2Group`] /
+//! [`GroupActionEndo`] for the `F = G × −` equivariance example (CDL Ex 2.6).
+//! [`HKT`] / [`Functor`] are re-exported from [`crate::endofunctor`].
 
 mod coalgebra;
 mod f_algebra;

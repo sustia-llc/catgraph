@@ -1,93 +1,19 @@
-//! The `R`-module actegory `(FinReal, ⊕, R⁰)` acting on itself — the first
-//! non-`(Set, ×, 1)` [`MonoidalCategory`] / [`Actegory`] instance.
+//! The `R`-module actegory `(FinReal, ⊕, R⁰)` acting on itself.
 //!
-//! ## Paper anchors (verified against [arXiv:2402.15332v2](https://arxiv.org/abs/2402.15332))
+//! Anchors (arXiv:2402.15332v2): Def E.2 (actegory — `▶ : M × C → C`,
+//! unitor `η_X : I ▶ X ≅ X`, multiplicator `µ_{M,N} : (M ⊗ N) ▶ X ≅ M ▶ (N ▶ X)`,
+//! Eq. 7–8) is what [`Actegory`] models ([`Actegory::act`] = `▶`,
+//! [`Actegory::compose_action`] = `µ`); Ex E.4 (self-action of a monoidal
+//! category) is [`RActegory`] with `▶ = ⊗ = ⊕`; Ex G.3 (`Para(Smooth)` over the
+//! **cartesian** structure of real vector spaces) fixes the product as the
+//! biproduct `Rᵐ × Rⁿ ≅ Rᵐ⁺ⁿ`, i.e. `⊕` with unit `R⁰`.
 //!
-//! The umbrella issue ([#36](https://github.com/sustia-llc/catgraph/issues/36))
-//! cites "CDL §3.1" for the R-module actegory. §3 of the main body ("2-Categories
-//! and Parametric Morphisms") introduces `Para`; the **formal** actegory
-//! definition and the concrete module example both live in the appendices, so
-//! the precise anchors used here are:
-//!
-//! - **Definition E.2** (*Actegories*, after Capucci & Gavranović 2023) — an
-//!   `M`-actegory `C` is a category `C` with a functor `▶ : M × C → C` and
-//!   natural isomorphisms
-//!   `η_X : I ▶ X ≅ X` (unitor) and
-//!   `µ_{M,N} : (M ⊗ N) ▶ X ≅ M ▶ (N ▶ X)` (multiplicator),
-//!   satisfying the pentagonator (Eq. 7) and the left/right unitor diagrams
-//!   (Eq. 8). This is the surface [`Actegory`] models: [`Actegory::act`] is the
-//!   underlying map of `▶`, [`Actegory::compose_action`] is `µ`.
-//! - **Example E.4** (*Monoidal action*) — "any monoidal category gives rise to
-//!   a self-action". [`RActegory`] is exactly this self-action of the
-//!   monoidal category [`RMonoidal`] on itself, with `▶ = ⊗ = ⊕`.
-//! - **Example G.3** (*Real Vector Spaces and Smooth Maps*) — "Consider the
-//!   **cartesian** category `Smooth` whose objects are real vector spaces …
-//!   As this category is cartesian, we can form `Para(Smooth)`". This is the
-//!   gradient-based-learning `Para(…)` construction. It fixes the monoidal
-//!   product below.
-//!
-//! ## Why the monoidal product is the direct sum `⊕`, not the tensor `⊗_R`
-//!
-//! Example G.3 forms `Para(Smooth)` over the **cartesian** monoidal structure
-//! of real vector spaces. For finite-dimensional real modules the categorical
-//! product is the biproduct — `Rᵐ × Rⁿ ≅ Rᵐ⁺ⁿ` — i.e. the **direct sum `⊕`**,
-//! with monoidal unit the zero module `R⁰`. The tensor product `⊗_R` is a
-//! *different* (closed) monoidal structure with unit `R¹ = R`; it is the setting
-//! for multilinear algebra, not the parameter-concatenation used by
-//! gradient-based-learning `Para` constructions. So `[RMonoidal]` realises
-//! `(FinReal, ⊕, R⁰)`: [`RMonoidal::tensor_objects`] pairs blocks and
-//! [`DirectSum::flatten`] concatenates their coordinates.
-//!
-//! ## Carriers (module-appropriate, **not** the `(Set, ×, 1)` tuple)
-//!
-//! [`RModule<S>`] is the object carrier — a finite-dimensional module over the
-//! scalar ring `S`, `Vec<S>`-backed, an element of `Sⁿ`. It carries genuine
-//! `R`-module structure ([`RModule::zeros`], [`RModule::basis`],
-//! [`RModule::add`], [`RModule::scale`], [`RModule::direct_sum`]); this is
-//! where catgraph-applied's `rig::Zero` / `rig::One` carry the ring identities
-//! (issue #36) — `Zero::zero()` is the additive identity `0 ∈ R` filling the
-//! zero vector, `One::one()` is the multiplicative identity `1 ∈ R` marking each
-//! standard-basis generator. [`F64Module`] is the `S = f64` alias.
-//!
-//! The object-level tensor is the dedicated [`DirectSum`] carrier — deliberately
-//! **not** the Rust tuple `(A, B)` that the `(Set, ×, 1)` blanket
-//! [`SetCategoryDefaults`](super::SetCategoryDefaults) uses — so [`RMonoidal`]
-//! is a genuine non-`Set` instance rather than an alias of
-//! [`SetMonoidal`](super::SetMonoidal). It does **not** opt into
-//! `SetCategoryDefaults`; the [`MonoidalCategory`] / [`Actegory`] impls are
-//! hand-written with `DirectSum`-appropriate bodies.
-//!
-//! ## Coherence
-//!
-//! On `DirectSum` the associator and unitors are exact re-associations (pure
-//! data movement, no arithmetic), so Mac Lane's pentagon and triangle hold on
-//! the nose — machine-checked in `tests/module_actegory_laws.rs` via the
-//! **generic** `common::assert_monoidal_coherence` (the same driver used for
-//! the `(Set, ×, 1)` tuple carrier). Since
-//! [`MonoidalCategory::tensor_morphisms`] landed
-//! ([#65](https://github.com/sustia-llc/catgraph/issues/65)) the `α ⊗ id` /
-//! `id ⊗ α` pentagon/triangle legs are expressed through that method rather
-//! than hand-spelled per instance — for `DirectSum` it maps the two summands,
-//! and this instance supplies the [`DirectSum`]-shaped body. Honesty note: the
-//! [`MonoidalCategory`] impl itself is object-agnostic pure re-association
-//! (the trait's GATs place no bound on `A`, `B` — `tensor_objects` accepts
-//! any types, exactly like `SetMonoidal`'s); what makes this instance the
-//! `R`-module actegory is the [`DirectSum`] carrier plus the concrete module
-//! layer ([`RModule`], [`DirectSum::flatten`]) that realises `⊕` on actual
-//! coordinates. The `R`-module axioms that exercise `Zero` / `One`, and the
-//! concrete `⊕`-monoid laws on coordinates, are law-tested in the same file.
-//!
-//! ## Base ring as a compile-time type
-//!
-//! [`RMonoidal<S>`] / [`RActegory<S>`] are zero-sized: the base ring is the
-//! *type parameter* `S`, statically known at every use site, so this instance
-//! needs no runtime payload in the `&self` slot. The default instantiation is
-//! `S = f64` ([`F64Monoidal`] / [`F64Actegory`]), but any scalar type
-//! satisfying the per-method bounds works — the ring genuinely lives in the
-//! type system. The slot (see the "Why methods take `&self`" section on
-//! [`MonoidalCategory`](super::MonoidalCategory)) remains reserved for an
-//! instance whose ring is a **runtime value** — e.g. `Z/nZ` with a modulus `n`
-//! chosen at construction — which would carry `n` in the receiver.
+//! Carriers: [`RModule<S>`] (`Vec<S>`-backed `Sⁿ`; `zeros`, `basis`, `add`,
+//! `scale`, `direct_sum`; `Zero`/`One` supply `0` and `1`), the tensor
+//! [`DirectSum`] with [`DirectSum::flatten`] concatenating coordinates.
+//! [`RMonoidal<S>`] / [`RActegory<S>`] are zero-sized with the ring as the
+//! type parameter `S`; [`F64Monoidal`] / [`F64Actegory`] / [`F64Module`] are
+//! the `S = f64` aliases. Associator and unitors are exact re-associations.
 
 use core::marker::PhantomData;
 use core::ops::{Add, Mul};
@@ -97,123 +23,41 @@ use catgraph_applied::rig::{One, Zero};
 use super::actegory::Actegory;
 use super::monoidal_category::MonoidalCategory;
 
-/// The direct-sum tensor carrier `A ⊕ B`.
-///
-/// The object-level tensor of [`RMonoidal`] (and the action result of
-/// [`RActegory`]). A dedicated newtype rather than the Rust tuple `(A, B)`:
-/// this is what makes [`RMonoidal`] a genuine non-`Set` monoidal category
-/// instead of an alias of the `(Set, ×, 1)` blanket. As a *set* the direct sum
-/// of two modules is their cartesian product of coordinate blocks, so the two
-/// slots `.0` / `.1` hold the summands; [`DirectSum::flatten`] realises the
-/// direct sum of two concrete [`RModule`]s as one concatenated module.
-///
-/// CDL Definition E.2 / Example E.4.
-///
-/// # Serde (feature `serde`)
-///
-/// Under `--features serde` the carrier round-trips whenever both summands do
-/// ([#230](https://github.com/sustia-llc/catgraph/issues/230)). It is a plain
-/// pair with public fields and no cross-slot invariant, so there is nothing a
-/// document could state that [`DirectSum::flatten`] would not equally accept
-/// from a hand-built value — the trust boundary is entirely the summands'
-/// (for [`RModule`], see its Serde section, which is the statement of record;
-/// the untagged-wire-shape caveat there applies to this pair too).
+/// Direct-sum tensor carrier `A ⊕ B`: the tensor of [`RMonoidal`] and the
+/// action result of [`RActegory`] (CDL Def E.2 / Ex E.4). With `serde` it
+/// round-trips whenever both summands do; it carries no cross-slot invariant.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DirectSum<A, B>(pub A, pub B);
 
 impl<S> DirectSum<RModule<S>, RModule<S>> {
-    /// Realise the abstract direct sum `V ⊕ W` of two concrete modules as the
-    /// single concatenated module `Rᵐ⁺ⁿ` — the biproduct carrier of
-    /// `Rᵐ × Rⁿ ≅ Rᵐ⁺ⁿ` (Example G.3, cartesian structure of real vector
-    /// spaces). Coordinates of the left summand precede those of the right.
+    /// `V ⊕ W` as the concatenated module `Rᵐ⁺ⁿ`, left coordinates first.
     #[must_use]
     pub fn flatten(self) -> RModule<S> {
         self.0.direct_sum(self.1)
     }
 }
 
-/// A finite-dimensional free module `Sⁿ` over the scalar ring `S`.
+/// Free module `Sⁿ` over the scalar ring `S`, `Vec<S>`-backed (CDL Def E.2,
+/// Ex G.3): [`zeros`](RModule::zeros), [`basis`](RModule::basis),
+/// dimension-guarded [`add`](RModule::add), [`scale`](RModule::scale),
+/// [`direct_sum`](RModule::direct_sum). Bounds are per method.
+/// [`F64Module`] is `S = f64`.
 ///
-/// The object carrier of the `R`-module actegory. Backed by `Vec<S>`; the
-/// dimension `n` is the vector length. This is the free `R`-module on `n`
-/// generators, so it carries the full `R`-module structure:
-///
-/// - additive identity [`RModule::zeros`] (`0 ∈ Sⁿ`, each entry
-///   `<S as Zero>::zero()`),
-/// - standard basis [`RModule::basis`] (`eᵢ`, a single
-///   `<S as One>::one()` at position `i`),
-/// - vector addition [`RModule::add`] (dimension-guarded),
-/// - scalar multiplication [`RModule::scale`] (`r · v`),
-/// - direct sum [`RModule::direct_sum`] (`⊕`, the monoidal product).
-///
-/// The scalar ring is the type parameter `S`; [`F64Module`] is the `S = f64`
-/// instantiation used throughout the crate. Bounds are stated **per method**,
-/// not on the struct, so a scalar type only has to satisfy what the operations
-/// it is actually used with require.
-///
-/// CDL Definition E.2 (the objects of the category `C` the actegory acts on);
-/// Example G.3 (real vector spaces).
-///
-/// # Float honesty (`S = f64` and other IEEE float scalars)
-///
-/// This section is about IEEE-754 semantics, not about the generic structure —
-/// it applies whenever `S` is a floating-point type (in particular to the
-/// [`F64Module`] alias), and not to exact scalar rings.
-///
-/// Equality is structural `Vec<f64>` equality via `f64` `PartialEq`, which
-/// **identifies `-0.0` and `+0.0`**. The module-axiom identities
-/// (`1 · v = v`, `0 · v = 0`, `v + 0 = v`) hold exactly *under that equality*
-/// for finite inputs — but signed-zero **bit patterns are not preserved**:
-/// IEEE-754 gives `0.0 · (-1.0) = -0.0` (so `0 · v` need not be bitwise
-/// `zeros()`) and `-0.0 + 0.0 = +0.0` (so `v + 0` can flip a sign bit of `v`).
-/// Do not rely on these identities for bit-exactness (same family as the
-/// [#58](https://github.com/sustia-llc/catgraph/issues/58) `F64Rig`
-/// signed-zero note). General [`RModule::add`] / [`RModule::scale`] on
-/// arbitrary reals are subject to ordinary floating-point rounding and are
-/// **not** asserted associative/distributive on the nose; tests use the
-/// NaN-free `finite_f64` strategy.
+/// For float `S`: equality is `PartialEq` on coordinates, so `-0.0 == +0.0`
+/// but signed-zero bit patterns are not preserved by `scale`/`add`, and
+/// `add`/`scale` are not associative or distributive on the nose.
 ///
 /// # Serde (feature `serde`)
 ///
-/// Under `--features serde` a module round-trips as its bare coordinate
-/// vector, for any scalar `S` with serde impls of its own
-/// ([#230](https://github.com/sustia-llc/catgraph/issues/230)) — in this
-/// workspace that means `f64` (and the other std primitives) plus, under
-/// `ad`, `Dual<f64>`; `catgraph-applied`'s rig scalars (`F64Rig`, `Tropical`,
-/// …) carry no serde impls today, so `RModule<Tropical>` does not serialize.
-/// This is the parameter half of the persistence track
-/// ([#72](https://github.com/sustia-llc/catgraph/issues/72)/[#73](https://github.com/sustia-llc/catgraph/issues/73));
-/// terms are the other half, serialized in `catgraph-applied`
-/// ([#81](https://github.com/sustia-llc/catgraph/issues/81)).
-///
-/// **This section is the trust-boundary statement of record** — the README,
-/// CHANGELOG, and feature comment point here. What deserialization does and
-/// does not check:
-///
-/// - A deserialized module's [`dim`](Self::dim) is whatever the payload's
-///   coordinate count says — the same situation as [`RModule::new`], which
-///   accepts any `Vec<S>`, so serde admits no state the constructor did not.
-///   Nothing checks it against the dimension the *caller* expected.
-/// - Only [`add`](Self::add) rejects a dimension mismatch with `None`
-///   ([`basis`](Self::basis) guards an index, but it is an associated
-///   constructor — it never sees a loaded value). [`scale`](Self::scale),
-///   [`direct_sum`](Self::direct_sum), [`DirectSum::flatten`],
-///   [`as_slice`](Self::as_slice), and [`into_vec`](Self::into_vec) all
-///   operate at whatever dimension was loaded, so a wrong-size document
-///   propagates silently through them — and consumer code indexing the slice
-///   panics out of range. **Check `dim()` once at your own entry point**;
-///   that is the whole discipline (the #81 `Presentation` analogue).
-/// - The wire shape carries no type tag: at matching float counts, an
-///   `RModule<f64>` of dim 2, a [`DirectSum<f64, f64>`](DirectSum), and an
-///   `ad` `Dual<f64>` document are mutually acceptable — `[0.5,1.5]` reads
-///   back as any of the three. Which type a document means is metadata the
-///   consumer keeps.
-/// - Non-finite scalars do not survive JSON: `serde_json` serializes
-///   `NaN`/`±∞` as `null` (the save succeeds; the values are destroyed and
-///   indistinguishable) and deserializing that `null` back into `f64` fails —
-///   a checkpoint written from a non-finite state is unreadable. Pinned by
-///   `tests/serde_roundtrip.rs`.
+/// Round-trips as the bare coordinate vector for any `S` with serde impls
+/// (`f64`, std primitives, `Dual<f64>` under `ad`; not the `catgraph-applied`
+/// rig scalars). Deserialization checks nothing beyond what [`RModule::new`]
+/// accepts: [`dim`](Self::dim) is the payload's length; only
+/// [`add`](Self::add) rejects a mismatch; the wire shape carries no type tag
+/// (`[0.5, 1.5]` reads back as an `RModule<f64>` of dim 2, a
+/// [`DirectSum<f64, f64>`](DirectSum), or a `Dual<f64>`); `serde_json`
+/// writes non-finite scalars as `null`, which does not read back into `f64`.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RModule<S>(Vec<S>);

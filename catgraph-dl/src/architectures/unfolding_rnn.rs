@@ -6,26 +6,10 @@
 //! - `cell_o : P × S → O` — output projection.
 //! - `cell_n : P × S → S` — next-state.
 //!
-//! Unrolling produces a `Stream(O)` (CDL Example J.2).
-//!
-//! ## `unroll_to_vec`
-//!
-//! [`UnfoldingRnn::unroll_to_vec`] is a *bounded-depth* approximation of
-//! the unique coalgebra homomorphism into the *final* coalgebra
-//! `Stream(O)`. We materialise the first `depth` elements:
-//!
-//! ```text
-//! unroll_to_vec(s_0, n) = [cell_o(p, s_0), cell_o(p, s_1), …, cell_o(p, s_{n−1})]
-//! where s_{k+1} = cell_n(p, s_k)
-//! ```
-//!
-//! Lazy (on-demand) unrolling is provided by [`UnfoldingRnn::unroll_iter`],
-//! which returns a genuinely infinite `impl Iterator<Item = O>`. A plain
-//! pull-based Rust `Iterator` is the pragmatic lazy carrier for the
-//! conceptually-infinite `Stream(O)` — no `Lazy` / `Thunk` carrier and no
-//! async `tokio_stream::Stream` dependency are needed; callers bound the
-//! stream with `.take(n)`. See the closing CDL §3.2 remark on streams as
-//! final coalgebras.
+//! Unrolling into `Stream(O)` (CDL Ex J.2 / Ex I.3): [`UnfoldingRnn::unroll_to_vec`]
+//! materialises `[cell_o(p, s_0), …, cell_o(p, s_{n−1})]` with
+//! `s_{k+1} = cell_n(p, s_k)`; [`UnfoldingRnn::unroll_iter`] is the same
+//! sequence as an infinite `Iterator`.
 
 use core::marker::PhantomData;
 
@@ -64,28 +48,9 @@ where
     CellO: Fn((P, S)) -> O,
     CellN: Fn((P, S)) -> S,
 {
-    /// Bounded-depth unroll into a `Vec<O>` of length `depth`.
-    ///
-    /// CDL Remark H.6 / Example J.2 / App I.3. The unique coalgebra
-    /// homomorphism into the final coalgebra `Stream(O)` is conceptually
-    /// infinite; this method materialises a finite prefix. Semantics:
-    ///
-    /// ```text
-    /// unroll_to_vec(s_0, n) = [cell_o(p, s_0), cell_o(p, s_1), …, cell_o(p, s_{n−1})]
-    /// where s_{k+1} = cell_n(p, s_k)
-    /// ```
-    ///
-    /// `depth = 0` returns the empty vector (no states observed).
-    ///
-    /// # Why bounded?
-    ///
-    /// Rust eagerly evaluates `Vec<O>`; the *true* final-coalgebra
-    /// homomorphism lands in a lazy carrier. That carrier is
-    /// [`UnfoldingRnn::unroll_iter`], which returns a genuinely infinite
-    /// `impl Iterator<Item = O>` — the pragmatic lazy carrier for the
-    /// conceptually-infinite `Stream(O)` (a pull-based Rust `Iterator`, no
-    /// async dependency). `unroll_iter(s_0).take(n)` agrees with
-    /// `unroll_to_vec(s_0, n)` elementwise.
+    /// The first `depth` outputs: `[cell_o(p, s_0), …, cell_o(p, s_{depth−1})]`
+    /// with `s_{k+1} = cell_n(p, s_k)` (CDL Remark H.6 / Ex J.2); empty for
+    /// `depth = 0`.
     ///
     /// # Examples
     ///
@@ -114,29 +79,13 @@ where
         out
     }
 
-    /// Lazily unroll into a **genuinely infinite** `impl Iterator<Item = O>`.
-    ///
-    /// CDL Example J.2 / Remark H.6. This is the lazy carrier the *true*
-    /// final-coalgebra homomorphism into `Stream(O)` lands in: a pull-based
-    /// Rust `Iterator` that steps the coalgebra on demand, emitting one output
-    /// per `.next()` and threading the state exactly as [`unroll_to_vec`]
-    /// does — same `(cell_o, cell_n)` output-then-advance sequencing:
-    ///
-    /// ```text
-    /// unroll_iter(s_0) = [cell_o(p, s_0), cell_o(p, s_1), cell_o(p, s_2), …]
-    /// where s_{k+1} = cell_n(p, s_k)
-    /// ```
-    ///
-    /// The iterator never terminates on its own; callers **must** bound it —
-    /// `unroll_iter(s_0).take(n)` yields the same sequence as
-    /// [`unroll_to_vec`]`(s_0, n)` elementwise, for every `n` (`n = 0`
-    /// included). It borrows `cell` for the lifetime of the returned iterator.
+    /// Infinite `Iterator` over `cell_o(p, s_k)`, `s_{k+1} = cell_n(p, s_k)`
+    /// (CDL Ex J.2 / Remark H.6), borrowing `cell`; `.take(n)` equals
+    /// [`unroll_to_vec`]`(s_0, n)`.
     ///
     /// # Panics
     ///
-    /// If a `cell_o`/`cell_n` call panics and the unwind is caught (e.g.
-    /// `catch_unwind`), the iterator is **poisoned**: any further `.next()`
-    /// call panics rather than silently reporting the stream as exhausted.
+    /// After a caught panic in `cell_o`/`cell_n`, every further `.next()` panics.
     ///
     /// [`unroll_to_vec`]: UnfoldingRnn::unroll_to_vec
     ///

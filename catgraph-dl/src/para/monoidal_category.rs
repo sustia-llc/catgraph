@@ -1,128 +1,20 @@
-//! Monoidal category of parameter spaces.
+//! Monoidal category `(M, ⊗, I)` of parameter spaces (CDL §3.1): the
+//! [`MonoidalCategory`] trait, the `(Set, ×, 1)` instance [`SetMonoidal`]
+//! (`Tensor<A, B> = (A, B)`, `Unit = ()`), and the [`SetCategoryDefaults`]
+//! opt-in blanket for further `(Set, ×, 1)`-flavoured ZSTs. Methods take
+//! `&self`; the ring-valued instance is [`RMonoidal`](super::RMonoidal).
 //!
-//! CDL §3.1: `Para(M, C)` is parameterised by a monoidal category
-//! `(M, ⊗, I)`. This module exposes the [`MonoidalCategory`] trait surface and
-//! provides the concrete instance [`SetMonoidal`] — the monoidal category
-//! `(Set, ×, 1)` with object-level tensor `(A, B) ↦ (A, B)` and unit
-//! `1 = ()`. CDL takes `(Set, ×, 1)` as the default and it is the only
-//! instance currently shipped.
-//!
-//! ## HKT shape
-//!
-//! Rust has no kind `* -> * -> *`, so the object-level tensor is encoded as
-//! a Generic Associated Type [`MonoidalCategory::Tensor`]. For
-//! [`SetMonoidal`] this projects to the Rust tuple `(A, B)`; for the unit
-//! object [`SetMonoidal::Unit`] projects to `()`.
-//!
-//! Coherence isomorphisms (associator, unitors) are exposed as method
-//! signatures on values; for `SetMonoidal` they are concrete tuple
-//! re-associations and are exact (not "up to iso"). Future instances
-//! over richer monoidal categories will need these slots, so the trait
-//! surface is widened now to keep their addition a non-breaking transition for
-//! [`SetMonoidal`] consumers.
-//!
-//! ## Coherence laws (machine-checked generically)
-//!
-//! The associator and unitors must satisfy Mac Lane's **pentagon** and
-//! **triangle** identities (see the [`MonoidalCategory`] trait rustdoc for the
-//! equations). Since [`MonoidalCategory::tensor_morphisms`] landed (issue #65)
-//! the `α ⊗ id` / `id ⊗ α` legs of both diagrams are expressible **on this
-//! trait surface**, so the coherence check is a single generic driver —
-//! `common::assert_monoidal_coherence`, generic over `MonoidalCategory` — that
-//! is machine-checked against `SetMonoidal`, a downstream-style
-//! `(Set, ×, 1)`-flavoured ZST (`tests/monoidal_coherence_laws.rs`, issue
-//! #40), **and** the non-`Set` [`DirectSum`](super::DirectSum) carrier
-//! [`F64Monoidal`](super::F64Monoidal) (`tests/module_actegory_laws.rs`, issue
-//! #36). All three hold on the nose (exact isomorphisms, not "up to iso"). For
-//! any future instance the laws remain documented implementor obligations, but
-//! the same generic driver now checks them without per-instance hand-spelling.
-//!
-//! Closure convention across the `para` module: `Fn((P, X)) -> Y`
-//! (tuple-as-single-argument). This mirrors the `architectures::*` scaffold
-//! which uses `fn((f32, u8, u32)) -> u32` etc.
-//!
-//! ## Why methods take `&self`
-//!
-//! All five [`MonoidalCategory`] methods (`tensor_objects`, `unit`,
-//! `associate`, `left_unitor`, `right_unitor`) take `&self` even though the
-//! only shipped instance ([`SetMonoidal`]) is a zero-sized type for which
-//! the receiver is unobservable. The `&self` slot is a deliberate
-//! future-proofing choice: future instances over richer monoidal categories
-//! will carry **runtime data** — an `R`-module instance carries its base
-//! ring; a hyperdoctrine instance carries the fibration's projection map; a
-//! vector-bundle instance carries its connection. Freezing the trait surface
-//! today at "static methods only" would force a breaking change later when
-//! those non-`(Set, ×, 1)` instances land.
-//!
-//! This is a narrow divergence from the witness convention of
-//! [`crate::endofunctor`], whose `Functor`/`Monad` traits dispatch statically
-//! and exclusively (`ListEndo::fmap(x, f)`, not `x.fmap(f)`, with the witness a
-//! type-level token never instantiated). A witness-first design carries runtime
-//! payload in a separate `Context` type parameter; [`MonoidalCategory`] folds
-//! the equivalent role into the `&self` receiver instead — so the divergence is
-//! in the *placement* of runtime data (receiver vs context-parameter), not in
-//! whether the design can carry it. The `&self` choice keeps the API shape
-//! aligned with idiomatic Rust trait-method calls
-//! (`monoidal.tensor_objects(a, b)`) at the cost of forgoing the witness-first
-//! convention.
-//!
-//! Since #12, the crate's *endofunctor* layer (`ListEndo` / `TreeEndo` /
-//! `GroupActionEndo`) follows the static-dispatch convention throughout.
-//! [`MonoidalCategory`] is therefore the deliberate *local* exception: it keeps
-//! the `&self` receiver for the runtime-payload slot while the rest of the crate
-//! stays witness-first.
-//!
-//! **Rationale validation:** a downstream coalition
-//! `impl Actegory<SetMonoidal>` for `UnitIntervalQ` / `TropicalQ` /
-//! `QuantaleDefault` is the first consumer expected to carry
-//! runtime data (Tropical zero / one for the underlying min-plus
-//! semiring; BTV21 free-monoid generator references; Lawvere-metric
-//! embedding parameter). The shipped surface commits to the `&self` slot for
-//! future-proofing; the audit checkpoint fires at that consumer's
-//! post-shipping review and either ratifies the choice or opens a
-//! follow-up to consider static dispatch. See
-//! [`AUDIT-CHECKPOINT-v0.4.0.md`](../../docs/AUDIT-CHECKPOINT-v0.4.0.md)
-//! for audit criteria.
-//!
-//! ## `(Set, ×, 1)`-flavoured ZSTs via [`SetCategoryDefaults`]
-//!
-//! Defining a fresh `(Set, ×, 1)`-flavoured ZST instance (with `Tensor<A, B>
-//! = (A, B)` and `Unit = ()`) used to require reproducing all five method
-//! bodies pointwise. The [`SetCategoryDefaults`] opt-in marker trait now
-//! supplies the bodies via a blanket impl: downstream users write
-//! `impl SetCategoryDefaults for MyMonoidal {}` (empty body) and the
-//! [`MonoidalCategory`] impl is automatic. [`SetMonoidal`] itself uses this
-//! path. See [`SetCategoryDefaults`] for the full design rationale, the
-//! `: Sized` bound rationale, the conflict-guard caveat for downstream
-//! users, and a doctest exercising all five method bodies.
+//! Closure convention across `para`: `Fn((P, X)) -> Y`.
 
 use core::marker::PhantomData;
 
-/// A monoidal category `(M, ⊗, I)` of parameter spaces.
-///
-/// CDL §3.1 — the parameter category for the 2-category `Para(M, C)`.
-///
-/// The trait carries:
-///
-/// - [`MonoidalCategory::Object`] — the *kind* of objects of `M` (use a
-///   marker type when objects are themselves generic, as in `SetMonoidal`).
-/// - [`MonoidalCategory::Morphism`] — the kind of morphisms of `M`.
-/// - [`MonoidalCategory::Unit`] — the monoidal unit `I`.
-/// - [`MonoidalCategory::Tensor`] — the object-level tensor product GAT
-///   `(A, B) ↦ A ⊗ B`.
-/// - Coherence isomorphisms [`MonoidalCategory::associate`],
-///   [`MonoidalCategory::left_unitor`], [`MonoidalCategory::right_unitor`].
-///
-/// For `SetMonoidal`, the GATs project to Rust tuples and the coherence
-/// isomorphisms are exact, not "up to iso".
-///
-/// # Coherence obligations (Mac Lane)
-///
-/// Implementors must satisfy the **pentagon** and **triangle** identities.
-/// Writing `α` for [`associate`](MonoidalCategory::associate), `λ` for
-/// [`left_unitor`](MonoidalCategory::left_unitor), `ρ` for
-/// [`right_unitor`](MonoidalCategory::right_unitor), and `⊗` for the
-/// object/morphism tensor:
+/// A monoidal category `(M, ⊗, I)` (CDL §3.1): object/morphism kind markers,
+/// [`Unit`](MonoidalCategory::Unit), the tensor GAT
+/// [`Tensor`](MonoidalCategory::Tensor), the associator and unitors, and the
+/// morphism tensor. Implementors must satisfy Mac Lane's pentagon and
+/// triangle, with `α` = [`associate`](MonoidalCategory::associate),
+/// `λ` = [`left_unitor`](MonoidalCategory::left_unitor),
+/// `ρ` = [`right_unitor`](MonoidalCategory::right_unitor):
 ///
 /// ```text
 /// Pentagon (on ((A ⊗ B) ⊗ C) ⊗ D):
@@ -132,19 +24,6 @@ use core::marker::PhantomData;
 /// Triangle (on (A ⊗ I) ⊗ B):
 ///   (id_A ⊗ λ_B) ∘ α_{A,I,B} = ρ_A ⊗ id_B
 /// ```
-///
-/// These are documented obligations, not enforced at construction — but they
-/// are now **expressible generically on this surface**: the `α ⊗ id` /
-/// `id ⊗ α` legs are the applying-form morphism tensor
-/// [`tensor_morphisms`](MonoidalCategory::tensor_morphisms) (issue #65,
-/// `f ⊗ g` mapping the two components of a tensored value). A single generic
-/// driver, `common::assert_monoidal_coherence`, therefore machine-checks the
-/// pentagon and triangle for **every** instance — the `(Set, ×, 1)` blanket
-/// (`tests/monoidal_coherence_laws.rs`, issue #40) and the non-`Set`
-/// [`DirectSum`](super::DirectSum) carrier
-/// [`F64Monoidal`](super::F64Monoidal) (`tests/module_actegory_laws.rs`, issue
-/// #36) — instead of hand-spelling the legs per instance. Any future instance
-/// inherits the same generic check.
 pub trait MonoidalCategory {
     /// Marker for the kind of objects of `M`. For `SetMonoidal` this is the
     /// uninhabited [`SetObject`] tag — actual objects are Rust types
@@ -203,123 +82,21 @@ pub trait MonoidalCategory {
     ) -> Self::Tensor<C, D>;
 }
 
-/// Sealing module for [`SetCategoryDefaults`].
-///
-/// Downstream users opting into the `(Set, ×, 1)` blanket via
-/// [`SetCategoryDefaults`] must ALSO `impl Sealed for MyMonoidal {}` —
-/// the dual-impl requirement is the "soft seal" that surfaces the
-/// commitment-to-`(Set, ×, 1)` decision at the impl site. See the
-/// "## ⚠️ Soft-seal" section in [`SetCategoryDefaults`]'s
-/// rustdoc for the full rationale.
+/// Sealing module for [`SetCategoryDefaults`]: an opt-in needs both
+/// `impl Sealed for T {}` and `impl SetCategoryDefaults for T {}`.
 pub mod private {
-    /// Sealing trait for [`super::SetCategoryDefaults`]. Implementing this
-    /// trait signals deliberate commitment to the canonical
-    /// `(Set, ×, 1)`-flavoured `MonoidalCategory` body supplied by the
-    /// blanket impl. See the "## ⚠️ Soft-seal" section in
-    /// [`super::SetCategoryDefaults`]'s rustdoc.
+    /// Sealing trait for [`super::SetCategoryDefaults`].
     pub trait Sealed {}
 }
 
-/// Opt-in marker trait for `(Set, ×, 1)`-flavoured monoidal-category ZSTs.
-///
-/// CDL §3.1 default. Implementing `SetCategoryDefaults` for a zero-sized
-/// type opts the type into a blanket [`MonoidalCategory`] impl that fixes:
-///
-/// - [`MonoidalCategory::Object`] = [`SetObject`]
-/// - [`MonoidalCategory::Morphism`] = [`SetMorphism`]
-/// - [`MonoidalCategory::Unit`] = `()`
-/// - [`MonoidalCategory::Tensor<A, B>`] = `(A, B)`
-///
-/// All five method bodies (`tensor_objects`, `unit`, `associate`,
-/// `left_unitor`, `right_unitor`) are supplied by the blanket impl as the
-/// canonical Cartesian-product / tuple-re-association forms. Downstream
-/// users defining a fresh `(Set, ×, 1)`-flavoured naming-witness ZST get
-/// `MonoidalCategory` for free without reproducing the bodies.
-///
-/// ## `: Sized` bound
-///
-/// The trait carries a `: Sized` supertrait bound. This is a soft witness
-/// that the trait is intended for **zero-sized witness types** (or other
-/// `Sized` carriers) — the canonical `(Set, ×, 1)` flavour does not need a
-/// runtime-sized payload. A downstream attempt to write
-/// `impl SetCategoryDefaults for &'a [u8]` (or any `?Sized` carrier) will
-/// fail at the bound site rather than silently picking up the blanket and
-/// surprising the caller later. The bound costs nothing at the canonical
-/// shipping call sites: [`SetMonoidal`] is a unit struct (`Sized` via the
-/// default `Sized` bound); the doctest's `MyMonoidal` is too.
-///
-/// ## ⚠️ Soft-seal
-///
-/// `SetCategoryDefaults` carries a `: private::Sealed` supertrait bound.
-/// Downstream users must `impl Sealed for MyMonoidal {}` AND
-/// `impl SetCategoryDefaults for MyMonoidal {}` (two impls) to opt into
-/// the `(Set, ×, 1)` blanket. The dual-impl requirement is the
-/// commitment-signalling mechanism: a downstream user who writes only
-/// `impl SetCategoryDefaults for MyMonoidal {}` (without the parallel
-/// `Sealed` impl) gets a clear `Sealed: not satisfied` diagnostic at the
-/// impl site, rather than the harder-to-diagnose
-/// `conflicting implementations of MonoidalCategory` coherence error
-/// that the conflict-guard caveat (below) warns about.
-///
-/// Rationale: the earlier `Sized`-only bound let a downstream user collide
-/// `impl SetCategoryDefaults for MyType {}` + a hand-rolled
-/// `impl MonoidalCategory for MyType { ... }` and discover the
-/// coherence error LATE (the diagnostic does not name
-/// `SetCategoryDefaults` as the proximal cause). The soft-seal
-/// surfaces the commitment at compile time at the impl site, where the
-/// fix is local and the diagnostic is direct. See
-/// [`private::Sealed`] for the trait. The sealing approach (option (a))
-/// was chosen over the rejected alternatives.
-///
-/// ## ⚠️ Conflict-guard caveat (superseded by the soft-seal but still valid)
-///
-/// **Implementing `SetCategoryDefaults` for a type commits the type to the
-/// canonical `(Set, ×, 1)` `MonoidalCategory` body via the blanket impl.**
-/// A downstream user who writes both
-///
-/// ```text
-/// impl Sealed for MyType {}
-/// impl SetCategoryDefaults for MyType {}
-/// impl MonoidalCategory for MyType { type Tensor<A, B> = SomethingElse; ... }
-/// ```
-///
-/// will hit a `conflicting implementations of trait MonoidalCategory for
-/// type MyType` compile error from the trait-coherence checker (the
-/// soft-seal does not prevent this third case — a deliberate `Sealed`
-/// impl + a deliberate hand-rolled `MonoidalCategory` impl is the bypass
-/// path the seal does not block). The diagnostic does not name
-/// `SetCategoryDefaults` as the proximal cause, so the convention is
-/// **don't combine the two impl paths**. If a non-`(Set, ×, 1)`-flavoured
-/// `MonoidalCategory` impl is wanted, write `impl MonoidalCategory for
-/// MyType { ... }` directly WITHOUT `SetCategoryDefaults` / `Sealed`. If a
-/// `(Set, ×, 1)`-flavoured impl is wanted, opt into the dual-impl
-/// (`Sealed` + `SetCategoryDefaults`) and let the blanket supply the body.
-///
-/// ## Implementation note (option (γ-ii))
-///
-/// At design phase, three options were considered for supplying the default
-/// bodies:
-///
-/// - **(α)** marker trait + blanket impl gated on the marker.
-/// - **(β)** `#[derive(SetMonoidal)]` proc-macro — re-affirmed as rejected in
-///   [#42](https://github.com/sustia-llc/catgraph/issues/42), where the same
-///   decision is recorded under the `#[derive(SetCategoryDefaults)]` name (the
-///   README documents the dual-impl pattern instead).
-/// - **(γ)** sub-trait with GAT default-method bodies on `MonoidalCategory`.
-///
-/// Option (γ) as originally sketched (sub-trait with default-method bodies
-/// inherited by the supertrait's impls) does not type-check on stable Rust:
-/// a sub-trait cannot override a supertrait's method bodies. The closest
-/// equivalent that compiles is (γ-ii) — a blanket impl carrying the bodies,
-/// gated by `SetCategoryDefaults` opt-in. Functionally this is a renamed
-/// (α) since both use a marker-with-blanket-impl pattern; the trade-off is
-/// essentially zero, and the `SetCategoryDefaults` name better signals the
-/// "(Set, ×, 1)-flavoured defaults" intent than a generic `Marker` name.
+/// Opt-in marker for `(Set, ×, 1)`-flavoured ZSTs: a blanket
+/// [`MonoidalCategory`] impl with `Object = `[`SetObject`],
+/// `Morphism = `[`SetMorphism`], `Unit = ()`, `Tensor<A, B> = (A, B)` and
+/// tuple bodies for every method. Requires `impl `[`private::Sealed`]` for T {}`
+/// alongside. A type with this impl cannot also implement `MonoidalCategory`
+/// by hand (coherence conflict).
 ///
 /// # Examples
-///
-/// Defining a fresh `(Set, ×, 1)`-flavoured ZST and getting
-/// [`MonoidalCategory`] for free — exercises all five method bodies:
 ///
 /// ```
 /// use catgraph_dl::para::{MonoidalCategory, Sealed, SetCategoryDefaults};
@@ -327,12 +104,9 @@ pub mod private {
 /// #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 /// struct MyMonoidal;
 ///
-/// // Dual-impl soft-seal: Sealed first, then SetCategoryDefaults.
 /// impl Sealed for MyMonoidal {}
 /// impl SetCategoryDefaults for MyMonoidal {}
 ///
-/// // MonoidalCategory comes for free via the blanket impl. All five
-/// // method bodies are live; verify each one.
 /// let m = MyMonoidal;
 /// assert_eq!(m.tensor_objects(1_i32, "two"), (1_i32, "two"));
 /// assert_eq!(m.unit(), ());

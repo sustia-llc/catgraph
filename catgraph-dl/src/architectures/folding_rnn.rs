@@ -7,20 +7,9 @@
 //! - `cell_0 : P → S` — initial hidden state.
 //! - `cell_1 : P × A × S → S` — the recurrent cell.
 //!
-//! ## `unroll`
-//!
-//! [`FoldingRnn::unroll`] is the unique algebra homomorphism
-//! `(P, List(A)) → S` from the *initial* algebra of the free monad
-//! `FreeMnd(1 + A × −) ≅ List(A)` (CDL Remark 2.13 / Example 2.12) into
-//! the cell's algebra `(S, [cell_0, cell_1])`. Right-fold semantics:
-//!
-//! ```text
-//! unroll([a_1, …, a_n]) = cell_1(p, a_1, cell_1(p, a_2, … cell_1(p, a_n, cell_0(p)) …))
-//! ```
-//!
-//! Implemented as `inputs.into_iter().rev().fold(cell_0(p), step)` so the
-//! *rightmost* input is consumed first (innermost call); the *leftmost*
-//! becomes the outermost. This matches Haskell's standard `foldr`.
+//! [`FoldingRnn::unroll`] is the right fold
+//! `cell_1(p, a_1, cell_1(p, a_2, … cell_1(p, a_n, cell_0(p)) …))`
+//! (CDL Remark 2.13 / Ex 2.12).
 
 use core::marker::PhantomData;
 
@@ -58,22 +47,8 @@ where
     Cell0: Fn(P) -> S,
     Cell1: Fn((P, A, S)) -> S,
 {
-    /// Unroll the cell over a list of inputs, threading the parameter `p`.
-    ///
-    /// CDL Remark 2.13 / Example 2.12. This is the unique algebra
-    /// homomorphism `(P, List(A)) → S` from the initial algebra of the
-    /// free monad on `1 + A × −` into the cell's algebra. Concretely it is
-    /// a right-fold:
-    ///
-    /// ```text
-    /// unroll([a_1, …, a_n]) = cell_1(p, a_1, cell_1(p, a_2, … cell_1(p, a_n, cell_0(p)) …))
-    /// ```
-    ///
-    /// The `rev()` on the input iterator is the implementation detail that
-    /// realises right-fold semantics from `Iterator::fold`'s left-fold
-    /// shape: with the input reversed, the rightmost CDL element `a_n` is
-    /// consumed first against the seed `cell_0(p)` (i.e. lands in the
-    /// innermost call); the leftmost `a_1` is consumed last (outermost).
+    /// Right fold `cell_1(p, a_1, cell_1(p, a_2, … cell_1(p, a_n, cell_0(p)) …))`;
+    /// `a_n` is consumed first (CDL Remark 2.13 / Ex 2.12).
     ///
     /// # Examples
     ///

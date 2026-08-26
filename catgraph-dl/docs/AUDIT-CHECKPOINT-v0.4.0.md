@@ -18,8 +18,7 @@ Both traits take `&self` on every method — a deliberate divergence from the
 `deep_causality_haft` static-dispatch (associated-fn-on-ZST-witness) convention
 (historical — substrate crate-owned since #222; the convention itself is
 unchanged and now stated by `src/endofunctor/`).
-The rationale lives in the trait rustdoc ("## Why methods take `&self`" in
-`para/monoidal_category.rs` and `para/actegory.rs`): a future instance that
+The rationale (recorded here; the rustdoc states the convention only): a future instance that
 carries **runtime data** — an `R`-module actegory holding its base ring, a
 `QuantaleActegory` holding a Tropical/UnitInterval quantale, a
 hyperdoctrine/vector-bundle surface — would need to read `self.{field}`, and
@@ -78,8 +77,7 @@ builds.
 
 ## Cross-references
 
-- Live rationale: the "## Why methods take `&self`" sections in
-  `para/monoidal_category.rs` and `para/actegory.rs`.
+- Rationale: the Background section above.
 - `F64Module` R-module actegory (#36) — the non-cartesian ZST instance that
   exercises tensor generality but not the `&self` slot.
 - Out-of-tree validators: the coalition/enriched-magnitude track
