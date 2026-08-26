@@ -508,6 +508,37 @@ mod tests {
         assert_eq!(scores.len(), 4);
     }
 
+    /// Two-node cycle, ρ(A) = 1: katz at α = 1.5 and at α = 0.25.
+    #[test]
+    fn katz_cycle_diverges_at_large_alpha_converges_at_small() {
+        let mut graph: MultiwayEvolutionGraph<i32, ()> = MultiwayEvolutionGraph::new();
+        let root = graph.add_root(0);
+        let kids = graph.add_fork(root, vec![(1, (), 0)]);
+        graph.add_merge_edge(kids[0], root, ());
+
+        assert_eq!(
+            multiway_katz(&graph, Some(1.5), None, None),
+            None,
+            "α = 1.5 exceeds 1/ρ(A) = 1 and must not converge"
+        );
+
+        // x = αAᵀx + 1 with Aᵀ = A symmetric: both entries equal 1/(1 - α) = 4/3,
+        // L2 norm (4/3)·√2, so each normalised entry is 1/√2.
+        let scores = multiway_katz(&graph, Some(0.25), None, None).expect("α = 0.25 converges");
+        let expected = 1.0 / 2.0_f64.sqrt();
+        assert!(
+            (scores[&root] - expected).abs() < 1e-9,
+            "root scored {}, expected {expected}",
+            scores[&root]
+        );
+        assert!(
+            (scores[&kids[0]] - expected).abs() < 1e-9,
+            "kid scored {}, expected {expected}",
+            scores[&kids[0]]
+        );
+        assert_eq!(scores.len(), 2);
+    }
+
     /// Empty graph: `Some(empty)` from katz, empty map from betweenness.
     #[test]
     fn empty_graph_scores_empty_rather_than_failing_to_converge() {
