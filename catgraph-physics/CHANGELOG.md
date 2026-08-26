@@ -10,6 +10,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Changed
+
+- `multiway::branchial_analysis` rustdoc reduced to contract statements;
+  design rationale for Katz-over-eigenvector stays in the v0.14.0 entry below
+  ([#330](https://github.com/sustia-llc/catgraph/issues/330)).
+
 ## [workspace-v0.14.0] - 2026-08-16
 
 ### Changed
