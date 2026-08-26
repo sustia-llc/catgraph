@@ -449,12 +449,7 @@ fn print_mat(m: &MatR<F64Rig>) {
 /// nalgebra-bridge consumer in the example file. Decisions made:
 ///
 /// - Round-trip via `mat_to_nalgebra` → `determinant` → `try_inverse` →
-///   `mat_from_nalgebra`. Determinant uses nalgebra's LU decomposition under
-///   the hood (`DMatrix::determinant()` dispatches through `LU`); inverse
-///   uses the same. For dense `f64` matrices the LU path is the standard
-///   non-LAPACK route — LAPACK crossover is empirically ~64×64 (see the
-///   `nalgebra-lapack` skill's xgesdd/xgetrf crossover knowledge), well
-///   above the 3×3 fixture here.
+///   `mat_from_nalgebra`.
 /// - Non-singular fixture: `[[1,2,0], [0,3,4], [5,0,6]]` has determinant
 ///   `1·(3·6 − 0·4) − 2·(0·6 − 4·5) + 0 = 18 + 40 = 58`. The hand-computed
 ///   value gives the reader a non-trivial determinant target to verify.
@@ -462,12 +457,7 @@ fn print_mat(m: &MatR<F64Rig>) {
 ///   and `try_inverse` MUST return `None`. The `Option` return type is the
 ///   nalgebra-bridge correctness gate — `None` on singular, `Some` on
 ///   invertible.
-/// - Round-trip: `inv · m_original = I_3` is the inverse-axiom check, verified
-///   to tolerance `1e-12` per IEEE-754 LU accumulation. The 3×3 integer-valued
-///   fixture's exact rational inverse (denominator 58, max entry ≈ 0.31) yields
-///   worst-case f64 round-trip error on the order of `~n²·u ≈ 1e-15`; `1e-12`
-///   stays 3 orders above that realistic worst case while tightening the
-///   correctness gate enough to catch a hypothetical row/col layout bug.
+/// - Round-trip: `inv · m_original = I_3`, verified to tolerance `1e-12`.
 #[cfg(feature = "f64-rig")]
 fn run_mat_f64_demo() {
     use catgraph_applied::mat_f64::{determinant, mat_from_nalgebra, mat_to_nalgebra, try_inverse};
@@ -497,11 +487,7 @@ fn run_mat_f64_demo() {
     println!("  determinant(m)       = {det}");
     assert!((det - 58.0).abs() < 1e-9, "expected det = 58.0");
 
-    // try_inverse: returns Some(inv) for non-singular m. Verify inv · m = I_3
-    // to a tight tolerance. The 3×3 integer-valued fixture has exact rational
-    // inverse with denominator 58 and max entry ≈ 0.31; LU round-trip error is
-    // on the order of ~n²·u ≈ 1e-15. 1e-12 keeps 3 orders of magnitude of
-    // slack above that without leaving room for a hypothetical layout bug.
+    // try_inverse: Some(inv) for non-singular m; every entry of inv · m − I_3 is < 1e-12.
     let inv = try_inverse(&m).expect("m is non-singular");
     println!(
         "  try_inverse(m).rows  = {}  (Some(inv) — non-singular path)",

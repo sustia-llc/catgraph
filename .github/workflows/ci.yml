@@ -182,6 +182,9 @@ jobs:
       # uncompiled. Targeted test + clippy pass (the #81 serde-lane shape).
       - run: cargo test -p catgraph-magnitude --features f64-fast
       - run: cargo clippy -p catgraph-magnitude --features f64-fast --all-targets -- -D warnings
+      # #296: `f64-rig` is off by default, so `tests/mat_f64.rs` compiles to nothing above.
+      - run: cargo test -p catgraph-applied --features f64-rig
+      - run: cargo clippy -p catgraph-applied --features f64-rig --all-targets -- -D warnings
 
   # #11: the slow BV 2025 Prop 3.14 acceptance fixture
   # (euler_char_identity::fixture_3_5point_path_t_2_5) is ignored under
