@@ -10,18 +10,8 @@ use super::hyperedge::Hyperedge;
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 
-/// A hypergraph consisting of vertices and hyperedges.
-///
-/// A hypergraph is a generalization of a graph where edges (hyperedges) can
-/// connect any number of vertices. This is the fundamental structure in the
-/// Wolfram Physics model.
-///
-/// # Structure
-///
-/// - Vertices are identified by `usize` IDs
-/// - Hyperedges are ordered sequences of vertex IDs
-/// - Multiple hyperedges can share vertices
-/// - Self-loops and parallel hyperedges are allowed
+/// Hypergraph: `usize` vertices, ordered hyperedges; self-loops and parallel
+/// hyperedges allowed.
 ///
 /// # Example
 ///

@@ -91,16 +91,19 @@ First monorepo release.
 
 ### Added
 
-- `interval` — `DiscreteInterval`, `ParallelIntervals` (ported from `irreducible`).
+- `interval` — `DiscreteInterval`, `ParallelIntervals` with `total_complexity`
+  / `max_complexity` (ported from `irreducible`).
 - `temporal_cospan_chain` — `TemporalComplex`, `to_cospan_chain`,
   `compose_cospan_chain`; `StokesError` → `TemporalComplexError`.
-- `trace` — `StepTrace`, `analyze_trace`, `detect_repeats`, `is_irreducible`.
+- `trace` — `StepTrace`, `TraceAnalysis`, `RepeatDetection`, `analyze_trace`,
+  `detect_repeats`, `is_irreducible`.
 
 ## [0.2.2] - 2026-04-19
 
 ### Added
 
-- `parallel` feature (pass-through to `catgraph/parallel`); `examples/wasi_smoke_physics.rs`.
+- Default-on `parallel` feature (pass-through to `catgraph/parallel`);
+  `examples/wasi_smoke_physics.rs`.
 
 ### Changed
 

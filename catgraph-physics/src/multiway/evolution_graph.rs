@@ -1,72 +1,13 @@
-//! Core data structure for multiway (non-deterministic) evolution.
+//! Multiway (non-deterministic) evolution graph: states as nodes, transitions
+//! as edges, step-graded, with fork and merge.
 //!
-//! A multiway evolution graph represents branching computation where
-//! multiple execution paths exist simultaneously. This captures:
-//! - Non-deterministic Turing machines (multiple transitions per state)
-//! - String rewriting systems (multiple rule applications)
-//! - Hypergraph rewriting (Wolfram Physics model)
-//!
-//! ## Category Theory Connection
-//!
-//! In the category 𝒯 of computations with symmetric monoidal structure ⟨𝒯, ⊗, I⟩:
-//! - Objects are states/configurations
-//! - Morphisms are transitions
-//! - Tensor product ⊗ represents parallel branches
-//!
-//! The functor Z': 𝒯 → ℬ maps this to the cobordism category, where
-//! multicomputational irreducibility means Z' is a *pure* symmetric monoidal
-//! functor.
-//!
-//! ## Time-step discretization as a functor `F: C → D`
-//!
-//! The bridge from `MultiwayEvolutionGraph` to the cospan-chain category
-//! (via [`HypergraphEvolution::to_cospan_chain`](crate::hypergraph::HypergraphEvolution::to_cospan_chain)) instantiates
-//! a general compositional pattern that also appears in:
-//!
-//! - **Gorard (2023), "A functorial perspective on (multi)computational
-//!   irreducibility"** (arXiv:2301.04690) — irreducibility = *exactness* of the
-//!   functorial correspondence between a computation category and a cobordism
-//!   category (the map is a pure symmetric monoidal functor); reducibility is
-//!   deformation away from exactness.
-//! - **Mamba / state-space models** (analogy only — not a paper anchor; the
-//!   Mamba paper is not part of this crate's citation surface) —
-//!   discretization parameter Δ
-//!   (exponential-trapezoidal, bilinear, zero-order hold) acts as a functor
-//!   `F: C → D` from smooth ODE morphisms to discrete recurrences; the
-//!   selection mechanism chooses a natural transformation per token.
-//! - **Bradley-Vigneaux (2025), "The magnitude of categories of texts enriched
-//!   by language models"** (arXiv:2501.06662) — generative text distribution
-//!   discretized into an autoregressive sampling process.
-//!
-//! In all three cases:
-//!
-//! | Category | Role | Morphisms |
-//! |---|---|---|
-//! | `C` | continuous / generative | differential equations, extension distributions, multiway branches |
-//! | `D` | discrete / observational | linear recurrences, token sequences, cospan chains |
-//! | `F: C → D` | discretization / sampling | chosen per step via branchial foliation |
-//!
-//! catgraph-physics implements the Wolfram-physics instance: `C` is the
-//! multiway evolution graph, `D` is the cospan-chain category (catgraph core),
-//! and the branchial foliation (per-step cross-section, see
-//! [`crate::multiway::branchial`]) plays the role of the discretization
-//! parameter Δ.
-//!
-//! ### Per-step foliation selection (selection-mechanism analogue)
-//!
-//! [`MultiwayEvolutionGraph::confluence_diamonds`] and
-//! [`MultiwayEvolutionGraph::parallel_independent_events`] expose the
-//! per-step branching structure needed to choose *which* foliation to use at
-//! each time step. Consumers (e.g. `irreducible`) can treat this as a
-//! *natural transformation* between discretization functors — each step
-//! commits to one coarsening of the multiway graph into a branchial
-//! cross-section, analogous to Mamba's input-dependent Δ selection.
-//!
-//! Enrichment (`[0,1]`-weighted hom-objects on the cospan chain) is
-//! deliberately not provided here; it lives in the `catgraph-magnitude`
-//! sibling crate, where the Bradley-Vigneaux magnitude formula
-//! `Mag(tM) = (t − 1) · Σ_{x ∈ ob(M) \ T(⊥)} H_t(p_x) + #(T(⊥))` gives a
-//! quantitative measure of how much information `D` carries about `C`.
+//! Anchor: Gorard 2023, arXiv:2301.04690 — a computation category 𝒯 maps to a
+//! cobordism category by `Z′: 𝒯 → ℬ`; multicomputational irreducibility is
+//! `Z′` being a *pure* symmetric monoidal functor. Here `𝒯` is this graph and
+//! `ℬ` is the cospan-chain category, reached via
+//! [`HypergraphEvolution::to_cospan_chain`](crate::hypergraph::HypergraphEvolution::to_cospan_chain);
+//! the per-step cross-section is [`crate::multiway::branchial`]. Enrichment
+//! lives in `catgraph-magnitude`.
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -854,25 +795,10 @@ pub struct MergePoint {
     pub parent_nodes: Vec<MultiwayNodeId>,
 }
 
-/// Run multiway BFS evolution with a domain-specific step function.
-///
-/// Generic BFS loop shared by all multiway systems. The `step_fn` takes
-/// a state reference and returns all possible successor states with
-/// their transition data and a rule index label.
-///
-/// # Arguments
-/// * `initial` - The initial state
-/// * `step_fn` - Closure that computes all successors: `&S -> Vec<(S, T, usize)>`
-/// * `max_steps` - Maximum BFS depth per branch
-/// * `max_branches` - Maximum total branches to explore
-///
-/// # Algorithm (pure BFS, follows the NTM pattern)
-///
-/// 1. Create graph, add root
-/// 2. frontier = `VecDeque` with (`root_id`, `initial_state`)
-/// 3. Pop from frontier; skip if step >= `max_steps`; break if budget exhausted
-/// 4. Single successor  → sequential step
-/// 5. Multiple successors → fork (capped by remaining branch budget)
+/// BFS multiway evolution from `initial`: `step_fn(&state)` yields
+/// `(successor, transition, rule_index)` triples; one successor → sequential
+/// step, several → fork capped by the remaining `max_branches` budget; nodes
+/// at `step >= max_steps` are not expanded.
 ///
 /// # Panics
 ///

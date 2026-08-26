@@ -55,29 +55,11 @@ pub struct OllivierRicciCurvature {
 pub type OllivierFoliation = CurvatureFoliation<OllivierRicciCurvature>;
 
 impl OllivierRicciCurvature {
-    /// Compute Ollivier-Ricci curvature from a branchial graph.
-    ///
-    /// Algorithm:
-    /// 1. Build adjacency lists and a node-index mapping.
-    /// 2. All-pairs BFS shortest paths (unweighted).
-    /// 3. For each edge: build uniform neighbor distributions, compute
-    ///    `W₁(μ_x, μ_y)`, then `κ(x, y) = 1 - W₁ / d(x, y)`.
-    /// 4. Vertex Ricci = average of incident edge curvatures.
-    /// 5. Scalar = normalized sum of vertex curvatures.
-    ///
-    /// # Which all-pairs pass runs (#162)
-    ///
-    /// Step 2 goes through rustworkx-core when the default-on `rustworkx`
-    /// feature is enabled, and through a hand-rolled queue BFS otherwise. The
-    /// two agree by construction — same unweighted hop metric, same
-    /// `f64::INFINITY` for an unreachable pair, same `0.0` diagonal — so the
-    /// curvatures do not depend on the feature. rustworkx's sweep may run on
-    /// rayon past `APSP_PARALLEL_THRESHOLD` nodes, but only with the `parallel`
-    /// feature also on, and its output is bit-identical either way (it fills
-    /// disjoint rows with hop counts, never an accumulated sum).
-    ///
-    /// Step 1 is *not* redundant with step 2: `adj` also carries the neighbour
-    /// distributions `μ_x` that step 3 integrates against.
+    /// Ollivier–Ricci curvature of a branchial graph: unweighted hop metric
+    /// (rustworkx-core with the `rustworkx` feature, queue BFS otherwise),
+    /// uniform neighbour distributions, `κ(x, y) = 1 − W₁(μ_x, μ_y) / d(x, y)`
+    /// per edge, vertex Ricci = mean of incident edge curvatures, scalar =
+    /// normalised sum of vertex curvatures.
     #[must_use]
     #[allow(
         clippy::cast_precision_loss,
@@ -302,23 +284,8 @@ impl OllivierFoliation {
 // Internal helpers
 // ============================================================================
 
-/// All-pairs BFS shortest paths on an unweighted undirected graph.
-///
-/// Returns a distance matrix `dist[i][j]` where `f64::INFINITY` means
-/// unreachable.
-///
-/// **Slim-build fallback only.** With the default-on `rustworkx` feature this
-/// pass is `branchial_analysis::branchial_distance_matrix` instead (#162) —
-/// named in plain code formatting, deliberately: an intra-doc link would be
-/// **unresolvable in the only configuration this item compiles in**, since
-/// `#[cfg(not(feature = "rustworkx"))]` is exactly when
-/// `multiway::branchial_analysis` does not exist. CI's rustdoc gate runs with
-/// default features, so it would not catch the broken link either. This sweep
-/// is what keeps
-/// [`OllivierRicciCurvature::from_branchial`] available to a
-/// `--no-default-features` consumer, for whom `branchial_analysis` — and with
-/// it petgraph and rustworkx-core — does not exist at all. The two must agree
-/// on the metric, so any change here is a change to both.
+/// All-pairs unweighted hop distances, `f64::INFINITY` when unreachable;
+/// the `rustworkx`-off stand-in for `branchial_analysis::branchial_distance_matrix`.
 #[cfg(not(feature = "rustworkx"))]
 fn all_pairs_bfs(adj: &[Vec<usize>], n: usize) -> Vec<Vec<f64>> {
     let mut dist = vec![vec![f64::INFINITY; n]; n];
