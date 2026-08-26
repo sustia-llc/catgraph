@@ -82,7 +82,8 @@ where
     }
 
     /// Lazy [`run`]: one output per input pulled, `cell_o` before `cell_n`,
-    /// borrowing `cell`; `.collect()` equals [`run`]`(s_0, inputs)`.
+    /// ending with `inputs`, borrowing `cell`; `.collect()` equals
+    /// [`run`]`(s_0, inputs)`.
     ///
     /// # Panics
     ///

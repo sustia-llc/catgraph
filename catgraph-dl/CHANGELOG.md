@@ -10,8 +10,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ### Changed
 
-- Rustdoc reduced to contract statements crate-wide; this CHANGELOG rewritten
-  to one line per change. `architectures` module doc no longer describes
+- Rustdoc reduced to contract statements; this CHANGELOG rewritten to one
+  bullet per change. `architectures` module doc no longer describes
   `RecursiveNn::unroll` as fallible (it has returned `S` since v0.15.0).
 
 ## [workspace-v0.15.0] - 2026-08-16
@@ -19,8 +19,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 ### Changed
 
 - **BREAKING:** every carrier walk is an explicit heap worklist — `Free::fold`,
-  `Cofree::unfold`, the tree bijections, `RecursiveNn::unroll`, and the
-  carriers' `Drop`/`PartialEq`/`Debug`/`Clone`
+  `Cofree::unfold`, the tree bijections, `RecursiveNn::unroll`, the
+  carriers' `Drop`/`PartialEq`/`Debug` and `BinaryTree`'s `Clone`
   ([#200](https://github.com/sustia-llc/catgraph/issues/200)):
   - `Free` and `BinaryTree` are structs over a private cell; their shapes are
     the new `FreeView` (`Pure`/`Suspend`) and `TreeView` (`Leaf`/`Node`),
@@ -41,7 +41,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
     sign/zero-pad and debug-hex flags render as if absent.
   - `Free::fold` now allocates (`2·n + 2` on lists, `2·(L − 1) + 2` on trees).
   - Sizes: `Free` and `BinaryTree` equal their views; `Cofree` is one word
-    larger than its cell.
+    larger than its cell (`Cofree<OptionWitness, u32>` 16 → 24,
+    `Cofree<TreeEndo<u8>, f64>` 24 → 32).
 - `TreeView::Node` holds one boxed pair (`Node(Box<(BinaryTree, BinaryTree)>)`):
   `L − 1` allocations per tree, `BinaryTree<A>` 24 → 16 bytes; `Debug` output
   unchanged (`Node(<left>, <right>)`). Breaking for by-hand matches on the
@@ -75,8 +76,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
   serialize as JSON `null` and do not load back.
 - `depth` and `errors` modules: `MAX_TREE_DEPTH = 256`, `tree_depth` /
   `free_mnd_depth`, `guard_tree_depth` / `guard_free_mnd_depth`,
-  `DepthError::TreeDepthExceeded { depth, limit }` (`#[non_exhaustive]`);
-  `thiserror` dependency
+  `DepthError::TreeDepthExceeded { depth, limit }` (`#[non_exhaustive]`,
+  also re-exported at the crate root); `thiserror` dependency
   ([#231](https://github.com/sustia-llc/catgraph/issues/231)).
 
 ### Changed
@@ -99,12 +100,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
   `derivative`, `Add`/`Sub`/`Mul`/`Neg`/`Div`/`AddAssign`/`MulAssign`,
   `Mul<T>`, `Zero`/`One`; re-exported at `para::ad::Dual`. Not carried from
   the replaced type: `Sum`, `Product`, `FromPrimitive`, `Display`, `Default`,
-  nesting ([#221](https://github.com/sustia-llc/catgraph/issues/221)).
+  the analytic-scalar marker traits
+  ([#221](https://github.com/sustia-llc/catgraph/issues/221)).
 
 ### Changed
 
-- `deep_causality_num` and `deep_causality_num_dual` removed; `ad = []`
-  declares no dependency ([#219](https://github.com/sustia-llc/catgraph/issues/219), #221).
+- `deep_causality_num` and `deep_causality_num_dual` removed; `Zero`/`One`
+  resolve to `catgraph_applied::rig` and are re-exported at the crate root;
+  `ad = []` declares no dependency
+  ([#219](https://github.com/sustia-llc/catgraph/issues/219), #221).
 
 ## [workspace-v0.6.0] - 2026-08-02
 
@@ -126,28 +130,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 ### Changed
 
 - R-module actegory generic in the scalar: `RModule<S>`, `RObject<S>`,
-  `RMorphism<S>`, `RMonoidal<S>`, `RActegory<S>` with per-method bounds;
-  `F64*` become aliases. Breaking: the four former unit structs lose
-  bare-value construction and their `Debug` names change (#74).
+  `RMorphism<S>`, `RMonoidal<S>`, `RActegory<S>` with per-method bounds,
+  re-exported from `para`; `DirectSum::flatten` generic over
+  `DirectSum<RModule<S>, RModule<S>>`; `F64*` become aliases. Breaking: the
+  four former unit structs lose bare-value construction and their `Debug`
+  names change (#74).
 
 ## [workspace-v0.4.0] - 2026-07-25
 
 ### Changed
 
-- `deep_causality_haft` pin `=0.4.1` → `=0.4.2`; carrier `Clone` unadopted
+- `deep_causality_haft` / `deep_causality_num` pins `=0.3.3` → `=0.4.0`
+  ([#69](https://github.com/sustia-llc/catgraph/issues/69)), then haft
+  `=0.4.1` → `=0.4.2`; carrier `Clone` unadopted
   ([#154](https://github.com/sustia-llc/catgraph/issues/154)).
 - **BREAKING:** `free_monad` adopts haft's `Free`/`Cofree`: `FreeMnd` /
-  `CofreeCmnd` → `Free` / `Cofree`, variants `Pure`/`Suspend` with the box
-  inside the functor hole, private `Cofree` fields, no carrier `Clone`,
-  opt-in `Eq`/`Debug` via `EqFunctor` / `DebugFunctor`; gains `Free::fold`
+  `CofreeCmnd` → `Free` / `Cofree` (with `FreeWitness` / `CofreeWitness`,
+  `EqFunctor` / `DebugFunctor` re-exported at the crate root), variants
+  `Pure`/`Suspend` with the box inside the functor hole, private `Cofree`
+  fields, no carrier `Clone`, opt-in `Eq`/`Debug` via `EqFunctor` /
+  `DebugFunctor` (`ListEndo` / `TreeEndo` implement both); gains `Free::fold`
   and `Cofree::unfold` ([#93](https://github.com/sustia-llc/catgraph/issues/93)).
 - Paper-audit phase 5: "Appendix K" → J; THEOREM_MAP functor-laws row Def
   1.5 → 1.4; `container.rs` cites §4 "New Horizons"; unroller catalogue
   cites Ex J.1–J.5 with Remark 2.13 / Remark H.6.
 - **BREAKING:** `MonoidalCategory::tensor_morphisms` required
   ([#65](https://github.com/sustia-llc/catgraph/issues/65)).
-- **BREAKING:** `EndoFunctor` replaced by haft `HKT` + `Functor` witnesses;
-  `EndoWitness` alias; `Either` from haft, `either` dependency dropped
+- **BREAKING:** `EndoFunctor` replaced by haft `HKT` + `Functor` witnesses:
+  the five `EndoFunctor` paths (`catgraph_dl::`, `endofunctor::`, `algebra::`,
+  `free_monad::`, `free_monad::free_mnd::`) removed; `catgraph_dl::{HKT,
+  Functor, EndoWitness, NoConstraint, Satisfies, Either}` added at the crate
+  root and through `endofunctor`, `{HKT, Functor, EndoWitness}` through
+  `algebra` and `free_monad`; `either` dependency dropped
   ([#12](https://github.com/sustia-llc/catgraph/issues/12)).
 - `deep_causality_num` reservation re-anchored to #36.
 
@@ -161,19 +175,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
   ([#34](https://github.com/sustia-llc/catgraph/issues/34)).
 - `F64Module` R-module actegory `(FinReal, ⊕, R⁰)`: `F64Module`,
   `DirectSum<A, B>`, `F64Monoidal`, `F64Actegory`, `F64Object`,
-  `F64Morphism`; `tests/module_actegory_laws.rs` (#36).
+  `F64Morphism`; `tests/module_actegory_laws.rs`; `deep_causality_num`
+  moves from deps-only to used (#36).
 - Coalgebra-direction unroller equivalence tests against
   `Cofree<OptionWitness, O>` ([#64](https://github.com/sustia-llc/catgraph/issues/64)).
 - `tests/THEOREM_MAP.md` ([#70](https://github.com/sustia-llc/catgraph/issues/70)).
 - `full_monad_algebra_hom_certification_recipe` test
   ([#67](https://github.com/sustia-llc/catgraph/issues/67)).
-- `GroupActionEndo<G>: Monad` (writer monad); `MonadAlgebra::verify_unit_law`
-  / `verify_assoc_law`, `MonadAlgebraHom::verify_unit_coherence` /
-  `verify_mult_coherence`; pentagon/triangle equations on `MonoidalCategory`;
+- `endofunctor` re-exports `Monad`; `GroupActionEndo<G>: Monad` (writer
+  monad); `MonadAlgebra::verify_unit_law` / `verify_assoc_law`,
+  `MonadAlgebraHom::verify_unit_coherence` / `verify_mult_coherence`;
+  pentagon/triangle equations on `MonoidalCategory`;
   `tests/monoidal_coherence_laws.rs`, `tests/monad_algebra_laws.rs`, proptests
   for `verify_commutes` and `FreeMnd`-equivalence
   ([#40](https://github.com/sustia-llc/catgraph/issues/40)).
-- `natural::NaturalTransformation`, `natural::IsoForward` / `IsoBackward`,
+- `endofunctor` re-exports `Pure`, `NaturalIso`, `OptionWitness`,
+  `assert_natural_iso_round_trip` / `assert_natural_iso_naturality`;
+  `natural::NaturalTransformation`, `natural::IsoForward` / `IsoBackward`,
   `natural::Pointed` (`GroupActionEndo: Pure`), `container::Container` with
   `ListEndo` / `TreeEndo` / `GroupActionEndo` instances;
   `tests/natural_pointed_laws.rs`, `tests/container_laws.rs`

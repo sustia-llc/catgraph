@@ -37,7 +37,8 @@ where
 }
 
 /// Free monad on `F` (CDL Prop B.18): construct with [`pure`](Free::pure) /
-/// [`suspend`](Free::suspend) or `From<FreeView<..>>`, read with
+/// [`suspend`](Free::suspend) / [`from_view`](Free::from_view) or
+/// `From<FreeView<..>>`, read with
 /// [`into_view`](Free::into_view) / [`as_view`](Free::as_view), interpret with
 /// [`fold`](Free::fold). `fold`, `Drop`, `PartialEq` and `Debug` are heap
 /// worklists; `fold`, `==` and `{:?}` require `F: `[`Container`].
@@ -281,7 +282,8 @@ where
 /// every line by its nesting depth.
 ///
 /// Carries alternate, precision and width; fill, alignment, sign, zero-pad
-/// and debug-hex flags render as if absent.
+/// and debug-hex flags render as if absent. A payload `Debug` error
+/// propagates as `fmt::Error`.
 impl<F, A> fmt::Debug for Free<F, A>
 where
     F: DebugFunctor + Container,

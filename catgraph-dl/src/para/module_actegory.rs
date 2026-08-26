@@ -55,9 +55,9 @@ impl<S> DirectSum<RModule<S>, RModule<S>> {
 /// rig scalars). Deserialization checks nothing beyond what [`RModule::new`]
 /// accepts: [`dim`](Self::dim) is the payload's length; only
 /// [`add`](Self::add) rejects a mismatch; the wire shape carries no type tag
-/// (an `RModule<f64>` of dim 2, a [`DirectSum<f64, f64>`](DirectSum) and a
-/// `Dual<f64>` document coincide); `serde_json` writes non-finite scalars as
-/// `null`, which does not read back into `f64`.
+/// (`[0.5, 1.5]` reads back as an `RModule<f64>` of dim 2, a
+/// [`DirectSum<f64, f64>`](DirectSum), or a `Dual<f64>`); `serde_json`
+/// writes non-finite scalars as `null`, which does not read back into `f64`.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RModule<S>(Vec<S>);

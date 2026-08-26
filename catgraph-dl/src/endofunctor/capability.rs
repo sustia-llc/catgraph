@@ -21,7 +21,7 @@ use crate::endofunctor::HKT;
 /// [`Cofree`](crate::free_monad::Cofree) their `PartialEq`. As reflexive,
 /// symmetric and transitive as the label comparisons (partial for float
 /// labels); two shapes called equal must have the same number of content
-/// positions.
+/// positions — the carriers compare unequal on a count mismatch.
 pub trait EqFunctor: HKT {
     /// Shape equality of two `Self::Type<T>` containers: same constructor and
     /// same labels, **ignoring** the contents at every position.
@@ -34,9 +34,10 @@ pub trait DebugFunctor: HKT {
     /// Format the shape into `f`, writing each entry of `contents` (one per
     /// position, in [`Container::contents`](crate::container::Container::contents)
     /// order) directly into `f` via `Formatter` methods, exactly once; the
-    /// carrier splices the real child at that position and fails with
-    /// [`fmt::Error`] if an entry was rendered elsewhere. `f` carries
-    /// `alternate`, `precision` and `width` only.
+    /// carrier splices the real child at that position, fails with
+    /// [`fmt::Error`] if an entry was rendered elsewhere, and omits the child
+    /// of an entry never rendered. `f` carries `alternate`, `precision` and
+    /// `width` only.
     ///
     /// # Errors
     ///

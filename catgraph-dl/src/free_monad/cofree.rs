@@ -42,8 +42,9 @@ where
     tail: F::Type<Box<Cofree<F, A>>>,
 }
 
-/// Cofree comonad on `F` (CDL Prop B.18): a `head` label and an
-/// `F`-structure of children, through [`new`](Cofree::new) /
+/// Cofree comonad on `F` (CDL Prop B.18; bounded stream prefixes over
+/// `OptionWitness`, CDL Remark H.6): a `head` label and an `F`-structure of
+/// children, through [`new`](Cofree::new) /
 /// [`head`](Cofree::head) / [`tail`](Cofree::tail) /
 /// [`into_parts`](Cofree::into_parts). One machine word larger than its cell.
 /// Finitely constructible only over functors with an empty shape;
@@ -253,7 +254,8 @@ where
 /// nesting depth, so that output is itself quadratic in the depth of a spine.
 ///
 /// Carries alternate, precision and width; fill, alignment, sign, zero-pad
-/// and debug-hex flags render as if absent.
+/// and debug-hex flags render as if absent. A payload `Debug` error
+/// propagates as `fmt::Error`.
 impl<F, A> fmt::Debug for Cofree<F, A>
 where
     F: DebugFunctor + Container,

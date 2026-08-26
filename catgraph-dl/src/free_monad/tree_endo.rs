@@ -178,8 +178,9 @@ impl<A: fmt::Debug> fmt::Debug for TreeView<A> {
 }
 
 /// Binary tree with leaves in `A` (CDL Ex B.20): [`leaf`](BinaryTree::leaf) /
-/// [`node`](BinaryTree::node), read through [`into_view`](BinaryTree::into_view)
-/// / [`as_view`](BinaryTree::as_view). `Clone`, `PartialEq`, `Debug` and
+/// [`node`](BinaryTree::node) / [`from_view`](BinaryTree::from_view), read
+/// through [`into_view`](BinaryTree::into_view) /
+/// [`as_view`](BinaryTree::as_view). `Clone`, `PartialEq`, `Debug` and
 /// `Drop` are iterative. `Drop` is hand-written, so a borrowed payload must
 /// outlive the carrier:
 ///
@@ -347,7 +348,8 @@ impl<A: Eq> Eq for BinaryTree<A> {}
 /// caterpillar. Neither aborts on a degenerate spine, which the derive did.
 ///
 /// Carries alternate, precision and width; fill, alignment, sign, zero-pad
-/// and debug-hex flags render as if absent.
+/// and debug-hex flags render as if absent. A payload `Debug` error
+/// propagates as `fmt::Error`.
 impl<A: fmt::Debug> fmt::Debug for BinaryTree<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         super::write_debug(self, f)

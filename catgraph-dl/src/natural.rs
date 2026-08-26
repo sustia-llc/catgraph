@@ -1,6 +1,6 @@
 //! [`NaturalTransformation<F, G>`] — a component family `α_X : F(X) → G(X)`
 //! (CDL Def 1.5), a static method on a zero-sized witness — and [`Pointed`],
-//! a pointed endofunctor `(F, σ)` with `σ = `[`Pure`] (CDL Def B.3).
+//! a pointed endofunctor `(F, σ)` with `σ = `[`Pure`] (CDL Def B.3, App B.1).
 //! [`IsoForward`] / [`IsoBackward`] adapt a [`NaturalIso<F, G>`] to each
 //! direction. `Pointed` instances: [`crate::algebra::GroupActionEndo<G>`]
 //! (`σ(x) = (G::identity(), x)`) and

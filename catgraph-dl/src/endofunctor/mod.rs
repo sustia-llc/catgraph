@@ -10,8 +10,8 @@
 //!
 //! [`HKT::Type`] is the object map of `F : Set → Set`, [`Functor::fmap`] the
 //! morphism map; a witness is a zero-sized type implementing both, and `fmap`
-//! is a static method. [`EndoWitness`] = `HKT + Functor<Self>`, the bound the
-//! F-(co)algebra verifiers use.
+//! is a static method. [`EndoWitness`] = `HKT + Functor<Self> + Sized`, the
+//! bound the F-(co)algebra verifiers use.
 //!
 //! Functor laws, required of every witness for pure morphisms (`fmap` takes
 //! `FnMut`, so a stateful closure may observe a different call order between

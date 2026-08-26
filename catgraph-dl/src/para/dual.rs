@@ -1,6 +1,7 @@
 //! The forward-mode dual number `a + b·ε`, `ε² = 0` (feature `ad`):
-//! `Add`/`Sub`/`Mul`/`Div`/`Neg`, [`Zero`], [`One`], `Clone`; bounds per impl;
-//! no nesting for higher derivatives.
+//! `Add`/`Sub`/`Mul`/`Div`/`Neg`/`AddAssign`/`MulAssign`, scalar `Mul<T>`,
+//! [`Zero`], [`One`]; derives `Copy`, `Clone`, `PartialEq`, `PartialOrd`,
+//! `Debug`; bounds per impl.
 
 use core::ops::{Add, AddAssign, Div, Mul, MulAssign, Neg, Sub};
 

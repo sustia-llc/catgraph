@@ -15,11 +15,12 @@
 //! `Drop`, `PartialEq`, `Debug`, [`BinaryTree`](tree_endo::BinaryTree)'s `Clone`
 //! — is an explicit heap worklist; no spine depth overflows the stack.
 //!
-//! `PartialEq` / `Debug` are opt-in through
+//! `PartialEq` / `Debug` on [`Free`] / [`Cofree`] are opt-in through
 //! [`EqFunctor::eq_shape`](crate::endofunctor::EqFunctor::eq_shape) /
-//! [`DebugFunctor::fmt_shape`] on the witness; no `Eq`. A carrier's `Debug`
+//! [`DebugFunctor::fmt_shape`] on the witness; neither carrier is `Eq`, and
+//! both compare unequal on a content-count mismatch. A carrier's `Debug`
 //! honours `{:#?}`, precision and width; fill/alignment, sign, zero-pad and hex
-//! flags render as if absent.
+//! flags render as if absent; a payload `Debug` error propagates.
 //!
 //! The carriers hand-write [`Drop`], so a borrowed payload must outlive the
 //! carrier:
@@ -39,7 +40,7 @@
 //! # let _ = &tree;
 //! ```
 //!
-//! Surface: [`Free`] has `pure`/`suspend`/`into_view`/`as_view`/`fold`;
+//! Surface: [`Free`] has `pure`/`suspend`/`from_view`/`into_view`/`as_view`/`fold`;
 //! [`Cofree`] has `new`/`head`/`tail`/`into_parts`/`unfold`. No `bind`/`map`
 //! on `Free`, no `extract`/`extend` on `Cofree`, no [`Functor`] impl on
 //! [`CofreeWitness`], no carrier `Clone`.

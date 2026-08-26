@@ -28,9 +28,9 @@
 //!   conjecture; not in CDL ICML 2024, no public API, no preprint as of
 //!   2026-05-06 (see `src/hopf_fibration/mod.rs`).
 //!
-//! Re-exports from `catgraph-applied`: [`Rig`], [`UnitInterval`], [`Tropical`],
-//! [`F64Rig`], [`BoolRig`], [`EnrichedCategory`], [`HomMap`],
-//! [`LawvereMetricSpace`].
+//! Re-exports from `catgraph-applied`: [`Rig`], [`Zero`], [`One`],
+//! [`UnitInterval`], [`Tropical`], [`F64Rig`], [`BoolRig`],
+//! [`EnrichedCategory`], [`HomMap`], [`LawvereMetricSpace`].
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -70,9 +70,7 @@ pub use endofunctor::{
 pub use container::Container;
 pub use natural::{IsoBackward, IsoForward, NaturalTransformation, Pointed};
 
-// The recursion guard's rejection (issue #231). Mirrored at the crate root on
-// the same convention as the surfaces above: three public entries return it, so
-// callers should not have to reach into `errors::` to name it.
+// Returned by the two `depth::guard_*` helpers.
 pub use errors::DepthError;
 
 // Re-exports of the Tier 3 enrichment substrate from catgraph-applied. Same

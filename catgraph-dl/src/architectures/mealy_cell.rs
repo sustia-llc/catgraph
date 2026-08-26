@@ -64,8 +64,8 @@ where
         out
     }
 
-    /// Lazy [`run`]: one Mealy step per input pulled, borrowing `cell`;
-    /// `.collect()` equals [`run`]`(s_0, inputs)`.
+    /// Lazy [`run`]: one Mealy step per input pulled, ending with `inputs`,
+    /// borrowing `cell`; `.collect()` equals [`run`]`(s_0, inputs)`.
     ///
     /// # Panics
     ///

@@ -6,7 +6,7 @@
 //! - `cell_o : P × S → O` — output projection.
 //! - `cell_n : P × S → S` — next-state.
 //!
-//! Unrolling into `Stream(O)` (CDL Ex J.2): [`UnfoldingRnn::unroll_to_vec`]
+//! Unrolling into `Stream(O)` (CDL Ex J.2 / App I.3): [`UnfoldingRnn::unroll_to_vec`]
 //! materialises `[cell_o(p, s_0), …, cell_o(p, s_{n−1})]` with
 //! `s_{k+1} = cell_n(p, s_k)`; [`UnfoldingRnn::unroll_iter`] is the same
 //! sequence as an infinite `Iterator`.
@@ -79,8 +79,9 @@ where
         out
     }
 
-    /// Infinite `Iterator` over `cell_o(p, s_k)`, `s_{k+1} = cell_n(p, s_k)`,
-    /// borrowing `cell`; `.take(n)` equals [`unroll_to_vec`]`(s_0, n)`.
+    /// Infinite `Iterator` over `cell_o(p, s_k)`, `s_{k+1} = cell_n(p, s_k)`
+    /// (CDL Ex J.2 / Remark H.6), borrowing `cell`; `.take(n)` equals
+    /// [`unroll_to_vec`]`(s_0, n)`.
     ///
     /// # Panics
     ///
