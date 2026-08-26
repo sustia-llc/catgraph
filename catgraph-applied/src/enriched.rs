@@ -1,21 +1,10 @@
 //! V-enriched categories — hom-objects live in a monoidal category V
-//! (typically a [`Rig`]). Pedagogical references: F&S Seven Sketches §1.1, §2.4;
-//! CTFP Ch 28.
+//! (F&S *Seven Sketches* §1.1, §2.4).
 //!
-//! The `V`-enriched refinement of an ordinary category replaces
-//! `Hom(a, b): Set` with `Hom(a, b): V` for a chosen monoidal category V.
-//! catgraph-applied's [`EnrichedCategory<V>`] targets V = a [`Rig`]: the rig's `·`
-//! is the monoidal composition, the rig's `1` is the identity hom, and the
-//! rig's `0` represents "no hom" (absorbing zero).
-//!
-//! # Phase 6 role
-//!
-//! This trait is the catgraph-side enrichment substrate for the Phase 6
-//! `catgraph-magnitude` sibling repo. BTV 2021 (arXiv:2106.07890) enriches
-//! language categories over `[0,1]` (via [`crate::rig::UnitInterval`]); BV 2025
-//! (arXiv:2501.06662) computes magnitude over [`crate::rig::Tropical`]-enriched
-//! categories via the `-ln π` embedding provided by
-//! [`crate::rig::BaseChange<UnitInterval> for Tropical`].
+//! The V-enriched refinement of an ordinary category replaces `Hom(a, b): Set`
+//! with `Hom(a, b): V`. [`EnrichedCategory<V>`] takes V to be a [`Rig`]: the
+//! rig's `·` is the monoidal composition, its `1` is the identity hom, and its
+//! absorbing `0` represents "no hom".
 
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -24,25 +13,15 @@ use crate::rig::Rig;
 
 /// A V-enriched category over the rig V.
 ///
-/// # Semantics
+/// [`hom`](Self::hom) returns the hom-value between two objects, with
+/// `V::zero()` signalling "no morphism"; being the rig's absorbing element it
+/// propagates to "no composite" under [`compose_hom`](Self::compose_hom), which
+/// defaults to `hom(a, b) · hom(b, c)`. [`id_hom`](Self::id_hom) defaults to
+/// `V::one()`. Implementations may override either for specialised semantics.
 ///
-/// - [`hom`](Self::hom) returns the hom-value between two objects. By
-///   convention, `V::zero()` signals "no morphism" — `zero` is the rig's
-///   absorbing element, which under [`compose_hom`](Self::compose_hom)
-///   propagates to "no composite".
-/// - [`id_hom`](Self::id_hom) defaults to `V::one()`, the rig's
-///   multiplicative unit.
-/// - [`compose_hom`](Self::compose_hom) defaults to `hom(a, b) · hom(b, c)`;
-///   implementations may override for specialised semantics (e.g. over
-///   [`crate::rig::Tropical`] this coincides with real addition of
-///   distances — shortest-path semantics).
-///
-/// # Object safety
-///
-/// This trait IS object-safe. Callers may use `Box<dyn EnrichedCategory<V, Object = T>>`
-/// (specifying both the `V: Rig` parameter and the `Object` associated type at the
-/// `dyn` site). The associated type constraint is required because trait objects
-/// erase the concrete `Self`, so `Self::Object` needs a binding to be nameable:
+/// The trait is object-safe: `Box<dyn EnrichedCategory<V, Object = T>>` names
+/// both the `V: Rig` parameter and the `Object` associated type at the `dyn`
+/// site.
 ///
 /// ```rust,ignore
 /// use catgraph_applied::enriched::{EnrichedCategory, HomMap};
@@ -52,9 +31,6 @@ use crate::rig::Rig;
 ///     = Box::new(HomMap::new(vec!['a', 'b']));
 /// let _d = boxed.hom(&'a', &'b');
 /// ```
-///
-/// This is important for Phase 6 `catgraph-magnitude` consumers that may hold
-/// heterogeneous collections of enriched categories.
 pub trait EnrichedCategory<V: Rig> {
     /// Objects of the enriched category.
     type Object: Clone + Eq + Hash;
@@ -77,11 +53,9 @@ pub trait EnrichedCategory<V: Rig> {
     fn objects(&self) -> Box<dyn Iterator<Item = Self::Object> + '_>;
 }
 
-/// A concrete finite enriched category backed by an explicit hom-table.
-///
-/// Useful for testing and small-finite enrichment cases. Objects are stored
-/// in a `Vec<O>` (insertion-ordered); homs are stored in a
-/// `HashMap<(O, O), V>` with unset entries defaulting to `V::zero()`.
+/// A finite enriched category backed by an explicit hom-table: objects in an
+/// insertion-ordered `Vec<O>`, homs in a `HashMap<(O, O), V>` whose unset
+/// entries read as `V::zero()`.
 #[derive(Debug, Clone)]
 pub struct HomMap<O, V>
 where

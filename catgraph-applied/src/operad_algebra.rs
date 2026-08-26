@@ -1,31 +1,20 @@
 //! Algebras over an operad.
 //!
-//! F&S *Seven Sketches* §6.5 **Def 6.99.** An *algebra* for an operad `O` is
-//! a functor `F : O → Set`. Concretely, `F` sends each type of `O` to a
-//! carrier set `F(X)` and each `n`-ary operation `o ∈ O(X_1, …, X_n; Y)` to
-//! a function `F(o) : F(X_1) × … × F(X_n) → F(Y)` such that substitution in
-//! `O` corresponds to composition of functions, and identities in `O` map
-//! to identity functions on carriers.
+//! F&S *Seven Sketches* §6.5 **Def 6.99.** An *algebra* for an operad `O` is a
+//! functor `F : O → Set`: it sends each type of `O` to a carrier set `F(X)` and
+//! each `n`-ary operation `o ∈ O(X_1, …, X_n; Y)` to a function
+//! `F(o) : F(X_1) × … × F(X_n) → F(Y)`, so that substitution in `O` becomes
+//! composition of functions and identities in `O` become identity functions.
 //!
-//! # This implementation
-//!
-//! The [`OperadAlgebra`] trait captures the single-sorted case: one carrier
-//! set per operad (the associated type [`OperadAlgebra::Element`]) and a
-//! uniform [`evaluate`](OperadAlgebra::evaluate) method that interprets
-//! each operation of `O` as a function `Elementⁿ → Element`. Multi-sorted
-//! (typed) operads are a future refinement.
-//!
-//! The trait is parameterised over the operad type `O` and the input-label
-//! type `Input` so that the same algebra notion applies to all concrete
-//! operads defined in this crate ([`crate::e1_operad::E1`],
-//! [`crate::e2_operad::E2`], [`crate::wiring_diagram::WiringDiagram`]).
-//!
-//! # Ex 6.100 worked example
-//!
-//! [`CircAlgebra`] implements the textbook's named example
-//! `Circ : Cospan → Set` specialised to
-//! [`crate::wiring_diagram::WiringDiagram`]. See the example
-//! `examples/operad_algebra_circ.rs` for a substitution-preservation demo.
+//! [`OperadAlgebra`] covers the single-sorted case — one carrier set per operad
+//! ([`OperadAlgebra::Element`]) and one
+//! [`evaluate`](OperadAlgebra::evaluate) interpreting each operation as
+//! `Elementⁿ → Element`. It is parameterised over the operad type `O` and the
+//! input-label type `Input`, so it applies to [`crate::e1_operad::E1`],
+//! [`crate::e2_operad::E2`], and [`crate::wiring_diagram::WiringDiagram`] alike.
+//! [`CircAlgebra`] is the Ex 6.100 example `Circ : Cospan → Set` specialised to
+//! [`crate::wiring_diagram::WiringDiagram`]; see
+//! `examples/operad_algebra_circ.rs`.
 
 use std::fmt::Debug;
 
@@ -47,27 +36,19 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`CatgraphError`] when the caller-supplied `inputs` do not
-    /// match the operation's declared arity or when the algebra cannot
-    /// evaluate the operation for a domain-specific reason.
+    /// [`CatgraphError`] if `inputs` do not match the operation's declared
+    /// arity, or on a domain-specific evaluation failure.
     fn evaluate(&self, op: &O, inputs: &[Self::Element]) -> Result<Self::Element, CatgraphError>;
 }
 
 // ---- Ex 6.100: Circ : WiringDiagram → Set ----------------------------------
 
 /// F&S *Seven Sketches* **Ex 6.100.** `Circ : Cospan → Set` specialised to
-/// [`WiringDiagram`]. A minimal, faithful instance: the carrier `F(c)` is
-/// the natural number of outer-circle ports of a circuit with circle-shape
-/// `c`, and `evaluate(op, inputs)` returns the outer-port count of `op`
-/// regardless of the input circuits. This witnesses the theorem that
-/// outer-port counts are stable under operadic substitution — the inner
-/// circles of `op` change when another diagram is plugged in, but the
-/// outer circle is invariant.
-///
-/// Richer circuit carriers (e.g. resistor network decorations as in the
-/// textbook's resistor-circuit running example) require a functorial
-/// bridge from [`DecoratedCospan`](crate::decorated_cospan::DecoratedCospan)
-/// and are deferred to a future release.
+/// [`WiringDiagram`]: the carrier `F(c)` is the number of outer-circle ports of
+/// a circuit with circle-shape `c`, and `evaluate(op, inputs)` returns the
+/// outer-port count of `op` for any inputs. Outer-port counts are stable under
+/// operadic substitution — plugging a diagram in changes `op`'s inner circles,
+/// not its outer one.
 #[derive(Default, Clone, Copy, Debug)]
 pub struct CircAlgebra;
 
@@ -96,15 +77,14 @@ where
 /// evaluate(outer[slot := inner], inputs) == evaluate(outer, inputs)
 /// ```
 ///
-/// This is the single-sorted form of the Def 6.99 functoriality axiom
-/// specialised to algebras whose evaluate-function discards inputs. For
-/// algebras that use their inputs non-trivially, the RHS would be
-/// `evaluate(outer, inputs_with_slot_recomputed)` — out of scope here.
+/// This is the Def 6.99 functoriality axiom in the single-sorted case, and it
+/// holds as stated only for algebras whose evaluate-function discards its
+/// inputs.
 ///
 /// # Errors
 ///
-/// Returns [`CatgraphError`] when any of the three evaluate/substitution
-/// calls fail, or when the before/after outputs differ.
+/// [`CatgraphError`] if any of the three evaluate/substitution calls fail, or
+/// if the before/after outputs differ.
 pub fn check_substitution_preserved<A, O, Input>(
     algebra: &A,
     outer: O,

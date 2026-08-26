@@ -1,17 +1,14 @@
 //! Wiring diagram operad built on named cospans.
 //!
-//! A [`WiringDiagram`] wraps a [`NamedCospan`] where the left (domain) boundary
-//! nodes sit on named **inner circles** (sub-boxes) and the right (codomain)
+//! A [`WiringDiagram`] wraps a [`NamedCospan`] whose left (domain) boundary
+//! nodes sit on named **inner circles** (sub-boxes) and whose right (codomain)
 //! boundary nodes sit on a single **outer circle**. Wires are typed by `Lambda`;
 //! ports are identified by direction ([`Dir`]) and circle/position names.
-//!
-//! The key operation is **operadic substitution** via the [`Operadic`] trait:
-//! replacing an inner circle with another wiring diagram by composing the
-//! underlying named cospans (matching outer ports of the substituted diagram
-//! to the inner ports of the host diagram).
-//!
-//! Also supports boundary mutation (add/delete/connect/rename ports), orientation
-//! flipping, and functorial mapping over wire types.
+//! [`Operadic`] substitution replaces an inner circle with another wiring
+//! diagram by composing the underlying named cospans, matching the substituted
+//! diagram's outer ports to the host's inner ports. Also supports boundary
+//! mutation (add/delete/connect/rename ports), orientation flipping, and
+//! functorial mapping over wire types.
 //!
 //! See also `examples/wiring_diagram.rs`.
 
@@ -120,12 +117,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns [`CatgraphError::ConstructionDuplicatePortName`] if `new_name` is
-    /// already the name of a port on the boundary it selects. Fallible since
-    /// [#289](https://github.com/sustia-llc/catgraph/issues/289): the underlying
-    /// [`NamedCospan::add_boundary_node_unknown_target`] used to abort the
-    /// process with a bare release `assert!` on a duplicate name, which this
-    /// wrapper then discarded the result of.
+    /// [`CatgraphError::ConstructionDuplicatePortName`] if `new_name` already
+    /// names a port on the boundary it selects.
     pub fn add_boundary_node_unconnected(
         &mut self,
         type_: Lambda,
@@ -208,10 +201,8 @@ where
                 .collect::<Vec<_>>(),
         )
         .map_err(|message| CatgraphError::Operadic { message })?;
-        // `necessary_permutation` returns the `q` with `q.permute(names) ==
-        // target`, i.e. it answers "which old slot supplies each new slot".
-        // `permute_side` asks the opposite question — "where does the wire at
-        // slot `i` go" (#258) — so the adapter between them is `q.inv()`.
+        // `necessary_permutation` answers "which old slot supplies each new
+        // slot"; `permute_side` asks "where does slot `i` go" — hence `inv()`.
         internal_other.0.permute_side(&p.inv(), true);
 
         self.0 = internal_other
@@ -363,9 +354,8 @@ mod test {
         let p = Permutation::try_from(&y).unwrap();
         example_outer.0.permute_side(&p, false);
         example_outer.0.assert_valid_nohash();
-        // #258: `permute_side(p, _)` moves the wire at slot `i` to slot
-        // `p.apply(i)`, so the word it leaves behind is `p.inv().permute(old)`.
-        // These three read `p.permute(old)` before that change.
+        // `permute_side(p, _)` moves the wire at slot `i` to slot `p.apply(i)`,
+        // so the word it leaves behind is `p.inv().permute(old)`.
         let p_inv = p.inv();
         assert_eq!(
             *example_outer.0.left_names(),
@@ -466,8 +456,7 @@ mod test {
         example_outer.0.permute_side(&p2, true);
         example_outer.0.assert_valid_nohash();
 
-        // #258: the word left behind is `p.inv().permute(old)`; these read
-        // `p.permute(old)` before that change.
+        // The word left behind by `permute_side(p, _)` is `p.inv().permute(old)`.
         assert_eq!(
             *example_outer.0.left_names(),
             p1.inv().permute(&outer_left_names)
@@ -795,20 +784,13 @@ mod test {
         wd.0.assert_valid_nohash();
     }
 
-    /// #289: a duplicate port name is now an `Err` the caller can act on, and
-    /// the diagram is left untouched.
+    /// A duplicate port name is an `Err` the caller can act on, and the diagram
+    /// is left untouched.
     ///
-    /// **What this ranges over.** One collision, on the codomain side, against
-    /// the middle of three existing names — enough to show the position is the
-    /// colliding port's rather than a hard-coded 0. The domain side and the
-    /// out-of-bounds-index arm are covered by the core pins in
-    /// `catgraph/tests/checked_mutators.rs`, since both checks live in
-    /// `NamedCospan` / `Cospan`; this test's claim is only that the wrapper
-    /// propagates instead of discarding.
-    ///
-    /// Measured before #289: `NamedCospan::add_boundary_node`'s bare
-    /// `assert!(!self.right_names.contains(&new_name_real))` aborted the
-    /// process in every profile, and this wrapper returned `()` regardless.
+    /// One collision, on the codomain side, against the middle of three
+    /// existing names — enough to show the reported position is the colliding
+    /// port's rather than a hard-coded 0. The domain side and the
+    /// out-of-bounds-index arm are not covered here.
     #[test]
     fn add_boundary_node_unconnected_reports_a_duplicate_name() {
         use super::Dir;
@@ -1175,11 +1157,8 @@ mod test {
         assert_eq!(combined.codomain(), vec![true, false]);
     }
 
-    /// Regression: `Operadic` works with a non-`Copy` `InterCircle`.
-    /// Mirrors the `operadic` test fixture but parameterizes `CircleName` by
-    /// `String` rather than `i32`, exercising the loosened `InterCircle: Clone`
-    /// bound (catgraph `find_nodes_by_name_predicate` /
-    /// `NamedCospan::identity` Clone-bound widening).
+    /// `Operadic` with a non-`Copy` `InterCircle`: the `operadic` fixture with
+    /// `CircleName` as `String` rather than `i32`.
     #[allow(clippy::items_after_statements)]
     #[test]
     fn operadic_with_clone_only_intercircle() {

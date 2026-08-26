@@ -8,8 +8,8 @@
 //!
 //! This module does NOT use nalgebra — `Mat(R)` over an arbitrary rig may fail
 //! nalgebra's field-like trait bounds (`Tropical`, `BoolRig`, any semiring
-//! without subtraction). An nalgebra bridge specialized to `F64Rig` may be
-//! added in a later release behind a feature flag.
+//! without subtraction). The nalgebra bridge specialized to `F64Rig` is
+//! `crate::mat_f64`, behind the `f64-rig` feature.
 
 use catgraph::{
     category::{Composable, HasIdentity},
@@ -155,7 +155,7 @@ impl<R: Rig> MatR<R> {
     /// [`SymmetricMonoidalMorphism`](catgraph::monoidal::SymmetricMonoidalMorphism)
     /// contract promises.
     ///
-    /// Shared by both #258 constructors, which are the same function here.
+    /// Shared by both `from_permutation_*` constructors, which coincide here.
     ///
     /// # Errors
     ///
@@ -187,8 +187,7 @@ impl<R: Rig> MatR<R> {
 
     /// Mutable access to a single entry. Returns `None` if `(row, col)` is out of bounds.
     ///
-    /// Substrate for in-place row/column operations in
-    /// `catgraph-magnitude`'s SNF Phase 1 + Phase 2 (Storjohann 2000).
+    /// Substrate for in-place row/column operations (Storjohann 2000 SNF).
     pub fn entry_mut(&mut self, row: usize, col: usize) -> Option<&mut R> {
         self.entries.get_mut(row)?.get_mut(col)
     }
@@ -403,18 +402,10 @@ impl<R: Rig> Monoidal for MatR<R> {
 impl<R: Rig> MonoidalMorphism<Vec<()>> for MatR<R> {}
 
 // `MatR`'s objects are `Vec<()>` — bare arities carrying no colour — so the two
-// #258 constructors have no label to place on either side and are necessarily
-// the same morphism. That is the trait contract collapsing on a single-sorted
-// carrier, not this impl opting out of it: `permutation_matrix(p)` has
-// `entries[i][p.apply(i)] = 1`, i.e. row = domain wire, column = codomain wire,
-// which is exactly the `i ↦ p.apply(i)` wiring the trait specifies and the same
-// one `Cospan` realizes.
-//
-// ⚠ The pre-#258 rustdoc on `PropExpr::from_permutation` claimed the opposite —
-// that generic code got "`p` on `PropExpr`/`MatR` and `p⁻¹` on `Cospan`/`Corel`".
-// That read `Cospan`'s `p.inv()` off its *leg index vector*; connectivity in a
-// cospan runs through the apex, and that read inverts. Both carriers realize
-// `p`, which is why the S-functor square holds on both named methods.
+// constructors have no label to place on either side and are the same morphism.
+// `permutation_matrix(p)` has `entries[i][p.apply(i)] = 1`, i.e. row = domain
+// wire, column = codomain wire: the `i ↦ p.apply(i)` wiring the trait specifies
+// and the one `Cospan` realizes.
 impl<R: Rig> SymmetricMonoidalMorphism<()> for MatR<R> {
     fn from_permutation_on_domain(p: Permutation, types: &[()]) -> Result<Self, CatgraphError> {
         Self::braiding_matrix(&p, types.len())

@@ -1,34 +1,29 @@
 //! A process **cost functional** and bounded **convex-DPO rewriting** over
-//! abstract content ([#214](https://github.com/sustia-llc/catgraph/issues/214)
-//! W2 + W3; [#57](https://github.com/sustia-llc/catgraph/issues/57) a2).
+//! abstract content.
 //!
 //! # An optimizer, not a decider
 //!
 //! Everything here searches for a *cheaper writing of the same process*. It is
-//! not a decision procedure and does not try to be:
+//! not a decision procedure:
 //! [`Presentation::eq_mod`](super::Presentation::eq_mod) and
 //! [`ColoredExpr::eq_colored`](crate::prop::colored::ColoredExpr::eq_colored)
-//! remain the deciders, and nothing in this module is consulted by either
-//! ([#15](https://github.com/sustia-llc/catgraph/issues/15) stays
-//! (B) functorial-terminal). The engine below is a *separate surface*: it takes
-//! oriented equations as rules, applies them to the content hypergraph, and
-//! returns the cheapest representative it reached within a caller-supplied fuel
-//! budget, together with a replayable trace.
+//! remain the deciders, and nothing in this module is consulted by either. The
+//! engine takes oriented equations as rules, applies them to the content
+//! hypergraph, and returns the cheapest representative it reached within a
+//! caller-supplied fuel budget, together with a replayable trace.
 //!
 //! # The policy and the primitives it is built from
 //!
 //! [`optimize`] is *one* policy — descend on [`cost_of`], stop on fuel. The two
-//! things it does underneath are public in their own right
-//! ([#250](https://github.com/sustia-llc/catgraph/issues/250)): [`match_sites`]
+//! things it does underneath are public in their own right: [`match_sites`]
 //! enumerates every convex match of a rule, preferring none, and [`apply_at`]
 //! fires one chosen site, comparing nothing. A caller with a different objective
-//! — a neutral walk, a search that must move through a *dearer* writing to reach
-//! a cheaper one, an externally scored choice — writes it over that pair rather
-//! than reshaping the search. [`MatchSite::into_step`] turns the sites it picked
-//! into ordinary [`RewriteStep`]s, so such a walk is [`replay`]-able like any
-//! other trace. [`match_sites_of`] / [`rewrite_at`] are the same pair over a
-//! [`ColoredExpr`], for a single named step; a multi-step search stays on
-//! [`Content`] and pays the readback once at the end.
+//! writes it over that pair rather than reshaping the search;
+//! [`MatchSite::into_step`] turns the sites it picked into ordinary
+//! [`RewriteStep`]s, so such a walk is [`replay`]-able like any other trace.
+//! [`match_sites_of`] / [`rewrite_at`] are the same pair over a [`ColoredExpr`],
+//! for a single named step; a multi-step search stays on [`Content`] and pays the
+//! readback once at the end.
 //!
 //! # Anchors
 //!
@@ -47,47 +42,32 @@
 //!   rules**, so the returned representative is related to the start by the
 //!   rules in the free symmetric monoidal category.
 //!
-//! Papers are not kept in-tree; cite by arXiv id and theorem number.
-//!
 //! ## The Λ-colored lift is an extension
 //!
-//! BGKSZ's setting is **single-sorted** — the paper has no sorts or colors. The
-//! lift to a Λ-colored signature ([#79](https://github.com/sustia-llc/catgraph/issues/79))
-//! is a crate **extension**, marked here in the same style as `MatKron`'s
-//! extension of F&S Ex 2.16 and `catgraph-magnitude`'s typed valuation surface.
-//! It is a *restricting* extension: the convexity condition is unchanged and
-//! matching additionally requires node-color equality, so every colored match is
-//! an uncolored match and per-step soundness is inherited rather than re-proved.
-//! The colored conclusion leans on the color-generic lifts of Lemma 3.11 /
-//! Thm 3.12 recorded in the Lemma 4.1 proof
-//! (`docs/SMC-NF-RECONCILIATION.md` §4.2), which realize Thm 5.6's
-//! factorization contexts as colored terms; color matching strictly refining
-//! matches supplies the rest.
+//! BGKSZ's setting is **single-sorted**. The lift to a Λ-colored signature is a
+//! crate **extension**, and a *restricting* one: the convexity condition is
+//! unchanged and matching additionally requires node-color equality, so every
+//! colored match is an uncolored match and per-step soundness is inherited rather
+//! than re-proved. The colored conclusion leans on the color-generic lifts of
+//! Lemma 3.11 / Thm 3.12 recorded in the Lemma 4.1 proof
+//! (`docs/SMC-NF-RECONCILIATION.md` §4.2).
 //!
 //! # What is deliberately **not** claimed
 //!
-//! - **No termination.** The search is bounded by fuel and by nothing else.
-//!   `docs/SMC-NF-RECONCILIATION.md` §4.7 carries the correction of record
-//!   (2026-07-29): Lafont's strictly-monotone-interpretation technique proves
-//!   termination for the PROP **F** of functions only — for the
-//!   bialgebra-bearing system he states termination as a *conjecture* and
-//!   documents the obstruction (`ε : 1 → 0` admits no strictly monotone
-//!   interpretation) — and the nearest actual proof in the cached anchors,
-//!   BGKSZ Thm 6.1, covers the **non-commutative** bimonoid. The commutative
-//!   case an `E_18`-style system needs is unproven in those anchors. Fuel is the
-//!   honest bound, and [`RewriteOutcome::fuel_exhausted`] reports when it bit.
+//! - **No termination.** The search is bounded by fuel and by nothing else; the
+//!   commutative case an `E_18`-style system needs is unproven in the cached
+//!   anchors (`docs/SMC-NF-RECONCILIATION.md` §4.7), the nearest proof,
+//!   BGKSZ Thm 6.1, covering the **non-commutative** bimonoid.
+//!   [`RewriteOutcome::fuel_exhausted`] reports when the bound bit.
 //! - **No confluence, no normal form, no canonicality.**
 //!   [`RewriteOutcome::best`] is *best found under fuel*, not a representative of
 //!   anything. Two starting points in the same class may return different
 //!   representatives, and a larger fuel budget may return a cheaper one.
-//! - **No spider transparency.** `catgraph-syntax`'s `FrobeniusOr`-style
-//!   spiders participate as **opaque generators**; their SCFM equations may be
-//!   supplied as ordinary rules, which is sound but weaker than treating them as
-//!   structure. BGKSZ **Thm 4.6** — rewriting modulo a chosen special Frobenius
-//!   structure as *unrestricted* DPO over Frobenius termgraphs, where spiders
-//!   become vertex identifications — is a **different substrate** and is
-//!   explicitly out of scope here, as is MPZ23's commutative-(co)monoid middle
-//!   case.
+//! - **No spider transparency.** `catgraph-syntax`'s `FrobeniusOr`-style spiders
+//!   participate as **opaque generators**; their SCFM equations may be supplied
+//!   as ordinary rules, which is sound but weaker than treating them as
+//!   structure. BGKSZ **Thm 4.6** — unrestricted DPO over Frobenius termgraphs —
+//!   is a different substrate and out of scope.
 //!
 //! # Layering
 //!
@@ -116,23 +96,12 @@ use super::display::expr_of_content;
 /// Re-validate a caller-supplied [`ColoredExpr`] from scratch — arity first,
 /// then the *words* — naming it `what` in any rejection.
 ///
-/// Every value [`ColoredExpr::new`] builds is word-well-formed by construction,
-/// because that constructor runs [`check`]. Its **serde path does not**:
-/// deserialization reconstructs the three fields directly, and the trust
-/// boundary documented there prescribes exactly this remedy — "when ingesting
-/// untrusted documents, re-validate by rebuilding". So each public entry point
-/// of this module re-derives the target word from the expression and the
-/// declared source word, and requires it to be the one stored.
-///
-/// An arity screen alone would not do. It admits a forged document whose
-/// `Compose` joins matching *widths* with mismatched *colors* — a term no
-/// [`ColoredExpr::new`] can produce — and the whole colored engine then reads
-/// node colors that no `⟦·⟧` ever assigned, including through the
-/// `content::from_parts` rebuild. The arity clause stays in front of the word
-/// clause anyway, because an arity-ill-formed tree is the one that would make
-/// [`content_of_colored`] *panic*, and it earns the sharper message.
-///
-/// Once per input, at entry — never per search state.
+/// Every value [`ColoredExpr::new`] builds is word-well-formed by construction;
+/// its serde path is not, so each public entry point of this module re-derives
+/// the target word from the expression and the declared source word and requires
+/// it to be the one stored. The arity clause runs first, since an
+/// arity-ill-formed tree is the one that would make [`content_of_colored`]
+/// *panic*. Once per input, at entry — never per search state.
 fn revalidate<G: PropSignature>(what: &str, expr: &ColoredExpr<G>) -> Result<(), CatgraphError> {
     if !is_arity_well_formed(expr.expr()) {
         return Err(CatgraphError::Presentation {
@@ -160,36 +129,16 @@ fn revalidate<G: PropSignature>(what: &str, expr: &ColoredExpr<G>) -> Result<(),
 /// The cost of a process: `per_gen` summed over the content's hyperedges.
 ///
 /// One hyperedge is one **generator occurrence** (BGKSZ §3), so the default
-/// weighting `|_| 1` counts generators. A caller that prices its own steps —
-/// per-step latency, money, headcount — supplies them through `per_gen`, and
-/// this crate owns none of that semantics.
-///
-/// # Why it is defined on content
-///
-/// Content quotients by SMC coherence exactly (Lemma 4.1,
-/// `docs/SMC-NF-RECONCILIATION.md` §4.2), so a function of the content is a
-/// function of the **morphism** rather than of the writing. That is the property
-/// §4.6's recorded rejection of the `out_min` comparator demanded — "lower is
-/// not the objective; a comparator that is a function of the morphism is" —
-/// and it is why the objective lives here rather than on [`PropExpr`].
-///
-/// It is **deliberately not** invariant under the presentation's user
-/// equations: `Copy ; Add` and whatever an equation rewrites it to are
-/// different contents with different costs, and that difference is precisely
-/// the signal [`optimize`] chases ("the same job in fewer steps").
-///
-/// # Extension
-///
-/// No paper anchor exists for a cost functional on string diagrams; this is a
-/// crate **extension**, marked as such. What *is* anchored is the invariance
-/// argument above.
-///
-/// # Saturation
+/// weighting `|_| 1` counts generators; a caller that prices its own steps
+/// supplies them through `per_gen`. Being a function of the content, it is a
+/// function of the **morphism** rather than of the writing (Lemma 4.1,
+/// `docs/SMC-NF-RECONCILIATION.md` §4.2), and it is **deliberately not**
+/// invariant under the presentation's user equations — that difference is the
+/// signal [`optimize`] chases. No paper anchor exists for a cost functional on
+/// string diagrams; this is a crate **extension**.
 ///
 /// The sum saturates at [`u64::MAX`] rather than overflowing, so a pathological
 /// weighting cannot panic a debug build or wrap a release one.
-///
-/// [`PropExpr`]: crate::prop::PropExpr
 ///
 /// # Examples
 ///
@@ -226,28 +175,15 @@ pub fn cost_of<G: PropSignature>(content: &Content<G>, per_gen: impl Fn(&G) -> u
 ///
 /// # No serde, deliberately (feature `serde`)
 ///
-/// [`RewriteStep`] and [`RewriteOutcome`] gained `Serialize` / `Deserialize`
-/// under the `serde` feature
-/// ([#249](https://github.com/sustia-llc/catgraph/issues/249)). This type did
-/// **not**, and the asymmetry is the design rather than an omission: it is
-/// exactly the sentence above. A step is re-derived at every use, so a forged
-/// one is an `Err` from [`replay`]. A rule is validated **once**, in
-/// [`RewriteRule::new`], and *nothing re-checks it afterwards* — the four
-/// conditions below are established there and then read as facts by the matcher
-/// and the DPO step. A `Deserialize` derive would hand that unchecked: an
-/// edge-free `lhs` that matches everywhere, a non-mono left interface whose
-/// pushout complement is not unique, sides that are not the colored morphisms
-/// they claim to be. Nor are the compiled fields free of the same problem —
-/// `interior` and `order` are *derived* from `lhs`, and a document that
-/// contradicts them is describing a rule that no `new` could build.
-///
-/// The supported round trip is the pair the rule was built from: persist the
-/// `(lhs, rhs)` [`ColoredExpr`]s, which do serialize (under their own documented
-/// boundary), and rebuild through [`RewriteRule::new`] at load — which re-runs
-/// all four conditions, so the rebuilt rule is as trustworthy as an in-process
-/// one. Rebuild the slice **in the same order**: a [`RewriteStep`] binds a rule
-/// *index*, not a rule identity, so a reordered slice replays a stored trace to
-/// a different endpoint (see [`replay`]).
+/// A rule is validated **once**, in [`RewriteRule::new`], and nothing re-checks
+/// it afterwards — the four conditions there are then read as facts by the
+/// matcher and the DPO step, and a `Deserialize` derive would hand that
+/// unchecked. The supported round trip is the pair the rule was built from:
+/// persist the `(lhs, rhs)` [`ColoredExpr`]s, which do serialize under their own
+/// documented boundary, and rebuild through [`RewriteRule::new`] at load. Rebuild
+/// the slice **in the same order**: a [`RewriteStep`] binds a rule *index*, not a
+/// rule identity, so a reordered slice replays a stored trace to a different
+/// endpoint (see [`replay`]).
 #[derive(Clone, Debug)]
 pub struct RewriteRule<G: PropSignature> {
     lhs: Content<G>,
@@ -263,35 +199,27 @@ pub struct RewriteRule<G: PropSignature> {
 impl<G: PropSignature> RewriteRule<G> {
     /// Compile `lhs ⇒ rhs` into a content-level span.
     ///
-    /// # What is required, and why
+    /// # What is required
     ///
-    /// 1. **Parallel.** Equal source words and equal target words. A step
+    /// 1. **Parallel.** Equal source words and equal target words — a step
     ///    replaces one side by the other in place, so the interfaces have to
     ///    agree letter for letter, not merely in width.
     /// 2. **Well-formed on both sides, re-derived rather than trusted.** Arity
-    ///    first ([`is_arity_well_formed`], which subsumes the
-    ///    [#196](https://github.com/sustia-llc/catgraph/issues/196) overflow
-    ///    screen), then the words: [`check`] is re-run against the declared
-    ///    source word and the target word it derives must equal the stored one
-    ///    (the private `revalidate`). Both clauses are unreachable through
+    ///    first ([`is_arity_well_formed`]), then the words: [`check`] is re-run
+    ///    against the declared source word and the target word it derives must
+    ///    equal the stored one (the private `revalidate`). Both clauses are
+    ///    unreachable through
     ///    [`ColoredExpr::new`](crate::prop::colored::ColoredExpr::new) and both
-    ///    are reachable across its serde trust boundary. Outside the arity
-    ///    domain [`content_of_colored`] would panic rather than answer; inside
-    ///    it, an un-rechecked *word* would let a rule whose two sides are not
-    ///    the colored morphisms they claim to be match on label equality alone.
-    /// 3. **A non-empty left-hand side.** An edge-free `lhs` matches everywhere
-    ///    and would make the search meaningless.
+    ///    are reachable across its serde trust boundary.
+    /// 3. **A non-empty left-hand side.** An edge-free `lhs` matches everywhere.
     /// 4. **A mono left interface.** No node may occur twice in
-    ///    `lhs.input ++ lhs.output`. Two consequences of monogamy make this the
-    ///    right condition: a node occurring in both anchors is a wire no
-    ///    generator touches — a rule matching a bare wire — and a repeated
-    ///    coordinate would make the interface non-injective, which is exactly
-    ///    where the **unique pushout complement** BGKSZ's DPO step relies on
-    ///    (the discussion following Thm 4.6) stops being unique.
+    ///    `lhs.input ++ lhs.output`; a repeated coordinate makes the interface
+    ///    non-injective, which is where the **unique pushout complement** BGKSZ's
+    ///    DPO step relies on stops being unique.
     ///
     /// The right-hand side carries no such restriction: it may thread wires
-    /// straight through (`Copy ; Add ⇒ id₁` is the motivating shape), and the
-    /// step glues the corresponding interface nodes together.
+    /// straight through (`Copy ; Add ⇒ id₁`), and the step glues the
+    /// corresponding interface nodes together.
     ///
     /// # Errors
     ///
@@ -392,24 +320,18 @@ fn incidence<G: PropSignature>(content: &Content<G>) -> (Vec<Option<usize>>, Vec
 
 // ---------------------------------------------------------------- matching
 
-/// A structural hash of `content` **as a representation** — not up to iso.
-///
-/// This is deliberately *not* [`canonical_key`]. That key is a complete
-/// invariant of the SMC-iso class, so it is stable under exactly the renumbering
-/// this has to detect: `apply_match` renumbers the surviving nodes densely and
-/// appends the rhs's hyperedges, and two different states can be iso-equal while
-/// their index spaces disagree. A [`MatchSite`] is a tuple of *indices*, so what
-/// it has to be pinned to is the writing, not the class.
+/// A structural hash of `content` **as a representation** — not up to iso, and
+/// deliberately not [`canonical_key`], which is stable under exactly the
+/// renumbering this has to detect. A [`MatchSite`] is a tuple of *indices*, so
+/// what it has to be pinned to is the writing, not the class.
 ///
 /// Hashed, in order: the node count, the node colors, the hyperedge count, then
 /// each hyperedge's `(label, sources, targets)` **in index order**, then the
-/// input and output anchors. Every one of those moves under a renumbering that
-/// changes which edge an index names, which is the property the check needs.
+/// input and output anchors.
 ///
-/// It is a hash, so it is a screen and not a proof: distinct contents may
-/// collide with probability ~2⁻⁶⁴, and a collision degrades exactly to the
-/// pre-fingerprint behaviour — the convex-match re-derivation `match_at` runs
-/// next, which is what previously carried the whole check.
+/// It is a hash, so it is a screen and not a proof: distinct contents may collide
+/// with probability ~2⁻⁶⁴, and a collision degrades to the convex-match
+/// re-derivation `match_at` runs next.
 fn fingerprint<G: PropSignature>(content: &Content<G>) -> u64 {
     let mut hasher = DefaultHasher::new();
     content.node_count().hash(&mut hasher);
@@ -429,10 +351,7 @@ fn fingerprint<G: PropSignature>(content: &Content<G>) -> u64 {
 ///
 /// Sites are produced by [`match_sites`] and consumed by [`apply_at`] — together
 /// the **neutral** primitive pair [`optimize`] is built from: enumeration, and
-/// apply-at-a-chosen-site, with no cost descent and no fuel
-/// ([#250](https://github.com/sustia-llc/catgraph/issues/250)). A caller wanting
-/// some policy other than "descend on cost" writes it over these two; `optimize`
-/// keeps its own policy and is not routed through them.
+/// apply-at-a-chosen-site, with no cost descent and no fuel.
 ///
 /// # The edge assignment is what a site *is*
 ///
@@ -446,35 +365,23 @@ fn fingerprint<G: PropSignature>(content: &Content<G>) -> u64 {
 /// # A site names its content, and is rejected anywhere else
 ///
 /// Both index vectors are the *target's* own indices, so a site is meaningful
-/// only against the content it was enumerated from — and a **stale** site is the
-/// dangerous case, not the obvious one. `apply_match` renumbers the surviving
-/// nodes densely and appends the rhs's hyperedges, so after one step the old
-/// indices name *different* edges; in a repetitive content they can still happen
-/// to form a perfectly convex match there. Re-deriving the assignment alone
-/// would accept such a site and rewrite the wrong place in silence — `A ; A ; A`
-/// under `A ⇒ B` is the two-line demonstration.
+/// only against the content it was enumerated from. `apply_match` renumbers the
+/// surviving nodes densely and appends the rhs's hyperedges, so after one step
+/// the old indices name *different* edges and in a repetitive content can still
+/// form a convex match there. A site therefore carries a private **fingerprint**
+/// of the content it came from, which [`apply_at`] checks before re-deriving the
+/// assignment; the two rejections are kept apart, a foreign or stale site being a
+/// different diagnosis from a bad rule pairing. The correct loop re-enumerates
+/// after every apply.
 ///
-/// So a site also carries a private **fingerprint** of the content it came from
-/// (the private `fingerprint`: a structural hash of that content as a
-/// *representation*, not up to iso), and [`apply_at`] checks it first. The two
-/// rejections are kept apart deliberately: a site from another content is a
-/// stale or foreign *site*, while a site whose content is right but whose
-/// assignment is not convex for this rule is a bad *pairing* — different
-/// diagnoses, and a caller has to be able to tell them apart. The correct loop
-/// re-enumerates after every apply.
-///
-/// The fingerprint is *not* carried into a step. [`Self::into_step`] drops it,
+/// The fingerprint is *not* carried into a step: [`Self::into_step`] drops it,
 /// because a [`RewriteStep`] is index-based by design and [`replay`] re-derives
-/// every step against the running content it has actually reached — which is
-/// also why the site the private `match_at` builds is stamped with the content
-/// it was just validated against rather than with any earlier one.
+/// every step against the running content it has actually reached.
 ///
 /// # Equality
 ///
 /// Two sites enumerated from the same content compare exactly as their index
-/// vectors do; sites from different contents differ on the fingerprint too,
-/// which is the same statement as "a site is meaningful only against its own
-/// content".
+/// vectors do; sites from different contents differ on the fingerprint too.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MatchSite {
     nodes: Vec<usize>,
@@ -491,8 +398,7 @@ impl MatchSite {
     /// The same vector [`RewriteStep::matched_edges`] carries, in the same
     /// **`lhs`-hyperedge index order** — *not* the matcher's traversal order,
     /// which is [`RewriteRule`]'s internal connectivity-first permutation of the
-    /// same edges. The two are different sequences, so correlating position `i`
-    /// here with the `i`-th edge the matcher visited reads the wrong `lhs` edge.
+    /// same edges.
     #[must_use]
     pub fn matched_edges(&self) -> &[usize] {
         &self.edges
@@ -510,22 +416,16 @@ impl MatchSite {
 
     /// Record this site as a trace step firing rule index `rule`.
     ///
-    /// The bridge from the neutral surface to the trace surface: the result is an
-    /// ordinary [`RewriteStep`], so a caller driving its own search with
-    /// [`match_sites`] / [`apply_at`] can hand the sequence it chose to
-    /// [`replay`] and have every step re-validated. `rule` indexes the `rules`
+    /// The result is an ordinary [`RewriteStep`], so a caller driving its own
+    /// search with [`match_sites`] / [`apply_at`] can hand the sequence it chose
+    /// to [`replay`] and have every step re-validated. `rule` indexes the `rules`
     /// slice the replay will be given — a step binds a rule *index*, not a rule
     /// identity, so the two must line up.
     ///
-    /// The site's content fingerprint is **dropped** here, and a
-    /// [`RewriteStep`] carries none. That is the design, not an omission: a step
-    /// is index-based against the *running* content of a replay, which is a
-    /// different content at every position, so pinning it to the one content the
-    /// site was enumerated from would reject legal traces. [`replay`] re-derives
-    /// each step's assignment against the state it has actually reached — which
-    /// is also what lets a step be persisted and a `MatchSite` not: re-derivation
-    /// at use is a stronger check than a stored hash of a content the loader no
-    /// longer has (see [`RewriteStep`]'s serde section).
+    /// The site's content fingerprint is **dropped** here, and a [`RewriteStep`]
+    /// carries none: a step is index-based against the *running* content of a
+    /// replay, so pinning it to the one content the site was enumerated from
+    /// would reject legal traces.
     #[must_use]
     pub fn into_step(self, rule: usize) -> RewriteStep {
         RewriteStep {
@@ -732,14 +632,10 @@ impl<'a, G: PropSignature> Matcher<'a, G> {
 
 /// Every convex match of `rule`'s left-hand side in `target`, up to `limit`.
 ///
-/// The **enumeration** half of the neutral primitive pair
-/// ([#250](https://github.com/sustia-llc/catgraph/issues/250)); [`apply_at`] is
-/// the other. Neutral in the exact sense that no site is preferred: every convex
+/// The **enumeration** half of the neutral primitive pair; [`apply_at`] is the
+/// other. Neutral in the exact sense that no site is preferred: every convex
 /// match is returned, cheaper or dearer or neither, with no cost functional
-/// consulted and no fuel spent. [`optimize`] is the cost-descending policy built
-/// on top; this is what it is built *from*, and a caller wanting some other
-/// policy — enumerate, score by its own criterion, apply one — writes it here
-/// instead of reaching into the search.
+/// consulted and no fuel spent.
 ///
 /// `limit` truncates: enumeration stops as soon as `limit` sites are in hand, so
 /// which sites come back is the matcher's own order and not a ranking. `limit`
@@ -751,8 +647,8 @@ impl<'a, G: PropSignature> Matcher<'a, G> {
 /// # Cost
 ///
 /// Backtracking over hyperedges, pruned by label equality, tentacle-position
-/// forcing and node colors. Worst case **exponential in `|lhs|`** — the
-/// small-rule assumption is explicit: rules are expected to be a handful of
+/// forcing and node colors. Worst case **exponential in `|lhs|`**, under an
+/// explicit small-rule assumption: rules are expected to be a handful of
 /// generators, the size the equations of a presentation actually are.
 #[must_use]
 pub fn match_sites<G: PropSignature>(
@@ -790,37 +686,17 @@ fn union(parent: &mut [usize], a: usize, b: usize) {
 /// span, then glue `rule.rhs` in along the interface (BGKSZ Def 5.5).
 ///
 /// The result is rebuilt through the validating `content::from_parts`, which
-/// re-checks the whole image characterization of Thm 3.12 — so a step that
-/// would leave it surfaces as an error here rather than as a corrupt content
-/// downstream. The rebuild runs in both build profiles, because a corrupt
-/// content is not something to discover later.
+/// re-checks the whole image characterization of Thm 3.12 — so a step that would
+/// leave it surfaces as an error here rather than as a corrupt content
+/// downstream. The rebuild runs in both build profiles.
 ///
-/// # Why the rebuild cannot fail on a convex match
-///
-/// **Acyclicity.** Suppose the rebuilt content had a directed cycle. The cycle
-/// alternates between hyperedges that came from the rhs and hyperedges of the
-/// surviving context, so take any maximal *context* segment of it. That segment
-/// starts at a class containing the image of an lhs **output** node — its
-/// producer inside the target was matched, since the mono interface forces
-/// every lhs output node to have an lhs producer, so what the segment leaves by
-/// is a context consumer — and it ends, dually, at a class containing the image
-/// of an lhs **input** node, whose consumer was matched. That is a directed
-/// context path leaving the image at one matched hyperedge and re-entering at
-/// another: exactly the BGKSZ Def 3.10 convexity violation `is_convex` rejects,
-/// so no such match reaches this function.
-///
-/// **Monogamy.** A glued class holds at most three nodes — one rhs node, one
-/// lhs-input image, one lhs-output image — because the rhs anchors are mono,
-/// the lhs interface is mono ([`RewriteRule::new`] clause 4) and the match is
-/// injective, so two nodes of the same kind could only be glued through a
-/// coordinate collision that mono-ness rules out. Of those three, the rhs node
-/// is anchored on both rhs feet (that is how it got glued twice) and so has
-/// neither producer nor consumer inside the rhs; the lhs-input image has no
-/// surviving consumer, its lhs consumer having been deleted; the lhs-output
-/// image has no surviving producer. So the class's producer is the lhs-input
-/// image's — a context hyperedge, or none, in which case the class is
-/// input-anchored — and its consumer is the lhs-output image's. One each, which
-/// is the condition. Every node outside a glued class keeps the degrees it had.
+/// It cannot fail on a convex match. A directed cycle in the rebuilt content
+/// would need a context path leaving the image at one matched hyperedge and
+/// re-entering at another, which is the BGKSZ Def 3.10 violation `is_convex`
+/// rejects; and a glued class holds at most three nodes — one rhs node, one
+/// lhs-input image, one lhs-output image — of which only the lhs-input image can
+/// contribute a surviving producer and only the lhs-output image a surviving
+/// consumer, so monogamy holds.
 ///
 /// # Errors
 ///
@@ -926,55 +802,37 @@ fn apply_match<G: PropSignature>(
 
 /// Apply `rule` at `site` in `target`, and return the rewritten content.
 ///
-/// The **apply-at-a-chosen-site** half of the neutral primitive pair
-/// ([#250](https://github.com/sustia-llc/catgraph/issues/250)); [`match_sites`]
-/// is the other. It fires wherever the caller points it: no cost is compared, no
-/// fuel is spent, and a site that *raises* the cost is applied as readily as one
-/// that lowers it. [`optimize`]'s cost descent is a policy over this, not a
-/// property of it.
+/// The **apply-at-a-chosen-site** half of the neutral primitive pair;
+/// [`match_sites`] is the other. It fires wherever the caller points it: no cost
+/// is compared, no fuel is spent, and a site that *raises* the cost is applied as
+/// readily as one that lowers it.
 ///
 /// # The site is re-validated, not trusted — in two independent stages
 ///
-/// A [`MatchSite`] is an ordinary value: it can be enumerated against one content
-/// and handed to another, kept across an apply that renumbered everything, or
-/// paired with a rule it never matched. Two checks answer those separately, and
-/// the order matters.
-///
 /// 1. **Is this the site's content at all?** The site's fingerprint (see
-///    [`MatchSite`]) must equal `target`'s. Re-deriving the assignment would
-///    *not* settle this: this function renumbers the surviving nodes and appends
-///    the rhs, so a site kept across one apply names different hyperedges
+///    [`MatchSite`]) must equal `target`'s. Re-deriving the assignment would not
+///    settle this: a site kept across one apply names different hyperedges
 ///    afterwards and, in a repetitive content, can still form a convex match
-///    there. Without this stage such a site is applied at the wrong location in
-///    silence — the failure the stage exists to make impossible.
+///    there.
 /// 2. **Is this assignment a convex match of *this rule* here?** The hyperedge
-///    assignment is then re-run through every condition [`match_sites`] enforces
-///    — label agreement, injectivity, positional tentacle binding, node colors,
-///    no deleted boundary node, and BGKSZ Def 3.10 convexity — before any gluing
-///    happens, and the node images the step uses are the ones that re-derivation
+///    assignment is re-run through every condition [`match_sites`] enforces —
+///    label agreement, injectivity, positional tentacle binding, node colors, no
+///    deleted boundary node, and BGKSZ Def 3.10 convexity — before any gluing
+///    happens, and the node images the step uses are the ones re-derivation
 ///    produces rather than the ones the value carries.
-///
-/// This is the same trust boundary [`replay`] applies to a caller-supplied
-/// [`RewriteStep`] (stage 2 of it; a step deliberately carries no fingerprint,
-/// see [`MatchSite::into_step`]), and it is the point of the primitive: an
-/// unchecked apply is what the caller would have had to write themselves.
 ///
 /// # Errors
 ///
-/// Two **distinct** rejections, reported with different messages because they are
-/// different diagnoses and the fix differs:
+/// Two **distinct** rejections, reported with different messages:
 ///
 /// - [`CatgraphError::Presentation`] if `site` was enumerated from a *different
 ///   content* than `target` — a foreign site, or a stale one held across an
-///   apply. The site's indices name other hyperedges here; the fix is to
-///   re-enumerate against the content in hand. This says nothing about whether
-///   the assignment would have been convex.
+///   apply. The fix is to re-enumerate against the content in hand.
 /// - [`CatgraphError::Presentation`] if `site` belongs to `target` but its
-///   hyperedges are not a convex match **of `rule`** there — typically the wrong
-///   rule. The fix is a different rule, or a different site.
+///   hyperedges are not a convex match **of `rule`** there. The fix is a
+///   different rule, or a different site.
 /// - [`CatgraphError::Presentation`] from the rebuild, which re-establishes the
-///   BGKSZ Thm 3.12 image characterization. Unreachable on a convex match, for
-///   the reasons the private `apply_match` argues.
+///   BGKSZ Thm 3.12 image characterization. Unreachable on a convex match.
 pub fn apply_at<G: PropSignature>(
     target: &Content<G>,
     rule: &RewriteRule<G>,
@@ -1007,51 +865,41 @@ pub fn apply_at<G: PropSignature>(
 /// permutation of the same edges. That makes the trace a **witness** rather than
 /// a summary: replaying it with [`replay`] re-derives the state it describes.
 ///
-/// [`optimize`] is not the only source of steps: [`MatchSite::into_step`] turns a
-/// site a caller chose itself into one, so a search driven over [`match_sites`]
-/// and [`apply_at`] produces traces of the same kind, replayable the same way
-/// ([#250](https://github.com/sustia-llc/catgraph/issues/250)).
+/// [`MatchSite::into_step`] turns a site a caller chose itself into one, so a
+/// search driven over [`match_sites`] and [`apply_at`] produces traces of the
+/// same kind, replayable the same way.
 ///
 /// # Serde (feature `serde`)
 ///
-/// `Serialize` / `Deserialize` round-trip both fields
-/// ([#249](https://github.com/sustia-llc/catgraph/issues/249)), and this is the
-/// one type on the rewrite surface where a derive is safe **without** a
-/// validating constructor behind it. A step is a *claim* about where a rule
-/// fired, and [`replay`] does not take the claim on trust: it re-derives every
-/// step's assignment with the private `match_at`, against the state it has
-/// actually reached, and rejects one whose recorded hyperedges are not a convex
-/// match of the named rule *there*. So a deserialized trace is **checked, not
-/// trusted** — a hand-crafted document buys an `Err`, not a silent bad rewrite.
-/// That is why the fields may stay `pub`-less and the type still cross a process
-/// boundary: the validator is at the far end, not at construction.
+/// `Serialize` / `Deserialize` round-trip both fields, and this is the one type
+/// on the rewrite surface where a derive is safe **without** a validating
+/// constructor behind it: a step is a *claim* about where a rule fired, and
+/// [`replay`] re-derives every step's assignment against the state it has
+/// actually reached, rejecting one whose recorded hyperedges are not a convex
+/// match of the named rule *there*. A deserialized trace is **checked, not
+/// trusted**.
 ///
 /// Three things a document can still do, none of them unsound — each is a legal
 /// derivation, just not necessarily *the* one the trace was recorded from:
 ///
-/// - **Name a different derivation.** Validation is relative to the `rules`
-///   slice as given, and a step binds a rule *index*, not a rule identity. A
-///   trace replayed against a differently-ordered slice may reach a different —
-///   still legal — endpoint. Persist the rules' `(lhs, rhs)` pairs alongside the
-///   trace and rebuild them in the same order (see [`RewriteRule`]).
-/// - **Mean something else against a different start.** The same binding by
-///   position applies to the *content*: `matched_edges` are indices into the
-///   running content, so a trace only says what it was recorded to say against
-///   the `start` it was recorded from. Replayed against a different well-formed
-///   start whose edge indices happen to line up, [`replay`] returns `Ok` with an
-///   unrelated endpoint and nothing marks it. **Persist the start with the
-///   trace** — a [`RewriteOutcome`] does not carry one, so a store that keeps
-///   only the outcome is the default way to meet this.
+/// - **Name a different derivation.** Validation is relative to the `rules` slice
+///   as given, and a step binds a rule *index*, not a rule identity. Persist the
+///   rules' `(lhs, rhs)` pairs alongside the trace and rebuild them in the same
+///   order (see [`RewriteRule`]).
+/// - **Mean something else against a different start.** `matched_edges` are
+///   indices into the running content, so replayed against a different
+///   well-formed start whose edge indices happen to line up, [`replay`] returns
+///   `Ok` with an unrelated endpoint and nothing marks it. **Persist the start
+///   with the trace** — a [`RewriteOutcome`] does not carry one.
 /// - **Describe a legal derivation nobody searched for.** [`replay`] certifies
 ///   that the steps compose to a rewriting step sequence modulo SMC structure
 ///   (BGKSZ Thm 5.6); it says nothing about which search, if any, produced them.
 ///
 /// **The serialized shape is the private field layout**, as it is for
-/// [`ContentKey`](super::content::ContentKey): no version tag is embedded, and a
-/// later version of this crate may add a field — additive by this crate's own
-/// standards, but every previously stored document would then fail to load on a
-/// missing field. Durable storage should carry a version the consumer controls,
-/// or be treated as a cache that can be rebuilt.
+/// [`ContentKey`](super::content::ContentKey): no version tag is embedded, so a
+/// field added in a later version would fail every previously stored document on
+/// load. Durable storage should carry a version the consumer controls, or be
+/// treated as a cache that can be rebuilt.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RewriteStep {
@@ -1078,49 +926,33 @@ impl RewriteStep {
 ///
 /// # Serde (feature `serde`)
 ///
-/// `Serialize` / `Deserialize` round-trip every field
-/// ([#249](https://github.com/sustia-llc/catgraph/issues/249)). The trust
-/// boundary is **not uniform across them**, and the honest statement is
-/// per-field rather than per-type — this is a *report* on a search, and only
-/// part of a report is checkable at all:
+/// `Serialize` / `Deserialize` round-trip every field, and the trust boundary is
+/// **not uniform across them** — this is a *report* on a search, and only part of
+/// a report is checkable:
 ///
 /// - [`Self::steps`] is validated **at use**. Hand it to [`replay`] with the
-///   rules and every step is re-derived against the running content; see
-///   [`RewriteStep`].
+///   rules and every step is re-derived against the running content.
 /// - [`Self::best`] inherits [`ColoredExpr`]'s documented boundary:
-///   deserialization does not re-run `check`, and every public entry point of
-///   this module re-validates the morphism it is handed (the private
-///   `revalidate`) precisely because of it. **A successful [`replay`] does not
-///   certify it.** Nothing in this crate compares `best` against what the trace
-///   replays to, so an edited document can keep an honest trace — `replay`
-///   returns `Ok` — and still carry an unrelated `best`. Unlike the numbers
-///   below, this one *is* exactly re-derivable: [`optimize`] builds `best` as
-///   the readback of the state its trace reaches, which is the value [`replay`]
-///   returns, so compare the two (or just use [`replay`]'s result) when `best`
-///   has to be right.
+///   deserialization does not re-run `check`. **A successful [`replay`] does not
+///   certify it** — nothing in this crate compares `best` against what the trace
+///   replays to, so an edited document can keep an honest trace and still carry
+///   an unrelated `best`. It is exactly re-derivable: [`optimize`] builds `best`
+///   as the readback of the state its trace reaches, which is the value
+///   [`replay`] returns.
 /// - [`Self::initial_cost`], [`Self::best_cost`], [`Self::states_explored`] and
-///   [`Self::fuel_exhausted`] have **no validator anywhere in this crate**, and
-///   can have none: they are facts about a search that already happened, not
-///   properties of the data carried here. A hand-crafted document may claim any
-///   numbers it likes — a `best_cost` above its `initial_cost`, which
-///   [`optimize`] cannot produce since the start is itself a candidate; a
-///   `states_explored` unrelated to the trace; a `fuel_exhausted` that never
-///   bit. Nothing rejects them. If a number has to be right, recompute it:
-///   [`cost_of`] on the start and on the replayed endpoint re-derives both
-///   costs, and the other two are not re-derivable from the document at all.
+///   [`Self::fuel_exhausted`] have **no validator anywhere in this crate**: they
+///   are facts about a search that already happened, so a hand-crafted document
+///   may claim any numbers it likes and nothing rejects them. [`cost_of`] on the
+///   start and on the replayed endpoint re-derives both costs; the other two are
+///   not re-derivable from the document at all.
 ///
 /// Round-tripping a value this crate produced is always sound; that is the
-/// contract. For untrusted input, the checkable core is *the trace* — and only
-/// against the starting morphism it was recorded from, which **this type does
-/// not carry**: [`Self::best`] is the endpoint, and [`replay`] needs a `start` a
-/// store has to persist separately. So read a stored outcome as a trace plus a
-/// separately-kept start, replay it, and treat every other field — `best`
-/// included — as a hint until re-derived.
+/// contract. For untrusted input the checkable core is *the trace*, and only
+/// against the starting morphism it was recorded from, which **this type does not
+/// carry** — [`replay`] needs a `start` a store has to persist separately.
 ///
 /// The same wire-format caveat applies as to [`RewriteStep`]: the serialized
-/// shape is the private field layout, with no version tag, so a field added in a
-/// later version would fail every stored document on load. Version durable
-/// storage yourself, or treat it as a rebuildable cache.
+/// shape is the private field layout, with no version tag.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -1208,14 +1040,11 @@ struct SearchState<G: PropSignature> {
 /// Best-first over states keyed by [`canonical_key`] — the sanctioned dedup use
 /// of that key — expanding the cheapest frontier state each round and applying
 /// every convex match of every rule to it. `fuel` counts **applications**, so a
-/// cyclic rule set (a commutativity rule and its mirror, say) terminates against
-/// the visited set rather than looping.
+/// cyclic rule set terminates against the visited set rather than looping.
 ///
 /// **This is one policy, not the surface.** Cost descent and a fuel budget are
 /// choices made here; [`match_sites`] and [`apply_at`] are the neutral primitives
-/// underneath, and a caller wanting a different policy drives those directly
-/// ([#250](https://github.com/sustia-llc/catgraph/issues/250)) rather than
-/// reshaping this function.
+/// underneath, and a caller wanting a different policy drives those directly.
 ///
 /// # What the result means
 ///
@@ -1225,28 +1054,22 @@ struct SearchState<G: PropSignature> {
 /// symmetric monoidal category. Nothing stronger: see the module docs on the
 /// absent termination, confluence and canonicality claims. When the rules come
 /// from a [`Presentation`](super::Presentation)'s equations, this composes to
-/// "`start` and [`RewriteOutcome::best`] are equal modulo that presentation" —
-/// which [`Presentation::eq_mod`](super::Presentation::eq_mod), the decider,
-/// can confirm independently (soundly, in the `Some(true)` direction —
-/// [#15](https://github.com/sustia-llc/catgraph/issues/15)).
+/// "`start` and [`RewriteOutcome::best`] are equal modulo that presentation".
 ///
 /// # Errors
 ///
 /// - [`CatgraphError::Presentation`] if `start` is not well-formed — arity or
 ///   words, the private `revalidate` — reachable only across [`ColoredExpr`]'s
-///   serde trust boundary, and screened here because [`content_of_colored`]
-///   would panic instead of answering, and because an unchecked word would put
-///   node colors no `⟦·⟧` assigned in front of the colored matcher.
+///   serde trust boundary.
 /// - [`CatgraphError::Presentation`] if the readback of the best state does not
-///   re-check as a colored morphism, or does not carry that state's content —
-///   an engine-invariant failure rather than a user error.
+///   re-check as a colored morphism, or does not carry that state's content — an
+///   engine-invariant failure rather than a user error.
 ///
-/// A step whose rebuild fails is not an error of this function, and what
-/// becomes of it **depends on the build profile**: with `debug_assertions` on
-/// — the test profile, deliberately — the failure trips an assertion and the
-/// search dies loudly; with them off the match is *skipped* and the search
-/// continues with the states it already has. Both are unreachable on a convex
-/// match, for the reasons `apply_match` argues.
+/// A step whose rebuild fails is not an error of this function, and what becomes
+/// of it **depends on the build profile**: with `debug_assertions` on the failure
+/// trips an assertion and the search dies loudly; with them off the match is
+/// *skipped* and the search continues with the states it already has. Both are
+/// unreachable on a convex match.
 pub fn optimize<G: PropSignature>(
     start: &ColoredExpr<G>,
     rules: &[RewriteRule<G>],
@@ -1349,17 +1172,13 @@ pub fn optimize<G: PropSignature>(
 ///
 /// # Replaying a persisted trace
 ///
-/// The re-validation is what makes a [`RewriteStep`] safe to deserialize
-/// ([#249](https://github.com/sustia-llc/catgraph/issues/249)), so this function
-/// is also the load-side entry point for a stored trace. The index binding above
-/// is then the thing to get right, because a store has to reconstruct the slice:
-/// [`RewriteRule`] carries no serde derives on purpose, so persist each rule's
-/// `(lhs, rhs)` [`ColoredExpr`] pair, rebuild through [`RewriteRule::new`], and
-/// **preserve the order** — a slice rebuilt in a different order is a different
-/// `rules` argument, and the same stored trace then replays to a different
-/// endpoint with no error to mark it. Only the `start` and the trace need to be
-/// trusted-then-checked; the rest of a stored [`RewriteOutcome`] is a report,
-/// with the per-field boundary documented there.
+/// The re-validation is what makes a [`RewriteStep`] safe to deserialize, so this
+/// function is also the load-side entry point for a stored trace, and the index
+/// binding above is the thing to get right: [`RewriteRule`] carries no serde
+/// derives on purpose, so persist each rule's `(lhs, rhs)` [`ColoredExpr`] pair,
+/// rebuild through [`RewriteRule::new`], and **preserve the order** — a slice
+/// rebuilt in a different order replays the same stored trace to a different
+/// endpoint with no error to mark it.
 ///
 /// # Errors
 ///
@@ -1403,40 +1222,27 @@ pub fn replay<G: PropSignature>(
 /// [`match_sites`] one level up: the expression's content is computed, the
 /// enumeration runs there, and the sites index *that* content — which is the
 /// content [`rewrite_at`] recomputes, so the pair composes. The sites are
-/// fingerprinted with it too (see [`MatchSite`]), so [`rewrite_at`] takes them
-/// and refuses one enumerated from a different expression, or held across an
-/// earlier rewrite.
+/// fingerprinted with it too (see [`MatchSite`]), so [`rewrite_at`] refuses one
+/// enumerated from a different expression, or held across an earlier rewrite.
 ///
 /// # Prefer the content level for a multi-step search
 ///
 /// This wrapper and [`rewrite_at`] each pay a `content_of_colored` on the way in,
-/// and `rewrite_at` a readback on the way out; a search that takes `n` steps
-/// through them pays `n` of each. The content level pays neither: hold a
-/// [`Content`], loop [`match_sites`] and [`apply_at`] over it, and read back
-/// **once** at the end — [`optimize`] is written exactly that way. That asymmetry
-/// is why both levels exist: this one for a single named step from and to a
-/// [`ColoredExpr`], the content one for search.
+/// and `rewrite_at` a readback on the way out. The content level pays neither:
+/// hold a [`Content`], loop [`match_sites`] and [`apply_at`] over it, and read
+/// back **once** at the end.
 ///
 /// # Cost
 ///
-/// [`match_sites`]'s, unchanged: backtracking over hyperedges, pruned by label
-/// equality, tentacle-position forcing and node colors, worst case
-/// **exponential in `|lhs|`** under an explicit small-rule assumption — rules are
-/// expected to be a handful of generators, the size the equations of a
-/// presentation actually are.
+/// [`match_sites`]'s, unchanged: worst case **exponential in `|lhs|`** under an
+/// explicit small-rule assumption.
 ///
 /// # Errors
 ///
-/// [`CatgraphError::Presentation`] if `expr` is not well-formed — arity or
-/// words, the private `revalidate`, under the same message [`rewrite_at`] uses,
-/// because it is the same screen. Reachable only across [`ColoredExpr`]'s
-/// documented serde trust boundary, and screened here rather than left to panic:
-/// this is the **first** step of the enumerate-then-apply pair, so a malformed
-/// term would abort before `rewrite_at`'s own screen was ever reached.
-///
-/// The malformed case is an `Err`, never an empty `Vec` — "this term is not a
-/// term" and "this term has no sites" are different answers, and returning the
-/// second for the first is a silent wrong answer.
+/// [`CatgraphError::Presentation`] if `expr` is not well-formed — arity or words,
+/// the private `revalidate`, under the same message [`rewrite_at`] uses.
+/// Reachable only across [`ColoredExpr`]'s documented serde trust boundary. The
+/// malformed case is an `Err`, never an empty `Vec`.
 pub fn match_sites_of<G: PropSignature>(
     expr: &ColoredExpr<G>,
     rule: &RewriteRule<G>,
@@ -1451,14 +1257,9 @@ pub fn match_sites_of<G: PropSignature>(
 ///
 /// [`apply_at`] one level up, with the same two-stage re-validation: `site`'s
 /// fingerprint must be `expr`'s content's, and its assignment is then re-derived
-/// there before anything is glued — so a site enumerated from some other
-/// morphism, or held across an earlier rewrite, is rejected rather than
-/// reinterpreted. The output goes through the module's usual two-check readback
-/// — re-checked as a colored morphism, then compared back against the content it
-/// was read off.
-///
-/// Pair it with [`match_sites_of`]; for more than one step, see that function's
-/// note on staying at the content level and paying the readback once.
+/// there before anything is glued. The output goes through the module's usual
+/// two-check readback — re-checked as a colored morphism, then compared back
+/// against the content it was read off. Pair it with [`match_sites_of`].
 ///
 /// # Errors
 ///
@@ -1470,7 +1271,7 @@ pub fn match_sites_of<G: PropSignature>(
 ///   rejection, with its message.
 /// - [`CatgraphError::Presentation`] if `site` belongs to `expr`'s content but is
 ///   not a convex match of `rule` there. [`apply_at`]'s second rejection, kept
-///   distinct from the first because the two call for different fixes.
+///   distinct because the two call for different fixes.
 /// - [`CatgraphError::Presentation`] if the readback does not re-check as a
 ///   colored morphism, or does not carry the rewritten content — an
 ///   engine-invariant failure rather than a user error.
@@ -1488,10 +1289,9 @@ pub fn rewrite_at<G: PropSignature>(
 /// condition [`match_sites`] enforces.
 ///
 /// The [`MatchSite`] this returns is stamped with `target`'s fingerprint — the
-/// content the assignment was just validated against, not any content it may
-/// have been recorded from. That is what keeps [`replay`] working: a step's
-/// assignment is *meant* to be read against the running content at that
-/// position, so the site built from it belongs to that content by construction.
+/// content the assignment was just validated against, not any content it may have
+/// been recorded from, so the site built from a [`replay`] step belongs to that
+/// replay's running content by construction.
 fn match_at<G: PropSignature>(
     target: &Content<G>,
     rule: &RewriteRule<G>,
@@ -1531,13 +1331,10 @@ fn match_at<G: PropSignature>(
 ///    readback came from, with [`content_eq`] — cospan iso under both feet, the
 ///    only sense available, since node indices are presentation-dependent.
 ///
-/// (2) is what discharges a dependency at runtime. [`expr_of_content`] is total
-/// on everything the content constructors produce, but its round-trip property
-/// — `content_eq(content_of(expr_of_content(c)), c)` — is **corpus-verified,
-/// not proven** (see [`expr_of_content`]'s own docs: 200 000 contents per mode
-/// in `tests/canonical_display_corpus.rs`). Without (2) the engine would be
-/// resting a per-step soundness claim on an unproven premise; with it, a
-/// readback that lost the content is an error at the call site instead.
+/// (2) discharges a dependency at runtime: [`expr_of_content`]'s round-trip
+/// property — `content_eq(content_of(expr_of_content(c)), c)` — is
+/// **corpus-verified, not proven**, so without it the engine would rest a
+/// per-step soundness claim on an unproven premise.
 ///
 /// # Errors
 ///

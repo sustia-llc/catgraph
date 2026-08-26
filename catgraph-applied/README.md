@@ -100,7 +100,7 @@ cargo clippy -p catgraph-applied -- -W clippy::pedantic
 `[features] parallel` (default-on) gates the `rayon` + `rayon-cond`
 dependencies and the four `CondIterator` call sites in
 `linear_combination::Mul::mul`, `linear_combination::linear_combine`, and
-`temperley_lieb::BrauerMorphism::non_crossing` (source + target sides).
+`temperley_lieb::PerfectMatching::non_crossing` (source + target sides).
 Disable with `--no-default-features` for single-threaded WASI hosts.
 
 ```sh

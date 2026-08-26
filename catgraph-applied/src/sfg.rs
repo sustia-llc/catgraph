@@ -13,16 +13,10 @@
 //! generators. This keeps [`SfgSignature`] aligned with F&S `G_R` exactly and
 //! keeps the Thm 5.60 equation set defined on primitives.
 //!
-//! ## Trait-bound story
-//!
-//! [`PropSignature`] requires `Clone + PartialEq + Eq + Hash + Debug + Ord`.
-//! [`SfgGenerator<R>`] derives all of them uniformly and therefore requires
-//! `R: Rig + Eq + Hash + Ord + Debug`. All four shipped rigs
-//! ([`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
-//! [`crate::rig::Tropical`], [`crate::rig::F64Rig`]) satisfy these — the three
-//! `f64`-wrapping rigs provide manual `Eq + Hash` impls via `to_bits()` and a
-//! manual `Ord` via `total_cmp` on the same `-0.0`-normalized payload (NaN
-//! caveats documented on the rig module).
+//! [`SfgGenerator<R>`] derives the whole [`PropSignature`] bound set uniformly
+//! and therefore requires `R: Rig + Eq + Hash + Ord + Debug`. All four shipped
+//! rigs ([`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
+//! [`crate::rig::Tropical`], [`crate::rig::F64Rig`]) satisfy it.
 //!
 //! `SFG_R` is single-sorted: [`SfgGenerator`]'s
 //! [`Color`](PropSignature::Color) is `()` and its interface words are
@@ -41,15 +35,9 @@ use crate::{
 ///
 /// Parameterised over the rig `R` so that `Scalar(r)` ranges over `R`-values.
 ///
-/// The `Eq + Hash` bounds on `R` are required (via the `PropSignature`
-/// `Eq + Hash` bounds) by the congruence-closure decision procedure, and `Ord`
-/// by the `PropSignature: Ord` supertrait — `Scalar(r)` is the one variant
-/// whose ordering has to consult `R`. All four shipped rig instances —
-/// [`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
-/// [`crate::rig::Tropical`], [`crate::rig::F64Rig`] — satisfy all three; the
-/// three `f64`-wrapping rigs provide manual `Eq + Hash` via `to_bits()`
-/// (bit-exact except `-0.0` normalizes to `0.0` to satisfy the `Eq`/`Hash`
-/// contract) and a manual `Ord` via `total_cmp` on the same normalized payload.
+/// The `Eq + Hash + Ord` bounds on `R` come from [`PropSignature`]'s
+/// supertraits; `Scalar(r)` is the one variant whose equality and ordering
+/// consult `R`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SfgGenerator<R: Rig + Eq + std::hash::Hash> {
@@ -191,10 +179,7 @@ impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> SignalFlow
 
     /// Wrap a `PropExpr` into a `SignalFlowGraph`.
     ///
-    /// This is the inverse of [`as_prop_expr`](Self::as_prop_expr). Intended
-    /// for soundness tests and for plumbing equation pairs from a
-    /// [`Presentation`](crate::prop::presentation::Presentation) back through
-    /// functors like `sfg_to_mat` that consume `SignalFlowGraph`.
+    /// The inverse of [`as_prop_expr`](Self::as_prop_expr).
     ///
     /// No structural validation is performed — the caller is responsible for
     /// ensuring the expression is built from `SfgGenerator<R>` primitives.
@@ -221,9 +206,8 @@ impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> SignalFlow
 ///
 /// # Errors
 ///
-/// In principle this construction is arity-safe, but it returns
-/// `Result<_, CatgraphError>` to match the composition signature and to
-/// surface any bugs in the recursion.
+/// The construction is arity-safe; the `Result` matches the composition
+/// signature it is built from.
 pub fn copy_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     n: usize,
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {
@@ -261,9 +245,8 @@ pub fn discard_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static
 ///
 /// # Errors
 ///
-/// In principle this construction is arity-safe, but it returns
-/// `Result<_, CatgraphError>` to match the composition signature and to
-/// surface any bugs in the recursion.
+/// The construction is arity-safe; the `Result` matches the composition
+/// signature it is built from.
 pub fn add_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     m: usize,
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {

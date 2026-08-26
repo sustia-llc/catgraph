@@ -7,11 +7,9 @@
 //! - `0` is absorbing: `a * 0 = 0 = 0 * a`.
 //!
 //! This is a ring without negatives. The [`Rig`] trait packages [`Zero`] +
-//! [`One`] + `Add` + `Mul` with a marker. A blanket impl lifts any concrete
+//! [`One`] + `Add` + `Mul` with a marker, and a blanket impl lifts any concrete
 //! type satisfying those bounds. All three traits are **catgraph-native** and
-//! defined in this module (#219): the rig substrate is owned end to end, and
-//! `Rig` is in particular never anyone else's `Ring` — the lowest ring in the
-//! numeric crates we surveyed requires `Sub`, which `BoolRig`/`Tropical` lack.
+//! defined in this module.
 //!
 //! ## Concrete instances
 //!
@@ -29,44 +27,36 @@
 //!   rig; see the overflow policy below.
 //!
 //! Primitive integer and float types are rigs via the blanket impl, since this
-//! module implements [`Zero`]/[`One`] for all of them. Note that
-//! `rust_decimal::Decimal` (used by [`petri_net`](crate::petri_net) for token
-//! multiplicities) is **not** currently a rig — nothing implements [`Zero`] or
-//! [`One`] for it. Now that both traits are catgraph-native the impl would be
-//! legal here (no orphan-rule barrier), but adding it is a surface decision,
-//! not a consequence of owning the traits.
+//! module implements [`Zero`]/[`One`] for all of them. `rust_decimal::Decimal`
+//! (used by [`petri_net`](crate::petri_net) for token multiplicities) is **not**
+//! a rig — nothing implements [`Zero`] or [`One`] for it.
 //!
 //! # `Eq + Hash + Ord` on `f64`-wrapping rigs
 //!
 //! [`UnitInterval`], [`Tropical`], and [`F64Rig`] manually implement `Eq` and
-//! `Hash` via `f64::to_bits()`. This is required by the
-//! [`PropSignature`](crate::prop::PropSignature) `Eq + Hash` supertrait bounds:
-//! [`SfgGenerator<R>`](crate::sfg::SfgGenerator) now requires `R: Eq + Hash`,
-//! and the [`prop::presentation::kb::CongruenceClosure`](crate::prop::presentation::kb::CongruenceClosure)
-//! term graph uses `SfgGenerator<R>` as a `HashMap` key. Hashing is bit-exact
-//! EXCEPT `-0.0` normalizes to `0.0` so that hashing agrees with the derived
-//! IEEE `PartialEq` (under which `-0.0 == 0.0`) — required by the `Eq`/`Hash`
-//! contract, and the fix for #58 (a `-0.0` and `0.0` splitting a congruence
-//! class).
+//! `Hash` via `f64::to_bits()`, which the
+//! [`PropSignature`](crate::prop::PropSignature) supertrait bounds require of
+//! them through [`SfgGenerator<R>`](crate::sfg::SfgGenerator). Hashing is
+//! bit-exact EXCEPT `-0.0` normalizes to `0.0`, so that hashing agrees with the
+//! derived IEEE `PartialEq` (under which `-0.0 == 0.0`) as the `Eq`/`Hash`
+//! contract demands.
 //!
-//! The same three also implement `Ord` manually — the
-//! [`PropSignature`](crate::prop::PropSignature) `Ord` supertrait (#79) reaches
-//! them through `SfgGenerator::Scalar(r)`. The order is `f64::total_cmp` on the
-//! same `-0.0`-normalized payload, so it is total, agrees with the IEEE order
+//! The same three implement `Ord` manually: `f64::total_cmp` on the same
+//! `-0.0`-normalized payload, so it is total, agrees with the IEEE order
 //! wherever that is defined, and ranks equal exactly the values that hash alike.
 //! It is **not** a `to_bits()` order, which would invert the ordering of
 //! negative values. `PartialOrd` is re-derived from `Ord` (`Some(self.cmp(..))`)
-//! so the two cannot drift; the derived `PartialOrd` these replace is gone.
-//! Ordering is a canonicalization key only — no rig operation consults it, and
-//! [`Tropical::add`] still takes the min of the raw payloads.
+//! so the two cannot drift. Ordering is a canonicalization key only — no rig
+//! operation consults it, and [`Tropical::add`] still takes the min of the raw
+//! payloads.
 //!
-//! NaN caveats still inherit from `PartialEq`: a NaN payload is non-reflexive
-//! under `==` even though `Ord` orders it, so `Ord` and `PartialEq` disagree
-//! there and the manual `Eq` is a promise the caller must keep. Callers should
-//! not construct NaN values in these newtypes (the [`UnitInterval::new`]
-//! validator already rejects them).
+//! NaN caveats inherit from `PartialEq`: a NaN payload is non-reflexive under
+//! `==` even though `Ord` orders it, so `Ord` and `PartialEq` disagree there and
+//! the manual `Eq` is a promise the caller must keep. Callers should not
+//! construct NaN values in these newtypes (the [`UnitInterval::new`] validator
+//! already rejects them).
 //!
-//! # Overflow policy (workspace policy of record, #88)
+//! # Overflow policy
 //!
 //! Rig arithmetic anywhere in the workspace — [`MatR::matmul`](crate::mat::MatR),
 //! [`sfg_to_mat`](crate::sfg_to_mat::sfg_to_mat),
@@ -74,32 +64,22 @@
 //! and catgraph-syntax's `eval` / `SfgModel` — is *exactly* `R`'s own
 //! [`Add`] and [`Mul`]. No layer above `R` inserts a check, so the overflow
 //! behaviour of a computation is decided entirely by the rig you instantiate.
-//! This section is the single place that behaviour is specified; downstream
-//! docs cite it rather than restating it.
 //!
 //! | Rig family | Overflow behaviour |
 //! | --- | --- |
 //! | [`BoolRig`], [`UnitInterval`] | No integer overflow is possible — `∨`/`∧` and `max`/`·` on `[0,1]` are closed. |
-//! | [`Tropical`], [`F64Rig`] | Float families; no integer overflow. They keep IEEE-754 `inf`/NaN semantics, documented honestly rather than papered over (the #58 posture). |
-//! | [`Z`](crate::z::Z) / other BigInt-valued rigs | **Exact.** Arbitrary-precision integers cannot overflow; this is the zero-caveat answer and the recommended coefficient ring whenever counts are unbounded. |
+//! | [`Tropical`], [`F64Rig`] | Float families; no integer overflow. They keep IEEE-754 `inf`/NaN semantics. |
+//! | [`Z`](crate::z::Z) / other BigInt-valued rigs | **Exact.** Arbitrary-precision integers cannot overflow. |
 //! | Primitive integers (`i64`, `u32`, …) via the blanket impl | **Inherited from `R`**, i.e. Rust's profile-dependent behaviour: a debug build panics on overflow, a release build wraps silently. |
 //! | [`Checked<T>`] over a primitive integer | **Opt-in detection.** Overflow produces the absorbing sentinel [`Checked::Poison`], which propagates to the result where a caller can see it. |
 //!
-//! **Saturating arithmetic is rejected**, and is not offered even as an opt-in.
-//! Clamping at `T::MAX` yields a silently *wrong* value that is
-//! indistinguishable from a legitimate one, and it breaks distributivity
-//! (`a·(b+c) ≠ a·b + a·c` once any operand saturates) — so a saturating rig
-//! would not be a rig at all, while also destroying the evidence that anything
-//! went wrong. [`Checked<T>`] loses strictly less (one axiom, visibly).
+//! **Saturating arithmetic is not offered**, not even as an opt-in: clamping at
+//! `T::MAX` breaks distributivity (`a·(b+c) ≠ a·b + a·c` once any operand
+//! saturates), so a saturating rig would not be a rig.
 
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 /// The additive identity `0` of a [`Rig`].
-///
-/// Catgraph-native: the trait is defined here, next to the [`Rig`] it pairs
-/// with, so the whole rig substrate is owned by this crate (#219). The
-/// supertrait bound is deliberate — an additive identity for a type with no
-/// addition is not an identity for anything.
 ///
 /// Implemented here for every primitive integer and float, and for each
 /// concrete rig in this module; a downstream scalar that wants to be a [`Rig`]
@@ -117,8 +97,7 @@ pub trait Zero: Sized + Add<Self, Output = Self> {
 
 /// The multiplicative identity `1` of a [`Rig`].
 ///
-/// The multiplicative counterpart of [`Zero`]; see that trait's docs for why
-/// both live in this crate and why the supertrait bound is there.
+/// The multiplicative counterpart of [`Zero`], implemented for the same types.
 pub trait One: Sized + Mul<Self, Output = Self> {
     /// The multiplicative identity element of `Self`, `1`.
     ///
@@ -250,14 +229,11 @@ impl Mul for BoolRig {
 /// `(·, 1)` is the multiplicative monoid.
 /// Distributivity holds because `max(a, b) · c = max(a · c, b · c)` on `[0, 1]`.
 ///
-/// # Relationship to BTV 2021 language enrichment
-///
 /// BTV 2021 enriches the language category over the **monoidal** structure
-/// `([0,1], ≤, ·, 1)`, not the rig axioms. The additive `max` structure is
-/// only used when Unit Interval is treated as an idempotent rig (e.g. for
-/// matrix representations via `Mat(UnitInterval)`). Magnitude computations
-/// in BV 2025 operate via the embedding `UnitInterval → ℝ` via `-ln`, not
-/// via rig arithmetic directly.
+/// `([0,1], ≤, ·, 1)`, not the rig axioms; the additive `max` structure applies
+/// only where the unit interval is treated as an idempotent rig (e.g.
+/// `Mat(UnitInterval)`). BV 2025 magnitude computations go through the `-ln`
+/// embedding `UnitInterval → ℝ` rather than rig arithmetic.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UnitInterval(f64);
 
@@ -316,17 +292,11 @@ impl Mul for UnitInterval {
     }
 }
 
-// `Eq + Hash` for use as a `HashMap` key in the congruence-closure term graph
-// (`PropSignature: Eq + Hash` bound). Hashing is bit-exact via `to_bits()`
-// EXCEPT `-0.0` normalizes to `0.0`, so hashing agrees with the derived IEEE
-// `PartialEq` (under which `-0.0 == 0.0`) — required by the `Eq`/`Hash`
-// contract. NaN caveats inherit from `PartialEq`; [`UnitInterval::new`] rejects
-// NaN on construction.
+// Bit-exact hashing except `-0.0`, which normalizes to `0.0` to agree with the
+// derived IEEE `PartialEq`. See the module docs.
 impl Eq for UnitInterval {}
 impl std::hash::Hash for UnitInterval {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // -0.0 == 0.0 under the derived PartialEq, so they must hash alike
-        // (Eq/Hash contract). All other values keep bit-exact hashing.
         let bits = if self.0 == 0.0 {
             0.0f64.to_bits()
         } else {
@@ -336,15 +306,8 @@ impl std::hash::Hash for UnitInterval {
     }
 }
 
-// A lawful total order, required by the `PropSignature: Ord` supertrait (#79)
-// via `SfgGenerator<R>`. Consistent with the `Eq`/`Hash` impls above: `-0.0` is
-// normalized to `0.0` first, so values that hash alike also compare `Equal`.
-// `f64::total_cmp` agrees with the IEEE order wherever that is defined, and
-// totally orders NaN besides. Deliberately **not** a `to_bits()` order — the
-// sign-magnitude bit layout inverts the ordering of negatives, which would rank
-// `Tropical(-1.0)` below `Tropical(-2.0)`. `PartialOrd` is re-derived from `Ord`
-// so the two cannot drift apart. See the module's NaN caveat for the one place
-// `Ord` and `PartialEq` still disagree.
+// `f64::total_cmp` on the `-0.0`-normalized payload, so values that hash alike
+// compare `Equal`. See the module docs.
 impl Ord for UnitInterval {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         norm_zero(self.0).total_cmp(&norm_zero(other.0))
@@ -402,16 +365,11 @@ impl Mul for Tropical {
     }
 }
 
-// `Eq + Hash` for use as a `HashMap` key in the congruence-closure term graph
-// (`PropSignature: Eq + Hash` bound). Hashing is bit-exact via `to_bits()`
-// EXCEPT `-0.0` normalizes to `0.0`, so hashing agrees with the derived IEEE
-// `PartialEq` (under which `-0.0 == 0.0`) — required by the `Eq`/`Hash`
-// contract. NaN caveats inherit from `PartialEq`.
+// Bit-exact hashing except `-0.0`, which normalizes to `0.0` to agree with the
+// derived IEEE `PartialEq`. See the module docs.
 impl Eq for Tropical {}
 impl std::hash::Hash for Tropical {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // -0.0 == 0.0 under the derived PartialEq, so they must hash alike
-        // (Eq/Hash contract). All other values keep bit-exact hashing.
         let bits = if self.0 == 0.0 {
             0.0f64.to_bits()
         } else {
@@ -421,14 +379,9 @@ impl std::hash::Hash for Tropical {
     }
 }
 
-// Lawful total order for the `PropSignature: Ord` supertrait (#79), matching
-// the `-0.0`-normalizing `Eq`/`Hash` above and re-deriving `PartialOrd` from
-// `Ord`. `f64::total_cmp`, not `to_bits`: the bit order inverts on negatives,
-// so `to_bits` would rank `Tropical(-1.0)` below `Tropical(-2.0)` — wrong over
-// exactly the range min-plus distances occupy. Note this order is the ordinary
-// real order on the payload, i.e. the *opposite* of the rig's additive order
-// (`Tropical::add` takes the min); it is a canonicalization key, not a
-// semantic one, and `Tropical::add` keeps reading the raw `f64`.
+// `f64::total_cmp` on the `-0.0`-normalized payload: the ordinary real order,
+// i.e. the *opposite* of the rig's additive order (`Tropical::add` takes the
+// min). A canonicalization key only — see the module docs.
 impl Ord for Tropical {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         norm_zero(self.0).total_cmp(&norm_zero(other.0))
@@ -442,10 +395,8 @@ impl PartialOrd for Tropical {
 
 /// Plain real rig `(ℝ, 0, 1, +, ·)`.
 ///
-/// Included primarily for `Mat(R)` and `SFG_R` demonstration purposes. Note
-/// that `F64Rig` is actually a **ring** (has negatives); we use the rig
-/// layer because the Thm 5.60 presentation and Mat(R) theory only require
-/// rig axioms.
+/// `F64Rig` is in fact a **ring** (it has negatives), but the Thm 5.60
+/// presentation and `Mat(R)` theory require only the rig axioms.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct F64Rig(pub f64);
 
@@ -481,12 +432,8 @@ impl Mul for F64Rig {
     }
 }
 
-// Ring + field operations on `F64Rig`, a prerequisite for the
-// catgraph-magnitude Möbius path. `F64Rig` is the only `Ring + Div`-bounded
-// rig in the workspace; `mobius_function::<F64Rig>` needs all
-// four of `Neg`, `Sub`, `Div`, and `From<f64>`. The ring/field bound stays
-// off `Rig` itself — these impls live only on `F64Rig` (and any future
-// real-valued rig that elects to adopt them).
+// Ring + field operations, on `F64Rig` alone — `Rig` itself carries no such
+// bound.
 impl Neg for F64Rig {
     type Output = Self;
     fn neg(self) -> Self {
@@ -515,28 +462,19 @@ impl From<f64> for F64Rig {
 }
 
 impl From<i64> for F64Rig {
-    /// Convert a signed integer to `F64Rig`. Used by
-    /// `catgraph-magnitude`'s `boundary_matrix` to lift `(-1)^i` signs into
-    /// the rig.
-    ///
-    /// Note: `i64` values exceeding 2^53 lose precision in `f64`; the SNF
-    /// call sites use only `±1`, so this is not a concern in practice.
+    /// Convert a signed integer to `F64Rig`. Values exceeding 2^53 lose
+    /// precision in `f64`.
     #[allow(clippy::cast_precision_loss)]
     fn from(n: i64) -> Self {
         F64Rig(n as f64)
     }
 }
 
-// `Eq + Hash` for use as a `HashMap` key in the congruence-closure term graph
-// (`PropSignature: Eq + Hash` bound). Hashing is bit-exact via `to_bits()`
-// EXCEPT `-0.0` normalizes to `0.0`, so hashing agrees with the derived IEEE
-// `PartialEq` (under which `-0.0 == 0.0`) — required by the `Eq`/`Hash`
-// contract. NaN caveats inherit from `PartialEq`.
+// Bit-exact hashing except `-0.0`, which normalizes to `0.0` to agree with the
+// derived IEEE `PartialEq`. See the module docs.
 impl Eq for F64Rig {}
 impl std::hash::Hash for F64Rig {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // -0.0 == 0.0 under the derived PartialEq, so they must hash alike
-        // (Eq/Hash contract). All other values keep bit-exact hashing.
         let bits = if self.0 == 0.0 {
             0.0f64.to_bits()
         } else {
@@ -546,10 +484,8 @@ impl std::hash::Hash for F64Rig {
     }
 }
 
-// Lawful total order for the `PropSignature: Ord` supertrait (#79), matching
-// the `-0.0`-normalizing `Eq`/`Hash` above and re-deriving `PartialOrd` from
-// `Ord`. `f64::total_cmp`, not `to_bits`: the bit order inverts on negatives,
-// and `F64Rig` is the one shipped rig with genuine negatives (`Neg`/`Sub` below).
+// `f64::total_cmp` on the `-0.0`-normalized payload, not `to_bits`: the bit
+// order inverts on negatives, which `F64Rig` has. See the module docs.
 impl Ord for F64Rig {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         norm_zero(self.0).total_cmp(&norm_zero(other.0))
@@ -566,9 +502,7 @@ impl PartialOrd for F64Rig {
 ///
 /// Implemented for every primitive integer type by delegating to the std
 /// inherent `checked_add` / `checked_mul`; a `None` return **is** the overflow
-/// signal. The trait is catgraph-local rather than a `num-traits` import, for
-/// the same reason [`Zero`] and [`One`] are — the rig substrate is owned by
-/// this crate; see the crate-root substrate rules.
+/// signal.
 ///
 /// Downstream types may implement it to make themselves wrappable in
 /// [`Checked`]; the contract is that `None` means "the exact result is not
@@ -604,12 +538,11 @@ impl_checked_ops_for_primitive_int!(
 /// [`Value`](Checked::Value) or the absorbing poison sentinel
 /// [`Poison`](Checked::Poison), written `⊥`.
 ///
-/// `Checked<T>` is the workspace's **opt-in overflow-detection** rig (#88; the
-/// policy of record is in this module's docs). Wrapping a primitive integer
-/// rig in it makes overflow *visible in the result* instead of profile-
-/// dependent: `Checked::new(i64::MAX) + Checked::new(1)` is `⊥`, in both debug
-/// and release builds, and that `⊥` survives every subsequent operation all
-/// the way out to the caller, who can test it with [`is_poisoned`].
+/// `Checked<T>` is the **opt-in overflow-detection** rig. Wrapping a primitive
+/// integer rig in it makes overflow *visible in the result* instead of
+/// profile-dependent: `Checked::new(i64::MAX) + Checked::new(1)` is `⊥`, in both
+/// debug and release builds, and that `⊥` survives every subsequent operation
+/// all the way out to the caller, who can test it with [`is_poisoned`].
 ///
 /// It satisfies the [`Rig`] blanket impl (`Clone + PartialEq + Zero + One +
 /// Add + Mul`), so `Checked<i64>` drops into
@@ -624,29 +557,20 @@ impl_checked_ops_for_primitive_int!(
 /// `(Value a) ⊕ (Value b)` is `⊥` exactly when the checked primitive operation
 /// reports that the exact result is not representable.
 ///
-/// Full absorption deliberately includes **`⊥ × 0 = ⊥`**. Special-casing zero
-/// to give `⊥ × 0 = 0` would erase a detected overflow — a caller could
-/// multiply a poisoned intermediate by zero and get a clean-looking answer
-/// back — and it would break distributivity in any ring extension, where
-/// `⊥ × (1 + (−1))` must agree with `⊥ × 1 + ⊥ × (−1)`.
+/// Full absorption includes **`⊥ × 0 = ⊥`**: special-casing zero would erase a
+/// detected overflow.
 ///
 /// # Laws
 ///
-/// Full absorption is what keeps the algebra well behaved: associativity,
-/// commutativity, and both distributive laws hold on all of `Checked<T>`,
-/// because every equation with a `⊥` anywhere in it evaluates to `⊥` on both
-/// sides.
+/// Associativity, commutativity, and both distributive laws hold on all of
+/// `Checked<T>`, because every equation with a `⊥` anywhere in it evaluates to
+/// `⊥` on both sides.
 ///
 /// **Exactly one axiom is lost: the absorbing zero.**
 /// [`verify_rig_axioms`]'s axiom 8 requires `a * 0 == 0`, and that fails for
-/// `a = ⊥` — the one poisoned cone of the value space. Everywhere else
-/// (`Value(_)` samples only) all eight axioms hold, and `verify_rig_axioms`
-/// passes.
-///
-/// The honest reading, mirroring [`F64Rig`]'s NaN posture (#58), is: **a rig on
-/// the unpoisoned subset, with `⊥` adjoined as an absorbing sentinel.** That is
-/// strictly less loss than saturating arithmetic, which gives wrong values
-/// *and* breaks distributivity (see the module-level overflow policy).
+/// `a = ⊥`. Everywhere else (`Value(_)` samples only) all eight axioms hold, and
+/// `verify_rig_axioms` passes. So: **a rig on the unpoisoned subset, with `⊥`
+/// adjoined as an absorbing sentinel.**
 ///
 /// # Text form
 ///
@@ -666,12 +590,9 @@ impl_checked_ops_for_primitive_int!(
 /// let overflowed = big * big;
 /// assert!(overflowed.is_poisoned());
 ///
-/// // ⊥ is fully absorbing — multiplying by zero does NOT clear it.
 /// assert!((overflowed * Checked::zero()).is_poisoned());
 /// ```
-// `PartialOrd + Ord` are derived (not hand-written): they exist only to satisfy
-// the `PropSignature: Ord` supertrait (#79) for `SfgGenerator<Checked<T>>`, and
-// the derived variant order — every `Value` below `Poison` — is a canonical
+// The derived variant order — every `Value` below `Poison` — is a canonical
 // sort key, not a claim that `⊥` is arithmetically the largest element.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Checked<T> {
@@ -781,10 +702,8 @@ impl<T: std::fmt::Display> std::fmt::Display for Checked<T> {
 }
 
 impl<T: std::str::FromStr> std::str::FromStr for Checked<T> {
-    /// `T`'s own parse error, unchanged. No dedicated error type is needed:
-    /// the `⊥` case is a *success*, not a failure, so nothing but `T`'s
-    /// failures can be reported. Poison is strictly the overflow sentinel and
-    /// is never used as a dumping ground for parse errors.
+    /// `T`'s own parse error, unchanged: the `⊥` case is a *success*, so
+    /// nothing but `T`'s failures can be reported.
     type Err = T::Err;
 
     /// Exactly `"⊥"` parses to [`Checked::Poison`]; every other input is
@@ -1055,10 +974,10 @@ mod tests {
         assert!(hashes_agree(&pos_zero, &neg_zero));
     }
 
-    // ---- `Checked<T>` (#88) --------------------------------------------------
+    // ---- `Checked<T>` --------------------------------------------------------
 
-    /// `4e9 * 4e9 = 1.6e19` exceeds `i64::MAX ≈ 9.22e18` — the issue's own
-    /// overflow witness, which a release build would silently wrap.
+    /// `4e9 * 4e9 = 1.6e19` exceeds `i64::MAX ≈ 9.22e18`, an overflow a release
+    /// build would silently wrap.
     const BIG: i64 = 4_000_000_000;
 
     #[test]

@@ -16,14 +16,10 @@ use rand_core::Rng;
 type IntervalCoord = f32;
 
 /// One uniform sample from the `f32` grid of \[0, 1): the top 24 bits of a
-/// single `u32` word, scaled by 2⁻²⁴.
-///
-/// In-tree because the published dependency is `rand_core` alone (#239), which
-/// supplies raw words and no float distributions. Every value `k · 2⁻²⁴`
-/// (`k < 2²⁴`) is exactly representable in [`IntervalCoord`], the maximum is
-/// `1 − 2⁻²⁴`, and the range is genuinely half-open — the strict upper bound
-/// is this function's postcondition, not a consumer tolerance. Finite by
-/// construction.
+/// single `u32` word, scaled by 2⁻²⁴. Every value `k · 2⁻²⁴` (`k < 2²⁴`) is
+/// exactly representable in [`IntervalCoord`], the maximum is `1 − 2⁻²⁴`, and
+/// the strict upper bound is a postcondition, not a consumer tolerance. Finite
+/// by construction.
 #[inline]
 #[allow(clippy::cast_precision_loss)] // k < 2^24 is exactly representable in f32
 fn uniform_unit(rng: &mut impl Rng) -> IntervalCoord {
@@ -105,79 +101,45 @@ impl E1 {
         }
     }
 
-    /// Generate a random valid E1 configuration with the given arity.
+    /// A random valid E1 configuration of the given arity.
     ///
-    /// Draws `2 * cur_arity` samples uniformly from \[0, 1), sorts them, and pairs
-    /// consecutive values into intervals. A raw draw can place adjacent sorted
-    /// samples arbitrarily close, yielding a zero-width or sub-epsilon interval that
-    /// [`E1::new`] rejects; to guarantee a valid result the whole batch is resampled
-    /// until every adjacent pair of sorted coordinates is separated by more than
-    /// `MIN_SEPARATION`.
+    /// Draws `2 * cur_arity` samples uniformly from \[0, 1), sorts them, and
+    /// pairs consecutive values into intervals `(s0, s1), (s2, s3), …`,
+    /// resampling the whole batch until every adjacent pair of sorted
+    /// coordinates is separated by more than `MIN_SEPARATION`
+    /// (`2·F32_EPSILON`). The result has exactly `cur_arity` intervals, each of
+    /// width greater than `MIN_SEPARATION`, pairwise disjoint with gaps greater
+    /// than `MIN_SEPARATION`. There is no iteration cap, so termination is
+    /// probabilistic in the arity: the accept probability for `m = 2 *
+    /// cur_arity` sorted uniform draws is roughly `(1 − m · MIN_SEPARATION)^m`,
+    /// effectively non-terminating well before the pigeonhole bound
+    /// `m · MIN_SEPARATION > 1` (arity ≈ 250 000), and a degenerate generator
+    /// never separates.
     ///
-    /// # Postconditions
-    ///
-    /// - The returned configuration has exactly `cur_arity` intervals (empty when
-    ///   `cur_arity == 0`).
-    /// - Every interval has width greater than `MIN_SEPARATION` (`2·F32_EPSILON`,
-    ///   i.e. `2e-6`).
-    /// - Intervals are pairwise strictly disjoint with gaps greater than
-    ///   `MIN_SEPARATION`, formed by pairing sorted coordinates
-    ///   `(s0, s1), (s2, s3), …`.
+    /// `rng` is any [`Rng`] implementor on the `rand_core` **0.10** line; an
+    /// engine built against 0.9 does not satisfy the bound. The bound and its
+    /// base trait are re-exported as [`crate::Rng`] and [`crate::TryRng`] so
+    /// callers can name them — including a custom engine via
+    /// `TryRng<Error = Infallible>`, since `Rng` is blanket-implemented over it
+    /// — without a direct `rand_core` dependency.
     ///
     /// # Panics
     ///
-    /// - If `2 * cur_arity` (the draw count) overflows `usize`.
-    /// - The sort's `partial_cmp` expect and the terminal `expect` document
-    ///   invariants — samples are finite by construction (see `uniform_unit`),
-    ///   resampled coordinates are strictly separated — and cannot fire.
-    ///
-    /// # Termination
-    ///
-    /// The separation resampling makes termination probabilistic, and it
-    /// requires the generator to yield uniformly distributed words. The accept
-    /// probability for `m = 2 * cur_arity` sorted uniform draws is roughly
-    /// `(1 − m · MIN_SEPARATION)^m` — a negligible retry rate at small
-    /// arities (≈ 1e-3 at arity 10), shrinking steeply once arities reach the
-    /// low thousands, and effectively non-terminating well before the
-    /// pigeonhole bound `m · MIN_SEPARATION > 1` (arity ≈ 250 000). A
-    /// degenerate generator (constant or low-entropy words) collapses the
-    /// draws and never separates. There is deliberately no iteration cap:
-    /// supply a real RNG and practical arities.
-    ///
-    /// # RNG supply
-    ///
-    /// The `rng` is any `rand_core 0.10` [`Rng`] implementor — an engine from
-    /// the *caller's* own RNG crate (`StdRng`, `rand_chacha 0.10`'s
-    /// `ChaCha20Rng`, …). The engine must sit on the rand_core **0.10** line:
-    /// one built against rand_core 0.9 does not satisfy the bound, and the
-    /// compiler reports the mismatch as two same-named `Rng` traits. The
-    /// bound and its base trait are re-exported at the crate root
-    /// ([`crate::Rng`], [`crate::TryRng`]) so callers can *name* them — a
-    /// generic wrapper, or a custom engine via `TryRng<Error = Infallible>`
-    /// (`Rng` itself is blanket-implemented and cannot be implemented
-    /// directly) — without a direct `rand_core` dependency; engines
-    /// themselves still come from the caller's chosen crate. The uniform
-    /// \[0, 1) sampler is in-tree, so this crate's published edge is
-    /// `rand_core` alone — no distributions, no engines, and no OS entropy
-    /// anywhere in `src` (#239, #232).
+    /// If `2 * cur_arity`, the draw count, overflows `usize`.
     ///
     /// ```
-    /// use catgraph_applied::Rng; // the re-exported supply contract
+    /// use catgraph_applied::Rng;
     /// use catgraph_applied::e1_operad::E1;
     /// use rand::{SeedableRng, rngs::StdRng};
     ///
-    /// // The bound is nameable through this crate alone.
     /// fn sample(rng: &mut impl Rng) -> E1 {
     ///     E1::random(3, rng)
     /// }
     /// assert_eq!(sample(&mut StdRng::seed_from_u64(7)).arity(), 3);
     /// ```
     pub fn random(cur_arity: usize, rng: &mut impl Rng) -> Self {
-        // Strictly above the `E1::new` width threshold (`F32_EPSILON`), with slack,
-        // so every accepted interval has positive width and neighbouring intervals
-        // are strictly disjoint. The guarantee comes entirely from this loop:
-        // `random` constructs with `overlap_check = false`, so `E1::new` only
-        // re-checks widths and bounds, not disjointness.
+        // Above `E1::new`'s width threshold with slack; `random` constructs with
+        // `overlap_check = false`, so disjointness comes from this loop alone.
         const MIN_SEPARATION: f32 = 2.0 * F32_EPSILON;
 
         let draw_count = cur_arity
@@ -190,8 +152,7 @@ impl E1 {
                 a.partial_cmp(b)
                     .expect("invariant: uniform_unit samples are finite by construction")
             });
-            // An empty sample vec (cur_arity == 0) has no adjacent pairs, so `all`
-            // is vacuously true and the loop exits on the first iteration.
+            // `cur_arity == 0` has no adjacent pairs, so `all` is vacuously true.
             let well_separated = sub_ints
                 .iter()
                 .tuple_windows()
@@ -364,9 +325,7 @@ mod test {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
-    /// Single module-level seed (workspace bench convention — see
-    /// `benches/mat_ops_bench.rs`). Tests needing an independent stream
-    /// thread a small offset off this constant.
+    /// Module-level seed; tests needing an independent stream add a small offset.
     const SEED: u64 = 1001;
 
     /// A fixed-word engine over `rand_core::TryRng` — pins the sampler's
@@ -501,8 +460,7 @@ mod test {
 
         for _ in 0..trial_num {
             let used_arity: u8 = rng.random_range(1..arity_max);
-            // Route through `E1::random` (not an inline draw-sort-pair copy of its
-            // old body) so the fixture inherits its minimum-separation guarantee.
+            // Via `E1::random` so the fixture inherits its separation guarantee.
             let mut as_e1_v1 = E1::random(used_arity as usize, &mut rng);
             let as_e1_v2 = as_e1_v1.clone();
             let sub_intervals = as_e1_v1.sub_intervals().to_vec();
@@ -533,8 +491,7 @@ mod test {
 
         for _ in 0..trial_num {
             let used_arity_1: u8 = rng.random_range(1..arity_max);
-            // Route through `E1::random` (not an inline draw-sort-pair copy of its
-            // old body) so both fixtures inherit its minimum-separation guarantee.
+            // Via `E1::random` so both fixtures inherit its separation guarantee.
             let as_e1_v1 = E1::random(used_arity_1 as usize, &mut rng);
 
             let used_arity_2: u8 = rng.random_range(1..arity_max);
@@ -566,17 +523,10 @@ mod test {
 
     /// Numeric oracle for [`E1::operadic_substitution`] at one point of its
     /// input space: outer `[(1/8, 1/4), (1/2, 3/4)]`, slot `0`, inner
-    /// `[(1/4, 1/2), (3/4, 7/8)]`.
-    ///
-    /// Asserts the resulting arity and every output interval as a literal, in
-    /// order.
-    ///
-    /// Every coordinate here, and every product and sum reaching it, is a
-    /// dyadic rational with denominator at most 64, hence exact in `f32`: the
-    /// assertions are exact equalities.
-    ///
-    /// One `(outer, slot, inner)` triple is one point of that space. No other
-    /// slot, arity, or configuration is covered here.
+    /// `[(1/4, 1/2), (3/4, 7/8)]`. Asserts the resulting arity and every output
+    /// interval as a literal, in order. Every coordinate, and every product and
+    /// sum reaching it, is a dyadic rational with denominator at most 64, hence
+    /// exact in `f32`. No other slot, arity, or configuration is covered here.
     #[test]
     fn e1_substitution_numeric_oracle() {
         use super::E1;

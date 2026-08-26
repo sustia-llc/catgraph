@@ -1,14 +1,13 @@
 //! Temperley-Lieb and Brauer algebra morphisms via perfect matchings.
 //!
 //! A [`BrauerMorphism<T>`] is a formal linear combination of Brauer diagrams —
-//! perfect matchings on `source + target` points — with coefficients in a ring `T`.
-//! Composition multiplies diagrams by stacking them vertically and connecting
-//! matched points through a `petgraph` connectivity check, accumulating powers
-//! of the loop parameter δ for each closed loop.
-//!
-//! The non-crossing subset forms the **Temperley-Lieb subalgebra**: diagrams where
-//! no arcs cross on either the source or target side, and through-lines are
-//! monotonically increasing. The `is_def_tl` flag tracks this property.
+//! perfect matchings on `source + target` points — with coefficients in a ring
+//! `T`. Composition stacks two diagrams vertically, reads the glued endpoint
+//! matching off their connected components, and accumulates one power of the
+//! loop parameter δ per closed loop. The non-crossing diagrams — no arcs
+//! crossing on either the source or the target side, through-lines
+//! monotonically increasing — form the **Temperley-Lieb subalgebra**, tracked
+//! by the `is_def_tl` flag.
 //!
 //! ## Generators
 //!
@@ -20,7 +19,7 @@
 //! Implements [`Composable`], [`Monoidal`], [`HasIdentity`], and
 //! [`MonoidalMorphism`].
 //!
-//! See also `examples/temperley_lieb.rs` for the braid relation and generator usage.
+//! See also `examples/temperley_lieb.rs`.
 
 use catgraph::errors::CatgraphError;
 
@@ -43,15 +42,10 @@ use {
 #[cfg(feature = "parallel")]
 use rayon_cond::CondIterator;
 
-/// Threshold gating the parallel arm of [`CondIterator`] in
-/// [`BrauerMorphism::non_crossing`] per-side combinations check when the
-/// `parallel` feature is enabled. Combinations grow as `n * (n - 1) / 2`, so
-/// a source-line count of 8 yields 28 pairs.
-// TODO(rayon-threshold, #37): remeasure via `benches/rayon_thresholds.rs`. The
-// current value of 8 was flagged by a pre-reboot audit as likely too low —
-// the parallel arm's per-worker setup cost may dominate for small pair
-// counts. Run `cargo bench -p catgraph-applied --bench rayon_thresholds`
-// and adjust.
+/// Minimum same-side arc count at which the per-side combinations check in
+/// `PerfectMatching::non_crossing` dispatches its [`CondIterator`] to the
+/// parallel arm.
+// TODO(rayon-threshold, #37): remeasure via `benches/rayon_thresholds.rs`; 8 may be too low.
 #[cfg(feature = "parallel")]
 const PARALLEL_COMBINATIONS_THRESHOLD: usize = 8;
 
@@ -170,9 +164,7 @@ impl PerfectMatching {
             .copied()
             .collect();
 
-        // Check for crossings in source lines. `combinations(2)` is a lazy
-        // itertools iterator — collect to `Vec` so `CondIterator::new` can
-        // dispatch to either `into_par_iter` (rayon) or `into_iter` (std).
+        // `combinations(2)` is lazy; collect so `CondIterator::new` can dispatch.
         let source_combos: Vec<Vec<Pair>> = source_lines.iter().copied().combinations(2).collect();
         let has_crossing = |cur_item: Vec<Pair>| -> bool {
             let first_block = cur_item[0];
@@ -206,8 +198,6 @@ impl PerfectMatching {
             .copied()
             .collect();
 
-        // Check for crossings in target lines (same `CondIterator` pattern,
-        // reusing the `has_crossing` predicate defined above).
         let target_combos: Vec<Vec<Pair>> = target_lines.iter().copied().combinations(2).collect();
         #[cfg(feature = "parallel")]
         let target_has_crossing = CondIterator::new(
@@ -257,9 +247,6 @@ impl Mul for ExtendedPerfectMatching {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        // Diagram composition resolves the glued endpoint matching + closed-loop
-        // (δ-power) count via a union-find connected-components pass; see
-        // [`connectivity::resolve`], which is total.
         connectivity::resolve(&self, &rhs)
     }
 }
@@ -870,26 +857,13 @@ mod test {
         }
     }
 
-    // ---------------------------------------------------------------------
-    // #294 — value oracles for `PerfectMatching::non_crossing` and for
-    // `Monoidal::monoidal` at a non-zero shift.
-    //
-    // These live beside the implementation rather than in
-    // `tests/temperley_lieb.rs` because the only public reader of `is_def_tl`
-    // is the `Debug` impl, and the pair set of a diagram has no public reader
-    // at all. A child module reads the fields; the integration suite would
-    // need a new accessor to say anything at all.
-    // ---------------------------------------------------------------------
+    // Value oracles for `PerfectMatching::non_crossing` and `Monoidal::monoidal`;
+    // both read private fields, so they live here rather than in `tests/`.
 
     /// `Pair::contains` against strict betweenness, over every `(a, b, x)` drawn
-    /// from `0..6` — 216 cases, both argument orders and `a == b` included.
-    ///
-    /// `contains` is public and its contract is order-agnostic, but no fixture
-    /// reaching it through `non_crossing` supplies a descending pair: deleting
-    /// the `(x < self.0 && x > self.1)` disjunct leaves the crate suite green.
-    /// This asserts the contract directly. The reference normalises with
-    /// `min`/`max` instead of case-splitting on the argument order, so it
-    /// shares no branch with production.
+    /// from `0..6` — 216 cases, both argument orders and `a == b` included. The
+    /// reference normalises with `min`/`max` rather than case-splitting on the
+    /// argument order.
     #[test]
     fn pair_contains_is_strict_betweenness_in_either_order() {
         for a in 0..6usize {
@@ -906,18 +880,12 @@ mod test {
     ///
     /// Draw Hom(`source`, `target`) in a rectangle with the domain points left
     /// to right along the top edge and the codomain points left to right along
-    /// the bottom. Walking the rectangle's boundary once visits the domain in
-    /// ascending label order and then the codomain in *descending* label order;
+    /// the bottom. Walking the boundary once visits the domain in ascending
+    /// label order and then the codomain in *descending* label order;
     /// `walk_position` is that walk. Arcs drawn inside the rectangle avoid each
     /// other exactly when the walk reads as a balanced parenthesis string, so
     /// cancelling adjacent partners off a stack empties it iff the diagram is
     /// planar.
-    ///
-    /// This is a different algorithm from the one under test, not a paraphrase
-    /// of it. [`PerfectMatching::non_crossing`] splits planarity into four
-    /// special cases — cup/cup interleaving, cap/cap interleaving, through-lines
-    /// landing on an index some cup or cap blocks, and monotonicity of the
-    /// through-line map — and never builds the boundary order at all.
     fn boundary_walk_planar(pairs: &[Pair], source: usize, target: usize) -> bool {
         let points = source + target;
         let walk_position = |v: usize| {
@@ -984,21 +952,11 @@ mod test {
     }
 
     /// `non_crossing` against the boundary walk on every perfect matching of up
-    /// to ten points, at every domain/codomain split of those points.
-    ///
-    /// Two oracles, because a pointwise check is only as good as its reference:
-    ///
-    /// * pointwise — production against [`boundary_walk_planar`];
-    /// * by count — a split `source + target = 2k` only relabels which of the
-    ///   `2k` boundary positions is which, so exactly `C_k` of the matchings are
-    ///   planar at *every* split, whatever the split. Neither constant can
-    ///   satisfy that for `k >= 2`, and neither can a `Pair::contains` that has
-    ///   stopped discriminating.
-    ///
-    /// Ten points is the ceiling of the exhaustive enumeration. It never reaches
-    /// the `parallel` arms, which need eight arcs on one side and so at least
-    /// sixteen domain points; `non_crossing_parallel_arms_public_api` and
-    /// `non_crossing_parallel_arms_seeded` cover those.
+    /// to ten points, at every domain/codomain split of those points, under two
+    /// oracles: pointwise against [`boundary_walk_planar`], and by count —
+    /// exactly `C_k` of the `(2k − 1)!!` matchings on `2k` points are planar at
+    /// every split. Ten points is the enumeration's ceiling; it never reaches
+    /// the `parallel` arms, which need sixteen domain points.
     #[test]
     fn non_crossing_exhaustive_to_ten_points() {
         for k in 1..=5 {
@@ -1006,8 +964,7 @@ mod test {
                 .into_iter()
                 .map(PerfectMatching::from)
                 .collect();
-            // "every matching" is the claim the two oracles below range over, so
-            // pin the enumeration itself: distinct, and all of them.
+            // Pin the enumeration the two oracles range over: distinct, and all of them.
             let distinct: std::collections::BTreeSet<&Vec<Pair>> =
                 matchings.iter().map(|m| &m.pairs).collect();
             assert_eq!(
@@ -1057,13 +1014,8 @@ mod test {
         )
     }
 
-    /// Assert both same-side arc counts reach the parallel threshold.
-    ///
-    /// The counts are the operands each `CondIterator` site's dispatch
-    /// condition is applied to, not the condition itself. Changing both sites'
-    /// comparison so neither arm dispatches leaves the crate suite green.
-    ///
-    /// A no-op without the feature, where neither site exists.
+    /// Assert both same-side arc counts reach the parallel threshold. A no-op
+    /// without the `parallel` feature, where neither dispatch site exists.
     fn assert_parallel_arms_dispatch(pairs: &[Pair], source: usize, what: &str) {
         #[cfg(feature = "parallel")]
         {
@@ -1081,11 +1033,9 @@ mod test {
         }
     }
 
-    /// Collect a morphism's `(delta power, pairs)` basis, sorted.
-    ///
-    /// `LinearCombination` keeps its map private and exposes no iterator, so
-    /// this borrows `all_terms_satisfy`. The predicate is constantly true
-    /// because that method short-circuits on false.
+    /// Collect a morphism's `(delta power, pairs)` basis, sorted. The predicate
+    /// passed to `all_terms_satisfy` is constantly true, since that method
+    /// short-circuits on false.
     fn terms(m: &BrauerMorphism<i64>) -> Vec<(usize, Vec<Pair>)> {
         let collected = std::cell::RefCell::new(Vec::new());
         m.diagram
@@ -1103,21 +1053,15 @@ mod test {
     /// Both parallel arms of `non_crossing`, in both polarities, over diagrams
     /// built with nothing but the public API.
     ///
-    /// Eight same-side arcs is the threshold, so the domain needs sixteen
-    /// points. One generator has a single cup; composition accumulates them, and
-    /// `e_0 ; e_2 ; … ; e_14` in Hom(16, 16) cups every domain point in pairs and
-    /// caps every codomain point in pairs — eight arcs a side, exactly at the
-    /// threshold.
-    ///
-    /// Getting `non_crossing` to run at all takes one more step: `set_is_tl`
-    /// early-returns while `is_def_tl` is true, and that product's flag is true.
-    /// `s_0 ; s_0` is the identity diagram, so composing with it leaves the
-    /// geometry bit-identical while `&&`-ing the flag down to false.
-    ///
-    /// The three cases put the two arms through all four of their outcomes:
-    /// the domain arm finds a crossing (`domain_crossing`) and does not
-    /// (`flag_cleared`, `codomain_crossing`); the codomain arm finds one
-    /// (`codomain_crossing`) and does not (`flag_cleared`).
+    /// `e_0 ; e_2 ; … ; e_14` in Hom(16, 16) cups every domain point in pairs
+    /// and caps every codomain point in pairs — eight arcs a side, exactly at
+    /// the threshold. Composing with `s_0 ; s_0`, the identity diagram, leaves
+    /// the geometry unchanged while clearing `is_def_tl`, which `set_is_tl`
+    /// early-returns on while it is true. The three cases put the two arms
+    /// through all four outcomes: the domain arm finds a crossing
+    /// (`domain_crossing`) and does not (`flag_cleared`, `codomain_crossing`);
+    /// the codomain arm finds one (`codomain_crossing`) and does not
+    /// (`flag_cleared`).
     #[test]
     fn non_crossing_parallel_arms_public_api() {
         use catgraph::category::Composable;
@@ -1205,17 +1149,15 @@ mod test {
     /// Seeded diagrams that keep both parallel arms dispatching, checked
     /// against the boundary walk.
     ///
-    /// Reaching the arm takes eight arcs on a side. At `source = target = 16`
-    /// that consumes the domain entirely, so those diagrams have no
-    /// through-lines and exercise the two combination arms alone. At
-    /// `source = target = 17` one domain point and one codomain point are left
-    /// over and pair with each other, so the *blocking* branch runs under the
-    /// parallel arms too — emptying either side's blocking set reddens these
-    /// fixtures. The monotonicity branch runs and cannot discriminate: one
-    /// through-line is always sorted, and reaching two while keeping eight
-    /// same-side arcs per side needs `source = target >= 18`. Each side is
-    /// drawn either planar by construction or unconstrained, independently of
-    /// the other.
+    /// At `source = target = 16` eight same-side arcs consume the domain
+    /// entirely, so those diagrams have no through-lines and exercise the two
+    /// combination arms alone. At `source = target = 17` one domain point and
+    /// one codomain point are left over and pair with each other, so the
+    /// blocking branch runs under the parallel arms too. The monotonicity
+    /// branch runs and cannot discriminate: one through-line is always sorted,
+    /// and reaching two while keeping eight same-side arcs per side needs
+    /// `source = target >= 18`. Each side is drawn either planar by
+    /// construction or unconstrained, independently of the other.
     #[test]
     fn non_crossing_parallel_arms_seeded() {
         let mut rng = Lcg::new(0x0002_945e_ed00_0001);
@@ -1252,10 +1194,7 @@ mod test {
                     let got = matching.non_crossing(source, target);
                     let want = boundary_walk_planar(&matching.pairs, source, target);
                     if domain_planar && codomain_planar && source % 2 == 0 {
-                        // Two planar blocks occupy disjoint stretches of the
-                        // boundary and there is no through-line to bridge them,
-                        // so nothing can interleave. Pins the planar generator,
-                        // and keeps a planar sample in the corpus.
+                        // Disjoint boundary stretches, no through-line to bridge them.
                         assert!(want, "must be planar by construction — {what}");
                     }
                     assert_eq!(
@@ -1274,16 +1213,13 @@ mod test {
     /// Tensoring draws `a` to the left of `b`, so the result's domain is `a`'s
     /// domain block followed by `b`'s and its codomain is `a`'s codomain block
     /// followed by `b`'s. On the flat point ids `0 .. n1 + n2 + m1 + m2` the two
-    /// factors therefore embed as
+    /// factors embed as
     ///
     /// * `a`: a domain point `v` stays put; a codomain point (`v >= n1`) moves
     ///   past `b`'s domain block, to `v + n2`;
     /// * `b`: a domain point moves past `a`'s domain block, to `v + n1`; a
     ///   codomain point (`v >= n2`) moves past `a`'s domain *and* codomain
     ///   blocks, to `v + n1 + m1`.
-    ///
-    /// `monoidal` arrives at the same place by a different route — it shifts
-    /// `a` once and `b` twice, the second time against the *new* domain width.
     fn tensor_reference(a: &[Pair], n1: usize, m1: usize, b: &[Pair], n2: usize) -> Vec<Pair> {
         let mut out: Vec<Pair> = a
             .iter()
@@ -1299,13 +1235,9 @@ mod test {
     }
 
     /// `monoidal` against the side-by-side placement, on the pair set rather
-    /// than on the arities.
-    ///
-    /// The arity assertions in `tests/temperley_lieb.rs::monoidal_tensor` cannot
-    /// see a mislabelling: a shift that destroys the matching trips
-    /// `PerfectMatching::from_iter`'s bijection assertion and the test panics
-    /// before reaching them, and a shift that preserves it leaves the arities
-    /// alone. This asserts the labels.
+    /// than on the arities, over every ordered pair drawn from eight factors:
+    /// `id_1`, `id_3`, `e_0` of 3, `e_1` of 4, `s_0` of 3, `s_2` of 4,
+    /// `e_0 ; e_0` of 2, and `δ + δ²`.
     #[test]
     fn monoidal_pair_set_at_nonzero_shift() {
         use catgraph::{
@@ -1314,15 +1246,9 @@ mod test {
         };
         use std::collections::BTreeSet;
 
-        // Hand-derived from the placement, before running anything: e_0 in
-        // Hom(3, 3) is (0,1) (2,5) (3,4) and id_2 in Hom(2, 2) is (0,2) (1,3).
-        // Putting id_2 to the right of e_0 gives Hom(5, 5), whose domain block
-        // is 0..5 and codomain block 5..10. e_0's domain points 0, 1, 2 stay;
-        // its codomain points 3, 4, 5 shift past id_2's two domain points to
-        // 5, 6, 7. id_2's domain points 0, 1 shift past e_0's three domain
-        // points to 3, 4; its codomain points 2, 3 shift past e_0's three
-        // domain and three codomain points to 8, 9. So (0,1) stays, (2,5) →
-        // (2,7), (3,4) → (5,6), (0,2) → (3,8), (1,3) → (4,9).
+        // Hand-derived: e_0 in Hom(3, 3) is (0,1) (2,5) (3,4), id_2 in Hom(2, 2)
+        // is (0,2) (1,3); side by side in Hom(5, 5) that is (0,1) (2,7) (5,6)
+        // from e_0 and (3,8) (4,9) from id_2.
         let mut tensored = BrauerMorphism::<i64>::temperley_lieb_gens(3)[0].clone();
         tensored.monoidal(BrauerMorphism::<i64>::identity(&2));
         assert_eq!(tensored.domain(), 5);
@@ -1396,18 +1322,13 @@ mod test {
 }
 
 /// Union-find resolution of the connectivity core of
-/// `<ExtendedPerfectMatching as Mul>::mul`. Composition glues two Brauer diagrams
-/// and reads off (a) the endpoint matching of the result and (b) the number of
-/// closed loops (the δ-power increment) — both from the connected components of
-/// the glued diagram graph.
-///
-/// Diagram arcs are undirected, which is exactly what a disjoint-set structure
-/// models, so each arc is one `union` and connectivity needs no graph object at
-/// all. The point set is the flat range `0 .. self_dom + self_cod + rhs_cod`:
-/// `lhs`'s points keep their own ids, and `rhs`'s point `p` is `p + self_dom`,
-/// which lands rhs's domain exactly on lhs's codomain — that offset *is* the
-/// gluing. Components are labelled once (near-linear), then the matching falls
-/// out of O(1) root comparison: two endpoints are matched iff they share a root.
+/// `<ExtendedPerfectMatching as Mul>::mul`: composition glues two Brauer
+/// diagrams and reads the result's endpoint matching and its closed-loop count
+/// (the δ-power increment) off the connected components of the glued diagram.
+/// The point set is the flat range `0 .. self_dom + self_cod + rhs_cod`, with
+/// `lhs`'s points keeping their own ids and `rhs`'s point `p` sitting at
+/// `p + self_dom` — that offset lands rhs's domain on lhs's codomain and is the
+/// gluing. Two endpoints are matched iff they share a component root.
 mod connectivity {
     use super::{ExtendedPerfectMatching, Pair, PerfectMatching};
     use std::collections::HashSet;

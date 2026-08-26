@@ -31,12 +31,10 @@ use crate::{
 ///
 /// # Errors
 ///
-/// Returns [`CatgraphError::SfgFunctor`] (wrapping an inner
-/// [`CatgraphError::CompositionSizeMismatch`]) if the underlying
-/// [`PropExpr`] is ill-formed, or plainly if a `Braid` width overflows `usize`
-/// (#196). For values built through the safe [`SignalFlowGraph`] constructors
-/// neither can occur; the error arm exists to surface misuse via direct
-/// `PropExpr` construction.
+/// [`CatgraphError::SfgFunctor`] — wrapping a
+/// [`CatgraphError::CompositionSizeMismatch`] — if the underlying [`PropExpr`]
+/// is ill-formed, or plainly if a `Braid` width overflows `usize`; neither can
+/// occur for a graph built through the [`SignalFlowGraph`] constructors.
 pub fn sfg_to_mat<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     sfg: &SignalFlowGraph<R>,
 ) -> Result<MatR<R>, CatgraphError> {
@@ -104,12 +102,7 @@ fn generator_matrix<R: Rig + Eq + std::hash::Hash>(g: &SfgGenerator<R>) -> MatR<
 ///
 /// # Errors
 ///
-/// [`CatgraphError::SfgFunctor`] if `m + n` overflows `usize` (#196). The width
-/// is a *matrix dimension* here, not a length to compare, so the saturating
-/// `usize::MAX` of [`PropExpr::source`](crate::prop::PropExpr::source) would be
-/// a `usize::MAX × usize::MAX` allocation rather than a rejectable sentinel;
-/// this returns through the caller's existing error arm instead, which exists
-/// for exactly this — misuse via direct `PropExpr` construction.
+/// [`CatgraphError::SfgFunctor`] if `m + n` overflows `usize`.
 fn braid_matrix<R: Rig>(m: usize, n: usize) -> Result<MatR<R>, CatgraphError> {
     let dim = m.checked_add(n).ok_or_else(|| CatgraphError::SfgFunctor {
         message: format!("braid width {m} + {n} overflows usize in S(σ_{{m,n}})"),

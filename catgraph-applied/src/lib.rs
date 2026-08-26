@@ -1,62 +1,44 @@
-//! Applied category theory extensions for catgraph.
-//!
-//! This crate packages modules that build on catgraph's Fong-Spivak 2019 core
-//! (cospans, spans, Frobenius, hypergraph categories) but are **not** part of
-//! the F&S 2019 paper's numbered content. It is the applied-CT complement to
-//! the strict core crate.
+//! Applied category theory extensions for catgraph — modules built on the
+//! Fong-Spivak 2019 core (cospans, spans, Frobenius, hypergraph categories)
+//! that are not part of that paper's numbered content.
 //!
 //! ## Modules
 //!
-//! - [`wiring_diagram`] — operadic substitution on named cospans
-//! - [`petri_net`] — place/transition nets with cospan bridge
-//! - [`temperley_lieb`] — Temperley-Lieb / Brauer algebra via perfect matchings
-//!   (composition connectivity via a union-find components pass)
-//! - [`linear_combination`] — formal linear combinations over a coefficient ring
-//!   (used internally by `temperley_lieb`)
+//! - [`decorated_cospan`] — `Decoration` trait + `DecoratedCospan<Lambda, D>` (F&S Def 6.75, Thm 6.77)
 //! - [`e1_operad`] — little-intervals operad (E₁)
 //! - [`e2_operad`] — little-disks operad (E₂)
-//! - [`decorated_cospan`] — generic `DecoratedCospan<F>` over a `Decoration` functor
-//!   (Fong–Spivak Def 6.75 + Thm 6.77)
-//! - [`prop`] — symmetric strict monoidal categories with `Ob = ℕ` and the
-//!   free prop `Free(G)` on a signature (F&S Def 5.2, Def 5.25)
-//! - [`operad_algebra`] — operad algebras `F : O → Set` with `CircAlgebra`
-//!   (F&S Def 6.99, Ex 6.100)
-//! - [`operad_functor`] — functors between operads with the canonical
-//!   `E₁ ↪ E₂` inclusion (F&S Rough Def 6.98)
-//! - [`enriched`] — `EnrichedCategory<V>` trait + `HomMap<O, V>` concrete impl
-//!   (F&S §2.4, CTFP Ch 28)
-//! - [`lawvere_metric`] — `LawvereMetricSpace<T>` over `Tropical` with triangle
-//!   inequality verifier + `-ln π` embedding from `UnitInterval`
-//!   (Lawvere 1973, BTV 2021)
-//! - [`integer`] — `ZAlgebra` trait (sealed; Bourbaki Algèbre Ch. I §8 — ℤ as initial object of the category of unital rings)
-//!   for rigs carrying integer-exact arithmetic (substrate for
-//!   catgraph-magnitude §1.17 Leinster 2008 Cor 1.5 chain-sum Möbius;
-//!   `ZAlgebra` is also re-exported at the crate root as
-//!   [`ZAlgebra`]; renamed from `Integer` and sealed)
-//! - [`z`] — `Z(BigInt)` newtype, the canonical [`integer::ZAlgebra`]
-//!   implementor for catgraph-magnitude §1.17 integer-exact Möbius
-//!   inversion
-//! - [`mat_kron`] — `MatKron(R)` FdVect with the Kronecker tensor: a genuine
-//!   hypergraph category with the Hadamard SCFM as inherent generators
-//!   (F&S 2019 Ex 2.16); concrete re-expression on the native
-//!   `Monoidal`/`Composable`/`SymmetricMonoidalMorphism` traits
-//! - [`trace`] — partial trace `Tr_X(f) : A → B` from the compact-closed
-//!   structure of [`mat_kron`] (F&S 2019 §3.1); strict tensor, no
-//!   associators/unitors required
-//! - [`hypergraph`] — a CRUD hypergraph container (`Hypergraph<V, HE>`), the
-//!   zero-dependency K1 backend for the downstream koalisi coalition layer
-//!   (sustia-llc/koalisi#4), with a `hyperedge_as_cospan` categorical view (the
-//!   identity cospan over the member index list) back to
-//!   [`catgraph::cospan::Cospan`]
+//! - [`enriched`] — `EnrichedCategory<V>` trait + `HomMap<O, V>` (F&S §2.4)
+//! - [`graphical_linalg`] — the 18-equation Thm 5.60 presentation of `Mat(R)` (F&S §5.4)
+//! - [`hypergraph`] — `Hypergraph<V, HE>` CRUD container with a `hyperedge_as_cospan`
+//!   view back to [`catgraph::cospan::Cospan`]
+//! - [`integer`] — sealed `ZAlgebra` trait for rigs carrying integer-exact
+//!   arithmetic (Bourbaki *Algèbre* Ch. I §8)
+//! - [`lawvere_metric`] — `LawvereMetricSpace<T>` over `Tropical` (Lawvere 1973)
+//! - [`linear_combination`] — formal linear combinations over a coefficient ring
+//! - [`mat`] — `MatR<R>`, the matrix prop over any `Rig` (F&S Def 5.50)
+//! - `mat_f64` — nalgebra bridge for `MatR<F64Rig>` (feature `f64-rig`)
+//! - [`mat_kron`] — `MatKron(R)`, FdVect with the Kronecker tensor (F&S 2019 Ex 2.16)
+//! - [`mat_to_sfg`] — the realization `mat_to_sfg` (F&S Prop 5.56)
+//! - [`operad_algebra`] — operad algebras `F : O → Set` with `CircAlgebra` (F&S Def 6.99, Ex 6.100)
+//! - [`operad_functor`] — functors between operads with the `E₁ ↪ E₂` inclusion (F&S Rough Def 6.98)
+//! - [`petri_net`] — place/transition nets with a cospan bridge
+//! - [`prop`] — symmetric strict monoidal categories with `Ob = ℕ` and the free
+//!   prop `Free(G)` on a signature (F&S Def 5.2, Def 5.25)
+//! - [`rig`] — the `Rig` semiring trait with `BoolRig`, `UnitInterval`,
+//!   `Tropical`, `F64Rig` (F&S Def 5.36)
+//! - [`sfg`] — `SignalFlowGraph<R>`, the free prop on signal-flow generators (F&S Def 5.45)
+//! - [`sfg_to_mat`] — the functor `S : SFG_R → Mat(R)` (F&S Thm 5.53)
+//! - [`temperley_lieb`] — Temperley-Lieb / Brauer algebra via perfect matchings
+//! - [`trace`] — partial trace `Tr_X(f) : A → B` on [`mat_kron`] (F&S 2019 §3.1)
+//! - [`wiring_diagram`] — operadic substitution on named cospans
+//! - [`z`] — the `Z(BigInt)` newtype implementing [`integer::ZAlgebra`]
 //!
-//! ## Relationship to catgraph
+//! ## Features
 //!
-//! All modules depend on catgraph's public API:
-//! - `Cospan`, `NamedCospan`, `Span`, `Rel` — pushout/pullback composition
-//! - `Frobenius` generators — operadic composition of SMCs (Prop 3.8)
-//! - `HypergraphCategory` trait — target of applied semantic functors
-//! - `Operadic` trait — abstract interface for substitution
-//! - `compact_closed` cup/cap — string-diagram rewriting (TL, wiring)
+//! - `parallel` (default) — rayon arms in [`linear_combination`] and [`temperley_lieb`]
+//! - `f64-rig` — exposes the `mat_f64` nalgebra bridge
+//! - `serde` — `Serialize`/`Deserialize` on the term, rewrite-trace, and content-key types
+//! - `internal-bench`, `internal-probes` — hooks for benches and tests; not public API
 //!
 //! See [`docs/FS18-AUDIT.md`](https://github.com/sustia-llc/catgraph/blob/main/catgraph-applied/docs/FS18-AUDIT.md)
 //! for alignment with Fong & Spivak, *Seven Sketches in Compositionality*
@@ -91,23 +73,15 @@ pub mod trace;
 pub mod wiring_diagram;
 pub mod z;
 
-// Convenience re-export: the canonical short path is
-// `use catgraph_applied::ZAlgebra;` (parallels the cg-mag-side
-// convenience-path convention). Long path `use
-// catgraph_applied::integer::ZAlgebra;` remains valid.
+// Short path for `integer::ZAlgebra`; the long path remains valid.
 pub use integer::ZAlgebra;
 
-// Convenience re-exports for the K1 hypergraph container (koalisi#4 consumer
-// surface). Long paths `catgraph_applied::hypergraph::…` remain valid.
+// Short paths for the hypergraph container; the long paths remain valid.
 pub use hypergraph::{HyperedgeIndex, Hypergraph, HypergraphError, VertexIndex};
 
-/// The RNG supply contract for [`e1_operad::E1::random`] (#239): `rand_core
-/// 0.10`'s infallible generator trait `Rng` and, for custom engines, its base
-/// trait `TryRng` (implement `TryRng<Error = Infallible>`; `Rng` is
-/// blanket-implemented over it and cannot be implemented directly).
-/// Re-exported so callers can *name* the bound — a generic wrapper or a
-/// custom engine — without a direct `rand_core` dependency; engines
-/// themselves still come from the caller's own RNG crate, on the rand_core
-/// 0.10 line. The re-export ties this crate's public API to rand_core's
-/// major version by design.
+/// The RNG supply contract for [`e1_operad::E1::random`]: `rand_core 0.10`'s
+/// infallible generator trait `Rng` and its base trait `TryRng`. Re-exported so
+/// callers can name the bound without a direct `rand_core` dependency; a custom
+/// engine implements `TryRng<Error = Infallible>`, since `Rng` is
+/// blanket-implemented over it and cannot be implemented directly.
 pub use rand_core::{Rng, TryRng};

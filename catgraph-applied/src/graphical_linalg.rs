@@ -36,14 +36,11 @@ use crate::{
 ///
 /// Returns [`CatgraphError::CompositionSizeMismatch`] or
 /// [`CatgraphError::Composition`] if `add_equation`'s boundary-word check
-/// rejects an equation — should not happen with the hardcoded monochromatic
-/// forms below, but surfaced in case of future maintenance bugs.
+/// rejects an equation.
 ///
 /// # Panics
 ///
-/// Panics via `.expect(...)` if one of the hardcoded compose calls below fails
-/// arity validation. This indicates a maintenance bug in this function, not a
-/// caller error — the panic message documents the internal inconsistency.
+/// Panics if one of the hardcoded compose calls below fails arity validation.
 pub fn matr_presentation<R>(
     rig_samples: &[R],
 ) -> Result<Presentation<SfgGenerator<R>>, CatgraphError>
@@ -117,15 +114,9 @@ where
     // C4. η ; ε = id_0
     p.add_equation(cmp(zero_gen(), discard()), id_n(0))?;
 
-    // D-group scalar equations: D2 and D8 are independent of rig_samples (the
-    // unit scalar is always R::one(), the zero scalar always R::zero()); D3-D6
-    // need a single sample `a`; D1 and D7 need two samples `a, b` (D1 with their
-    // precomputed product, D7 with their precomputed sum). We emit D2 and D8
-    // first (outside the loop), then iterate the single-sample equations, then
-    // close with the double-sample D1/D7 in the inner loop. The out-of-paper-
-    // order of D1 (last by emission) vs its paper position (first in §5.4) is
-    // deliberate for enumeration efficiency — emitting the most-instantiated
-    // equations at the end of the presentation's equation list.
+    // D-group scalar equations: D2 and D8 are independent of rig_samples, D3-D6
+    // need a single sample `a`, D1 and D7 two samples `a, b`. The
+    // most-instantiated equations are emitted last, for enumeration efficiency.
 
     // D2. r_{one} = id_1  (BE15 (13))
     p.add_equation(scalar(R::one()), id_n(1))?;
@@ -180,7 +171,7 @@ where
 /// Disjoint-set forest over `0..n`, with path halving and union by size.
 ///
 /// Used by [`verify_sfg_to_mat_is_full_and_faithful`] to take the connected
-/// components of the `eq_mod`-equality graph inside one matrix bucket (#189).
+/// components of the `eq_mod`-equality graph inside one matrix bucket.
 struct UnionFind {
     parent: Vec<usize>,
     size: Vec<usize>,
@@ -229,12 +220,10 @@ pub struct FaithfulnessReport<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 
     /// How many distinct matrix images the enumerated expressions produced —
     /// i.e. the number of fibres of `S` on this fragment, `|S(enumerated)|`.
     ///
-    /// Added in #167 because the *partition* was otherwise unobservable: every
-    /// other field here is computed **within** a bucket, so a change to the
-    /// bucket key (say, one that splits `-0.0` from `0.0` by rendering it)
-    /// could move the whole partition without moving a single reported number.
-    /// This is the field that makes such a change visible, and it is the one a
-    /// regression test can pin.
+    /// This is the field that makes a change to the bucket key visible: every
+    /// other field here is computed **within** a bucket, so a key change (say,
+    /// one that splits `-0.0` from `0.0` by rendering it) could move the whole
+    /// partition without moving another reported number.
     ///
     /// `expressions_checked - collisions_under_s - matrix_buckets` is not a
     /// meaningful quantity; the three are independent views. Note in particular
@@ -252,62 +241,41 @@ pub struct FaithfulnessReport<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + 
 }
 
 /// Bucket key for [`verify_sfg_to_mat_is_full_and_faithful`]: an SFG
-/// expression's matrix image under `S`, as `(rows, cols, entries)` (#167).
+/// expression's matrix image under `S`, as `(rows, cols, entries)`.
 ///
 /// The entries alone would not do — `Zero : 0 → 1` has empty `entries()`
 /// whatever its column count, and `Discard : 1 → 0` has `vec![vec![]]` — so
 /// shape rides along. `MatR<R>` itself cannot be the key: it derives only
-/// `Clone, Debug, PartialEq`. See that function's rustdoc for why this is the
-/// matrix *value* and not a `Debug` rendering of it.
+/// `Clone, Debug, PartialEq`.
 type MatrixKey<R> = (usize, usize, Vec<Vec<R>>);
 
 /// Enumerate SFG expressions whose `PropExpr` depth is at most `size_bound`,
 /// bucket them by matrix image under `S`, and count how far each bucket falls
 /// short of being a single `matr_presentation(rig_samples)`-equivalence class.
 ///
-/// # What "same matrix image" means here (#167)
+/// # What "same matrix image" means here
 ///
 /// Two expressions share a bucket iff `sfg_to_mat` gives them the same shape
 /// **and** entry-wise `Eq`-equal entries — the rig's own equality, asked
-/// directly of the values.
+/// directly of the values rather than of a `Debug` rendering of them. Keying on
+/// the value inherits [`crate::rig`]'s `-0.0` normalization, under which
+/// `F64Rig(-0.0)` and `F64Rig(0.0)` share a bucket; a derived-`Debug` key would
+/// print them differently and split it. A caller can put a `-0.0` straight into
+/// a `Scalar` generator's `1×1` matrix through `rig_samples`.
 ///
-/// It used to be asked of a `Debug` rendering: the bucket key was
-/// `format!("{}×{} {:?}", m.rows(), m.cols(), m.entries())`. That is a strictly
-/// finer relation than the one the consumer is asking about, and for the
-/// `f64`-backed rigs it is finer in exactly the place [`crate::rig`] went out of
-/// its way to fix. `F64Rig`'s `Hash` normalizes `-0.0` to `0.0` and its `Eq` is
-/// the derived IEEE `PartialEq`, under which `-0.0 == 0.0` — that pairing is the
-/// fix for issue #58, where a signed zero split a congruence class. But `Debug`
-/// on `F64Rig(pub f64)` is *derived*, so it prints `F64Rig(-0.0)` and
-/// `F64Rig(0.0)` differently and reinstates the same split one layer up, in the
-/// bucketing rather than in the closure. Keying on the value inherits #58's
-/// normalization instead of working around it.
+/// ⚠ The value key inherits *all* of the rig's equality, including its NaN
+/// behaviour. A rig value that is not `Eq`-reflexive — `F64Rig(f64::NAN)`,
+/// reachable only by putting a NaN or an infinity in `rig_samples` — can never
+/// match its own `HashMap` entry, so every NaN-imaged expression lands in a
+/// bucket of one and contributes nothing. A rig whose `Eq` is not an
+/// equivalence gives a bucketing that is not one either.
 ///
-/// Whether that split is *reachable* depends on the sample set. With the
-/// shipped depth-2 fixtures it is not: matrix entries come only from
-/// `R::zero()`, `R::one()`, the `rig_samples` themselves, and `MatR::matmul`,
-/// and `matmul` accumulates from `R::zero()`, so an entry that would be `-0.0`
-/// (`-1.0 × 0.0`) is summed into `+0.0` before it is stored. But `rig_samples`
-/// is a caller's choice, and `F64Rig(-0.0)` in it puts a `-0.0` straight into a
-/// `Scalar` generator's `1×1` matrix. The old key was a latent unsoundness with
-/// a live trigger, not a dormant one.
-///
-/// ⚠ The flip side, stated rather than papered over (the #58 posture): the
-/// value key inherits *all* of the rig's equality, including its NaN behaviour.
-/// A rig value that is not `Eq`-reflexive — `F64Rig(f64::NAN)`, reachable only
-/// by putting a NaN or an infinity in `rig_samples` — can never match its own
-/// `HashMap` entry, so every NaN-imaged expression lands in a bucket of one and
-/// contributes nothing. The `Debug` key merged those instead. Neither is more
-/// correct; asking the rig is the behaviour this function wants, and a rig whose
-/// `Eq` is not an equivalence gives a bucketing that is not one either.
-///
-/// **No tolerance.** A tolerance-aware comparison was considered for #167 and
-/// rejected. This consumer asks whether `S(a) == S(b)` *as matrices over R*,
-/// which is an exact question; merging near-equal matrices would put
+/// **No tolerance.** The question asked is whether `S(a) == S(b)` *as matrices
+/// over R*, which is exact; merging near-equal matrices would put
 /// presentation-distinct expressions into one bucket and manufacture
 /// faithfulness witnesses that the functor does not assert.
 ///
-/// # How a bucket is partitioned (#189)
+/// # How a bucket is partitioned
 ///
 /// Inside a bucket, build the graph whose vertices are the bucket's expressions
 /// and whose edges are the pairs [`Presentation::eq_mod`] decides `Some(true)`,
@@ -315,32 +283,19 @@ type MatrixKey<R> = (usize, usize, Vec<Vec<R>>);
 /// contributes `k − 1` to `collisions_under_s`, and adjacent-pair witnesses
 /// between the component representatives (least bucket index per component).
 ///
-/// This used to be a greedy scan — each expression joined the first class whose
-/// *representative* it matched. That agrees with components only when the
-/// relation is transitive, and `eq_mod` is not: `Scalar(false)` ~
-/// `Discard ; Zero` ~ `Discard ⊗ Zero` while `Scalar(false)` ≁
-/// `Discard ⊗ Zero` (#189 measured 10 490 ordered violating triples on a
-/// 120-expression pool of parallel `1 → 1` arrows, zero `None` verdicts — see
-/// [`Presentation::eq_mod`]'s own note). Over a non-transitive relation a greedy
-/// class count is a statistic of enumeration order, not a function of the
-/// relation. Components are the transitive closure of the same edge set, so the
-/// count *is* a function of the relation, and growing the relation can only add
-/// edges and therefore only merge components — the counts move monotonically,
-/// which is the property the baselines in `tests/graphical_linalg.rs` are read
-/// under.
+/// Components rather than a greedy scan over class representatives, because
+/// `eq_mod` is not transitive — `Scalar(false)` ~ `Discard ; Zero` ~
+/// `Discard ⊗ Zero` while `Scalar(false)` ≁ `Discard ⊗ Zero` (see
+/// [`Presentation::eq_mod`]'s own note) — and over a non-transitive relation a
+/// greedy class count is a statistic of enumeration order, not a function of the
+/// relation. Components are the transitive closure of the same edge set, so
+/// growing the relation can only add edges and therefore only merge components:
+/// the counts move monotonically, which is the property the baselines in
+/// `tests/graphical_linalg.rs` are read under.
 ///
-/// Components are coarser than the greedy partition, or equal to it — every
-/// greedy class sits inside one component — so the switch could only lower and
-/// in fact lowered every pinned baseline: BoolRig 952 → **748**, UnitInterval
-/// 1397 → **1114**, Tropical 1974 → **1594**, F64Rig 1969 → **1590** (depth 2,
-/// release).
-///
-/// Cost: all-pairs per bucket is `O(k²)` `eq_mod` calls in the worst case, but a
-/// pair already inside one component is skipped — exactly, since an intra-component
-/// edge cannot change the partition — which is what keeps it affordable. Depth-2
-/// bucket sizes top out at 682 (BoolRig) / 1602 (Tropical, F64Rig), for an
-/// all-pairs ceiling of 1.6M–4.5M calls per rig; the skip brings the BoolRig
-/// depth-2 run to ~2 min against the greedy scan's ~11 s.
+/// Cost: all-pairs per bucket is `O(k²)` `eq_mod` calls in the worst case, less
+/// the pairs already inside one component, which are skipped exactly because an
+/// intra-component edge cannot change the partition.
 ///
 /// # Enumeration strategy
 ///
@@ -372,11 +327,9 @@ where
     let expressions = enumerate_sfg_expressions::<R>(size_bound, rig_samples);
 
     // Primary bucket = matrix image under S, keyed by `MatrixKey<R>` — the
-    // matrix *value*, not a rendering of it (#167). Within each bucket, two
+    // matrix *value*, not a rendering of it. Within each bucket, two
     // expressions are a faithfulness-violation witness iff they are NOT
-    // equal modulo the presentation. Within-bucket partitioning uses
-    // Presentation::eq_mod (which routes through the default
-    // CongruenceClosure engine).
+    // equal modulo the presentation.
     let mut by_matrix: std::collections::HashMap<MatrixKey<R>, Vec<SignalFlowGraph<R>>> =
         std::collections::HashMap::new();
     for expr in &expressions {
@@ -395,15 +348,9 @@ where
 
         // Partition the bucket into the CONNECTED COMPONENTS of the graph whose
         // vertices are the bucket's expressions and whose edges are the pairs
-        // `eq_mod` decides `Some(true)` (#189). This is all-pairs by
-        // construction, not a scan against class representatives: `eq_mod` is
-        // *not* transitive (measured witness triple — `Scalar(false)` ~
-        // `Discard ; Zero` ~ `Discard ⊗ Zero` while `Scalar(false)` ≁
-        // `Discard ⊗ Zero`), so a representative scan returns a statistic of
-        // enumeration order rather than a function of the relation. Components
-        // are the transitive closure of exactly the same edge set, so the count
-        // *is* a function of the relation, and enlarging the relation can only
-        // merge components — the monotonicity the pins are read under.
+        // `eq_mod` decides `Some(true)` — all-pairs by construction, not a scan
+        // against class representatives, since `eq_mod` is not transitive. See
+        // the rustdoc.
         //
         // eq_mod returns Option<bool>:
         //   Some(true)  → equal in presentation (edge — union the endpoints)
@@ -414,11 +361,8 @@ where
         let mut uf = UnionFind::new(bucket.len());
         for i in 0..bucket.len() {
             for j in (i + 1)..bucket.len() {
-                // Skipping a pair already in one component is exact, not an
-                // approximation: an edge inside a component cannot change the
-                // component partition. It is also what keeps the pass
-                // affordable — the O(k²) pair space collapses to roughly the
-                // edges that actually merge something.
+                // Exact, not an approximation: an edge inside a component
+                // cannot change the partition.
                 if uf.same(i, j) {
                     continue;
                 }
@@ -504,17 +448,9 @@ where
         }
         expressions.extend(new_exprs);
 
-        // Deduplicate structurally to prevent combinatorial explosion.
-        //
-        // Keyed on the VALUE, not on `format!("{:?}", …)` (#167). `PropExpr`
-        // derives `Eq + Hash`, so this needs no rendering — and the rendering
-        // was the same defect the bucket key above had: `Debug` on
-        // `F64Rig(pub f64)` is derived and prints the sign bit, so a caller
-        // passing both `0.0` and `-0.0` in `rig_samples` got two `Scalar`
-        // generators that are `Eq`-equal under the rig's own equality yet
-        // survived dedup as distinct expressions — inflating
-        // `expressions_checked` and doing redundant O(k²) `eq_mod` work inside
-        // the single bucket they now share.
+        // Deduplicate structurally to prevent combinatorial explosion, keyed on
+        // the VALUE (`PropExpr` derives `Eq + Hash`), not on a `Debug`
+        // rendering, which would split `Scalar(0.0)` from `Scalar(-0.0)`.
         let mut seen = std::collections::HashSet::new();
         expressions.retain(|e| seen.insert(e.as_prop_expr().clone()));
     }

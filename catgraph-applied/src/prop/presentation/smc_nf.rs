@@ -2,32 +2,19 @@
 //!
 //! # Role
 //!
-//! This module provides, in place of the plain `apply_smc_rules` pre-pass, a
-//! **Joyal-Street string-diagram normal form**: a function
+//! A **Joyal-Street string-diagram normal form**: a function
 //! [`PropExpr`] → [`StringDiagram`], total on the arities a real wire bundle can
 //! have and rejecting an overflowing width outright (see [`nf`]'s `# Panics`),
-//! aiming at "SMC-equal iff NF-equal". The
-//! ⇐ direction holds unconditionally (every rewrite is SMC-sound); for the ⇒
-//! direction, **rigidity is proven on the fragment `𝔉′`** — braid-free,
-//! every `η` placement-pinned (Theorem 4.5, `docs/SMC-NF-RECONCILIATION.md`
-//! §4.4) — with canonicality-via-`nf` there resting on that theorem, whose proof
-//! is at sketch density with two flagged-open induction steps. Its corollary's
-//! own side conditions are discharged: invariant satisfaction at fixpoints since
-//! #185 made the Step-6½ cuts symmetric (2026-08-02), braid-freeness by `𝔉′`'s
-//! per-writing definition. Beyond `𝔉′` it is open and not bounded either: the
-//! `smc_canonicality_probes` suite verifies a named set of convergences,
-//! while a differential sweep still finds SMC-equal pairs inside the larger
-//! fragment `𝔉` whose normal forms differ — on the default corpus all of
-//! them `η` placement slack, the freedom `𝔉′` excludes (§4.6's ledger and
-//! §4.4's status; residual scope on [`nf`]). Of the four *named* residuals, three are closed: the
-//! closed↔closed equal-key case in #79 P1 with the in-situ reading key (see the
-//! private `component_reading` helper), the trapped nesting and the sink form
-//! of the nested-column case in #174 with the Step 6½ column pass (see the
-//! private `reorder_zero_arity_columns` helper), and its source form with the
-//! same issue's free-site retirement. The sibling
-//! [`super::kb::CongruenceClosure`] (Layer 2) then operates on NF-normalized
-//! terms and handles user-equation congruence without needing to know about
-//! SMC axioms.
+//! aiming at "SMC-equal iff NF-equal". The ⇐ direction holds unconditionally
+//! (every rewrite is SMC-sound); for the ⇒ direction, **rigidity is proven on the
+//! fragment `𝔉′`** — braid-free, every `η` placement-pinned (Theorem 4.5,
+//! `docs/SMC-NF-RECONCILIATION.md` §4.4) — with the proof at sketch density and
+//! two flagged-open induction steps. Beyond `𝔉′` it is open and not bounded
+//! either: a differential sweep still finds SMC-equal pairs inside the larger
+//! fragment `𝔉` whose normal forms differ, on the default corpus all of them `η`
+//! placement slack (§4.6's ledger; residual scope on [`nf`]). The sibling
+//! [`super::kb::CongruenceClosure`] (Layer 2) operates on NF-normalized terms and
+//! handles user-equation congruence without knowing about SMC axioms.
 //!
 //! # Algorithm (9 steps + empty-braid normalization)
 //!
@@ -42,24 +29,22 @@
 //!   Paper: JS-I Ch 1 Prop 1.1 p.66; JS-II Thm 1.1.3 p.4.
 //! - **Step 4(c)** — `topological_layer_order`: sift each generator up to its
 //!   earliest braid-free layer (interchange scheduling; zero-source `η` by the
-//!   point-span rule at the leftmost slot its coordinate admits — the
-//!   component-anchored slot walk was retired in #174).
-//!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality / interchange); issue #14.
+//!   point-span rule at the leftmost slot its coordinate admits).
+//!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality / interchange).
 //! - **Step 5** — `simplify_units`: remove `Identity(0)` atoms.
 //!   Paper: JS-I Ch 1 §1 p.57; Selinger Table 2 p.10.
 //! - **Step 7** — `reorder_component_blocks`: transpose adjacent *free* component
 //!   blocks (closed ∥ anything, input-only ∥ output-only) into rule-(i) order.
 //!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 with JS-I Ch 2 §1 axiom (S) p.73 in its
-//!   degenerate `σ_{0,n} = id` form; issue #55 rule (i).
+//!   degenerate `σ_{0,n} = id` form.
 //! - **Step 6½** — `reorder_zero_arity_columns`: transpose two adjacent
 //!   interval-aligned *columns* whose block arities strictly commute — the move
 //!   between Step 6 (atoms) and Step 7 (whole components).
-//!   Paper: the same two laws as Step 7, read at column granularity; issue #174.
+//!   Paper: the same two laws as Step 7, read at column granularity.
 //! - **Step 6** — `reorder_tied_zero_arity`: within-layer canonical order for
 //!   strictly-commuting zero-arity atoms (`scalar < η < ε < solid`, then
-//!   `G::cmp`; content-only since #174 retired its component-order branch).
-//!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality) with a 0-arity edge;
-//!   issue #55 Decision 1 + rule (i).
+//!   `G::cmp`).
+//!   Paper: JS-I Ch 1 §4 Thm 1.2 p.71 (bifunctoriality) with a 0-arity edge.
 //!
 //! (Steps 7 and 6½ are staged *before* Step 6 in the fixpoint loop: a block or
 //! column move can land an `η` beside an `ε`, and Step 6 repairs that on the
@@ -114,33 +99,30 @@ pub enum Atom<G: PropSignature> {
 ///   positive-source generator's consumed wires all pass through `Identity`
 ///   atoms in the preceding braid-free layer, and no zero-source generator
 ///   (`η`) can slide across into that layer at its wire coordinate (Step 4(c)).
-///   Marking does not enter this clause — it stopped gating the sift in #174.
+///   Marking does not enter this clause.
 /// - Within every layer, no adjacent strictly-commuting pair is ordered against
-///   the Step 6 order `scalar < η < ε < solid`, then `G::cmp` at an equal
-///   class. That order reads the two atoms alone; the component-order branch it
-///   used to open with was retired in #174.
+///   the Step 6 order `scalar < η < ε < solid`, then `G::cmp` at an equal class.
+///   That order reads the two atoms alone.
 /// - No adjacent *free* pair of connected components is ordered against rule
 ///   (i)'s component order, extended at the one tie that order admits (two
 ///   closed blocks) by the in-situ reading key (the private `component_reading`
-///   helper). Step 7's free pair: at most one component attaching each
-///   boundary, at least one multi-atom, neither interleaved, neither
-///   braid-carrying.
-/// - No adjacent pair of interval-aligned *columns* whose block arities
-///   strictly commute is ordered against that same component order (Step 6½,
-///   over the same refinement). Its guards: at least one multi-atom, neither
-///   interleaved, neither braid-carrying, and the two keys distinct — an
-///   equal-key (closed↔closed) pair is declined, not decided.
+///   helper). Step 7's free pair: at most one component attaching each boundary,
+///   at least one multi-atom, neither interleaved, neither braid-carrying.
+/// - No adjacent pair of interval-aligned *columns* whose block arities strictly
+///   commute is ordered against that same component order (Step 6½, over the
+///   same refinement). Its guards: at least one multi-atom, neither interleaved,
+///   neither braid-carrying, and the two keys distinct — an equal-key
+///   (closed↔closed) pair is declined, not decided.
 ///
 /// Both transposition clauses are conditional on those guards, so a marked or
-/// braid-carrying component ordered "wrongly" is not an invariant breach. And
-/// both **except *both-readings adjacencies*** (restated 2026-07-28): where the
-/// contested run boundary is an adjacency of strictly-commuting atoms from the
-/// two components — so Step 6 also claims the pair — the Step 6 class order
-/// wins and the two component-order clauses do not apply. Step 6 runs last in
-/// the fixpoint loop and is idempotent, so every fixpoint is Step-6-sorted;
-/// without the exception the clause set is jointly unsatisfiable on some
-/// contents (witnesses: `tests/pass_disjointness_probes.rs`; disposition:
-/// `docs/SMC-NF-RECONCILIATION.md` §4.4 "pass disjointness").
+/// braid-carrying component ordered "wrongly" is not an invariant breach. Both
+/// also **except *both-readings adjacencies***: where the contested run boundary
+/// is an adjacency of strictly-commuting atoms from the two components — so
+/// Step 6 also claims the pair — the Step 6 class order wins and the two
+/// component-order clauses do not apply. Step 6 runs last in the fixpoint loop
+/// and is idempotent, so every fixpoint is Step-6-sorted; without the exception
+/// the clause set is jointly unsatisfiable on some contents
+/// (`docs/SMC-NF-RECONCILIATION.md` §4.4 "pass disjointness").
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct StringDiagram<G: PropSignature> {
     pub layers: Vec<Layer<G>>,
@@ -152,61 +134,46 @@ pub struct StringDiagram<G: PropSignature> {
 
 /// Normalize `expr` to a canonical [`StringDiagram`].
 ///
-/// Totality: `nf` is defined on every arity-well-formed `PropExpr<G>` and
-/// always terminates (see the termination measure in `docs/SMC-NF-RECONCILIATION.md` §2.4).
-/// A `Compose` joining *mismatched* arities is not excluded — it normalizes
-/// rather than failing, and [`Presentation::eq_mod`](super::Presentation::eq_mod)
-/// relies on that as its fallback outside
-/// [`content_of`](super::content::content_of)'s (stricter) domain. (The one
-/// caveat is arithmetic rather than structural: on a mismatched tree the layer
-/// widths this pipeline *derives* are no longer bounded by the tree's own
-/// arities, so an `Identity` of `usize::MAX`-scale arity beside another atom can
-/// still overflow a within-layer sum. That needs an arity no real wire bundle
-/// has, and it is not what the screen below is about — tracked in #197.)
+/// Totality: `nf` is defined on every arity-well-formed `PropExpr<G>` and always
+/// terminates (termination measure: `docs/SMC-NF-RECONCILIATION.md` §2.4). A
+/// `Compose` joining *mismatched* arities is not excluded — it normalizes rather
+/// than failing, and [`Presentation::eq_mod`](super::Presentation::eq_mod) relies
+/// on that as its fallback outside
+/// [`content_of`](super::content::content_of)'s stricter domain. On such a tree
+/// the layer widths this pipeline *derives* are no longer bounded by the tree's
+/// own arities, so an `Identity` of `usize::MAX`-scale arity beside another atom
+/// can still overflow a within-layer sum.
 ///
 /// # Panics
 ///
 /// Panics if some `Braid` or `Tensor` width in `expr` sums past `usize::MAX`
-/// ([`PropExpr::arities_fit`] is the test). Unlike a mismatched `Compose`, that
-/// is an input the pipeline cannot answer *for* rather than merely answer badly:
-/// Step 1 would decompose a `σ` of `usize::MAX + 1` wires, and the layer
-/// arithmetic below sizes padding identities from the same sums. `PropExpr`'s
-/// variants are public so such a tree is constructible by hand; terms built
-/// through [`Free`](crate::prop::Free) cannot hit this, and the equality APIs
-/// above `nf` gate on `arities_fit` and stay total (#196). Rejecting is uniform
-/// across build profiles — the previous behavior was a debug-build overflow
-/// panic and a release-build wrap onto a small, spuriously valid width.
+/// ([`PropExpr::arities_fit`] is the test): Step 1 would decompose a `σ` of
+/// `usize::MAX + 1` wires, and the layer arithmetic sizes padding identities from
+/// the same sums. `PropExpr`'s variants are public so such a tree is
+/// constructible by hand; terms built through [`Free`](crate::prop::Free) cannot
+/// hit this, and the equality APIs above `nf` gate on `arities_fit` and stay
+/// total. Rejecting is uniform across build profiles.
 ///
-/// Canonicality: the *soundness* direction — `nf(&a) == nf(&b)` implies `a`
-/// and `b` are SMC-equal (equal in the free symmetric monoidal category on
-/// `G`) — holds unconditionally, since `nf` applies only SMC-sound rewrites.
-/// The *canonicality* direction — SMC-equal expressions get equal NFs — has
-/// rigidity proven on the fragment 𝔉′ (braid-free, every `η`
-/// placement-pinned — Theorem 4.5, docs §4.4, at proof-sketch density with two
-/// flagged-open induction steps) with the `nf`-level corollary's side
-/// conditions discharged there (#185, 2026-08-02), is
-/// probe-verified on the named families beyond it, and is open in general:
-/// the dominant remaining freedom is `η` placement slack (docs §4.4, §4.6).
+/// # Canonicality
 ///
-/// Known exception (issue #55): both halves of the former zero-arity gap are
-/// closed — probe-verified on the fragment 𝔉, **proven on the smaller `𝔉′`**
-/// (`docs/SMC-NF-RECONCILIATION.md` §4.1 for 𝔉 — every connected component
-/// clear of guard 3's marking *and* touching a boundary; §4.4 Theorem 4.5 for
-/// `𝔉′`. The closed-component exclusion was added 2026-07-27 for the
-/// trapped-nesting residual, and the draft §4 proof was refuted the same day
-/// by a residual *inside* 𝔉. Both of those are closed behaviourally as of
-/// #174 — the trapped nesting by the Step 6½ column pass, the refuting
-/// family's source form by the free-site retirement. The remaining open
-/// freedom is `η` placement slack — the `𝔉′` hypothesis, witnessed live by
-/// `eta_slack_residual` in `tests/smc_nf_completeness.rs`).
-/// - **Within-layer order** — Step 6 (`reorder_tied_zero_arity`, PR1) puts every
-///   tied run in canonical order, so `nf(ε ⊗ η) == nf(η ⊗ ε)`.
+/// The *soundness* direction — `nf(&a) == nf(&b)` implies `a` and `b` are
+/// SMC-equal (equal in the free symmetric monoidal category on `G`) — holds
+/// unconditionally, since `nf` applies only SMC-sound rewrites. The
+/// *canonicality* direction — SMC-equal expressions get equal NFs — has rigidity
+/// proven on the fragment 𝔉′ (braid-free, every `η` placement-pinned —
+/// Theorem 4.5, docs §4.4, at proof-sketch density with two flagged-open
+/// induction steps), is probe-verified on the named families beyond it, and is
+/// open in general; the dominant remaining freedom is `η` placement slack (docs
+/// §4.4, §4.6). Both halves of the former zero-arity gap are closed —
+/// probe-verified on the fragment 𝔉 (docs §4.1: every connected component clear
+/// of guard 3's marking *and* touching a boundary), proven on the smaller `𝔉′`:
+///
+/// - **Within-layer order** — Step 6 (`reorder_tied_zero_arity`) puts every tied
+///   run in canonical order, so `nf(ε ⊗ η) == nf(η ⊗ ε)`.
 /// - **Layer assignment** — a zero-source generator (`source == 0`, e.g.
-///   `η : 0 → 1`) is scheduled by the point-span sift (PR2): its slot in the
-///   earlier layer is the leftmost one its output coordinate admits. The
-///   component-anchored slot walk that used to refine that choice was retired in
-///   #174 — it made the normal form depend on the writing (`CE-R1`).
-///   So `nf(F ⊗ η ⊗ G) == nf((F ⊗ G) ; (id₁ ⊗ η ⊗ id₁))`,
+///   `η : 0 → 1`) is scheduled by the point-span sift: its slot in the earlier
+///   layer is the leftmost one its output coordinate admits. So
+///   `nf(F ⊗ η ⊗ G) == nf((F ⊗ G) ; (id₁ ⊗ η ⊗ id₁))`,
 ///   `nf(ε ; η) == nf(η ⊗ ε) == nf(ε ⊗ η)`, and the two-component witness
 ///   `nf((μ;!) ; (η;Δ)) == nf((μ;!) ⊗ (η;Δ))`.
 /// - **Block order** — Step 7 (`reorder_component_blocks`) transposes whole
@@ -214,49 +181,34 @@ pub struct StringDiagram<G: PropSignature> {
 ///   transpositions close too: `nf((μ;!) ⊗ (η;Δ)) == nf((η;Δ) ⊗ (μ;!))`, and a
 ///   closed block sorts leftmost regardless of where it was written. Two
 ///   *distinct* closed blocks share rule (i)'s one closed key and are separated
-///   by the in-situ reading key (`component_reading`, #79 P1), so they too
-///   converge from either writing.
-///
-/// - **Column order** — Step 6½ (`reorder_zero_arity_columns`, issue #174)
-///   transposes a zero-arity-bounded *block* against a *column* of a larger
-///   component, the move between what Step 6 (adjacent atoms) and Step 7 (whole
-///   components) can do. So a block written **nested** inside another
-///   component's wire span extracts to its free writing:
+///   by the in-situ reading key (`component_reading`).
+/// - **Column order** — Step 6½ (`reorder_zero_arity_columns`) transposes a
+///   zero-arity-bounded *block* against a *column* of a larger component, the
+///   move between what Step 6 (adjacent atoms) and Step 7 (whole components) can
+///   do. So a block written **nested** inside another component's wire span
+///   extracts to its free writing:
 ///   `nf(Copy ; (id₁ ⊗ η ⊗ id₁) ; (id₁ ⊗ ε ⊗ id₁) ; μ) == nf((η;ε) ⊗ (Copy;μ))`,
 ///   and likewise for a nested block solid on the side facing its encloser's
-///   opening (the two cases that were residuals (c) and (d)).
+///   opening.
 ///
 /// **Residual scope.** The one *named* residual left is the interleave guard:
 /// when a component's boundary attachment interleaves another's on the same
 /// boundary, transposition is not braid-free, so Steps 7 and 6½ leave its blocks
-/// and columns alone. (Its `η`s do sift, and its tied adjacencies do order —
-/// #174 retired the guard from those two sites.)
+/// and columns alone. Its `η`s do sift, and its tied adjacencies do order.
 ///
-/// That is a named residual, **not a bound**. A differential sweep over 100 000
-/// random SFG expressions, each paired with a sound interchange rewriting of
-/// itself, still finds 93 divergent pairs *inside* the fragment 𝔉 (128 before
-/// #185) — unmarked,
-/// boundary-attached, and mostly predating this machinery. `nf` remains sound on
+/// That is a named residual, **not a bound**: a differential sweep over random
+/// SFG expressions, each paired with a sound interchange rewriting of itself,
+/// still finds divergent pairs *inside* the fragment 𝔉. `nf` remains sound on
 /// every one of them; what is open is uniqueness. See
 /// `docs/SMC-NF-RECONCILIATION.md` §2.6 (where rule (i)'s coordinates may be
-/// read), §4.5 (the column move), §4.6 (the residual ledger and the measured
-/// landscape), and the `smc_canonicality_probes` module in
-/// `tests/smc_nf_completeness.rs`, which is the gate of record.
+/// read), §4.5 (the column move) and §4.6 (the residual ledger).
 pub fn nf<G: PropSignature>(expr: &PropExpr<G>) -> StringDiagram<G> {
     nf_inner(expr, true)
 }
 
-/// [`nf`] with **Step 6½ skipped** — an `internal-probes` test hook.
-///
-/// Not public API and not built by default. It exists so
-/// `smc_canonicality_probes::column_pass_ablation` can pin *which* witnesses the
-/// column pass is load-bearing for, rather than leaving that attribution to a
-/// hand-run experiment. §4.5's "What actually depends on the pass" and the
-/// CHANGELOG's residual-(c)/(d) entry both make a counted claim about this; the
-/// probe is what keeps the count honest.
-///
-/// Everything else is unchanged, so a diagram that converges under both is one
-/// the column pass does not decide.
+/// [`nf`] with **Step 6½ skipped** — an `internal-probes` test hook, not public
+/// API and not built by default. Everything else is unchanged, so a diagram that
+/// converges under both is one the column pass does not decide.
 ///
 /// # Panics
 ///
@@ -271,12 +223,12 @@ pub fn nf_without_column_pass<G: PropSignature>(expr: &PropExpr<G>) -> StringDia
 ///
 /// # Panics
 ///
-/// See [`nf`]. The domain screen is here, at the single entry point, rather
-/// than at each of the interior `m + n` sites (#196 lists six): past it every
-/// arity *written in the tree* is known to fit, and [`atom_source`] records why
-/// that covers every braid width the pipeline goes on to read or build. It does
-/// not cover the widths the pipeline *derives* by adding across a layer (#197)
-/// — see [`nf`]'s caveat, and `merge_adjacent_identities`, which saturates.
+/// See [`nf`]. The domain screen is here, at the single entry point, rather than
+/// at each of the interior `m + n` sites: past it every arity *written in the
+/// tree* is known to fit, which covers every braid width the pipeline goes on to
+/// read or build. It does not cover the widths the pipeline *derives* by adding
+/// across a layer — see [`nf`]'s caveat, and `merge_adjacent_identities`, which
+/// saturates.
 fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDiagram<G> {
     assert!(
         expr.arities_fit(),
@@ -291,75 +243,38 @@ fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDi
     // - `reduce_involution` shrinks crossings (σ;σ → id); `hexagon_expand` leaves
     //   crossings fixed (it preserves the underlying permutation);
     // - `isolate_mixed_braid_layers` (inside `collect_braid_prefix`) strictly
-    //   shrinks mixed_layer_count, and the mixed-merge refusal at
-    //   `reduce_involution`'s merge site keeps anything from re-creating a mixed
-    //   layer;
+    //   shrinks mixed_layer_count; the mixed-merge refusal at
+    //   `reduce_involution`'s merge site keeps a mixed layer from re-forming;
     // - `hexagon_expand` strictly shrinks wide_braid_count (`Braid(m,n)`, m+n>2 →
     //   `Braid(1,1)` bricks), placed ahead of braid_position_sum so a wide braid
-    //   emitted by the naturality sweep is decomposed on the next pass before
-    //   braid positions are compared (at the fixpoint check no wide braid remains);
+    //   emitted by the naturality sweep is decomposed before braid positions are
+    //   compared;
     // - the naturality sweep shrinks braid_position_sum (braids move input-ward);
-    // - `topological_layer_order` shrinks generator_position_sum (each sift,
-    //   including a zero-source `η` point-span sift, drops
-    //   exactly one generator by one layer and moves nothing else — issue #55);
+    // - `topological_layer_order` shrinks generator_position_sum (each sift drops
+    //   exactly one generator by one layer and moves nothing else);
     // - `coalesce_identity_layers`/`simplify_units` shrink layer_count;
-    // - `reorder_component_blocks` (Step 7) shrinks block_inversion_count — each
-    //   transposition flips every position pair between the two blocks' runs and
-    //   leaves all other pairs' relative order alone. The count is taken against
-    //   the lex order (rule-(i) key, in-situ reading key): the reading key
-    //   records no wire coordinates, so — like the keys — it is invariant under
-    //   the swap, and the same all-pairs argument covers the equal-key
-    //   closed↔closed swap the reading key enables (#79 P1). It changes no
-    //   layer's membership and rewrites no atom, so every earlier component is
-    //   invariant under it. It may *raise* tied_inversion_count (a block move
-    //   can land an η beside an ε), but that is the later component and Step 6
-    //   repairs it on the same pass;
-    // - `reorder_zero_arity_columns` (Step 6½) shrinks column_inversion_count —
-    //   the interval-level analogue of block_inversion_count, counted over the
-    //   pairs whose two components pass the pass's guards and have distinct keys.
-    //   Each transposition flips every position pair between the two columns'
-    //   runs and leaves all other pairs alone; the comparator core is
-    //   `component_key_order`, and because one side of the pair is zero-width at
-    //   each of the interval's own boundaries, the swap moves no boundary wire —
-    //   so keys, sizes, markings and attachment flags are invariant under it.
-    //   It changes no layer's membership and rewrites no atom, so every earlier
-    //   component is invariant (block_inversion_count included: its free pairs
-    //   are ordered by the same core, so a column swap can only lower it or
-    //   leave it alone). Like Step 7 it may *raise* tied_inversion_count, the
-    //   later component, which Step 6 repairs on the same pass;
+    // - `reorder_component_blocks` (Step 7) shrinks block_inversion_count, and
+    //   `reorder_zero_arity_columns` (Step 6½) column_inversion_count, its
+    //   interval-level analogue over the pairs passing the guards with distinct
+    //   keys. Each transposition flips every position pair between the two runs
+    //   and leaves all other pairs alone; neither changes a layer's membership or
+    //   rewrites an atom, so every earlier component is invariant;
     // - `reorder_tied_zero_arity` (Step 6) shrinks tied_inversion_count — each
-    //   swap flips exactly one order-inverted pair and leaves every other pair's
-    //   relative order alone. The order is `tie_sorts_before`'s: the Decision-1
-    //   class order, then (two 0→0 scalar generators, the only atoms that can
-    //   strictly commute at an equal class) `G::cmp`. Since #174 retired its
-    //   rule-(i) branch, that order reads the two atoms and nothing else, so it
-    //   cannot change under any pass and the count is well-defined without an
-    //   invariance argument. Step 6 is within-layer only — it moves no atom
-    //   between layers and rewrites no atom — so every earlier component is
-    //   untouched. block_inversion_count and column_inversion_count are NOT
-    //   invariant under it in general: at a both-readings adjacency (docs §4.4)
-    //   a tied swap moves a counted pair against the component order —
-    //   witnessed, tests/pass_disjointness_probes.rs — the rewriting pass moves
-    //   it back, and the loop exits on exact cancellation via the whole-pass
-    //   `sd == prev` check, landing on the Step-6-sorted layout the restated
-    //   invariant clauses ratify. The measure is the termination proof
-    //   everywhere else; completing it at these adjacencies is tracked on
-    //   issue #174 (docs §2.4).
+    //   swap flips exactly one order-inverted pair. Its order reads the two atoms
+    //   and nothing else, so the count is well-defined without an invariance
+    //   argument, and Step 6 is within-layer only. block_inversion_count and
+    //   column_inversion_count are NOT invariant under it at a both-readings
+    //   adjacency (docs §4.4): a tied swap moves a counted pair against the
+    //   component order, the rewriting pass moves it back, and the loop exits on
+    //   exact cancellation via the whole-pass `sd == prev` check.
     //
     // Three steps can *raise* a later component while strictly shrinking an
-    // earlier one, so the tuple still drops lexicographically and the later
-    // pass repairs the ordering on the same fixpoint pass:
-    // - `try_unitor_merge` raises tied_inversion_count (its case 1 prepends an ε
-    //   ahead of the absorbed layer's atoms, possibly past an η; its case 4
-    //   appends an η after them, possibly behind an ε; case 3's η-prepend is
-    //   order-canonical) while shrinking layer_count. It changes no component's
-    //   key, size or marking, so it cannot raise column_inversion_count.
-    // - the point-span sift can land an `η` beside an `ε` (raising
-    //   tied_inversion_count) and moves an atom between layers (so it *can*
-    //   raise column_inversion_count) while shrinking generator_position_sum.
-    // - a Step-7 block move raises tied_inversion_count while shrinking
-    //   block_inversion_count; it cannot raise column_inversion_count, since
-    //   both counts order the swapped pair by the same `component_key_order`.
+    // earlier one, so the tuple still drops lexicographically and the later pass
+    // repairs the ordering on the same fixpoint pass: `try_unitor_merge` raises
+    // tied_inversion_count while shrinking layer_count; the point-span sift raises
+    // tied_inversion_count and can raise column_inversion_count while shrinking
+    // generator_position_sum; a Step-7 block move raises tied_inversion_count
+    // while shrinking block_inversion_count.
     // See `docs/SMC-NF-RECONCILIATION.md` §2.4.
     loop {
         let prev = sd.clone();
@@ -385,13 +300,10 @@ fn nf_inner<G: PropSignature>(expr: &PropExpr<G>, run_columns: bool) -> StringDi
 /// becomes a right-associated tensor of its atoms; a layer sequence becomes a
 /// right-associated compose of the per-layer tensor expressions.
 ///
-/// Used by Layer 2 to feed NF-normalized terms into the CC engine.
-///
 /// # Panics
 ///
-/// Never — the internal `expect` calls are invariant-guarded by the empty-list
-/// early returns. The `expect` messages exist for developer visibility if the
-/// invariant is ever violated by a future refactor.
+/// Never — the internal `expect` calls are guarded by the empty-list early
+/// returns.
 #[must_use]
 pub fn from_string_diagram<G: PropSignature>(sd: &StringDiagram<G>) -> PropExpr<G> {
     if sd.layers.is_empty() {
@@ -490,12 +402,8 @@ fn pad_and_zip<G: PropSignature>(
         .map(|(mut la, lb)| {
             la.atoms.extend(lb.atoms);
             // Merge adjacent identities eagerly so distinct lowering paths
-            // (e.g., tensor associator variants) converge on the same
-            // atom-boundary structure before canonicalization runs. Without
-            // this, `pad_and_zip` can produce `[Identity(k)]` on one branch
-            // while the mirror branch produces `[Identity(1), Identity(1),
-            // ...]` at the same wire positions, causing Step 2's
-            // `try_column_merge` to fire asymmetrically.
+            // converge on the same atom-boundary structure before
+            // canonicalization runs.
             Layer {
                 atoms: merge_adjacent_identities(la.atoms),
             }
@@ -514,12 +422,10 @@ fn trailing_arity<G: PropSignature>(sd: &StringDiagram<G>) -> usize {
 
 /// Input arity of an atom.
 ///
-/// The `Braid` sum is unchecked on purpose (#196). Every `Braid` atom's two
-/// halves come from one of three places, and none of them can overflow: `lower`
-/// copies them off a `PropExpr::Braid`, which [`nf_inner`]'s entry screen has
-/// already checked; Step 1 emits `Braid(1, 1)` bricks; and the naturality sweep
-/// builds `Braid(s_a, s_b)` from two atoms *of one layer*, so its sum is at most
-/// that layer's width.
+/// The `Braid` sum is unchecked on purpose: every `Braid` atom's two halves come
+/// from `lower` (checked by [`nf_inner`]'s entry screen), from Step 1's
+/// `Braid(1, 1)` bricks, or from the naturality sweep's `Braid(s_a, s_b)` over
+/// two atoms of one layer, whose sum is at most that layer's width.
 fn atom_source<G: PropSignature>(a: &Atom<G>) -> usize {
     match a {
         Atom::Identity(n) => *n,
@@ -593,11 +499,8 @@ fn normalize_empty_braids<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagr
 ///
 /// A layer qualifies when its only non-`Identity` atom is a single wide
 /// `Braid(m,n)` (`m+n > 2`) — including identity-padded layers such as
-/// `[Identity(p), Braid(2,1), Identity(s)]`. Wide braids reach this shape not
-/// only from lowering but from `try_naturality_swap`'s `σ_{s_a,s_b}` emission
-/// and from `isolate_mixed_braid_layers`; expanding them in place is what keeps
-/// the "no `Braid(m,n)` with `m+n > 2`" invariant true. The surrounding
-/// prefix/suffix identity widths are re-applied to each emitted brick layer.
+/// `[Identity(p), Braid(2,1), Identity(s)]`. The surrounding prefix/suffix
+/// identity widths are re-applied to each emitted brick layer.
 ///
 /// Paper anchor: JS-Braided Prop 2.1 / axiom (B2) p.33–34
 /// (`c_{U⊗V, W} = (c_{U,W} ⊗ 1_V) ∘ (1_U ⊗ c_{V,W})`); JS-I Ch 2 Thm 2.3 p.81
@@ -675,14 +578,9 @@ fn decompose_braid<G: PropSignature>(m: usize, n: usize) -> Vec<Layer<G>> {
     // Bubble-sort perm to [0..total] via the shared `adjacent_swaps` core,
     // recording the swap positions.
     let mut swaps = super::super::adjacent_swaps(&perm);
-    // Reversed sequence applied to identity reproduces σ_{m,n}: sorting the
-    // OUTPUT-indexed perm above yields the word that UNDOES the braid, and
+    // Sorting the OUTPUT-indexed perm yields the word that UNDOES the braid;
     // reversing a word of self-inverse adjacent transpositions inverts the
-    // composite — giving the word that BUILDS it. (A permutation-convention
-    // fact, not a pipeline-direction difference: `permutation_sfg` in
-    // `crate::mat_to_sfg` needs no reversal because its perm is INPUT-indexed —
-    // wire `p` exits at `perm[p]` — and both consumers compose layers in the
-    // same forward order.)
+    // composite, giving the word that builds it.
     swaps.reverse();
     swaps
         .into_iter()
@@ -715,18 +613,12 @@ fn braid_at_position<G: PropSignature>(i: usize, n_total: usize) -> Vec<Atom<G>>
 /// - `X ; Identity(n)  →  X` with `X.target == n` — right identity-compose
 /// - `Braid(m, n) ; Braid(n, m)  →  Identity(m+n)` — symmetric involution (S)
 ///
-/// The generalization beyond bare involution is load-bearing: the
-/// faithfulness tests' blocking case `(σ ⊗ id) ; (σ ⊗ id) = id_3` only
-/// closes when each column reduces independently (σ;σ=id in column 0;
-/// id;id=id in column 1), which is this step's job.
-///
-/// If any column-pair fails to reduce to a single atom, the layer pair is
-/// left intact and normalization proceeds via later steps. A σ;σ band trapped
-/// alongside a `generator ; generator` chain in a mixed layer — which no
-/// whole-layer merge can reach — is instead handled downstream by
-/// `isolate_mixed_braid_layers` → naturality sweep → braid-run canonicalization
-/// (see [`collect_braid_prefix`]), which slides the braids to the leading
-/// layers where the ordinary involution column-merge cancels them.
+/// If any column-pair fails to reduce to a single atom, the layer pair is left
+/// intact and normalization proceeds via later steps. A σ;σ band trapped
+/// alongside a `generator ; generator` chain in a mixed layer is instead handled
+/// downstream by `isolate_mixed_braid_layers` → naturality sweep → braid-run
+/// canonicalization (see [`collect_braid_prefix`]), which slides the braids to
+/// the leading layers where the ordinary involution column-merge cancels them.
 ///
 /// Paper anchor: JS-I Ch 2 §1 axiom (S) p.73 (the σ;σ case); JS-Braided (S)
 /// p.21; Selinger §3.5 p.17. Interchange-over-identity is JS-I §4 Thm 1.2
@@ -737,11 +629,8 @@ fn reduce_involution<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G>
     while i + 1 < layers.len() {
         let merged = try_column_merge(&layers[i], &layers[i + 1])
             .or_else(|| try_unitor_merge(&layers[i], &layers[i + 1]))
-            // Never (re-)create a mixed braid+generator layer: `collect_braid_prefix`'s
-            // `isolate_mixed_braid_layers` splits those, and re-forming one would
-            // re-trap a braid alongside an independent generator and stall the
-            // fixpoint. Both `try_column_merge` and `try_unitor_merge` can otherwise
-            // produce one, so the guard lives here at the shared merge site.
+            // Never (re-)create a mixed braid+generator layer: it would re-trap a
+            // braid alongside an independent generator and stall the fixpoint.
             .filter(|m| !is_mixed_layer(&m.atoms));
         if let Some(merged) = merged {
             layers[i] = merged;
@@ -833,12 +722,10 @@ fn try_unitor_merge<G: PropSignature>(l1: &Layer<G>, l2: &Layer<G>) -> Option<La
 /// incompatible total widths or any column pair fails to reduce to a single
 /// atom.
 ///
-/// Boundary refinement is load-bearing: different `PropExpr` factorizations
-/// of the same morphism can produce adjacent layers with the same wire
-/// widths but different atom-boundary splits (e.g., `[Identity(2), F]`
-/// alongside `[F, Identity(2)]`). Without refinement, Step 2 would fire
-/// asymmetrically across different lowering paths, breaking tensor-associator
-/// and bifunctoriality canonicalization.
+/// Boundary refinement is load-bearing: different `PropExpr` factorizations of
+/// the same morphism can produce adjacent layers with the same wire widths but
+/// different atom-boundary splits, and without it Step 2 would fire
+/// asymmetrically across lowering paths.
 ///
 /// Mixed braid+generator results are rejected by the caller
 /// ([`reduce_involution`]'s merge site), not here.
@@ -1127,11 +1014,7 @@ fn try_naturality_swap<G: PropSignature>(
 ) -> Option<(Layer<G>, Layer<G>)> {
     // Only a single-braid layer can slide as a whole: this rewrite replaces the
     // entire braid layer with the swapped gen layer, so a second braid would be
-    // dropped. Multi-braid layers are normally eliminated before the sweep —
-    // `canonicalize_braid_runs` (run at the top of `collect_braid_prefix`) splits
-    // `Braid(1,1)` runs into single-braid layers, and `hexagon_expand` decomposes
-    // wide braids in identity padding. This guard is the safety net for any
-    // residual multi-braid layer.
+    // dropped.
     if braid_layer
         .atoms
         .iter()
@@ -1158,9 +1041,8 @@ fn try_naturality_swap<G: PropSignature>(
     let braid_wire_pos = braid_wire_pos?;
 
     // Refine gen-layer identities to unit width so the braid can cross a wide
-    // identity or a pure-identity cover, not only two 1-target atoms — but only
-    // allocate the exploded copy when a wide identity is actually present.
-    // Otherwise scan the layer as-is (the common path, incl. every no-swap exit).
+    // identity or a pure-identity cover, allocating the exploded copy only when a
+    // wide identity is actually present.
     let exploded;
     let gen_atoms: &[Atom<G>] = if gen_layer
         .atoms
@@ -1272,9 +1154,8 @@ fn canonicalize_run<G: PropSignature>(run: &[Layer<G>]) -> Vec<Layer<G>> {
         apply_braid_layer_to_perm(layer, &mut perm);
     }
 
-    // Canonical decomposition of perm via the shared `adjacent_swaps` core
-    // (the same one behind `decompose_braid`), reversed for the same
-    // undo-word → build-word reason documented there.
+    // Canonical decomposition of perm via the shared `adjacent_swaps` core,
+    // reversed for the same undo-word → build-word reason as `decompose_braid`.
     let mut swaps = super::super::adjacent_swaps(&perm);
     swaps.reverse();
 
@@ -1368,11 +1249,8 @@ fn merge_adjacent_identities<G: PropSignature>(atoms: Vec<Atom<G>>) -> Vec<Atom<
         if let Atom::Identity(n) = atom
             && let Some(Atom::Identity(prev_n)) = out.last_mut()
         {
-            // Not one of the arities [`nf_inner`]'s screen covers: this width is
-            // *derived*, and on an arity-mismatched tree `pad_and_zip` can put
-            // an `Identity(usize::MAX)` beside a padding identity from a
-            // shorter branch. Saturate rather than wrap (#88, #196) — identical
-            // on every width a real wire bundle can have.
+            // A *derived* width, outside `nf_inner`'s entry screen: on an
+            // arity-mismatched tree this can exceed `usize::MAX`, so saturate.
             *prev_n = prev_n.saturating_add(n);
             continue;
         }
@@ -1382,7 +1260,7 @@ fn merge_adjacent_identities<G: PropSignature>(atoms: Vec<Atom<G>>) -> Vec<Atom<
 }
 
 // -------------------------------------------------------------------------
-// Connected components — the rule-(i) component-order anchor (issue #55)
+// Connected components — the rule-(i) component-order anchor
 // -------------------------------------------------------------------------
 
 /// Boundary attachment of a connected component: the key rule (i) orders
@@ -1393,9 +1271,9 @@ fn merge_adjacent_identities<G: PropSignature>(atoms: Vec<Atom<G>>) -> Vec<Atom<
 ///
 /// Two *distinct* anchored components can never share a key — a least attached
 /// coordinate is a wire owned by exactly one of them — so equal keys mean both
-/// components are closed, all of which share `(0, 0)`. That one tie is broken
-/// by the in-situ reading key ([`component_reading`], #79 P1): closed blocks
-/// order by content, not by the order they were written in.
+/// components are closed, all of which share `(0, 0)`. That one tie is broken by
+/// the in-situ reading key ([`component_reading`]): closed blocks order by
+/// content, not by the order they were written in.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct CompKey {
     /// `0` = closed (attaches to neither boundary), `1` = input-anchored
@@ -1435,8 +1313,7 @@ struct Components {
 ///
 /// The derived order is the intended one: `Identity < Braid < Generator` by
 /// variant tag, then widths numerically, then the generator by
-/// `PropSignature: Ord` (issue #79 P1, Decision 2). No wire coordinate appears
-/// — see [`component_reading`] for why that matters.
+/// `PropSignature: Ord`. No wire coordinate appears — see [`component_reading`].
 ///
 /// A component carrying a `Braid` is never transposed by Step 7 (the braid
 /// guard), so the `Braid` arm exists only to keep the comparator total.
@@ -1450,25 +1327,19 @@ enum ReadingAtom<'a, G: PropSignature> {
 /// The **in-situ reading** of component `c`: its atoms in layer order,
 /// left-to-right within each layer, mapped to [`ReadingAtom`] keys.
 ///
-/// This is the content-derived total order that separates two closed
-/// components, which rule (i)'s [`CompKey`] cannot (issue #79 P1, Decision 2).
-/// Compared as a `Vec`, i.e. lexicographically with a prefix sorting before a
-/// longer sequence.
+/// This is the content-derived total order that separates two closed components,
+/// which rule (i)'s [`CompKey`] cannot. Compared as a `Vec`, i.e.
+/// lexicographically with a prefix sorting before a longer sequence.
 ///
-/// **Offset-independence is the load-bearing property.** The reading records
-/// only what the atoms *are*, never where they sit, so it is invariant under
-/// Step 7's own transpositions — which permute whole runs and rewrite nothing.
-/// A position-sensitive key would change under the swap it just licensed and
-/// the `nf` fixpoint would oscillate instead of terminating (the same failure
-/// mode `analyze_components`' emptiness guard avoids for the analysis itself —
-/// Step 6 no longer reads one). Equal
-/// readings therefore mean the two blocks are identical, and transposing them
-/// is invisible.
+/// **Offset-independence is the load-bearing property.** The reading records only
+/// what the atoms *are*, never where they sit, so it is invariant under Step 7's
+/// own transpositions; a position-sensitive key would change under the swap it
+/// just licensed and the `nf` fixpoint would oscillate instead of terminating.
+/// Equal readings therefore mean the two blocks are identical, and transposing
+/// them is invisible.
 ///
 /// `ids` is the caller's per-layer component-id rows, which must be the ones
-/// analysed from `sd`. Step 7 is the only caller, and it passes the refined
-/// pair it rewrites on — the unrefined call site this note used to name
-/// (`component_slot`) was retired in #174.
+/// analysed from `sd`.
 fn component_reading<'a, G: PropSignature>(
     sd: &'a StringDiagram<G>,
     ids: &[Vec<usize>],
@@ -1492,17 +1363,13 @@ fn component_reading<'a, G: PropSignature>(
 /// Order between two components *before* the closed↔closed reading-key
 /// tie-break: rule (i)'s [`CompKey`], nothing else.
 ///
-/// **Where rule (i)'s coordinates are allowed to be read** (issue #174 design
-/// round, 2026-07-28). `CompKey` carries a boundary *coordinate*, and a
-/// coordinate is only a function of the morphism where the geometry pins it.
-/// The two **rewriting** passes — Step 7 and Step 6½ — verify that pinning
-/// before they move anything: each checks that the transposition is braid-free
-/// at both boundaries it spans, so the pair's order there really is geometry,
-/// not a choice. The **free** decision sites do not have that guarantee, which
-/// is why they no longer consult this order at all: the Step 4(c) `η` slot walk
-/// and Step 6's tied comparator were retired in the same round (`component_slot`
-/// and `tie_sorts_before`'s rule-(i) branch), leaving those sites
-/// coordinate-free. See `docs/SMC-NF-RECONCILIATION.md` §2.6.
+/// **Where rule (i)'s coordinates are allowed to be read.** `CompKey` carries a
+/// boundary *coordinate*, and a coordinate is only a function of the morphism
+/// where the geometry pins it. The two **rewriting** passes — Step 7 and Step 6½
+/// — verify that pinning before they move anything: each checks that the
+/// transposition is braid-free at both boundaries it spans. The **free** decision
+/// sites have no such guarantee and do not consult this order at all. See
+/// `docs/SMC-NF-RECONCILIATION.md` §2.6.
 ///
 /// `Ordering::Equal` means both components are closed, the one tie rule (i)
 /// admits; [`block_sorts_before`] resolves it by content.
@@ -1629,13 +1496,9 @@ impl FragmentStatus {
 
 /// Classify `sd` against the fragment `𝔉`. See [`FragmentStatus`].
 ///
-/// **Reads the stored layers, not the identity-split refinement**, and that
-/// choice is load-bearing rather than incidental. It reproduces the #174 design
-/// round's `probe::marking`, which is the classification behind §4.6's published
-/// buckets; refining here instead would split components a fused `Identity`
-/// joins, move diagrams across the `𝔉` boundary, and silently re-base every
-/// count the sweep pins. If this ever needs to change, the sweep's pins must be
-/// re-measured in the same commit.
+/// **Reads the stored layers, not the identity-split refinement.** Refining here
+/// would split components a fused `Identity` joins and move diagrams across the
+/// `𝔉` boundary, re-basing every count the differential sweep pins.
 #[cfg(feature = "internal-probes")]
 pub fn fragment_status<G: PropSignature>(sd: &StringDiagram<G>) -> FragmentStatus {
     let comps = analyze_components(sd);
@@ -1650,7 +1513,7 @@ pub fn fragment_status<G: PropSignature>(sd: &StringDiagram<G>) -> FragmentStatu
 }
 
 /// Union-find the atoms of `sd` into connected components and classify each by
-/// its boundary attachment (issue #55 rule (i), owner decision 2026-07-26).
+/// its boundary attachment (rule (i)).
 fn analyze_components<G: PropSignature>(sd: &StringDiagram<G>) -> Components {
     let mut offsets = Vec::with_capacity(sd.layers.len() + 1);
     let mut total = 0;
@@ -1787,20 +1650,15 @@ fn analyze_components<G: PropSignature>(sd: &StringDiagram<G>) -> Components {
 ///   of layer `j−1` or strictly inside one of its identities
 ///   (`point_placement`), never strictly inside a generator's output span.
 ///   Where the coordinate leaves a *choice* of slot — a run of target-0 atoms
-///   all sit at it — the **leftmost** is taken. The component-anchored walk
-///   that used to choose among them was retired in #174: the slot is a genuinely
-///   free choice, and rule (i)'s coordinates are writing-dependent there, so
-///   consulting them made the normal form writing-dependent too (`CE-R1`).
+///   all sit at it — the **leftmost** is taken.
 ///
-/// Soundness: this is bifunctoriality / interchange — JS-I Ch 1 §4 Thm 1.2
-/// p.71, `(id ⊗ g) ; (h ⊗ id) = h ⊗ g`, generalized to the identity context
+/// Soundness: this is bifunctoriality / interchange — JS-I Ch 1 §4 Thm 1.2 p.71,
+/// `(id ⊗ g) ; (h ⊗ id) = h ⊗ g`, generalized to the identity context
 /// `(id_pre ⊗ g ⊗ id_post) ; (id_pre ⊗ id_g.target ⊗ id_post ⊗ …)`. Moving `g`
 /// earlier through a column of identities (or, for `η`, across an atom boundary
 /// where it shares no wire with either neighbour) preserves the morphism. The
-/// pass is the topological-layer-order canonicalization of issue #14: it forces
-/// the C2-gap witnesses (same morphism, independent atoms scheduled into
-/// different layers) onto a single earliest-schedule form. Paper: JS-I Ch 1 §4
-/// Thm 1.2 p.71.
+/// pass forces same-morphism writings whose independent atoms are scheduled into
+/// different layers onto a single earliest-schedule form.
 ///
 /// Termination: each move strictly decreases the sum of the layer indices of
 /// `Generator` atoms (one generator — positive- or zero-source — drops by one
@@ -1810,13 +1668,12 @@ fn analyze_components<G: PropSignature>(sd: &StringDiagram<G>) -> Components {
 /// - **Zero-source `η` uses the point-span rule, not a covering-identity scan.**
 ///   Its consumed span is empty, so the earliest placement is fixed by the
 ///   single output coordinate. It is blocked only when that coordinate is
-///   strictly inside a generator's output span. Marking no longer enters: guard
-///   3 stopped gating this sift in #174, so a marked component's `η` schedules
-///   like any other (witness `marked_component_eta_sifts_and_converges`). This
-///   subsumes the `try_unitor_merge` zero-arity source patterns (both agree on
-///   the 2-atom boundary shape) without racing it (both moves only ever decrease
-///   the `nf` fixpoint measure). Target-0 sinks (`ε : 1 → 0`) have a non-empty
-///   source span and sift via the positive-source path.
+///   strictly inside a generator's output span; marking does not enter, so a
+///   marked component's `η` schedules like any other. This subsumes the
+///   `try_unitor_merge` zero-arity source patterns without racing them, both
+///   moves only ever decreasing the `nf` fixpoint measure. Target-0 sinks
+///   (`ε : 1 → 0`) have a non-empty source span and sift via the positive-source
+///   path.
 /// - **Braids never sift and generators never sift into a braid-bearing layer.**
 ///   Braid placement is `collect_braid_prefix`'s responsibility (braids stay in
 ///   the leading layers); this guard keeps the two passes from oscillating in
@@ -1869,7 +1726,6 @@ enum Placement {
     /// atoms `at − 1` and `at` (no split; `at == len` appends). Used when the
     /// output point sits on an atom boundary — e.g. between two generators'
     /// target spans, as in `[F, G]` — so there is no covering identity to split.
-    /// This is the case the mid-layer-`η` witness needs (issue #55).
     Boundary { at: usize },
 }
 
@@ -1963,10 +1819,9 @@ fn covering_identity<G: PropSignature>(
 /// no wire with either neighbour) preserves the morphism. JS-I Ch 1 §4 Thm 1.2
 /// p.71.
 ///
-/// Case 2 returns the **leftmost** matching boundary, and since #174 that is
-/// also the slot used: when a run of target-0 atoms (`ε`s) makes the coordinate
-/// repeat, every slot in the run denotes the same morphism, and the leftmost is
-/// taken rather than chosen by component order.
+/// Case 2 returns the **leftmost** matching boundary, which is also the slot
+/// used: when a run of target-0 atoms (`ε`s) makes the coordinate repeat, every
+/// slot in the run denotes the same morphism.
 fn point_placement<G: PropSignature>(prev: &Layer<G>, q: usize) -> Option<Placement> {
     let mut p = 0; // cumulative target position = boundary before atom `k`
     for (k, atom) in prev.atoms.iter().enumerate() {
@@ -2064,16 +1919,15 @@ fn simplify_units<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
 }
 
 // -------------------------------------------------------------------------
-// Step 7 — block-level component transposition (issue #55 rule (i))
+// Step 7 — block-level component transposition (rule (i))
 // -------------------------------------------------------------------------
 
 /// **Step 7**: transpose adjacent **free component blocks** into rule-(i) order.
 ///
 /// Step 6 reorders single *atoms* within a layer. Rule (i) states an order
 /// between whole connected components, and transposing two multi-atom blocks is
-/// a coupled multi-layer move that no single-atom pass can make — the residual
-/// the PR2 diagnosis note named (`docs/SMC-NF-RECONCILIATION.md` §2.6). This
-/// pass makes it.
+/// a coupled multi-layer move that no single-atom pass can make
+/// (`docs/SMC-NF-RECONCILIATION.md` §2.6).
 ///
 /// # Free pair
 ///
@@ -2102,12 +1956,11 @@ fn simplify_units<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
 /// output-only(2, coord)` — with the **in-situ reading key** breaking the one
 /// tie that key admits. Two distinct *anchored* components can never share a
 /// key (a least attached coordinate is a wire owned by exactly one of them), so
-/// equal keys mean both blocks are closed, and [`component_reading`] then
-/// orders them by content: layer by layer, left to right within each layer,
-/// compared lexicographically (issue #79 P1). The reading names no wire
-/// coordinate, so it is invariant under this pass's own swaps; equal readings
-/// mean the two blocks are identical and the transposition is invisible, so no
-/// swap is made and none is needed. The whole comparator is
+/// equal keys mean both blocks are closed, and [`component_reading`] then orders
+/// them by content: layer by layer, left to right within each layer, compared
+/// lexicographically. The reading names no wire coordinate, so it is invariant
+/// under this pass's own swaps; equal readings mean the two blocks are identical
+/// and the transposition is invisible. The whole comparator is
 /// [`block_sorts_before`]; Step 6½ shares its [`component_key_order`] core.
 ///
 /// A pair is *adjacent* when, in **every** layer where both appear, each one's
@@ -2145,11 +1998,8 @@ fn simplify_units<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
 /// transposition flips every such pair between the two runs and leaves every
 /// other pair's relative order alone, so the count drops by at least one; and
 /// because (c) holds, neither block contributes wires at a boundary the other
-/// attaches to, so all of `keys`, `sizes`, `interleaved` and the attachment
-/// flags are invariant under the swap. The reading keys are invariant too — the
-/// swap permutes whole runs and rewrites no atom, and the reading depends on no
-/// position — so the same all-pairs argument carries the equal-key
-/// closed↔closed swap. `block_inversion_count` sits
+/// attaches to, so `keys`, `sizes`, `interleaved`, the attachment flags and the
+/// reading keys are all invariant under the swap. `block_inversion_count` sits
 /// between `layer_count` and `tied_inversion_count` in the `nf` measure
 /// (`docs/SMC-NF-RECONCILIATION.md` §2.4).
 ///
@@ -2177,18 +2027,12 @@ fn reorder_component_blocks<G: PropSignature>(
 /// Steps 7 and 6½, sharing one identity-split refinement and one component
 /// analysis.
 ///
-/// The two passes run back-to-back in the `nf` loop and would otherwise build
-/// the same refinement and the same union-find twice per iteration. They can
-/// share both: neither rewrites an atom or moves one between layers, so
-/// connectivity — and with it every field of [`Components`] — is invariant
-/// across Step 7's swaps, and Step 6½ can keep reading the analysis Step 7 was
-/// handed. (`ids` is permuted alongside the atoms, so the per-atom mapping stays
-/// in step.) Re-fusing after Step 7 only to re-explode for Step 6½ would be a
-/// round trip through the identical atom sequence, so the fuse happens once, on
-/// the way out.
-///
-/// Ordering is Step 7 first: a block move can expose a column pair, and the
-/// column pass runs to fixpoint after it.
+/// Neither pass rewrites an atom or moves one between layers, so connectivity —
+/// and with it every field of [`Components`] — is invariant across Step 7's
+/// swaps and Step 6½ can keep reading the analysis Step 7 was handed (`ids` is
+/// permuted alongside the atoms, so the per-atom mapping stays in step). The
+/// fuse happens once, on the way out. Ordering is Step 7 first: a block move can
+/// expose a column pair, and the column pass runs to fixpoint after it.
 fn reorder_blocks_and_columns<G: PropSignature>(
     sd: StringDiagram<G>,
     run_columns: bool,
@@ -2307,10 +2151,9 @@ fn find_block_transposition<G: PropSignature>(
     for row in ids {
         for w in row.windows(2) {
             let (c1, c2) = (w[0], w[1]);
-            // The raw-key prune is literally `component_key_order`'s body — it
-            // exists only to skip the expensive guards on a pair that cannot be
-            // inverted. Keep the two in step: if the order ever grows a clause,
-            // this line has to grow it too or the prune starts lying.
+            // The raw-key prune is `component_key_order`'s body, skipping the
+            // expensive guards on a pair that cannot be inverted; keep them in
+            // step if the order ever grows a clause.
             if c1 == c2
                 || comps.keys[c2] > comps.keys[c1]
                 || has_braid[c1]
@@ -2368,7 +2211,7 @@ fn block_wiring_is_consistent<G: PropSignature>(sd: &StringDiagram<G>, ids: &[Ve
 }
 
 // -------------------------------------------------------------------------
-// Step 6½ — zero-arity column transposition (issue #174)
+// Step 6½ — zero-arity column transposition
 // -------------------------------------------------------------------------
 
 /// The atom-index cuts of one column pair in one layer: `X` occupies
@@ -2386,12 +2229,11 @@ struct ColumnSwap {
 /// arities strictly commute.
 ///
 /// Step 6 lifts strict commutation to adjacent *atoms*; Step 7 lifts component
-/// order to whole *components*. The move strictly between them — the one
-/// residuals §4.6(c) and §4.6(d) both need — is a transposition of two
-/// **columns**: `X ⊗ B = B ⊗ X` where `B` is a zero-arity-bounded block and `X`
-/// is a column of a *larger* component, so Step 7's boundary-freedom test (a
-/// whole-component test) never licenses it (`docs/SMC-NF-RECONCILIATION.md`
-/// §4.5). This pass makes it.
+/// order to whole *components*. The move strictly between them is a transposition
+/// of two **columns**: `X ⊗ B = B ⊗ X` where `B` is a zero-arity-bounded block
+/// and `X` is a column of a *larger* component, so Step 7's boundary-freedom test
+/// (a whole-component test) never licenses it
+/// (`docs/SMC-NF-RECONCILIATION.md` §4.5).
 ///
 /// # Columns and interval alignment
 ///
@@ -2401,10 +2243,9 @@ struct ColumnSwap {
 ///
 /// A **column pair** is a layer interval `[j0, j1)` together with, in every one
 /// of its layers, a maximal run of `c1`'s atoms sitting immediately left of a
-/// maximal run of `c2`'s. Both runs are *local* (issue #185): neither
-/// component's whole presence in the layer need be contiguous, so a column pair
-/// may sit inside a component whose layer presence is split (`[L, B, L]`) —
-/// the shape the pass used to decline on the right-hand side alone. The pair is
+/// maximal run of `c2`'s. Both runs are *local*: neither component's whole
+/// presence in the layer need be contiguous, so a column pair may sit inside a
+/// component whose layer presence is split (`[L, B, L]`). The pair is
 /// **interval-aligned** when all three cuts (left of `X`, between `X` and `B`,
 /// right of `B`) sit at the same wire coordinate read from above and from below
 /// at every internal boundary.
@@ -2422,9 +2263,9 @@ struct ColumnSwap {
 ///
 /// — Step 6's criterion read at column granularity. Both connecting braids are
 /// then `σ_{0,n} = id`, so `X ⊗ B` and `B ⊗ X` are the same morphism on the
-/// nose. A column closed over the interval (`0 → 0`) commutes with every other,
-/// which is residual (c)'s extraction move for free. Because at each of the two
-/// boundaries one side contributes no wire, the swap moves no wire coordinate
+/// nose. A column closed over the interval (`0 → 0`) commutes with every other.
+/// Because at each of the two boundaries one side contributes no wire, the swap
+/// moves no wire coordinate
 /// there — so when the interval abuts a diagram boundary, that boundary's owner
 /// word is unchanged and every component key, size, marking and attachment flag
 /// survives the swap.
@@ -2433,19 +2274,14 @@ struct ColumnSwap {
 ///
 /// [`component_key_order`] — the same core Step 7 reads, so the two *rewriting*
 /// passes cannot disagree with each other. Step 6 is not in that statement: it
-/// orders a tied adjacency by the atoms' own class, an unrelated criterion, and
-/// the two families **do** prescribe conflicting layouts at *both-readings
-/// adjacencies* — settled 2026-07-28, witnesses in
-/// `tests/pass_disjointness_probes.rs`, including a shipped-generator conflict
-/// with this very pass at distinct keys. The ratified resolution is a carve,
-/// not a lemma: the class order wins there (Step 6 runs last and every
-/// fixpoint is Step-6-sorted), and the `StringDiagram` invariant clauses
+/// orders a tied adjacency by the atoms' own class, and the two families **do**
+/// prescribe conflicting layouts at *both-readings adjacencies*. The resolution
+/// is a carve, not a lemma: the class order wins there (Step 6 runs last and
+/// every fixpoint is Step-6-sorted), and the `StringDiagram` invariant clauses
 /// except those adjacencies — `docs/SMC-NF-RECONCILIATION.md` §4.4 "pass
-/// disjointness". The pass declines the one tie that order admits (two
-/// *closed* components): closed↔closed order is Step 7's whole-block reading key
-/// (#79 P1). Note what the decline does **not** buy: Step 7 decides by reading
-/// key exactly the tie this pass declines, so the decline is a
-/// single-ownership rule for closed↔closed order, not a Step-6 firewall.
+/// disjointness". The pass declines the one tie that order admits (two *closed*
+/// components), whose order is Step 7's whole-block reading key — a
+/// single-ownership rule, not a Step-6 firewall.
 ///
 /// # Guards
 ///
@@ -2454,11 +2290,9 @@ struct ColumnSwap {
 ///   atoms is what stops them oscillating;
 /// - a marked (interleaved) component is never transposed — rule (i)'s slot is
 ///   ill-defined there, so residual (a) is unchanged;
-/// - at least one of the two components is multi-atom: a single ∥ single pair is
-///   left to Decision 1 / Step 6 — with two single-atom components there is no
-///   block to carry across an interval, so the move is an atom swap, which is
-///   Step 6's. (The §2.6 carve that used to phrase this as a hand-off between
-///   two competing orders is retired; only one order applies at each site now.)
+/// - at least one of the two components is multi-atom: with two single-atom
+///   components there is no block to carry across an interval, so the move is an
+///   atom swap, which is Step 6's.
 ///
 /// # Termination
 ///
@@ -2467,15 +2301,12 @@ struct ColumnSwap {
 /// distinct keys, and are inverted against [`component_key_order`]. A
 /// transposition flips every such pair between the two runs (at least one, since
 /// they are adjacent in every layer of the interval) and leaves every other
-/// pair's relative order alone; the comparator itself is invariant under the
-/// swap by the boundary argument above. Local runs (#185) do not weaken this:
-/// the swap is a rotation *inside* `[left, right)`, so an atom of either
-/// component sitting elsewhere in the row does not move and keeps its order
-/// against everything outside the interval, while a pair of atoms from the same
-/// component is not counted at all (the count reads distinct keys). The
-/// boundary/comparator-invariance argument is likewise per-interval and never
-/// appealed to whole-layer presence. The pass changes no layer's membership
-/// and rewrites no atom, so every earlier measure component — including
+/// pair's relative order alone; the comparator itself is invariant under the swap
+/// by the boundary argument above. Local runs do not weaken this: the swap is a
+/// rotation *inside* `[left, right)`, so an atom of either component sitting
+/// elsewhere in the row does not move, while a pair of atoms from the same
+/// component is not counted at all. The pass changes no layer's membership and
+/// rewrites no atom, so every earlier measure component — including
 /// `block_inversion_count`, whose free pairs are ordered by the same core — is
 /// invariant or lowered. It may *raise* `tied_inversion_count`, the later
 /// component, which Step 6 repairs on the same pass.
@@ -2491,17 +2322,9 @@ fn reorder_zero_arity_columns<G: PropSignature>(
     comps: &Components,
     has_braid: &[bool],
 ) -> bool {
-    // The two diagram boundaries the swaps must leave alone. `block_wiring_is_consistent`
-    // checks only *internal* boundaries — it would pass a swap that reordered the
-    // diagram's own input or output wires, which is exactly what strict commutation
-    // at the interval's ends is there to prevent. Capture them before any move.
-    //
-    // Step 7 needs no analogue: `block_pair_is_free` forbids swapping two
-    // components that share a boundary at all, so its swaps cannot reach a
-    // boundary word. Step 6½ moves column *fragments* of components that may
-    // well share one, and buys its safety from an arithmetic check at the
-    // interval's ends rather than from a structural exclusion — so it is worth
-    // asserting rather than assuming.
+    // The two diagram boundaries the swaps must leave alone.
+    // `block_wiring_is_consistent` checks only *internal* boundaries, so capture
+    // the outer two before any move.
     let before = boundary_owner_words(refined, ids);
     let mut swapped = false;
     while let Some(swap) = find_column_transposition(refined, comps, ids, has_braid) {
@@ -2564,14 +2387,10 @@ fn run_starting_at(row: &[usize], p: usize, c: usize) -> (usize, usize) {
 /// `c1`'s maximal run ending at `p`, immediately left of `c2`'s maximal run
 /// starting at `p + 1`. `None` when `row` does not hold that shape at `p`.
 ///
-/// Both runs are *local* (issue #185): neither component's whole presence in the
-/// layer need be contiguous. The old form took the left run maximal but demanded
-/// the right component's whole layer presence be one contiguous run, so the pass
-/// never seeded on a split-presence encloser (`[L, B, L]` rows) — an asymmetry
-/// the §1 invariant clause and §4.5's own column definition never had. The
-/// factorization the move relies on (`A ⊗ X ⊗ B ⊗ C` over the interval) is a
-/// property of the three *cuts* alone, so atoms of either component sitting in
-/// `A` or `C` are irrelevant to it.
+/// Both runs are *local*: neither component's whole presence in the layer need be
+/// contiguous. The factorization the move relies on (`A ⊗ X ⊗ B ⊗ C` over the
+/// interval) is a property of the three *cuts* alone, so atoms of either
+/// component sitting in `A` or `C` are irrelevant to it.
 fn adjacent_column_cuts_at(row: &[usize], p: usize, c1: usize, c2: usize) -> Option<ColumnCuts> {
     if row.get(p) != Some(&c1) || row.get(p + 1) != Some(&c2) {
         return None;
@@ -2604,13 +2423,12 @@ fn cuts_meet(up: &LayerPrefixes, down: &LayerPrefixes, u: ColumnCuts, d: ColumnC
 /// leftmost-first is the tie-break rather than an appeal to uniqueness.
 ///
 /// **What a tie actually needs.** [`cuts_meet`] reads **one side per row**:
-/// `up.tgt` for the layer above the boundary, `down.src` for the layer below.
-/// So two adjacencies tie exactly when every atom in the span between them —
-/// the two candidates' own runs included — has zero width **on the side being
-/// read at that boundary**, not on both sides. One-sided-zero atoms therefore
-/// qualify: a run of `η`s ties the `src` reading, a run of `ε`s ties the `tgt`
-/// reading. A `0 → 0` atom is merely the case that ties both readings — the
-/// example, not the condition. (Stated the other way round until 2026-08-02.)
+/// `up.tgt` for the layer above the boundary, `down.src` for the layer below. So
+/// two adjacencies tie exactly when every atom in the span between them — the two
+/// candidates' own runs included — has zero width **on the side being read at
+/// that boundary**, not on both sides. One-sided-zero atoms therefore qualify: a
+/// run of `η`s ties the `src` reading, a run of `ε`s ties the `tgt` reading. A
+/// `0 → 0` atom is merely the case that ties both readings.
 ///
 /// The tie-break is free of completeness cost: see the truncation lemma in
 /// [`find_column_transposition`]'s **Completeness** note.
@@ -2674,11 +2492,9 @@ fn column_pair_is_transposable(prefixes: &[LayerPrefixes], j0: usize, cuts: &[Co
         return false;
     }
     // Interval alignment: every cut is the same wire coordinate read from above
-    // and from below at every internal boundary. Since #185 the widening in
-    // [`find_column_transposition`] is itself alignment-guided, so every interval
-    // reaching here already passes this — it is kept as the definition of record
-    // (and the check any future seeding path is measured against), not as dead
-    // weight.
+    // and from below at every internal boundary. `find_column_transposition`'s
+    // widening is itself alignment-guided, so every interval reaching here
+    // already passes this; it is kept as the definition of record.
     (1..cuts.len()).all(|t| {
         cuts_meet(
             &prefixes[j0 + t - 1],
@@ -2703,7 +2519,7 @@ fn column_pair_is_admissible(comps: &Components, has_braid: &[bool], c1: usize, 
 /// scanning layers top-to-bottom and positions left-to-right.
 ///
 /// A seed is a `(c1, c2)` adjacency **at a position**, and its two columns are
-/// the two maximal *local* runs meeting there (#185). From it the pass takes the
+/// the two maximal *local* runs meeting there. From it the pass takes the
 /// maximal run of layers whose own `(c1, c2)` adjacencies meet the seed's cuts
 /// across every boundary crossed — widening is alignment-guided, since with
 /// local runs a layer can hold several adjacencies and only the aligned one
@@ -2719,8 +2535,7 @@ fn column_pair_is_admissible(comps: &Components, has_braid: &[bool], c1: usize, 
 /// one of them reconstructs cuts that meet at every boundary the pair spans.
 /// The sub-interval search then finds the pair itself.
 ///
-/// *Ties do not weaken this* (truncation lemma; #185 adversarial review,
-/// 2026-08-02 — this note used to hold only "wherever the tie does not fire").
+/// *Ties do not weaken this* (truncation lemma).
 /// [`aligned_column_cuts`] takes the leftmost meeting candidate, so at a
 /// boundary where two candidates meet the same anchor, widening may divert off
 /// the pair. But such a boundary has all six cut coordinates equal — both
@@ -2747,29 +2562,21 @@ fn find_column_transposition<G: PropSignature>(
     for (j, row) in ids.iter().enumerate() {
         for p in 0..row.len().saturating_sub(1) {
             let (c1, c2) = (row[p], row[p + 1]);
-            // `!= Less` also declines `Equal` — two closed components — which is
-            // the tie carve: closed↔closed order belongs to Step 7's whole-block
-            // reading key. (It is single-ownership of that tie, not a Step-6
-            // firewall — this pass can still meet Step 6 at distinct keys; the
-            // both-readings carve in the invariant list is what resolves that.
-            // See the type-level docs and docs §4.4.)
+            // `!= Less` also declines `Equal` — two closed components — whose
+            // order belongs to Step 7's whole-block reading key.
             if !column_pair_is_admissible(comps, has_braid, c1, c2)
                 || component_key_order(comps, c2, c1) != Ordering::Less
             {
                 continue;
             }
             // The seed is the adjacency *at this position* — its two maximal
-            // local runs (#185). Widening then walks outward one layer at a
-            // time, taking the neighbour's `(c1, c2)` adjacency whose cuts meet
-            // the current edge layer's across the boundary between them. It has
-            // to be alignment-guided: with local runs a layer may hold several
-            // such adjacencies, and only the aligned one continues *this*
-            // column pair. Alignment is also monotone in the wrong direction to
-            // widen past — an interval containing the seed and a layer beyond a
-            // misaligned boundary must contain that boundary, so
-            // `column_pair_is_transposable` would reject it anyway. The run
-            // reached here is therefore the whole of what the sub-interval
-            // search below can accept.
+            // local runs. Widening walks outward one layer at a time, taking the
+            // neighbour's `(c1, c2)` adjacency whose cuts meet the current edge
+            // layer's across the boundary between them; with local runs a layer
+            // may hold several such adjacencies, and only the aligned one
+            // continues *this* column pair. An interval reaching past a
+            // misaligned boundary would contain it, so
+            // `column_pair_is_transposable` would reject it anyway.
             let Some(seed) = adjacent_column_cuts_at(row, p, c1, c2) else {
                 continue;
             };
@@ -2854,32 +2661,17 @@ fn apply_column_transposition<G: PropSignature>(
 ///
 /// # Canonical order: η before ε, scalars leftmost
 ///
-/// Class order (issue #55 Decision 1, design of record 2026-07-25,
-/// `.claude/docs/2026-07-25-55-tensor-order-canonicalization.md`):
+/// Class order:
 ///
 /// ```text
 /// scalar (0→0)  <  η (0→n)  <  ε (n→0)  <  solid
 /// ```
 ///
-/// # The disjointness carve, retired (issue #174 design round, 2026-07-28)
-///
-/// This pass used to open with rule (i): a tied adjacency between atoms of two
-/// *multi-atom* components was read as a **component transposition** and ordered
-/// by the component anchor, with the class order only as a fallback. The carve
-/// that split the two freedoms by component size is gone, and with it the
-/// component analysis this pass used to build — a tied adjacency is now always
-/// the class order above, then `G::cmp`.
-///
-/// The reason is that a tied adjacency is a *free* choice: nothing in the
-/// diagram pins which of the two commuting atoms comes first, so importing
-/// rule (i)'s boundary coordinates made the normal form depend on how the
-/// morphism was written. That is CE-R1 (`ce_r1_interchange_split_converges`),
-/// an SMC-equal pair inside 𝔉 that the imported order separated. Component
-/// order survives in the two *rewriting* passes, Steps 7 and 6½, which verify
-/// braid-freedom at the boundaries they span before moving anything
-/// (`docs/SMC-NF-RECONCILIATION.md` §2.6). Retiring the branch also retires the
-/// §4.4 merge-monotonicity caveat, which existed only because this comparator
-/// mixed the two orders.
+/// A tied adjacency is a *free* choice — nothing in the diagram pins which of the
+/// two commuting atoms comes first — so the order reads the two atoms alone.
+/// Component order lives in the two *rewriting* passes, Steps 7 and 6½, which
+/// verify braid-freedom at the boundaries they span before moving anything
+/// (`docs/SMC-NF-RECONCILIATION.md` §2.6).
 ///
 /// The pass is a within-layer **bubble reorder**: repeatedly swap an adjacent
 /// pair `(A, B)` iff `A` and `B` strictly commute *and* `B` sorts before `A`.
@@ -2888,15 +2680,11 @@ fn apply_column_transposition<G: PropSignature>(
 /// the inversion count (each swap fixes exactly the pair it swaps and can never
 /// re-invert it) and is confluent by the usual sorting argument.
 ///
-/// Equal *classes* among scalars swap: two
-/// `0 → 0` generators sort ascending by `G::cmp`, the design note's "scalars
-/// sorted by generator order", available since `PropSignature` gained its `Ord`
-/// supertrait (issue #79 P1, Decision 2). Two equal generators still never
-/// swap — `Ord`'s law makes that the same atom. No shipped signature has a
-/// `0 → 0` generator (Mat(R)/SFG scalars are `1 → 1`; `FrobeniusOr`'s η/ε are
-/// `0 → 1` / `1 → 0`), so the tie-break is inert on today's baselines and
-/// exercised only by test signatures; it retires the caveat structurally rather
-/// than waiting on a signature to exercise it.
+/// Equal *classes* among scalars swap: two `0 → 0` generators sort ascending by
+/// `G::cmp`. Two equal generators never swap — `Ord`'s law makes that the same
+/// atom. No shipped signature has a `0 → 0` generator (Mat(R)/SFG scalars are
+/// `1 → 1`; `FrobeniusOr`'s η/ε are `0 → 1` / `1 → 0`), so the tie-break is inert
+/// on today's baselines.
 ///
 /// The pass is per-layer: it moves no atom across a layer boundary, rewrites no
 /// atom, and is idempotent. Strict commutation also makes every swap
@@ -2938,8 +2726,6 @@ fn reorder_tied_zero_arity<G: PropSignature>(mut sd: StringDiagram<G>) -> String
             // A `0 → 0` scalar bubbling out from between two `Identity` atoms
             // leaves them adjacent; re-fuse so `topological_layer_order`'s
             // merged-identity precondition still holds on the next fixpoint pass.
-            // (Unreachable with today's signatures — no shipped `G` has a 0→0
-            // generator — but cheap and keeps the invariant unconditional.)
             layer.atoms = merge_adjacent_identities(std::mem::take(&mut layer.atoms));
         }
     }
@@ -2953,20 +2739,13 @@ fn strictly_commute<G: PropSignature>(a: &Atom<G>, b: &Atom<G>) -> bool {
     (atom_source(a) == 0 || atom_source(b) == 0) && (atom_target(a) == 0 || atom_target(b) == 0)
 }
 
-/// Does `b` sort strictly before `a` at a tied adjacency? The Decision-1 class
-/// order `scalar < η < ε < solid`, then — at an equal class, reachable only for
-/// a `0 → 0` scalar pair — `G::cmp` (issue #79 P1).
+/// Does `b` sort strictly before `a` at a tied adjacency? The class order
+/// `scalar < η < ε < solid`, then — at an equal class, reachable only for a
+/// `0 → 0` scalar pair — `G::cmp`.
 ///
-/// **Content-only, by construction.** Both keys are read off the two atoms
-/// alone: no wire coordinate, no component identity, nothing about where the
-/// pair sits. The rule-(i) branch this comparator used to open with — component
-/// keys whenever either component was multi-atom — was retired in the #174
-/// design round (`docs/SMC-NF-RECONCILIATION.md` §2.6). A tied adjacency is a
-/// *free* choice between two orders that the diagram does not pin, and rule
-/// (i)'s coordinates are writing-dependent there, so importing them made the
-/// normal form depend on how the morphism was written. Retiring the branch also
-/// retires the §2.6 disjointness carve at this site and the §4.4
-/// merge-monotonicity caveat, which existed only because the two orders mixed.
+/// **Content-only, by construction.** Both keys are read off the two atoms alone:
+/// no wire coordinate, no component identity, nothing about where the pair sits
+/// (`docs/SMC-NF-RECONCILIATION.md` §2.6).
 ///
 /// The `G::cmp` tie-break is reachable only for a `0 → 0` scalar pair. Equal
 /// classes among strictly-commuting atoms leave no other option: two η's never
@@ -3063,8 +2842,7 @@ mod c0_smoke {
         let f = PropExpr::Generator(Sig::F);
         let e: PropExpr<Sig> = PropExpr::Compose(Box::new(f.clone()), Box::new(f));
         let nf_sd = nf(&e);
-        // Without Steps 1–5 implemented yet, we don't assert canonical form —
-        // only that the structure is two layers, each with one Generator atom.
+        // Assert the lowering structure only: two layers, one Generator each.
         assert_eq!(nf_sd.layers.len(), 2);
         assert_eq!(nf_sd.layers[0].atoms.len(), 1);
         assert_eq!(nf_sd.layers[1].atoms.len(), 1);

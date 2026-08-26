@@ -184,9 +184,8 @@ where
     /// Embed an E1 configuration into E2 by mapping \[0, 1\] intervals to disks along the x-axis.
     pub fn from_e1_config(e1_config: E1, disk_namer: impl Fn(usize) -> Name) -> Self {
         let sub_intervals = e1_config.extract_sub_intervals();
-        // Map E1 interval [a,b] ⊂ [0,1] to E2 disk in unit disk:
-        // Center: midpoint (a+b)/2 mapped from [0,1] to [-1,1] → ((a+b)-1, 0)
-        // Radius: full interval width (not half) because center coord is doubled
+        // [a,b] ↦ centre ((a+b)−1, 0), radius b−a: the midpoint is rescaled from
+        // [0,1] to [-1,1], which doubles the width too.
         let sub_circles = sub_intervals.iter().enumerate().map(|(idx, interval)| {
             let new_center = ((interval.1 + interval.0) - 1.0, 0.0);
             let new_radius = interval.1 - interval.0;
@@ -465,15 +464,11 @@ mod test {
     /// input space: outer disks `0` at centre `(3/8, 1/2)` radius `1/4` and `1`
     /// at centre `(−1/2, −1/4)` radius `1/8`, with the arity-2 inner
     /// configuration `2` at `(1/2, 1/4)` radius `1/4` and `3` at `(−1/2, 1/2)`
-    /// radius `1/8` substituted into disk `0`.
-    ///
-    /// Asserts the resulting arity and every output disk — name, both centre
-    /// coordinates, and radius — as a literal. Every coordinate here, and every
-    /// product and sum reaching it, is a dyadic rational with denominator at
-    /// most 32, hence exact in `f32`: the assertions are exact equalities.
-    ///
-    /// One `(outer, slot, inner)` triple is one point of that space. No other
-    /// slot, arity, or configuration is covered here.
+    /// radius `1/8` substituted into disk `0`. Asserts the resulting arity and
+    /// every output disk — name, both centre coordinates, and radius — as a
+    /// literal. Every coordinate, and every product and sum reaching it, is a
+    /// dyadic rational with denominator at most 32, hence exact in `f32`. No
+    /// other slot, arity, or configuration is covered here.
     #[test]
     fn e2_substitution_numeric_oracle() {
         let mut outer = E2::new(

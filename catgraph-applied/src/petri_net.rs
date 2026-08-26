@@ -204,9 +204,6 @@ impl Hash for Marking {
 ///
 /// All firing operations are pure: they return new [`Marking`]s without mutating
 /// the net or the input marking.
-///
-/// Future: colored tokens (typed multisets) and weighted tokens (semiring-valued
-/// markings for stochastic/continuous/timed Petri nets connecting to magnitude enrichment).
 #[derive(Clone, Debug)]
 pub struct PetriNet<Lambda: Sized + Eq + Copy + Debug> {
     /// Lambda-typed places, indexed by position.
@@ -222,10 +219,9 @@ where
     /// Construct a Petri net, checking that every arc indexes a place of this
     /// net.
     ///
-    /// That property is what makes a net *well-formed*, and several operations
-    /// depend on it — [`transition_as_cospan`](Self::transition_as_cospan) builds
-    /// its legs directly out of arc place indices, so an arc pointing past the
-    /// places vector produces a structurally invalid cospan.
+    /// That property is what makes a net *well-formed*;
+    /// [`transition_as_cospan`](Self::transition_as_cospan) builds its legs
+    /// directly out of arc place indices.
     ///
     /// # Errors
     ///
@@ -485,12 +481,10 @@ where
     ///
     /// Panics if any arc weight is not representable as `u64`.
     ///
-    /// The legs are arc place indices, so they must index this net's places.
-    /// [`PetriNet::new`] establishes that; a net built with
-    /// [`PetriNet::new_unchecked`] from arcs that do not is malformed, and the
-    /// cospan built here inherits the fault (a `debug_assert!` catches it in a
-    /// debug build, and it is deferred to whatever indexes the legs later in a
-    /// release build).
+    /// The legs are arc place indices, so they must index this net's places —
+    /// [`PetriNet::new`] establishes that, and a net built with
+    /// [`PetriNet::new_unchecked`] from arcs that do not yields a structurally
+    /// invalid cospan.
     #[must_use]
     pub fn transition_as_cospan(&self, transition: usize) -> Cospan<Lambda> {
         let t = &self.transitions[transition];
@@ -510,8 +504,6 @@ where
         }
         // Correct by construction: the legs are arc place indices, and
         // `PetriNet::new` refuses a net whose arcs do not index its own places.
-        // A caller that reached past that with `new_unchecked` owns the
-        // invariant, which is what the `# Panics` note above records.
         Cospan::new_unchecked(left, right, self.places.clone())
     }
 
@@ -640,29 +632,12 @@ where
     /// set and whose decoration is its transition list.
     ///
     /// The underlying cospan is [`Cospan::identity`] on `self.places()`, so
-    /// both boundary legs are the identity map onto the full place set;
-    /// the net's semantic content lives entirely in the decoration. This
-    /// is the simplest faithful bridge: no information is quotiented or
-    /// projected, and [`PetriNet::from_decorated_cospan`] is its exact
-    /// inverse (modulo transition ordering, which is preserved).
-    ///
-    /// Using this in composition / monoidal product:
-    ///
-    /// - [`Composable::compose`] currently flags its missing pushforward
-    ///   step. That limitation is irrelevant here because the identity
-    ///   cospan produces the identity quotient, on which
-    ///   [`PetriDecoration::pushforward`] is itself the identity. For
-    ///   Petri nets with non-trivial cospan boundaries (i.e. when
-    ///   `to_decorated_cospan` is extended to emit non-identity legs), the
-    ///   pushforward wiring noted on [`crate::decorated_cospan`] becomes
-    ///   load-bearing.
-    /// - [`Monoidal::monoidal`] already does the right thing: disjoint
-    ///   union of places on the cospan side, concatenation of transition
-    ///   lists on the decoration side. There is no apex quotient in a
-    ///   monoidal product, so no pushforward step is needed.
-    ///
-    /// [`Composable::compose`]: catgraph::category::Composable::compose
-    /// [`Monoidal::monoidal`]: catgraph::monoidal::Monoidal::monoidal
+    /// both boundary legs are the identity map onto the full place set and the
+    /// net's semantic content lives entirely in the decoration. No information
+    /// is quotiented or projected, and [`PetriNet::from_decorated_cospan`] is
+    /// its exact inverse (modulo transition ordering, which is preserved). The
+    /// identity cospan produces the identity quotient, on which
+    /// [`PetriDecoration::pushforward`] is itself the identity.
     #[must_use]
     pub fn to_decorated_cospan(&self) -> DecoratedCospan<Lambda, PetriDecoration<Lambda>> {
         DecoratedCospan::new(Cospan::identity(&self.places), self.transitions.clone())
@@ -832,14 +807,7 @@ where
     /// ([`SymmetricMonoidalMorphism::permute_side`]), which specifies that the
     /// wire at slot `i` of the *permuted boundary* moves to slot `p.apply(i)`.
     /// `p` here is sized by the transition count, not by a boundary arity, and
-    /// the boundary words are derived rather than stored. So this carrier was
-    /// deliberately left alone when the other implementations moved onto that
-    /// contract at [#258], and it cannot participate in the cross-carrier
-    /// wiring sweep — the same unobservability
-    /// [#272](https://github.com/sustia-llc/catgraph/issues/272) records for
-    /// its constructors.
-    ///
-    /// [#258]: https://github.com/sustia-llc/catgraph/issues/258
+    /// the boundary words are derived rather than stored.
     ///
     /// If `p.len()` does not match `self.transitions.len()`, the call is a
     /// no-op — this preserves the trait's panic-free contract. Callers
@@ -973,12 +941,8 @@ mod test {
         assert_eq!(net.transition_count(), 1);
     }
 
-    /// `PetriNet::new` refuses a net whose arcs do not index its own places.
-    ///
-    /// This is the property [`PetriNet::transition_as_cospan`] relies on: before
-    /// it was checked here, a net built from an out-of-range arc produced a
-    /// structurally invalid cospan, and the failure surfaced wherever that
-    /// cospan was next indexed.
+    /// `PetriNet::new` refuses a net whose arcs do not index its own places —
+    /// the property [`PetriNet::transition_as_cospan`] relies on.
     #[test]
     fn petri_net_new_rejects_arcs_outside_its_places() {
         // One place, but the transition's pre-arc names place 5.
