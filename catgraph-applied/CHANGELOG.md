@@ -13,6 +13,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+### Fixed
+
+- `E1::operadic_substitution` keeps `sub_intervals` sorted when a ≥2-ary inner
+  is substituted into a non-final slot; images now occupy the substituted
+  slot's position
+  ([#360](https://github.com/sustia-llc/catgraph/issues/360)).
+
 ### Fixed — tests
 
 - **`LinearCombination`'s `Mul` parallel arm had no value oracle**
