@@ -55,10 +55,8 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
 
     /// Construct a metric space from an explicit distance iterator.
     ///
-    /// Convenience constructor pairing [`new`](Self::new) with a sequence of
-    /// [`set_distance`](Self::set_distance) calls in one step. Phase 6C
-    /// (BTV 2021 enriched-coalition magnitude) consumes this shape directly
-    /// when materializing per-port distance tables.
+    /// Pairs [`new`](Self::new) with a sequence of
+    /// [`set_distance`](Self::set_distance) calls in one step.
     ///
     /// **Identity axiom.** This constructor does **not** seed the diagonal
     /// `d(x, x) = 0`. To satisfy the Lawvere metric identity axiom, callers
@@ -83,11 +81,10 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
 
     /// Distance from `a` to `b`. Returns `Tropical(+∞)` if unset.
     ///
-    /// Convention: unset distance = `Tropical::zero()` = `Tropical(+∞)` in
-    /// the min-plus semiring (see `rig.rs:161-164`). Semantically: "no edge" /
-    /// "unreachable". Under min-plus multiplication (= real addition),
-    /// `+∞ + anything = +∞`, so unset distances correctly propagate through
-    /// the triangle-inequality check and shortest-path composition.
+    /// Unset distance = `Tropical::zero()` = `Tropical(+∞)` in the min-plus
+    /// semiring, i.e. "no edge" / "unreachable". Under min-plus multiplication
+    /// (= real addition), `+∞ + anything = +∞`, so unset distances propagate
+    /// through the triangle-inequality check and shortest-path composition.
     #[must_use]
     pub fn distance(&self, a: &T, b: &T) -> Tropical {
         self.distances
@@ -123,20 +120,12 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
     /// Returns `true` iff `d(x, z) ≤ d(x, y) + d(y, z) + tol` everywhere; a
     /// triple is a violation iff `d(x, z) > d(x, y) + d(y, z) + tol`.
     ///
-    /// # Why a tolerance
-    ///
-    /// When distances are the `−ln` lift of `[0, 1]`-valued couplings (BTV
-    /// 2021 §5), a max-product transitive closure guarantees the *product*
-    /// inequality `π(x, z) ≥ π(x, y)·π(y, z)` exactly, but the corresponding
-    /// distance inequality is `−ln π(x, z) ≤ −ln(π(x, y)·π(y, z))`. Evaluating
-    /// the right side as `(−ln π(x, y)) + (−ln π(y, z))` — a log-of-product
-    /// rewritten as a sum-of-logs — differs from `−ln(π(x, y)·π(y, z))` by a
-    /// few ULPs of `ln` and multiplication rounding. On non-dyadic couplings
-    /// (e.g. `1/3`, `2/5`) that ULP noise can push `d(x, z)` a hair above the
-    /// summed bound, spuriously failing the exact check even though the space
-    /// is a valid Lawvere metric by construction. A small absolute `tol`
-    /// (orders of magnitude above the ULP noise, orders below any genuine
-    /// violation) absorbs it.
+    /// The tolerance is for distances that are the `−ln` lift of `[0, 1]`-valued
+    /// couplings (BTV 2021 §5): evaluating `−ln(π(x, y)·π(y, z))` as
+    /// `(−ln π(x, y)) + (−ln π(y, z))` differs by a few ULPs, and on non-dyadic
+    /// couplings (e.g. `1/3`, `2/5`) that noise can push `d(x, z)` a hair above
+    /// the summed bound. A `tol` orders of magnitude above the ULP noise and
+    /// orders below any genuine violation absorbs it.
     ///
     /// `tol` is an absolute slack in the distance / log domain (the same units
     /// as the stored `Tropical` values). Passing `tol = 0.0` reproduces the
@@ -162,15 +151,11 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
                     let dxy = self.distance(x, y);
                     let dyz = self.distance(y, z);
                     let dxz = self.distance(x, z);
-                    // Tropical multiplication is real addition (the (min, +)
-                    // semiring's multiplicative op), so `sum.0 = dxy.0 + dyz.0`.
+                    // Tropical multiplication is real addition, so
+                    // `sum.0 = dxy.0 + dyz.0`.
                     let sum = dxy * dyz;
-                    // The triangle inequality `d(x,z) ≤ d(x,y) + d(y,z)` is
-                    // the ordinary `≤` on `[0, ∞]`, i.e. ordering on the
-                    // underlying `f64` — distinct from the rig's additive
-                    // order (which is `min`, not `≤`). `tol` is absolute slack
-                    // in this log domain; `sum.0 = +∞ ⇒ sum.0 + tol = +∞ ⇒`
-                    // never a violation.
+                    // Ordinary `≤` on the payload — distinct from the rig's
+                    // additive order, which is `min`.
                     if dxz.0 > sum.0 + tol {
                         return false;
                     }
@@ -180,8 +165,7 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
         true
     }
 
-    /// Number of objects. Substrate for chain enumeration
-    /// in `catgraph-magnitude::chain_complex`.
+    /// Number of objects.
     #[must_use]
     pub fn size(&self) -> usize {
         self.objects.len()
@@ -191,11 +175,9 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
     ///
     /// # Name resolution
     ///
-    /// This inherent method shares its name with
-    /// [`EnrichedCategory::objects`],
-    /// which returns a `Box<dyn Iterator<...>>`. By Rust's method-resolution
-    /// rules, bare `space.objects()` resolves to *this* slice accessor;
-    /// callers wanting the iterator form must use UFCS:
+    /// This inherent method shares its name with [`EnrichedCategory::objects`],
+    /// which returns a `Box<dyn Iterator<...>>`. Bare `space.objects()`
+    /// resolves to *this* slice accessor; the iterator form needs UFCS:
     /// `EnrichedCategory::<Tropical>::objects(&space)`.
     #[must_use]
     pub fn objects(&self) -> &[T] {
@@ -225,18 +207,15 @@ impl<T: Clone + Eq + Hash> LawvereMetricSpace<T> {
     /// The constructor iterates `objects × objects` in the `Vec<T>` order,
     /// not [`HashMap`] order — the `prob` closure sees a deterministic
     /// traversal.
-    // Signature takes `Vec<T>` by value for symmetry with [`new`](Self::new),
-    // which stores the list. Caller-side ergonomics: every test/example
-    // constructs an owned `Vec<T>` and hands it over.
+    // Takes `Vec<T>` by value for symmetry with `new`, which stores the list.
     #[allow(clippy::needless_pass_by_value)]
     pub fn from_unit_interval<F>(objects: Vec<T>, prob: F) -> Self
     where
         F: Fn(&T, &T) -> UnitInterval,
     {
         let mut space = Self::new(objects);
-        // Iterate over the stored list — deterministic `Vec<T>` traversal.
-        // Clone the outer handle once so we can mutate `space.distances`
-        // from the inner loops without aliasing `space.objects`.
+        // Cloned once so the loops can mutate `space.distances` without
+        // aliasing `space.objects`.
         let keys = space.objects.clone();
         for a in &keys {
             for b in &keys {
@@ -253,9 +232,6 @@ impl LawvereMetricSpace<usize> {
     /// Build a `usize`-indexed Lawvere metric space `(0..n)` from a distance
     /// closure. Equivalent to the `new(0..n) + set_distance` loop, but more
     /// ergonomic for fixtures.
-    ///
-    /// Substrate for `catgraph-magnitude::chain_complex`
-    /// test fixtures.
     ///
     /// # Caller obligations
     ///
@@ -294,14 +270,11 @@ where
     ///
     /// **Off-diagonal.** Falls through to [`distance`](Self::distance), which
     /// returns the recorded value or `Tropical::zero() = Tropical(+∞)` if
-    /// unset. Off-diagonal unset entries remain "unreachable" by design — the
-    /// diagonal default is a category-theoretic axiom enforcement, not a
-    /// transitive-closure inference.
+    /// unset. Off-diagonal unset entries remain "unreachable": the diagonal
+    /// default enforces an axiom, it does not infer a transitive closure.
     fn hom(&self, a: &Self::Object, b: &Self::Object) -> Tropical {
         if a == b {
-            // Identity axiom: prefer an explicit entry if recorded; otherwise
-            // return Tropical::one() so that hom never yields `+∞` on the
-            // diagonal of an LM that forgot to seed `d(x, x) = 0`.
+            // An explicit entry wins; otherwise the identity axiom's 0.
             self.distances
                 .get(&(a.clone(), b.clone()))
                 .copied()

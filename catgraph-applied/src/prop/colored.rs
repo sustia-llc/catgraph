@@ -1,5 +1,4 @@
-//! Λ-colored well-formedness for free-prop expressions
-//! ([#79](https://github.com/sustia-llc/catgraph/issues/79) P1).
+//! Λ-colored well-formedness for free-prop expressions.
 //!
 //! F&S 2019 **Def 3.9** takes the objects of a Λ-colored symmetric monoidal
 //! category to be the free monoid `List(Λ)` (an *objectwise-free* structure:
@@ -8,55 +7,35 @@
 //! bare natural numbers; `Color = ()` collapses `List(Λ)` back to `ℕ` and
 //! recovers the single-sorted prop of F&S 2018 Def 5.25.
 //!
-//! # Why a check pass and not a smart constructor
-//!
-//! [`PropExpr::Identity`] and [`PropExpr::Braid`] carry only a width. They are
+//! [`PropExpr::Identity`] and [`PropExpr::Braid`] carry only a width and are
 //! *color-polymorphic*: `id_n` spans `n` wires of whatever colors flow in, and
-//! a braid permutes whatever it is handed. A bare `Identity(2)` has no
-//! intrinsic word, so there is nothing for a smart constructor to check.
-//! Colors instead **flow top-down**: given the diagram's source word, every
-//! internal boundary word is derived by threading it through the tree. That is
-//! [`check`], and it is what makes the colored morphism the *pair*
-//! `(source word, expression)` — [`ColoredExpr`].
-//!
-//! The word discipline is the one written up Λ-generically in
-//! `docs/SMC-NF-RECONCILIATION.md` **§4.1**: words live in `Λ*`, `⊗`
-//! concatenates, braids are discrete cospans with a permuted anchor, and
-//! identities/braids "carry whatever colors flow in". The shipped
+//! a braid permutes whatever it is handed, so a bare `Identity(2)` has no
+//! intrinsic word. Colors **flow top-down** instead: given the diagram's source
+//! word, [`check`] derives every internal boundary word by threading it through
+//! the tree, which makes the colored morphism the *pair*
+//! `(source word, expression)` — [`ColoredExpr`]. Words live in `Λ*`, `⊗`
+//! concatenates, and braids are discrete cospans with a permuted anchor
+//! (`docs/SMC-NF-RECONCILIATION.md` **§4.1**, Λ-generic); the shipped
 //! monochromatic signatures are the instance `Λ = {•}`, spelled `Color = ()`
 //! (see [`super::mono_word`]).
 //!
 //! # Equality
 //!
 //! [`ColoredExpr::eq_colored`] is the SMC-quotient equality: equal **content**
-//! (`presentation::content`) plus equal boundary words. The derived `PartialEq`
-//! on [`ColoredExpr`] is the *pre-quotient*, structural one — same caveat as
-//! [`PropExpr`] itself (see the [module docs] of the parent module).
-//!
-//! Cited, not re-derived: `docs/SMC-NF-RECONCILIATION.md` **§4.2**, Lemma 4.1 —
-//! `C(e) = C(e′)` **iff** `e =_SMC e′`, stated color-generically over an
-//! arbitrary Λ, so the word-level reading here inherits it. Both directions, so
-//! `eq_colored` decides the question rather than approximating it
-//! ([#57](https://github.com/sustia-llc/catgraph/issues/57) a1).
-//!
-//! Until #57 a1 this test was normal-form equality, which is sound but *not*
-//! complete: §4.3's Lemma 4.2 gives `nf(e) = nf(e′) ⇒ e =_SMC e′` on every
-//! diagram, while the converse is proven only as rigidity on the fragment `𝔉′`
-//! (**§4.4** Theorem 4.5, with the `nf`-level corollary there still conditional)
-//! and is open beyond it — §4.6's sweep finds SMC-equal pairs with distinct
-//! normal forms. So a `false` used not to be a disproof. Those pairs are exactly
-//! what content closes. `nf` is not thereby retired: besides canonical display
-//! and readback it stays this method's fallback outside content's domain, and
-//! remains the canonicalizer inside `presentation::kb::CongruenceClosure`'s
-//! `smc_refine` fixpoint, which is a different surface entirely.
+//! (`presentation::content`) plus equal boundary words, exact in both
+//! directions by `docs/SMC-NF-RECONCILIATION.md` **§4.2** Lemma 4.1
+//! (`C(e) = C(e′)` **iff** `e =_SMC e′`, stated color-generically over an
+//! arbitrary Λ). The derived `PartialEq` on [`ColoredExpr`] is the
+//! *pre-quotient*, structural one — same caveat as [`PropExpr`] itself (see the
+//! [module docs] of the parent module).
 //!
 //! # Equations
 //!
 //! An equation `lhs = rhs` has no *declared* source word — the two sides are
-//! required to be parallel over *some* common one. That is the P2 inference
-//! pass behind [`Presentation::add_equation`]: fresh variables stand for the
-//! unknown source colors, both sides are threaded through the same variables,
-//! and the two target words are unified pairwise. See `check_equation`.
+//! required to be parallel over *some* common one. Fresh variables stand for
+//! the unknown source colors, both sides are threaded through the same
+//! variables, and the two target words are unified pairwise; that is
+//! `check_equation`, behind [`Presentation::add_equation`].
 //!
 //! [module docs]: super
 //! [`PropExpr::Identity`]: super::PropExpr::Identity
@@ -72,11 +51,8 @@ use super::{PropExpr, PropSignature};
 /// Thread `input` through `expr` top-down and return the resulting target word.
 ///
 /// This is the colored well-formedness pass: composition requires *word*
-/// equality at the interface, not merely equal arities. The arity-equal /
-/// color-unequal case is exactly what a `usize`-only check cannot see.
-///
-/// Recursion depth is the expression height, matching the existing
-/// [`PropExpr::source`] / [`PropExpr::target`] idiom.
+/// equality at the interface, not merely equal arities. Recursion depth is the
+/// expression height.
 ///
 /// # Errors
 ///
@@ -93,7 +69,7 @@ use super::{PropExpr, PropSignature};
 /// use catgraph_applied::prop::{Free, PropSignature};
 ///
 /// #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-/// struct Swap; // `Swap : A B → B A` over Λ = {A, B}
+/// struct Swap;
 ///
 /// #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// enum Wire { A, B }
@@ -106,7 +82,7 @@ use super::{PropExpr, PropSignature};
 ///
 /// let expr = Free::generator(Swap);
 /// assert_eq!(check(&expr, &[Wire::A, Wire::B]).unwrap(), vec![Wire::B, Wire::A]);
-/// assert!(check(&expr, &[Wire::B, Wire::A]).is_err()); // arities agree, colors do not
+/// assert!(check(&expr, &[Wire::B, Wire::A]).is_err());
 /// ```
 pub fn check<G: PropSignature>(
     expr: &PropExpr<G>,
@@ -118,8 +94,8 @@ pub fn check<G: PropSignature>(
             Ok(input.to_vec())
         }
         PropExpr::Braid(m, n) => {
-            // Checked so a directly-constructed `Braid(usize::MAX, 1)` reports a
-            // mismatch instead of wrapping; `usize::MAX` matches no slice length.
+            // `usize::MAX` matches no slice length, so an overflowing width
+            // reports a mismatch instead of wrapping.
             expect_len(m.checked_add(*n).unwrap_or(usize::MAX), input)?;
             // σ_{m,n} : u ⊗ v → v ⊗ u — a block swap of the two halves.
             let mut out = Vec::with_capacity(input.len());
@@ -177,7 +153,7 @@ fn expect_at_least<C>(expected: usize, input: &[C]) -> Result<(), CatgraphError>
     }
 }
 
-// ---- Equation-level word inference (#79 P2) ---------------------------------
+// ---- Equation-level word inference ------------------------------------------
 
 /// A letter of an *inferred* word: a unification variable standing for an
 /// as-yet-unconstrained color, or a concrete color.
@@ -288,8 +264,7 @@ fn infer<G: PropSignature>(
             Ok(input.to_vec())
         }
         PropExpr::Braid(m, n) => {
-            // Saturating, as in [`check`]: an overflowing braid is rejected as a
-            // size mismatch rather than wrapping into a spuriously valid arity.
+            // Saturating, as in `check`: an overflowing braid is a size mismatch.
             expect_len(m.checked_add(*n).unwrap_or(usize::MAX), input)?;
             let mut out = Vec::with_capacity(input.len());
             out.extend_from_slice(&input[*m..]);
@@ -331,8 +306,8 @@ fn infer<G: PropSignature>(
 /// Both sides are threaded through the *same* fresh source variables, so a
 /// constraint discovered on either side propagates to the other; the two target
 /// words are then unified pairwise. Success means such a shared word exists
-/// (the most general one under the inferred constraints). The constraint itself
-/// is not returned — see the caller's rustdoc for why that is sound today.
+/// (the most general one under the inferred constraints); the constraint itself
+/// is not returned.
 ///
 /// # Errors
 ///
@@ -344,22 +319,15 @@ fn infer<G: PropSignature>(
 ///   conflict — the message names the generator and position, or the target
 ///   position, and both colors.
 ///
-/// # `usize::MAX` on the left (#196)
+/// # `usize::MAX` on the left
 ///
 /// `lhs.source()` is the one arity here that is not *compared* but *consumed*:
-/// it sizes the fresh variable vector. The saturating `usize::MAX` that
-/// [`PropExpr::source`] reports for an overflowing width is therefore not a
-/// rejectable sentinel at this site — the sizing runs first, and a
-/// `usize::MAX`-element `collect` aborts the process rather than returning an
-/// error anyone can catch. So it is screened *before* the sizing and reported as
-/// `CompositionSizeMismatch { expected: usize::MAX, actual: rhs.source() }`:
-/// the LHS demands a source word no real bundle can have, against the RHS arity
-/// the equation would have to agree with.
-///
+/// it sizes the fresh variable vector. It is therefore screened *before* the
+/// sizing and reported as
+/// `CompositionSizeMismatch { expected: usize::MAX, actual: rhs.source() }`.
 /// The RHS needs no such screen — it is never sized from, only threaded through
 /// [`infer`], whose `Braid` arm rejects the saturated width against the real
-/// word length (#180). That asymmetry is why PR #195's regression test put its
-/// overflowing braid on the RHS, and why its verdict is unchanged here.
+/// word length.
 ///
 /// [`Presentation::add_equation`]: super::presentation::Presentation::add_equation
 pub(crate) fn check_equation<G: PropSignature>(
@@ -415,14 +383,8 @@ pub(crate) fn check_equation<G: PropSignature>(
 /// hand-crafted document could carry a target word that the expression does not
 /// actually produce, or an expression that is not word-well-formed at all.
 /// Constructing through serde is a *trusted* path; round-tripping a value
-/// produced by this crate is always safe. This mirrors the boundary documented
-/// on [`Presentation`] (#81), whose [`add_equation`] check is boundary-word
-/// equality since #79 P2 and is likewise not re-run on deserialization. When
-/// ingesting untrusted documents, re-validate by rebuilding via [`Self::new`].
-///
-/// [`add_equation`]: super::presentation::Presentation::add_equation
-///
-/// [`Presentation`]: super::presentation::Presentation
+/// produced by this crate is always safe. When ingesting untrusted documents,
+/// re-validate by rebuilding via [`Self::new`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -479,44 +441,32 @@ impl<G: PropSignature> ColoredExpr<G> {
 
     /// SMC-quotient equality: equal boundary words **and** equal content.
     ///
-    /// **Exact on word-well-formed values**
-    /// ([#57](https://github.com/sustia-llc/catgraph/issues/57) a1) — which is
-    /// every value [`Self::new`] can build. Lemma 4.1 (§4.2) makes content
-    /// equality *equal to* SMC-equality rather than merely sufficient for it, so
-    /// on two such values the verdict decides the question in both directions:
-    /// `true` is sound, and — unlike the `nf`-based test this replaced — `false`
-    /// is now a disproof. The pairs that motivated the old caveat (§4.4's `η`
-    /// placement slack, §4.6's ledger) are exactly the ones that now come back
-    /// `true`.
-    ///
-    /// Both sides go through [`content_of_colored`], so the colors of wires no
-    /// generator touches are pinned from the source words and the comparison is
-    /// like-with-like. On word-well-formed values the boundary-word test in front
-    /// is then redundant — a fully typed content records its own boundary words —
-    /// and is kept because it is cheaper than building either content, and
-    /// because it is **not** redundant in the two cases below.
+    /// **Exact on word-well-formed values** — which is every value
+    /// [`Self::new`] can build. Lemma 4.1 (§4.2) makes content equality *equal
+    /// to* SMC-equality rather than merely sufficient for it, so on two such
+    /// values the verdict decides the question in both directions: `true` is
+    /// sound and `false` is a disproof. Both sides go through
+    /// [`content_of_colored`], so the colors of wires no generator touches are
+    /// pinned from the source words and the comparison is like-with-like.
     ///
     /// # Outside the well-formed case
     ///
     /// A [`ColoredExpr`] reconstructed across the serde trust boundary (see the
     /// type's docs) has not been through [`check`], and splits into three:
     ///
-    /// - **Arity-mismatched.** Outside [`content_of_colored`]'s domain, so the
-    ///   gate below — which tests arity and nothing else — routes it to the old
-    ///   normal-form test, with the old semantics: `true` sound, `false` not a
+    /// - **Arity-mismatched.** Outside [`content_of_colored`]'s domain, so it
+    ///   takes the normal-form test instead: `true` sound, `false` not a
     ///   disproof.
-    /// - **Arity-overflowing** (#196). A `Braid` or `Tensor` width summing past
+    /// - **Arity-overflowing.** A `Braid` or `Tensor` width summing past
     ///   `usize::MAX` is outside [`nf`]'s domain as well as
-    ///   [`content_of_colored`]'s — both would size a collection from it — so
-    ///   neither branch below can run and the answer falls back to structural
-    ///   equality of the two expressions. Sound in the same sense as the branch
-    ///   above (`true` sound, `false` not a disproof), and reflexive.
+    ///   [`content_of_colored`]'s, so the answer falls back to structural
+    ///   equality of the two expressions — `true` sound, `false` not a
+    ///   disproof, and reflexive.
     /// - **Arity-well-formed but word-ill-formed**, e.g. a source word shorter
-    ///   than the expression's arity. The gate does *not* catch this, and such a
-    ///   value takes the content path with some nodes left untyped, where Lemma
-    ///   4.1 does not apply and the verdict carries no exactness claim. The
-    ///   stored-word test in front is load-bearing here rather than redundant: it
-    ///   is what still compares the forged words themselves.
+    ///   than the expression's arity. Such a value takes the content path with
+    ///   some nodes left untyped, where Lemma 4.1 does not apply and the verdict
+    ///   carries no exactness claim; the stored-word test in front is what still
+    ///   compares the forged words themselves.
     ///
     /// [`content_of_colored`]: super::presentation::content::content_of_colored
     #[must_use]
@@ -525,7 +475,7 @@ impl<G: PropSignature> ColoredExpr<G> {
             return false;
         }
         if !self.expr.arities_fit() || !other.expr.arities_fit() {
-            // #196: below `nf`'s domain as well as content's — see the rustdoc.
+            // Below `nf`'s domain as well as content's — see the rustdoc.
             return self.expr == other.expr;
         }
         if is_arity_well_formed(&self.expr) && is_arity_well_formed(&other.expr) {

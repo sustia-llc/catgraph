@@ -1,20 +1,17 @@
 //! Partial trace from the compact-closed structure of [`MatKron`]
-//! (Fong & Spivak 2019, *Hypergraph Categories* arXiv:1806.08304v3, §3.1).
+//! (Fong & Spivak 2019, *Hypergraph Categories* arXiv:1806.08304v3, §3.1),
+//! expressed on the native [`Composable`] /
+//! [`Monoidal`](catgraph::monoidal::Monoidal) traits.
 //!
 //! `MatKron(R)` is a self-dual compact closed category whose Kronecker tensor
-//! is **strictly** associative with a **strict** unit (dimension `1`). No
-//! associators or unitors are therefore required: the partial trace over an
-//! object `X` of a morphism `f : A⊗X → B⊗X` is built directly from the
-//! cup/cap generators of the Hadamard SCFM as
+//! is **strictly** associative with a **strict** unit (dimension `1`), so no
+//! associators or unitors are needed: the partial trace over an object `X` of a
+//! morphism `f : A⊗X → B⊗X` is built from the cup/cap generators of the
+//! Hadamard SCFM as
 //!
 //! ```text
 //! Tr_X(f) = (id_A ⊗ cup_X) ; (f ⊗ id_X) ; (id_B ⊗ cap_X)
 //! ```
-//!
-//! This is a concrete (semantic) re-expression on the native
-//! [`Composable`] / [`Monoidal`](catgraph::monoidal::Monoidal) traits, with
-//! the compact-closed
-//! cup/cap realized as inherent generators on [`MatKron`].
 
 use catgraph::{category::Composable, errors::CatgraphError};
 
@@ -24,15 +21,12 @@ use crate::rig::Rig;
 /// Partial trace over `X` of `f : A⊗X → B⊗X`, returning `Tr_X(f) : A → B`.
 ///
 /// In the row-vector convention `f` is an `(a·x) × (b·x)` matrix and the result
-/// is `a × b`. Built structurally from the compact-closed pieces:
-///
-/// ```text
-/// Tr_X(f) = (id_A ⊗ cup_X) ; (f ⊗ id_X) ; (id_B ⊗ cap_X)
-/// ```
+/// is `a × b`, built as
+/// `(id_A ⊗ cup_X) ; (f ⊗ id_X) ; (id_B ⊗ cap_X)`.
 ///
 /// # Errors
 ///
-/// Returns [`CatgraphError::CompositionSizeMismatch`] if `f.rows() != a*x` or
+/// [`CatgraphError::CompositionSizeMismatch`] if `f.rows() != a*x` or
 /// `f.cols() != b*x`.
 pub fn trace<R: Rig>(
     f: &MatKron<R>,
@@ -60,10 +54,8 @@ pub fn trace<R: Rig>(
     left.compose(&mid)?.compose(&right)
 }
 
-/// Partial trace for the strict category — delegates to [`trace`].
-///
-/// `MatKron(R)` is strictly associative/unital, so no associator/unitor
-/// rebracketing is needed and the strict trace coincides with [`trace`].
+/// Partial trace for the strict category. `MatKron(R)` is strictly
+/// associative and unital, so this coincides with [`trace`] and delegates to it.
 ///
 /// # Errors
 ///

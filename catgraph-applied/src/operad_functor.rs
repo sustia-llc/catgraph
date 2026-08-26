@@ -10,23 +10,15 @@
 //! F(o ∘_i q) = F(o) ∘_i F(q).
 //! ```
 //!
-//! # This implementation
-//!
 //! The [`OperadFunctor`] trait captures the arity-preserving map on
-//! operations. Identity- and substitution-preservation are *not* encoded
-//! as trait laws but verified per-impl using the helper
-//! [`check_substitution_preserved`] on concrete sample inputs (analogous
-//! to property-testing algebraic laws rather than proving them).
+//! operations. Identity- and substitution-preservation are *not* encoded as
+//! trait laws but verified per-impl with the helper
+//! [`check_substitution_preserved`] on concrete sample inputs.
 //!
-//! # E1 → E2 worked example
-//!
-//! [`E1ToE2`] packages the canonical inclusion of the little-intervals
-//! operad `E1` into the little-disks operad `E2`: every interval
-//! `[a, b] ⊂ [0, 1]` becomes a disk on the x-axis with centre `(a+b-1, 0)`
-//! and radius `b - a`. The underlying geometry is already implemented by
-//! [`E2::from_e1_config`](crate::e2_operad::E2::from_e1_config) — this
-//! module repackages it as an [`OperadFunctor`] and adds
-//! substitution-preservation tests.
+//! [`E1ToE2`] is the canonical inclusion of the little-intervals operad `E1`
+//! into the little-disks operad `E2`: every interval `[a, b] ⊂ [0, 1]` becomes
+//! a disk on the x-axis with centre `(a+b-1, 0)` and radius `b - a`, the
+//! geometry of [`E2::from_e1_config`](crate::e2_operad::E2::from_e1_config).
 
 use std::fmt::Debug;
 
@@ -59,12 +51,10 @@ where
 /// [`E2::from_e1_config`]; disks are named `start_name .. start_name +
 /// arity` in insertion order.
 ///
-/// The `start_name` offset exists so that two images used together in a
-/// single operadic substitution (outer + inner) can be given disjoint name
-/// ranges — [`E2::operadic_substitution`] requires globally unique disk
-/// names and the default `start_name = 0` does not satisfy this for the
-/// right-hand side of `F(o ∘_i q) = F(o) ∘_i F(q)`. Geometric content is
-/// unaffected by the offset.
+/// The `start_name` offset gives two images used together in a single operadic
+/// substitution (outer + inner) disjoint name ranges, which
+/// [`E2::operadic_substitution`] requires. Geometric content is unaffected by
+/// the offset.
 #[derive(Default, Clone, Copy, Debug)]
 pub struct E1ToE2 {
     start_name: usize,
@@ -80,7 +70,7 @@ impl E1ToE2 {
 
     /// Verify `F(outer ∘_i inner) ≡ F(outer) ∘_i F(inner)` as a literal
     /// equality of `E₂` operations, modulo disk names (compared via
-    /// geometric content: centres + radii within `f32` tolerance).
+    /// geometric content: centres + radii within a fixed tolerance).
     ///
     /// On the RHS path, `F(outer)` uses `start_name = 0` and `F(inner)`
     /// uses `start_name = outer.arity()`, yielding disjoint name ranges so
@@ -89,9 +79,9 @@ impl E1ToE2 {
     ///
     /// # Errors
     ///
-    /// Returns [`CatgraphError`] when any of the substitution/map calls
-    /// fail, when the two paths produce different arities, or when any
-    /// disk's geometry differs beyond `f32::EPSILON`.
+    /// Returns [`CatgraphError`] when any of the substitution/map calls fail,
+    /// when the two paths produce different arities, or when any disk's centre
+    /// or radius differs by more than `1e-5`.
     pub fn check_substitution_preserved<MakeOuter, MakeInner>(
         make_outer: MakeOuter,
         slot: usize,

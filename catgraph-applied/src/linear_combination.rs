@@ -1,32 +1,26 @@
 //! Formal linear combinations over a coefficient ring.
 //!
-//! [`LinearCombination<Coeffs, Target>`] represents an element of the free module R\[T\]:
-//! a sparse map from basis elements `T` to coefficients in a ring `R`. Supports:
+//! [`LinearCombination<Coeffs, Target>`] is an element of the free module
+//! R\[T\]: a sparse map from basis elements `T` to coefficients in a ring `R`,
+//! carrying
 //!
-//! - **Additive structure**: `Add`, `Sub`, `Neg` (pointwise on coefficients)
-//! - **Scalar multiplication**: `Mul<Coeffs>`, `MulAssign<Coeffs>`
-//! - **Convolution**: `Mul<Self>` when `Target: Mul<Output = Target>` — the product
-//!   of two formal sums, distributing over basis multiplication (parallelized
-//!   via rayon above a fixed `PARALLEL_MUL_THRESHOLD` (32 terms))
-//! - **Generalized convolution**: [`linear_combine`](LinearCombination::linear_combine)
-//!   over heterogeneous basis types
-//! - **Functorial maps**: [`inj_linearly_extend`](LinearCombination::inj_linearly_extend)
-//!   and [`linearly_extend`](LinearCombination::linearly_extend) for basis change
-//!
-//! Used internally by [`BrauerMorphism`](crate::temperley_lieb::BrauerMorphism) for
-//! Brauer algebra arithmetic and available as a standalone module for any algebraic
-//! computation over formal sums.
+//! - **additive structure** — `Add`, `Sub`, `Neg`, pointwise on coefficients;
+//! - **scalar multiplication** — `Mul<Coeffs>`, `MulAssign<Coeffs>`;
+//! - **convolution** — `Mul<Self>` when `Target: Mul<Output = Target>`,
+//!   distributing over basis multiplication;
+//! - **generalized convolution** —
+//!   [`linear_combine`](LinearCombination::linear_combine) over heterogeneous
+//!   basis types;
+//! - **functorial maps** —
+//!   [`inj_linearly_extend`](LinearCombination::inj_linearly_extend) and
+//!   [`linearly_extend`](LinearCombination::linearly_extend) for basis change.
 //!
 //! See also `examples/linear_combination.rs`.
 
 use {
-    // `num::{One, Zero}` is intentional here: `LinearCombination` is the private
-    // coefficient substrate for `temperley_lieb`, whose coefficients are
-    // `num::Complex<i32>` — a foreign type that already carries num's identities.
-    // Since #219 catgraph owns `rig::{Zero, One}`, so an impl for `Complex<i32>`
-    // would now be legal (the trait is local); staying on the `num` side is a
-    // deliberate choice to keep this private substrate off the `Rig` surface,
-    // not a rule the orphan check forces. On the grep-guard exception list.
+    // `num::{One, Zero}`, not catgraph's: this substrate's coefficients are
+    // `num::Complex<i32>`, which already carries num's identities. On the
+    // grep-guard exception list.
     num::{One, Zero},
     std::{
         collections::HashMap,
@@ -39,14 +33,11 @@ use {
 #[cfg(feature = "parallel")]
 use rayon_cond::CondIterator;
 
-/// Threshold gating the parallel arm of [`CondIterator`] in `Mul::mul` and
-/// [`LinearCombination::linear_combine`] when the `parallel` feature is
-/// enabled. Below this size the serial iterator is faster due to rayon
-/// worker-setup overhead.
-// HashMap `into_par_iter()` is not `IndexedParallelIterator`, so the adaptive
-// `with_min_len` pattern (used in catgraph core) doesn't apply here —
-// `rayon_cond::CondIterator` provides the compile/runtime parallel↔serial
-// toggle instead (following the rustworkx-core precedent).
+/// Minimum term count, required of both operands, at which `Mul::mul` and
+/// [`LinearCombination::linear_combine`] dispatch their [`CondIterator`] to the
+/// parallel arm.
+// `HashMap::into_par_iter` is not `IndexedParallelIterator`, so `with_min_len`
+// does not apply; `CondIterator` provides the parallel↔serial toggle instead.
 #[cfg(feature = "parallel")]
 const PARALLEL_MUL_THRESHOLD: usize = 32;
 
@@ -229,7 +220,6 @@ impl<Coeffs, Target: Eq + Hash> LinearCombination<Coeffs, Target> {
     ///
     /// Combines `self ∈ R[T]` with `rhs ∈ R[U]` to produce an element of `R[V]`,
     /// using `combiner: T × U → V` as the "multiplication" on basis elements.
-    /// Parallelized via rayon when both operands exceed `PARALLEL_MUL_THRESHOLD` (32 terms).
     pub fn linear_combine<U, V, F>(
         &self,
         rhs: LinearCombination<Coeffs, U>,
@@ -310,14 +300,12 @@ impl<Coeffs: Zero, Target: Eq + Hash> LinearCombination<Coeffs, Target> {
 impl<Coeffs, Target: Clone + Eq + Hash> LinearCombination<Coeffs, Target> {
     /// Extend an injective map `T1 → T2` to a linear map `R[T1] → R[T2]`.
     ///
-    /// Each basis element is mapped through `injection` and its coefficient
-    /// is preserved. Panics if the function is not actually injective (i.e. two
-    /// distinct basis elements map to the same target).
+    /// Each basis element is mapped through `injection` and its coefficient is
+    /// preserved.
     ///
     /// # Panics
     ///
-    /// Panics if `injection` is not actually injective — i.e. maps distinct basis elements
-    /// to the same target.
+    /// If `injection` maps two distinct basis elements to the same target.
     pub fn inj_linearly_extend<Target2: Eq + Hash, F>(
         &self,
         injection: F,
@@ -376,12 +364,8 @@ mod test {
         assert!(zeroed.0.is_empty());
     }
 
-    /// Multiplication of two linear combinations where the target type
-    /// supports Mul (here we use i32 as both coefficient and target).
-    /// (2*1 + 3*2) * (1*1 + 1*2) should yield:
-    ///   2*1*1 + 2*1*2 + 3*2*1 + 3*2*2
-    /// = 2*1   + 2*2   + 3*2   + 3*4
-    /// = 2*1   + 5*2   + 3*4
+    /// Multiplication with `i64` as both coefficient and target:
+    /// `(2*1 + 3*2) * (1*1 + 1*2)` = `2*1 + 5*2 + 3*4`.
     #[test]
     fn multiplication() {
         use super::LinearCombination;

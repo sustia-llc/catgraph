@@ -1,18 +1,11 @@
 #![cfg(feature = "f64-rig")]
 //! nalgebra bridge for [`MatR<F64Rig>`](crate::mat::MatR) — feature `f64-rig`.
 //!
-//! Provides:
-//! - `mat_to_nalgebra` / `mat_from_nalgebra`: bidirectional conversion between
-//!   [`MatR<F64Rig>`] and `nalgebra::DMatrix<f64>`.
-//! - `determinant`: square-matrix determinant via nalgebra.
-//! - `try_inverse`: square-matrix inverse via nalgebra, returning None for
-//!   singular matrices.
-//!
-//! These operations are field-specific — they require R to be a field (has
-//! subtraction and division). For arbitrary rigs (`BoolRig`, `Tropical`, user
-//! semirings without subtraction), these functions are not available;
-//! `MatR<R>` pure-rig `matmul` / `block_diagonal` remain available for any
-//! `R: Rig`.
+//! [`mat_to_nalgebra`] and [`mat_from_nalgebra`] convert between
+//! [`MatR<F64Rig>`] and `nalgebra::DMatrix<f64>`; [`determinant`] and
+//! [`try_inverse`] are the square-matrix determinant and inverse. All four are
+//! field-specific — they need subtraction and division — so they exist for
+//! `F64Rig` alone and not for rigs such as `BoolRig` or `Tropical`.
 
 use nalgebra::DMatrix;
 
@@ -31,9 +24,8 @@ pub fn mat_to_nalgebra(m: &MatR<F64Rig>) -> DMatrix<f64> {
 ///
 /// # Panics
 ///
-/// Never panics in practice — the `(rows, cols)` shape is derived directly
-/// from the source `DMatrix`, so `MatR::new`'s shape validation always
-/// succeeds. The `.expect` is defensive against future refactors.
+/// Never: the `(rows, cols)` shape is derived from the source `DMatrix`, so
+/// `MatR::new`'s shape validation always succeeds.
 #[must_use]
 pub fn mat_from_nalgebra(m: &DMatrix<f64>) -> MatR<F64Rig> {
     let rows = m.nrows();

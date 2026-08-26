@@ -1,100 +1,50 @@
-//! [`Hypergraph`] — a CRUD hypergraph container (K1 backend, sustia-llc/koalisi#4).
+//! [`Hypergraph`] — a CRUD hypergraph container over `Copy` vertex and
+//! hyperedge weights.
 //!
-//! This is the zero-dependency replacement for the yamafaktory `hypergraph`
-//! crate (v4.2.0) that the downstream **koalisi** coalition layer re-backs its
-//! `TemporalHypergraph` on. catgraph's *hypergraph categories*
-//! (`Cospan`/`NamedCospan`/`HypergraphCategory`) are the categorical structure,
-//! **not** an n-ary hyperedge data structure — no such container existed in core
-//! or applied. This module supplies the operations koalisi's topology layer
-//! calls (a full call-site survey of `koalisi/src/topology/temporal.rs`), with
-//! signatures adapted where the K1 re-back can improve on yamafaktory — e.g.
-//! [`clear_hyperedges`](Hypergraph::clear_hyperedges) is **infallible** here
-//! (`()`), so koalisi's `clear_hyperedges()?` call site simply drops the `?`.
-//! It also offers a categorical *view* back into catgraph's [`Cospan`]
+//! catgraph's *hypergraph categories* (`Cospan`/`NamedCospan`/
+//! `HypergraphCategory`) are the categorical structure, **not** an n-ary
+//! hyperedge data structure; this module supplies that container, over plain
+//! `Vec`/`HashMap` and monotonic counters. It also offers a categorical *view*
+//! back into catgraph's [`Cospan`]
 //! ([`hyperedge_as_cospan`](Hypergraph::hyperedge_as_cospan)).
-//!
-//! It uses plain `Vec`/`HashMap` and monotonic counters — **zero new
-//! dependencies** — at coalition scale (tens–hundreds of vertices), correctness
-//! over micro-performance.
 //!
 //! # Three load-bearing semantics
 //!
-//! These three properties are relied upon by koalisi's event-sourced replay and
-//! are therefore contractual, not incidental:
-//!
 //! 1. **Stable, never-reused indices.** [`VertexIndex`] / [`HyperedgeIndex`] are
 //!    handed out by monotonic counters and are **never reused** after a removal —
-//!    not even across [`Hypergraph::clear`]. koalisi's event log stores raw
-//!    indices and replays them; reuse would alias a replayed index onto a
-//!    different entity. Removing vertex `b` from `{a, b, c}` and then adding `d`
-//!    gives `d` a *fresh* index; `a` and `c` keep theirs; `b`'s index errors
-//!    forever after.
+//!    not even across [`Hypergraph::clear`]. Removing vertex `b` from
+//!    `{a, b, c}` and then adding `d` gives `d` a *fresh* index; `a` and `c`
+//!    keep theirs; `b`'s index errors forever after.
 //! 2. **Hyperedges are ORDERED `Vec<VertexIndex>` with duplicates allowed.** A
 //!    hyperedge is an ordered member list; the same vertex may appear more than
-//!    once, and order is preserved through every read, [`reverse`](Hypergraph::reverse_hyperedge),
-//!    and [`join`](Hypergraph::join_hyperedges). (Duplicates are legal *here* but
-//!    the magnitude layer rejects them — see the consumer-path note below.)
-//! 3. **`Copy` weights returned by value.** Vertex/hyperedge weights are `Copy`
-//!    and read out by value (never by reference), matching koalisi's atomic
-//!    read-modify-write pattern under a single lock.
+//!    once, and order is preserved through every read,
+//!    [`reverse`](Hypergraph::reverse_hyperedge), and
+//!    [`join`](Hypergraph::join_hyperedges). A consumer that rejects repeated
+//!    members must deduplicate the list first.
+//! 3. **`Copy` weights returned by value.** Vertex and hyperedge weights are
+//!    `Copy` and read out by value, never by reference.
 //!
-//! # Divergences from yamafaktory `hypergraph` v4.2.0 (all deliberate)
-//!
-//! This is the canonical enumeration; per-item docs point back here.
+//! # Update and clear semantics
 //!
 //! - **No-op updates return `Ok`, not `Err`.**
 //!   [`update_vertex_weight`](Hypergraph::update_vertex_weight),
 //!   [`update_hyperedge_weight`](Hypergraph::update_hyperedge_weight), and
 //!   [`update_hyperedge_vertices`](Hypergraph::update_hyperedge_vertices) accept
-//!   an unchanged value/list and return `Ok(())`. yamafaktory errors on an
-//!   unchanged update (`…Unchanged`). This is the divergence that fixes
-//!   koalisi's idempotency wart: `CoalitionManager::try_join_coalition`'s
-//!   docstring promises re-join "is idempotent if `agent` is already a member",
-//!   but on yamafaktory a re-join of an already-present agent left the member
-//!   list unchanged and errored. Making the no-op succeed makes the documented
-//!   behavior true.
+//!   an unchanged value/list and return `Ok(())`.
 //! - **Infallible clears.** [`clear_hyperedges`](Hypergraph::clear_hyperedges)
-//!   and [`clear`](Hypergraph::clear) return `()`, not `Result` (nothing can
-//!   fail); koalisi's `?` call sites drop the operator.
-//! - **Relaxed generic bounds.** `V, HE: Copy + Eq + Debug` only — no `Display`,
-//!   no `Into<usize>`, no `Hash` requirement (yamafaktory required more). Weights
-//!   are keyed by internal `usize`, never hashed, so `Hash` is not needed.
-//! - **No serde.** Serialization is not an applied concern (and would be a new
-//!   dependency). koalisi wraps [`VertexIndex`] / [`HyperedgeIndex`] in its own
-//!   serde newtypes for the event log.
-//!
-//! # The real consumer path (K1 → K2)
-//!
-//! The magnitude layer does **not** consume a cospan. `Coalition` has no cospan
-//! constructor (and deliberately gains none — plain constructors only, per the
-//! #23 tripwire). The actual path from this container to a diversity scalar is:
-//!
-//! 1. [`get_hyperedge_vertices`](Hypergraph::get_hyperedge_vertices) — read a
-//!    coalition's ordered member indices.
-//! 2. koalisi maps those members' capabilities to pairwise couplings
-//!    `(from, to, prob)`.
-//! 3. `catgraph_magnitude::coalition_value(agents, couplings, members)` returns
-//!    the pinned-`t = 1` diversity scalar.
-//!
-//! **Dedup before step 3.** Hyperedges legally carry duplicate members
-//! (semantic #2), but `coalition_value` / `Coalition::from_enriched` **error** on
-//! a duplicate member (a repeated agent would seed two ∞-separated nodes). A
-//! caller feeding a hyperedge's member list to the magnitude layer must
-//! deduplicate it first.
+//!   and [`clear`](Hypergraph::clear) return `()`, not `Result`.
+//! - **Generic bounds.** `V, HE: Copy + Eq + Debug` only — no `Display`, no
+//!   `Into<usize>`, no `Hash`: weights are keyed by internal `usize`, never
+//!   hashed.
+//! - **No serde.**
 //!
 //! # The categorical view
 //!
 //! [`hyperedge_as_cospan`](Hypergraph::hyperedge_as_cospan) reads a hyperedge as
 //! the **identity cospan over its member index list** — middle = the ordered
 //! member [`VertexIndex`] list (duplicates preserved), both legs the identity
-//! `0..k`. This is *not* a "discrete" graph: under the `WeightedCospan`
-//! implied-edge reading (see `catgraph-magnitude`'s `weighted_cospan.rs`), an
-//! identity cospan's edges are the bipartite product of its leg targets — i.e.
-//! **all `(i, j)` member pairs**, precisely the coupling slots the magnitude
-//! layer would fill. It carries the same middle currency (member *identities*)
-//! that `Coalition::from_enriched` builds its internal cospan from — so it is the
-//! natural handle for cospan-level composition **within applied**, not a shortcut
-//! into the magnitude layer (which takes the plain-data path above).
+//! `0..k`. Its middle currency is member *identities*, so it is the handle for
+//! cospan-level composition within this crate.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Debug, Display};
@@ -107,11 +57,9 @@ use catgraph::cospan::Cospan;
 /// Handed out by a monotonic counter; see the module-level "stable indices"
 /// contract. Prefer [`VertexIndex::get`] / `From`/`Into` at API boundaries.
 ///
-/// The inner `usize` is `pub` and [`From<usize>`] exists **only** so a consumer
-/// can rehydrate an index it previously observed (koalisi replays raw indices
-/// from its event log). Indices are semantically **opaque, never-reused
-/// capabilities** — forging an arbitrary value, or reusing a removed one, breaks
-/// the replay contract. Construct fresh indices only via
+/// The inner `usize` is `pub` and [`From<usize>`] exists so a consumer can
+/// rehydrate an index it previously observed. Indices are semantically
+/// **opaque, never-reused capabilities**; construct fresh ones only via
 /// [`Hypergraph::add_vertex`].
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
 pub struct VertexIndex(pub usize);
@@ -177,11 +125,9 @@ impl From<HyperedgeIndex> for usize {
 
 /// Structured error for [`Hypergraph`] operations.
 ///
-/// Non-generic (unlike yamafaktory's error, which is parameterized by the weight
-/// types) — each variant carries the offending index or a reason so the caller
-/// can diagnose the failure without re-inspecting the graph. Derived with
-/// `thiserror`, matching `catgraph`'s `CatgraphError` pattern (#28); the
-/// `Display` strings are unchanged from the original hand-rolled impl.
+/// Non-generic in the weight types — each variant carries the offending index
+/// or a reason, so the caller can diagnose the failure without re-inspecting
+/// the graph.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum HypergraphError {
     /// No vertex with this index exists (removed, or never added).
@@ -212,8 +158,8 @@ pub enum HypergraphError {
     VerticesNotFound(Vec<VertexIndex>),
 }
 
-/// Comma-join for [`HypergraphError::VerticesNotFound`]'s `Display` — keeps the
-/// derived message byte-identical to the original hand-rolled `[v0, v1, …]` form.
+/// Comma-join for [`HypergraphError::VerticesNotFound`]'s `Display`, giving the
+/// `v0, v1, …` form.
 fn join_indices(vs: &[VertexIndex]) -> String {
     vs.iter()
         .map(ToString::to_string)
@@ -223,17 +169,16 @@ fn join_indices(vs: &[VertexIndex]) -> String {
 
 /// A CRUD hypergraph over `Copy` vertex weights `V` and hyperedge weights `HE`.
 ///
-/// See the module docs for the three load-bearing semantics (stable/never-reused
-/// indices, ordered duplicate-allowing hyperedge lists, `Copy` weights by value)
-/// and the deliberate divergences from yamafaktory `hypergraph` v4.2.0.
+/// See the module docs for the three load-bearing semantics: stable,
+/// never-reused indices; ordered duplicate-allowing hyperedge lists; `Copy`
+/// weights read by value.
 ///
 /// # Bounds
 ///
-/// `V, HE: Copy + Eq + Debug`. This is **relaxed** relative to yamafaktory
-/// (which additionally required `Display`/`Into<usize>`/`Hash`): weights are
-/// stored in a `HashMap` keyed by the internal `usize`, never by the weight
-/// itself, so no `Hash` bound is needed. `Eq` powers hyperedge idempotency and
-/// nothing else; `Copy` lets reads return by value.
+/// `V, HE: Copy + Eq + Debug`. Weights are stored in a `HashMap` keyed by the
+/// internal `usize`, never by the weight itself, so no `Hash` bound is needed.
+/// `Eq` powers hyperedge idempotency and nothing else; `Copy` lets reads return
+/// by value.
 #[derive(Clone, Debug)]
 pub struct Hypergraph<V, HE>
 where
@@ -302,8 +247,7 @@ where
 
     /// Set a vertex's weight.
     ///
-    /// **Divergence:** setting the *same* weight is a no-op that returns `Ok`
-    /// (yamafaktory errors on an unchanged update). See the module docs.
+    /// Setting the *same* weight is a no-op that returns `Ok`.
     ///
     /// # Errors
     ///
@@ -362,11 +306,9 @@ where
     /// vertices, weight)* pair already exists, its existing index is returned and
     /// no new hyperedge is created (linear scan).
     ///
-    /// Insertion cannot itself create two identical edges, but a
-    /// [`remove_vertex`](Hypergraph::remove_vertex) **cascade can**: filtering a
-    /// vertex out of two distinct edges may collapse them to the same
-    /// `(vertices, weight)`. To keep the returned index deterministic under
-    /// replay, this scans **all** matches and returns the **smallest** index.
+    /// A [`remove_vertex`](Hypergraph::remove_vertex) cascade can collapse two
+    /// distinct edges onto the same `(vertices, weight)`, so this scans **all**
+    /// matches and returns the **smallest** index.
     ///
     /// # Errors
     ///
@@ -388,10 +330,7 @@ where
         if !missing.is_empty() {
             return Err(HypergraphError::VerticesNotFound(missing));
         }
-        // Idempotency: return the SMALLEST existing index whose (vertices,
-        // weight) is identical. `min` over all matches makes the result
-        // independent of HashMap iteration order, which matters because a
-        // remove_vertex cascade can leave two edges identical.
+        // `min` over all matches keeps the result independent of HashMap order.
         let existing = self
             .hyperedges
             .iter()
@@ -410,17 +349,12 @@ where
     /// The ordered member list of a hyperedge, as an **owned** order-preserving
     /// clone.
     ///
-    /// Returns an owned `Vec` (not a borrow) because koalisi's caller uses it as
-    /// the read-half of an atomic read-modify-write: the member list is read,
-    /// mutated, and written back under one write lock, so a borrow into `self`
-    /// could not be held across the mutation. For read-only inspection with no
-    /// following write, prefer the borrowing
-    /// [`hyperedge_vertices`](Hypergraph::hyperedge_vertices).
-    ///
-    /// **Dedup before the magnitude layer:** the returned list may contain
-    /// duplicate members (semantic #2), but `coalition_value` /
-    /// `Coalition::from_enriched` reject duplicates — deduplicate first (see the
-    /// module's "real consumer path" note).
+    /// Returns an owned `Vec` rather than a borrow, so the list can be read,
+    /// mutated, and written back without a live borrow of `self`. For read-only
+    /// inspection with no following write, prefer the borrowing
+    /// [`hyperedge_vertices`](Hypergraph::hyperedge_vertices). The list may
+    /// contain duplicate members; a consumer that rejects those must
+    /// deduplicate first.
     ///
     /// # Errors
     ///
@@ -439,12 +373,9 @@ where
     /// clone).
     ///
     /// Use this when you only need to read the members and are **not** about to
-    /// mutate the same hyperedge (which would require the borrow to end first —
-    /// use the owned [`get_hyperedge_vertices`](Hypergraph::get_hyperedge_vertices)
-    /// for the read-modify-write case).
-    ///
-    /// **Dedup before the magnitude layer** — same caveat as
-    /// [`get_hyperedge_vertices`](Hypergraph::get_hyperedge_vertices).
+    /// mutate the same hyperedge; for the read-modify-write case use the owned
+    /// [`get_hyperedge_vertices`](Hypergraph::get_hyperedge_vertices). The
+    /// members may contain duplicates.
     ///
     /// # Errors
     ///
@@ -473,7 +404,7 @@ where
 
     /// Set a hyperedge's weight.
     ///
-    /// **Divergence:** setting the *same* weight is a no-op that returns `Ok`.
+    /// Setting the *same* weight is a no-op that returns `Ok`.
     ///
     /// # Errors
     ///
@@ -494,12 +425,7 @@ where
 
     /// Replace a hyperedge's ordered member list.
     ///
-    /// **Divergence (load-bearing for koalisi):** passing an *unchanged* list
-    /// returns `Ok` (see the module docs). yamafaktory errors on an unchanged
-    /// update; making it succeed is what makes
-    /// `CoalitionManager::try_join_coalition`'s documented re-join idempotency
-    /// ("idempotent if `agent` is already a member") actually hold — a re-join of
-    /// an already-present agent leaves the list unchanged.
+    /// Passing an *unchanged* list is a no-op that returns `Ok`.
     ///
     /// # Errors
     ///
@@ -526,7 +452,6 @@ where
             return Err(HypergraphError::VerticesNotFound(missing));
         }
         // Overwrite unconditionally — an unchanged list is an Ok no-op.
-        // Existence was verified above, so the slot is present.
         let (members, _) = self
             .hyperedges
             .get_mut(&index.0)
@@ -571,10 +496,7 @@ where
     /// duplicates are preserved in the concatenated result.
     ///
     /// **Weight semantics:** the joined edge keeps the **first** edge's weight;
-    /// the tail edges' weights are discarded along with the tail edges. This
-    /// matches yamafaktory v4.2.0 exactly — its `join_hyperedges` moves all
-    /// vertices into `hyperedges[0]` and removes the tail, never touching
-    /// weights.
+    /// the tail edges' weights are discarded along with the tail edges.
     ///
     /// # Errors
     ///
@@ -628,11 +550,7 @@ where
     /// returned unchanged, with no collapse of pre-existing adjacent `target`
     /// runs (there was no replacement to merge).
     ///
-    /// The collapse is **adjacent-only** — this mirrors yamafaktory `hypergraph`
-    /// v4.2.0's observable behavior. koalisi's wrapper
-    /// (`topology/temporal.rs::contract_hyperedge_vertices`) is a pass-through
-    /// with no documented full-dedup expectation and no business-logic caller, so
-    /// the adjacent-only contract stands: a list `[t, x, t]` where `x` is
+    /// The collapse is **adjacent-only**: a list `[t, x, t]` where `x` is
     /// unrelated stays `[t, x, t]`, and `[a, t, a]`-contract-`a`→`t` becomes
     /// `[t]` (the two `t`s that surround the contracted `a` are adjacent after
     /// replacement).
@@ -761,25 +679,11 @@ where
     ///
     /// The middle (apex) is the hyperedge's ordered member [`VertexIndex`] list
     /// (duplicates preserved); both legs are the identity `0..k`, so the result
-    /// satisfies `is_left_identity() && is_right_identity()`. The middle currency
-    /// is the member *identities* — the same currency
-    /// `Coalition::from_enriched` builds its own internal cospan from — **not**
-    /// vertex weights (two distinct vertices with equal weights must stay
-    /// distinct).
-    ///
-    /// This is a categorical *view* for cospan-level composition **within
-    /// applied**, not a shortcut into the magnitude layer. Under the
-    /// `WeightedCospan` implied-edge reading, an identity cospan's edges are the
-    /// bipartite product of its leg targets — the complete set of `(i, j)` member
-    /// pairs, i.e. every coupling slot — so it is emphatically **not** a discrete
-    /// graph. See the module's "categorical view" and "real consumer path"
-    /// notes; the magnitude layer takes the plain-data
-    /// [`get_hyperedge_vertices`](Hypergraph::get_hyperedge_vertices) →
-    /// `coalition_value` path, and duplicate members must be removed before that
-    /// step.
-    ///
-    /// Built via [`HasIdentity::identity`](catgraph::category::HasIdentity) on
-    /// the member list.
+    /// satisfies `is_left_identity() && is_right_identity()`. The middle
+    /// currency is the member *identities*, **not** vertex weights: two distinct
+    /// vertices with equal weights stay distinct. Built via
+    /// [`HasIdentity::identity`](catgraph::category::HasIdentity) on the member
+    /// list.
     ///
     /// # Errors
     ///
@@ -910,8 +814,8 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // No-op updates return Ok (the yamafaktory divergence), for all three
-    // update operations; unknown targets still error.
+    // No-op updates return Ok for all three update operations; unknown
+    // targets still error.
     // ------------------------------------------------------------------
     #[test]
     fn noop_updates_return_ok() {
@@ -924,8 +828,7 @@ mod tests {
         assert!(g.update_vertex_weight(a, 'a').is_ok());
         // Same hyperedge weight → Ok.
         assert!(g.update_hyperedge_weight(e, 1).is_ok());
-        // Same (unchanged) vertex list → Ok. THE try_join_coalition idempotency
-        // fix (re-join of an already-present agent leaves the list unchanged).
+        // Same (unchanged) vertex list → Ok.
         assert!(g.update_hyperedge_vertices(e, vec![a, b]).is_ok());
 
         // Changed values also Ok and observable.
@@ -1067,8 +970,7 @@ mod tests {
 
     // ------------------------------------------------------------------
     // Empty to-contract set is a TRUE no-op: pre-existing adjacent target
-    // runs are NOT collapsed (regression — the loop used to run
-    // unconditionally and merge [t, t, b] → [t, b]).
+    // runs are NOT collapsed ([t, t, b] stays [t, t, b]).
     // ------------------------------------------------------------------
     #[test]
     fn contract_empty_vertices_is_true_noop() {

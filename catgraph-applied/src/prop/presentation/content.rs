@@ -1,5 +1,4 @@
-//! Abstract content of a free-prop expression, and equality on it
-//! ([#57](https://github.com/sustia-llc/catgraph/issues/57), a1).
+//! Abstract content of a free-prop expression, and equality on it.
 //!
 //! # What the content is
 //!
@@ -14,9 +13,7 @@
 //! interpretation is BGKSZ's `⟦·⟧`; the **content** `C(e)` is its value up to
 //! isomorphism *under both feet* — an iso of the carrier `H` commuting with the
 //! anchors, identity on `n` and `m`, so every boundary *coordinate* is a content
-//! invariant.
-//!
-//! [`Content`] is that value, [`content_eq`] is that equality, and
+//! invariant. [`Content`] is that value, [`content_eq`] is that equality, and
 //! [`canonical_key`] is a hashable normal form for it.
 //!
 //! # The anchors
@@ -28,23 +25,9 @@
 //!   node has in- and out-degree exactly 1, and a boundary node has degree 0 on
 //!   its anchored side. That is what lets [`content_eq`] avoid search entirely —
 //!   the boundary-attached part is decided by forced propagation, and the closed
-//!   part by comparing a complete invariant rather than by matching components
-//!   against each other.
+//!   part by comparing a complete invariant.
 //! - Together they give **Lemma 4.1** (§4.2): `e =_SMC e′` **iff**
-//!   `C(e) = C(e′)`. Stated color-generically there, over an arbitrary `Λ`, so
-//!   the [#79](https://github.com/sustia-llc/catgraph/issues/79) worded surface
-//!   inherits it.
-//!
-//! # Why this module exists
-//!
-//! §4.7 specifies content as the substrate a #57 knowledge base would rewrite:
-//! represent terms by `C`, rewrite by convex DPO on content, and use
-//! [`smc_nf::nf`](super::smc_nf::nf) as the canonical *readback*. This module is
-//! the first half of that — content and its equality — with rewriting-modulo-user
-//! -equations deferred. The immediate payoff is stated in §4.7: an engine that
-//! decides equality on content never chooses `η` placement (`ι`, the single named
-//! canonicality gap of §4.4) at all, so content equality is complete on every
-//! divergence class the normal form leaves open.
+//!   `C(e) = C(e′)`, stated color-generically over an arbitrary `Λ`.
 //!
 //! # Layering: this is SMC-equality, not equality modulo user equations
 //!
@@ -58,16 +41,12 @@
 //!
 //! Nodes carry a color. [`content_of`] reads it off the generator tentacle
 //! *words* ([`PropSignature::source_word`] / [`PropSignature::target_word`]), so
-//! it is word-aware for any `Λ` without any positional engine being touched —
-//! the same layering #79 used, where the diagram layer stayed positional.
-//! [`content_of_colored`] additionally pins the colors an expression alone cannot
-//! determine (see [`content_of_colored`] for which those are, and why there are
-//! no others). With `Color = ()` the comparison of *letters* degenerates to a
-//! no-op — there is only one letter — but the distinction between a typed and an
-//! untyped node does not: `Some(())` and `None` still differ, so a monochromatic
-//! signature is not the same as one with colors deleted, and the like-with-like
-//! caveat on [`content_eq`] binds monochromatic callers exactly as much as
-//! colored ones.
+//! it is word-aware for any `Λ`; [`content_of_colored`] additionally pins the
+//! colors an expression alone cannot determine. With `Color = ()` the comparison
+//! of *letters* degenerates to a no-op — there is only one letter — but the
+//! distinction between a typed and an untyped node does not: `Some(())` and
+//! `None` still differ, so the like-with-like caveat on [`content_eq`] binds
+//! monochromatic callers exactly as much as colored ones.
 
 use std::collections::VecDeque;
 
@@ -103,30 +82,20 @@ pub struct ContentEdge<G: PropSignature> {
 ///
 /// # No `PartialEq`
 ///
-/// Deliberately not derived. Structural equality of the fields would be
-/// *representation* equality, which is finer than content equality and would be
-/// the wrong default for a type whose whole point is the quotient. Content
+/// Deliberately not derived: structural equality of the fields is
+/// *representation* equality, which is finer than content equality. Content
 /// equality is [`content_eq`]; the hashable form is [`canonical_key`].
 ///
 /// # Construction invariant
 ///
-/// The fields are private, so every value comes from one of four places:
-/// [`content_of`] / [`content_of_colored`], which build it by walking an
-/// expression; the private `canonical_content`, which only relabels one of
-/// those; and the crate-internal `from_parts`, which takes raw parts and
-/// *validates* the invariant instead of inheriting it. Either way the
-/// *underlying uncolored* cospan is monogamous directed acyclic — the image
-/// characterization of BGKSZ Thm 3.12. Both algorithms below rely on that, and
-/// on its consequence that every node is
-/// either incident to a hyperedge or anchored on both feet (a wire no generator
-/// touches runs from the input foot straight to the output foot). The accessors
-/// are read-only, so no caller can break either.
-///
-/// The tentacle typing is additionally *type-respecting* — putting the value in
-/// the image of the Λ-typed `⟦·⟧` — exactly when the expression was
-/// word-well-formed. Over a nontrivial `Λ` that is a real restriction, not a
-/// tautology: `content_of` accepts an ill-colored `Compose` and returns a
-/// perfectly good uncolored cospan whose typing no Λ-typed expression realizes.
+/// The fields are private and the accessors read-only. Every value's *underlying
+/// uncolored* cospan is monogamous directed acyclic — the image characterization
+/// of BGKSZ Thm 3.12 — and every node is either incident to a hyperedge or
+/// anchored on both feet (a wire no generator touches runs from the input foot
+/// straight to the output foot). The tentacle typing is additionally
+/// *type-respecting* exactly when the expression was word-well-formed: over a
+/// nontrivial `Λ`, `content_of` accepts an ill-colored `Compose` and returns a
+/// cospan whose typing no Λ-typed expression realizes.
 #[derive(Clone, Debug)]
 pub struct Content<G: PropSignature> {
     node_count: usize,
@@ -176,26 +145,14 @@ impl<G: PropSignature> Content<G> {
 /// Whether every `Compose` in `expr` joins a target arity to a matching source
 /// arity **and** no `Braid` or `Tensor` width overflows `usize` — exactly
 /// [`content_of`]'s precondition, and so a test for membership in its domain.
-///
-/// Terms built through [`Free`](crate::prop::Free) always pass, since its smart
-/// constructors check on the way in. `PropExpr`'s variants are public, though, so
-/// a hand-built or deserialized tree may not, and a caller that must stay total
-/// on such input — [`Presentation::eq_mod`](super::Presentation::eq_mod) is one —
-/// can ask first instead of catching a panic it has no way to catch.
-///
-/// The overflow clause is [#196]. `PropExpr::Braid(usize::MAX, 1)` is
-/// documented-legal to construct, and here its width is a *magnitude* — it sizes
-/// the braid's node vector — not a length to compare, so the saturating
-/// `usize::MAX` that [`PropExpr::source`] reports is not a usable answer and the
-/// tree is reported ill-formed instead. [`PropExpr::arities_fit`] is that clause
-/// on its own, for callers that need to separate the two failure modes; `nf`'s
-/// domain is the wider one.
+/// Terms built through [`Free`](crate::prop::Free) always pass; `PropExpr`'s
+/// variants are public, so a hand-built or deserialized tree may not.
+/// [`PropExpr::arities_fit`] is the overflow clause on its own, for callers that
+/// need to separate the two failure modes.
 ///
 /// `O(n)` for the overflow clause; the composability clause re-reads each node's
 /// own arities, which are `O(height)` for a `Compose` spine and proportional to
 /// the subterm for a `Tensor`.
-///
-/// [#196]: https://github.com/sustia-llc/catgraph/issues/196
 #[must_use]
 pub fn is_arity_well_formed<G: PropSignature>(expr: &PropExpr<G>) -> bool {
     // Order matters: once every width fits, `source`/`target` are exact and the
@@ -204,11 +161,9 @@ pub fn is_arity_well_formed<G: PropSignature>(expr: &PropExpr<G>) -> bool {
 }
 
 /// The composability half of [`is_arity_well_formed`]: every `Compose` joins a
-/// target arity to a matching source arity.
-///
-/// Only meaningful once [`PropExpr::arities_fit`] holds — two independently
-/// saturated arities compare equal, so on an overflowing tree this can report a
-/// match that is not one.
+/// target arity to a matching source arity. Only meaningful once
+/// [`PropExpr::arities_fit`] holds — two independently saturated arities compare
+/// equal, so on an overflowing tree this can report a match that is not one.
 fn composes<G: PropSignature>(expr: &PropExpr<G>) -> bool {
     match expr {
         PropExpr::Identity(_) | PropExpr::Braid(_, _) | PropExpr::Generator(_) => true,
@@ -268,11 +223,8 @@ fn build<G: PropSignature>(e: &PropExpr<G>, b: &mut Builder<G>) -> Piece {
             }
         }
         PropExpr::Braid(m, n) => {
-            // #196: the width is a magnitude here — it sizes two vectors — so a
-            // saturating `usize::MAX` would be a `usize::MAX`-element `collect`,
-            // not a rejectable sentinel. `is_arity_well_formed` screens this,
-            // and `content_of`'s documented domain excludes it; the `expect`
-            // makes the release build reject rather than wrap.
+            // The width sizes two vectors, so a saturating `usize::MAX` would be
+            // a `usize::MAX`-element `collect` rather than a rejectable sentinel.
             let width = m
                 .checked_add(*n)
                 .expect("invariant: content_of's domain excludes a braid width that overflows usize (is_arity_well_formed)");
@@ -360,28 +312,17 @@ impl Renumber<'_> {
 ///
 /// # Precondition
 ///
-/// `expr` is **arity**-well-formed, the same precondition
-/// [`nf`](super::smc_nf::nf) carries; like `nf`, this function does not return a
-/// `Result`. It does *not* require word-well-formedness
-/// ([`colored::check`](super::super::colored::check)): where that check would
-/// fail — a `Compose` whose two sides agree on wire counts but not on colors —
-/// the glued wire takes its producer's declared color, which is a content
-/// invariant like any other, so nothing below degrades.
+/// `expr` is **arity**-well-formed. Word-well-formedness
+/// ([`colored::check`](super::super::colored::check)) is *not* required: where
+/// that check would fail — a `Compose` whose two sides agree on wire counts but
+/// not on colors — the glued wire takes its producer's declared color, which is a
+/// content invariant like any other.
 ///
 /// # Panics
 ///
-/// Panics if `expr` is not arity-well-formed, i.e. some `Compose` joins a target
-/// arity to a different source arity, **or** some `Braid` / `Tensor` width sums
-/// past `usize::MAX` (#196 — an overflowing width counts as ill-formed here,
-/// because it is a magnitude this function would size a node vector from).
-/// `PropExpr`'s variants are public, so such a tree is constructible by hand;
-/// terms built through [`Free`](crate::prop::Free) cannot hit this.
-///
-/// **This is a stricter contract than the equality API above it.**
-/// [`Presentation::eq_mod`](super::Presentation::eq_mod) is total on such a tree
-/// — it answers rather than panics — so it gates its content path on
-/// [`is_arity_well_formed`] and falls back to the normal form outside this
-/// function's domain, rather than propagating the panic to its callers.
+/// Panics if `expr` is not arity-well-formed: some `Compose` joins a target arity
+/// to a different source arity, **or** some `Braid` / `Tensor` width sums past
+/// `usize::MAX`. Terms built through [`Free`](crate::prop::Free) cannot hit this.
 #[must_use]
 pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
     let mut b = Builder {
@@ -399,8 +340,8 @@ pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
     };
 
     // First-touch order: input anchor, then edges in construction order (sources
-    // then targets), then output anchor. Presentation-dependent by design — the
-    // invariant renumbering is `canonical_key`'s.
+    // then targets), then output anchor — the invariant renumbering is
+    // `canonical_key`'s.
     let input: Vec<usize> = piece.input.iter().map(|&x| renumber.get(x)).collect();
     let edges: Vec<ContentEdge<G>> = b
         .edges
@@ -413,9 +354,8 @@ pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
         .collect();
     let output: Vec<usize> = piece.output.iter().map(|&x| renumber.get(x)).collect();
 
-    // Type each node from its incident tentacle. Both passes are single-valued by
-    // monogamy, and the producer pass runs second so it wins where an
-    // ill-colored `Compose` glued two disagreeing declarations.
+    // Type each node from its incident tentacle. The producer pass runs second so
+    // it wins where an ill-colored `Compose` glued two disagreeing declarations.
     let mut node_colors: Vec<Option<G::Color>> = vec![None; renumber.next];
     for edge in &edges {
         for (position, &x) in edge.sources.iter().enumerate() {
@@ -431,8 +371,7 @@ pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
     debug_assert!(
         {
             // `node_colors[x].is_some()` is now exactly "x is incident to some
-            // hyperedge", so this is the coverage invariant both algorithms below
-            // rely on: no node escapes into neither the anchors nor the edges.
+            // hyperedge", so this checks the coverage invariant.
             let mut anchored = vec![false; renumber.next];
             for &x in &input {
                 anchored[x] = true;
@@ -456,32 +395,23 @@ pub fn content_of<G: PropSignature>(expr: &PropExpr<G>) -> Content<G> {
 /// serde-built exception in `# Panics` below.
 ///
 /// The expression alone leaves exactly one kind of node untyped: one no generator
-/// tentacle touches. Such a node has in-degree and out-degree 0 by construction,
-/// so monogamy (BGKSZ Def 3.6) forces it into `in(G) ∩ out(G)` — anchored on
-/// *both* feet — and its color is therefore the source word's letter at its input
-/// coordinate, which a [`ColoredExpr`] supplies. Every other node already carries
-/// the color its incident tentacle declared.
-///
-/// Consequently the boundary *words* are recoverable from the returned content
-/// (read `node_colors` along `input` / `output`), so [`content_eq`] on two values
-/// of this function decides colored SMC-equality — parallelism included — rather
-/// than only the positional part. Both statements are about a value whose source
-/// word covers its arity, which is every value [`ColoredExpr::new`] can build;
-/// the serde exception below leaves the uncovered coordinates untyped, and a word
-/// read off such a content is correspondingly partial.
+/// tentacle touches. Such a node has in-degree and out-degree 0, so monogamy
+/// (BGKSZ Def 3.6) forces it into `in(G) ∩ out(G)` — anchored on *both* feet —
+/// and its color is the source word's letter at its input coordinate, which a
+/// [`ColoredExpr`] supplies. The boundary *words* are therefore recoverable from
+/// the returned content (read `node_colors` along `input` / `output`), so
+/// [`content_eq`] on two values of this function decides colored SMC-equality,
+/// parallelism included. That holds of a value whose source word covers its
+/// arity, which is every value [`ColoredExpr::new`] can build; a serde-built
+/// shorter word leaves the uncovered coordinates untyped.
 ///
 /// # Panics
 ///
 /// Panics exactly when [`content_of`] does: the wrapped expression is not
-/// arity-well-formed. That is unreachable through [`ColoredExpr::new`], which
-/// runs [`colored::check`](super::super::colored::check) — but it *is* reachable
-/// through the documented serde trust boundary on [`ColoredExpr`], whose
-/// deserialization reconstructs the fields without re-running that check.
-///
-/// The other shape that boundary admits — a `source_word` shorter than the
-/// expression's source arity — does not panic here: the uncovered coordinates
-/// simply keep their `None`, and the result is as meaningful as the document that
-/// produced it.
+/// arity-well-formed. Unreachable through [`ColoredExpr::new`], which runs
+/// [`colored::check`](super::super::colored::check), but reachable through the
+/// serde trust boundary on [`ColoredExpr`]. A `source_word` shorter than the
+/// expression's source arity does *not* panic here.
 #[must_use]
 pub fn content_of_colored<G: PropSignature>(expr: &ColoredExpr<G>) -> Content<G> {
     let mut content = content_of(expr.expr());
@@ -507,41 +437,24 @@ pub fn content_of_colored<G: PropSignature>(expr: &ColoredExpr<G>) -> Content<G>
 /// Rebuild a [`Content`] from raw parts, **validating** the image
 /// characterization of BGKSZ Thm 3.12 before handing one back.
 ///
-/// # Why this exists, and why it is not public
-///
-/// [`Content`]'s fields are private exactly so that every value comes from
-/// [`content_of`] / [`content_of_colored`] and therefore satisfies the
-/// construction invariant the two algorithms below rely on. One operation
-/// cannot be phrased as "walk an expression": the DPO step of
-/// [`rewrite`](super::rewrite), which excises a matched sub-hypergraph and glues
-/// a replacement in along the boundary. Its parts arrive raw, so this
-/// constructor re-establishes the invariant by *checking* it rather than by
-/// inheriting it — which is why it returns a `Result` and why it stays
-/// `pub(super)`.
-///
 /// # What is checked
 ///
 /// 1. `node_colors` has one entry per node, and every index in `edges`, `input`
 ///    and `output` is in range.
 /// 2. Each edge's tentacle counts agree with its label's declared words, **and
 ///    each tentacle's node carries the color that word declares at that
-///    position** — the [`PropSignature`] invariant restated locally, plus
-///    [`content_of`]'s typing discipline, which reads a node's color off the
-///    tentacle incident to it. A node no tentacle touches is unconstrained
-///    here: its color is boundary data, not a derived quantity.
-/// 3. **Monogamy** (BGKSZ Def 3.6), in full: no node has two
-///    producers or two consumers; the **anchor legs are mono** — no node
-///    occupies two `input` coordinates, and none two `output` coordinates
-///    (occupying one of each is legal and is exactly `id₁`); and — the boundary
-///    half of the same definition — a node is producerless *iff* it is
+///    position**. A node no tentacle touches is unconstrained here: its color is
+///    boundary data, not a derived quantity.
+/// 3. **Monogamy** (BGKSZ Def 3.6), in full: no node has two producers or two
+///    consumers; the **anchor legs are mono** — no node occupies two `input`
+///    coordinates, and none two `output` coordinates (occupying one of each is
+///    legal and is exactly `id₁`); and a node is producerless *iff* it is
 ///    input-anchored, consumerless *iff* it is output-anchored.
 /// 4. **Acyclicity** (BGKSZ Def 3.9), by a Kahn sweep over the hyperedges.
 ///
 /// (3) and (4) together are Thm 3.12's image characterization, so a value that
 /// passes is one `⟦·⟧` could have produced. Colors beyond the tentacle-declared
-/// ones are carried through as given: the color of a node no tentacle touches is
-/// data the caller is responsible for transporting, not a structural invariant,
-/// and the DPO step gets it from a color-preserving match.
+/// ones are carried through as given.
 ///
 /// # Errors
 ///
@@ -589,8 +502,7 @@ pub(super) fn from_parts<G: PropSignature>(
                     "content parts: monogamy — node {x} has two consumers"
                 ));
             }
-            // `content_of` types a node from the tentacle incident to it, so a
-            // caller-supplied color that disagrees with the label's word is a
+            // A caller-supplied color that disagrees with the label's word is a
             // content no `⟦·⟧` could have produced.
             if node_colors[x].as_ref() != Some(&source_word[position]) {
                 return reject(format!(
@@ -621,10 +533,9 @@ pub(super) fn from_parts<G: PropSignature>(
         }
     }
 
-    // The two anchor legs are each **mono** (BGKSZ Def 3.6: "f and g are mono"),
-    // so neither may repeat a node. Occupying one input *and* one output
-    // coordinate is a different thing and stays legal — that is `id₁`, a wire no
-    // generator touches — so the two sweeps are separate.
+    // Each anchor leg is mono (BGKSZ Def 3.6), so neither may repeat a node;
+    // occupying one input *and* one output coordinate stays legal (`id₁`), so the
+    // two sweeps are separate.
     let mut in_anchored = vec![false; node_count];
     for &x in &input {
         if x >= node_count {
@@ -706,11 +617,9 @@ pub(super) fn from_parts<G: PropSignature>(
 
 // ---------------------------------------------------------------- incidence
 
-/// Per-node incidence, read once and shared by both algorithms.
-///
-/// Monogamy (BGKSZ Def 3.6) is what makes `producer` / `consumer` single-valued:
-/// an interior node has exactly one of each, a boundary node none on its anchored
-/// side. It holds by construction for every [`Content`] (Thm 3.12).
+/// Per-node incidence, read once and shared by both algorithms. Monogamy (BGKSZ
+/// Def 3.6) makes `producer` / `consumer` single-valued: an interior node has
+/// exactly one of each, a boundary node none on its anchored side.
 struct Profile {
     /// `(edge, tentacle position)` producing the node, if any.
     producer: Vec<Option<(usize, usize)>>,
@@ -768,14 +677,11 @@ struct EdgeRecord<G> {
 /// A closed component's canonical serialization: the lexicographic minimum over
 /// its seed choices, and a **complete iso invariant** of the component.
 ///
-/// Carries no colors, and does not need to. Every node of a closed component has
-/// a *producer*: a node with no producer has in-degree 0, so monogamy (BGKSZ
-/// Def 3.6) puts it on the input foot, and an anchored node is by definition not
-/// in a closed component. Since [`content_of`] defines a node's color to be its
-/// producer's declared letter, the records below already determine every color
-/// here. (The boundary-attached part does record colors, because a wire no
-/// generator touches has no producer and takes the boundary word's letter
-/// instead.)
+/// Carries no colors, and does not need to: every node of a closed component has
+/// a producer — a producerless node has in-degree 0, so monogamy (BGKSZ Def 3.6)
+/// puts it on the input foot, and an anchored node is not in a closed component —
+/// and [`content_of`] defines a node's color to be its producer's declared letter,
+/// so the records below already determine every color here.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct ClosedBlock<G> {
@@ -891,13 +797,10 @@ fn closed_components<G: PropSignature>(
 }
 
 /// The lexicographic minimum serialization of one closed component, over its
-/// choices of seed edge.
-///
-/// Seeding fixes one edge as number 0 and the propagation numbers the rest, so
-/// each seed yields one serialization; the minimum over seeds depends only on the
-/// component's iso class. Two components are isomorphic iff their minima agree:
-/// `⇐` because the minimum is invariant, `⇒` because equal serializations exhibit
-/// the bijection.
+/// choices of seed edge. Seeding fixes one edge as number 0 and the propagation
+/// numbers the rest, so each seed yields one serialization and the minimum over
+/// seeds depends only on the component's iso class; two components are isomorphic
+/// iff their minima agree.
 fn minimal_block<G: PropSignature>(
     c: &Content<G>,
     p: &Profile,
@@ -1049,49 +952,33 @@ impl<G: PropSignature> Matcher<'_, G> {
 ///
 /// # Exactness
 ///
-/// A cospan iso under both feet splits into two independent halves, because a
-/// closed component contains no anchored node and so is coupled to nothing else:
-/// an iso of the boundary-attached parts, and a bijection of the closed
-/// components with a component iso at each. The procedure decides each half
-/// outright, and neither half searches.
+/// A cospan iso under both feet splits into two independent halves — an iso of
+/// the boundary-attached parts, and a bijection of the closed components with a
+/// component iso at each — and neither half searches.
 ///
 /// 1. **Anchored forcing.** The feet are fixed, so the anchors force node images
-///    pointwise: `a.input[i] ↦ b.input[i]`, likewise on the output. No choice.
+///    pointwise: `a.input[i] ↦ b.input[i]`, likewise on the output.
 /// 2. **Monogamy propagation.** A forced node pair forces its producer and its
-///    consumer edge pair — each is unique by monogamy (BGKSZ Def 3.6) — and a
-///    forced edge pair forces every tentacle pair, since tentacle positions are
-///    invariants. Iterating reaches every node and edge of every
-///    boundary-attached component, still with no choice. A conflict at any step
-///    (label, arity, color, anchor coordinates, or an already-taken image) refutes
-///    the iso outright, because each step was forced. If nothing conflicts, the
-///    partial map built is the unique candidate iso of the anchored halves.
-/// 3. **Closed components, by invariant rather than by search.** Serializing a
-///    connected closed component from each of its edges in turn and keeping the
-///    lexicographic minimum (the private `minimal_block`) is a *complete* iso
-///    invariant of it: equal serializations exhibit a label- and
-///    tentacle-preserving bijection, and isomorphic components minimize to the
-///    same one. So the required bijection exists iff the two sorted multisets
-///    agree, which is a comparison, not a match. Colors need no separate check
-///    here: every closed-component node has a producer, and its color is by
-///    definition that producer's declared letter.
-///
-/// There is no comparator, no order on components, and no writing-dependent
-/// coordinate anywhere in the above — the whole decision reads labels, tentacle
-/// positions, anchor coordinates and colors, all of which are content invariants.
+///    consumer edge pair — each unique by monogamy (BGKSZ Def 3.6) — and a forced
+///    edge pair forces every tentacle pair, since tentacle positions are
+///    invariants. A conflict at any step (label, arity, color, anchor
+///    coordinates, or an already-taken image) refutes the iso outright; if
+///    nothing conflicts, the partial map built is the unique candidate iso of the
+///    anchored halves.
+/// 3. **Closed components, by invariant rather than by search.** The private
+///    `minimal_block` is a *complete* iso invariant of a closed component, so the
+///    required bijection exists iff the two sorted multisets agree. Colors need
+///    no separate check: every closed-component node has a producer, and its
+///    color is that producer's declared letter.
 ///
 /// # Cost
 ///
-/// Polynomial, with no backtracking anywhere. Take a content with `n` nodes and
-/// `e` hyperedges. Steps 1–2 are linear in it: each node and edge is forced at
-/// most once. Step 3 serializes each closed component `K` once per choice of
-/// seed, and each of those passes allocates a numbering sized to the *whole*
-/// content rather than to `K`, so a component costs `O(|E_K| · (n + e))` — over
-/// all components, `O(e · (n + e))`, plus the block sort. With nothing closed the
-/// call is `O(n + e)`.
-///
-/// Sizing the per-seed numbering to the component would drop that to
-/// `O(|E_K| · (|V_K| + |E_K|))`. It is not worth doing at present content sizes
-/// (tens of nodes), and is left for whenever a measurement asks for it.
+/// Polynomial, with no backtracking. For a content with `n` nodes and `e`
+/// hyperedges, steps 1–2 are linear — each node and edge is forced at most once.
+/// Step 3 serializes each closed component `K` once per seed, each pass
+/// allocating a numbering sized to the whole content, so a component costs
+/// `O(|E_K| · (n + e))` — over all components `O(e · (n + e))`, plus the block
+/// sort. With nothing closed the call is `O(n + e)`.
 ///
 /// # Comparing like with like
 ///
@@ -1142,17 +1029,10 @@ pub fn content_eq<G: PropSignature>(a: &Content<G>, b: &Content<G>) -> bool {
 /// `Vec<Option<C>>` in a shape a self-describing format can read back.
 ///
 /// `Option<C>` is **not** round-trippable through JSON when `C` itself
-/// serializes as `null` — and that is exactly the monochromatic case
-/// `Color = ()`, the most common signature in this crate (`SfgGenerator`'s among
-/// them). `Some(())` and `None` both write `null`, and `null` reads back as
-/// `None`, so a key of a fully-typed content would come home with every color
-/// erased: still a valid `ContentKey` value, no longer `canonical_key(c)` for
-/// the `c` it was computed from, and unequal to a freshly computed key — the
-/// silent-drift failure [#255](https://github.com/sustia-llc/catgraph/issues/255)
-/// exists to prevent. So the slot is made explicit instead of leaning on
-/// `Option`'s representation.
-///
-/// Found by the round-trip test, not by inspection.
+/// serializes as `null`, which is the monochromatic case `Color = ()`:
+/// `Some(())` and `None` both write `null`, and `null` reads back as `None`. The
+/// slot is therefore tagged explicitly instead of leaning on `Option`'s
+/// representation.
 #[cfg(feature = "serde")]
 mod color_slots {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -1195,52 +1075,31 @@ mod color_slots {
 }
 
 /// A hashable canonical form of a [`Content`], with
-/// `canonical_key(a) == canonical_key(b)` **iff** `content_eq(&a, &b)`.
-///
-/// Use it to key contents in a `HashMap` / `HashSet`. Two consumers are
-/// intended: the congruence-closure engine's structural buckets, and
-/// [`rewrite::optimize`](super::rewrite::optimize)'s visited-state dedup, which
-/// is what makes a cyclic rule set terminate against the visited set rather
-/// than loop.
+/// `canonical_key(a) == canonical_key(b)` **iff** `content_eq(&a, &b)`. Use it to
+/// key contents in a `HashMap` / `HashSet`.
 ///
 /// # Not `Ord`
 ///
 /// [`PropSignature::Color`] is not required to be `Ord`, and the key records
 /// colors, so there is no total order to derive. `Eq + Hash` is the whole
-/// contract — unchanged by the serde derives below, which add persistence and
-/// not ordering. A store that needs a sort order has to impose one itself, on
-/// the serialized form or on a consumer-side wrapper.
+/// contract; a store that needs a sort order has to impose one itself.
 ///
 /// # Serde (feature `serde`)
 ///
-/// `Serialize` / `Deserialize` round-trip the canonical form
-/// ([#255](https://github.com/sustia-llc/catgraph/issues/255)), which is what a
-/// downstream store needs: the anchored canonicalization behind
-/// [`canonical_key`] is too subtle to reimplement faithfully, and a
-/// reimplementation that drifted would disagree *silently* — two contents the
-/// crate calls equal landing in different buckets, or worse, the reverse.
-///
-/// **It is a key, not a term.** Deserialization reconstructs the fields directly
-/// and does not re-run [`canonical_key`]; nothing here can, because the content
-/// it was computed from is not carried. So a hand-crafted document can be a key
-/// of no content at all — a colors vector of the wrong length for its
-/// `node_count`, an anchor naming a node past the end, closed blocks in an order
-/// no seed minimization produces. Such a value is still a perfectly good
-/// `HashMap` key; it simply is not `canonical_key(c)` for any `c`, so the `iff`
-/// at the top of this type's docs does not hold of it, and a lookup against it
-/// answers a question nobody asked. Round-tripping a value this crate produced
-/// is always sound, and is the contract; treat an untrusted document as a
-/// *claim* about a content, and re-derive the key from the content itself when
-/// the answer has to mean something.
+/// `Serialize` / `Deserialize` round-trip the canonical form. **It is a key, not
+/// a term.** Deserialization reconstructs the fields directly and does not re-run
+/// [`canonical_key`], so a hand-crafted document can be a key of no content at
+/// all — a colors vector of the wrong length for its `node_count`, an anchor
+/// naming a node past the end, closed blocks in an order no seed minimization
+/// produces. Such a value is still a usable `HashMap` key, but it is not
+/// `canonical_key(c)` for any `c`, so the `iff` above does not hold of it.
+/// Round-tripping a value this crate produced is always sound, and is the
+/// contract.
 ///
 /// The serialized shape is the private field layout, so it is **not** a stable
-/// wire format across crate versions: the canonicalization may gain structure,
-/// and no version tag is embedded. Persist keys as a cache keyed by a version
-/// you control, or recompute on load. One field does not use its type's default
-/// representation: the per-node color slots are written as an explicit
-/// `Untyped` / `Typed(c)` tag rather than as `Option<C>`, because `Option` is
-/// lossy in JSON for a color that serializes as `null` — see the private
-/// `color_slots`.
+/// wire format across crate versions and embeds no version tag. The per-node
+/// color slots are written as an explicit `Untyped` / `Typed(c)` tag rather than
+/// as `Option<C>`, which is lossy in JSON for a color that serializes as `null`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(
@@ -1268,28 +1127,21 @@ pub struct ContentKey<G: PropSignature> {
 
 /// Compute the canonical key of a content.
 ///
-/// # Why it is canonical
-///
-/// The boundary-attached part is numbered by the same anchored propagation
-/// [`content_eq`] uses, made into a numbering: nodes are discovered from the
-/// input anchor in coordinate order, then the output anchor, then breadth-first
-/// through incident edges taken in the fixed `[consumer, producer]` order, each
-/// edge numbering its tentacles in tentacle order. Every ingredient of that walk
-/// — anchor coordinates, tentacle positions, labels — is a content invariant, so
-/// isomorphic contents produce identical numberings. Conversely two equal
-/// numberings *are* an iso under both feet, since the anchors are recorded
-/// coordinate-wise.
-///
-/// The closed part is the same complete invariant [`content_eq`] compares — each
-/// component's minimum-over-seeds serialization, sorted — which turns the
-/// unordered family of closed components into a canonical sequence.
+/// The boundary-attached part is numbered by the anchored propagation
+/// [`content_eq`] uses: nodes are discovered from the input anchor in coordinate
+/// order, then the output anchor, then breadth-first through incident edges taken
+/// in the fixed `[consumer, producer]` order, each edge numbering its tentacles in
+/// tentacle order. Every ingredient of that walk is a content invariant, so
+/// isomorphic contents produce identical numberings, and two equal numberings
+/// *are* an iso under both feet. The closed part is the same complete invariant
+/// [`content_eq`] compares — each component's minimum-over-seeds serialization,
+/// sorted.
 ///
 /// # Cost
 ///
 /// The same bound as [`content_eq`]: linear in the content for the
-/// boundary-attached part, `O(|E_K| · (n + e))` per closed component `K` — see
-/// that function on why the per-seed pass is sized to the content and not to `K`
-/// — plus the block sort.
+/// boundary-attached part, `O(|E_K| · (n + e))` per closed component `K`, plus
+/// the block sort.
 #[must_use]
 pub fn canonical_key<G: PropSignature>(c: &Content<G>) -> ContentKey<G> {
     let p = profile(c);
@@ -1322,13 +1174,9 @@ pub fn canonical_key<G: PropSignature>(c: &Content<G>) -> ContentKey<G> {
 
 // ------------------------------------------------- canonical representative
 
-/// Rebuild a content from its canonical key: the anchored part under the
-/// key's numbering, then one closed component per block, node-disjointly
-/// offset in the key's sorted block order.
-///
-/// Closed nodes take their producer's declared letter — the derivation
-/// [`ClosedBlock`] documents, and the reason dropping colors there loses
-/// nothing.
+/// Rebuild a content from its canonical key: the anchored part under the key's
+/// numbering, then one closed component per block, node-disjointly offset in the
+/// key's sorted block order. Closed nodes take their producer's declared letter.
 fn content_of_key<G: PropSignature>(key: &ContentKey<G>) -> Content<G> {
     let mut node_count = key.node_count;
     let mut node_colors = key.colors.clone();
@@ -1371,24 +1219,12 @@ fn content_of_key<G: PropSignature>(key: &ContentKey<G>) -> Content<G> {
 /// The canonical representative of `c`'s iso class: the same cospan, relabeled
 /// onto [`canonical_key`]'s numbering.
 ///
-/// # Why the readback may build on this
-///
-/// It factors through [`canonical_key`] — literally, `content_of_key ∘
-/// canonical_key` — and that key is a *complete* invariant
-/// (`canonical_key(a) == canonical_key(b)` **iff** [`content_eq`]). So
-/// `content_eq(a, b)` implies the two representatives are equal field for
-/// field, which is what lets
-/// [`expr_of_content`](super::display::expr_of_content) be a function of the
-/// iso class rather than of the writing that produced the content. The raw
-/// indices of a [`Content`] are presentation-dependent by design (see
-/// [`content_of`]), so reading a diagram back off them directly would not be.
-///
-/// The result is isomorphic to `c` under both feet, so every invariant of the
-/// construction — monogamy, acyclicity, the boundary conditions of BGKSZ
-/// Thm 3.12 — transports across unchanged. Two things it does *not* preserve:
-/// the node *indices* (that is the point), and the colors
-/// [`content_of_colored`] pins on a wire no generator touches, which the key
-/// does record for the anchored part and which therefore survive there.
+/// It factors through [`canonical_key`] — literally `content_of_key ∘
+/// canonical_key` — and that key is a *complete* invariant, so `content_eq(a, b)`
+/// implies the two representatives are equal field for field. The result is
+/// isomorphic to `c` under both feet, so monogamy, acyclicity and the boundary
+/// conditions of BGKSZ Thm 3.12 transport across unchanged. It does *not*
+/// preserve the node indices.
 pub(super) fn canonical_content<G: PropSignature>(c: &Content<G>) -> Content<G> {
     let canonical = content_of_key(&canonical_key(c));
     debug_assert!(
@@ -1467,10 +1303,8 @@ mod tests {
         let _ = content_of(&bad);
     }
 
-    /// `from_parts` is the one constructor whose parts arrive raw, so every
-    /// clause of the BGKSZ Thm 3.12 image characterization it re-establishes has
-    /// to be exercised from a hand-built violation — module-private access is
-    /// exactly why these live here rather than in `tests/`.
+    /// Hand-built violations of each clause of the BGKSZ Thm 3.12 image
+    /// characterization; every one is expected to be rejected.
     #[test]
     fn from_parts_rejects_every_way_the_image_characterization_can_fail() {
         fn edge(label: Sfg, sources: Vec<usize>, targets: Vec<usize>) -> ContentEdge<Sfg> {

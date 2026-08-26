@@ -1,37 +1,25 @@
 //! `MatKron(R)` — `FdVect` with the **Kronecker** tensor: a genuine hypergraph
 //! category (Fong & Spivak 2019, *Hypergraph Categories* arXiv:1806.08304v3,
-//! Ex 2.16, §2.3).
+//! Ex 2.16, §2.3), expressed on catgraph's native [`Monoidal`] /
+//! [`Composable`] / [`SymmetricMonoidalMorphism`] traits.
 //!
-//! This is a concrete (semantic) re-expression onto catgraph's **native**
-//! [`Monoidal`] / [`Composable`] / [`SymmetricMonoidalMorphism`] traits. It is
-//! a sibling carrier to [`MatR`]: both wrap the same
-//! row-major matrix data, but
+//! A sibling carrier to [`MatR`]: both wrap the same row-major matrix data, but
 //!
 //! | | [`MatR`] (`Mat(R)`) | [`MatKron`] (`MatKron(R)`) |
 //! |---|---|---|
 //! | Tensor `a ⊗ b` | `a + b` (block-diagonal ⊕) | `a · b` (Kronecker) |
 //! | Monoidal unit | object `0` | object `1` |
-//! | SCFM | addition (fails speciality) | **Hadamard** (special) |
+//! | SCFM | none | **Hadamard** (special) |
 //! | Hypergraph category? | no | **yes** |
 //!
-//! Because [`MatR`] already carries the block-diagonal [`Monoidal`] impl,
-//! `MatKron` is a distinct newtype so that the Kronecker [`Monoidal`] impl does
-//! not collide.
+//! **Row-vector convention**, inherited from [`MatR`]: a morphism `a → b` is an
+//! `a × b` matrix (rows = domain arity, cols = codomain arity); composition
+//! `self ; other` is row-major [`matmul`](crate::mat::MatR::matmul). Objects are
+//! dimensions `usize`, encoded as `Vec<()>`, so `domain()` returns `vec![(); rows]`.
 //!
-//! # Conventions (inherited from [`MatR`])
-//!
-//! **Row-vector convention.** A morphism `a → b` is an `a × b` matrix (rows =
-//! domain arity, cols = codomain arity); composition `self ; other` is
-//! row-major [`matmul`](crate::mat::MatR::matmul). Objects are dimensions
-//! `usize`, encoded as `Vec<()>` (`domain()` returns `vec![(); rows]`) to
-//! mirror [`MatR`].
-//!
-//! # Hadamard SCFM
-//!
-//! Every object `n` carries a genuine special commutative Frobenius monoid,
-//! realized here as **inherent generators** (`eta`/`epsilon`/`mu`/`delta`)
-//! rather than a separate trait. Speciality `δ ; μ = id_n` holds (the marquee
-//! property that makes this a hypergraph category, not merely compact closed).
+//! Every object `n` carries a special commutative Frobenius monoid, realized as
+//! the inherent generators `eta`/`epsilon`/`mu`/`delta` rather than a separate
+//! trait; speciality `δ ; μ = id_n` holds.
 
 use catgraph::{
     category::{Composable, HasIdentity},
@@ -207,10 +195,9 @@ impl<R: Rig> MatKron<R> {
             .expect("invariant: mu(n^2xn) ; epsilon(nx1) composes to n^2x1")
     }
 
-    /// The braiding `σ : a⊗b = a·b → b·a = b·a` — the perfect-shuffle
-    /// permutation matrix of shape `(a·b) × (a·b)` with
-    /// `result[i*b + j][j*a + i] = 1` for `i in 0..a, j in 0..b`, else `0`.
-    /// Maps the basis vector `e_i ⊗ e_j` to `e_j ⊗ e_i`.
+    /// The braiding `σ : a⊗b → b⊗a` — the perfect-shuffle permutation matrix of
+    /// shape `(a·b) × (a·b)` with `result[i*b + j][j*a + i] = 1` for
+    /// `i in 0..a, j in 0..b`, else `0`. Maps `e_i ⊗ e_j` to `e_j ⊗ e_i`.
     #[must_use]
     pub fn braiding(a: usize, b: usize) -> Self {
         let n = a * b;
@@ -257,13 +244,8 @@ impl<R: Rig> Monoidal for MatKron<R> {
 
 impl<R: Rig> MonoidalMorphism<Vec<()>> for MatKron<R> {}
 
-// Both the permutation-matrix construction and the pre/post-multiply logic are
-// identical to `MatR`'s (composition is matmul for both carriers), so these
-// delegate to the inner `MatR` rather than duplicating that machinery.
-// Like `MatR`, `MatKron`'s objects are `Vec<()>`, so the two #258 constructors
-// have no label to place and coincide. Both delegate to `MatR`'s, which is also
-// what makes the two carriers agree on the braiding by construction rather than
-// by a duplicated convention that could drift.
+// Composition is matmul for both carriers and both have `Vec<()>` objects, so
+// these delegate to `MatR` rather than duplicating the permutation machinery.
 impl<R: Rig> SymmetricMonoidalMorphism<()> for MatKron<R> {
     fn from_permutation_on_domain(p: Permutation, types: &[()]) -> Result<Self, CatgraphError> {
         MatR::from_permutation_on_domain(p, types).map(Self)

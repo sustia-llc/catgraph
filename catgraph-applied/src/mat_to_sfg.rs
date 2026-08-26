@@ -1,10 +1,7 @@
-//! The realization `mat_to_sfg` — F&S 2018 Prop 5.56 (converse of Thm 5.53).
-//!
-//! Thm 5.53 ships the functor `S : SFG_R → Mat(R)` (see
-//! [`crate::sfg_to_mat`]). Prop 5.56 states that `S` is **full/surjective**:
-//! *every* matrix `M ∈ Mat(R)` is realized by some signal-flow graph. This
-//! module implements the constructive converse `mat_to_sfg`, so that
-//! `sfg_to_mat(mat_to_sfg(M)) == M` for every `M`.
+//! The realization `mat_to_sfg` — F&S 2018 Prop 5.56, the constructive converse
+//! of the Thm 5.53 functor `S : SFG_R → Mat(R)` (see [`crate::sfg_to_mat`]):
+//! every matrix `M ∈ Mat(R)` is realized by a signal-flow graph, and
+//! `sfg_to_mat(mat_to_sfg(M)) == M`.
 //!
 //! ## The four-layer construction (Prop 5.56 proof sketch + Exercise 5.59)
 //!
@@ -23,23 +20,18 @@
 //! - **L4 — add/zero** `m·n → n`: each output `j` sums its `m` incoming wires
 //!   via [`add_n(m)`](crate::sfg::add_n) (for `m = 0` this is `zero`).
 //!
-//! Key idea: there is exactly one path from input `i` to output `j`, and it
-//! carries exactly one scalar icon `M(i, j)`, so `S` of the composite is `M`.
+//! There is exactly one path from input `i` to output `j`, carrying exactly one
+//! scalar icon `M(i, j)`, so `S` of the composite is `M`.
 //!
 //! Matrix-dimension convention (F&S Def 5.50 + Remark 5.49, matching
 //! [`crate::sfg_to_mat`]): a morphism `m → n` is an `m × n` matrix — row index
 //! = input wire, column index = output wire.
 //!
-//! ## Degenerate shapes
-//!
-//! The general four-layer composite degenerates naturally for every empty
-//! dimension — no shape needs special-casing:
-//!
-//! - `m = 0` (`0 × n`): L1/L2/L3 collapse to `id(0)`; L4 is `n` copies of
-//!   `zero` (= [`zero_n(n)`](crate::sfg::zero_n)), realizing the `0 × n` matrix.
-//! - `n = 0` (`m × 0`): L1 is `m` copies of `discard` (=
-//!   [`discard_n(m)`](crate::sfg::discard_n)); L2/L3/L4 collapse to `id(0)`.
-//! - `0 × 0`: every layer is `id(0)`, so the composite is `id(0)`.
+//! Empty dimensions need no special case: at `m = 0` layers L1–L3 collapse to
+//! `id(0)` and L4 is `n` copies of `zero` (= [`zero_n(n)`](crate::sfg::zero_n));
+//! at `n = 0` L1 is `m` copies of `discard`
+//! (= [`discard_n(m)`](crate::sfg::discard_n)) and L2–L4 collapse to `id(0)`;
+//! at `0 × 0` every layer is `id(0)`.
 
 use catgraph::errors::CatgraphError;
 
@@ -58,10 +50,9 @@ use crate::{
 ///
 /// # Errors
 ///
-/// Returns [`CatgraphError::CompositionSizeMismatch`] only if the internal
-/// layer arities fail to line up — a construction invariant that holds for all
-/// well-formed [`MatR`], so this cannot occur for values obtained through the
-/// safe [`MatR`] constructors. The `Result` mirrors [`copy_n`]/[`add_n`].
+/// [`CatgraphError::CompositionSizeMismatch`] if the internal layer arities
+/// fail to line up, which cannot occur for a [`MatR`] built through its own
+/// constructors.
 pub fn mat_to_sfg<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     m: &MatR<R>,
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {
@@ -115,23 +106,21 @@ pub fn mat_to_sfg<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'stati
 /// (input row `p` → output column `perm[p]`), consistent with `braid_matrix`
 /// in [`crate::sfg_to_mat`].
 ///
-/// The network is produced by a bubble sort of `perm` into ascending order via
-/// the shared [`crate::prop::adjacent_swaps`] core: each adjacent swap during
-/// the sort becomes one braid layer, emitted in the swap order (input-side
-/// first). `O(k²)` braid layers for `k = perm.len()`; the identity is returned
-/// when `perm` is already sorted (including `k ≤ 1`).
+/// The network is a bubble sort of `perm` into ascending order via
+/// [`crate::prop::adjacent_swaps`]: each adjacent swap becomes one braid layer,
+/// emitted in swap order (input-side first). `O(k²)` layers for
+/// `k = perm.len()`; the identity is returned when `perm` is already sorted,
+/// including `k ≤ 1`.
 ///
 /// # Errors
 ///
-/// Returns [`CatgraphError::CompositionSizeMismatch`] only on an internal
-/// arity bug; the layer widths are constructed to always line up.
+/// [`CatgraphError::CompositionSizeMismatch`] only on an internal arity bug;
+/// the layer widths always line up.
 fn permutation_sfg<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
     perm: &[usize],
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {
     let k = perm.len();
     let mut g = SignalFlowGraph::<R>::identity(k);
-    // Each swap at position t is a braid layer applied in input→output order, so
-    // the wire at position p is routed to perm[p].
     for t in crate::prop::adjacent_swaps(perm) {
         let layer = SignalFlowGraph::<R>::identity(t)
             .tensor(&SignalFlowGraph::<R>::braid_1_1())

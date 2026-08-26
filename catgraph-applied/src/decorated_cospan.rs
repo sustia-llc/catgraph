@@ -14,15 +14,12 @@
 //! cospan machinery in [`catgraph::cospan`] and domain-specific decorated
 //! structures (open Petri nets, open graphs, open dynamical systems, …).
 //!
-//! ## What lives here
-//!
-//! - the [`Decoration`] trait (F on objects + laxator + pushforward), and
-//! - the generic [`DecoratedCospan`] struct, with pushout-based
-//!   [`Composable`] composition (invoking `D::pushforward` on the
-//!   coequalizer quotient, per F&S Def 6.75), [`Monoidal`] parallel
-//!   product via the laxator, and a [`HypergraphCategory`] instance
-//!   supplying the Frobenius generators inherited from `Cospan`,
-//!   realizing F&S **Theorem 6.77**.
+//! This module defines the [`Decoration`] trait (`F` on objects + laxator +
+//! pushforward) and the generic [`DecoratedCospan`] struct, with pushout-based
+//! [`Composable`] composition (invoking `D::pushforward` on the coequalizer
+//! quotient, per F&S Def 6.75), [`Monoidal`] parallel product via the laxator,
+//! and a [`HypergraphCategory`] instance supplying the Frobenius generators
+//! inherited from `Cospan`, realizing F&S **Theorem 6.77**.
 //!
 //! # Examples
 //!
@@ -110,30 +107,13 @@ pub trait Decoration: Sized {
 /// [`Cospan`]; the `D` parameter is a [`Decoration`] functor whose associated
 /// apex type determines the shape of the decoration.
 ///
-/// `PartialEq` compares both fields — the underlying cospan and the
-/// decoration. It is **hand-written rather than derived**, and the two reasons
-/// are worth keeping straight:
-///
-/// - It could not exist at all until
-///   [#289](https://github.com/sustia-llc/catgraph/issues/289): the upstream
-///   `Cospan<Lambda>` had no `PartialEq`, because its cached identity flags
-///   were part of the value and could make structurally equal cospans compare
-///   unequal. #289 deleted that cache and `Cospan` now derives `PartialEq`, so
-///   that obstacle is gone.
-/// - A `#[derive(PartialEq)]` would compile, but bound the wrong parameter:
-///   derive constrains the *type parameters* (`Lambda: PartialEq`,
-///   `D: PartialEq`), whereas the field is `D::Apex` and
-///   [`Decoration`] already requires `type Apex: PartialEq`. Every `Decoration`
-///   marker in this workspace is a unit struct that does not implement
-///   `PartialEq` itself, so the derived impl would apply to none of them. The
-///   impl below asks only for `D: Decoration`. (The pre-existing derived
-///   `Clone` / `Debug` carry exactly that spurious bound; widening them is a
-///   separate change.)
-///
-/// There is no `Eq`: `Decoration::Apex` is bounded by `PartialEq` only, so
-/// nothing here can promise reflexivity. Comparing the `cospan` field alone
-/// still works through [`Cospan::structurally_equal`] (equivalently `==`) or
-/// the public leg/middle accessors.
+/// `PartialEq` compares both fields — the underlying cospan and the decoration
+/// — and is hand-written so that it asks only for `D: Decoration`, not the
+/// `D: PartialEq` a derive would demand of the marker type. There is no `Eq`:
+/// [`Decoration::Apex`] is bounded by `PartialEq`, not `Eq`, so nothing here can
+/// promise reflexivity. Comparing the `cospan` field alone still works through
+/// [`Cospan::structurally_equal`] (equivalently `==`) or the public leg/middle
+/// accessors.
 #[derive(Clone, Debug)]
 pub struct DecoratedCospan<Lambda, D>
 where
@@ -151,8 +131,7 @@ where
     Lambda: Eq + Copy + Debug,
     D: Decoration,
 {
-    /// Both fields, in the order a failing comparison is cheapest to read: the
-    /// cospan's `(left, right, middle)` triple, then the decoration.
+    /// The cospan's `(left, right, middle)` triple, then the decoration.
     fn eq(&self, other: &Self) -> bool {
         self.cospan == other.cospan && self.decoration == other.decoration
     }
@@ -354,11 +333,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    // The trivial decoration uses `type Apex = ()`, so every call to
-    // `Trivial::{empty, combine, pushforward}` returns `()`. Clippy's
-    // `let_unit_value` / `unit_arg` pedantic lints fire on every such call.
-    // These lints are signal on real code but pure noise for a unit-valued
-    // test double, so suppress them in this module only.
+    // The trivial decoration's `Apex` is `()`, so these two lints fire on
+    // every call to `Trivial::{empty, combine, pushforward}`.
     #![allow(clippy::let_unit_value, clippy::unit_arg)]
 
     use super::{DecoratedCospan, Decoration};
@@ -395,8 +371,7 @@ mod tests {
         assert_eq!(decorated.cospan.left_to_middle(), &[0]);
         assert_eq!(decorated.cospan.right_to_middle(), &[1]);
 
-        // Exercise the remaining `Decoration` methods so they aren't flagged
-        // as dead code and so the sanity test covers the full trait surface.
+        // Exercise the remaining `Decoration` methods.
         let combined: <Trivial as Decoration>::Apex =
             Trivial::combine(Trivial::empty(1), Trivial::empty(1));
         assert_eq!(combined, ());
@@ -407,14 +382,6 @@ mod tests {
 
     /// `==` compares both fields, and is available for a `Decoration` marker
     /// that is not itself `PartialEq`.
-    ///
-    /// The second half is the reason the impl is hand-written. A
-    /// `#[derive(PartialEq)]` bounds the *type parameters* — `D: PartialEq` —
-    /// where the field is `D::Apex`, which [`Decoration`] already bounds. Every
-    /// marker in this workspace (`Counter` here, `Trivial` above,
-    /// `PetriDecoration`, the `Circuit` in `tests/`) is a unit struct with no
-    /// `PartialEq`, so a derived impl would apply to none of them: the
-    /// comparison below would not compile at all.
     ///
     /// **What this ranges over.** One `Decoration` (`usize`-valued), one apex
     /// size, and the three cases that separate the two conjuncts of `eq`:
