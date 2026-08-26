@@ -487,7 +487,7 @@ fn run_mat_f64_demo() {
     println!("  determinant(m)       = {det}");
     assert!((det - 58.0).abs() < 1e-9, "expected det = 58.0");
 
-    // try_inverse: Some(inv) for non-singular m; inv · m = I_3 within 1e-12.
+    // try_inverse: Some(inv) for non-singular m; every entry of inv · m − I_3 is < 1e-12.
     let inv = try_inverse(&m).expect("m is non-singular");
     println!(
         "  try_inverse(m).rows  = {}  (Some(inv) — non-singular path)",
