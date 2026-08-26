@@ -487,11 +487,7 @@ fn run_mat_f64_demo() {
     println!("  determinant(m)       = {det}");
     assert!((det - 58.0).abs() < 1e-9, "expected det = 58.0");
 
-    // try_inverse: returns Some(inv) for non-singular m. Verify inv · m = I_3
-    // to a tight tolerance. The 3×3 integer-valued fixture has exact rational
-    // inverse with denominator 58 and max entry ≈ 0.31; LU round-trip error is
-    // on the order of ~n²·u ≈ 1e-15. 1e-12 keeps 3 orders of magnitude of
-    // slack above that without leaving room for a hypothetical layout bug.
+    // try_inverse: Some(inv) for non-singular m; inv · m = I_3 within 1e-12.
     let inv = try_inverse(&m).expect("m is non-singular");
     println!(
         "  try_inverse(m).rows  = {}  (Some(inv) — non-singular path)",

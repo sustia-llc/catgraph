@@ -66,7 +66,8 @@ fn check_determinants(cases: &[(&str, MatR<F64Rig>, f64)]) {
     let mut mismatches = Vec::new();
     for (label, m, expected) in cases {
         let det = determinant(m).expect("fixture is square");
-        if (det - expected).abs() >= 1e-12 {
+        let diff = (det - expected).abs();
+        if diff.is_nan() || diff >= 1e-12 {
             mismatches.push(format!("{label}: expected {expected}, measured {det}"));
         }
     }
@@ -80,7 +81,7 @@ fn check_determinants(cases: &[(&str, MatR<F64Rig>, f64)]) {
 /// A wrong `expected` (`[[7]]` → 8) makes `check_determinants` panic with the
 /// measured value.
 #[test]
-#[should_panic(expected = "determinant mismatches: [[7]]: expected 8, measured 7")]
+#[should_panic(expected = "[[7]]: expected 8, measured 7")]
 fn check_determinants_reports_a_mismatch() {
     check_determinants(&[("[[7]]", mat(&[&[7.0]]), 8.0)]);
 }
