@@ -27,6 +27,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed — tests
 
+- `Presentation` depth-bound contract: `eq_mod` pinned at `Ok(None)` on both
+  engines (Structural with `A = A;A` at depth 4; CC at depth 0) next to
+  `Some(true)`/`Some(false)` on pairs that converge; `normalize` pinned at
+  depths 0, 1 and 2 with `expr` written out; the two `A = B, B = A` tests now
+  assert `converged`, `expr` and `steps_taken`. No production change
+  ([#297](https://github.com/sustia-llc/catgraph/issues/297)).
 - `mat_f64::determinant`: value pins at n = 0, 1, 2, 3, 4 (sign, singular,
   block-diagonal); the rustdoc's "via nalgebra's LU decomposition" claim
   removed, and the same claim in `examples/mat_operations.rs`; CI

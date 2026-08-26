@@ -68,6 +68,49 @@ fn normalize_result_hits_bound_on_cycle() {
 }
 
 #[test]
+fn normalize_result_performs_no_iterations_at_depth_zero() {
+    // Depth 0, with no equation and with A → B: converged false, steps_taken 0,
+    // expr A.
+    let p = Presentation::<G>::with_depth(0);
+    let result = p.normalize(&a()).unwrap();
+    assert!(!result.converged);
+    assert_eq!(result.steps_taken, 0);
+    assert_eq!(result.expr, a());
+
+    let mut with_eq = Presentation::<G>::with_depth(0);
+    with_eq.add_equation(a(), b()).unwrap();
+    let result = with_eq.normalize(&a()).unwrap();
+    assert!(!result.converged);
+    assert_eq!(result.steps_taken, 0);
+    assert_eq!(result.expr, a());
+}
+
+#[test]
+fn normalize_result_steps_taken_tracks_depth_on_the_growing_rewrite() {
+    // A → A;A, converged false at both depths: depth 1 → steps_taken 1, expr
+    // `A;A`; depth 2 → steps_taken 2, expr `(A;A);(A;A)` (as `rewrite_once_top`
+    // produced it, not re-associated).
+    let a_then_a = Free::<G>::compose(a(), a()).unwrap();
+
+    let mut p1 = Presentation::<G>::with_depth(1);
+    p1.add_equation(a(), a_then_a.clone()).unwrap();
+    let r1 = p1.normalize(&a()).unwrap();
+    assert!(!r1.converged);
+    assert_eq!(r1.steps_taken, 1);
+    assert_eq!(r1.expr, a_then_a);
+
+    let mut p2 = Presentation::<G>::with_depth(2);
+    p2.add_equation(a(), a_then_a.clone()).unwrap();
+    let r2 = p2.normalize(&a()).unwrap();
+    assert!(!r2.converged);
+    assert_eq!(r2.steps_taken, 2);
+    assert_eq!(
+        r2.expr,
+        Free::<G>::compose(a_then_a.clone(), a_then_a).unwrap()
+    );
+}
+
+#[test]
 fn normalize_result_preserves_original_on_zero_equations() {
     let p = Presentation::<G>::new();
     let result = p.normalize(&a()).unwrap();
