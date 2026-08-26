@@ -151,18 +151,16 @@ fn ill_composed_tree_rejected_even_though_top_arities_match() {
 }
 
 #[test]
-fn depth_bound_respected_on_cyclic_rewrite() {
-    // Cyclic rewrite A → B, B → A. Normalize must terminate within depth bound.
+fn paired_inverse_equations_converge_in_one_iteration() {
+    // A = B, B = A at depth 16; normalize(A): converged, expr A, steps_taken 1.
     let mut pres = Presentation::<TestGen>::with_depth(16);
     pres.add_equation(g(TestGen::A), g(TestGen::B)).unwrap();
     pres.add_equation(g(TestGen::B), g(TestGen::A)).unwrap();
 
-    // Must return *some* PropExpr within bound, even if not unique.
-    let result = pres.normalize(&g(TestGen::A));
-    assert!(
-        result.is_ok(),
-        "normalize must terminate under cyclic rewrites: {result:?}"
-    );
+    let result = pres.normalize(&g(TestGen::A)).unwrap();
+    assert!(result.converged);
+    assert_eq!(result.expr, g(TestGen::A));
+    assert_eq!(result.steps_taken, 1);
 }
 
 #[test]
@@ -191,13 +189,6 @@ fn compose_identity_reduction_smc_rule() {
     let expr = Free::<TestGen>::compose(Free::<TestGen>::identity(1), g(TestGen::A)).unwrap();
     let normalized = pres.normalize(&expr).unwrap().expr;
     assert_eq!(normalized, g(TestGen::A));
-}
-
-// Unused in passing runs; keeps the import honest if a later assertion needs
-// it. Present to mirror the spec's triad TestGen::{A, B, C}.
-#[allow(dead_code)]
-fn _use_c() -> PropExpr<TestGen> {
-    g(TestGen::C)
 }
 
 // ---- NormalizeEngine selector tests ----
@@ -341,17 +332,83 @@ fn presentation_cc_handles_both_smc_interchange_and_overlapping_user_equations()
 }
 
 #[test]
-fn presentation_structural_engine_returns_none_on_cyclic_overlap() {
-    // With A = B, B = A under Structural + small depth bound, normalization
-    // oscillates. The Structural behavior is to return `None` (depth-bound hit).
-    // This locks in that the `Structural` branch preserves the `Option<bool>`
-    // return-type contract.
+fn presentation_structural_engine_decides_true_on_paired_inverse_equations() {
+    // A = B, B = A under Structural at depth 16: normalize(A) = (A, 1 step),
+    // normalize(B) = (A, 2 steps), eq_mod(A, B) = Some(true).
     let mut pres = Presentation::<TestGen>::with_depth(16);
     pres.set_engine(NormalizeEngine::Structural);
     pres.add_equation(g(TestGen::A), g(TestGen::B)).unwrap();
     pres.add_equation(g(TestGen::B), g(TestGen::A)).unwrap();
 
-    // Any of Some(true) / Some(false) / None is acceptable here — the point
-    // is that we don't panic and we stay within the depth bound.
-    let _ = pres.eq_mod(&g(TestGen::A), &g(TestGen::B)).unwrap();
+    let na = pres.normalize(&g(TestGen::A)).unwrap();
+    assert!(na.converged);
+    assert_eq!(na.expr, g(TestGen::A));
+    assert_eq!(na.steps_taken, 1);
+
+    let nb = pres.normalize(&g(TestGen::B)).unwrap();
+    assert!(nb.converged);
+    assert_eq!(nb.expr, g(TestGen::A));
+    assert_eq!(nb.steps_taken, 2);
+
+    assert_eq!(
+        pres.eq_mod(&g(TestGen::A), &g(TestGen::B)).unwrap(),
+        Some(true)
+    );
+}
+
+#[test]
+fn presentation_structural_engine_returns_none_only_when_a_side_hits_the_bound() {
+    // A = A;A under Structural at depth 4: normalize(A) converged false,
+    // steps_taken 4; normalize(B) = (B, 1 step); eq_mod(A, B) = None;
+    // eq_mod(B ⊗ Identity(0), B) = Some(true); eq_mod(B, C) = Some(false).
+    let mut pres = Presentation::<TestGen>::with_depth(4);
+    pres.set_engine(NormalizeEngine::Structural);
+    let a_then_a = Free::<TestGen>::compose(g(TestGen::A), g(TestGen::A)).unwrap();
+    pres.add_equation(g(TestGen::A), a_then_a).unwrap();
+
+    let na = pres.normalize(&g(TestGen::A)).unwrap();
+    assert!(!na.converged);
+    assert_eq!(na.steps_taken, 4);
+
+    let nb = pres.normalize(&g(TestGen::B)).unwrap();
+    assert!(nb.converged);
+    assert_eq!(nb.expr, g(TestGen::B));
+    assert_eq!(nb.steps_taken, 1);
+
+    assert_eq!(pres.eq_mod(&g(TestGen::A), &g(TestGen::B)).unwrap(), None);
+
+    let b_tensor_id0 = Free::<TestGen>::tensor(g(TestGen::B), Free::<TestGen>::identity(0));
+    let n_unitor = pres.normalize(&b_tensor_id0).unwrap();
+    assert!(n_unitor.converged);
+    assert_eq!(n_unitor.expr, g(TestGen::B));
+    assert_eq!(n_unitor.steps_taken, 2);
+
+    assert_eq!(
+        pres.eq_mod(&b_tensor_id0, &g(TestGen::B)).unwrap(),
+        Some(true)
+    );
+    assert_eq!(
+        pres.eq_mod(&g(TestGen::B), &g(TestGen::C)).unwrap(),
+        Some(false)
+    );
+}
+
+#[test]
+fn presentation_cc_engine_returns_none_when_the_smc_pre_pass_hits_the_bound() {
+    // Depth 0, default CC engine: eq_mod(A, B) = None, eq_mod(A, A) =
+    // Some(true); the same pair at the default depth 32 = Some(false).
+    let pres = Presentation::<TestGen>::with_depth(0);
+    assert_eq!(pres.engine(), NormalizeEngine::CongruenceClosure);
+    assert_eq!(pres.eq_mod(&g(TestGen::A), &g(TestGen::B)).unwrap(), None);
+    assert_eq!(
+        pres.eq_mod(&g(TestGen::A), &g(TestGen::A)).unwrap(),
+        Some(true)
+    );
+
+    assert_eq!(
+        Presentation::<TestGen>::new()
+            .eq_mod(&g(TestGen::A), &g(TestGen::B))
+            .unwrap(),
+        Some(false)
+    );
 }
