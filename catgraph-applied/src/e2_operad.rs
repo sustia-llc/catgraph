@@ -461,6 +461,40 @@ mod test {
         assert_eq!(outer.arity, 2);
     }
 
+    /// Numeric oracle for [`E2::operadic_substitution`] at one point of its
+    /// input space: outer disks `0` at centre `(3/8, 1/2)` radius `1/4` and `1`
+    /// at centre `(−1/2, −1/4)` radius `1/8`, with the arity-2 inner
+    /// configuration `2` at `(1/2, 1/4)` radius `1/4` and `3` at `(−1/2, 1/2)`
+    /// radius `1/8` substituted into disk `0`.
+    ///
+    /// Asserts the resulting arity and every output disk — name, both centre
+    /// coordinates, and radius — as a literal. Every coordinate here, and every
+    /// product and sum reaching it, is a dyadic rational with denominator at
+    /// most 32, hence exact in `f32`: the assertions are exact equalities.
+    ///
+    /// One `(outer, slot, inner)` triple is one point of that space. No other
+    /// slot, arity, or configuration is covered here.
+    #[test]
+    fn e2_substitution_numeric_oracle() {
+        let mut outer = E2::new(
+            vec![(0, (0.375, 0.5), 0.25), (1, (-0.5, -0.25), 0.125)],
+            true,
+        )
+        .unwrap();
+        let inner = E2::new(vec![(2, (0.5, 0.25), 0.25), (3, (-0.5, 0.5), 0.125)], true).unwrap();
+
+        let composed = outer.operadic_substitution(0, inner);
+        assert_ok!(composed);
+
+        let expected: Vec<(i32, (f32, f32), f32)> = vec![
+            (1, (-0.5, -0.25), 0.125),   // outer disk 1, geometry unchanged
+            (2, (0.5, 0.5625), 0.0625),  // image of inner disk 2
+            (3, (0.25, 0.625), 0.03125), // image of inner disk 3
+        ];
+        assert_eq!(outer.arity_of(), 3);
+        assert_eq!(outer.sub_circles(), expected.as_slice());
+    }
+
     #[test]
     fn e2_can_coalesce_boxes() {
         let circles = vec![(0, (0.0, 0.0), 0.2), (1, (0.0, 0.5), 0.2)];
