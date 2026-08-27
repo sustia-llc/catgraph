@@ -30,6 +30,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed — tests
 
+- `mat_to_sfg` round-trip at the Tropical rig zero: `prop_5_56_tropical_rig_zero`
+  pins `Tropical::zero()` (`+∞`) at 1×1, 2×2 all-zero and mixed with finite
+  entries; `roundtrip_tropical` samples that zero alongside `0.0, 1.0, 2.0, 3.0`
+  ([#301](https://github.com/sustia-llc/catgraph/issues/301)).
 - `PropExpr` serde: each variant round-trips on its own, `Braid`'s widths under
   an asymmetric `σ_{1,2}`, with wildcard-free matches making a sixth variant a
   compile error in the test file; `sample_term` composes a `Braid` and its
