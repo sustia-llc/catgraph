@@ -209,7 +209,10 @@ where
 // versions are private, so the logic of `analyze_components`,
 // `block_pair_is_free`, `blocks_are_adjacent`, `block_sorts_before` and the
 // single-layer core of `find_column_transposition` is re-implemented here;
-// smc_nf.rs:1569/2182/2192/1436/2541 are the references)
+// smc_nf.rs:1542/2132/2152/1413/2583 are the references). `blocks_adjacent`
+// below is the two-`contiguous_run` shape `blocks_are_adjacent` carried before
+// #303; `blocks_are_adjacent` now routes through `adjacent_runs`, computing
+// the same predicate.
 // ============================================================================
 
 mod check {

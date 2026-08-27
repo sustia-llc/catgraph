@@ -222,6 +222,7 @@ jobs:
       # so without this step that claim only ever runs with debug assertions
       # on.
       - run: cargo test -p catgraph --test checked_mutators --release
+      - run: cargo test -p catgraph-applied --release --test arity_overflow
 
   # #233: wasm compile-only regression guard, so the wasm properties probed
   # for #230-#232 can't regress silently. Check-only — running the wasi smoke

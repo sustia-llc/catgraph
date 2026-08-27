@@ -1110,21 +1110,50 @@ fn try_naturality_swap<G: PropSignature>(
     ))
 }
 
+/// One atom of a [`BraidLayer`]: an identity span of `n` wires, or the single
+/// adjacent-wire crossing `Braid(1, 1)`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BraidAtom {
+    Identity(usize),
+    Swap,
+}
+
+/// A non-empty layer whose atoms are all identities or `Braid(1, 1)` bricks,
+/// in source order.
+struct BraidLayer {
+    atoms: Vec<BraidAtom>,
+}
+
+impl BraidLayer {
+    /// `None` when `layer` is empty or carries an atom that is neither an
+    /// identity nor a `Braid(1, 1)`.
+    fn from_layer<G: PropSignature>(layer: &Layer<G>) -> Option<Self> {
+        if layer.atoms.is_empty() {
+            return None;
+        }
+        layer
+            .atoms
+            .iter()
+            .map(|a| match a {
+                Atom::Identity(n) => Some(BraidAtom::Identity(*n)),
+                Atom::Braid(1, 1) => Some(BraidAtom::Swap),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()
+            .map(|atoms| Self { atoms })
+    }
+}
+
 /// Canonicalize each maximal run of consecutive pure-braid (or pure-identity)
 /// layers to its bubble-sort decomposition. Identity-only layers contribute
 /// no swap to the underlying permutation but are absorbed into the run.
 fn canonicalize_braid_runs<G: PropSignature>(layers: Vec<Layer<G>>) -> Vec<Layer<G>> {
     let mut out: Vec<Layer<G>> = Vec::new();
-    let mut run: Vec<Layer<G>> = Vec::new();
+    let mut run: Vec<(Layer<G>, BraidLayer)> = Vec::new();
 
     for layer in layers {
-        let all_ident_or_braid = !layer.atoms.is_empty()
-            && layer
-                .atoms
-                .iter()
-                .all(|a| matches!(a, Atom::Identity(_) | Atom::Braid(1, 1)));
-        if all_ident_or_braid {
-            run.push(layer);
+        if let Some(braid) = BraidLayer::from_layer(&layer) {
+            run.push((layer, braid));
         } else {
             if !run.is_empty() {
                 out.extend(canonicalize_run(&std::mem::take(&mut run)));
@@ -1138,21 +1167,21 @@ fn canonicalize_braid_runs<G: PropSignature>(layers: Vec<Layer<G>>) -> Vec<Layer
     out
 }
 
-fn canonicalize_run<G: PropSignature>(run: &[Layer<G>]) -> Vec<Layer<G>> {
-    if run.is_empty() {
+fn canonicalize_run<G: PropSignature>(run: &[(Layer<G>, BraidLayer)]) -> Vec<Layer<G>> {
+    let Some((first, _)) = run.first() else {
         return Vec::new();
-    }
+    };
     // Total wire width = source width of first layer in the run.
-    let total: usize = run[0].atoms.iter().map(atom_source).sum();
+    let total: usize = first.atoms.iter().map(atom_source).sum();
     if total < 2 {
         // No possible crossings; just pass through a single identity layer.
-        return vec![run[0].clone()];
+        return vec![first.clone()];
     }
 
     // Apply each layer's swaps to compute the underlying permutation.
     let mut perm: Vec<usize> = (0..total).collect();
-    for layer in run {
-        apply_braid_layer_to_perm(layer, &mut perm);
+    for (_, braid) in run {
+        apply_braid_layer_to_perm(braid, &mut perm);
     }
 
     // Canonical decomposition of perm via the shared `adjacent_swaps` core,
@@ -1175,22 +1204,17 @@ fn canonicalize_run<G: PropSignature>(run: &[Layer<G>]) -> Vec<Layer<G>> {
     }
 }
 
-/// Update `perm` in place by applying each `Braid(1,1)` in `layer` as an
+/// Update `perm` in place by applying each `BraidAtom::Swap` in `layer` as an
 /// adjacent-wire swap. Identity atoms advance the wire cursor without
 /// modifying the permutation.
-fn apply_braid_layer_to_perm<G: PropSignature>(layer: &Layer<G>, perm: &mut [usize]) {
+fn apply_braid_layer_to_perm(layer: &BraidLayer, perm: &mut [usize]) {
     let mut wire_pos = 0;
     for atom in &layer.atoms {
         match atom {
-            Atom::Identity(n) => wire_pos += n,
-            Atom::Braid(1, 1) => {
+            BraidAtom::Identity(n) => wire_pos += n,
+            BraidAtom::Swap => {
                 perm.swap(wire_pos, wire_pos + 1);
                 wire_pos += 2;
-            }
-            _ => {
-                // Non-brick braid or generator shouldn't appear here;
-                // canonicalize_braid_runs filters these.
-                debug_assert!(false, "apply_braid_layer_to_perm: unexpected atom");
             }
         }
     }
@@ -2114,17 +2138,23 @@ fn block_pair_is_free(comps: &Components, c1: usize, c2: usize) -> bool {
         && !(comps.touches_output[c1] && comps.touches_output[c2])
 }
 
+/// `c1`'s run immediately left of `c2`'s in `row`, as `(start of c1, the
+/// boundary they share, end of c2)`. `None` when either run is absent or not
+/// contiguous, or when the two are not adjacent in that order. A returned
+/// triple satisfies `a1 <= b1 <= b2`.
+fn adjacent_runs(row: &[usize], c1: usize, c2: usize) -> Option<(usize, usize, usize)> {
+    let (a1, b1) = contiguous_run(row, c1)?;
+    let (a2, b2) = contiguous_run(row, c2)?;
+    (b1 == a2).then_some((a1, b1, b2))
+}
+
 /// `c1`'s run immediately left of `c2`'s in every layer holding both.
 fn blocks_are_adjacent(ids: &[Vec<usize>], c1: usize, c2: usize) -> bool {
     for row in ids {
         if !layer_holds(row, c1) || !layer_holds(row, c2) {
             continue;
         }
-        let (Some((_, b1)), Some((a2, _))) = (contiguous_run(row, c1), contiguous_run(row, c2))
-        else {
-            return false;
-        };
-        if b1 != a2 {
+        if adjacent_runs(row, c1, c2).is_none() {
             return false;
         }
     }
@@ -2179,9 +2209,7 @@ fn apply_block_transposition<G: PropSignature>(
         if !layer_holds(row, c1) || !layer_holds(row, c2) {
             continue;
         }
-        if let (Some((a1, b1)), Some((a2, b2))) = (contiguous_run(row, c1), contiguous_run(row, c2))
-        {
-            debug_assert_eq!(b1, a2, "block transposition on a non-adjacent pair");
+        if let Some((a1, b1, b2)) = adjacent_runs(row, c1, c2) {
             layer.atoms[a1..b2].rotate_left(b1 - a1);
             row[a1..b2].rotate_left(b1 - a1);
         }
@@ -2322,6 +2350,7 @@ fn reorder_zero_arity_columns<G: PropSignature>(
     // The two diagram boundaries the swaps must leave alone.
     // `block_wiring_is_consistent` checks only *internal* boundaries, so capture
     // the outer two before any move.
+    #[cfg(debug_assertions)]
     let before = boundary_owner_words(refined, ids);
     let mut swapped = false;
     while let Some(swap) = find_column_transposition(refined, comps, ids, has_braid) {
@@ -2332,6 +2361,7 @@ fn reorder_zero_arity_columns<G: PropSignature>(
         !swapped || block_wiring_is_consistent(refined, ids),
         "reorder_zero_arity_columns broke the per-wire component correspondence"
     );
+    #[cfg(debug_assertions)]
     debug_assert!(
         !swapped || boundary_owner_words(refined, ids) == before,
         "reorder_zero_arity_columns moved a wire on a diagram boundary"
@@ -2342,6 +2372,7 @@ fn reorder_zero_arity_columns<G: PropSignature>(
 /// The per-wire component owner sequences on the diagram's **own** two
 /// boundaries: layer 0 read on its sources, the last layer read on its targets.
 /// Both are part of the morphism, so no transposition may change either.
+#[cfg(debug_assertions)]
 fn boundary_owner_words<G: PropSignature>(
     sd: &StringDiagram<G>,
     ids: &[Vec<usize>],

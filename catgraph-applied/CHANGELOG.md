@@ -20,6 +20,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
   an `Err` ([#298](https://github.com/sustia-llc/catgraph/issues/298)).
 - Rustdoc reduced to contract statements; this CHANGELOG rewritten to one
   bullet per change ([#365](https://github.com/sustia-llc/catgraph/issues/365)).
+- `smc_nf`: `apply_braid_layer_to_perm` takes a private identity-or-swap layer
+  type, losing its `_` match arm; `apply_block_transposition` loses the
+  adjacency `debug_assert_eq!`, and it and `blocks_are_adjacent` both go
+  through one adjacency-checked `adjacent_runs`; `reorder_zero_arity_columns`
+  computes its boundary snapshot only under `debug_assertions`
+  ([#303](https://github.com/sustia-llc/catgraph/issues/303)).
 
 ### Fixed
 
