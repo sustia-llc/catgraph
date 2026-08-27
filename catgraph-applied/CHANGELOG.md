@@ -15,6 +15,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Changed
 
+- `MatR::permute_side` takes its two `matmul` results with `.expect`, whose
+  message names the length guard checked above, instead of silently discarding
+  an `Err` ([#298](https://github.com/sustia-llc/catgraph/issues/298)).
 - Rustdoc reduced to contract statements; this CHANGELOG rewritten to one
   bullet per change ([#365](https://github.com/sustia-llc/catgraph/issues/365)).
 
@@ -27,6 +30,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed — tests
 
+- `MatR::permute_side` on non-square `MatR<F64Rig>`: entry pins for each value
+  of `of_codomain` under a 3-cycle, and unchanged-matrix pins where the
+  permutation's length matches the opposite side's arity
+  ([#298](https://github.com/sustia-llc/catgraph/issues/298)).
 - `Presentation` depth-bound contract: `eq_mod` pinned at `Ok(None)` on both
   engines (Structural with `A = A;A` at depth 4; CC at depth 0) next to
   `Some(true)`/`Some(false)` on pairs that converge; `normalize` pinned at

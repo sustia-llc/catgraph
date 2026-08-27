@@ -425,9 +425,9 @@ impl<R: Rig> SymmetricMonoidalMorphism<()> for MatR<R> {
         }
         let perm_mat = Self::permutation_matrix(p);
         if of_codomain {
-            if let Ok(result) = self.matmul(&perm_mat) {
-                *self = result;
-            }
+            *self = self.matmul(&perm_mat).expect(
+                "invariant: p.len() == self.cols checked above, so self.cols == perm_mat.rows",
+            );
         } else {
             // P^T has entries[p(i)][i] = 1; equivalently, the transpose of P.
             let n = p.len();
@@ -440,9 +440,9 @@ impl<R: Rig> SymmetricMonoidalMorphism<()> for MatR<R> {
                 cols: n,
                 entries,
             };
-            if let Ok(result) = p_transpose.matmul(self) {
-                *self = result;
-            }
+            *self = p_transpose.matmul(self).expect(
+                "invariant: p.len() == self.rows checked above, so p_transpose.cols == self.rows",
+            );
         }
     }
 }

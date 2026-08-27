@@ -1,8 +1,9 @@
 //! Integration tests for `MatR<R>` over concrete rigs (`F64Rig`, `BoolRig`,
 //! `Tropical`). Exercises identity / matmul / block-diag / permutation
-//! correctness and the categorical interchange law.
+//! correctness, `permute_side` and its length guard, and the categorical
+//! interchange law.
 
-use catgraph::{category::Composable, errors::CatgraphError};
+use catgraph::{category::Composable, errors::CatgraphError, monoidal::SymmetricMonoidalMorphism};
 use catgraph_applied::{
     mat::MatR,
     rig::{BoolRig, F64Rig, Tropical},
@@ -110,6 +111,100 @@ fn permutation_swap_squared_is_identity() {
     let m = MatR::<F64Rig>::permutation_matrix(&swap);
     let mm = m.matmul(&m).unwrap();
     assert_eq!(mm, MatR::<F64Rig>::identity(3));
+}
+
+// ---- permute_side: each side, and the length guard ----
+
+/// `permute_side` for each value of `of_codomain` and each length outcome of
+/// the `p.len() != expected` guard, on non-square matrices.
+///
+/// Both direction pins use the 3-cycle `pc`, whose inverse differs from it, so
+/// each separates `β(p)` from `β(p⁻¹)`; the shape is transposed for the domain
+/// case to give that side arity 3. A 2-element permutation cannot make that
+/// separation — it is its own inverse.
+///
+/// The two no-op cases feed the permutation that is *valid on the opposite
+/// side* of the 2 × 3 — `pc` has length 3 (its codomain arity) and `pd`
+/// length 2 (its domain arity) — so a mismatch is rejected by length alone,
+/// never because the permutation was an identity.
+#[test]
+fn permute_side_permutes_the_matching_side_and_no_ops_on_length_mismatch() {
+    let wide = || {
+        MatR::<F64Rig>::new(
+            2,
+            3,
+            vec![
+                vec![F64Rig(1.0), F64Rig(2.0), F64Rig(3.0)],
+                vec![F64Rig(4.0), F64Rig(5.0), F64Rig(6.0)],
+            ],
+        )
+        .unwrap()
+    };
+    let tall = || {
+        MatR::<F64Rig>::new(
+            3,
+            2,
+            vec![
+                vec![F64Rig(1.0), F64Rig(2.0)],
+                vec![F64Rig(3.0), F64Rig(4.0)],
+                vec![F64Rig(5.0), F64Rig(6.0)],
+            ],
+        )
+        .unwrap()
+    };
+    // apply = [1, 2, 0]
+    let pc = permutations::Permutation::rotation_left(3, 1);
+    // apply = [1, 0]
+    let pd = permutations::Permutation::transposition(2, 0, 1);
+
+    let mut codomain = wide();
+    codomain.permute_side(&pc, true);
+    assert_eq!(
+        codomain,
+        MatR::<F64Rig>::new(
+            2,
+            3,
+            vec![
+                vec![F64Rig(3.0), F64Rig(1.0), F64Rig(2.0)],
+                vec![F64Rig(6.0), F64Rig(4.0), F64Rig(5.0)],
+            ],
+        )
+        .unwrap(),
+        "columns permuted by pc: column p.apply(b) receives column b"
+    );
+
+    let mut domain = tall();
+    domain.permute_side(&pc, false);
+    assert_eq!(
+        domain,
+        MatR::<F64Rig>::new(
+            3,
+            2,
+            vec![
+                vec![F64Rig(5.0), F64Rig(6.0)],
+                vec![F64Rig(1.0), F64Rig(2.0)],
+                vec![F64Rig(3.0), F64Rig(4.0)],
+            ],
+        )
+        .unwrap(),
+        "rows permuted by pc: row p.apply(i) receives row i"
+    );
+
+    let mut wrong_on_codomain = wide();
+    wrong_on_codomain.permute_side(&pd, true);
+    assert_eq!(
+        wrong_on_codomain,
+        wide(),
+        "pd has length 2, the codomain arity is 3: guarded no-op"
+    );
+
+    let mut wrong_on_domain = wide();
+    wrong_on_domain.permute_side(&pc, false);
+    assert_eq!(
+        wrong_on_domain,
+        wide(),
+        "pc has length 3, the domain arity is 2: guarded no-op"
+    );
 }
 
 // ---- Tropical smoke test: matmul behaves like shortest-path ----
