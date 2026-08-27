@@ -12,7 +12,7 @@
 use catgraph_applied::{
     mat::MatR,
     mat_to_sfg::mat_to_sfg,
-    rig::{BoolRig, F64Rig, Tropical, UnitInterval},
+    rig::{BoolRig, F64Rig, One, Tropical, UnitInterval, Zero},
     sfg_to_mat::sfg_to_mat,
 };
 use proptest::prelude::*;
@@ -97,6 +97,25 @@ fn edge_one_by_one() {
     assert_roundtrip(&m);
 }
 
+// ---- Pinned: the Tropical rig zero reaches `mat_to_sfg` ----
+
+/// `Tropical::zero()` (`+∞`) round-trips at 1×1, at 2×2 all-zero, and beside
+/// `Tropical::one()` and `Tropical(3.0)` in a mixed 2×2.
+#[test]
+fn prop_5_56_tropical_rig_zero() {
+    let zero = Tropical::zero();
+    assert_roundtrip(&MatR::new(1, 1, vec![vec![zero]]).expect("1×1 fixture"));
+    assert_roundtrip(&MatR::<Tropical>::zero_matrix(2, 2));
+    assert_roundtrip(
+        &MatR::new(
+            2,
+            2,
+            vec![vec![zero, Tropical::one()], vec![Tropical(3.0), zero]],
+        )
+        .expect("2×2 fixture"),
+    );
+}
+
 // ---- Round-trip proptest over all four rigs ----
 
 /// Generate a `MatR<R>` up to 4×4 from a per-rig entry strategy.
@@ -122,14 +141,19 @@ proptest! {
         assert_roundtrip(&m);
     }
 
-    /// Tropical (min, +) over finite dyadic values — round-trips exactly since
+    /// Tropical (min, +) over the finite dyadic values `0.0, 1.0, 2.0, 3.0`
+    /// and the rig zero `Tropical::zero()` (`+∞`) — round-trips exactly since
     /// each entry passes through a single path (tropical-mul by one = `+0.0`,
     /// tropical-add with zero = `min(x, +∞) = x`).
     #[test]
     fn roundtrip_tropical(
-        m in arb_matrix::<Tropical, _>(
-            prop::sample::select(vec![0.0f64, 1.0, 2.0, 3.0]).prop_map(Tropical)
-        )
+        m in arb_matrix::<Tropical, _>(prop::sample::select(vec![
+            Tropical(0.0),
+            Tropical(1.0),
+            Tropical(2.0),
+            Tropical(3.0),
+            Tropical::zero(),
+        ]))
     ) {
         assert_roundtrip(&m);
     }
