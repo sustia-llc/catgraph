@@ -222,6 +222,13 @@ jobs:
       # so without this step that claim only ever runs with debug assertions
       # on.
       - run: cargo test -p catgraph --test checked_mutators --release
+      # #303: `arity_overflow.rs` states that `nf` rejects an overflowing
+      # `Braid`/`Tensor` width "in both build profiles" — the rejection is a
+      # plain `assert!` in `nf_inner` precisely so it survives release, where
+      # the pre-#196 behaviour was a wrap onto a small, spuriously valid width
+      # rather than a panic. Only the debug `cargo test --workspace` above runs
+      # this target, so that half of the claim was unpinned in CI.
+      - run: cargo test -p catgraph-applied --release --test arity_overflow
 
   # #233: wasm compile-only regression guard, so the wasm properties probed
   # for #230-#232 can't regress silently. Check-only — running the wasi smoke
