@@ -30,6 +30,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed — tests
 
+- `PropExpr` serde: each variant round-trips on its own, `Braid`'s widths under
+  an asymmetric `σ_{1,2}`, with wildcard-free matches making a sixth variant a
+  compile error in the test file; `sample_term` composes a `Braid` and its
+  every-variant claim is read off the term; the `RewriteOutcome` accessor census
+  covers `into_best`
+  ([#299](https://github.com/sustia-llc/catgraph/issues/299)).
 - `MatR::permute_side` on non-square `MatR<F64Rig>`: entry pins for each value
   of `of_codomain` under a 3-cycle, and unchanged-matrix pins where the
   permutation's length matches the opposite side's arity

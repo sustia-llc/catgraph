@@ -21,8 +21,8 @@
 //! [#255]: https://github.com/sustia-llc/catgraph/issues/255
 #![cfg(feature = "serde")]
 
-use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 
 use catgraph::errors::CatgraphError;
@@ -39,26 +39,114 @@ use catgraph_applied::sfg::SfgGenerator;
 
 type G = SfgGenerator<i64>;
 
-/// A non-trivial `1 → 1` signal-flow term: `copy ; (scalar(3) ⊗ id) ; add`,
-/// exercising every `PropExpr` variant (`Generator`, `Identity`, `Compose`,
-/// `Tensor`) and a generator carrying an `R` payload (`Scalar`).
+/// A non-trivial `1 → 1` signal-flow term:
+/// `copy ; braid(1,1) ; (scalar(3) ⊗ id) ; add`, exercising every `PropExpr`
+/// variant (`Identity`, `Braid`, `Generator`, `Compose`, `Tensor`) and a
+/// generator carrying an `R` payload (`Scalar`).
 fn sample_term() -> PropExpr<G> {
     let copy = Free::generator(SfgGenerator::Copy); // 1 → 2
+    let swap = Free::<G>::braid(1, 1); // 2 → 2
     let scaled = Free::tensor(
         Free::generator(SfgGenerator::Scalar(3_i64)), // 1 → 1
         Free::<G>::identity(1),                       // 1 → 1
     ); // 2 → 2
     let add = Free::generator(SfgGenerator::Add); // 2 → 1
-    let left = Free::compose(copy, scaled).expect("copy(1→2) ; (2→2)");
+    let left = Free::compose(copy, swap).expect("copy(1→2) ; braid(2→2)");
+    let left = Free::compose(left, scaled).expect("(1→2) ; (2→2)");
     Free::compose(left, add).expect("(1→2) ; add(2→1)")
+}
+
+/// Label a `PropExpr` by its variant.
+///
+/// The `match` is exhaustive with no wildcard arm, so a sixth variant cannot
+/// reach this file without an edit here. Naming it is not covering it — the
+/// legs below stay a hand-list, held to the labels by an assertion.
+fn variant_label(e: &PropExpr<G>) -> &'static str {
+    match e {
+        PropExpr::Identity(_) => "Identity",
+        PropExpr::Braid(_, _) => "Braid",
+        PropExpr::Generator(_) => "Generator",
+        PropExpr::Compose(_, _) => "Compose",
+        PropExpr::Tensor(_, _) => "Tensor",
+    }
+}
+
+/// Collect the variant labels occurring anywhere in `e`.
+fn variants_in(e: &PropExpr<G>, seen: &mut BTreeSet<&'static str>) {
+    seen.insert(variant_label(e));
+    match e {
+        PropExpr::Identity(_) | PropExpr::Braid(_, _) | PropExpr::Generator(_) => {}
+        PropExpr::Compose(f, g) | PropExpr::Tensor(f, g) => {
+            variants_in(f, seen);
+            variants_in(g, seen);
+        }
+    }
 }
 
 #[test]
 fn propexpr_json_round_trip_is_identity() {
     let term = sample_term();
+
+    // `sample_term`'s "every variant" is a claim about this term, so read it off
+    // the term rather than leaving it in the docstring.
+    let mut seen = BTreeSet::new();
+    variants_in(&term, &mut seen);
+    assert_eq!(
+        seen.into_iter().collect::<Vec<_>>(),
+        ["Braid", "Compose", "Generator", "Identity", "Tensor"],
+        "sample_term must contain every PropExpr variant",
+    );
+
     let json = serde_json::to_string(&term).expect("serialize");
     let back: PropExpr<G> = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(term, back, "PropExpr must survive a JSON round-trip");
+}
+
+/// Each `PropExpr` variant round-trips on its own, over fixture values the
+/// composite term does not carry and with the failing variant named in the
+/// message.
+///
+/// Not a stronger equality than the composite's: `PropExpr`'s `PartialEq` is
+/// derived, so whole-tree equality already decomposes to every node. What the
+/// legs add is the values — chiefly an asymmetric `Braid` — and localization.
+///
+/// The `Braid` leg is `σ_{1,2}` because `sample_term`'s `σ_{1,1}` is its own
+/// field swap: it round-trips equal whether or not the two widths stay in
+/// order, so only an asymmetric one can see the order at all.
+#[test]
+fn each_propexpr_variant_round_trips_on_its_own() {
+    let variants: Vec<PropExpr<G>> = vec![
+        Free::<G>::identity(2),
+        Free::<G>::braid(1, 2),
+        Free::generator(SfgGenerator::Scalar(3_i64)),
+        Free::compose(
+            Free::generator(SfgGenerator::Copy),
+            Free::generator(SfgGenerator::Add),
+        )
+        .expect("copy(1→2) ; add(2→1)"),
+        Free::tensor(
+            Free::generator(SfgGenerator::Scalar(3_i64)),
+            Free::<G>::identity(1),
+        ),
+    ];
+
+    // One term per variant, in declaration order — otherwise the loop below
+    // could run five times over four variants.
+    let labels: Vec<&'static str> = variants.iter().map(variant_label).collect();
+    assert_eq!(
+        labels,
+        ["Identity", "Braid", "Generator", "Compose", "Tensor"],
+        "the legs must cover the variants one for one",
+    );
+
+    for term in &variants {
+        let label = variant_label(term);
+        let json =
+            serde_json::to_string(term).unwrap_or_else(|e| panic!("{label}: serialize: {e}"));
+        let back: PropExpr<G> =
+            serde_json::from_str(&json).unwrap_or_else(|e| panic!("{label}: deserialize: {e}"));
+        assert_eq!(&back, term, "{label} must survive a JSON round-trip");
+    }
 }
 
 #[test]
@@ -164,7 +252,8 @@ fn rewrite_outcome_json_round_trip_is_identity() {
     let json = serde_json::to_string(&outcome).expect("serialize");
     let back: RewriteOutcome<G> = serde_json::from_str(&json).expect("deserialize");
 
-    // Every accessor, not a sample of them.
+    // Every accessor, not a sample of them — the consuming one closes the list
+    // below the stability check.
     assert_eq!(back.best(), outcome.best());
     assert_eq!(back.initial_cost(), outcome.initial_cost());
     assert_eq!(back.best_cost(), outcome.best_cost());
@@ -176,6 +265,11 @@ fn rewrite_outcome_json_round_trip_is_identity() {
     // representation is stable and not merely accessor-equal.
     let json2 = serde_json::to_string(&back).expect("re-serialize");
     assert_eq!(json, json2, "RewriteOutcome JSON must be round-trip stable");
+
+    // The roster's seventh accessor, below the stability check because it
+    // consumes. Both sides are structurally equal by now, so this cannot see a
+    // wrong return value — it pins that `into_best` is reachable at all.
+    assert_eq!(back.into_best(), outcome.into_best());
 }
 
 /// The end-to-end consumer story: persist the trace *and* the rule pairs,
