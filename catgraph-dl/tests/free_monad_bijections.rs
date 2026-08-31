@@ -10,7 +10,7 @@
 //!
 //! ## Test taxonomy
 //!
-//! Six consolidated tests, one per acceptance criterion:
+//! One consolidated test per acceptance criterion:
 //!
 //! 1. `vec_round_trip_proptest` — proptest-driven round trip for `Vec<u32>`
 //!    in both directions.
