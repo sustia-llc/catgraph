@@ -42,9 +42,7 @@ fn tree_algebra(cell: Either<char, (String, String)>) -> String {
     }
 }
 
-/// Fold a [`Tree`] to its parenthesized rendering. The result determines both
-/// which arm ran at each cell and the position order of the children's
-/// results.
+/// Fold a [`Tree`] to its parenthesized rendering.
 fn render(tree: Tree) -> String {
     tree.fold(&tree_pure, &tree_algebra)
 }
