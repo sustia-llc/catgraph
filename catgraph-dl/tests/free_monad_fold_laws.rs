@@ -2,9 +2,10 @@
 //! position order, and the `Assemble` recompose path.
 //!
 //! Both witnesses carry an **inhabited** payload type, so `Pure` leaves are
-//! reachable, and fold with a **non-commutative** algebra, so a permuted child
-//! order changes the folded value. Every expected value below is a closed-form
-//! string.
+//! reachable. The tree witness folds with a **non-commutative** algebra, so a
+//! permuted child order changes the folded value; the list witness has arity
+//! ≤ 1, so it exercises the `Pure` terminator, not child order. Every expected
+//! value below is a closed-form string.
 
 use catgraph_dl::Either;
 use catgraph_dl::free_monad::Free;
@@ -71,7 +72,7 @@ fn render_list(list: List) -> String {
 }
 
 /// The catamorphism over `A + (−)²` (CDL Remark 2.13), on shapes that separate
-/// the three things `fold` decides.
+/// the `Pure` arm, position order, and the `Assemble` recompose path.
 ///
 /// - **`Pure` arm** — the bare `Pure` root, and the `Pure` leaves inside the
 ///   compound shapes, which render `[p]` / `[z]` where no other arm can.
@@ -117,8 +118,8 @@ fn fold_pins_the_pure_arm_child_order_and_recompose() {
 /// rendering.
 ///
 /// The two terminators give `x:y:z:<END>` and `x:y:z:<TAIL>` over identical
-/// labels, so the `Pure` arm's value is the only thing separating them. The
-/// `Nil` shape is folded too: arity 0 through `recompose`, rendering `a:!`.
+/// labels. The `Nil` shape is folded too: arity 0 through `recompose`,
+/// rendering `a:!`.
 #[test]
 fn list_endo_fold_threads_the_pure_terminator() {
     let items = vec!['x', 'y', 'z'];
@@ -138,7 +139,7 @@ fn list_endo_fold_threads_the_pure_terminator() {
     assert_eq!(render_list(vec_to_free_mnd(Vec::new(), "END")), "<END>");
 
     // A `Nil`-terminated cons cell — the arity-0 shape of `1 + A × −`, which
-    // `free_mnd_to_vec` rejects but `fold` interprets.
+    // `free_mnd_to_vec` panics on but `fold` interprets.
     let nil_terminated: List = Free::suspend(Some(('a', Box::new(Free::suspend(None)))));
     assert_eq!(render_list(nil_terminated), "a:!");
 }
