@@ -7,6 +7,13 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+### Fixed — tests
+
+- `FrobeniusOr::Delta`/`Eta` print/parse pinned at the implicit sort (token
+  round-trip at both the bare and colour-annotated form, plus a
+  presentation-file golden), closing the gap left after `Mu`/`Epsilon`
+  ([#316](https://github.com/sustia-llc/catgraph/issues/316)).
+
 ## [workspace-v0.16.0] - 2026-08-24
 
 ### Documentation
