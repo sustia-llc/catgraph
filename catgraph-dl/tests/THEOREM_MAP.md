@@ -105,6 +105,15 @@ it has no paper anchor to link. Registering them would fake traceability.
 > [#200](https://github.com/sustia-llc/catgraph/issues/200) is closed by that
 > window.
 
+> **Not a law test (#312):**
+> `free_monad_bijections::free_mnd_to_vec_panics_on_bare_suspend_none` pins
+> the documented panic contract on a non-canonical `Free::suspend(None)`
+> reaching `free_mnd_to_vec`. It carries no paper anchor and gets no row of
+> its own: a panic message and a well-formedness precondition are
+> engineering, not a CDL statement — so it is excluded from the
+> `free_monad_bijections::*` row above the same way the recursion-depth
+> tests already are.
+
 > **Anchor correction (#64):** the coalgebra-direction dual of Remark 2.13 is
 > **Remark H.6** ("streams are a terminal object in the category of
 > `(O × −)`-coalgebras"), and the three coalgebra wrappers live in **App I**

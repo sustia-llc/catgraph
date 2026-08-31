@@ -19,6 +19,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - The list-bijection tests compare `Free` values structurally: the backward
   proptest leg asserts `f2 == f1`, and the cons-cell tower is compared to its
   canonical encoding ([#311](https://github.com/sustia-llc/catgraph/issues/311)).
+- `free_mnd_to_vec` gains a `#[should_panic]` pin on a bare
+  `Free::suspend(None)` reaching the panic branch with no `Pure` terminator
+  above it ([#312](https://github.com/sustia-llc/catgraph/issues/312)).
 
 ## [workspace-v0.15.0] - 2026-08-16
 

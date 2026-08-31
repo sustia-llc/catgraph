@@ -10,7 +10,7 @@
 //!
 //! ## Test taxonomy
 //!
-//! Six consolidated tests, one per acceptance criterion:
+//! One consolidated test per acceptance criterion:
 //!
 //! 1. `vec_round_trip_proptest` — proptest-driven round trip for `Vec<u32>`
 //!    in both directions.
@@ -33,6 +33,12 @@
 //!    docs for the bisected table) is constructed, embedded, projected back,
 //!    folded, cloned, compared, formatted and dropped, on all three carriers.
 //!    Every one of those aborted before the carriers' walks became iterative.
+//! 8. `free_mnd_to_vec_panics_on_bare_suspend_none` — the documented panic
+//!    contract (#312) on a non-canonical `Free::suspend(None)` reaching
+//!    `free_mnd_to_vec` with no `Pure` terminator above it. Engineering drift
+//!    guard, not a CDL law: the canonical encoding never emits this shape, so
+//!    the pin's value is in the panic message wording and the signature, not
+//!    a live regression.
 
 #![allow(clippy::float_cmp, clippy::single_match_else)]
 
@@ -111,6 +117,19 @@ fn cons_cell_explicit_structure_round_trips() {
 
     let (items_canon, ()) = free_mnd_to_vec(canonical);
     assert_eq!(items_canon, vec![1_u32, 2_u32]);
+}
+
+/// Issue #312. The documented panic contract on a non-canonical
+/// `Free::suspend(None)` reaching `free_mnd_to_vec` with no `Pure`
+/// terminator above it. Engineering pin, not a CDL law: the canonical
+/// encoding (`vec_to_free_mnd`) never emits this shape, so the pin's value
+/// is in guarding the panic message wording and a future signature change —
+/// a silent-return alternative does not compile today.
+#[test]
+#[should_panic(expected = "non-canonical Free value")]
+fn free_mnd_to_vec_panics_on_bare_suspend_none() {
+    let bare: Free<ListEndo<u32>, ()> = Free::suspend(None);
+    let _ = free_mnd_to_vec(bare);
 }
 
 /// CDL Example B.20. Three hand-built `BinaryTree` instances round-trip
