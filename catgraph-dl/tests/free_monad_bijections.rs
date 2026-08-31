@@ -66,12 +66,9 @@ proptest! {
         let (round_trip, ()) = free_mnd_to_vec(f);
         prop_assert_eq!(round_trip, items.clone());
 
-        // Backward: build the Free from the same items, decode, rebuild —
-        // the rebuild must coincide structurally with the original `Free`
-        // (Free's own PartialEq), not merely decode to the same values a
-        // second time, which cancels a one-sided reversal in the encoder.
-        // `Free` has no `Clone` (#93/#222), so `f1` is built twice from
-        // `items` rather than cloned.
+        // Backward: rebuild from the decoded items and compare structurally
+        // (Free's own PartialEq). `Free` has no `Clone` (#93/#222), so `f1`
+        // is built twice from `items` rather than cloned.
         let f1 = vec_to_free_mnd::<u32, ()>(items.clone(), ());
         let (items_again, ()) = free_mnd_to_vec(vec_to_free_mnd::<u32, ()>(items.clone(), ()));
         let f2 = vec_to_free_mnd::<u32, ()>(items_again, ());
