@@ -1,4 +1,4 @@
-//! Recursive-descent parser for the textual free-prop surface (Phase S2).
+//! Recursive-descent parser for the textual free-prop surface.
 //!
 //! [`parse`] is the inverse of [`print`](super::print::print): it reads the
 //! concrete syntax `expr := term (';' term)*`,
@@ -263,8 +263,7 @@ impl<'a, G: GeneratorSyntax> Parser<'a, G> {
 
     /// `factor := id(n) | braid(m,n) | GENERATOR | '(' expr ')'`.
     fn parse_factor(&mut self, depth: usize) -> Result<PropExpr<G>, SyntaxError> {
-        // Reborrow the shared lexeme slice (independent of `&mut self`) so the
-        // token can be matched by reference without cloning it.
+        // Reborrow the shared lexeme slice so the token matches by reference, not by clone.
         let Some(lexeme) = self.lexemes.get(self.pos) else {
             return self.parse_err(
                 self.end_offset,
@@ -384,20 +383,15 @@ fn parse_usize(s: &str, offset: usize) -> Result<usize, SyntaxError> {
 mod tests {
     use super::*;
 
-    /// The lexer's delimiter alphabet is exactly the shared grammar operators
-    /// plus the grouping parentheses — nothing more. If this set changes, update
-    /// the [`GeneratorSyntax`] clause-2 prose in `text/mod.rs` (the alphabet
-    /// consts are `pub(crate)` and cannot be intra-doc-linked from the public
-    /// trait docs, so that contract is spelled out as prose).
+    /// Fixture: `SEMI, STAR, TENSOR, '(', ')', EQUALS, COMMA, COLON` classify as
+    /// delimiters; `@ - > _ . / a Z 0 9 ⊕ λ` classify as atom-safe.
     #[test]
     fn single_tok_classifies_exactly_the_grammar_delimiters() {
         let delimiters = [SEMI, STAR, TENSOR, '(', ')', EQUALS, COMMA, COLON];
         for c in delimiters {
             assert!(single_tok(c).is_some(), "{c:?} should be a delimiter");
         }
-        // A representative sample of characters that must stay *inside* atoms —
-        // note `@` (the `mu@A` colour joiner), `-` and `>` (the `->` declaration
-        // arrow), `_` (the `scalar_-7` token) and assorted letters/digits.
+        // Representative atom-safe sample: @ (colour joiner), - > (declaration arrow), _ (scalar_-7), plus letters/digits.
         let atom_chars = ['@', '-', '>', '_', '.', '/', 'a', 'Z', '0', '9', '⊕', 'λ'];
         for c in atom_chars {
             assert!(single_tok(c).is_none(), "{c:?} must stay inside an atom");

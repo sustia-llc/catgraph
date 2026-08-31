@@ -2,10 +2,7 @@
 //!
 //! The printer is **structural and total**: it renders a term exactly as
 //! written — it never normalizes, reassociates, or applies any prop equation.
-//! This is deliberate. Printing the syntactic term (rather than a normal form)
-//! sidesteps applied's η-scheduling normalization question
-//! ([#55](https://github.com/sustia-llc/catgraph/issues/55)) entirely: a
-//! `PropExpr` prints to concrete syntax that parses back (via
+//! A `PropExpr` prints to concrete syntax that parses back (via
 //! [`parse`](super::parse::parse)) to the *same* tree, independent of any
 //! decision procedure.
 //!
@@ -30,7 +27,7 @@
 //! structural recursion of `PropExpr` itself (`source`/`target`, the NF
 //! engine). Pathologically deep terms (tens of thousands of nested nodes)
 //! can exhaust the stack; this is an engine-wide property of the term
-//! representation, not specific to the printer. The S2 parser bounds input
+//! representation, not specific to the printer. The parser bounds input
 //! nesting explicitly (untrusted text).
 
 use std::fmt;

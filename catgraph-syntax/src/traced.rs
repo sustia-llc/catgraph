@@ -1,28 +1,16 @@
-//! Typed builder over the Arrow seam (Phase S5) — the executable/denotational
-//! pairing that completes the [#5](https://github.com/sustia-llc/catgraph/issues/5)
-//! milestone surface.
+//! Typed builder over the Arrow seam — the executable/denotational pairing
+//! above the crate's free-prop layer.
 //!
 //! A [`Traced<A, G>`] pairs a runnable [`Arrow`]
 //! with the [`PropExpr<G>`](catgraph_applied::prop::PropExpr) *term* it denotes,
 //! so a single value can be both **run** (via the arrow) and **reasoned about**
 //! (via the term — printed, parsed, evaluated under any
 //! [`ArrowModel`](crate::eval::ArrowModel), normalized, or fed to the presentation
-//! engine). This is the typed track of the design's *Arrow bridge*: the S3
-//! [interpreter](crate::eval) works over `Vec<V>` wire bundles sized by `usize`
-//! arities, while arrows live in a world of nested pairs; [`Wires`] is the
-//! lawful, arity-preserving bridge between the two.
+//! engine). The [interpreter](crate::eval) works over `Vec<V>` wire bundles
+//! sized by `usize` arities, while arrows live in a world of nested pairs;
+//! [`Wires`] is the lawful, arity-preserving bridge between the two.
 //!
-//! # Intellectual lineage
-//!
-//! The combinator vocabulary ([`then`](Traced::then) = `>>>`, [`par`](Traced::par)
-//! = `***`, the identity/generator builders) is John Hughes' Arrow interface
-//! (*Generalising Monads to Arrows*, Science of Computer Programming 37, 2000),
-//! reached here through the crate's own value-level Arrow algebra
-//! ([`crate::arrow_seam`]). This is a **lineage**
-//! citation, not a theorem anchor: the milestone law below (S5's coherence
-//! contract) is what is proven, not an Arrow-law completeness result.
-//!
-//! # The coherence contract (the S5 milestone law)
+//! # The coherence contract
 //!
 //! For a [`Traced<A, G>`] and a model `M: ArrowModel<G, Value = V>`:
 //!
@@ -31,9 +19,8 @@
 //! ```
 //!
 //! — running the arrow on a typed [`Wires`] bundle and flattening equals
-//! evaluating the paired term on the flattened input. The law is **conditional**,
-//! and the cleanest way to see both *why* it holds and *why the combinators are
-//! the trustworthy part* is inductively over how a `Traced` is built:
+//! evaluating the paired term on the flattened input. The law is
+//! **conditional**, built up inductively over how a `Traced` is constructed:
 //!
 //! - **Base case — the generator constructors *establish* coherence.**
 //!   [`traced_generator`] pairs a generator with an arrow and holds only for a
@@ -41,56 +28,44 @@
 //!   agreement is the caller's hypothesis: [`traced_generator`] checks its
 //!   **arity** half *structurally* (the `Wires::COUNT` match), while the
 //!   **value** half — that the arrow computes what the model computes — is the
-//!   caller's responsibility (the coherence tests discharge it for the shipped
-//!   SFG examples). [`traced_id`] and [`traced_braid_1_1`] are unconditional base
-//!   cases: identity and the block-swap agree with `eval`'s `Identity`/`Braid` for
-//!   *any* model.
+//!   caller's responsibility. [`traced_id`] and [`traced_braid_1_1`] are
+//!   unconditional base cases: identity and the block-swap agree with `eval`'s
+//!   `Identity`/`Braid` for *any* model.
 //! - **Inductive step — [`then`](Traced::then), [`par`](Traced::par) *preserve*
 //!   coherence.** If two `Traced`s are each coherent for `M`, so is their
 //!   composition/tensor: `eval` is a prop-functor (compose pipes, tensor
 //!   concatenates) and [`run`](Traced::run) mirrors it on the typed side, so the
 //!   equation is closed under both combinators.
 //!
-//! So the conditionality lives *entirely* in the generator base case (a value
-//! contract the caller supplies); every structural combinator is unconditionally
-//! sound. Because wire shapes are *type-level* (a `Traced`'s interface is fixed by
-//! `A::In`/`A::Out`), the law cannot be proptested over random shapes; the test
-//! suite instead exercises every combinator with a family of hand-built pipelines
-//! over [`SfgGenerator<i64>`](catgraph_applied::sfg::SfgGenerator) /
-//! [`SfgModel`](crate::eval::SfgModel), each checked over proptest-random input
-//! *values*.
+//! The conditionality lives entirely in the generator base case (a value
+//! contract the caller supplies); every structural combinator is
+//! unconditionally sound. Because wire shapes are *type-level* (a `Traced`'s
+//! interface is fixed by `A::In`/`A::Out`), the law cannot be proptested over
+//! random shapes; the test suite instead exercises every combinator with a
+//! family of hand-built pipelines over
+//! [`SfgGenerator<i64>`](catgraph_applied::sfg::SfgGenerator) /
+//! [`SfgModel`](crate::eval::SfgModel), each checked over proptest-random
+//! input *values*.
 //!
-//! # Deliberate omissions
+//! # Omitted combinators
 //!
-//! Three combinators are intentionally **not** offered — each would either need
-//! machinery out of this phase's scope or would let the arrow and the term denote
-//! *different* morphisms, breaking the coherence law. This module is the canonical
-//! statement of these rejections (the [`crate::arrow_seam`] and README notes point
-//! here):
+//! Three combinators are not offered, because each would let the arrow and
+//! the term denote different morphisms, breaking the coherence law:
 //!
-//! - **General `braid(m, n)`.** Only [`traced_braid_1_1`] ships. A general braid
-//!   would have to rebracket arbitrary nested pair types at the type level (turn
-//!   `((A, B), C)` into a permuted nesting), which the [`Wires`] encoding does not
-//!   express — flatten canonicalizes *values*, not *types*. Out of scope.
-//! - **`fanout` (`&&&`) — rejected.** The algebra's
-//!   [`Fanout`](crate::arrow_seam::Fanout) is the Cartesian diagonal `A → (A, A)`
-//!   (copy is free in `Set`). Pairing it
-//!   with a term would let the arrow *duplicate* a wire while no term generator
-//!   did — the arrow and the term would denote different morphisms. Copying is a
-//!   *model* concern (a Frobenius comultiplication `δ` the model must supply, e.g.
-//!   [`SfgGenerator::Copy`](catgraph_applied::sfg::SfgGenerator::Copy) whose
-//!   `Clone` lives in [`SfgModel`](crate::eval::SfgModel)), never a free structure
-//!   map. This is the interpreter's *no-`Clone`-in-`eval`* discipline (see
-//!   [`crate::eval`]'s "No `Clone` on the wire values") and
-//!   [`crate::arrow_seam`]'s `Fanout` note made **type-level**: the diagonal is
-//!   simply unreachable through this builder.
-//! - **Spider arrows.** The [`Arrow`] algebra has no
-//!   Frobenius structure, so μ/η/δ/ε have no arrow realization here; spiders are
-//!   interpreter / matrix territory ([`crate::eval`], [`crate::frobenius`]).
+//! - General `braid(m, n)` — only [`traced_braid_1_1`] ships; [`Wires`]
+//!   flattens values, not types, so a general braid cannot rebracket nested
+//!   pair types.
+//! - `fanout` (`&&&`) — the algebra's [`Fanout`](crate::arrow_seam::Fanout) is
+//!   the Cartesian diagonal `A → (A, A)`; pairing it with a term would let the
+//!   arrow duplicate a wire with no matching term generator. Copying is a
+//!   model concern (e.g.
+//!   [`SfgGenerator::Copy`](catgraph_applied::sfg::SfgGenerator::Copy)), never
+//!   a free-structure map.
+//! - Spider arrows — the [`Arrow`] algebra has no Frobenius structure, so
+//!   μ/η/δ/ε have no arrow realization here; spiders are interpreter / matrix
+//!   territory ([`crate::eval`], [`crate::frobenius`]).
 //!
-//! An iteration / fixed-point combinator stays out on the same footing —
-//! [`crate::arrow_seam`] defines none (see that module's *Historical note*), and
-//! a loop combinator is not wanted by this design.
+//! No iteration / fixed-point combinator is offered either.
 
 use std::vec;
 
@@ -134,7 +109,7 @@ mod sealed {
 
         /// Draw exactly this bundle's wires off `iter`, leaving any surplus. A
         /// `(L, R)` draws `L`'s wires then `R`'s from the shared cursor, mirroring
-        /// the S3 interpreter's `take_exact` pattern.
+        /// the interpreter's `take_exact` pattern.
         fn unflatten_from(iter: &mut vec::IntoIter<V>) -> Result<Self, SyntaxError>;
     }
 }

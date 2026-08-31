@@ -16,20 +16,13 @@
 //! citation, not a theorem anchor: the crate's anchors are F&S 2018 / 2019, and
 //! nothing here claims an Arrow-law completeness result.
 //!
-//! The algebra is crate-owned as of
-//! [#222](https://github.com/sustia-llc/catgraph/issues/222), derived from
-//! `deep_causality_haft` 0.4.2's Arrow module (MIT — see this file's license
-//! header). This module was previously the re-export seam over that crate and
-//! is now the definition site, leaving catgraph-syntax with a runtime
-//! dependency set of `catgraph` + `catgraph-applied` + `thiserror` (plus
-//! opt-in `serde`; dev adds `proptest` and `serde_json`). The module *name* is
-//! kept so the public path `catgraph_syntax::arrow_seam` and the ten names it
-//! exports are unchanged.
+//! The algebra is derived from `deep_causality_haft` 0.4.2's Arrow module
+//! (MIT — see this file's license header).
 //!
 //! # What the typed builder consumes
 //!
 //! The Arrow algebra is the **execution target** for the typed builder
-//! ([`crate::traced`], Phase S5): a [`Traced<A, G>`](crate::traced::Traced) pairs
+//! ([`crate::traced`]): a [`Traced<A, G>`](crate::traced::Traced) pairs
 //! an executable [`Arrow`] with the
 //! [`PropExpr`](catgraph_applied::prop::PropExpr) term it denotes, so a morphism
 //! can be both *run* and *reasoned about* from one value. These are the names it
@@ -72,26 +65,15 @@
 //! surface is monoidal over `⊗`, and [`crate::traced`] pairs each combinator with
 //! a [`PropExpr`](catgraph_applied::prop::PropExpr) term former, of which there is
 //! none for a sum. An owned algebra carries what it uses, so those four are
-//! absent rather than unused — a breaking change for any downstream caller that
-//! reached them as provided methods through this module's earlier re-export.
+//! absent rather than unused.
 //!
-//! # Historical note
-//!
-//! While this module re-exported an external Arrow implementation it also
-//! recorded what it did *not* re-export: that crate's free-monad carrier
-//! (`Free` / `FreeWitness`), its `IoAction` effect family, and its `EndoArrow`
-//! iteration arrow. Two of those statements outlive the re-export, because they
-//! are design positions rather than artifacts of a dependency:
+//! # Design positions
 //!
 //! - **[`PropExpr<G>`](catgraph_applied::prop::PropExpr) is the term type.**
 //!   Applied's congruence-closure engine requires `Eq + Hash` on terms (see
 //!   [`PropSignature`](catgraph_applied::prop::PropSignature)), which `PropExpr`
-//!   derives; a free-monad carrier whose `Eq` is capability-gated and which ships
-//!   no `Hash` cannot back it. That verdict was reached in catgraph
-//!   [#93](https://github.com/sustia-llc/catgraph/issues/93) (with
-//!   [#76](https://github.com/sustia-llc/catgraph/issues/76)) and is independent
-//!   of who owns the Arrow algebra.
-//! - **No iteration and no effect executor.** The S5
+//!   derives.
+//! - **No iteration and no effect executor.** The
 //!   [`Traced`](crate::traced::Traced) builder wants no fixed-point / loop
 //!   combinator, and an effect executor whose `run` consumes `self` cannot back
 //!   the term-plus-arrow pairing at all. So this algebra defines neither.

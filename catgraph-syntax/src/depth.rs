@@ -1,4 +1,4 @@
-//! Structural depth of a term and the shared interpreter recursion guard (#99).
+//! Structural depth of a term and the shared interpreter recursion guard.
 //!
 //! The term interpreters ([`eval`](crate::eval::eval),
 //! [`to_mat_kron`](crate::frobenius::to_mat_kron), and the Cospan functor's

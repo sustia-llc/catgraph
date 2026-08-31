@@ -1,11 +1,10 @@
 //! Error type for the textual surface.
 //!
 //! [`SyntaxError`] carries the failure modes the crate's surfaces can produce:
-//! [`Parse`](SyntaxError::Parse) from the textual layer (S1/S2), the two
-//! interpreter variants [`WireCount`](SyntaxError::WireCount) and
-//! [`ModelArity`](SyntaxError::ModelArity) from the S3 evaluator
-//! ([`crate::eval`]), the two S4 Frobenius-functor variants
-//! [`NonFrobenius`](SyntaxError::NonFrobenius) and
+//! [`Parse`](SyntaxError::Parse) from the textual layer, the interpreter
+//! variants [`WireCount`](SyntaxError::WireCount) and
+//! [`ModelArity`](SyntaxError::ModelArity) from [`crate::eval`], the
+//! Frobenius-functor variants [`NonFrobenius`](SyntaxError::NonFrobenius) and
 //! [`DimensionOverflow`](SyntaxError::DimensionOverflow) from
 //! [`to_mat_kron`](crate::frobenius::to_mat_kron), and a transparent passthrough
 //! for the arity failures that originate in
@@ -17,13 +16,8 @@ use thiserror::Error;
 
 /// Failures raised by `catgraph-syntax`'s textual surface.
 ///
-/// `#[non_exhaustive]`: later phases add variants (S4's Frobenius layer landed
-/// [`NonFrobenius`](SyntaxError::NonFrobenius) /
-/// [`DimensionOverflow`](SyntaxError::DimensionOverflow); S5's typed builder
-/// reuses [`WireCount`](SyntaxError::WireCount) for its
-/// [`Wires`](crate::traced::Wires) / `traced_generator` arity checks, adding no
-/// variant), so downstream `match`es must carry a wildcard arm — a new
-/// variant is not a breaking change. Match with a `_ =>` catch-all.
+/// `#[non_exhaustive]`: new variants may be added without a breaking change,
+/// so downstream `match`es must carry a `_ =>` catch-all arm.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[non_exhaustive]
 pub enum SyntaxError {
@@ -46,29 +40,18 @@ pub enum SyntaxError {
 
     /// A wire count did not match a declared arity — always a *term, bundle, or
     /// caller* fault, never a model one (a misbehaving model surfaces as
-    /// [`ModelArity`](SyntaxError::ModelArity)).
-    ///
-    /// Producers, across the interpreter ([`crate::eval`]) and the S5 typed
-    /// builder ([`crate::traced`]):
-    ///
-    /// - [`eval`](crate::eval::eval) itself — the top-level input length differs
-    ///   from `expr.source()`, or (for a directly-constructed, ill-formed
-    ///   [`PropExpr`](catgraph_applied::prop::PropExpr)) an interior node draws
-    ///   the wrong wire count off the cursor. Here `context` names the node kind
-    ///   the mismatch was detected at (`"id"`, `"braid"`, `"generator"`,
-    ///   `"compose"`).
-    /// - [`SfgModel::apply_generator`](crate::eval::SfgModel) called *directly*
-    ///   with a wrong-length bundle — `context` is `"SfgModel generator input
-    ///   arity"`. (Routed through [`eval`](crate::eval::eval) this cannot happen,
-    ///   since `eval` hands each generator exactly its source arity.)
-    /// - [`Wires::unflatten`](crate::traced::Wires::unflatten) fed a value vector
-    ///   whose length is not the bundle's `COUNT` — `context` is
-    ///   `"Wires::unflatten bundle length"` (or `"Wires::unflatten wire"` in the
-    ///   unreachable interior case).
-    /// - [`traced_generator`](crate::traced::traced_generator) when an arrow's
-    ///   typed interface disagrees with the generator's declared arity —
-    ///   `context` is `"traced_generator input bundle vs generator source arity"`
-    ///   or `"...output bundle vs generator target arity"`.
+    /// [`ModelArity`](SyntaxError::ModelArity)). Raised by
+    /// [`eval`](crate::eval::eval) (`context` one of `"id"`, `"braid"`,
+    /// `"generator"`, `"compose"`), by
+    /// [`SfgModel::apply_generator`](crate::eval::SfgModel) called directly
+    /// with a wrong-length bundle (`context` = `"SfgModel generator input
+    /// arity"`), by [`Wires::unflatten`](crate::traced::Wires::unflatten) fed a
+    /// value vector whose length is not the bundle's `COUNT` (`context` =
+    /// `"Wires::unflatten bundle length"` or `"Wires::unflatten wire"`), and by
+    /// [`traced_generator`](crate::traced::traced_generator) when an arrow's
+    /// typed interface disagrees with the generator's declared arity
+    /// (`context` = `"traced_generator input bundle vs generator source
+    /// arity"` or `"...output bundle vs generator target arity"`).
     #[error("wire-count mismatch at a `{context}` node: expected {expected}, got {actual}")]
     WireCount {
         /// The declared arity the check expected — the source arity when a *source*
@@ -98,7 +81,7 @@ pub enum SyntaxError {
     },
 
     /// A [`to_mat_kron`](crate::frobenius::to_mat_kron) mapping hit a `User`
-    /// generator, which is **out of the semantic functor's domain** (S4). The
+    /// generator, which is out of the semantic functor's domain. The
     /// Prop 3.8 functor `Cospan → MatKron(R)` is defined only on the Frobenius
     /// generators μ/η/δ/ε and the SMC structure; a signature generator carries
     /// no MatKron image, so the mapping stops here rather than guess one.
@@ -111,25 +94,14 @@ pub enum SyntaxError {
         generator: String,
     },
 
-    /// A [`to_mat_kron`](crate::frobenius::to_mat_kron) node's **dense cell
-    /// count** overflowed `usize`.
-    ///
-    /// A wire of colour `c` maps to `R^dims(c)`, so an interface *word* maps to
-    /// the product of its letters' dimensions and a node's dense matrix has
-    /// `product(source word) · product(target word)` cells. Every node is
-    /// guarded before its matrix is built, so the products a naïve per-interface
-    /// check would miss — `braiding`'s block product, `mu`/`delta`'s `dims(c)²`,
-    /// and the `kron`/matmul results — are all covered, and the sound checker
-    /// never wraps into a wrong matrix nor attempts an overflowing allocation.
-    /// This guards the cell *count* (a `usize` overflow), **not** memory
-    /// pressure: a huge-but-representable matrix still allocates and is the
-    /// caller's concern.
-    ///
-    /// The two fields locate the multiplication that overflowed rather than
-    /// summarising the whole node, because with per-colour dimensions there is
-    /// no single `dim` to report. Monochromatically they read as
-    /// `dim^k × dim` for the first `k` at which the running product exceeds
-    /// `usize`.
+    /// A [`to_mat_kron`](crate::frobenius::to_mat_kron) node's dense cell
+    /// count overflowed `usize`. A wire of colour `c` maps to `R^dims(c)`, so
+    /// an interface word maps to the product of its letters' dimensions and a
+    /// node's dense matrix has `product(source word) · product(target word)`
+    /// cells; `product` is the running product accumulated before the
+    /// overflowing multiplication, and `factor` is the value it was
+    /// multiplied by. This guards the cell count, not memory pressure — a
+    /// huge-but-representable matrix still allocates.
     #[error("dense cell count overflowed usize: {product} × {factor} exceeds usize::MAX")]
     DimensionOverflow {
         /// The running product accumulated before the overflowing multiplication.
@@ -143,14 +115,10 @@ pub enum SyntaxError {
     /// A term interpreter ([`eval`](crate::eval::eval),
     /// [`to_mat_kron`](crate::frobenius::to_mat_kron)) refused a term whose
     /// structural nesting depth exceeds
-    /// [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH). The interpreters recurse
-    /// over the term structure, so an unbounded, *programmatically*-built term
-    /// (parsed terms are already capped by the parser's `MAX_NESTING_DEPTH`)
-    /// would otherwise risk a **stack overflow** — an abort, not a catchable
-    /// error. The guard is a pre-flight *iterative* depth measurement
-    /// ([`term_depth`](crate::depth::term_depth)), so the interpreter never
-    /// recurses past the limit. (The recursive `Drop` of the deep term itself is
-    /// a separate, upstream `PropExpr` concern.)
+    /// [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH), measured pre-flight
+    /// by [`term_depth`](crate::depth::term_depth) before the interpreter
+    /// recurses. Parsed terms are already capped by the parser's
+    /// `MAX_NESTING_DEPTH`; this guards programmatically-built terms.
     #[error("term nesting depth {depth} exceeds MAX_TERM_DEPTH ({limit})")]
     RecursionLimit {
         /// The term's measured structural depth.

@@ -36,10 +36,9 @@
 //! **Scalars are kept.** Cospan is *special*, not *extra-special*: the closed
 //! bubble `η # ε` is a genuine non-identity scalar, distinguished from `id₀`.
 //! Corelations ([`Corel`](catgraph::corel::Corel)) would collapse it and so are
-//! the wrong target — see the [#80] spike.
+//! the wrong target.
 //!
 //! [`apply`]: CospanFunctor::apply
-//! [#80]: https://github.com/sustia-llc/catgraph/issues/80
 
 use catgraph::category::{Composable, HasIdentity};
 use catgraph::cospan::Cospan;
@@ -94,7 +93,7 @@ impl CospanFunctor {
 /// # Errors
 ///
 /// - [`CatgraphError::RecursionLimit`] if the term's structural depth exceeds
-///   [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH) (the recursion guard, #99 —
+///   [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH) (the recursion guard —
 ///   the same variant `SyntaxError::RecursionLimit` wraps, so every interpreter
 ///   reports the guard with one shape even though [`CompleteFunctor`] fixes this
 ///   one's error type to `CatgraphError`).
@@ -115,7 +114,7 @@ where
     G::Color: Copy + Ord,
 {
     // Pre-flight the recursion depth so `to_cospan_inner` cannot overflow the
-    // stack on an unbounded programmatically-built term (#99). `CompleteFunctor`
+    // stack on an unbounded programmatically-built term. `CompleteFunctor`
     // fixes the error type to `CatgraphError`, so this reports the shared
     // `CatgraphError::RecursionLimit` — the same shape `SyntaxError::RecursionLimit`
     // carries for the other interpreters.
