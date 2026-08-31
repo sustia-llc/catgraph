@@ -16,6 +16,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - `Free::fold` and `Cofree::unfold` rustdoc state position order; the
   evaluation-order clauses are gone
   ([#310](https://github.com/sustia-llc/catgraph/issues/310)).
+- The list-bijection tests compare `Free` values structurally: the backward
+  proptest leg asserts `f2 == f1`, and the cons-cell tower is compared to its
+  canonical encoding ([#311](https://github.com/sustia-llc/catgraph/issues/311)).
 
 ## [workspace-v0.15.0] - 2026-08-16
 
