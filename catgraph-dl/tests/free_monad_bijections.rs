@@ -66,13 +66,16 @@ proptest! {
         let (round_trip, ()) = free_mnd_to_vec(f);
         prop_assert_eq!(round_trip, items.clone());
 
-        // Backward: build the Free from the same items, destruct,
-        // rebuild — must coincide structurally.
+        // Backward: build the Free from the same items, decode, rebuild —
+        // the rebuild must coincide structurally with the original `Free`
+        // (Free's own PartialEq), not merely decode to the same values a
+        // second time, which cancels a one-sided reversal in the encoder.
+        // `Free` has no `Clone` (#93/#222), so `f1` is built twice from
+        // `items` rather than cloned.
         let f1 = vec_to_free_mnd::<u32, ()>(items.clone(), ());
-        let (items_again, ()) = free_mnd_to_vec(f1);
-        let f2 = vec_to_free_mnd::<u32, ()>(items_again.clone(), ());
-        let (final_items, ()) = free_mnd_to_vec(f2);
-        prop_assert_eq!(final_items, items);
+        let (items_again, ()) = free_mnd_to_vec(vec_to_free_mnd::<u32, ()>(items.clone(), ()));
+        let f2 = vec_to_free_mnd::<u32, ()>(items_again, ());
+        prop_assert_eq!(f2, f1);
     }
 }
 
@@ -100,12 +103,15 @@ fn cons_cell_explicit_structure_round_trips() {
     let inner: Free<ListEndo<u32>, ()> = Free::suspend(Some((2_u32, Box::new(Free::pure(())))));
     let outer: Free<ListEndo<u32>, ()> = Free::suspend(Some((1_u32, Box::new(inner))));
 
+    // The canonical encoding from `vec![1, 2]` must coincide with the
+    // hand-built tower structurally (Free's own PartialEq), compared before
+    // either side is consumed by decoding.
+    let canonical = vec_to_free_mnd::<u32, ()>(vec![1, 2], ());
+    assert_eq!(canonical, outer);
+
     let (items, ()) = free_mnd_to_vec(outer);
     assert_eq!(items, vec![1_u32, 2_u32]);
 
-    // And the canonical encoding from `vec![1, 2]` matches it structurally
-    // (compared by re-decoding both through the bijection).
-    let canonical = vec_to_free_mnd::<u32, ()>(vec![1, 2], ());
     let (items_canon, ()) = free_mnd_to_vec(canonical);
     assert_eq!(items_canon, vec![1_u32, 2_u32]);
 }
