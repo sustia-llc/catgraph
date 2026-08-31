@@ -53,7 +53,7 @@
 //! - [`Fanout`] — Cartesian fanout `A → (B, C)` (the diagonal `A → (A, A)` at
 //!   `id &&& id`); **rejected** by the builder, because pairing it with a term
 //!   would let the arrow duplicate a wire no term generator copied (`Fanout` ≠
-//!   Frobenius `δ`) — [`crate::traced`]'s *Deliberate omissions* is the
+//!   Frobenius `δ`) — [`crate::traced`]'s *Omitted combinators* is the
 //!   canonical statement; the type stays public so that distinction can be
 //!   *named*.
 //!
@@ -77,6 +77,8 @@
 //!   [`Traced`](crate::traced::Traced) builder wants no fixed-point / loop
 //!   combinator, and an effect executor whose `run` consumes `self` cannot back
 //!   the term-plus-arrow pairing at all. So this algebra defines neither.
+//! - **Not carried over.** `Free`/`FreeWitness`, `IoAction`, and `EndoArrow`
+//!   are not part of this algebra.
 
 use core::marker::PhantomData;
 
@@ -359,8 +361,8 @@ where
 /// `g: A → C`. Requires the input to be `Clone` (it is duplicated).
 ///
 /// The duplication is *Cartesian* copying (the diagonal `A → (A, A)` arises at
-/// `id &&& id`), not a Frobenius `δ`; [`crate::traced`]'s *Deliberate
-/// omissions* is the canonical statement of why the typed builder refuses to
+/// `id &&& id`), not a Frobenius `δ`; [`crate::traced`]'s *Omitted
+/// combinators* is the canonical statement of why the typed builder refuses to
 /// pair it with a term.
 pub struct Fanout<F, G>(F, G);
 
