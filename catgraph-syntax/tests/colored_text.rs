@@ -284,6 +284,94 @@ fn an_implicit_sort_is_bare_on_a_token_and_a_dot_in_a_word() {
     );
 }
 
+#[test]
+fn delta_and_eta_are_bare_at_the_implicit_sort_and_annotated_at_the_visible_one() {
+    // δ_Plain and η_Plain print bare, at the implicit sort — the Delta/Eta
+    // analogue of the epsilon case above.
+    assert_eq!(
+        FrobeniusOr::<Mix>::Delta(Tint::Plain).print_token(),
+        "delta"
+    );
+    assert_eq!(
+        FrobeniusOr::<Mix>::parse_token("delta"),
+        Some(FrobeniusOr::Delta(Tint::Plain))
+    );
+    assert_eq!(FrobeniusOr::<Mix>::Eta(Tint::Plain).print_token(), "eta");
+    assert_eq!(
+        FrobeniusOr::<Mix>::parse_token("eta"),
+        Some(FrobeniusOr::Eta(Tint::Plain))
+    );
+
+    // …and annotated once the colour has a token of its own.
+    assert_eq!(
+        FrobeniusOr::<Mix>::Delta(Tint::Vivid).print_token(),
+        "delta@V"
+    );
+    assert_eq!(
+        FrobeniusOr::<Mix>::parse_token("delta@V"),
+        Some(FrobeniusOr::Delta(Tint::Vivid))
+    );
+    assert_eq!(FrobeniusOr::<Mix>::Eta(Tint::Vivid).print_token(), "eta@V");
+    assert_eq!(
+        FrobeniusOr::<Mix>::parse_token("eta@V"),
+        Some(FrobeniusOr::Eta(Tint::Vivid))
+    );
+}
+
+#[test]
+fn delta_and_eta_round_trip_a_presentation_file() {
+    // The interchange law `(f * g) ; (h * k) = (f ; h) * (g ; k)`, instantiated
+    // with the unit and comultiplication spiders at both sorts of `Tint`:
+    // `(eta_Plain * eta_Vivid) ; (delta_Plain * delta_Vivid)
+    //     = (eta_Plain ; delta_Plain) * (eta_Vivid ; delta_Vivid)`,
+    // both sides `[] -> [Plain, Plain, Vivid, Vivid]`.
+    let mut p = Presentation::<FrobeniusOr<Mix>>::new();
+    let lhs = Free::compose(
+        Free::tensor(
+            Free::generator(FrobeniusOr::Eta(Tint::Plain)),
+            Free::generator(FrobeniusOr::Eta(Tint::Vivid)),
+        ),
+        Free::tensor(
+            Free::generator(FrobeniusOr::Delta(Tint::Plain)),
+            Free::generator(FrobeniusOr::Delta(Tint::Vivid)),
+        ),
+    )
+    .expect(
+        "eta_Plain * eta_Vivid : [] -> [Plain, Vivid] ; \
+         delta_Plain * delta_Vivid : [Plain, Vivid] -> [Plain, Plain, Vivid, Vivid]",
+    );
+    let rhs = Free::tensor(
+        Free::compose(
+            Free::generator(FrobeniusOr::Eta(Tint::Plain)),
+            Free::generator(FrobeniusOr::Delta(Tint::Plain)),
+        )
+        .expect("eta_Plain : [] -> [Plain] ; delta_Plain : [Plain] -> [Plain, Plain]"),
+        Free::compose(
+            Free::generator(FrobeniusOr::Eta(Tint::Vivid)),
+            Free::generator(FrobeniusOr::Delta(Tint::Vivid)),
+        )
+        .expect("eta_Vivid : [] -> [Vivid] ; delta_Vivid : [Vivid] -> [Vivid, Vivid]"),
+    );
+    p.add_equation(lhs, rhs)
+        .expect("both sides read [] -> [Plain, Plain, Vivid, Vivid]");
+
+    let text = print_presentation(&p);
+    assert_eq!(
+        text,
+        "eta : -> •\n\
+         eta@V : -> V\n\
+         delta : • -> • •\n\
+         delta@V : V -> V V\n\
+         eta * eta@V ; delta * delta@V = (eta ; delta) * (eta@V ; delta@V)"
+    );
+    assert_eq!(
+        parse_presentation::<FrobeniusOr<Mix>>(&text)
+            .expect("the printed file re-reads")
+            .equations(),
+        p.equations()
+    );
+}
+
 // ---- Declaration drift checks ------------------------------------------------
 
 #[test]
