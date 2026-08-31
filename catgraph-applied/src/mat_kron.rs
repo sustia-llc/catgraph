@@ -332,11 +332,13 @@ mod tests {
 
     // 4. delta coassociativity: delta ; (delta ⊗ id) == delta ; (id ⊗ delta).
     // n ∈ {0,1,2,3}, F64Rig + BoolRig. Coassociativity alone does not pin the
-    // true diagonal: a `delta` whose row `i` redirects to a fixed point of the
-    // permutation (`f∘f = f` without `f = id`) still satisfies this law, so
-    // this test is one leg of the suite, not an independent proof of
-    // correctness — `speciality_delta_then_mu_is_identity` and
-    // `frobenius_law` are what rule that redirect out.
+    // true diagonal: a `delta` whose row `i` redirects to a fixed point of a
+    // non-bijective idempotent endofunction (`f∘f = f` without `f = id` —
+    // e.g. a constant map; no *bijective* `f` can satisfy `f∘f = f` except
+    // `id`) still satisfies this law, so this test is one leg of the suite,
+    // not an independent proof of correctness —
+    // `speciality_delta_then_mu_is_identity`, `frobenius_law`, and
+    // `snake_equations` are what rule that redirect out.
     fn check_delta_coassociativity<R: Rig + std::fmt::Debug>(n: usize) {
         let delta = MatKron::<R>::delta(n);
         let id = MatKron::<R>::identity(n);
