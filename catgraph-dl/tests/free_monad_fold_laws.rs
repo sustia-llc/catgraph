@@ -1,6 +1,6 @@
 //! `Free::fold` law tests (CDL Example 2.12 lists, Example 2.14 trees, over
 //! the Prop B.18 carriers with an inhabited `Pure` payload): the `Pure` arm,
-//! left-to-right position order, and the `Assemble` recompose path.
+//! position order, and the `Assemble` recompose path.
 //!
 //! Both witnesses carry an **inhabited** payload type, so `Pure` leaves are
 //! reachable. The tree witness folds with a **non-commutative** algebra; the
@@ -34,8 +34,7 @@ fn tree_pure(z: char) -> String {
 }
 
 /// The algebra of [`render`]: `Left(a)` to `a`, `Right((l, r))` to
-/// `(<l><r>)`. Concatenation is non-commutative, so the rendering of a node
-/// determines the position order of its children's results.
+/// `(<l><r>)`. Concatenation is non-commutative.
 fn tree_algebra(cell: Either<char, (String, String)>) -> String {
     match cell {
         Either::Left(a) => a.to_string(),

@@ -158,7 +158,7 @@ where
     F: EndoWitness,
 {
     /// Anamorphism `unfold c x = let (a, fx) = c x in a :< fmap (unfold c) fx`;
-    /// iterative over a heap worklist, seeds expanded left to right.
+    /// iterative over a heap worklist, children assembled in position order.
     /// Terminates iff `coalg`'s `F`-structure is eventually empty.
     pub fn unfold<X, C>(seed: X, coalg: &C) -> Cofree<F, A>
     where
