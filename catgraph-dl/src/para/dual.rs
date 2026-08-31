@@ -189,3 +189,30 @@ impl<T: Copy + Zero + One + Add<Output = T> + Mul<Output = T>> One for Dual<T> {
         self.re.is_one() && self.du.is_zero()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use catgraph_applied::rig::verify_rig_axioms;
+
+    #[test]
+    fn verify_axioms_dual_f64_sample() {
+        let samples = [
+            Dual::new(0.0, 0.0),
+            Dual::new(1.0, 0.0),
+            Dual::new(2.5, -1.0),
+            Dual::new(-3.0, 4.0),
+            Dual::variable(3.0),
+            Dual::constant(-2.0),
+            Dual::zero(),
+            Dual::one(),
+        ];
+        for a in &samples {
+            for b in &samples {
+                for c in &samples {
+                    verify_rig_axioms(a, b, c).unwrap();
+                }
+            }
+        }
+    }
+}
