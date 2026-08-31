@@ -20,9 +20,10 @@
 //! Every object `n` carries a special commutative Frobenius monoid, realized as
 //! the inherent generators `eta`/`epsilon`/`mu`/`delta` rather than a separate
 //! trait; speciality `δ ; μ = id_n` and the other SCFM laws below are
-//! property-tested over `n ∈ {0, 1, 2, 3}` (`n = 0` collapsing every
-//! generator to a `0`-dimensioned matrix), for both `F64Rig` and `BoolRig`,
-//! in the `tests` module below.
+//! property-tested over `n ∈ {0, 1, 2, 3}` (`n = 0` degenerates every
+//! generator to a shape with at least one zero dimension — `mu`/`delta`/
+//! `braiding(0, 0)` become `0×0`, `eta`/`epsilon`/`cup`/`cap` become `1×0`
+//! or `0×1`), for both `F64Rig` and `BoolRig`, in the `tests` module below.
 
 use catgraph::{
     category::{Composable, HasIdentity},
@@ -270,11 +271,13 @@ mod tests {
 
     type M = MatKron<F64Rig>;
 
-    /// Object-arity sweep shared by every law test below. `n = 0` collapses
-    /// every generator to a `0`-dimensioned matrix (`MatR::new` has no
-    /// rows>0/cols>0 requirement — mat.rs — so these shapes build and
-    /// compose without special-casing); `n = 1` is the smallest nontrivial
-    /// case; `n ∈ {2, 3}` exercise genuine cross terms.
+    /// Object-arity sweep shared by every law test below. `n = 0` degenerates
+    /// every generator to a shape with at least one zero dimension —
+    /// `mu`/`delta`/`braiding(0, 0)` become `0×0`, `eta`/`epsilon`/`cup`/`cap`
+    /// become `1×0` or `0×1` (`MatR::new` has no rows>0/cols>0 requirement —
+    /// mat.rs — so these shapes build and compose without special-casing);
+    /// `n = 1` is the smallest nontrivial case; `n ∈ {2, 3}` exercise genuine
+    /// cross terms.
     const N_SWEEP: [usize; 4] = [0, 1, 2, 3];
 
     // 1. Kronecker dims + id ⊗ id = id.
@@ -328,7 +331,12 @@ mod tests {
     }
 
     // 4. delta coassociativity: delta ; (delta ⊗ id) == delta ; (id ⊗ delta).
-    // n ∈ {0,1,2,3}, F64Rig + BoolRig.
+    // n ∈ {0,1,2,3}, F64Rig + BoolRig. Coassociativity alone does not pin the
+    // true diagonal: a `delta` whose row `i` redirects to a fixed point of the
+    // permutation (`f∘f = f` without `f = id`) still satisfies this law, so
+    // this test is one leg of the suite, not an independent proof of
+    // correctness — `speciality_delta_then_mu_is_identity` and
+    // `frobenius_law` are what rule that redirect out.
     fn check_delta_coassociativity<R: Rig + std::fmt::Debug>(n: usize) {
         let delta = MatKron::<R>::delta(n);
         let id = MatKron::<R>::identity(n);
