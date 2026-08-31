@@ -3,6 +3,7 @@
 //! Verifies `RewriteRule` -> Span conversion, `HypergraphEvolution` -> Cospan chain,
 //! cospan composability, and span property validation using catgraph's Composable trait.
 
+use catgraph::category::Composable;
 use catgraph_physics::hypergraph::{Hypergraph, HypergraphEvolution, RewriteRule};
 
 // ---------------------------------------------------------------------------
@@ -85,23 +86,29 @@ fn deterministic_evolution_to_cospan_chain() {
 
 #[test]
 fn cospan_chain_composability_contiguous_steps() {
-    let rule = RewriteRule::wolfram_a_to_bb();
-    let graph = Hypergraph::from_edges(vec![vec![0, 1, 2]]);
+    let rule = RewriteRule::edge_split();
+    let graph = Hypergraph::from_edges(vec![vec![0, 1]]);
 
     let evolution = HypergraphEvolution::run(&graph, &[rule], 3);
     let cospans = evolution.to_cospan_chain();
 
-    if cospans.len() >= 2 {
-        // Right boundary of cospan i should match left boundary of cospan i+1
-        for i in 0..cospans.len() - 1 {
-            assert_eq!(
-                cospans[i].right_to_middle().len(),
-                cospans[i + 1].left_to_middle().len(),
-                "Boundary mismatch between cospan {} and {}",
-                i,
-                i + 1
-            );
-        }
+    assert_eq!(cospans.len(), 3);
+
+    // Right boundary of cospan i should match left boundary of cospan i+1
+    for i in 0..cospans.len() - 1 {
+        assert_eq!(
+            cospans[i].right_to_middle().len(),
+            cospans[i + 1].left_to_middle().len(),
+            "Boundary mismatch between cospan {} and {}",
+            i,
+            i + 1
+        );
+        assert!(
+            cospans[i].composable(&cospans[i + 1]).is_ok(),
+            "cospan {} not composable with cospan {}",
+            i,
+            i + 1
+        );
     }
 }
 
