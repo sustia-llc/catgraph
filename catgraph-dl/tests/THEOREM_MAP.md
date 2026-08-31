@@ -86,7 +86,7 @@ it has no paper anchor to link. Registering them would fake traceability.
 | `architecture_unrollers::moore_cell_run_iter_agrees` (+ proptest) | **CDL Remark H.6** / App I.5 | `MooreCell::run_iter`: output-then-step consumption = `run` = `Cofree` walk |
 | `architecture_unrollers::gdl_recovery_via_z2_invariant_folding` | CDL Example 2.6 | GDL recovery: Z2-invariant fold |
 | `free_monad_bijections::*` | CDL Example B.19/B.20, Prop B.18 | owned `Free`/`Cofree` ↔ concrete-carrier bijections |
-| `free_monad_fold_laws::*` | CDL Remark 2.13 + Example 2.14 | `Free::fold` catamorphism: `Pure` arm, left-to-right position order, `Assemble` recompose |
+| `free_monad_fold_laws::*` | CDL Example 2.12/2.14, Prop B.18 | `Free::fold` catamorphism: `Pure` arm, left-to-right position order, `Assemble` recompose |
 
 > **Not law tests (#231 → #200):**
 > `free_monad_bijections::opt_in_depth_guard_boundary`,

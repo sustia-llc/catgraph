@@ -179,7 +179,7 @@ where
 {
     /// Catamorphism (CDL Remark 2.13): `pure_case` on leaves,
     /// `algebra : F::Type<X> → X` on nodes; iterative over a heap worklist,
-    /// children folded left to right.
+    /// children's results reaching the algebra in position order.
     pub fn fold<X, P, Alg>(self, pure_case: &P, algebra: &Alg) -> X
     where
         F: Container,

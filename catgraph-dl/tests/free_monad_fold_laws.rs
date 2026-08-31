@@ -1,5 +1,6 @@
-//! `Free::fold` law tests (CDL Remark 2.13 lists, Example 2.14 trees): the
-//! `Pure` arm, left-to-right position order, and the `Assemble` recompose path.
+//! `Free::fold` law tests (CDL Example 2.12 lists, Example 2.14 trees, over
+//! the Prop B.18 carriers with an inhabited `Pure` payload): the `Pure` arm,
+//! left-to-right position order, and the `Assemble` recompose path.
 //!
 //! Both witnesses carry an **inhabited** payload type, so `Pure` leaves are
 //! reachable. The tree witness folds with a **non-commutative** algebra; the
@@ -71,8 +72,9 @@ fn render_list(list: List) -> String {
     list.fold(&list_pure, &list_algebra)
 }
 
-/// The catamorphism over `A + (−)²` (CDL Example 2.14), on shapes that separate
-/// the `Pure` arm, position order, and the `Assemble` recompose path.
+/// The catamorphism over `A + (−)²` (CDL Example 2.14, on the Prop B.18
+/// carrier), on shapes that separate the `Pure` arm, position order, and the
+/// `Assemble` recompose path.
 ///
 /// - **`Pure` arm** — the bare `Pure` root, and the `Pure` leaves inside the
 ///   compound shapes, which render `[p]` / `[z]` where no other arm can.
@@ -113,9 +115,8 @@ fn fold_pins_the_pure_arm_child_order_and_recompose() {
     assert_eq!(render(right_spine), "(1(2[z]))");
 }
 
-/// The same catamorphism over `1 + A × −`, where the `Pure` terminator is the
-/// innermost cell of a non-empty list and its payload is the tail of every
-/// rendering.
+/// The same catamorphism over `1 + A × −` (CDL Example 2.12, on the Prop B.18
+/// carrier), with reachable `Pure` terminators.
 ///
 /// The two terminators give `x:y:z:<END>` and `x:y:z:<TAIL>` over identical
 /// labels. The `Nil` shape is folded too: arity 0 through `recompose`,
