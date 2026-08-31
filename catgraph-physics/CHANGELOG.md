@@ -12,6 +12,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - `multiway::branchial_analysis` rustdoc reduced to contract statements
   ([#330](https://github.com/sustia-llc/catgraph/issues/330)).
 - This CHANGELOG rewritten to one line per change; rationale lives in the PRs.
+- `tests/catgraph_bridge.rs` contiguity test runs `edge_split` for three steps
+  and asserts adjacent cospans composable; the `len() >= 2` guard is removed
+  ([#328](https://github.com/sustia-llc/catgraph/issues/328)).
 
 ## [workspace-v0.14.0] - 2026-08-16
 
