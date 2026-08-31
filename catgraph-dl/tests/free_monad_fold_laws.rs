@@ -1,11 +1,11 @@
-//! `Free::fold` law tests (CDL Remark 2.13): the `Pure` arm, left-to-right
-//! position order, and the `Assemble` recompose path.
+//! `Free::fold` law tests (CDL Remark 2.13 lists, Example 2.14 trees): the
+//! `Pure` arm, left-to-right position order, and the `Assemble` recompose path.
 //!
 //! Both witnesses carry an **inhabited** payload type, so `Pure` leaves are
-//! reachable. The tree witness folds with a **non-commutative** algebra, so a
-//! permuted child order changes the folded value; the list witness has arity
-//! ≤ 1, so it exercises the `Pure` terminator, not child order. Every expected
-//! value below is a closed-form string.
+//! reachable. The tree witness folds with a **non-commutative** algebra; the
+//! list witness has arity ≤ 1, so child order is not observable there, and its
+//! tests exercise the `Pure` terminator. Every expected value below is a
+//! closed-form string.
 
 use catgraph_dl::Either;
 use catgraph_dl::free_monad::Free;
@@ -71,7 +71,7 @@ fn render_list(list: List) -> String {
     list.fold(&list_pure, &list_algebra)
 }
 
-/// The catamorphism over `A + (−)²` (CDL Remark 2.13), on shapes that separate
+/// The catamorphism over `A + (−)²` (CDL Example 2.14), on shapes that separate
 /// the `Pure` arm, position order, and the `Assemble` recompose path.
 ///
 /// - **`Pure` arm** — the bare `Pure` root, and the `Pure` leaves inside the
@@ -138,8 +138,8 @@ fn list_endo_fold_threads_the_pure_terminator() {
     // is the terminator.
     assert_eq!(render_list(vec_to_free_mnd(Vec::new(), "END")), "<END>");
 
-    // A `Nil`-terminated cons cell — the arity-0 shape of `1 + A × −`, which
-    // `free_mnd_to_vec` panics on but `fold` interprets.
+    // A cons cell whose tail is the bare `Nil` shape — the arity-0 `None` of
+    // `1 + A × −`, which `free_mnd_to_vec` panics on but `fold` interprets.
     let nil_terminated: List = Free::suspend(Some(('a', Box::new(Free::suspend(None)))));
     assert_eq!(render_list(nil_terminated), "a:!");
 }
