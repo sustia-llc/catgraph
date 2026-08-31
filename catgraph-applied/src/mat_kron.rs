@@ -19,7 +19,10 @@
 //!
 //! Every object `n` carries a special commutative Frobenius monoid, realized as
 //! the inherent generators `eta`/`epsilon`/`mu`/`delta` rather than a separate
-//! trait; speciality `δ ; μ = id_n` holds.
+//! trait; speciality `δ ; μ = id_n` and the other SCFM laws below are
+//! property-tested over `n ∈ {0, 1, 2, 3}` (`n = 0` collapsing every
+//! generator to a `0`-dimensioned matrix), for both `F64Rig` and `BoolRig`,
+//! in the `tests` module below.
 
 use catgraph::{
     category::{Composable, HasIdentity},
@@ -267,6 +270,13 @@ mod tests {
 
     type M = MatKron<F64Rig>;
 
+    /// Object-arity sweep shared by every law test below. `n = 0` collapses
+    /// every generator to a `0`-dimensioned matrix (`MatR::new` has no
+    /// rows>0/cols>0 requirement — mat.rs — so these shapes build and
+    /// compose without special-casing); `n = 1` is the smallest nontrivial
+    /// case; `n ∈ {2, 3}` exercise genuine cross terms.
+    const N_SWEEP: [usize; 4] = [0, 1, 2, 3];
+
     // 1. Kronecker dims + id ⊗ id = id.
     #[test]
     fn kron_dims_and_identity_tensor() {
@@ -280,125 +290,185 @@ mod tests {
         assert_eq!(id_kron, M::identity(6));
     }
 
-    // 2. Speciality (marquee gate): delta ; mu = id_n.
-    #[test]
-    fn speciality_delta_then_mu_is_identity() {
-        for n in [2usize, 3, 5] {
-            let prod = M::delta(n).compose(&M::mu(n)).unwrap();
-            assert_eq!(
-                prod,
-                M::identity(n),
-                "speciality failed for n={n} over F64Rig"
-            );
-        }
-        // Also over BoolRig for n=2.
-        let prod = MatKron::<BoolRig>::delta(2)
-            .compose(&MatKron::<BoolRig>::mu(2))
+    // 2. Speciality (marquee gate): delta ; mu = id_n. n ∈ {0,1,2,3}, F64Rig + BoolRig.
+    fn check_speciality<R: Rig + std::fmt::Debug>(n: usize) {
+        let prod = MatKron::<R>::delta(n)
+            .compose(&MatKron::<R>::mu(n))
             .unwrap();
         assert_eq!(
             prod,
-            MatKron::<BoolRig>::identity(2),
-            "speciality failed for n=2 over BoolRig"
+            MatKron::<R>::identity(n),
+            "speciality failed for n={n}"
         );
     }
 
-    // 3. mu associativity: (mu ⊗ id) ; mu == (id ⊗ mu) ; mu.
     #[test]
-    fn mu_associativity() {
-        let n = 2usize;
-        let mu = M::mu(n);
-        let id = M::identity(n);
+    fn speciality_delta_then_mu_is_identity() {
+        for n in N_SWEEP {
+            check_speciality::<F64Rig>(n);
+            check_speciality::<BoolRig>(n);
+        }
+    }
+
+    // 3. mu associativity: (mu ⊗ id) ; mu == (id ⊗ mu) ; mu. n ∈ {0,1,2,3}, F64Rig + BoolRig.
+    fn check_mu_associativity<R: Rig + std::fmt::Debug>(n: usize) {
+        let mu = MatKron::<R>::mu(n);
+        let id = MatKron::<R>::identity(n);
         let left = mu.kron(&id).compose(&mu).unwrap();
         let right = id.kron(&mu).compose(&mu).unwrap();
-        assert_eq!(left, right);
+        assert_eq!(left, right, "mu associativity failed for n={n}");
+    }
+
+    #[test]
+    fn mu_associativity() {
+        for n in N_SWEEP {
+            check_mu_associativity::<F64Rig>(n);
+            check_mu_associativity::<BoolRig>(n);
+        }
     }
 
     // 4. delta coassociativity: delta ; (delta ⊗ id) == delta ; (id ⊗ delta).
-    #[test]
-    fn delta_coassociativity() {
-        let n = 2usize;
-        let delta = M::delta(n);
-        let id = M::identity(n);
+    // n ∈ {0,1,2,3}, F64Rig + BoolRig.
+    fn check_delta_coassociativity<R: Rig + std::fmt::Debug>(n: usize) {
+        let delta = MatKron::<R>::delta(n);
+        let id = MatKron::<R>::identity(n);
         let left = delta.compose(&delta.kron(&id)).unwrap();
         let right = delta.compose(&id.kron(&delta)).unwrap();
-        assert_eq!(left, right);
+        assert_eq!(left, right, "delta coassociativity failed for n={n}");
+    }
+
+    #[test]
+    fn delta_coassociativity() {
+        for n in N_SWEEP {
+            check_delta_coassociativity::<F64Rig>(n);
+            check_delta_coassociativity::<BoolRig>(n);
+        }
     }
 
     // 5. Frobenius law: (delta ⊗ id);(id ⊗ mu) == mu;delta == (id ⊗ delta);(mu ⊗ id).
-    #[test]
-    fn frobenius_law() {
-        let n = 2usize;
-        let mu = M::mu(n);
-        let delta = M::delta(n);
-        let id = M::identity(n);
+    // n ∈ {0,1,2,3}, F64Rig + BoolRig.
+    fn check_frobenius_law<R: Rig + std::fmt::Debug>(n: usize) {
+        let mu = MatKron::<R>::mu(n);
+        let delta = MatKron::<R>::delta(n);
+        let id = MatKron::<R>::identity(n);
 
         let left = delta.kron(&id).compose(&id.kron(&mu)).unwrap();
         let middle = mu.compose(&delta).unwrap();
         let right = id.kron(&delta).compose(&mu.kron(&id)).unwrap();
 
-        assert_eq!(left, middle, "Frobenius left = middle failed");
-        assert_eq!(middle, right, "Frobenius middle = right failed");
+        assert_eq!(left, middle, "Frobenius left = middle failed for n={n}");
+        assert_eq!(middle, right, "Frobenius middle = right failed for n={n}");
     }
 
-    // 6. Commutativity: braiding(n,n) ; mu == mu.
+    #[test]
+    fn frobenius_law() {
+        for n in N_SWEEP {
+            check_frobenius_law::<F64Rig>(n);
+            check_frobenius_law::<BoolRig>(n);
+        }
+    }
+
+    // 6. Commutativity: braiding(n,n) ; mu == mu. n ∈ {0,1,2,3}, F64Rig + BoolRig.
+    fn check_mu_commutativity<R: Rig + std::fmt::Debug>(n: usize) {
+        let mu = MatKron::<R>::mu(n);
+        let braided = MatKron::<R>::braiding(n, n).compose(&mu).unwrap();
+        assert_eq!(braided, mu, "mu commutativity failed for n={n}");
+    }
+
     #[test]
     fn mu_commutativity() {
-        let n = 2usize;
-        let mu = M::mu(n);
-        let braided = M::braiding(n, n).compose(&mu).unwrap();
-        assert_eq!(braided, mu);
+        for n in N_SWEEP {
+            check_mu_commutativity::<F64Rig>(n);
+            check_mu_commutativity::<BoolRig>(n);
+        }
     }
 
     // 7. Unit laws: (eta ⊗ id) ; mu == id and (id ⊗ eta) ; mu == id.
-    #[test]
-    fn unit_laws() {
-        let n = 2usize;
-        let mu = M::mu(n);
-        let eta = M::eta(n);
-        let id = M::identity(n);
+    // n ∈ {0,1,2,3}, F64Rig + BoolRig.
+    fn check_unit_laws<R: Rig + std::fmt::Debug>(n: usize) {
+        let mu = MatKron::<R>::mu(n);
+        let eta = MatKron::<R>::eta(n);
+        let id = MatKron::<R>::identity(n);
 
         let left = eta.kron(&id).compose(&mu).unwrap();
-        assert_eq!(left, id, "(eta ⊗ id) ; mu = id failed");
+        assert_eq!(left, id, "(eta ⊗ id) ; mu = id failed for n={n}");
 
         let right = id.kron(&eta).compose(&mu).unwrap();
-        assert_eq!(right, id, "(id ⊗ eta) ; mu = id failed");
+        assert_eq!(right, id, "(id ⊗ eta) ; mu = id failed for n={n}");
     }
 
-    // 8. cup/cap dims.
+    #[test]
+    fn unit_laws() {
+        for n in N_SWEEP {
+            check_unit_laws::<F64Rig>(n);
+            check_unit_laws::<BoolRig>(n);
+        }
+    }
+
+    // 8. cup/cap dims. n ∈ {0,1,2,3}, F64Rig + BoolRig.
+    fn check_cup_cap_dims<R: Rig + std::fmt::Debug>(n: usize) {
+        let cup = MatKron::<R>::cup(n);
+        assert_eq!(cup.rows(), 1, "cup rows wrong for n={n}");
+        assert_eq!(cup.cols(), n * n, "cup cols wrong for n={n}");
+
+        let cap = MatKron::<R>::cap(n);
+        assert_eq!(cap.rows(), n * n, "cap rows wrong for n={n}");
+        assert_eq!(cap.cols(), 1, "cap cols wrong for n={n}");
+    }
+
     #[test]
     fn cup_cap_dims() {
-        let cup = M::cup(2);
-        assert_eq!(cup.rows(), 1);
-        assert_eq!(cup.cols(), 4);
-
-        let cap = M::cap(2);
-        assert_eq!(cap.rows(), 4);
-        assert_eq!(cap.cols(), 1);
+        for n in N_SWEEP {
+            check_cup_cap_dims::<F64Rig>(n);
+            check_cup_cap_dims::<BoolRig>(n);
+        }
     }
 
-    // 9. Snake (zigzag) equations.
+    // 9. Snake (zigzag) equations. n ∈ {0,1,2,3}, F64Rig + BoolRig.
+    fn check_snake_equations<R: Rig + std::fmt::Debug>(n: usize) {
+        let id = MatKron::<R>::identity(n);
+        let cup = MatKron::<R>::cup(n);
+        let cap = MatKron::<R>::cap(n);
+
+        // Right snake: (id ⊗ cup) ; (cap ⊗ id) = id.
+        let right = id.kron(&cup).compose(&cap.kron(&id)).unwrap();
+        assert_eq!(right, id, "right snake failed for n={n}");
+
+        // Left snake (dual): (cup ⊗ id) ; (id ⊗ cap) = id.
+        let left = cup.kron(&id).compose(&id.kron(&cap)).unwrap();
+        assert_eq!(left, id, "left snake failed for n={n}");
+    }
+
     #[test]
     fn snake_equations() {
-        for n in [2usize, 3] {
-            let id = M::identity(n);
-            let cup = M::cup(n);
-            let cap = M::cap(n);
-
-            // Right snake: (id ⊗ cup) ; (cap ⊗ id) = id.
-            let right = id.kron(&cup).compose(&cap.kron(&id)).unwrap();
-            assert_eq!(right, id, "right snake failed for n={n}");
-
-            // Left snake (dual): (cup ⊗ id) ; (id ⊗ cap) = id.
-            let left = cup.kron(&id).compose(&id.kron(&cap)).unwrap();
-            assert_eq!(left, id, "left snake failed for n={n}");
+        for n in N_SWEEP {
+            check_snake_equations::<F64Rig>(n);
+            check_snake_equations::<BoolRig>(n);
         }
     }
 
     // 10. braiding involution: braiding(a,b) ; braiding(b,a) = id_{a*b}.
+    // (a,b) ranges over the full N_SWEEP × N_SWEEP cross product (16 pairs,
+    // including asymmetric a≠b and either side 0), F64Rig + BoolRig — the
+    // shape convention (distinct a,b rather than a single n) is unchanged.
+    fn check_braiding_involution<R: Rig + std::fmt::Debug>(a: usize, b: usize) {
+        let composed = MatKron::<R>::braiding(a, b)
+            .compose(&MatKron::<R>::braiding(b, a))
+            .unwrap();
+        assert_eq!(
+            composed,
+            MatKron::<R>::identity(a * b),
+            "braiding involution failed for (a,b)=({a},{b})"
+        );
+    }
+
     #[test]
     fn braiding_involution() {
-        let (a, b) = (2usize, 3usize);
-        let composed = M::braiding(a, b).compose(&M::braiding(b, a)).unwrap();
-        assert_eq!(composed, M::identity(a * b));
+        for a in N_SWEEP {
+            for b in N_SWEEP {
+                check_braiding_involution::<F64Rig>(a, b);
+                check_braiding_involution::<BoolRig>(a, b);
+            }
+        }
     }
 }
