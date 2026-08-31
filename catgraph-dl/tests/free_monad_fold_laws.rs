@@ -35,7 +35,7 @@ fn tree_pure(z: char) -> String {
 
 /// The algebra of [`render`]: `Left(a)` to `a`, `Right((l, r))` to
 /// `(<l><r>)`. Concatenation is non-commutative, so the rendering of a node
-/// determines the order its children were folded in.
+/// determines the position order of its children's results.
 fn tree_algebra(cell: Either<char, (String, String)>) -> String {
     match cell {
         Either::Left(a) => a.to_string(),
@@ -44,7 +44,8 @@ fn tree_algebra(cell: Either<char, (String, String)>) -> String {
 }
 
 /// Fold a [`Tree`] to its parenthesized rendering. The result determines both
-/// which arm ran at each cell and in which order the children were folded.
+/// which arm ran at each cell and the position order of the children's
+/// results.
 fn render(tree: Tree) -> String {
     tree.fold(&tree_pure, &tree_algebra)
 }
