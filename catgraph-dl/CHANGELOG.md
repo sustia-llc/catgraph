@@ -13,9 +13,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - Rustdoc reduced to contract statements; this CHANGELOG rewritten to one
   bullet per change. `architectures` module doc no longer describes
   `RecursiveNn::unroll` as fallible (it has returned `S` since v0.15.0).
-- `Free::fold` and `Cofree::unfold` rustdoc state position order of the
-  children's results; the evaluation-order clauses were dropped as unpinned,
-  not as wrong ([#310](https://github.com/sustia-llc/catgraph/issues/310)).
+- `Free::fold` and `Cofree::unfold` rustdoc state position order; the
+  evaluation-order clauses are gone
+  ([#310](https://github.com/sustia-llc/catgraph/issues/310)).
 
 ## [workspace-v0.15.0] - 2026-08-16
 
