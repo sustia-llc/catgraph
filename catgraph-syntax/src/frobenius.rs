@@ -1,4 +1,4 @@
-//! The Frobenius layer (Phase S4): a **presentation** of the hypergraph theory
+//! The Frobenius layer: a **presentation** of the hypergraph theory
 //! on a colour palette `Λ`, built as a **sum over** a user signature, plus the
 //! spider calculus, the special commutative Frobenius monoid (SCFM) equations,
 //! and a sound semantic checker into
@@ -21,8 +21,8 @@
 //! [`FrobeniusOr<G>`] adjoins the four Frobenius generators μ/η/δ/ε — one family
 //! **per colour** — to a user signature `G` as *extra generators of the same
 //! prop*. Because it is itself a [`PropSignature`], **every** applied and
-//! textual surface — the normal-form engine, [`Presentation`], `eq_mod`, the S2
-//! [parser](mod@crate::text::parse)/[printer](mod@crate::text::print), and the S3
+//! textual surface — the normal-form engine, [`Presentation`], `eq_mod`, the
+//! [parser](mod@crate::text::parse)/[printer](mod@crate::text::print), and
 //! [`eval`](mod@crate::eval) — works over `PropExpr<FrobeniusOr<G>>` unchanged, with
 //! no new interpreter or new tree type. The Frobenius structure is data in the
 //! signature, not a fork of the engine.
@@ -32,8 +32,7 @@
 //! - **Def 2.5** — a special commutative Frobenius monoid `(X, μ, η, δ, ε)` and
 //!   its *nine* defining equations (see [`scfm_equations`]). The Hadamard SCFM
 //!   on `R^dim` (an extension of Ex 2.16, realized by
-//!   [`MatKron`](catgraph_applied::mat_kron)) satisfies them — the S4 milestone
-//!   law.
+//!   [`MatKron`](catgraph_applied::mat_kron)) satisfies them.
 //! - **Def 2.12** — a hypergraph category is a symmetric monoidal category "in
 //!   which each object `X` is equipped with a Frobenius structure
 //!   `(μ_X, η_X, δ_X, ε_X)`", compatibly with `⊗`. *Each object* — hence one
@@ -73,13 +72,13 @@
 //! design note said "ten"; the paper is the spec, so [`scfm_equations`] ships
 //! nine **per colour** and cites Ex 2.8's count.
 //!
-//! # The [#15](https://github.com/sustia-llc/catgraph/issues/15) boundary, restated
+//! # The completeness boundary, restated
 //!
 //! [`hypergraph_presentation`] seeds a [`Presentation`] with the nine equations
 //! `E_frob` at each palette colour. Deciding equality over it goes through
 //! applied's
 //! [`eq_mod`](catgraph_applied::prop::presentation::Presentation::eq_mod), which
-//! is **sound but syntactically incomplete** (#15): a `Some(true)` is a proof,
+//! is **sound but syntactically incomplete**: a `Some(true)` is a proof,
 //! but a `None`/`Some(false)` is *not* a disproof — only that the congruence
 //! closure did not establish the equation. `E_frob` overlaps heavily (spiders
 //! fuse in many ways), so `None` is the expected answer for many true equalities.
@@ -90,21 +89,20 @@
 //! promote an incomplete `eq_mod None` into a syntactic decision. For a
 //! **complete** decision over the User-free fragment, use
 //! [`CospanFunctor`](crate::cospan_functor::CospanFunctor) (F&S Prop 3.8 /
-//! Thm 3.14, #80).
+//! Thm 3.14).
 //!
 //! # Colour scope: Λ-colored end to end
 //!
-//! Since [#79](https://github.com/sustia-llc/catgraph/issues/79) the layer is
-//! colored at every level. P3a coloured the calculus —
+//! The layer is colored at every level. The calculus carries colour —
 //! `Mu(c)`/`Eta(c)`/`Delta(c)`/`Epsilon(c)` carry their colour,
 //! [`FrobeniusOr<G>`]'s own `Color` is `G`'s, and both interpreters
 //! ([`to_mat_kron`], [`to_cospan`](crate::cospan_functor::to_cospan)) thread an
-//! interface word top-down. P3b coloured the *text*: [`GeneratorSyntax`] for
+//! interface word top-down. The textual surface mirrors it: [`GeneratorSyntax`] for
 //! `FrobeniusOr<G>` holds for any [`ColorSyntax`] palette, spiders print and
 //! parse as `mu@A` / `eta@A` / `delta@A` / `epsilon@A`, and presentation files
 //! carry generator declarations (`g : A B -> C`). A monochromatic signature is
 //! the palette whose one letter is implicit, so its files are byte-for-byte the
-//! pre-#79 ones.
+//! single-palette form.
 
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -151,7 +149,7 @@ const KW_EPSILON: &str = "epsilon";
 ///
 /// Choosing `G::Color = ()` collapses the palette to the monochromatic
 /// `Λ = {•}`, recovering the single-sorted spider family: `Mu(())` *is* the
-/// pre-P3a `Mu`.
+/// uncoloured `Mu`.
 ///
 /// # Bounds
 ///
@@ -160,8 +158,8 @@ const KW_EPSILON: &str = "epsilon";
 /// [`PropSignature::Color`] requires only `Clone + Eq + Hash + Debug`, while
 /// `PropSignature` itself requires `Ord`. `Ord`/`PartialOrd` are therefore
 /// hand-written under `where G::Color: Ord` (variant order
-/// `Mu < Eta < Delta < Epsilon < User`, then payload order — the pre-P3a derived
-/// order, extended through the payload), and the [`PropSignature`] impl carries
+/// `Mu < Eta < Delta < Epsilon < User`, then payload order — the order a
+/// `#[derive(Ord)]` would give, extended through the payload), and the [`PropSignature`] impl carries
 /// the same bound. `()` satisfies it, so no shipped signature loses an impl.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -591,7 +589,7 @@ where
 /// The resulting presentation quotients `Free(FrobeniusOr<G>)` by the user
 /// theory *plus* the SCFM laws. Deciding equality over it is applied's
 /// [`eq_mod`](catgraph_applied::prop::presentation::Presentation::eq_mod), which
-/// is **sound but incomplete** (#15): `Some(true)` is a proof, but a
+/// is **sound but incomplete**: `Some(true)` is a proof, but a
 /// `None`/`Some(false)` is not a disproof. `E_frob` overlaps (spiders fuse many
 /// ways), so `None` is the *expected* answer for many genuine equalities.
 /// **Complete** decisions come only through the functorial route
@@ -603,7 +601,7 @@ where
 /// `Mat(R)` via Thm 5.60 for signal-flow graphs, and — for the User-free
 /// spider fragment of `E_frob` —
 /// [`CospanFunctor`](crate::cospan_functor::CospanFunctor) (F&S Prop 3.8 /
-/// Thm 3.14, #80).
+/// Thm 3.14).
 /// [`to_mat_kron`] is a separate **sound semantic** check, not a syntactic decision.
 ///
 /// # Equation order
@@ -623,7 +621,7 @@ where
 /// Returns [`SyntaxError::Catgraph`] if any lifted user equation is
 /// non-parallel or ill-formed (surfaced transparently from [`lift_user`] or from
 /// [`add_equation`](catgraph_applied::prop::presentation::Presentation::add_equation),
-/// whose check is boundary-*word* equality since #79 P2).
+/// whose check is boundary-*word* equality).
 /// The built-in equations are parallel by construction; an error here
 /// can only originate in a caller-supplied user equation.
 pub fn hypergraph_presentation<G>(
@@ -752,7 +750,7 @@ fn expect_at_least<C>(expected: usize, input: &[C]) -> Result<(), SyntaxError> {
 /// category on `Λ`) makes the extension to colored terms unique. `to_mat_kron`
 /// computes that functor. It therefore respects all nine [`scfm_equations`] at
 /// every colour: for a proven-equal pair, the two images are equal
-/// (the S4 milestone law, machine-checked). It is deliberately **not** registered
+/// (machine-checked). It is deliberately **not** registered
 /// as a
 /// [`CompleteFunctor`](catgraph_applied::prop::presentation::functorial::CompleteFunctor):
 /// no completeness theorem is claimed for `E_frob` here, so equal images witness
@@ -760,7 +758,7 @@ fn expect_at_least<C>(expected: usize, input: &[C]) -> Result<(), SyntaxError> {
 /// decision. The **complete** decision for the User-free fragment is
 /// [`CospanFunctor`](crate::cospan_functor::CospanFunctor) (same Prop 3.8 /
 /// Thm 3.14, but valued in the free `Cospan_Λ` rather than a single model
-/// `MatKron(R)`, #80).
+/// `MatKron(R)`).
 ///
 /// `User(_)` generators are outside this functor's domain (the SCFM structure
 /// carries no image for an arbitrary signature generator), so they are rejected
@@ -802,7 +800,7 @@ where
     D: Fn(&G::Color) -> usize,
 {
     // Pre-flight the recursion depth so `to_mat_kron_inner` cannot overflow the
-    // stack on an unbounded programmatically-built term (#99).
+    // stack on an unbounded programmatically-built term.
     crate::depth::guard_term_depth(expr)?;
     to_mat_kron_inner::<G, R, D>(expr, source_word, dims).map(|(matrix, _target)| matrix)
 }
@@ -939,7 +937,7 @@ where
 /// **annotated with their colour** where the palette has one to show, and
 /// [`User(g)`](FrobeniusOr::User) delegates to `g`'s own token.
 ///
-/// # Colour annotation: `mu@A` ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3b)
+/// # Colour annotation: `mu@A`
 ///
 /// A spider prints `mu@A` when its colour's
 /// [`print_color`](ColorSyntax::print_color) is `Some("A")`, and bare `mu` when
@@ -948,7 +946,7 @@ where
 /// `mu` takes the palette's [`implicit`](ColorSyntax::implicit) sort — and is a
 /// **parse failure** under a palette that has none, since there would be no
 /// colour to give the spider. The monochromatic palette `()` is all-implicit, so
-/// a single-sorted signature prints and parses exactly the pre-#79 tokens.
+/// a single-sorted signature prints and parses exactly the uncoloured tokens.
 ///
 /// The joiner `@` is reserved in the [`GeneratorSyntax`] clause-2 alphabet, so a
 /// user token can never be spelled `mu@…` and the split on `@` cannot cut a

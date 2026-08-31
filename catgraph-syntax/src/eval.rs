@@ -1,4 +1,4 @@
-//! Interpreter for free-prop terms (Phase S3).
+//! Interpreter for free-prop terms.
 //!
 //! [`eval`] runs a [`PropExpr<G>`](catgraph_applied::prop::PropExpr) as a
 //! wire-bundle transformer: given a model that says how each *generator* acts on
@@ -51,7 +51,7 @@
 //! structural recursion of `PropExpr` itself (and the [printer](mod@crate::text::print)).
 //! Pathologically deep terms (tens of thousands of nested nodes) can exhaust the
 //! stack; this is an engine-wide property of the term representation, not
-//! specific to the interpreter. The [S2 parser](mod@crate::text::parse) bounds input
+//! specific to the interpreter. The [parser](mod@crate::text::parse) bounds input
 //! nesting explicitly (untrusted text).
 //!
 //! # Relation to the matrix functor (Def 5.50 / Remark 5.49)
@@ -60,7 +60,7 @@
 //! **row-vector action** `x ↦ x · S(e)` of the Thm 5.53 matrix functor `S`,
 //! where a morphism `m → n` is the `m × n` matrix (rows = domain arity). Feeding
 //! the `i`-th standard basis vector therefore reproduces **row `i`** of the
-//! matrix — the law the S3 cross-check proptest pins.
+//! matrix — the law the cross-check proptest pins.
 
 use std::vec;
 
@@ -118,8 +118,8 @@ fn node_kind<G: PropSignature>(expr: &PropExpr<G>) -> &'static str {
 /// (with `context` naming the node) if the cursor cannot supply that many.
 ///
 /// The shortfall is detected *before* anything is reserved. `n` reaches here as
-/// a saturated `usize::MAX` on a directly-constructed `Braid(usize::MAX, 1)`
-/// (#196), and `Vec::with_capacity(usize::MAX)` panics on the reservation rather
+/// a saturated `usize::MAX` on a directly-constructed `Braid(usize::MAX, 1)`,
+/// and `Vec::with_capacity(usize::MAX)` panics on the reservation rather
 /// than returning the error the caller is entitled to. The cursor is an
 /// [`ExactSizeIterator`], so the check is `O(1)` and reports the same `actual`
 /// the drain-until-dry version did.
@@ -172,7 +172,7 @@ where
     M: ArrowModel<G>,
 {
     // Pre-flight the recursion depth so `eval_stream` cannot overflow the stack
-    // on an unbounded programmatically-built term (#99).
+    // on an unbounded programmatically-built term.
     crate::depth::guard_term_depth(expr)?;
     // The single `source()` walk — O(term size), paid once. From here every
     // node draws off `cursor` in O(1) per wire, so evaluation is linear overall.
@@ -205,7 +205,7 @@ where
         // `σ_{m,n}`: block-rotate `[a | b]` (|a| = m, |b| = n) to `[b | a]`.
         PropExpr::Braid(m, n) => {
             // Checked, like the sibling interpreters `to_cospan` and
-            // `to_mat_kron` (#180/#196): a directly-constructed
+            // `to_mat_kron`: a directly-constructed
             // `Braid(usize::MAX, 1)` would otherwise wrap onto a small width in
             // release and let `rotate_left(usize::MAX)` past its `mid <= len`
             // precondition. `usize::MAX` exceeds any real bundle, so
@@ -291,8 +291,7 @@ where
 /// wrapping or checked arithmetic.
 ///
 /// The workspace **policy of record** for this lives once, in
-/// [`catgraph_applied::rig`]'s module docs
-/// ([#88](https://github.com/sustia-llc/catgraph/issues/88)) — it gives the
+/// [`catgraph_applied::rig`]'s module docs — it gives the
 /// per-rig-family matrix (exact for `Z(BigInt)`, inherited-from-`R` for the
 /// primitive integers, no integer overflow for the Boolean/float families) and
 /// records why saturating arithmetic is rejected outright. The opt-in detection

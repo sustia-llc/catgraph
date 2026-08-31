@@ -17,9 +17,9 @@
 //!   Sketches Def 5.33).
 //!
 //! The round-trip target is `parse(&print(e)) == Ok(e)` structurally (same
-//! tree; the printer never normalises). It is machine-checked by the S2
-//! proptests, and holds for every term whose *printed* parenthesisation stays
-//! within [`parse::MAX_NESTING_DEPTH`]: printing is total, but a term nested
+//! tree; the printer never normalises), and holds for every term whose
+//! *printed* parenthesisation stays within [`parse::MAX_NESTING_DEPTH`]:
+//! printing is total, but a term nested
 //! deeper (e.g. a right-fold of more than `MAX_NESTING_DEPTH` compositions,
 //! each right operand of which prints parenthesised) produces text the
 //! depth-bounded parser rejects. Print-then-parse pipelines that persist
@@ -40,13 +40,7 @@ pub use print::{Pretty, print};
 
 use catgraph_applied::prop::PropSignature;
 
-// ---- Concrete-syntax alphabet (one definition, shared printer/parser) --------
-//
-// The printer ([`print`]) and the parser's lexer ([`parse::single_tok`]) must
-// agree on which characters are operators/separators and which words are
-// reserved keywords. Defining them once here keeps the two surfaces from
-// drifting: the printer emits these tokens and the lexer recognises exactly the
-// same set.
+// ---- Concrete-syntax alphabet (shared by the printer and the parser's lexer) ----
 
 /// Sequential-composition operator `;` (the loosest binder).
 pub(crate) const SEMI: char = ';';
@@ -109,11 +103,7 @@ pub(crate) const KW_BRAID: &str = "braid";
 /// validation or escaping** — a token violating clause 2 produces output that
 /// re-lexes as multiple tokens (or as the built-in `id(n)` / `braid(m,n)`
 /// atoms), so the printed term does **not** reparse to the same tree even
-/// though the token-level clause 1 may hold. Clause 1 is machine-checked per
-/// signature by a proptest from Phase S2 onward; clause 2 is additionally
-/// exercised by S2's whole-expression round-trip proptests (a violating
-/// implementation fails them). S1 ships the trait and the printer that
-/// consumes [`print_token`](GeneratorSyntax::print_token).
+/// though the token-level clause 1 may hold.
 pub trait GeneratorSyntax: PropSignature {
     /// The concrete token for this generator (e.g. `"copy"`, `"add"`).
     fn print_token(&self) -> String;
@@ -131,8 +121,7 @@ pub trait GeneratorSyntax: PropSignature {
 /// [`Color`](PropSignature::Color): it is what lets the textual surface spell a
 /// **colored** prop — the annotated spider tokens `mu@A` / `eta@A` / `delta@A` /
 /// `epsilon@A` of [`FrobeniusOr`](crate::frobenius::FrobeniusOr), and the colour
-/// words of a presentation-file declaration `g : A B -> C`
-/// ([#79](https://github.com/sustia-llc/catgraph/issues/79) P3b).
+/// words of a presentation-file declaration `g : A B -> C`.
 ///
 /// # The implicit sort
 ///
@@ -141,10 +130,9 @@ pub trait GeneratorSyntax: PropSignature {
 /// anyway it is written `•` (U+2022). [`print_color`](ColorSyntax::print_color)
 /// returns `None` for it and [`implicit`](ColorSyntax::implicit) names it.
 ///
-/// The monochromatic palette `()` is exactly this case, and that is what keeps
-/// the file format backward compatible: a fully monochromatic presentation prints
-/// no declarations and no `@` annotations, so every pre-#79 file still reads and
-/// writes byte for byte. A palette with **no** implicit letter
+/// The monochromatic palette `()` is exactly this case: a fully monochromatic
+/// presentation prints no declarations and no `@` annotations at all. A
+/// palette with **no** implicit letter
 /// (`implicit() == None`) makes a bare `mu` a parse error — under it there is no
 /// colour to default to, and inventing one would silently mistype a spider.
 ///
@@ -181,7 +169,7 @@ pub trait ColorSyntax: Sized {
 }
 
 /// The monochromatic palette `Λ = {•}`: its single letter is the implicit sort,
-/// so colored syntax degenerates to exactly the pre-#79 surface.
+/// so colored syntax degenerates to the uncoloured surface.
 impl ColorSyntax for () {
     fn print_color(&self) -> Option<String> {
         None

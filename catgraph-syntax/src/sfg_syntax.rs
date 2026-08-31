@@ -1,6 +1,6 @@
 //! [`GeneratorSyntax`] for the signal-flow-graph signature
 //! [`SfgGenerator<R>`](catgraph_applied::sfg::SfgGenerator) (Seven Sketches
-//! Def 5.45 / Eq 5.52) — the demo signature the S3 interpreter smoke test reads
+//! Def 5.45 / Eq 5.52) — the demo signature the interpreter smoke test reads
 //! from text.
 //!
 //! # Token scheme
@@ -8,13 +8,9 @@
 //! The four nullary-payload generators print to distinct plain tokens
 //! (`copy`, `discard`, `add`, `zero`). `Scalar(r)` carries a rig element, so
 //! its token is `scalar_<r>` using `R`'s [`Display`]; the argument is recovered
-//! with `R`'s [`FromStr`].
-//!
-//! The separator was `:` before
-//! [#79](https://github.com/sustia-llc/catgraph/issues/79) P3b, which reserved
-//! that character as the presentation-file declaration separator (`g : A B ->
-//! C`) and made it a lexer delimiter. `scalar:<r>` would no longer be a single
-//! lexical atom, so the prefix moved to the delimiter-free `scalar_`.
+//! with `R`'s [`FromStr`]. The prefix is the delimiter-free `scalar_` rather
+//! than `:`, since `:` is reserved as the presentation-file declaration
+//! separator (`g : A B -> C`) and is a lexer delimiter.
 //!
 //! # Round-trip compliance is conditional on `R`
 //!
@@ -36,8 +32,7 @@
 //! rig instantiated with this impl needs its own round-trip test. A rig whose
 //! `Display` emitted, say, a space would break clause 2 for its `Scalar`
 //! values; float rigs cannot inhabit [`SfgGenerator`] at all (no `Eq`/`Hash`)
-//! and are excluded from the round-trip guarantee regardless (the designer
-//! default recorded on issue #5).
+//! and are excluded from the round-trip guarantee regardless.
 
 use core::fmt::Display;
 use core::str::FromStr;

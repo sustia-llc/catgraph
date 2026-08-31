@@ -5,8 +5,7 @@
 //! boundary-matched equation pairs. This module renders and reads the equation
 //! list `E` as line-oriented text, reusing the expression
 //! [parser](super::parse::parse) / [printer](super::print::print) surface for
-//! each side. Both directions live here (rather than split across `parse.rs`
-//! and `print.rs`) so the equation-file format is documented in one place.
+//! each side.
 //!
 //! ## Format
 //!
@@ -19,9 +18,8 @@
 //!   a `Parse` error whose offset is relative to the whole input;
 //! - the check on each equation is
 //!   [`Presentation::add_equation`](catgraph_applied::prop::presentation::Presentation::add_equation),
-//!   whose failures — boundary-**word** disagreement since
-//!   [#79](https://github.com/sustia-llc/catgraph/issues/79) P2, not just arity
-//!   — pass through transparently as [`SyntaxError::Catgraph`];
+//!   whose failures — boundary-**word** disagreement, not just arity — pass
+//!   through transparently as [`SyntaxError::Catgraph`];
 //! - a line with no `=` and a `:` is a **declaration**
 //!   `TOKEN : COLOR* -> COLOR*` (whitespace-separated, either colour list
 //!   possibly empty, exactly one `:` and exactly one `->`). `:` is reserved the
@@ -52,8 +50,8 @@
 //! file mentions. Declarations are emitted **iff** at least one port colour of
 //! at least one such generator has a token of its own
 //! ([`ColorSyntax::print_color`] is `Some`); a monochromatic presentation
-//! therefore prints exactly what it printed before #79, and a
-//! declaration-free file stays valid input.
+//! therefore prints no declarations at all, and a declaration-free file stays
+//! valid input.
 //!
 //! ## Runtime configuration is not part of the format
 //!
@@ -195,11 +193,7 @@ where
     let mut line_start = 0usize;
     for line in input.split_inclusive('\n') {
         if !line.trim().is_empty() {
-            // `EQUALS` is the single source of truth for the separator char, and
-            // `single_tok` makes it an unconditional delimiter, so a raw
-            // `match_indices(EQUALS)` scan finds exactly the `Tok::Equals`
-            // positions the lexer would — with no per-line tokenisation and no
-            // allocation. Sides are sliced from the line at the found offset.
+            // EQUALS is a lexer delimiter, so this raw scan finds exactly the Tok::Equals positions the lexer would.
             let mut separators = line.match_indices(EQUALS).map(|(i, _)| i);
             match (separators.next(), separators.next()) {
                 (Some(eq), None) => {
@@ -262,8 +256,7 @@ fn check_declaration<G: GeneratorSyntax>(line: &str, line_start: usize) -> Resul
 where
     G::Color: ColorSyntax,
 {
-    // `COLON` is a lexer delimiter for exactly the reason `EQUALS` is, so this
-    // raw scan agrees with the lexer's own token boundaries.
+    // COLON is a lexer delimiter, so this raw scan agrees with the lexer's own token boundaries.
     let mut separators = line.match_indices(COLON).map(|(i, _)| i);
     let colon = separators.next().ok_or_else(|| SyntaxError::Parse {
         offset: line_start,
