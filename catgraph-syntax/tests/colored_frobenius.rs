@@ -7,7 +7,9 @@
 //! - colored spider **words** — `Mu(A) : [A, A] → [A]` (Def 2.5 at a colour);
 //! - `scfm_equations(c)` is nine equations *per colour* and
 //!   `hypergraph_presentation([A, B], …)` seeds 2 × 9 (Lemma 3.10: a Frobenius
-//!   structure per `l ∈ Λ` induces the whole hypergraph structure);
+//!   structure per `l ∈ Λ` induces the whole hypergraph structure), with
+//!   `to_mat_kron` and `CospanFunctor` returning one verdict on all nine at
+//!   each colour;
 //! - colored `to_cospan`: correct apex labelling, colour mismatch rejected, and
 //!   the colored `CospanFunctor` deciding a two-colour spider fusion through
 //!   `eq_mod_functorial_colored` (Ex 3.12 + Thm 3.14);
@@ -136,6 +138,52 @@ fn hypergraph_presentation_seeds_nine_per_palette_colour() {
     let pres = hypergraph_presentation::<ColoredSig>([Hue::A], [user_eq])
         .expect("a parallel user equation lifts");
     assert_eq!(pres.equations().len(), 10);
+}
+
+#[test]
+fn both_functors_decide_the_nine_axioms_at_each_colour() {
+    // The sound semantic checker (`to_mat_kron`, at that colour's own dimension —
+    // 2 at A, 3 at B) and the complete decision functor (`CospanFunctor`) return
+    // the same verdict on every Def 2.5 equation at every palette colour.
+    let f = CospanFunctor::new();
+    for c in [Hue::A, Hue::B] {
+        for (i, (lhs, rhs)) in scfm_equations::<ColoredSig>(c).into_iter().enumerate() {
+            let n = i + 1;
+            let word = vec![c; lhs.source()];
+            assert_eq!(
+                mk(&lhs, &word).expect("the axioms are User-free and well-coloured"),
+                mk(&rhs, &word).expect("the axioms are User-free and well-coloured"),
+                "equation {n} in MatKron at {c:?}"
+            );
+            assert_eq!(
+                f.apply_colored(&colored(word.clone(), lhs))
+                    .expect("User-free"),
+                f.apply_colored(&colored(word, rhs)).expect("User-free"),
+                "equation {n} in Cospan at {c:?}"
+            );
+        }
+
+        // …and both separate a non-law pair at the same boundary, so "agree" is
+        // not "identify everything": μ_c merges the two c wires, (id ⊗ ε_c)
+        // discards the second.
+        let word = vec![c, c];
+        let merge: Term = Free::generator(FrobeniusOr::Mu(c));
+        let discard: Term = Free::tensor(
+            Free::<FrobeniusOr<ColoredSig>>::identity(1),
+            Free::generator(FrobeniusOr::Epsilon(c)),
+        );
+        assert_ne!(
+            mk(&merge, &word).expect("well-coloured"),
+            mk(&discard, &word).expect("well-coloured"),
+            "μ vs discard in MatKron at {c:?}"
+        );
+        assert_ne!(
+            f.apply_colored(&colored(word.clone(), merge))
+                .expect("User-free"),
+            f.apply_colored(&colored(word, discard)).expect("User-free"),
+            "μ vs discard in Cospan at {c:?}"
+        );
+    }
 }
 
 // ---- Colored to_cospan -------------------------------------------------------

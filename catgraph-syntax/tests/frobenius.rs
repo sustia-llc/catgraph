@@ -1,7 +1,8 @@
 //! Frobenius-layer tests (Phase S4, F&S 2019 *Hypergraph Categories*).
 //!
 //! Covers the S4 milestone law — the Hadamard SCFM on `R^dim` satisfies all
-//! **nine** Def 2.5 equations (`to_mat_kron` semantic check, Ex 2.16) — the #15
+//! **nine** Def 2.5 equations (`to_mat_kron` semantic check, Ex 2.16), each
+//! equation's own `MatKron` image and concrete syntax — the #15
 //! boundary (each `E_frob` axiom is provable by its own presentation), the spider
 //! calculus (fusion, diagonal pattern, the `η;ε` empty spider, cup/cap parity
 //! with `MatKron`, the compact-closed snake), the braid shuffle direction, the
@@ -51,6 +52,126 @@ fn scfm_nine_laws_hold_in_hadamard_matkron() {
                 i + 1
             );
         }
+    }
+}
+
+/// Per-axiom goldens for `scfm_equations`, in the order the function returns
+/// them (the rustdoc's numbered list): `(name, image at d = 2, lhs, rhs)`.
+///
+/// The image is the matrix **both** sides map to — that equality is the law —
+/// so it fixes each slot only up to semantic equality. Slots 2, 5 and 9 share
+/// `identity(2)` and slots 7 and 8 share the `μ ; δ` spider, as the table shows;
+/// the two concrete syntaxes fix the terms themselves.
+type ScfmGolden = (&'static str, Vec<Vec<i64>>, &'static str, &'static str);
+
+fn scfm_goldens() -> [ScfmGolden; 9] {
+    [
+        (
+            "associativity",
+            // c³ → c: 1 exactly where all three legs share a basis index, at
+            // row 0 (000) → col 0 and row 7 (111) → col 1.
+            vec![
+                vec![1, 0],
+                vec![0, 0],
+                vec![0, 0],
+                vec![0, 0],
+                vec![0, 0],
+                vec![0, 0],
+                vec![0, 0],
+                vec![0, 1],
+            ],
+            "mu * id(1) ; mu",
+            "id(1) * mu ; mu",
+        ),
+        (
+            "unitality (left)",
+            // c → c: the unit is absorbed, leaving identity(2).
+            vec![vec![1, 0], vec![0, 1]],
+            "eta * id(1) ; mu",
+            "id(1)",
+        ),
+        (
+            "commutativity",
+            // c² → c: the shuffle is absorbed, leaving mu(2).
+            vec![vec![1, 0], vec![0, 0], vec![0, 0], vec![0, 1]],
+            "braid(1,1) ; mu",
+            "mu",
+        ),
+        (
+            "coassociativity",
+            // c → c³: e_i ↦ e_i ⊗ e_i ⊗ e_i, at col 0 and col 7.
+            vec![vec![1, 0, 0, 0, 0, 0, 0, 0], vec![0, 0, 0, 0, 0, 0, 0, 1]],
+            "delta ; delta * id(1)",
+            "delta ; id(1) * delta",
+        ),
+        (
+            "counitality (left)",
+            // c → c: the counit is absorbed, leaving identity(2).
+            vec![vec![1, 0], vec![0, 1]],
+            "delta ; epsilon * id(1)",
+            "id(1)",
+        ),
+        (
+            "cocommutativity",
+            // c → c²: the shuffle is absorbed, leaving delta(2).
+            vec![vec![1, 0, 0, 0], vec![0, 0, 0, 1]],
+            "delta ; braid(1,1)",
+            "delta",
+        ),
+        (
+            "Frobenius-L",
+            // c² → c²: the (2,2) spider — 1 iff both legs share a basis index.
+            vec![
+                vec![1, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 1],
+            ],
+            "delta * id(1) ; id(1) * mu",
+            "mu ; delta",
+        ),
+        (
+            "Frobenius-R",
+            vec![
+                vec![1, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 0],
+                vec![0, 0, 0, 1],
+            ],
+            "id(1) * delta ; mu * id(1)",
+            "mu ; delta",
+        ),
+        (
+            "speciality",
+            // c → c: the split-then-merge is identity(2).
+            vec![vec![1, 0], vec![0, 1]],
+            "delta ; mu",
+            "id(1)",
+        ),
+    ]
+}
+
+#[test]
+fn each_scfm_equation_matches_its_own_golden() {
+    let laws = scfm_equations::<Sig>(());
+    let goldens = scfm_goldens();
+    assert_eq!(laws.len(), goldens.len());
+    for (i, ((lhs, rhs), (name, image, lhs_text, rhs_text))) in
+        laws.iter().zip(goldens.iter()).enumerate()
+    {
+        let n = i + 1;
+        assert_eq!(print(lhs), *lhs_text, "equation {n} ({name}) lhs syntax");
+        assert_eq!(print(rhs), *rhs_text, "equation {n} ({name}) rhs syntax");
+        assert_eq!(
+            mk(lhs, 2).entries(),
+            image.as_slice(),
+            "equation {n} ({name}) lhs image at d=2"
+        );
+        assert_eq!(
+            mk(rhs, 2).entries(),
+            image.as_slice(),
+            "equation {n} ({name}) rhs image at d=2"
+        );
     }
 }
 
