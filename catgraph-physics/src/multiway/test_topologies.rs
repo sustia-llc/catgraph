@@ -59,16 +59,16 @@ pub(crate) fn topology_fixture(i: usize) -> BranchialGraph {
     branchial_from_ungraph(1, &g)
 }
 
-/// All-pairs distance summary of each [`topology_fixture`]: `(fixture, sum of
-/// every finite entry, count of infinite entries, largest finite entry)`.
-pub(crate) const DISTANCE_SUMMARY: [(usize, f64, usize, f64); TOPOLOGY_FIXTURE_COUNT] = [
-    (0, 1112.0, 246, 8.0),
-    (1, 1322.0, 0, 2.0),
-    (2, 3400.0, 0, 4.0),
-    (3, 1114.0, 0, 6.0),
-    (4, 5200.0, 0, 24.0),
-    (5, 150.0, 0, 2.0),
-    (6, 1840.0, 0, 8.0),
+/// All-pairs distance summary of [`topology_fixture`] `i` at index `i`: `(sum
+/// of every finite entry, count of infinite entries, largest finite entry)`.
+pub(crate) const DISTANCE_SUMMARY: [(f64, usize, f64); TOPOLOGY_FIXTURE_COUNT] = [
+    (1112.0, 246, 8.0),
+    (1322.0, 0, 2.0),
+    (3400.0, 0, 4.0),
+    (1114.0, 0, 6.0),
+    (5200.0, 0, 24.0),
+    (150.0, 0, 2.0),
+    (1840.0, 0, 8.0),
 ];
 
 /// Asserts two distance matrices are equal, reporting the first differing

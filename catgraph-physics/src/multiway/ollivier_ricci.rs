@@ -591,7 +591,7 @@ mod tests {
     /// entry. On every feature lane.
     #[test]
     fn topology_fixture_distances_are_pinned() {
-        for (i, want_sum, want_infinite, want_max) in DISTANCE_SUMMARY {
+        for (i, &(want_sum, want_infinite, want_max)) in DISTANCE_SUMMARY.iter().enumerate() {
             let bg = topology_fixture(i);
             let dist = all_pairs_bfs(&adjacency(&bg), bg.nodes.len());
 
