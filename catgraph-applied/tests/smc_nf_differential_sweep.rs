@@ -86,6 +86,26 @@
 //! though 36 of its cases *did* move normal form — both sides together, so the
 //! pair verdict is unchanged; see that test's own note.
 //!
+//! # H4 discharge record (2026-08-31)
+//!
+//! [#300](https://github.com/sustia-llc/catgraph/issues/300): the audit sweep's
+//! phase-0 H4 residual cites an earlier, undated probe run at commit `96cfea7`
+//! (release, `internal-probes`) that reports all five of this corpus's
+//! `--ignored` sweeps passing — this crate's three (`published_divergence_
+//! figures_reproduce`, `published_braid_mode_figures_reproduce`,
+//! `published_interleave_mode_figures_reproduce`, all in this file) plus
+//! `tests/content_equality_corpus.rs`'s two (`published_corpus_is_closed_by_
+//! content`, `braid_mode_corpus_is_closed_by_content`). That probe
+//! predates this record and was not independently re-run here. What *is*
+//! independently verified: re-running the identical five at
+//! `cargo test -p catgraph-applied --release --features internal-probes --test
+//! smc_nf_differential_sweep --test content_equality_corpus -- --ignored
+//! --test-threads=1` on 2026-08-31, against this file's current post-#185
+//! figures, all five pass in one combined run (3 + 2 = 5, 15.13s). This
+//! supersedes the
+//! `96cfea7` claim as the durable record: current, dated, and reproducible from
+//! this comment.
+//!
 //! # The interleave tier ([#183](https://github.com/sustia-llc/catgraph/issues/183))
 //!
 //! Residual (a) — marked (interleaved) components, the one lettered residual of
@@ -652,6 +672,30 @@ fn smoke_prefix_of_the_published_corpus() {
         },
         "the 5k prefix of the published corpus moved; run the full \
          `published_divergence_figures_reproduce` with --ignored to see whether \
+         the published totals moved with it."
+    );
+}
+
+/// Fast tier over the braid-mode corpus (#300) — a 5 000-case prefix of the
+/// same frozen seed as `published_braid_mode_figures_reproduce`, so CI notices
+/// a gross braid-mode change without the full 100k run. `tests/canonical_
+/// display_corpus.rs`'s `smoke_prefix_braid_corpus` already ran a non-ignored
+/// braid-mode prefix over the same seed before this test existed; that test
+/// tracks its own `Gate` readback/churn statistic, not this file's §4.6
+/// `Counts` divergence bucket, so this test adds coverage for the bucket
+/// figures specifically rather than being the first braid-mode CI check.
+#[test]
+fn braid_mode_smoke_prefix_of_the_published_corpus() {
+    let counts = on_big_stack(|| sweep(SMOKE_PAIRS, Mode::Braid));
+    assert_eq!(
+        counts,
+        Counts {
+            divergent: 77,
+            in_fragment: 38,
+            marked: 17,
+        },
+        "the 5k prefix of the braid-mode published corpus moved; run the full \
+         `published_braid_mode_figures_reproduce` with --ignored to see whether \
          the published totals moved with it."
     );
 }
