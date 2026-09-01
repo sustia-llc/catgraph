@@ -3,6 +3,7 @@
 //! This module tracks the history of hypergraph rewrites and provides
 //! tools for analyzing causal invariance via Wilson loops.
 
+use super::causal_graph::{CausalEvent, CausalGraph, EdgeId};
 use super::hypergraph::Hypergraph;
 use super::rewrite_rule::{RewriteMatch, RewriteRule};
 use std::collections::{HashMap, HashSet};
@@ -64,40 +65,43 @@ pub struct HypergraphNode {
 /// A Wilson loop in the hypergraph evolution history.
 ///
 /// A closed path in the rewrite history graph, analogous to a Wilson loop
-/// in lattice gauge theory. The holonomy (product of transformations
-/// around the loop) measures deviation from path-independence:
-/// holonomy = 1.0 means the system is causally invariant along this loop.
+/// in lattice gauge theory. The loop runs from the common ancestor down one
+/// branch, across the two branch tips (which carry isomorphic states), and back
+/// up the other branch to the ancestor; its holonomy compares the causal graphs
+/// the two branches induce.
 #[derive(Debug, Clone)]
 pub struct WilsonLoop {
-    /// Sequence of node IDs forming the loop.
+    /// Node IDs forming the loop, opening and closing at `base`.
     pub path: Vec<usize>,
 
-    /// Starting/ending node ID.
+    /// Starting/ending node ID: the branches' common ancestor.
     pub base: usize,
 
-    /// Holonomy value (1.0 = perfect closure, causally invariant).
+    /// `1.0` when the two branches induce isomorphic causal graphs, `0.0`
+    /// otherwise — including when either branch has no causal graph and when
+    /// the isomorphism search reaches its step budget.
     pub holonomy: f64,
 
     /// Length of the loop.
     pub length: usize,
 }
 
-/// Result of causal invariance analysis.
+/// Result of one confluence-witness pass over the explored fragment.
 #[derive(Debug, Clone)]
 pub struct CausalInvarianceResult {
-    /// Whether the system is causally invariant.
+    /// Whether every analyzed loop has holonomy `1.0`.
     pub is_invariant: bool,
 
-    /// Average holonomy deviation from 1.0.
+    /// Mean of `1.0 - holonomy` over the analyzed loops.
     pub average_deviation: f64,
 
-    /// Maximum holonomy deviation from 1.0.
+    /// Maximum of `1.0 - holonomy` over the analyzed loops.
     pub max_deviation: f64,
 
     /// Number of Wilson loops analyzed.
     pub loops_analyzed: usize,
 
-    /// Wilson loops with significant deviation.
+    /// Wilson loops with holonomy below `1.0`.
     pub non_trivial_loops: Vec<WilsonLoop>,
 }
 
@@ -121,6 +125,16 @@ pub struct HypergraphEvolution {
 
     /// Next vertex ID for new vertices.
     next_vertex_id: usize,
+
+    /// Hyperedge-instance identities of each node's state, positionally
+    /// parallel to that state's edge list.
+    edge_ids: Vec<Vec<EdgeId>>,
+
+    /// Update event that produced each node (`None` for the root).
+    events: Vec<Option<CausalEvent>>,
+
+    /// Next hyperedge-instance identity.
+    next_edge_id: usize,
 }
 
 impl HypergraphEvolution {
@@ -129,6 +143,7 @@ impl HypergraphEvolution {
     pub fn new(initial: Hypergraph, rules: Vec<RewriteRule>) -> Self {
         let fingerprint = initial.fingerprint();
         let max_vertex = initial.vertices().max().unwrap_or(0);
+        let root_edge_ids: Vec<EdgeId> = (0..initial.edge_count()).map(EdgeId).collect();
 
         let root = HypergraphNode {
             id: 0,
@@ -148,6 +163,9 @@ impl HypergraphEvolution {
             fingerprint_to_nodes,
             max_step: 0,
             next_vertex_id: max_vertex + 1,
+            next_edge_id: root_edge_ids.len(),
+            edge_ids: vec![root_edge_ids],
+            events: vec![None],
         }
     }
 
@@ -253,10 +271,29 @@ impl HypergraphEvolution {
         let parent = &self.nodes[parent_id];
         let mut new_state = parent.state.clone();
         let parent_step = parent.step;
+        let mut ids = self.edge_ids[parent_id].clone();
 
         // Apply the rule
         let rule = &self.rules[rule_idx];
-        rule.apply(&mut new_state, match_, &mut self.next_vertex_id);
+        let effect = rule.apply_effect(&mut new_state, match_, &mut self.next_vertex_id);
+
+        // Carry hyperedge-instance identity across the rewrite: the removed
+        // slots drop their identities, the appended slots mint fresh ones.
+        // `removed_edges` is descending, so each index still addresses the
+        // instance it addressed before any removal.
+        let mut consumed = Vec::with_capacity(effect.removed_edges.len());
+        for &edge_idx in &effect.removed_edges {
+            consumed.push(ids.remove(edge_idx));
+        }
+        consumed.reverse();
+
+        let mut produced = Vec::with_capacity(effect.added_edges.len());
+        for _ in &effect.added_edges {
+            let id = EdgeId(self.next_edge_id);
+            self.next_edge_id += 1;
+            ids.push(id);
+            produced.push(id);
+        }
 
         let fingerprint = new_state.fingerprint();
         let new_id = self.nodes.len();
@@ -272,6 +309,12 @@ impl HypergraphEvolution {
         };
 
         self.nodes.push(node);
+        self.edge_ids.push(ids);
+        self.events.push(Some(CausalEvent {
+            rule_index: rule_idx,
+            consumed,
+            produced,
+        }));
         self.fingerprint_to_nodes
             .entry(fingerprint)
             .or_default()
@@ -329,6 +372,58 @@ impl HypergraphEvolution {
             .collect()
     }
 
+    /// Returns the hyperedge-instance identities of a node's state,
+    /// positionally parallel to that state's edge list.
+    ///
+    /// `None` for a node ID outside the evolution.
+    #[must_use]
+    pub fn edge_identities(&self, node_id: usize) -> Option<&[EdgeId]> {
+        self.edge_ids.get(node_id).map(Vec::as_slice)
+    }
+
+    /// Returns the update event that produced a node.
+    ///
+    /// `None` for the root and for a node ID outside the evolution.
+    #[must_use]
+    pub fn event(&self, node_id: usize) -> Option<&CausalEvent> {
+        self.events.get(node_id).and_then(Option::as_ref)
+    }
+
+    /// Returns the causal graph of the update events on the path
+    /// `ancestor → node_id`, excluding `ancestor`'s own event.
+    ///
+    /// `None` when either ID is outside the evolution or `ancestor` is not on
+    /// `node_id`'s path to the root.
+    #[must_use]
+    pub fn causal_graph_between(&self, ancestor: usize, node_id: usize) -> Option<CausalGraph> {
+        if ancestor >= self.nodes.len() || node_id >= self.nodes.len() {
+            return None;
+        }
+
+        let mut chain = Vec::new();
+        let mut current = node_id;
+        while current != ancestor {
+            chain.push(current);
+            current = self.nodes[current].parent?;
+        }
+        chain.reverse();
+
+        let events = chain
+            .iter()
+            .filter_map(|&id| self.events[id].clone())
+            .collect();
+        Some(CausalGraph::from_events(events))
+    }
+
+    /// Returns the causal graph of the update events on the path from the root
+    /// to `node_id`.
+    ///
+    /// `None` for a node ID outside the evolution.
+    #[must_use]
+    pub fn causal_graph(&self, node_id: usize) -> Option<CausalGraph> {
+        self.causal_graph_between(0, node_id)
+    }
+
     /// Finds merge points (nodes with same fingerprint from different parents).
     #[must_use]
     pub fn find_merges(&self) -> Vec<Vec<usize>> {
@@ -380,30 +475,27 @@ impl HypergraphEvolution {
                             .copied()
                             .unwrap_or(0);
 
-                        // Build the loop path
+                        // Build the loop path: ancestor → id1, across to id2,
+                        // then id2 → ancestor.
                         let mut loop_path = Vec::new();
-
-                        // Path from ancestor to id1
-                        for &id in path1.iter().rev() {
+                        for &id in &path1 {
                             loop_path.push(id);
                             if id == ancestor {
                                 break;
                             }
                         }
+                        loop_path.reverse();
 
-                        // Path from id2 back to ancestor
-                        let mut path2_segment = Vec::new();
                         for &id in &path2 {
                             if id == ancestor {
                                 break;
                             }
-                            path2_segment.push(id);
+                            loop_path.push(id);
                         }
-                        path2_segment.reverse();
-                        loop_path.extend(path2_segment);
+                        loop_path.push(ancestor);
 
                         // Compute holonomy
-                        let holonomy = self.compute_holonomy(&loop_path);
+                        let holonomy = self.compute_holonomy(ancestor, id1, id2);
 
                         loops.push(WilsonLoop {
                             path: loop_path.clone(),
@@ -432,56 +524,39 @@ impl HypergraphEvolution {
         path
     }
 
-    /// Computes the holonomy of a loop.
+    /// Computes the holonomy of the loop based at `ancestor` closing the
+    /// branches to `id1` and `id2`.
     ///
-    /// Holonomy measures how much the state changes when going around a loop.
-    /// - Holonomy = 1.0: Perfect closure (causally invariant)
-    /// - Holonomy < 1.0: State differs after traversing the loop
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
-    fn compute_holonomy(&self, loop_path: &[usize]) -> f64 {
-        if loop_path.len() < 2 {
-            return 1.0;
-        }
+    /// `1.0` when the causal graphs the two branches induce are isomorphic,
+    /// `0.0` otherwise — including when either branch has no causal graph and
+    /// when the isomorphism search reaches its step budget.
+    fn compute_holonomy(&self, ancestor: usize, id1: usize, id2: usize) -> f64 {
+        let (Some(branch1), Some(branch2)) = (
+            self.causal_graph_between(ancestor, id1),
+            self.causal_graph_between(ancestor, id2),
+        ) else {
+            return 0.0;
+        };
 
-        let start_node = &self.nodes[loop_path[0]];
-        let end_node = &self.nodes[*loop_path.last().unwrap()];
-
-        // Compare states using isomorphism check
-        if start_node.state.is_isomorphic_to(&end_node.state) {
+        if branch1.is_isomorphic_to(&branch2) {
             1.0
         } else {
-            // Compute similarity based on structural overlap
-            let start_edges = start_node.state.edge_count();
-            let end_edges = end_node.state.edge_count();
-
-            if start_edges == 0 && end_edges == 0 {
-                return 1.0;
-            }
-
-            // Simple similarity measure
-            let common_vertices = start_node
-                .state
-                .vertices()
-                .filter(|v| end_node.state.contains_vertex(*v))
-                .count();
-            let total_vertices = start_node
-                .state
-                .vertex_count()
-                .max(end_node.state.vertex_count());
-
-            if total_vertices == 0 {
-                1.0
-            } else {
-                common_vertices as f64 / total_vertices as f64
-            }
+            0.0
         }
     }
 
-    /// Analyzes causal invariance of the evolution.
+    /// Reports whether any explored pair of isomorphic-state nodes separates
+    /// the causal graphs of the two branches reaching them.
     ///
-    /// A system is causally invariant if all Wilson loops have holonomy = 1.0,
-    /// meaning the final state is independent of the order of rule applications.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    /// `is_invariant` is true when every such pair's two branch causal graphs
+    /// compare isomorphic; a comparison that reaches
+    /// [`CausalGraph::MAX_SEARCH_STEPS`] counts as separating.
+    /// \[Gor20a\] states causal invariance over the whole multiway system,
+    /// which no finite exploration decides; this ranges over the
+    /// isomorphic-state pairs `run` / `run_multiway` reached, and a fragment
+    /// holding no such pair is true.
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn analyze_causal_invariance(&self) -> CausalInvarianceResult {
         let loops = self.find_wilson_loops();
 
@@ -495,18 +570,13 @@ impl HypergraphEvolution {
             };
         }
 
-        let deviations: Vec<_> = loops.iter().map(|l| (1.0 - l.holonomy).abs()).collect();
+        let deviations: Vec<_> = loops.iter().map(|l| 1.0 - l.holonomy).collect();
 
         let average_deviation = deviations.iter().sum::<f64>() / deviations.len() as f64;
         let max_deviation = deviations.iter().copied().fold(0.0, f64::max);
 
-        // Consider loops with deviation > 0.01 as non-trivial
-        let non_trivial_loops: Vec<_> = loops
-            .into_iter()
-            .filter(|l| (1.0 - l.holonomy).abs() > 0.01)
-            .collect();
-
-        let is_invariant = max_deviation < 0.01;
+        let non_trivial_loops: Vec<_> = loops.into_iter().filter(|l| l.holonomy < 1.0).collect();
+        let is_invariant = non_trivial_loops.is_empty();
 
         CausalInvarianceResult {
             is_invariant,
@@ -517,10 +587,13 @@ impl HypergraphEvolution {
         }
     }
 
-    /// Checks if the system is causally invariant.
+    /// Returns [`analyze_causal_invariance`](Self::analyze_causal_invariance)'s
+    /// `is_invariant`: true when every explored pair of isomorphic-state nodes
+    /// has isomorphic branch causal graphs, a comparison reaching
+    /// [`CausalGraph::MAX_SEARCH_STEPS`] counting as separating.
     ///
-    /// This is a quick check that returns true if all explored paths
-    /// that lead to isomorphic states have holonomy ≈ 1.0.
+    /// A reading of the explored fragment, not a verdict of causal
+    /// invariance.
     #[must_use]
     pub fn is_causally_invariant(&self) -> bool {
         self.analyze_causal_invariance().is_invariant
@@ -612,6 +685,7 @@ impl std::fmt::Display for CausalInvarianceResult {
 
 #[cfg(test)]
 mod tests {
+    use super::super::causal_graph::EventId;
     use super::*;
 
     #[test]
@@ -686,6 +760,239 @@ mod tests {
         assert!(path.contains(&0)); // Root is in path
         assert_eq!(path[0], last_id); // Starts with the node
         assert_eq!(*path.last().unwrap(), 0); // Ends at root
+    }
+
+    /// `{{0,1,2},{1,2,3}}` under `A→BB`, the deterministic trace: instance
+    /// identities carried across two rewrites.
+    #[test]
+    fn hyperedge_instance_identity_survives_rewrites() {
+        let initial = Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]);
+        let rules = vec![RewriteRule::wolfram_a_to_bb()];
+        let evolution = HypergraphEvolution::run(&initial, &rules, 2);
+
+        assert_eq!(evolution.node_count(), 3, "root plus two rewrites");
+
+        // The root mints one identity per initial edge.
+        assert_eq!(
+            evolution.edge_identities(0),
+            Some([EdgeId(0), EdgeId(1)].as_slice())
+        );
+
+        // Step 1 consumes the first ternary edge; the second edge keeps
+        // identity 1 even though its positional index moved from 1 to 0.
+        assert_eq!(
+            evolution.edge_identities(1),
+            Some([EdgeId(1), EdgeId(2), EdgeId(3)].as_slice()),
+            "surviving edge keeps EdgeId(1) after the slot shift"
+        );
+        assert_eq!(
+            evolution.event(1),
+            Some(&CausalEvent {
+                rule_index: 0,
+                consumed: vec![EdgeId(0)],
+                produced: vec![EdgeId(2), EdgeId(3)],
+            })
+        );
+
+        // Step 2 consumes the edge the root minted as identity 1.
+        assert_eq!(
+            evolution.edge_identities(2),
+            Some([EdgeId(2), EdgeId(3), EdgeId(4), EdgeId(5)].as_slice())
+        );
+        assert_eq!(
+            evolution.event(2),
+            Some(&CausalEvent {
+                rule_index: 0,
+                consumed: vec![EdgeId(1)],
+                produced: vec![EdgeId(4), EdgeId(5)],
+            })
+        );
+
+        assert_eq!(evolution.event(0), None, "the root has no event");
+        assert_eq!(evolution.edge_identities(3), None, "no node 3 in this run");
+
+        // Every identity minted across the multiway run is distinct.
+        let multiway = HypergraphEvolution::run_multiway(&initial, &rules, 3, 50);
+        let mut minted: Vec<EdgeId> = multiway
+            .edge_identities(0)
+            .expect("invariant: the root always exists")
+            .to_vec();
+        for id in 1..multiway.node_count() {
+            let event = multiway
+                .event(id)
+                .expect("invariant: non-root nodes carry an event");
+            minted.extend(event.produced.iter().copied());
+        }
+        let total = minted.len();
+        minted.sort_unstable();
+        minted.dedup();
+        assert_eq!(
+            minted.len(),
+            total,
+            "{total} identities minted over {} nodes, {} distinct",
+            multiway.node_count(),
+            minted.len()
+        );
+    }
+
+    /// Branch causal graphs of the two 2-step orders in two fixtures: one whose
+    /// updates are independent, one whose second update consumes the first's
+    /// output.
+    #[test]
+    fn branch_causal_graph_links_producer_to_consumer() {
+        let independent = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]),
+            &[RewriteRule::wolfram_a_to_bb()],
+            3,
+            50,
+        );
+        let branch = independent.causal_graph(3).expect("node 3 exists");
+        assert_eq!(branch.event_count(), 2, "two rewrites on the path 0 → 3");
+        assert_eq!(
+            branch.causal_edge_count(),
+            0,
+            "neither A→BB application consumes the other's output; got {:?}",
+            branch.causal_edges().collect::<Vec<_>>()
+        );
+
+        let dependent = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2], vec![2, 3]]),
+            &[RewriteRule::collapse()],
+            3,
+            50,
+        );
+        let chain = dependent.causal_graph(3).expect("node 3 exists");
+        assert_eq!(chain.event_count(), 2, "two rewrites on the path 0 → 3");
+        assert_eq!(
+            chain.causal_edges().collect::<Vec<_>>(),
+            vec![(EventId(0), EventId(1))],
+            "the second collapse consumes the edge the first produced"
+        );
+        assert!(
+            !branch.is_isomorphic_to(&chain),
+            "0 causal edges against 1 is a separation"
+        );
+
+        // A node that is not a descendant has no branch causal graph.
+        assert_eq!(dependent.causal_graph_between(1, 2), None);
+        assert_eq!(dependent.causal_graph_between(0, 99), None);
+        assert_eq!(dependent.causal_graph_between(99, 3), None);
+    }
+
+    /// `{{0,1,2},{1,2,3}}` under `A→BB` to depth 3: one merge, one Wilson loop,
+    /// isomorphic branch causal graphs.
+    #[test]
+    fn confluent_fixture_closes_its_loop_at_the_ancestor() {
+        let initial = Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]);
+        let evolution =
+            HypergraphEvolution::run_multiway(&initial, &[RewriteRule::wolfram_a_to_bb()], 3, 50);
+
+        let stats = evolution.statistics();
+        assert_eq!(stats.total_nodes, 5, "root, two step-1 nodes, two step-2");
+        assert_eq!(stats.max_step, 2);
+        assert_eq!(stats.branch_count, 2);
+        assert_eq!(stats.merge_count, 1);
+        assert_eq!(stats.rule_applications, vec![4]);
+        assert_eq!(evolution.find_merges().len(), 1);
+
+        let loops = evolution.find_wilson_loops();
+        assert_eq!(loops.len(), 1, "one merge yields one Wilson loop");
+        let wilson = &loops[0];
+        assert_eq!(wilson.base, 0, "the branches' common ancestor is the root");
+        assert_eq!(
+            wilson.path.first(),
+            Some(&wilson.base),
+            "the loop opens at its base; got path {:?}",
+            wilson.path
+        );
+        assert_eq!(
+            wilson.path.last(),
+            Some(&wilson.base),
+            "the loop closes at its base; got path {:?}",
+            wilson.path
+        );
+        assert_eq!(wilson.length, wilson.path.len());
+        assert!(
+            (wilson.holonomy - 1.0).abs() < 1e-12,
+            "isomorphic branch causal graphs give holonomy 1.0, got {}",
+            wilson.holonomy
+        );
+
+        let result = evolution.analyze_causal_invariance();
+        assert!(result.is_invariant);
+        assert_eq!(result.loops_analyzed, 1);
+        assert!(result.non_trivial_loops.is_empty());
+        assert!(
+            result.max_deviation.abs() < 1e-12,
+            "expected 0.0, got {}",
+            result.max_deviation
+        );
+        assert!(evolution.is_causally_invariant());
+    }
+
+    /// `{{0,1},{1,2},{2,3},{3,4}}` under `collapse` to depth 4: 6 of its 18
+    /// loops reach a shared state through non-isomorphic causal graphs.
+    #[test]
+    fn non_confluent_fixture_separates_branch_causal_graphs() {
+        let initial = Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2], vec![2, 3], vec![3, 4]]);
+        let evolution =
+            HypergraphEvolution::run_multiway(&initial, &[RewriteRule::collapse()], 4, 200);
+
+        let stats = evolution.statistics();
+        assert_eq!(stats.total_nodes, 16);
+        assert_eq!(stats.max_step, 3);
+        assert_eq!(stats.branch_count, 6);
+        assert_eq!(stats.merge_count, 4);
+        assert_eq!(stats.rule_applications, vec![15]);
+        assert_eq!(evolution.find_merges().len(), 4);
+
+        let loops = evolution.find_wilson_loops();
+        assert_eq!(loops.len(), 18, "18 isomorphic-state pairs");
+
+        let separating = loops.iter().filter(|l| l.holonomy < 1.0).count();
+        let closing = loops
+            .iter()
+            .filter(|l| (l.holonomy - 1.0).abs() < 1e-12)
+            .count();
+        let zero = loops.iter().filter(|l| l.holonomy.abs() < 1e-12).count();
+        assert_eq!(
+            (separating, closing, zero),
+            (6, 12, 6),
+            "expected (6 separating, 12 closing, 6 exactly zero); holonomies {:?}",
+            loops.iter().map(|l| l.holonomy).collect::<Vec<_>>()
+        );
+
+        for wilson in &loops {
+            assert_eq!(
+                wilson.path.first(),
+                Some(&wilson.base),
+                "loop opens at its base"
+            );
+            assert_eq!(
+                wilson.path.last(),
+                Some(&wilson.base),
+                "loop closes at its base"
+            );
+        }
+
+        let result = evolution.analyze_causal_invariance();
+        assert!(
+            !result.is_invariant,
+            "6 separating loops must sink the witness"
+        );
+        assert!(!evolution.is_causally_invariant());
+        assert_eq!(result.loops_analyzed, 18);
+        assert_eq!(result.non_trivial_loops.len(), 6);
+        assert!(
+            (result.max_deviation - 1.0).abs() < 1e-12,
+            "expected 1.0, got {}",
+            result.max_deviation
+        );
+        assert!(
+            (result.average_deviation - 6.0 / 18.0).abs() < 1e-12,
+            "expected 6/18, got {}",
+            result.average_deviation
+        );
     }
 
     #[test]

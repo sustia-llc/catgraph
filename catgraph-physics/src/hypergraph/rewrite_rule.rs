@@ -375,18 +375,44 @@ impl RewriteRule {
     ///
     /// # Panics
     ///
-    /// Panics if a pattern variable in the right-hand side is not in the variable map.
+    /// Panics if a pattern variable in the right-hand side is not in
+    /// `match_.variable_map` and is not one of the rule's created variables.
     pub fn apply(
         &self,
         graph: &mut Hypergraph,
         match_: &RewriteMatch,
         next_vertex_id: &mut usize,
     ) -> HashMap<usize, usize> {
+        self.apply_effect(graph, match_, next_vertex_id)
+            .new_vertices
+    }
+
+    /// Applies this rule to a hypergraph at the given match, reporting which
+    /// host-graph edge slots it removed and appended.
+    ///
+    /// Created variables are assigned vertex IDs in ascending variable order.
+    ///
+    /// # Arguments
+    ///
+    /// * `graph` - The hypergraph to rewrite (will be modified)
+    /// * `match_` - A valid match from `find_matches`
+    /// * `next_vertex_id` - Counter for generating new vertex IDs
+    ///
+    /// # Panics
+    ///
+    /// Panics if a pattern variable in the right-hand side is not in
+    /// `match_.variable_map` and is not one of the rule's created variables.
+    pub fn apply_effect(
+        &self,
+        graph: &mut Hypergraph,
+        match_: &RewriteMatch,
+        next_vertex_id: &mut usize,
+    ) -> RewriteEffect {
         // Remove matched edges (in reverse order to preserve indices)
-        let mut to_remove = match_.matched_edges.clone();
-        to_remove.sort_unstable();
-        to_remove.reverse();
-        for edge_idx in to_remove {
+        let mut removed_edges = match_.matched_edges.clone();
+        removed_edges.sort_unstable();
+        removed_edges.reverse();
+        for &edge_idx in &removed_edges {
             graph.remove_edge(edge_idx);
         }
 
@@ -394,34 +420,64 @@ impl RewriteRule {
         let mut full_map = match_.variable_map.clone();
 
         // Assign IDs to new variables
-        let created = self.created_variables();
-        let mut new_vars = HashMap::new();
+        let mut created = self.created_variables();
+        created.sort_unstable();
+        let mut new_vertices = HashMap::new();
         for var in created {
             let id = *next_vertex_id;
             *next_vertex_id += 1;
             full_map.insert(var, id);
-            new_vars.insert(var, id);
+            new_vertices.insert(var, id);
         }
 
         // Add right-hand side edges with mapped vertices
+        let mut added_edges = Vec::with_capacity(self.right.len());
         for pattern_edge in &self.right {
             let actual_vertices: Vec<_> = pattern_edge
                 .vertices()
                 .iter()
-                .map(|&pv| *full_map.get(&pv).unwrap())
+                .map(|&pv| {
+                    *full_map.get(&pv).expect(
+                        "invariant: every right-hand-side variable is matched or newly created",
+                    )
+                })
                 .collect();
-            graph.add_hyperedge(actual_vertices);
+            added_edges.push(graph.add_hyperedge(actual_vertices));
         }
 
-        new_vars
+        RewriteEffect {
+            removed_edges,
+            added_edges,
+            new_vertices,
+        }
     }
+}
+
+/// The host-graph edge slots one [`RewriteRule::apply_effect`] call touched.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RewriteEffect {
+    /// Indices of the removed left-hand-side edges, in the order removed
+    /// (descending).
+    pub removed_edges: Vec<usize>,
+
+    /// Indices of the appended right-hand-side edges, in right-hand-side order
+    /// (ascending).
+    pub added_edges: Vec<usize>,
+
+    /// Vertex IDs assigned to the rule's created variables.
+    pub new_vertices: HashMap<usize, usize>,
 }
 
 /// A match of a rewrite rule's left-hand side in a host hypergraph.
 ///
-/// Contains the mapping from pattern variables to actual vertex IDs
-/// and the indices of matched hyperedges. Produced by
-/// [`RewriteRule::find_matches`] and consumed by [`RewriteRule::apply`].
+/// Produced by [`RewriteRule::find_matches`] and consumed by
+/// [`RewriteRule::apply`] / [`RewriteRule::apply_effect`].
+///
+/// `matched_edges` holds positional indices into the edge list of the graph
+/// that `find_matches` was called on, valid against that graph's edge list
+/// only; rewriting shifts them. Identity that survives rewrites is
+/// [`EdgeId`](super::causal_graph::EdgeId), carried by
+/// [`HypergraphEvolution`](super::evolution::HypergraphEvolution).
 #[derive(Debug, Clone)]
 pub struct RewriteMatch {
     /// Mapping from pattern variables to actual vertex IDs.
@@ -590,6 +646,85 @@ mod tests {
 
         assert_eq!(graph.edge_count(), 2);
         assert_eq!(new_vars.len(), 1); // One new vertex created
+    }
+
+    /// `apply_effect` on a 3-edge path under `collapse` (two edges removed,
+    /// one appended, no created variable) and on a 1-edge graph under
+    /// `edge_split` (one removed, two appended, one created variable).
+    #[test]
+    fn apply_effect_reports_the_slots_it_touched() {
+        let mut graph = Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2], vec![2, 3]]);
+        let rule = RewriteRule::collapse();
+        let matches = rule.find_matches(&graph);
+        assert_eq!(matches.len(), 2, "(0,1)+(1,2) and (1,2)+(2,3)");
+        assert_eq!(matches[0].matched_edges, vec![0, 1]);
+
+        let mut next_id = 4;
+        let effect = rule.apply_effect(&mut graph, &matches[0], &mut next_id);
+        assert_eq!(
+            effect.removed_edges,
+            vec![1, 0],
+            "removal runs descending so each index stays valid"
+        );
+        assert_eq!(
+            effect.added_edges,
+            vec![1],
+            "one RHS edge appended after the two removals left {{2,3}} at slot 0"
+        );
+        assert!(
+            effect.new_vertices.is_empty(),
+            "collapse creates no variable; got {:?}",
+            effect.new_vertices
+        );
+        assert_eq!(next_id, 4, "no vertex minted");
+        assert_eq!(graph.edge_count(), 2);
+        assert_eq!(
+            graph.get_edge(1).map(Hyperedge::vertices),
+            Some([0, 2].as_slice())
+        );
+
+        let mut split_graph = Hypergraph::from_edges(vec![vec![0, 1]]);
+        let split = RewriteRule::edge_split();
+        let split_matches = split.find_matches(&split_graph);
+        let mut split_next = 2;
+        let split_effect = split.apply_effect(&mut split_graph, &split_matches[0], &mut split_next);
+        assert_eq!(split_effect.removed_edges, vec![0]);
+        assert_eq!(split_effect.added_edges, vec![0, 1]);
+        assert_eq!(split_effect.new_vertices.get(&2), Some(&2));
+        assert_eq!(split_effect.new_vertices.len(), 1);
+
+        // Two created variables: IDs go out in ascending variable order.
+        let mut chain_graph = Hypergraph::from_edges(vec![vec![0, 1]]);
+        let chain =
+            RewriteRule::from_pattern(vec![vec![0, 1]], vec![vec![0, 2], vec![2, 3], vec![3, 1]]);
+        let chain_matches = chain.find_matches(&chain_graph);
+        let mut chain_next = 7;
+        let chain_effect = chain.apply_effect(&mut chain_graph, &chain_matches[0], &mut chain_next);
+        assert_eq!(chain_effect.added_edges, vec![0, 1, 2]);
+        assert_eq!(
+            (
+                chain_effect.new_vertices.get(&2),
+                chain_effect.new_vertices.get(&3)
+            ),
+            (Some(&7), Some(&8)),
+            "variable 2 takes the lower ID; got {:?}",
+            chain_effect.new_vertices
+        );
+        assert_eq!(chain_next, 9);
+        assert_eq!(
+            chain_graph.get_edge(1).map(Hyperedge::vertices),
+            Some([7, 8].as_slice())
+        );
+        assert_eq!(split_next, 3);
+        assert_eq!(
+            split.apply(
+                &mut Hypergraph::from_edges(vec![vec![0, 1]]),
+                &split_matches[0],
+                &mut 2
+            ),
+            split_effect.new_vertices,
+            "apply returns apply_effect's new_vertices"
+        );
     }
 
     #[test]
