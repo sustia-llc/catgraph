@@ -7,7 +7,7 @@
 //! equation is justified by multiple papers, the primary citation is chosen
 //! per the "paper coverage matrix" in `docs/SMC-NF-RECONCILIATION.md` (§3 step table).
 
-use catgraph_applied::prop::presentation::smc_nf::{Atom, StringDiagram, nf};
+use catgraph_applied::prop::presentation::smc_nf::{Atom, Layer, StringDiagram, nf};
 use catgraph_applied::prop::{PropExpr, PropSignature, mono_word};
 use std::borrow::Cow;
 
@@ -684,6 +684,96 @@ mod review_soundness_fixes {
             nf(&Tensor(b(closed()), b(solids()))),
             out,
             "the closed block sorts leftmost from either writing"
+        );
+    }
+
+    /// Step 7's `blocks_are_adjacent` reads every layer holding both components,
+    /// and in each of them `adjacent_runs` requires the left block's run to end
+    /// exactly where the right block's run begins.
+    ///
+    /// The fixture is a `3 → 1` diagram in four layers:
+    ///
+    ///     [id₁, σ      ]
+    ///     [F,   G, G, η]
+    ///     [G,   ε, ε, F]
+    ///     [id₁, ε      ]
+    ///
+    /// The first input wire carries the solid chain `F;G`; the other two are
+    /// crossed by `σ` and consumed by the `G,G;ε,ε` block, whose braid keeps it
+    /// out of every Step 7 pair; `η;F;ε` is closed. The solid chain and the
+    /// closed block are adjacent in the last layer and separated by the braid
+    /// block's two atoms in each of the middle two. Every other Step 7 guard
+    /// passes on that pair: dropping the `b1 == a2` test from `adjacent_runs`
+    /// rotates it across the gap, returning — under `--release`, where
+    /// `reorder_component_blocks`' debug assertion is compiled out —
+    /// `[G, G, η, F]`, `[ε, ε, F, G]` and `[ε, id₁]` for the last three layers.
+    ///
+    /// Paper anchor: JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) with JS-I Ch 2
+    /// §1 axiom (S) p. 73 in its `σ_{0,n} = id` form — Step 7's own two laws,
+    /// which license a block transposition where the two blocks sit side by side.
+    #[test]
+    fn block_transposition_needs_adjacency_in_every_shared_layer() {
+        use super::{Atom, Layer, StringDiagram};
+
+        fn row(atoms: Vec<PropExpr<TestSig>>) -> PropExpr<TestSig> {
+            let mut it = atoms.into_iter().rev();
+            let last = it.next().expect("non-empty layer");
+            it.fold(last, |acc, x| Tensor(b(x), b(acc)))
+        }
+        fn stack(rows: Vec<PropExpr<TestSig>>) -> PropExpr<TestSig> {
+            let mut it = rows.into_iter();
+            let first = it.next().expect("non-empty stack");
+            it.fold(first, |acc, r| Compose(b(acc), b(r)))
+        }
+        let expr = stack(vec![
+            row(vec![Identity(1), Braid(1, 1)]),
+            row(vec![
+                Generator(TestSig::F),
+                Generator(TestSig::G),
+                Generator(TestSig::G),
+                Generator(TestSig::Eta),
+            ]),
+            row(vec![
+                Generator(TestSig::G),
+                Generator(TestSig::Eps),
+                Generator(TestSig::Eps),
+                Generator(TestSig::F),
+            ]),
+            row(vec![Identity(1), Generator(TestSig::Eps)]),
+        ]);
+
+        let expected = StringDiagram {
+            layers: vec![
+                Layer {
+                    atoms: vec![Atom::Identity(1), Atom::Braid(1, 1)],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(TestSig::F),
+                        Atom::Generator(TestSig::G),
+                        Atom::Generator(TestSig::G),
+                        Atom::Generator(TestSig::Eta),
+                    ],
+                },
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(TestSig::G),
+                        Atom::Generator(TestSig::Eps),
+                        Atom::Generator(TestSig::Eps),
+                        Atom::Generator(TestSig::F),
+                    ],
+                },
+                Layer {
+                    atoms: vec![Atom::Identity(1), Atom::Generator(TestSig::Eps)],
+                },
+            ],
+        };
+
+        assert_eq!(
+            nf(&expr),
+            expected,
+            "the free pair straddles the braid block's atoms in the two middle \
+             layers, so Step 7 leaves it where it is"
         );
     }
 }
