@@ -453,8 +453,7 @@ mod tests {
     /// Each twin is named for the carrier it mirrors, because a derived
     /// `Debug` prints the type's own name. Each is **generic in its payload**,
     /// so the same shapes can be built over a `f64` — the payload whose own
-    /// `Debug` honours `precision` and `width`, and so the only one that can
-    /// tell whether the renderer carried the caller's format spec down.
+    /// `Debug` honours `precision` as well as `width`.
     mod mirror {
         // Every field here is read by the derived `Debug` and nothing else,
         // which dead-code analysis deliberately does not count.
@@ -663,12 +662,13 @@ mod tests {
             // Anti-vacuity, fixture side — the twin is a derive, so the
             // renderer cannot satisfy this: a fixture whose payloads all
             // ignore width makes the width-only assertions below vacuous.
-            // Per fixture: one width-honouring slot of a two-slot fixture
-            // satisfies it.
+            // Per fixture: a single width-honouring payload — a two-slot
+            // fixture's lone terminator counts — satisfies it.
             assert_ne!(
                 format!("{twin:12?}"),
                 format!("{twin:?}"),
-                "{what}: twin {{:12?}} rendered identically to {{:?}}"
+                "`{}`: twin {{:12?}} rendered identically to {{:?}}",
+                stringify!($twin)
             );
             assert_eq!(format!("{live:?}"), format!("{twin:?}"), "{what} {{:?}}");
             assert_eq!(format!("{live:#?}"), format!("{twin:#?}"), "{what} {{:#?}}");
@@ -743,7 +743,8 @@ mod tests {
     /// `{:?}` — fixture side, since the renderer cannot touch a derive: the
     /// precision-bearing twin assertions on an `f64` fixture hold vacuously
     /// once the fixture's payloads all stop showing precision. Per fixture:
-    /// one precision-honouring slot of a two-slot fixture satisfies it.
+    /// a single precision-honouring payload — a two-slot fixture's lone
+    /// terminator counts — satisfies it.
     macro_rules! assert_precision_visible {
         ($twin:expr) => {{
             let twin = &$twin;
