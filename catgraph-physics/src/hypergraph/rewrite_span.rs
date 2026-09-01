@@ -462,9 +462,9 @@ mod tests {
         );
 
         let stray_left = RewriteSpan {
-            left: left.clone(),
-            kernel: two_vertex_kernel.clone(),
-            right: right.clone(),
+            left,
+            kernel: two_vertex_kernel,
+            right,
             left_map: HashMap::from([(0, 0), (1, 9)]),
             right_map: HashMap::from([(0, 0), (1, 1)]),
         };
@@ -478,40 +478,46 @@ mod tests {
             "9 is not a vertex of L = {{0,1}}"
         );
 
+        let wide = Hypergraph::from_edges(vec![vec![3, 5, 7]]);
+        let mut spread_kernel = Hypergraph::new();
+        for v in [3, 5] {
+            spread_kernel.add_vertex(Some(v));
+        }
+
         let collide_left = RewriteSpan {
-            left: left.clone(),
-            kernel: two_vertex_kernel.clone(),
-            right: right.clone(),
-            left_map: HashMap::from([(0, 0), (1, 0)]),
-            right_map: HashMap::from([(0, 0), (1, 1)]),
+            left: wide.clone(),
+            kernel: spread_kernel.clone(),
+            right: wide.clone(),
+            left_map: HashMap::from([(3, 7), (5, 7)]),
+            right_map: HashMap::from([(3, 3), (5, 5)]),
         };
         assert_eq!(
             collide_left.to_span().err(),
             Some(RewriteSpanError::NonInjectiveMap {
-                vertex_a: 0,
-                vertex_b: 1,
-                image: 0,
+                vertex_a: 3,
+                vertex_b: 5,
+                image: 7,
                 side: SpanSide::Left,
             }),
-            "kernel vertices 0 and 1 share left image 0; pairing both would repeat (0, _)"
+            "kernel vertices 3 and 5 share left image 7, at left index 2; pairing both would repeat (2, _)"
         );
 
         let collide_right = RewriteSpan {
-            left,
-            kernel: two_vertex_kernel,
-            right,
-            left_map: HashMap::from([(0, 0), (1, 1)]),
-            right_map: HashMap::from([(0, 0), (1, 0)]),
+            left: wide.clone(),
+            kernel: spread_kernel,
+            right: wide,
+            left_map: HashMap::from([(3, 3), (5, 5)]),
+            right_map: HashMap::from([(3, 7), (5, 7)]),
         };
         assert_eq!(
             collide_right.to_span().err(),
             Some(RewriteSpanError::NonInjectiveMap {
-                vertex_a: 0,
-                vertex_b: 1,
-                image: 0,
+                vertex_a: 3,
+                vertex_b: 5,
+                image: 7,
                 side: SpanSide::Right,
             }),
-            "kernel vertices 0 and 1 share right image 0; pairing both would repeat (_, 0)"
+            "kernel vertices 3 and 5 share right image 7, at right index 2; pairing both would repeat (_, 2)"
         );
     }
 }

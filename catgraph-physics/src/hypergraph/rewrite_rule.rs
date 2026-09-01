@@ -925,40 +925,46 @@ mod tests {
             "9 is not a vertex of L = {{0,1}}"
         );
 
+        let wide = Hypergraph::from_edges(vec![vec![3, 5, 7]]);
+        let mut spread_kernel = Hypergraph::new();
+        for v in [3, 5] {
+            spread_kernel.add_vertex(Some(v));
+        }
+
         let collide_left = RewriteSpan::try_new(
-            left.clone(),
-            two_vertex_kernel.clone(),
-            right.clone(),
-            HashMap::from([(0, 0), (1, 0)]),
-            HashMap::from([(0, 0), (1, 1)]),
+            wide.clone(),
+            spread_kernel.clone(),
+            wide.clone(),
+            HashMap::from([(3, 7), (5, 7)]),
+            HashMap::from([(3, 3), (5, 5)]),
         );
         assert_eq!(
             collide_left.err(),
             Some(RewriteSpanError::NonInjectiveMap {
-                vertex_a: 0,
-                vertex_b: 1,
-                image: 0,
+                vertex_a: 3,
+                vertex_b: 5,
+                image: 7,
                 side: SpanSide::Left,
             }),
-            "kernel vertices 0 and 1 share left image 0"
+            "kernel vertices 3 and 5 share left image 7"
         );
 
         let collide_right = RewriteSpan::try_new(
-            left.clone(),
-            two_vertex_kernel.clone(),
-            right.clone(),
-            HashMap::from([(0, 0), (1, 1)]),
-            HashMap::from([(0, 0), (1, 0)]),
+            wide.clone(),
+            spread_kernel,
+            wide,
+            HashMap::from([(3, 3), (5, 5)]),
+            HashMap::from([(3, 7), (5, 7)]),
         );
         assert_eq!(
             collide_right.err(),
             Some(RewriteSpanError::NonInjectiveMap {
-                vertex_a: 0,
-                vertex_b: 1,
-                image: 0,
+                vertex_a: 3,
+                vertex_b: 5,
+                image: 7,
                 side: SpanSide::Right,
             }),
-            "kernel vertices 0 and 1 share right image 0"
+            "kernel vertices 3 and 5 share right image 7"
         );
 
         assert!(
