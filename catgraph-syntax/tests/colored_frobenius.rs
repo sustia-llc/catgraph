@@ -148,9 +148,7 @@ fn both_functors_agree_on_the_nine_axioms_at_each_colour() {
     let f = CospanFunctor::new();
     for c in [Hue::A, Hue::B] {
         // At the mixed boundary [c, other] the braid shuffles those two
-        // dimensions in that order — braiding(2, 3) at A, braiding(3, 2) at B —
-        // so a colour-order-blind `to_mat_kron` (swapping the pair) is caught
-        // here and nowhere else in the suite.
+        // dimensions in that order — braiding(2, 3) at A, braiding(3, 2) at B.
         let other = if c == Hue::A { Hue::B } else { Hue::A };
         let braid: Term = Free::<FrobeniusOr<ColoredSig>>::braid(1, 1);
         assert_eq!(
