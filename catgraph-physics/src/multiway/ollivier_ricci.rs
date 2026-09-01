@@ -17,12 +17,8 @@
 //! - **κ < 0**: Neighbors spread apart further than x, y (saddle-like).
 
 use std::collections::HashMap;
-use std::hash::Hash;
-
-// Only the fallback sweep below needs a queue; with `rustworkx` on, the
-// all-pairs pass is rustworkx-core's bitset-frontier BFS.
-#[cfg(not(feature = "rustworkx"))]
 use std::collections::VecDeque;
+use std::hash::Hash;
 
 use super::branchial::BranchialGraph;
 use super::curvature::{CurvatureFoliation, DiscreteCurvature};
@@ -286,8 +282,8 @@ impl OllivierFoliation {
 
 /// All-pairs unweighted hop distances, `f64::INFINITY` when unreachable;
 /// the `rustworkx`-off stand-in for `branchial_analysis::branchial_distance_matrix`.
-#[cfg(not(feature = "rustworkx"))]
-fn all_pairs_bfs(adj: &[Vec<usize>], n: usize) -> Vec<Vec<f64>> {
+#[cfg_attr(feature = "rustworkx", allow(dead_code))]
+pub(crate) fn all_pairs_bfs(adj: &[Vec<usize>], n: usize) -> Vec<Vec<f64>> {
     let mut dist = vec![vec![f64::INFINITY; n]; n];
 
     for (source, row) in dist.iter_mut().enumerate().take(n) {
@@ -382,6 +378,7 @@ mod tests {
     use super::*;
 
     use super::super::evolution_graph::BranchId;
+    use super::super::test_topologies::{adjacency, topology_fixture};
 
     fn make_id(branch: usize, step: usize) -> MultiwayNodeId {
         MultiwayNodeId::new(BranchId(branch), step)
@@ -585,6 +582,98 @@ mod tests {
                 curv.irreducibility_indicator() >= 0.0,
                 "Graph {i}: indicator should be >= 0, got {}",
                 curv.irreducibility_indicator()
+            );
+        }
+    }
+
+    /// Scalar curvature of the [`topology_fixture`] indices pinned below.
+    const PINNED_FIXTURE_SCALARS: [(usize, f64); 5] = [
+        (0, -0.201_898_148_148_148_13),
+        (3, -0.155_555_555_555_555_5),
+        (4, 0.0),
+        (5, -0.377_777_777_777_777_6),
+        (6, -0.092_592_592_592_592_6),
+    ];
+
+    /// Shape, range, and scalar-curvature pins for [`topology_fixture`]
+    /// indices 0, 3, 4, 5 and 6, on every feature lane.
+    #[test]
+    fn topology_fixtures_have_pinned_curvature() {
+        for (i, want_scalar) in PINNED_FIXTURE_SCALARS {
+            let bg = topology_fixture(i);
+            let n = bg.nodes.len();
+            let curv = OllivierRicciCurvature::from_branchial(&bg);
+
+            assert_eq!(curv.dimension(), n, "fixture {i}: dimension");
+            assert_eq!(
+                curv.vertex_curvatures.len(),
+                n,
+                "fixture {i}: vertex curvature count"
+            );
+
+            // Distinct unordered edges whose endpoints are at a finite,
+            // non-zero hop distance — exactly the set `from_branchial` scores.
+            let dist = all_pairs_bfs(&adjacency(&bg), n);
+            let idx_of: HashMap<MultiwayNodeId, usize> = bg
+                .nodes
+                .iter()
+                .enumerate()
+                .map(|(k, &node)| (node, k))
+                .collect();
+            let mut scored: Vec<(usize, usize)> = bg
+                .edges
+                .iter()
+                .filter_map(|&(a, b)| {
+                    let ia = *idx_of.get(&a)?;
+                    let ib = *idx_of.get(&b)?;
+                    let (u, v) = if ia < ib { (ia, ib) } else { (ib, ia) };
+                    let d = dist[u][v];
+                    (d.is_finite() && d != 0.0).then_some((u, v))
+                })
+                .collect();
+            scored.sort_unstable();
+            scored.dedup();
+            assert_eq!(
+                curv.edge_curvatures.len(),
+                scored.len(),
+                "fixture {i}: edge curvature count"
+            );
+
+            for &((u, v), kappa) in &curv.edge_curvatures {
+                assert!(
+                    kappa.is_finite() && (-2.0..=1.0).contains(&kappa),
+                    "fixture {i}: edge ({u},{v}) curvature {kappa} outside [-2, 1]"
+                );
+            }
+            for (v, &kappa) in curv.vertex_curvatures.iter().enumerate() {
+                assert!(
+                    kappa.is_finite() && (-2.0..=1.0).contains(&kappa),
+                    "fixture {i}: vertex {v} curvature {kappa} outside [-2, 1]"
+                );
+            }
+
+            let got = curv.scalar_curvature();
+            assert!(
+                (got - want_scalar).abs() < 1e-12,
+                "fixture {i}: scalar curvature {got}, pinned {want_scalar}"
+            );
+        }
+    }
+
+    /// The `rustworkx` all-pairs pass and the queue BFS agree bit-for-bit on
+    /// every seeded topology fixture.
+    #[cfg(feature = "rustworkx")]
+    #[test]
+    fn distance_matrix_matches_queue_bfs_on_topology_fixtures() {
+        use super::super::test_topologies::TOPOLOGY_FIXTURE_COUNT;
+
+        for i in 0..TOPOLOGY_FIXTURE_COUNT {
+            let bg = topology_fixture(i);
+            let n = bg.nodes.len();
+            assert_eq!(
+                super::super::branchial_analysis::branchial_distance_matrix(&bg),
+                all_pairs_bfs(&adjacency(&bg), n),
+                "fixture {i}: rustworkx distance matrix differs from the queue BFS"
             );
         }
     }

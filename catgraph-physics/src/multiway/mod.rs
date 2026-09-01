@@ -24,6 +24,9 @@ pub mod branchial_spectrum;
 pub mod curvature;
 pub mod evolution_graph;
 pub mod ollivier_ricci;
+/// Seeded branchial topology fixtures shared by the `multiway` unit tests.
+#[cfg(test)]
+pub(crate) mod test_topologies;
 pub mod wasserstein;
 
 pub use branchial::{
