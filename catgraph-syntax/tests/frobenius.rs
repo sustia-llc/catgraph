@@ -1,8 +1,9 @@
 //! Frobenius-layer tests (Phase S4, F&S 2019 *Hypergraph Categories*).
 //!
 //! Covers the S4 milestone law — the Hadamard SCFM on `R^dim` satisfies all
-//! **nine** Def 2.5 equations (`to_mat_kron` semantic check, Ex 2.16), each
-//! equation's own `MatKron` image and concrete syntax — the #15
+//! **nine** Def 2.5 equations (`to_mat_kron` semantic check, Ex 2.16); each
+//! equation's `d=2` `MatKron` image (shared across the slots the paper's
+//! algebra makes coincide) plus its own concrete syntax — the #15
 //! boundary (each `E_frob` axiom is provable by its own presentation), the spider
 //! calculus (fusion, diagonal pattern, the `η;ε` empty spider, cup/cap parity
 //! with `MatKron`, the compact-closed snake), the braid shuffle direction, the
@@ -55,15 +56,16 @@ fn scfm_nine_laws_hold_in_hadamard_matkron() {
     }
 }
 
+/// `(name, image at d = 2, lhs, rhs)`.
+type ScfmGolden = (&'static str, Vec<Vec<i64>>, &'static str, &'static str);
+
 /// Per-axiom goldens for `scfm_equations`, in the order the function returns
-/// them (the rustdoc's numbered list): `(name, image at d = 2, lhs, rhs)`.
+/// them (the rustdoc's numbered list).
 ///
 /// The image is the matrix **both** sides map to — that equality is the law —
 /// so it fixes each slot only up to semantic equality. Slots 2, 5 and 9 share
 /// `identity(2)` and slots 7 and 8 share the `μ ; δ` spider, as the table shows;
 /// the two concrete syntaxes fix the terms themselves.
-type ScfmGolden = (&'static str, Vec<Vec<i64>>, &'static str, &'static str);
-
 fn scfm_goldens() -> [ScfmGolden; 9] {
     [
         (
@@ -132,6 +134,7 @@ fn scfm_goldens() -> [ScfmGolden; 9] {
         ),
         (
             "Frobenius-R",
+            // c² → c²: the same (2,2) spider as Frobenius-L — both equal μ ; δ.
             vec![
                 vec![1, 0, 0, 0],
                 vec![0, 0, 0, 0],
@@ -155,7 +158,11 @@ fn scfm_goldens() -> [ScfmGolden; 9] {
 fn each_scfm_equation_matches_its_own_golden() {
     let laws = scfm_equations::<Sig>(());
     let goldens = scfm_goldens();
-    assert_eq!(laws.len(), goldens.len());
+    assert_eq!(
+        laws.len(),
+        goldens.len(),
+        "Def 2.5 has nine equations (Ex 2.8)"
+    );
     for (i, ((lhs, rhs), (name, image, lhs_text, rhs_text))) in
         laws.iter().zip(goldens.iter()).enumerate()
     {

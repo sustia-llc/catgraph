@@ -141,12 +141,24 @@ fn hypergraph_presentation_seeds_nine_per_palette_colour() {
 }
 
 #[test]
-fn both_functors_decide_the_nine_axioms_at_each_colour() {
+fn both_functors_agree_on_the_nine_axioms_at_each_colour() {
     // The sound semantic checker (`to_mat_kron`, at that colour's own dimension —
-    // 2 at A, 3 at B) and the complete decision functor (`CospanFunctor`) return
-    // the same verdict on every Def 2.5 equation at every palette colour.
+    // 2 at A, 3 at B) and the complete decision functor (`CospanFunctor`) agree
+    // on every Def 2.5 equation at every palette colour.
     let f = CospanFunctor::new();
     for c in [Hue::A, Hue::B] {
+        // At the mixed boundary [c, other] the braid shuffles those two
+        // dimensions in that order — braiding(2, 3) at A, braiding(3, 2) at B —
+        // so a colour-order-blind `to_mat_kron` (swapping the pair) is caught
+        // here and nowhere else in the suite.
+        let other = if c == Hue::A { Hue::B } else { Hue::A };
+        let braid: Term = Free::<FrobeniusOr<ColoredSig>>::braid(1, 1);
+        assert_eq!(
+            mk(&braid, &[c, other]).expect("braids are colour-polymorphic"),
+            MatKron::<i64>::braiding(hue_dim(&c), hue_dim(&other)),
+            "braid at [{c:?}, {other:?}]"
+        );
+
         for (i, (lhs, rhs)) in scfm_equations::<ColoredSig>(c).into_iter().enumerate() {
             let n = i + 1;
             let word = vec![c; lhs.source()];
