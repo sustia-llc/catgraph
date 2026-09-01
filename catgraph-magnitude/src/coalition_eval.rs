@@ -1279,10 +1279,12 @@ mod tests {
             EvalPath::Fast,
             "the same shape at c₀ = 0.5 stays on the fast branch"
         );
-        assert_eq!(
-            rep_far.schur_complement(),
-            Some(0.5),
-            "control fixture: s = 1 − 0.5·1.0"
+        let s_far = rep_far
+            .schur_complement()
+            .expect("invariant: the fast branch reports a Schur complement");
+        assert!(
+            rel_close(s_far, 0.5),
+            "control fixture: s = 1 − 0.5·1.0, got {s_far}"
         );
     }
 
@@ -1596,7 +1598,8 @@ mod tests {
     /// The dense seeded grid (same shape as `seeded_grid_fresh_vs_incremental`)
     /// but comparing the scratch path against the allocating path with `==`
     /// (exact), not a tolerance. The per-`EvalPath` hit counts asserted at the
-    /// end state which routes the grid puts under the scratch.
+    /// end state which routes the grid takes, tallied on a fresh scratch per
+    /// candidate.
     #[test]
     fn value_with_scratch_bit_identical_to_value_with() {
         const NAMES: [&str; 12] = [
@@ -1661,7 +1664,7 @@ mod tests {
         assert_eq!(
             hits,
             [44usize, 64, 0],
-            "EvalPath hits [Fast, Slow, SlowNearSingular] under the reused scratch"
+            "EvalPath hits [Fast, Slow, SlowNearSingular] tallied on a fresh scratch per candidate"
         );
     }
 

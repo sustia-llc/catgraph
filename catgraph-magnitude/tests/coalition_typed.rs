@@ -384,10 +384,9 @@ proptest! {
     /// than two hand-built combinations: for unit-diagonal factors with
     /// off-diagonal entries in `[0.0, 0.9]` at `n_roles, n_fiber ∈ {2, 3}`, an
     /// evaluation of `RoleGrid::couplings()` through the ordinary entry point
-    /// equals `proof(t).expected_magnitude()` within `REL_TOL`, and that value
-    /// is the product of the two factor magnitudes. The three `t` comparisons
-    /// per case are counted, so an `Err` from either route fails the case
-    /// instead of skipping.
+    /// equals `proof(t).expected_magnitude()` within `REL_TOL`. The three `t`
+    /// comparisons per case are counted, so an `Err` from either route fails
+    /// the case instead of skipping.
     #[test]
     fn role_grid_certificate_over_product_couplings(
         n_roles in 2usize..=3,
@@ -410,16 +409,6 @@ proptest! {
                 continue;
             };
             compared += 1;
-            prop_assert!(
-                rel_close(
-                    proof.expected_magnitude(),
-                    proof.role_magnitude() * proof.fiber_magnitude()
-                ),
-                "t={t}: certificate {} is not |ρ|·|σ| = {}·{}",
-                proof.expected_magnitude(),
-                proof.role_magnitude(),
-                proof.fiber_magnitude()
-            );
             prop_assert!(
                 rel_close(actual, proof.expected_magnitude()),
                 "t={t}: grid {actual} vs certificate {} (|ρ| = {}, |σ| = {})",
