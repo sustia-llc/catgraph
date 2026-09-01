@@ -426,10 +426,8 @@ impl<const D: usize> HypergraphLattice<D> {
         holonomy
     }
 
-    /// Checks if the system is causally invariant.
-    ///
-    /// Causal invariance holds when all Wilson loops have holonomy = 1.0,
-    /// meaning that all paths to the same state give identical results.
+    /// Reports whether `path`'s Wilson loop has holonomy within `1e-6` of
+    /// `1.0`.
     ///
     /// # Arguments
     ///
@@ -558,7 +556,8 @@ impl<const D: usize> HypergraphLattice<D> {
         sum / self.wilson_loops.len() as f64
     }
 
-    /// Checks if all Wilson loops have perfect causal invariance.
+    /// Reports whether every stored Wilson loop's holonomy is within `1e-6` of
+    /// `1.0`.
     #[must_use]
     pub fn is_globally_causally_invariant(&self) -> bool {
         self.wilson_loops

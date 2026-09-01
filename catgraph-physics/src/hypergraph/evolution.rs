@@ -78,7 +78,8 @@ pub struct WilsonLoop {
     pub base: usize,
 
     /// `1.0` when the two branches induce isomorphic causal graphs, `0.0`
-    /// otherwise.
+    /// otherwise — including when either branch has no causal graph and when
+    /// the isomorphism search reaches its step budget.
     pub holonomy: f64,
 
     /// Length of the loop.
@@ -547,11 +548,13 @@ impl HypergraphEvolution {
     /// Reports whether any explored pair of isomorphic-state nodes separates
     /// the causal graphs of the two branches reaching them.
     ///
-    /// `is_invariant` is true when no pair in the explored fragment separates
-    /// them. \[Gor20a\] states causal invariance over the whole multiway
-    /// system, which no finite exploration decides, and makes confluence a
-    /// necessary condition for it; this is the confluence witness over the
-    /// fragment `run` / `run_multiway` explored, not a verdict on the system.
+    /// `is_invariant` is true when every such pair's two branch causal graphs
+    /// compare isomorphic; a comparison that reaches
+    /// [`CausalGraph::MAX_SEARCH_STEPS`] counts as separating.
+    /// \[Gor20a\] states causal invariance over the whole multiway system,
+    /// which no finite exploration decides; this ranges over the
+    /// isomorphic-state pairs `run` / `run_multiway` reached, and a fragment
+    /// holding no such pair is true.
     #[must_use]
     #[allow(clippy::cast_precision_loss)]
     pub fn analyze_causal_invariance(&self) -> CausalInvarianceResult {
@@ -585,10 +588,11 @@ impl HypergraphEvolution {
     }
 
     /// Returns [`analyze_causal_invariance`](Self::analyze_causal_invariance)'s
-    /// `is_invariant`: true when no explored pair of isomorphic-state nodes
-    /// separates its two branches' causal graphs.
+    /// `is_invariant`: true when every explored pair of isomorphic-state nodes
+    /// has isomorphic branch causal graphs, a comparison reaching
+    /// [`CausalGraph::MAX_SEARCH_STEPS`] counting as separating.
     ///
-    /// A witness over the explored fragment, not a verdict of causal
+    /// A reading of the explored fragment, not a verdict of causal
     /// invariance.
     #[must_use]
     pub fn is_causally_invariant(&self) -> bool {
@@ -825,7 +829,8 @@ mod tests {
         assert_eq!(
             minted.len(),
             total,
-            "{total} identities minted over 5 nodes, {} distinct",
+            "{total} identities minted over {} nodes, {} distinct",
+            multiway.node_count(),
             minted.len()
         );
     }
@@ -871,6 +876,7 @@ mod tests {
         // A node that is not a descendant has no branch causal graph.
         assert_eq!(dependent.causal_graph_between(1, 2), None);
         assert_eq!(dependent.causal_graph_between(0, 99), None);
+        assert_eq!(dependent.causal_graph_between(99, 3), None);
     }
 
     /// `{{0,1,2},{1,2,3}}` under `A→BB` to depth 3: one merge, one Wilson loop,

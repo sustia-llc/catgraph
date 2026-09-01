@@ -372,6 +372,11 @@ impl RewriteRule {
     /// # Returns
     ///
     /// A map from newly created pattern variables to their assigned vertex IDs.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a pattern variable in the right-hand side is not in
+    /// `match_.variable_map` and is not one of the rule's created variables.
     pub fn apply(
         &self,
         graph: &mut Hypergraph,
@@ -392,6 +397,11 @@ impl RewriteRule {
     /// * `graph` - The hypergraph to rewrite (will be modified)
     /// * `match_` - A valid match from `find_matches`
     /// * `next_vertex_id` - Counter for generating new vertex IDs
+    ///
+    /// # Panics
+    ///
+    /// Panics if a pattern variable in the right-hand side is not in
+    /// `match_.variable_map` and is not one of the rule's created variables.
     pub fn apply_effect(
         &self,
         graph: &mut Hypergraph,

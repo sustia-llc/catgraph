@@ -3,8 +3,7 @@
 //! An update event is one rewrite-rule application: it consumes the hyperedge
 //! instances its match selected and produces the instances the rule's
 //! right-hand side appended. A [`CausalGraph`] carries one vertex per event and
-//! a directed edge `A → B` for every hyperedge instance that `A` produced and
-//! `B` consumed.
+//! a directed edge `A → B` when `B` consumed an instance `A` produced.
 //!
 //! Hyperedge-instance identity is [`EdgeId`]: minted once per instance and
 //! carried across rewrites, so an instance stays distinguishable from the
@@ -31,7 +30,7 @@ pub struct CausalEvent {
     /// Index of the applied rule in the evolution's rule list.
     pub rule_index: usize,
 
-    /// Instances removed by the rewrite, in ascending host-graph index order.
+    /// Instances removed by the rewrite.
     pub consumed: Vec<EdgeId>,
 
     /// Instances appended by the rewrite, in right-hand-side order.
@@ -125,8 +124,8 @@ impl CausalGraph {
     /// Compares this causal graph with `other` up to isomorphism.
     ///
     /// Event count, causal-edge count, and a colour refinement on the disjoint
-    /// union settle the negative cases; a backtracking search over the refined
-    /// colour classes settles the rest, and reports
+    /// union screen out some negatives; a backtracking search over the refined
+    /// colour classes settles every case they leave, and reports
     /// [`CausalComparison::Undecided`] after [`Self::MAX_SEARCH_STEPS`]
     /// candidate assignments. `rule_index` is data on the events and is not
     /// part of the relation.
@@ -404,6 +403,115 @@ mod tests {
             path.compare(&path.clone()),
             CausalComparison::Isomorphic,
             "a causal graph is isomorphic to itself"
+        );
+    }
+
+    /// A bipartite 8-cycle against two 4-cycles: equal event counts, equal
+    /// causal-edge counts and equal in/out-degree sequences, separated
+    /// `NotIsomorphic`; and the same 8-cycle against its mirror image,
+    /// `Isomorphic`.
+    #[test]
+    fn backtracking_search_separates_a_wl_equivalent_pair() {
+        fn degree_sequences(graph: &CausalGraph) -> (Vec<usize>, Vec<usize>) {
+            let mut outgoing = vec![0usize; graph.event_count()];
+            let mut incoming = vec![0usize; graph.event_count()];
+            for (EventId(source), EventId(target)) in graph.causal_edges() {
+                outgoing[source] += 1;
+                incoming[target] += 1;
+            }
+            outgoing.sort_unstable();
+            incoming.sort_unstable();
+            (outgoing, incoming)
+        }
+
+        // Events 0–3 produce, events 4–7 consume; instance `1ij` carries
+        // source `i`'s dependency into sink `j`.
+        let c8 = CausalGraph::from_events(vec![
+            event(0, &[], &[100, 101]),
+            event(0, &[], &[111, 112]),
+            event(0, &[], &[122, 123]),
+            event(0, &[], &[133, 130]),
+            event(0, &[100, 130], &[]),
+            event(0, &[101, 111], &[]),
+            event(0, &[112, 122], &[]),
+            event(0, &[123, 133], &[]),
+        ]);
+        let two_c4 = CausalGraph::from_events(vec![
+            event(0, &[], &[200, 201]),
+            event(0, &[], &[210, 211]),
+            event(0, &[], &[222, 223]),
+            event(0, &[], &[232, 233]),
+            event(0, &[200, 210], &[]),
+            event(0, &[201, 211], &[]),
+            event(0, &[222, 232], &[]),
+            event(0, &[223, 233], &[]),
+        ]);
+        let mirrored_c8 = CausalGraph::from_events(vec![
+            event(0, &[], &[300, 303]),
+            event(0, &[], &[311, 310]),
+            event(0, &[], &[322, 321]),
+            event(0, &[], &[333, 332]),
+            event(0, &[300, 310], &[]),
+            event(0, &[311, 321], &[]),
+            event(0, &[322, 332], &[]),
+            event(0, &[333, 303], &[]),
+        ]);
+
+        for (name, graph) in [("c8", &c8), ("two_c4", &two_c4), ("mirrored", &mirrored_c8)] {
+            assert_eq!(
+                (graph.event_count(), graph.causal_edge_count()),
+                (8, 8),
+                "{name}: expected 8 events and 8 causal edges; edges {:?}",
+                graph.causal_edges().collect::<Vec<_>>()
+            );
+        }
+        assert_eq!(
+            degree_sequences(&c8),
+            degree_sequences(&two_c4),
+            "the count and degree screens read the same on both sides"
+        );
+
+        assert_eq!(
+            c8.compare(&two_c4),
+            CausalComparison::NotIsomorphic,
+            "one 8-cycle against two 4-cycles; edges {:?} against {:?}",
+            c8.causal_edges().collect::<Vec<_>>(),
+            two_c4.causal_edges().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            c8.compare(&mirrored_c8),
+            CausalComparison::Isomorphic,
+            "the mirrored 8-cycle is the same cycle; edges {:?} against {:?}",
+            c8.causal_edges().collect::<Vec<_>>(),
+            mirrored_c8.causal_edges().collect::<Vec<_>>()
+        );
+    }
+
+    /// Two edgeless causal graphs: 600 events settle `Isomorphic`, 700 events
+    /// reach [`CausalGraph::MAX_SEARCH_STEPS`] and report `Undecided`, which
+    /// [`CausalGraph::is_isomorphic_to`] reads as false.
+    #[test]
+    fn the_step_budget_reports_undecided() {
+        fn edgeless(n: usize) -> CausalGraph {
+            CausalGraph::from_events((0..n).map(|i| event(0, &[], &[i])).collect())
+        }
+
+        let settled = edgeless(600);
+        assert_eq!(
+            settled.compare(&edgeless(600)),
+            CausalComparison::Isomorphic,
+            "600 events settle within the step budget"
+        );
+
+        let budgeted = edgeless(700);
+        assert_eq!(
+            budgeted.compare(&edgeless(700)),
+            CausalComparison::Undecided,
+            "700 events exhaust the step budget"
+        );
+        assert!(
+            !budgeted.is_isomorphic_to(&edgeless(700)),
+            "Undecided reads as not isomorphic"
         );
     }
 
