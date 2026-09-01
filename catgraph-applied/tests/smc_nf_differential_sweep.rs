@@ -86,6 +86,26 @@
 //! though 36 of its cases *did* move normal form — both sides together, so the
 //! pair verdict is unchanged; see that test's own note.
 //!
+//! # H4 discharge record (2026-08-31)
+//!
+//! [#300](https://github.com/sustia-llc/catgraph/issues/300): the audit sweep's
+//! phase-0 H4 residual cites an earlier, undated probe run at commit `96cfea7`
+//! (release, `internal-probes`) that reports all five of this corpus's
+//! `--ignored` sweeps passing — this crate's three (`published_divergence_
+//! figures_reproduce`, `published_braid_mode_figures_reproduce`,
+//! `published_interleave_mode_figures_reproduce`, all in this file) plus
+//! `tests/content_equality_corpus.rs`'s two (`published_corpus_is_closed_by_
+//! content`, `braid_mode_corpus_is_closed_by_content`). That probe
+//! predates this record and was not independently re-run here. What *is*
+//! independently verified: re-running the identical five at
+//! `cargo test -p catgraph-applied --release --features internal-probes --test
+//! smc_nf_differential_sweep --test content_equality_corpus -- --ignored
+//! --test-threads=1` on 2026-08-31, against this file's current post-#185
+//! figures, all five pass in one combined run (3 + 2 = 5, 15.13s). This
+//! supersedes the
+//! `96cfea7` claim as the durable record: current, dated, and reproducible from
+//! this comment.
+//!
 //! # The interleave tier ([#183](https://github.com/sustia-llc/catgraph/issues/183))
 //!
 //! Residual (a) — marked (interleaved) components, the one lettered residual of
