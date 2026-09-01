@@ -6,12 +6,18 @@ Category-theoretic graph structures in Rust — strict Fong & Spivak,
 ## Build & test
 
 ```sh
-cargo build  --workspace
-cargo test   --workspace                                  # every change: green before merge
-cargo clippy --workspace --all-targets -- -D warnings     # the CI gate (default lints)
-cargo clippy --workspace --all-targets -- -W clippy::pedantic   # advisory local pass (non-gating)
+cargo nextest run <scope> --no-fail-fast                  # suites; cargo test only for -- --nocapture guard logs
+cargo clippy <scope> --all-targets -- -D warnings         # the CI gate, on every feature lane (.github/workflows/ci.yml)
 cargo fmt    --all --check
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+python3 scripts/check_version_refs.py ; scripts/check_rand_dev_only.py ; scripts/check_audit_counts.py <audit docs> ; scripts/check_measured_claims.py <nocapture log>
 ```
+
+`<scope>` while iterating = the touched crate **and its dependents** (core or
+testutil → `--workspace`; applied → `-p catgraph-applied -p catgraph-dl
+-p catgraph-magnitude -p catgraph-syntax`; dl / magnitude / physics / syntax →
+`-p <crate>`); `--workspace` once before the PR. Never `--workspace` on a wasm
+target. Each gate its own shell call, output to a file, never piped.
 
 ## Crate graph (dependency order)
 
@@ -44,25 +50,6 @@ verdicts (`ArrowTerm` vs `PropExpr`, `Category`/`Kleisli` vs `eval`,
 stand. No `deep_causality_*` crate remains anywhere in the graph
 (`rg deep_causality Cargo.lock */Cargo.toml` stays empty; CI-guarded).
 
-**Streamlining landed (#218):** the graph-crate edge retired in **#220** (D2 —
-toposort/connectivity in-tree; see catgraph's CHANGELOG);
-`deep_causality_num` retired in **#219** (D1) —
-`Zero`/`One` are catgraph's own, defined in `catgraph-applied/src/rig.rs` next
-to the native `Rig` and re-exported by magnitude and dl. They back the
-`RModule<S>` R-module actegory too (`F64Module = RModule<f64>`;
-`src/para/module_actegory.rs`, #36 first bullet — the direct-sum monoidal
-category `(FinReal, ⊕, R⁰)`; umbrella #36 stays open for
-hyperdoctrine/vector-bundle/lazy surfaces). `deep_causality_num_dual` retired in
-**#221** (D3), forced by the same change: the orphan rule forbids implementing a
-catgraph-owned `Zero`/`One` for a foreign `Dual`, so forward-mode `Dual<T>` moved
-to `catgraph-dl/src/para/dual.rs`. catgraph-dl's off-by-default `ad` feature
-(#74 PR2) now adds **no dependency at all**. `deep_causality_haft` retired in
-**#222** (D4): the dl endofunctor/carrier substrate and the syntax Arrow
-algebra moved in-tree at shape parity; `catgraph-applied`'s published
-randomness edge slimmed to `rand_core` in the same window (#239,
-`E1::random` over `catgraph_applied::Rng`, `rand` dev-only + CI-guarded).
-The #218 streamlining arc is complete.
-
 ## Paper anchors
 
 - **catgraph** — Fong & Spivak 2019 (*Hypergraph Categories*); secondary: F&S 2018
@@ -90,33 +77,18 @@ crate's `docs/`.
    crates requires `Sub`; `BoolRig` / `Tropical` have none.
 3. **Integer SNF / `Z(BigInt)` / Storjohann / Newman stay custom** (`num` supplies
    the BigInt, not the algorithm).
-4. **Every change is green** `cargo test --workspace` + clippy before merge.
+4. **Every change is green** — the gate list above, on the scope above, before merge.
+5. **No per-PR CHANGELOG edits.** `CHANGELOG.md` is written at tag time from the
+   merged PR titles, one line each, or by a dedicated prose PR. A PR body is the
+   one record of a change; the commit body states what changed and nothing more.
+   Rustdoc states **what** over **what input space** — no why, no history, no
+   hand-maintained counts; a universal names the command that establishes it.
+6. **A test is a claim.** New pins are falsified (revert the change, the test
+   goes red, restore) with observed vs expected in the failure message; a
+   docstring never quantifies more than the assertions do. Existing tests are
+   not retro-audited — the 2026-09 triage folded that queue.
 
-Work is tracked as GitHub issues. Contributing: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
-> **Status:** crate migration complete — the five proven crates (core / applied /
-> magnitude / physics / dl) landed on the then-current thin DC substrate
-> (Phases 0–5, merged; that substrate has since been divested entirely, #218/#222).
-> Phase 6 (`catgraph-syntax`, the Arrow presentation frontend, #5) is
-> **complete** (S1–S5 merged 2026-07-11): S1 printer, S2 parser + presentation
-> files, S3 interpreter (ArrowModel/eval/SfgModel), S4 Frobenius layer
-> (FrobeniusOr/spiders/E_frob/to_mat_kron), S5 Traced typed builder over the
-> Arrow seam (crate-owned since #222). The post-milestone follow-ups #79/#80/#81 have ALL shipped
-> (#80/#81 at v0.4.0, #79 completed at v0.5.0); other open follow-ups +
-> audit/README reconciliation tracked as GitHub issues (e.g. #7).
->
-> **Paper-audit (papers-vs-implementation citation sweep), ALL phases 1–7
-> complete (2026-07-19):** core (#112/#113), applied (#118/#119 — Thm 5.60
-> presentation completed to the paper's 18 equations "E_18"; Mat(R) completeness
-> attribution corrected to Baez–Erbele for fields + Wadsley–Woods for commutative
-> rigs), magnitude (#120/#122 — BV25/Leinster/LS reconciliation + BV25-AUDIT
-> recount), physics (#125 — inverted Gorard irreducibility gloss fixed;
-> provenance follow-up #124), dl (#128 — phantom "Appendix K", Def 1.4/1.5 swap,
-> fabricated section name), and syntax (#127 — spider vocabulary re-anchored to
-> FS18 Def 6.54/Thm 6.55; MatKron marked an extension of Ex 2.16) are merged.
-> A CI guard (`scripts/check_audit_counts.py`) keeps the FS19/FS18/BV25
-> audit-doc tallies self-consistent. Follow-ups resolved 2026-07-19: #117
-> (Selinger/JS sourcing — all four papers cached, every SMC-NF anchor
-> verified, (†) marks retired) and #124 (physics `docs/ANCHORS.md`).
-> The last substantive gap closed 2026-07-21: #126 (Prop 5.56 `mat_to_sfg`
-> realization, PR #137) — the audit arc is fully resolved.
+Work is tracked as GitHub issues (`taskmap.md` §Triage in `.claude/docs/` is
+the live order). Contributing: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+History (crate migration, DC divestment #218–#222, paper audit #112–#128) is
+in git and each crate's CHANGELOG.
