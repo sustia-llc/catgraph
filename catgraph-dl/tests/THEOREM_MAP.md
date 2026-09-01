@@ -90,7 +90,7 @@ it has no paper anchor to link. Registering them would fake traceability.
 
 > **Not law tests (#231 → #200):**
 > `free_monad_bijections::opt_in_depth_guard_boundary`,
-> `free_monad_bijections::deep_spine_survives_every_carrier_operation` and
+> `free_monad_bijections::deep_spine_survives_carrier_operations` and
 > `architecture_unrollers::recursive_nn_unroll_survives_a_deep_spine` are the
 > recursion-depth tests, so the `free_monad_bijections::*` glob above reaches
 > two of them. They carry **no paper anchor** and get no row of their own:

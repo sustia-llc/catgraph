@@ -26,13 +26,17 @@
 //!    caller-facing service since #200 rather than something the bijection
 //!    helpers call, accepts a carrier at `MAX_TREE_DEPTH` and rejects one cell
 //!    deeper. Engineering, not a CDL law.
-//! 7. `deep_spine_survives_every_carrier_operation` — the #200 regression pin.
-//!    A `common::DEEP`-deep caterpillar (**32 768** — 128× the retired
+//! 7. `deep_spine_survives_carrier_operations` — the #200 regression pin.
+//!    A `common::DEEP` fixture (**32 768** — 128× the retired
 //!    `MAX_TREE_DEPTH`, 4× the deepest spine a recursive walk survived on a
 //!    2 MiB test thread and 2× the shallowest that aborted; see `DEEP`'s own
-//!    docs for the bisected table) is constructed, embedded, projected back,
-//!    folded, cloned, compared, formatted and dropped, on all three carriers.
-//!    Every one of those aborted before the carriers' walks became iterative.
+//!    docs for the bisected table) is built on each of the three carriers and
+//!    put through: `BinaryTree` `tree_depth`, `Clone`, `==`, `!=` and `{:?}`;
+//!    `Free` `free_mnd_depth`, `==`, `{:?}` and `fold` on the branching
+//!    witness, and `==`, `!=`, `{:?}` and `fold` on the list one; `Cofree`
+//!    `unfold`, `head`, `tail`, the witness's `contents`, `==`, `!=` and
+//!    `{:?}`; the B.19 and B.20 bijections in both directions; and the drops.
+//!    `Clone` is `BinaryTree`'s alone — the other two carriers ship none.
 //! 8. `free_mnd_to_vec_panics_on_bare_suspend_none` — the documented panic
 //!    contract (#312) on a non-canonical `Free::suspend(None)` reaching
 //!    `free_mnd_to_vec` with no `Pure` terminator above it. Engineering drift
@@ -214,17 +218,19 @@ fn opt_in_depth_guard_boundary() {
     assert_eq!(free_mnd_depth(&spine_free_mnd(over)), over);
 }
 
-/// **The #200 regression pin.** Every carrier operation over a spine deep enough
-/// to have aborted the process before the walks became iterative.
+/// **The #200 regression pin.** Carrier operations run over a spine deep enough
+/// to have aborted the process before the walks became iterative — enumerated
+/// per carrier in this module's docs, item 7.
 ///
 /// The fixture is a `common::DEEP` (32 768) left caterpillar — 128× the retired
 /// `MAX_TREE_DEPTH`, and comfortably past every measured abort threshold (see
 /// `DEEP`'s own docs for the bisected table: recursive drop glue survives 8 192
 /// and aborts at 16 384; recursive `Debug` survives 4 096 and aborts at 8 192).
-/// So each operation below is a stack overflow under the previous
-/// implementation and a plain value here; the test deliberately runs on the
-/// default 2 MiB test thread, since a fat-stacked thread would erase exactly
-/// the margin it exists to pin.
+/// The operations that recursed before #200 abort at this depth under that
+/// implementation and are plain values here; construction, the two depth
+/// measures and the B.19 bijections were already iterative. The test
+/// deliberately runs on the default 2 MiB test thread, since a fat-stacked
+/// thread would erase exactly the margin it exists to pin.
 ///
 /// A stack overflow aborts the whole harness rather than failing an assertion,
 /// so the *failing* direction shows up as "test binary died / SIGSEGV", never a
@@ -236,7 +242,7 @@ fn opt_in_depth_guard_boundary() {
 /// witness is at the bottom, and a `{:?}` node count): an `unfold` that
 /// stopped after one level would satisfy a root-shaped check.
 #[test]
-fn deep_spine_survives_every_carrier_operation() {
+fn deep_spine_survives_carrier_operations() {
     // Construction, and the two depth measures (already iterative pre-#200).
     let tree = spine_tree(DEEP);
     assert_eq!(tree_depth(&tree), DEEP);
@@ -287,6 +293,55 @@ fn deep_spine_survives_every_carrier_operation() {
         },
     );
     assert_eq!(leaves, DEEP, "the caterpillar has DEEP leaves");
+
+    // The same depth on the crate's other `Free` witness. `ListEndo`'s hole has
+    // one recursion slot, so a DEEP-element list is a DEEP-cell tower; a
+    // constant label makes `==` walk all of it instead of stopping at the root.
+    // `assert!` rather than `assert_eq!`/`assert_ne!` for the same reason as the
+    // `Cofree` pair below: a failure would `Debug`-dump ~0.5 MB per side.
+    let list = vec_to_free_mnd::<u8, ()>(vec![0_u8; DEEP], ());
+    assert!(
+        list == vec_to_free_mnd::<u8, ()>(vec![0_u8; DEEP], ()),
+        "two identically built DEEP cons towers must compare equal"
+    );
+    let mut odd_items = vec![0_u8; DEEP];
+    odd_items[DEEP - 1] = 1;
+    assert!(
+        list != vec_to_free_mnd::<u8, ()>(odd_items, ()),
+        "…and unequal to one whose deepest cons label differs: every cell above \
+         it agrees and both sides have arity 1 throughout, so nothing but the \
+         label comparison separates them"
+    );
+    let list_shown = format!("{list:?}");
+    assert_eq!(
+        list_shown.matches("Suspend(").count(),
+        DEEP,
+        "`{{:?}}` renders one Suspend per cons cell"
+    );
+    assert_eq!(
+        list_shown.matches("Some((").count(),
+        DEEP,
+        "`{{:?}}` renders every cons cell through ListEndo::fmt_shape"
+    );
+    assert_eq!(
+        list_shown.matches("Pure(").count(),
+        1,
+        "the terminator renders exactly once"
+    );
+    let terminator = |(): ()| 0_usize;
+    let count_cell = |node: Option<(u8, usize)>| match node {
+        None => 0,
+        Some((_, rest)) => rest + 1,
+    };
+    let refolded = vec_to_free_mnd::<u8, ()>(vec![0_u8; DEEP], ());
+    let cells: usize = refolded.fold(&terminator, &count_cell);
+    assert_eq!(cells, DEEP, "the catamorphism counted every cons cell");
+    // The B.19 bijection, destruction direction, at the same depth. Split into
+    // a length and an all-labels check so a failure prints a verdict rather
+    // than 32 768 elements.
+    let (items, ()) = free_mnd_to_vec(list);
+    assert_eq!(items.len(), DEEP, "the B.19 round trip survives at DEEP");
+    assert!(items.iter().all(|&a| a == 0), "…with every label intact");
 
     // Back to the tree carrier, and structural equality with the original.
     let decoded = free_mnd_to_tree(encoded);

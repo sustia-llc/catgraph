@@ -43,7 +43,8 @@
 //! Surface: [`Free`] has `pure`/`suspend`/`from_view`/`into_view`/`as_view`/`fold`;
 //! [`Cofree`] has `new`/`head`/`tail`/`into_parts`/`unfold`. No `bind`/`map`
 //! on `Free`, no `extract`/`extend` on `Cofree`, no [`Functor`] impl on
-//! [`CofreeWitness`], no carrier `Clone`.
+//! [`CofreeWitness`]; `Free` and `Cofree` ship no `Clone` (`BinaryTree`'s
+//! is the hand-written iterative impl noted above).
 
 mod cofree;
 mod free;
@@ -433,6 +434,7 @@ mod tests {
     use super::{Cofree, Free, FreeView};
     use crate::container::Container;
     use crate::endofunctor::{DebugFunctor, Either, Functor, HKT, OptionWitness};
+    use crate::free_monad::list_endo::ListEndo;
     use crate::free_monad::tree_endo::{BinaryTree, TreeEndo, TreeView};
     use core::fmt;
     use core::fmt::Write as _;
@@ -451,8 +453,7 @@ mod tests {
     /// Each twin is named for the carrier it mirrors, because a derived
     /// `Debug` prints the type's own name. Each is **generic in its payload**,
     /// so the same shapes can be built over a `f64` — the payload whose own
-    /// `Debug` honours `precision` and `width`, and so the only one that can
-    /// tell whether the renderer carried the caller's format spec down.
+    /// `Debug` honours `precision` as well as `width`.
     mod mirror {
         // Every field here is read by the derived `Debug` and nothing else,
         // which dead-code analysis deliberately does not count.
@@ -475,6 +476,22 @@ mod tests {
         pub enum Free<A> {
             Pure(A),
             Suspend(FreeHole<A>),
+        }
+
+        pub mod list {
+            /// `ListEndo<A>`'s functor hole at the `Free` twin: label and
+            /// recursion slot in one tuple, where `super::FreeHole` keeps them
+            /// in separate `Either` summands. As there, the alias exists only
+            /// to keep `clippy::type_complexity` quiet.
+            type FreeHole<A, Z> = Option<(A, Box<Free<A, Z>>)>;
+
+            /// Twin of `Free<ListEndo<A>, Z>`. Two payload parameters, because
+            /// the carrier has two: the cons labels `A` and the terminator `Z`.
+            #[derive(Debug)]
+            pub enum Free<A, Z> {
+                Pure(Z),
+                Suspend(FreeHole<A, Z>),
+            }
         }
 
         pub mod stream {
@@ -554,6 +571,29 @@ mod tests {
         )
     }
 
+    /// A `len`-cell cons tower and its twin, labelled by cons position so a
+    /// mis-ordered slot shows up as a wrong number.
+    ///
+    /// `ListEndo`'s `None` summand has arity 0, so it can only ever sit at the
+    /// **bottom** of a tower — `nil_terminated` picks which of the two bottoms
+    /// is built. `ListEndo::fmt_shape`'s `None` arm is reached only by the nil
+    /// one.
+    fn list_pair<A: From<u8>, Z: From<u8>>(
+        len: u8,
+        nil_terminated: bool,
+    ) -> (Free<ListEndo<A>, Z>, mirror::list::Free<A, Z>) {
+        let (mut carrier, mut twin) = if nil_terminated {
+            (Free::suspend(None), mirror::list::Free::Suspend(None))
+        } else {
+            (Free::pure(Z::from(0)), mirror::list::Free::Pure(Z::from(0)))
+        };
+        for step in (1..=len).rev() {
+            carrier = Free::suspend(Some((A::from(step), Box::new(carrier))));
+            twin = mirror::list::Free::Suspend(Some((A::from(step), Box::new(twin))));
+        }
+        (carrier, twin)
+    }
+
     fn stream_pair<A: From<u8>>(len: u8) -> (Cofree<OptionWitness, A>, mirror::stream::Cofree<A>) {
         let mut carrier = Cofree::new(A::from(0), None);
         let mut twin = mirror::stream::Cofree {
@@ -607,15 +647,29 @@ mod tests {
     }
 
     /// Assert a carrier and its derived twin agree **character for character**
-    /// across every format spec the renderer claims to carry.
+    /// at the format specs below: every spec-carrying renderer arm at two
+    /// value pairs, so a renderer hardcoding the first pair's values in any
+    /// arm cannot pass. A width anti-vacuity check on the twin alone runs
+    /// first.
     ///
-    /// The default `{:?}` / `{:#?}` pair is the shape guard; the four
-    /// spec-bearing forms are the [`Spec`](super::Spec) guard, and only bite on
-    /// a payload whose own `Debug` honours `precision` / `width` — hence the
-    /// `f64` instantiations at the call sites. `width` bites on integers too.
+    /// The default `{:?}` / `{:#?}` pair is the shape guard; the spec-bearing
+    /// forms are the [`Spec`](super::Spec) guard, and only bite on a payload
+    /// whose own `Debug` honours `precision` / `width` — hence the `f64`
+    /// instantiations at the call sites. `width` bites on integers too.
     macro_rules! assert_agrees_at_every_carried_spec {
         ($carrier:expr, $twin:expr, $what:expr) => {{
             let (live, twin, what) = (&$carrier, &$twin, $what);
+            // Anti-vacuity, fixture side — the twin is a derive, so the
+            // renderer cannot satisfy this: a fixture whose payloads all
+            // ignore width makes the width-only assertions below vacuous.
+            // Per fixture: a single width-honouring payload — a two-slot
+            // fixture's lone terminator counts — satisfies it.
+            assert_ne!(
+                format!("{twin:12?}"),
+                format!("{twin:?}"),
+                "`{}`: twin {{:12?}} rendered identically to {{:?}}",
+                stringify!($twin)
+            );
             assert_eq!(format!("{live:?}"), format!("{twin:?}"), "{what} {{:?}}");
             assert_eq!(format!("{live:#?}"), format!("{twin:#?}"), "{what} {{:#?}}");
             assert_eq!(
@@ -638,20 +692,99 @@ mod tests {
                 format!("{twin:#12?}"),
                 "{what} {{:#12?}} — width must survive the pretty form too"
             );
+            assert_eq!(
+                format!("{live:12.2?}"),
+                format!("{twin:12.2?}"),
+                "{what} {{:12.2?}} — width and precision must combine"
+            );
+            assert_eq!(
+                format!("{live:#12.2?}"),
+                format!("{twin:#12.2?}"),
+                "{what} {{:#12.2?}} — width and precision must combine in the pretty form"
+            );
+            // A second value pair for every spec-carrying renderer arm: a
+            // renderer that hardcodes the first pair's values (`12`/`2`)
+            // instead of forwarding the caller's values passes every assert
+            // before this line.
+            assert_eq!(
+                format!("{live:.5?}"),
+                format!("{twin:.5?}"),
+                "{what} {{:.5?}} — the caller's precision value must be forwarded"
+            );
+            assert_eq!(
+                format!("{live:#.5?}"),
+                format!("{twin:#.5?}"),
+                "{what} {{:#.5?}} — the caller's precision value must be forwarded in the pretty form"
+            );
+            assert_eq!(
+                format!("{live:20?}"),
+                format!("{twin:20?}"),
+                "{what} {{:20?}} — the caller's width value must be forwarded"
+            );
+            assert_eq!(
+                format!("{live:#20?}"),
+                format!("{twin:#20?}"),
+                "{what} {{:#20?}} — the caller's width value must be forwarded in the pretty form"
+            );
+            assert_eq!(
+                format!("{live:20.7?}"),
+                format!("{twin:20.7?}"),
+                "{what} {{:20.7?}} — the caller's width and precision values must be forwarded"
+            );
+            assert_eq!(
+                format!("{live:#20.7?}"),
+                format!("{twin:#20.7?}"),
+                "{what} {{:#20.7?}} — the caller's width and precision values must be forwarded in the pretty form"
+            );
         }};
     }
 
-    /// Each carrier vs a `#[derive(Debug)]` twin of the same shape, at `{:?}`,
-    /// `{:#?}`, `{:.2?}`, `{:#.2?}`, `{:12?}`, `{:#12?}`, for `u8`/`u32` and
-    /// `f64` payloads (precision is visible only on floats).
+    /// Assert `{:.2?}` renders the derive twin `$twin` differently from
+    /// `{:?}` — fixture side, since the renderer cannot touch a derive: the
+    /// precision-bearing twin assertions on an `f64` fixture hold vacuously
+    /// once the fixture's payloads all stop showing precision. Per fixture:
+    /// a single precision-honouring payload — a two-slot fixture's lone
+    /// terminator counts — satisfies it.
+    macro_rules! assert_precision_visible {
+        ($twin:expr) => {{
+            let twin = &$twin;
+            assert_ne!(
+                format!("{twin:.2?}"),
+                format!("{twin:?}"),
+                "{{:.2?}} rendered identically to {{:?}} on `{}`",
+                stringify!($twin)
+            );
+        }};
+    }
+
+    /// Each carrier vs a `#[derive(Debug)]` twin of the same shape, at the
+    /// default `{:?}`/`{:#?}` pair and both value pairs of every
+    /// spec-carrying form, for `u8`/`u32` and `f64` payloads (of these, only
+    /// `f64` shows precision).
     #[test]
     fn every_carrier_debug_is_byte_identical_to_a_derived_twin() {
+        // Anti-vacuity, fixture side (the twins are derives, so a renderer
+        // defect cannot satisfy these): width is checked per fixture inside
+        // the twin macro; precision — of `u8`/`u32`/`f64`, shown only by
+        // `f64` — at each `f64` fixture by `assert_precision_visible!` ahead
+        // of its twin comparison.
+
         // Integer payloads: the shape guard, plus `width`.
         let (tree, tree_m) = tree_pair::<u8>(SHAPE);
         assert_agrees_at_every_carried_spec!(tree, tree_m, "BinaryTree<u8>");
 
         let (free, free_m) = free_pair::<u8>(SHAPE);
         assert_agrees_at_every_carried_spec!(free, free_m, "Free<TreeEndo<u8>, u8>");
+
+        // `ListEndo` — its hole tuples the cons label with the recursion slot,
+        // so `fmt_shape` renders a *pair* rather than handing the slot straight
+        // to `debug_tuple`. Both bottoms: `Pure(z)` and the nil cell
+        // `Suspend(None)`.
+        let (list, list_m) = list_pair::<u8, u8>(SHAPE * 4, false);
+        assert_agrees_at_every_carried_spec!(list, list_m, "Free<ListEndo<u8>, u8>");
+
+        let (nil, nil_m) = list_pair::<u8, u8>(SHAPE * 4, true);
+        assert_agrees_at_every_carried_spec!(nil, nil_m, "Free<ListEndo<u8>, u8> (nil-terminated)");
 
         let (stream, stream_m) = stream_pair::<u32>(SHAPE * 4);
         assert_agrees_at_every_carried_spec!(stream, stream_m, "Cofree<OptionWitness, u32>");
@@ -662,15 +795,36 @@ mod tests {
         // Float payloads: the same four shapes, at the only payload that can
         // see `precision` go missing.
         let (tree_f, tree_fm) = tree_pair::<f64>(SHAPE);
+        assert_precision_visible!(tree_fm);
         assert_agrees_at_every_carried_spec!(tree_f, tree_fm, "BinaryTree<f64>");
 
         let (free_f, free_fm) = free_pair::<f64>(SHAPE);
+        assert_precision_visible!(free_fm);
         assert_agrees_at_every_carried_spec!(free_f, free_fm, "Free<TreeEndo<f64>, f64>");
 
+        // Cons labels and terminator both at `f64`.
+        let (list_f, list_fm) = list_pair::<f64, f64>(SHAPE * 4, false);
+        assert_precision_visible!(list_fm);
+        assert_agrees_at_every_carried_spec!(list_f, list_fm, "Free<ListEndo<f64>, f64>");
+
+        // The list hole's payload reaches the formatter inside a
+        // `(label, slot)` tuple rather than as a `debug_tuple` field; the
+        // nil-terminated tower has no `Pure` payload, so the cons labels are
+        // the only `f64`s its precision guard can see.
+        let (nil_f, nil_fm) = list_pair::<f64, f64>(SHAPE * 4, true);
+        assert_precision_visible!(nil_fm);
+        assert_agrees_at_every_carried_spec!(
+            nil_f,
+            nil_fm,
+            "Free<ListEndo<f64>, f64> (nil-terminated)"
+        );
+
         let (stream_f, stream_fm) = stream_pair::<f64>(SHAPE * 4);
+        assert_precision_visible!(stream_fm);
         assert_agrees_at_every_carried_spec!(stream_f, stream_fm, "Cofree<OptionWitness, f64>");
 
         let (branching_f, branching_fm) = branching_pair::<f64, f64>(SHAPE);
+        assert_precision_visible!(branching_fm);
         assert_agrees_at_every_carried_spec!(
             branching_f,
             branching_fm,
@@ -681,21 +835,45 @@ mod tests {
         // compact one: at this depth they are many times longer and multi-line.
         assert!(format!("{tree:#?}").len() > 8 * format!("{tree:?}").len());
         assert!(format!("{branching:#?}").lines().count() > 100);
+    }
 
-        // …and the spec-bearing forms really are a different rendering, not a
-        // rerun of the default one. Without this, every `{:.2?}` assertion
-        // above would hold vacuously the moment precision stopped propagating
-        // on *both* sides — which is exactly how the default-spec-only version
-        // of this oracle passed through a regression.
+    /// `==` and `!=` through `Free<ListEndo<A>, Z>`, over cons towers of
+    /// `SHAPE * 4` cells: identical towers at each of the two bottoms, a tower
+    /// differing in its deepest cons label, and the two bottoms against each
+    /// other.
+    ///
+    /// The label case is the one that reaches
+    /// [`EqFunctor::eq_shape`](crate::endofunctor::EqFunctor::eq_shape)'s own
+    /// verdict: every cell above the difference agrees, and both sides have
+    /// arity 1 throughout, so nothing but the label comparison separates them.
+    /// The two-bottoms case is separated by the carrier's `Suspend`/`Pure`
+    /// match, not by the witness.
+    #[test]
+    fn free_over_list_endo_compares_through_the_witness() {
+        const LEN: u8 = SHAPE * 4;
+
+        let (tower, _) = list_pair::<u8, u8>(LEN, false);
+        let (same, _) = list_pair::<u8, u8>(LEN, false);
+        assert_eq!(tower, same, "identically built cons towers compare equal");
+
+        let (nil, _) = list_pair::<u8, u8>(LEN, true);
+        let (nil_again, _) = list_pair::<u8, u8>(LEN, true);
+        assert_eq!(nil, nil_again, "…and so do two nil-terminated ones");
+
+        // The deepest cons label, and only that, differs.
+        let mut odd: Free<ListEndo<u8>, u8> = Free::pure(0);
+        for step in (1..=LEN).rev() {
+            let label = if step == LEN { step + 1 } else { step };
+            odd = Free::suspend(Some((label, Box::new(odd))));
+        }
         assert_ne!(
-            format!("{tree_f:.2?}"),
-            format!("{tree_f:?}"),
-            "the f64 payload must actually render differently under {{:.2?}}"
+            tower, odd,
+            "a difference in the deepest cons label must make the towers unequal"
         );
+
         assert_ne!(
-            format!("{tree:12?}"),
-            format!("{tree:?}"),
-            "the u8 payload must actually render differently under {{:12?}}"
+            nil, tower,
+            "a nil bottom and a Pure bottom under identical labels are unequal"
         );
     }
 
@@ -951,6 +1129,20 @@ mod tests {
             size_of::<FreeView<TreeEndo<u8>, u8>>(),
             "…at the branching witness too"
         );
+        // `ListEndo` reaches the same relation from a different hole: its
+        // `Option<(A, Box<Free>)>` carries the cons label and the recursion
+        // slot in one tuple, where `TreeEndo`'s `Either<A, (Box, Box)>` keeps
+        // them in separate summands.
+        assert_eq!(
+            size_of::<Free<ListEndo<u8>, u8>>(),
+            size_of::<FreeView<ListEndo<u8>, u8>>(),
+            "…and at the list witness, whose hole tuples payload with slot"
+        );
+        assert_eq!(
+            size_of::<Free<ListEndo<f64>, f64>>(),
+            size_of::<FreeView<ListEndo<f64>, f64>>(),
+            "…there too, for a wider cons label and terminator"
+        );
 
         // `BinaryTree`: free as well, since `TreeView::Node` became one boxed
         // pair. A regression to the two-`Box` shape re-spends the view's niche
@@ -988,6 +1180,16 @@ mod tests {
             size_of::<CofreeCell<TreeEndo<u8>, usize>>() + size_of::<usize>(),
             "…there too, for a wider label"
         );
+        assert_eq!(
+            size_of::<Cofree<ListEndo<u8>, u8>>(),
+            size_of::<CofreeCell<ListEndo<u8>, u8>>() + size_of::<usize>(),
+            "…and at the list witness"
+        );
+        assert_eq!(
+            size_of::<Cofree<ListEndo<f64>, f64>>(),
+            size_of::<CofreeCell<ListEndo<f64>, f64>>() + size_of::<usize>(),
+            "…there too, for a wider label"
+        );
 
         // The exact 64-bit layout of every carrier the reshape touched. A
         // 32-bit host has a different (still at-most-one-word) answer, so the
@@ -1011,6 +1213,14 @@ mod tests {
             assert_eq!(size_of::<CofreeCell<TreeEndo<u8>, f64>>(), 24);
             assert_eq!(size_of::<Cofree<TreeEndo<u8>, usize>>(), 32);
             assert_eq!(size_of::<CofreeCell<TreeEndo<u8>, usize>>(), 24);
+            assert_eq!(size_of::<Free<ListEndo<u8>, u8>>(), 24);
+            assert_eq!(size_of::<FreeView<ListEndo<u8>, u8>>(), 24);
+            assert_eq!(size_of::<Free<ListEndo<f64>, f64>>(), 24);
+            assert_eq!(size_of::<FreeView<ListEndo<f64>, f64>>(), 24);
+            assert_eq!(size_of::<Cofree<ListEndo<u8>, u8>>(), 32);
+            assert_eq!(size_of::<CofreeCell<ListEndo<u8>, u8>>(), 24);
+            assert_eq!(size_of::<Cofree<ListEndo<f64>, f64>>(), 32);
+            assert_eq!(size_of::<CofreeCell<ListEndo<f64>, f64>>(), 24);
         }
     }
 }
