@@ -444,8 +444,7 @@ impl<const D: usize> HypergraphLattice<D> {
     /// A plaquette is recorded only when all four of its links carry a
     /// transition recorded by
     /// [`record_transition`](Self::record_transition). Nothing is recorded
-    /// when `max_length < 4` or `D < 2`. Longer cycles are not enumerated at
-    /// any `max_length`.
+    /// when `max_length < 4` or `D < 2`.
     pub fn find_wilson_loops(&mut self, max_length: usize) {
         self.wilson_loops.clear();
 
