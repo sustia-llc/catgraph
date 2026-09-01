@@ -125,13 +125,27 @@ fn wilson_loops() {
     lattice.apply_rewrite(&[1], 0);
     lattice.apply_rewrite(&[2], 0);
 
-    // Compute Wilson loop around a path
-    let path: Vec<&[usize; 1]> = vec![&[1], &[2], &[1]];
-    let holonomy = lattice.wilson_loop(&path);
-    let invariant = lattice.is_causally_invariant(&path);
-    println!("path [1]->[2]->[1]:");
-    println!("  holonomy: {holonomy:.4}");
-    println!("  causally invariant: {invariant}");
+    // Wilson loop over a path whose links have no recorded transition
+    let path: Vec<&[usize; 1]> = vec![&[1], &[2]];
+    println!("path [1]->[2]->[1] with no links recorded:");
+    println!("  holonomy: {:?}", lattice.wilson_loop(&path));
+    println!(
+        "  causally invariant: {:?}",
+        lattice.is_causally_invariant(&path)
+    );
+
+    // Record both links of the loop, then measure it
+    lattice.record_transition(&[1], &[2], 2.0);
+    lattice.record_transition(&[2], &[1], 0.5);
+    println!("path [1]->[2]->[1] with both links recorded:");
+    match lattice.wilson_loop(&path) {
+        Some(h) => println!("  holonomy: {h:.4}"),
+        None => println!("  holonomy: none"),
+    }
+    println!(
+        "  causally invariant: {:?}",
+        lattice.is_causally_invariant(&path)
+    );
     println!();
 }
 
@@ -157,11 +171,20 @@ fn actions() {
     // Lattice-level plaquette action
     let rules = vec![RewriteRule::wolfram_a_to_bb()];
     let group = HypergraphRewriteGroup::new(1);
-    let lattice: HypergraphLattice<1> = HypergraphLattice::new([5], group, rules);
+    let mut lattice: HypergraphLattice<1> = HypergraphLattice::new([5], group, rules);
 
     let path: Vec<&[usize; 1]> = vec![&[0], &[1]];
-    let action = lattice.plaquette_action(&path);
-    println!("lattice plaquette action (no transitions): {action:.4}");
+    println!(
+        "lattice plaquette action (no transitions): {:?}",
+        lattice.plaquette_action(&path)
+    );
+
+    lattice.record_transition(&[0], &[1], 0.5);
+    lattice.record_transition(&[1], &[0], 1.0);
+    match lattice.plaquette_action(&path) {
+        Some(a) => println!("lattice plaquette action (holonomy 0.5): {a:.4}"),
+        None => println!("lattice plaquette action (holonomy 0.5): none"),
+    }
     println!();
 }
 
