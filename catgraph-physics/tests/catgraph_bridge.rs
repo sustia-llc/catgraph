@@ -50,7 +50,7 @@ fn rule_to_rewrite_span_and_back_to_catgraph_span() {
     // Two paths to a Span: direct and through RewriteSpan
     let direct_span = rule.to_span();
     let rewrite_span = rule.to_rewrite_span();
-    let indirect_span = rewrite_span.to_span();
+    let indirect_span = rewrite_span.to_span().expect("identity maps embed");
 
     // Both should produce the same left and right element counts
     assert_eq!(direct_span.left().len(), indirect_span.left().len());

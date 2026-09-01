@@ -30,4 +30,6 @@ pub use multiway_cospan::{
     CospanInvarianceResult, CospanMergeDetail, MultiwayCospan, MultiwayCospanExt,
     MultiwayCospanGraph,
 };
-pub use rewrite_rule::{RewriteEffect, RewriteMatch, RewriteRule, RewriteSpan};
+pub use rewrite_rule::{
+    RewriteEffect, RewriteMatch, RewriteRule, RewriteSpan, RewriteSpanError, SpanSide,
+};
