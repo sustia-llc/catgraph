@@ -123,9 +123,7 @@ impl MultiwayCospanExt for HypergraphEvolution {
 
                     let composites_match =
                         match (compose_cospan_path(&path_a), compose_cospan_path(&path_b)) {
-                            (Some(ca), Some(cb)) => {
-                                ca.domain() == cb.domain() && ca.codomain() == cb.codomain()
-                            }
+                            (Some(ca), Some(cb)) => composites_agree(&ca, &cb),
                             _ => false,
                         };
 
@@ -150,6 +148,11 @@ impl MultiwayCospanExt for HypergraphEvolution {
             details,
         }
     }
+}
+
+/// Reports whether two cospans have both the same domain and the same codomain.
+fn composites_agree(a: &Cospan<u32>, b: &Cospan<u32>) -> bool {
+    a.domain() == b.domain() && a.codomain() == b.codomain()
 }
 
 /// Composes a sequence of cospans into a single composite.
@@ -287,7 +290,7 @@ mod tests {
     }
 
     /// `{{0,1,2},{1,2,3}}` under `A→BB` to depth 3: one merge group `[3, 4]`,
-    /// one checked pair, matching composite domains and codomains.
+    /// one checked pair, whose composites match.
     #[test]
     fn causal_invariance_multiway_confluent() {
         let initial = Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]);
@@ -296,16 +299,6 @@ mod tests {
 
         let graph = evolution.to_multiway_cospan_graph();
         assert_eq!(graph.merge_points, vec![vec![3, 4]]);
-
-        // Both composites run root → merged node.
-        let composite_a = compose_cospan_path(&graph.path_to_node(&evolution, 3))
-            .expect("invariant: a two-step path from the root composes");
-        let composite_b = compose_cospan_path(&graph.path_to_node(&evolution, 4))
-            .expect("invariant: a two-step path from the root composes");
-        assert_eq!(composite_a.domain(), vec![0u32, 1, 2, 3]);
-        assert_eq!(composite_a.codomain(), vec![0u32, 1, 2, 3]);
-        assert_eq!(composite_b.domain(), vec![0u32, 1, 2, 3]);
-        assert_eq!(composite_b.codomain(), vec![0u32, 1, 2, 3]);
 
         let result = evolution.verify_causal_invariance_via_cospans();
         assert_eq!(
@@ -360,6 +353,63 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![(0, 1, false), (0, 2, false), (1, 2, true)]
         );
+    }
+
+    /// `composites_agree` over a pair differing in codomain alone and a pair
+    /// differing in domain alone.
+    #[test]
+    fn composites_agree_compares_both_ends() {
+        let base: Cospan<u32> = Cospan::new(vec![0, 1], vec![2], vec![10, 20, 30]).unwrap();
+        let other_codomain: Cospan<u32> =
+            Cospan::new(vec![0, 1], vec![2], vec![10, 20, 40]).unwrap();
+        let other_domain: Cospan<u32> = Cospan::new(vec![0, 1], vec![2], vec![10, 21, 30]).unwrap();
+
+        assert!(composites_agree(&base, &base.clone()));
+        assert!(
+            !composites_agree(&base, &other_codomain),
+            "domains {:?} and {:?} agree, codomains {:?} and {:?} do not",
+            base.domain(),
+            other_codomain.domain(),
+            base.codomain(),
+            other_codomain.codomain()
+        );
+        assert!(
+            !composites_agree(&base, &other_domain),
+            "codomains {:?} and {:?} agree, domains {:?} and {:?} do not",
+            base.codomain(),
+            other_domain.codomain(),
+            base.domain(),
+            other_domain.domain()
+        );
+    }
+
+    /// `{{0,1}}` under `edge-split` to depth 3: the path to node 3 and its
+    /// composite run from the root's vertices `[0, 1]` to node 3's
+    /// `[0, 1, 2, 3, 4]`.
+    #[test]
+    fn composite_along_a_path_runs_root_to_target() {
+        let initial = Hypergraph::from_edges(vec![vec![0, 1]]);
+        let evolution = HypergraphEvolution::run(&initial, &[RewriteRule::edge_split()], 3);
+        assert_eq!(evolution.node_count(), 4, "root plus three rewrites");
+
+        let graph = evolution.to_multiway_cospan_graph();
+        let path = graph.path_to_node(&evolution, 3);
+        assert_eq!(path.len(), 3);
+        assert_eq!(
+            path[0].domain(),
+            vec![0u32, 1],
+            "the path opens at the root"
+        );
+        assert_eq!(
+            path[2].codomain(),
+            vec![0u32, 1, 2, 3, 4],
+            "the path closes at node 3"
+        );
+
+        let composite = compose_cospan_path(&path)
+            .expect("invariant: a three-step path from the root composes");
+        assert_eq!(composite.domain(), vec![0u32, 1]);
+        assert_eq!(composite.codomain(), vec![0u32, 1, 2, 3, 4]);
     }
 
     #[test]

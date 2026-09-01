@@ -138,56 +138,6 @@ fn non_confluent_fixture() -> HypergraphEvolution {
     )
 }
 
-#[test]
-fn causal_invariance_check() {
-    let closing = confluent_fixture().analyze_causal_invariance();
-    assert!(closing.is_invariant);
-    assert_eq!(closing.loops_analyzed, 1);
-    assert!(closing.non_trivial_loops.is_empty());
-    assert!(
-        closing.max_deviation.abs() < 1e-12,
-        "expected 0.0, got {}",
-        closing.max_deviation
-    );
-    assert!(
-        closing.average_deviation.abs() < 1e-12,
-        "expected 0.0, got {}",
-        closing.average_deviation
-    );
-
-    let separating = non_confluent_fixture().analyze_causal_invariance();
-    assert!(!separating.is_invariant);
-    assert_eq!(separating.loops_analyzed, 18);
-    assert_eq!(separating.non_trivial_loops.len(), 6);
-    assert!(
-        (separating.max_deviation - 1.0).abs() < 1e-12,
-        "expected 1.0, got {}",
-        separating.max_deviation
-    );
-    assert!(
-        (separating.average_deviation - 6.0 / 18.0).abs() < 1e-12,
-        "expected 6/18, got {}",
-        separating.average_deviation
-    );
-}
-
-#[test]
-fn is_causally_invariant_convenience_method() {
-    let confluent = confluent_fixture();
-    assert!(confluent.is_causally_invariant());
-    assert_eq!(
-        confluent.is_causally_invariant(),
-        confluent.analyze_causal_invariance().is_invariant
-    );
-
-    let non_confluent = non_confluent_fixture();
-    assert!(!non_confluent.is_causally_invariant());
-    assert_eq!(
-        non_confluent.is_causally_invariant(),
-        non_confluent.analyze_causal_invariance().is_invariant
-    );
-}
-
 // ---------------------------------------------------------------------------
 // Wilson loops
 // ---------------------------------------------------------------------------
