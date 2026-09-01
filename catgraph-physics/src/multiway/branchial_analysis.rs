@@ -568,6 +568,137 @@ mod tests {
         assert!(multiway_betweenness(&graph, false).is_empty());
     }
 
+    // --- parallel-path differentials ----------------------------------------
+
+    /// A seeded `G(320, 0.01)` branchial graph.
+    fn apsp_fixture() -> BranchialGraph {
+        use super::super::test_topologies::branchial_from_ungraph;
+        use rustworkx_core::generators::gnp_random_graph;
+        use rustworkx_core::petgraph::graph::UnGraph;
+
+        let g: UnGraph<(), ()> = gnp_random_graph(320, 0.01, Some(0x0A75_0BED), || (), || ())
+            .expect("gnp_random_graph(320, 0.01) has valid arguments");
+        branchial_from_ungraph(0, &g)
+    }
+
+    /// Above `APSP_PARALLEL_THRESHOLD` the rayon all-pairs sweep still matches
+    /// the queue BFS entry for entry, and repeats itself run to run.
+    #[test]
+    fn distance_matrix_matches_bfs_above_the_parallel_threshold() {
+        use super::super::ollivier_ricci::all_pairs_bfs;
+        use super::super::test_topologies::{adjacency, assert_same_matrix};
+
+        let bg = apsp_fixture();
+        let n = bg.nodes.len();
+        assert_eq!(n, 320);
+        #[cfg(feature = "parallel")]
+        assert!(n >= APSP_PARALLEL_THRESHOLD);
+
+        let matrix = branchial_distance_matrix(&bg);
+
+        // Both ends of the value range are present in the gnp block itself.
+        assert!(
+            matrix.iter().flatten().any(|d| d.is_infinite()),
+            "the gnp block must leave f64::INFINITY in the matrix"
+        );
+        assert!(
+            matrix.iter().flatten().any(|d| d.is_finite() && *d >= 3.0),
+            "the gnp block must leave a hop count of at least 3"
+        );
+
+        assert_same_matrix(
+            &matrix,
+            &all_pairs_bfs(&adjacency(&bg), n),
+            "rayon sweep vs queue BFS",
+        );
+        assert_same_matrix(
+            &matrix,
+            &branchial_distance_matrix(&bg),
+            "two runs of the rayon sweep",
+        );
+    }
+
+    /// 61 nodes: root → 4 forks → 2 sequential steps each → 3-way fork → 3
+    /// sequential steps each, plus 8 merge edges on `Lcg`-chosen chains.
+    fn layered_fork_graph() -> MultiwayEvolutionGraph<usize, ()> {
+        use catgraph_testutil::Lcg;
+
+        let mut graph: MultiwayEvolutionGraph<usize, ()> = MultiwayEvolutionGraph::new();
+        let root = graph.add_root(0);
+
+        let layer1 = graph.add_fork(root, (0..4).map(|r| (1000 + r, (), r)).collect());
+
+        let mut tips: Vec<MultiwayNodeId> = Vec::with_capacity(4);
+        for (b, &node) in layer1.iter().enumerate() {
+            let mid = graph.add_sequential_step(node, 2000 + b, ());
+            tips.push(graph.add_sequential_step(mid, 3000 + b, ()));
+        }
+
+        let mut step4: Vec<MultiwayNodeId> = Vec::with_capacity(12);
+        for (b, &tip) in tips.iter().enumerate() {
+            let kids = graph.add_fork(tip, (0..3).map(|r| (4000 + b * 3 + r, (), r)).collect());
+            step4.extend(kids);
+        }
+
+        let mut step6: Vec<MultiwayNodeId> = Vec::with_capacity(12);
+        for (k, &node) in step4.iter().enumerate() {
+            let five = graph.add_sequential_step(node, 5000 + k, ());
+            let six = graph.add_sequential_step(five, 6000 + k, ());
+            step6.push(six);
+            graph.add_sequential_step(six, 7000 + k, ());
+        }
+
+        let mut rng = Lcg::new(0x5EED_1234);
+        for _ in 0..8 {
+            let from = step4[rng.next_usize(0, step4.len() - 1)];
+            let to = step6[rng.next_usize(0, step6.len() - 1)];
+            graph.add_merge_edge(from, to, ());
+        }
+
+        graph
+    }
+
+    /// Above `BETWEENNESS_PARALLEL_THRESHOLD` the rayon Brandes sweep agrees
+    /// with the sequential one to 1e-9 relative, normalized or not.
+    #[test]
+    fn betweenness_matches_the_sequential_reference() {
+        let graph = layered_fork_graph();
+        let n = graph.node_count();
+        assert_eq!(n, 61);
+        #[cfg(feature = "parallel")]
+        assert!(n >= BETWEENNESS_PARALLEL_THRESHOLD);
+
+        let (pg, order) = graph.to_petgraph();
+
+        for normalized in [false, true] {
+            let got = multiway_betweenness(&graph, normalized);
+            let want = rustworkx_core::centrality::betweenness_centrality(
+                &pg,
+                false,
+                normalized,
+                usize::MAX,
+            );
+
+            assert_eq!(got.len(), n, "normalized = {normalized}");
+            for (i, id) in order.iter().enumerate() {
+                let reference = want[i].expect("betweenness is defined at every node");
+                let score = got[id];
+                assert!(
+                    (score - reference).abs() <= 1e-9 * reference.abs().max(1.0),
+                    "normalized = {normalized}: node {id:?} scored {score}, sequential \
+                     reference {reference}"
+                );
+            }
+
+            if !normalized {
+                let positive = got.values().filter(|&&s| s > 0.0).count();
+                let max = got.values().copied().fold(f64::NEG_INFINITY, f64::max);
+                assert!(positive >= 10, "only {positive} nodes score above zero");
+                assert!(max > 1.0, "top raw score is {max}");
+            }
+        }
+    }
+
     #[test]
     fn katz_and_betweenness_cover_every_node() {
         let (graph, ..) = diamond();

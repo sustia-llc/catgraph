@@ -9,6 +9,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ### Changed
 
+- `multiway::ollivier_ricci::all_pairs_bfs` compiles on every feature lane and
+  backs new unit pins: all-pairs distance summaries and differentials over the
+  seven seeded topology fixtures (`multiway::test_topologies`), the rayon
+  all-pairs sweep above its threshold, and a rayon-versus-sequential
+  `multiway_betweenness` comparison
+  ([#329](https://github.com/sustia-llc/catgraph/issues/329)).
 - `multiway::branchial_analysis` rustdoc reduced to contract statements
   ([#330](https://github.com/sustia-llc/catgraph/issues/330)).
 - This CHANGELOG rewritten to one line per change; rationale lives in the PRs.
