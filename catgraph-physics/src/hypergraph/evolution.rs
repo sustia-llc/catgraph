@@ -949,8 +949,6 @@ mod tests {
         let loops = evolution.find_wilson_loops();
         assert_eq!(loops.len(), 18, "18 isomorphic-state pairs");
 
-        // Every one of these 18 holonomies is exactly 0.0 or 1.0: the retired
-        // vertex-overlap fallback returned intermediate ratios.
         let separating = loops.iter().filter(|l| l.holonomy < 1.0).count();
         let closing = loops
             .iter()
