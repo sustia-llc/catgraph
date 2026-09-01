@@ -159,6 +159,11 @@ fn each_scfm_equation_matches_its_own_golden() {
     let laws = scfm_equations::<Sig>(());
     let goldens = scfm_goldens();
     assert_eq!(laws.len(), 9, "Def 2.5 has nine equations (Ex 2.8)");
+    assert_eq!(
+        goldens.len(),
+        9,
+        "scfm_goldens must have one entry per Def 2.5 equation"
+    );
     for (i, ((lhs, rhs), (name, image, lhs_text, rhs_text))) in
         laws.iter().zip(goldens.iter()).enumerate()
     {

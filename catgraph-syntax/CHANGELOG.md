@@ -13,6 +13,12 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
   round-trip at both the bare and colour-annotated form, plus a
   presentation-file golden) — `Epsilon` already had this coverage
   ([#316](https://github.com/sustia-llc/catgraph/issues/316)).
+- Each of `scfm_equations`' nine Def 2.5 equations pinned to its own
+  `MatKron` image and concrete syntax (a reflexive or duplicate substitution
+  for any one previously left the whole suite green); `to_mat_kron` and
+  `CospanFunctor` pinned to agree per palette colour, including the braid's
+  argument order at a mixed colour boundary
+  ([#317](https://github.com/sustia-llc/catgraph/issues/317)).
 
 ## [workspace-v0.16.0] - 2026-08-24
 
