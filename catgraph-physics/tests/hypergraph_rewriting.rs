@@ -138,6 +138,17 @@ fn non_confluent_fixture() -> HypergraphEvolution {
     )
 }
 
+/// `analyze_causal_invariance`'s `average_deviation` on the confluent fixture.
+#[test]
+fn confluent_fixture_average_deviation() {
+    let result = confluent_fixture().analyze_causal_invariance();
+    assert!(
+        result.average_deviation.abs() < 1e-12,
+        "expected 0.0, got {}",
+        result.average_deviation
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Wilson loops
 // ---------------------------------------------------------------------------
