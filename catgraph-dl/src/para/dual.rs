@@ -196,11 +196,14 @@ mod tests {
     use catgraph_applied::rig::verify_rig_axioms;
 
     // `verify_rig_axioms` checks axioms in a fixed order and aborts on the
-    // first failure, so a `Mul` cross-term bug is always caught via the
-    // multiplicative-identity check (`a * one() == a`) on whichever nonzero-`du`
-    // sample sorts first — the multiple nonzero-`du` samples below give catch
-    // redundancy for that identity check, not independent multi-operand
-    // associativity/distributivity coverage.
+    // first failure, so a `Mul` cross-term bug that breaks a rig law is caught
+    // via the multiplicative-identity check (`a * one() == a`) on whichever
+    // nonzero-`du` sample sorts first — the multiple nonzero-`du` samples below
+    // give catch redundancy for that identity check, not independent
+    // multi-operand associativity/distributivity coverage. This is a rig-axiom
+    // oracle, not a chain-rule oracle: a `Mul` corruption that stays isomorphic
+    // to a valid Rig (e.g. folding an `ε²` term into both channels) satisfies
+    // every rig axiom and is invisible to this test.
     #[test]
     fn verify_axioms_dual_f64_sample() {
         let samples = [
