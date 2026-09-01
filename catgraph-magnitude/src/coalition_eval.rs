@@ -120,19 +120,24 @@ pub const SCHUR_SLOW_FALLBACK_TOL: f64 = 1e-12;
 /// the private `value_with_impl` to assert that a fixture deliberately exercises
 /// the intended branch.
 ///
-/// The two variants are the module's two update routes (see the module docs):
-/// `Fast` is the closed-form bordered-Schur update against the cached skeletal
-/// `μ`, taken when `x` neither improves an interior member-to-member closure nor
-/// merges into an existing skeletal class **and** the Schur complement `s` is
-/// well-conditioned; `Slow` is the border-then-re-skeletalize-and-re-invert
-/// route, taken otherwise (including the near-singular
-/// [`SCHUR_SLOW_FALLBACK_TOL`] diversion out of the fast branch).
+/// The variants are the module's update routes (see the module docs): `Fast` is
+/// the closed-form bordered-Schur update against the cached skeletal `μ`, taken
+/// when `x` neither improves an interior member-to-member closure nor merges
+/// into an existing skeletal class **and** the Schur complement `s` is
+/// well-conditioned; `Slow` and `SlowNearSingular` are the same
+/// border-then-re-skeletalize-and-re-invert route, reached from the branch tests
+/// and from the [`SCHUR_SLOW_FALLBACK_TOL`] guard on `s` respectively.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum EvalPath {
     /// Bordered Schur update against the cached `μ` (no fresh inversion).
     Fast,
-    /// Re-skeletalize + re-invert the bordered `(m+1)`-point table.
+    /// Re-skeletalize + re-invert the bordered `(m+1)`-point table, entered on
+    /// an interior improvement or a skeletal merge.
     Slow,
+    /// The same re-skeletalize + re-invert route, entered from the fast branch
+    /// because `|s| ≤ SCHUR_SLOW_FALLBACK_TOL · (1 + |vᵀμu|)`.
+    SlowNearSingular,
 }
 
 /// A **structural** certificate that a candidate's real diversity increment is
@@ -241,7 +246,8 @@ pub enum ZeroDiversityProof {
 ///   improvement the cached `ζ_S` is stale and the `u = ζ_S·e_a` derivation's
 ///   premise fails — measured deviation up to **0.568 relative** on that path —
 ///   so no duplicate proof is issued there. A near-singular border that the
-///   [`SCHUR_SLOW_FALLBACK_TOL`] guard diverts to the slow route likewise
+///   [`SCHUR_SLOW_FALLBACK_TOL`] guard diverts to
+///   [`EvalPath::SlowNearSingular`] likewise
 ///   reports no proof (conservative; that guard fired **0 times** in the memo's
 ///   3996 evaluations).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -302,8 +308,8 @@ impl JoinReport {
 
     /// The Schur complement `s = 1 − vᵀμu`, `Some(s)` **iff** the closed-form
     /// fast branch produced the value (so it is `Some` exactly when
-    /// [`path`](Self::path) is [`EvalPath::Fast`], and `None` on every slow
-    /// route including the near-singular diversion).
+    /// [`path`](Self::path) is [`EvalPath::Fast`], and `None` on both
+    /// [`EvalPath::Slow`] and [`EvalPath::SlowNearSingular`]).
     ///
     /// Exposed as conditioning telemetry: `det ζ′ = det(ζ_S)·s`, so a small `|s|`
     /// is a near-singular bordered `ζ′`.
@@ -887,7 +893,8 @@ impl CoalitionEvaluator {
     /// agree only while `s` is well-conditioned, so an ill-conditioned border is
     /// routed through the fresh-equivalent slow path (finite when well-defined,
     /// `Err` exactly when the re-inversion is singular) instead of dividing by a
-    /// catastrophic-cancellation residue.
+    /// catastrophic-cancellation residue, and reported as
+    /// [`EvalPath::SlowNearSingular`].
     #[allow(clippy::similar_names)]
     fn value_with_fast<const REPORT: bool>(
         &self,
@@ -927,7 +934,9 @@ impl CoalitionEvaluator {
         // Schur division would amplify cancellation noise past tolerance, so
         // defer to the fresh-equivalent slow path.
         if s.abs() <= SCHUR_SLOW_FALLBACK_TOL * (1.0 + vmu.abs()) {
-            return self.value_with_slow(scratch, m);
+            let mut outcome = self.value_with_slow(scratch, m)?;
+            outcome.path = EvalPath::SlowNearSingular;
+            return Ok(outcome);
         }
 
         // p = 1ᵀμu = coweighting·u ; q = vᵀμ1 = v·weighting (dual borders).
@@ -990,9 +999,10 @@ impl CoalitionEvaluator {
         Ok(EvalOutcome {
             value: mag.0,
             path: EvalPath::Slow,
-            // The caller (`value_with_core`) attaches the merge-only proof; the
+            // The caller attaches the merge-only proof (`value_with_core`) and
+            // re-labels the near-singular diversion (`value_with_fast`); the
             // slow route itself certifies nothing, and `s` was never formed (or,
-            // on the near-singular diversion, was not trusted).
+            // on the diversion, was not trusted).
             zero_proof: None,
             schur_complement: None,
         })
@@ -1084,6 +1094,15 @@ mod tests {
 
     fn rel_close(a: f64, b: f64) -> bool {
         (a - b).abs() <= INCREMENTAL_REL_TOL * a.abs().max(b.abs()).max(1.0)
+    }
+
+    /// Bump `hits`, indexed `[Fast, Slow, SlowNearSingular]`.
+    fn tally(path: EvalPath, hits: &mut [usize; 3]) {
+        match path {
+            EvalPath::Fast => hits[0] += 1,
+            EvalPath::Slow => hits[1] += 1,
+            EvalPath::SlowNearSingular => hits[2] += 1,
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -1205,11 +1224,77 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
+    // Near-singular Schur diversion: the fast branch is entered and then
+    // diverted by the `SCHUR_SLOW_FALLBACK_TOL` guard.
+    // -----------------------------------------------------------------------
+
+    /// Two uncoupled members give `ζ_S = I`, so the bordered Schur complement is
+    /// `s = 1 − ζ(c₀)·ζ(r₀)` on the candidate's border alone. With
+    /// `c₀ = 1 − 5e-13` and `r₀ = 1.0` the branch tests are both false
+    /// (`c₀ ≠ 1.0` for the merge test, no `i ≠ j` shortcut for the interior
+    /// test), so the fast branch is entered, and `s ≈ 5e-13` is inside
+    /// `SCHUR_SLOW_FALLBACK_TOL · (1 + |vᵀμu|) ≈ 2e-12`. The control fixture is
+    /// the same shape at `c₀ = 0.5`.
+    #[test]
+    fn near_singular_border_diverts_to_slow() {
+        let agents = ["m0", "m1", "x"];
+        let members = [0usize, 1];
+        let t = 1.0;
+
+        let near = [(0usize, 2usize, 1.0 - 5e-13), (2, 0, 1.0)];
+        let ev = CoalitionEvaluator::new(&agents, &near, &members, t).unwrap();
+        let rep = ev.value_with_report(2).unwrap();
+        assert_eq!(
+            rep.path(),
+            EvalPath::SlowNearSingular,
+            "a border with s ≈ 5e-13 must be diverted out of the fast branch"
+        );
+        assert_eq!(
+            rep.schur_complement(),
+            None,
+            "the diversion reports no Schur complement"
+        );
+        assert_eq!(
+            rep.zero_proof(),
+            None,
+            "the diversion carries no zero-diversity proof"
+        );
+        assert!(
+            rep.value().is_finite(),
+            "diverted value must be finite, got {}",
+            rep.value()
+        );
+        let fresh = fresh_with(&agents, &near, &members, 2, t).unwrap();
+        assert!(
+            rel_close(rep.value(), fresh),
+            "diverted {} vs fresh {fresh}",
+            rep.value()
+        );
+
+        let far = [(0usize, 2usize, 0.5f64), (2, 0, 1.0)];
+        let ev_far = CoalitionEvaluator::new(&agents, &far, &members, t).unwrap();
+        let rep_far = ev_far.value_with_report(2).unwrap();
+        assert_eq!(
+            rep_far.path(),
+            EvalPath::Fast,
+            "the same shape at c₀ = 0.5 stays on the fast branch"
+        );
+        assert_eq!(
+            rep_far.schur_complement(),
+            Some(0.5),
+            "control fixture: s = 1 − 0.5·1.0"
+        );
+    }
+
+    // -----------------------------------------------------------------------
     // Deterministic seeded grid over m ∈ 2..=10 pools with several candidates.
     // Asserts fresh/incremental error-parity AND value equality within
     // tolerance for every (S, x) — this also exercises the singular branch if
     // any grid point hits it (see the report note: an exact post-skeletal
     // singular ζ is not hand-constructible).
+    //
+    // Also carries the rank-order identity (contract point 3) as a per-`(S, t)`
+    // argsort comparison, and the per-`EvalPath` hit counts over the grid.
     // -----------------------------------------------------------------------
     #[test]
     fn seeded_grid_fresh_vs_incremental() {
@@ -1220,6 +1305,8 @@ mod tests {
         // `| 1` (seed prep) stays at the call site — see catgraph-testutil (#33).
         let mut lcg = Lcg::new(0xC0FFEE | 1);
         let n = NAMES.len();
+        let mut hits = [0usize; 3];
+        let mut tight_pairs = 0usize;
 
         for m in 2..=10usize {
             // Random dense coupling table over all 12 agents (some structure so
@@ -1251,6 +1338,9 @@ mod tests {
                     Ok(ev) => ev,
                     Err(_) => continue, // singular base — skip this (S, t)
                 };
+                // `(incremental, fresh)` for the candidates that evaluated on
+                // both routes — the rank-order population for this `(S, t)`.
+                let mut ranked: Vec<(f64, f64)> = Vec::new();
                 for candidate in m..n {
                     let inc = ev.value_with(candidate);
                     let fresh = fresh_with(&NAMES, &couplings, &members, candidate, t);
@@ -1264,15 +1354,63 @@ mod tests {
                             rel_close(inc, fresh),
                             "m={m} t={t} cand={candidate}: inc {inc} vs fresh {fresh}"
                         );
+                        let (_, path) = ev
+                            .value_with_impl(candidate, &mut EvalScratch::new())
+                            .expect("invariant: value_with just succeeded on this candidate");
+                        tally(path, &mut hits);
+                        ranked.push((inc, fresh));
+                    }
+                }
+
+                // Rank-order identity (contract point 3) on this candidate
+                // population — argsort by incremental == argsort by fresh. The
+                // `tight_pairs` counter below states over how many pairs this
+                // adds to the per-candidate value assertion.
+                let mut order_inc: Vec<usize> = (0..ranked.len()).collect();
+                let mut order_fresh: Vec<usize> = (0..ranked.len()).collect();
+                order_inc.sort_by(|&a, &b| ranked[a].0.total_cmp(&ranked[b].0));
+                order_fresh.sort_by(|&a, &b| ranked[a].1.total_cmp(&ranked[b].1));
+                assert_eq!(
+                    order_inc, order_fresh,
+                    "m={m} t={t}: incremental ranking {order_inc:?} vs fresh {order_fresh:?} \
+                     over {ranked:?}"
+                );
+
+                // Pairs closer than twice the per-candidate tolerance: the ones
+                // whose order the value assertion above does not already fix.
+                for a in 0..ranked.len() {
+                    for b in (a + 1)..ranked.len() {
+                        let (_, fresh_a) = ranked[a];
+                        let (_, fresh_b) = ranked[b];
+                        let sep =
+                            2.0 * INCREMENTAL_REL_TOL * fresh_a.abs().max(fresh_b.abs()).max(1.0);
+                        if (fresh_a - fresh_b).abs() <= sep {
+                            tight_pairs += 1;
+                        }
                     }
                 }
             }
         }
+
+        assert_eq!(
+            hits,
+            [44usize, 64, 0],
+            "EvalPath hits [Fast, Slow, SlowNearSingular] over the seeded grid"
+        );
+        assert_eq!(
+            tight_pairs, 0,
+            "candidate pairs within 2·INCREMENTAL_REL_TOL on the fresh route — the \
+             population over which the ranking assertion is not already implied by \
+             the per-candidate value assertion"
+        );
     }
 
     // -----------------------------------------------------------------------
     // Rank-order identity (contract point 3): a fixed S, ≥5 candidates with
-    // distinct values, argsort by fresh == argsort by incremental.
+    // distinct values, argsort by fresh == argsort by incremental. Every
+    // candidate here takes the fast path (asserted below); the same identity
+    // over a population containing both routes is carried by
+    // `seeded_grid_fresh_vs_incremental`.
     // -----------------------------------------------------------------------
     #[test]
     fn rank_order_identity() {
@@ -1318,6 +1456,17 @@ mod tests {
         assert_eq!(
             order_inc, order_fresh,
             "incremental ranking must equal fresh ranking"
+        );
+
+        let mut hits = [0usize; 3];
+        for &c in &candidates {
+            let (_, path) = ev.value_with_impl(c, &mut EvalScratch::new()).unwrap();
+            tally(path, &mut hits);
+        }
+        assert_eq!(
+            hits,
+            [6usize, 0, 0],
+            "EvalPath hits [Fast, Slow, SlowNearSingular] over this fixture's candidates"
         );
     }
 
@@ -1446,7 +1595,8 @@ mod tests {
 
     /// The dense seeded grid (same shape as `seeded_grid_fresh_vs_incremental`)
     /// but comparing the scratch path against the allocating path with `==`
-    /// (exact), not a tolerance. Covers both fast- and slow-path candidates.
+    /// (exact), not a tolerance. The per-`EvalPath` hit counts asserted at the
+    /// end state which routes the grid puts under the scratch.
     #[test]
     fn value_with_scratch_bit_identical_to_value_with() {
         const NAMES: [&str; 12] = [
@@ -1455,6 +1605,7 @@ mod tests {
         // `| 1` (seed prep) stays at the call site — see catgraph-testutil (#33).
         let mut lcg = Lcg::new(0xC0FFEE | 1);
         let n = NAMES.len();
+        let mut hits = [0usize; 3];
 
         for m in 2..=10usize {
             let mut couplings: Vec<(usize, usize, f64)> = Vec::new();
@@ -1498,10 +1649,20 @@ mod tests {
                             plain, scr,
                             "m={m} t={t} cand={candidate}: scratch must be bit-identical"
                         );
+                        let (_, path) = ev
+                            .value_with_impl(candidate, &mut EvalScratch::new())
+                            .expect("invariant: value_with just succeeded on this candidate");
+                        tally(path, &mut hits);
                     }
                 }
             }
         }
+
+        assert_eq!(
+            hits,
+            [44usize, 64, 0],
+            "EvalPath hits [Fast, Slow, SlowNearSingular] under the reused scratch"
+        );
     }
 
     /// A reused scratch (fed a fast-path candidate, then a slow-path candidate,
