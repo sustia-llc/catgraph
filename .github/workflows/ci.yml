@@ -1,5 +1,14 @@
 name: ci
-on: [push, pull_request]
+# A branch push with an open PR used to run twice (push + pull_request) — three runs per
+# landed task (gh run list, 2026-09-01: every audit/* branch appeared twice). Now: PRs and
+# main only; a stale in-flight run on the same ref is cancelled by the next push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: ubuntu-latest
