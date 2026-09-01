@@ -678,7 +678,12 @@ fn smoke_prefix_of_the_published_corpus() {
 
 /// Fast tier over the braid-mode corpus (#300) — a 5 000-case prefix of the
 /// same frozen seed as `published_braid_mode_figures_reproduce`, so CI notices
-/// a gross braid-mode change without the full 100k run.
+/// a gross braid-mode change without the full 100k run. `tests/canonical_
+/// display_corpus.rs`'s `smoke_prefix_braid_corpus` already ran a non-ignored
+/// braid-mode prefix over the same seed before this test existed; that test
+/// tracks its own `Gate` readback/churn statistic, not this file's §4.6
+/// `Counts` divergence bucket, so this test adds coverage for the bucket
+/// figures specifically rather than being the first braid-mode CI check.
 #[test]
 fn braid_mode_smoke_prefix_of_the_published_corpus() {
     let counts = on_big_stack(|| sweep(SMOKE_PAIRS, Mode::Braid));
