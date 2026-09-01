@@ -675,3 +675,22 @@ fn smoke_prefix_of_the_published_corpus() {
          the published totals moved with it."
     );
 }
+
+/// Fast tier over the braid-mode corpus (#300) — a 5 000-case prefix of the
+/// same frozen seed as `published_braid_mode_figures_reproduce`, so CI notices
+/// a gross braid-mode change without the full 100k run.
+#[test]
+fn braid_mode_smoke_prefix_of_the_published_corpus() {
+    let counts = on_big_stack(|| sweep(SMOKE_PAIRS, Mode::Braid));
+    assert_eq!(
+        counts,
+        Counts {
+            divergent: 77,
+            in_fragment: 38,
+            marked: 17,
+        },
+        "the 5k prefix of the braid-mode published corpus moved; run the full \
+         `published_braid_mode_figures_reproduce` with --ignored to see whether \
+         the published totals moved with it."
+    );
+}
