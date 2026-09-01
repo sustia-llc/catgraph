@@ -106,37 +106,47 @@ fn multiway_evolution_explores_all_matches() {
     let graph = Hypergraph::from_edges(vec![vec![0, 1, 2], vec![3, 4, 5]]);
     let evolution = HypergraphEvolution::run_multiway(&graph, &[rule], 2, 100);
 
-    // Should explore both match sites
-    assert!(evolution.node_count() > 2);
+    // Both step-1 match sites, and one step-2 node from each.
+    assert_eq!(evolution.node_count(), 5);
+    assert_eq!(evolution.nodes_at_step(1), vec![1, 2]);
+    assert_eq!(evolution.nodes_at_step(2), vec![3, 4]);
+    assert_eq!(evolution.max_step(), 2);
 }
 
 // ---------------------------------------------------------------------------
 // Causal invariance (Wilson loops)
 // ---------------------------------------------------------------------------
 
-#[test]
-fn causal_invariance_check() {
-    let rule = RewriteRule::wolfram_a_to_bb();
-    let graph = Hypergraph::from_edges(vec![vec![0, 1, 2]]);
-
-    let evolution = HypergraphEvolution::run_multiway(&graph, &[rule], 3, 50);
-
-    // Check causal invariance -- the API should work regardless of result
-    let result = evolution.analyze_causal_invariance();
-    let _ = result.is_invariant;
-    let _ = result.average_deviation;
-    let _ = result.max_deviation;
-    let _ = result.loops_analyzed;
+/// `{{0,1,2},{1,2,3}}` under `A→BB` to depth 3, whose one loop closes, and
+/// `{{0,1},{1,2},{2,3},{3,4}}` under `collapse` to depth 4, 6 of whose 18 loops
+/// separate.
+fn confluent_fixture() -> HypergraphEvolution {
+    HypergraphEvolution::run_multiway(
+        &Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]),
+        &[RewriteRule::wolfram_a_to_bb()],
+        3,
+        50,
+    )
 }
 
-#[test]
-fn is_causally_invariant_convenience_method() {
-    let rule = RewriteRule::wolfram_a_to_bb();
-    let graph = Hypergraph::from_edges(vec![vec![0, 1, 2]]);
+fn non_confluent_fixture() -> HypergraphEvolution {
+    HypergraphEvolution::run_multiway(
+        &Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2], vec![2, 3], vec![3, 4]]),
+        &[RewriteRule::collapse()],
+        4,
+        200,
+    )
+}
 
-    let evolution = HypergraphEvolution::run_multiway(&graph, &[rule], 3, 50);
-    // This is a convenience wrapper; just verify it runs
-    let _ = evolution.is_causally_invariant();
+/// `analyze_causal_invariance`'s `average_deviation` on the confluent fixture.
+#[test]
+fn confluent_fixture_average_deviation() {
+    let result = confluent_fixture().analyze_causal_invariance();
+    assert!(
+        result.average_deviation.abs() < 1e-12,
+        "expected 0.0, got {}",
+        result.average_deviation
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -145,18 +155,43 @@ fn is_causally_invariant_convenience_method() {
 
 #[test]
 fn wilson_loop_computation() {
-    let rule = RewriteRule::wolfram_a_to_bb();
-    let graph = Hypergraph::from_edges(vec![vec![0, 1, 2]]);
+    let confluent = confluent_fixture();
+    let loops = confluent.find_wilson_loops();
+    assert_eq!(loops.len(), 1, "expected one Wilson loop");
+    assert_eq!(
+        loops[0].path,
+        vec![0, 1, 3, 4, 2, 0],
+        "root down one branch, across the tips, back up the other"
+    );
+    assert_eq!(loops[0].base, 0);
+    assert_eq!(loops[0].length, 6);
+    assert!(
+        (loops[0].holonomy - 1.0).abs() < 1e-12,
+        "expected 1.0, got {}",
+        loops[0].holonomy
+    );
 
-    let evolution = HypergraphEvolution::run_multiway(&graph, &[rule], 4, 100);
-    let loops = evolution.find_wilson_loops();
+    let separating = non_confluent_fixture().find_wilson_loops();
+    assert_eq!(separating.len(), 18);
+    let closed = separating
+        .iter()
+        .filter(|wl| (wl.holonomy - 1.0).abs() < 1e-12)
+        .count();
+    let open = separating
+        .iter()
+        .filter(|wl| wl.holonomy.abs() < 1e-12)
+        .count();
+    assert_eq!(
+        (closed, open),
+        (12, 6),
+        "expected 12 closing and 6 separating; holonomies {:?}",
+        separating.iter().map(|wl| wl.holonomy).collect::<Vec<_>>()
+    );
 
-    // Wilson loops exist only when branches merge (same fingerprint)
-    // We just verify the API works and returns valid structures
-    for wl in &loops {
-        assert!(!wl.path.is_empty());
-        assert!(wl.holonomy >= 0.0);
-        assert!(wl.holonomy <= 1.0);
+    for wl in &separating {
+        assert_eq!(wl.path.first(), Some(&wl.base), "loop opens at its base");
+        assert_eq!(wl.path.last(), Some(&wl.base), "loop closes at its base");
+        assert_eq!(wl.length, wl.path.len());
     }
 }
 

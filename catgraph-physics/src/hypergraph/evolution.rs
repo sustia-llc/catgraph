@@ -729,10 +729,22 @@ mod tests {
         let rules = vec![RewriteRule::edge_split()];
 
         let evolution = HypergraphEvolution::run(&initial, &rules, 3);
-        let result = evolution.analyze_causal_invariance();
+        assert!(evolution.find_wilson_loops().is_empty());
 
-        // No branches, so trivially invariant
-        assert!(result.is_invariant || result.loops_analyzed == 0);
+        let result = evolution.analyze_causal_invariance();
+        assert!(result.is_invariant);
+        assert_eq!(result.loops_analyzed, 0);
+        assert!(result.non_trivial_loops.is_empty());
+        assert!(
+            result.average_deviation.abs() < 1e-12,
+            "expected 0.0, got {}",
+            result.average_deviation
+        );
+        assert!(
+            result.max_deviation.abs() < 1e-12,
+            "expected 0.0, got {}",
+            result.max_deviation
+        );
     }
 
     #[test]
@@ -992,6 +1004,150 @@ mod tests {
             (result.average_deviation - 6.0 / 18.0).abs() < 1e-12,
             "expected 6/18, got {}",
             result.average_deviation
+        );
+    }
+
+    /// `compute_holonomy` on two branch endpoints without a causal graph: an ID
+    /// outside the evolution, and a node that is not a descendant of the base.
+    #[test]
+    fn holonomy_without_a_branch_causal_graph_is_zero() {
+        let evolution = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]),
+            &[RewriteRule::wolfram_a_to_bb()],
+            3,
+            50,
+        );
+
+        assert_eq!(evolution.causal_graph_between(0, 99), None);
+        let out_of_range = evolution.compute_holonomy(0, 99, 3);
+        assert!(
+            out_of_range.abs() < 1e-12,
+            "expected 0.0, got {out_of_range}"
+        );
+
+        assert_eq!(evolution.causal_graph_between(1, 2), None);
+        let not_a_descendant = evolution.compute_holonomy(1, 2, 3);
+        assert!(
+            not_a_descendant.abs() < 1e-12,
+            "expected 0.0, got {not_a_descendant}"
+        );
+    }
+
+    /// `find_merges` on four fixtures: a deterministic trace with no repeated
+    /// fingerprint, and three multiway runs whose merged node IDs are named.
+    #[test]
+    fn find_merges_returns_the_grouped_node_ids() {
+        let deterministic = HypergraphEvolution::run(
+            &Hypergraph::from_edges(vec![vec![0, 1, 2]]),
+            &[RewriteRule::wolfram_a_to_bb()],
+            10,
+        );
+        assert_eq!(deterministic.node_count(), 2, "root plus one rewrite");
+        assert_eq!(
+            sorted_merges(&deterministic),
+            Vec::<Vec<usize>>::new(),
+            "no two states of this trace share a fingerprint"
+        );
+
+        // {{0,1,2},{1,2,3}} under A→BB to depth 3.
+        let confluent = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]),
+            &[RewriteRule::wolfram_a_to_bb()],
+            3,
+            50,
+        );
+        assert_eq!(confluent.node_count(), 5);
+        assert_eq!(sorted_merges(&confluent), vec![vec![3, 4]]);
+
+        // {{0,1},{1,2},{2,3},{3,4}} under collapse to depth 4.
+        let non_confluent = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2], vec![2, 3], vec![3, 4]]),
+            &[RewriteRule::collapse()],
+            4,
+            200,
+        );
+        assert_eq!(non_confluent.node_count(), 16);
+        assert_eq!(
+            sorted_merges(&non_confluent),
+            vec![
+                vec![4, 8],
+                vec![5, 6],
+                vec![7, 9],
+                vec![10, 11, 12, 13, 14, 15]
+            ]
+        );
+
+        // {{0,1}} under create-loop to depth 2.
+        let self_loop = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1]]),
+            &[RewriteRule::create_self_loop()],
+            2,
+            50,
+        );
+        assert_eq!(self_loop.node_count(), 4);
+        assert_eq!(sorted_merges(&self_loop), vec![vec![2, 3]]);
+    }
+
+    /// [`HypergraphEvolution::find_merges`] with the groups in ascending order.
+    fn sorted_merges(evolution: &HypergraphEvolution) -> Vec<Vec<usize>> {
+        let mut groups = evolution.find_merges();
+        groups.sort();
+        groups
+    }
+
+    /// The rendering of [`EvolutionStatistics`] on a two-rule evolution, one
+    /// line per rule.
+    #[test]
+    fn statistics_render_one_line_per_rule() {
+        let two_rules = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1, 2]]),
+            &[RewriteRule::wolfram_a_to_bb(), RewriteRule::edge_split()],
+            2,
+            50,
+        );
+        assert_eq!(
+            two_rules.statistics().to_string(),
+            "Evolution Statistics:\n  Total nodes: 4\n  Max step: 2\n  Branches: 2\n  \
+             Merges: 0\n  Rule 0: 1 applications\n  Rule 1: 2 applications\n"
+        );
+    }
+
+    /// The rendering of [`EvolutionStatistics`] and [`CausalInvarianceResult`]
+    /// on a fixture whose loops all close and one whose loops do not.
+    #[test]
+    fn statistics_and_invariance_reports_render_their_fields() {
+        let confluent = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]),
+            &[RewriteRule::wolfram_a_to_bb()],
+            3,
+            50,
+        );
+        assert_eq!(
+            confluent.statistics().to_string(),
+            "Evolution Statistics:\n  Total nodes: 5\n  Max step: 2\n  Branches: 2\n  \
+             Merges: 1\n  Rule 0: 4 applications\n"
+        );
+        assert_eq!(
+            confluent.analyze_causal_invariance().to_string(),
+            "Causal Invariance Analysis:\n  Causally invariant: YES\n  Loops analyzed: 1\n  \
+             Average deviation: 0.000000\n  Max deviation: 0.000000\n  Non-trivial loops: 0\n"
+        );
+
+        let non_confluent = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2], vec![2, 3], vec![3, 4]]),
+            &[RewriteRule::collapse()],
+            4,
+            200,
+        );
+        assert_eq!(
+            non_confluent.statistics().to_string(),
+            "Evolution Statistics:\n  Total nodes: 16\n  Max step: 3\n  Branches: 6\n  \
+             Merges: 4\n  Rule 0: 15 applications\n"
+        );
+        assert_eq!(
+            non_confluent.analyze_causal_invariance().to_string(),
+            "Causal Invariance Analysis:\n  Causally invariant: NO\n  Loops analyzed: 18\n  \
+             Average deviation: 0.333333\n  Max deviation: 1.000000\n  Non-trivial loops: 6\n"
         );
     }
 
