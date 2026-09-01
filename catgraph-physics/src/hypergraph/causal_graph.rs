@@ -406,6 +406,34 @@ mod tests {
         );
     }
 
+    // Events 0–3 produce, events 4–7 consume; instance `1ij` carries source
+    // `i`'s dependency into sink `j`.
+    fn c8_block() -> Vec<CausalEvent> {
+        vec![
+            event(0, &[], &[100, 101]),
+            event(0, &[], &[111, 112]),
+            event(0, &[], &[122, 123]),
+            event(0, &[], &[133, 130]),
+            event(0, &[100, 130], &[]),
+            event(0, &[101, 111], &[]),
+            event(0, &[112, 122], &[]),
+            event(0, &[123, 133], &[]),
+        ]
+    }
+
+    fn two_c4_block() -> Vec<CausalEvent> {
+        vec![
+            event(0, &[], &[200, 201]),
+            event(0, &[], &[210, 211]),
+            event(0, &[], &[222, 223]),
+            event(0, &[], &[232, 233]),
+            event(0, &[200, 210], &[]),
+            event(0, &[201, 211], &[]),
+            event(0, &[222, 232], &[]),
+            event(0, &[223, 233], &[]),
+        ]
+    }
+
     /// A bipartite 8-cycle against two 4-cycles: equal event counts, equal
     /// causal-edge counts and equal in/out-degree sequences, separated
     /// `NotIsomorphic`; and the same 8-cycle against its mirror image,
@@ -424,28 +452,8 @@ mod tests {
             (outgoing, incoming)
         }
 
-        // Events 0–3 produce, events 4–7 consume; instance `1ij` carries
-        // source `i`'s dependency into sink `j`.
-        let c8 = CausalGraph::from_events(vec![
-            event(0, &[], &[100, 101]),
-            event(0, &[], &[111, 112]),
-            event(0, &[], &[122, 123]),
-            event(0, &[], &[133, 130]),
-            event(0, &[100, 130], &[]),
-            event(0, &[101, 111], &[]),
-            event(0, &[112, 122], &[]),
-            event(0, &[123, 133], &[]),
-        ]);
-        let two_c4 = CausalGraph::from_events(vec![
-            event(0, &[], &[200, 201]),
-            event(0, &[], &[210, 211]),
-            event(0, &[], &[222, 223]),
-            event(0, &[], &[232, 233]),
-            event(0, &[200, 210], &[]),
-            event(0, &[201, 211], &[]),
-            event(0, &[222, 232], &[]),
-            event(0, &[223, 233], &[]),
-        ]);
+        let c8 = CausalGraph::from_events(c8_block());
+        let two_c4 = CausalGraph::from_events(two_c4_block());
         let mirrored_c8 = CausalGraph::from_events(vec![
             event(0, &[], &[300, 303]),
             event(0, &[], &[311, 310]),
@@ -484,6 +492,36 @@ mod tests {
             "the mirrored 8-cycle is the same cycle; edges {:?} against {:?}",
             c8.causal_edges().collect::<Vec<_>>(),
             mirrored_c8.causal_edges().collect::<Vec<_>>()
+        );
+    }
+
+    /// The 8-cycle and the two 4-cycles in one graph against the same two
+    /// components in the opposite event order: `Isomorphic`.
+    #[test]
+    fn backtracking_search_recovers_from_an_abandoned_subtree() {
+        let c8_then_two_c4 =
+            CausalGraph::from_events(c8_block().into_iter().chain(two_c4_block()).collect());
+        let two_c4_then_c8 =
+            CausalGraph::from_events(two_c4_block().into_iter().chain(c8_block()).collect());
+
+        for (name, graph) in [
+            ("c8_then_two_c4", &c8_then_two_c4),
+            ("two_c4_then_c8", &two_c4_then_c8),
+        ] {
+            assert_eq!(
+                (graph.event_count(), graph.causal_edge_count()),
+                (16, 16),
+                "{name}: expected 16 events and 16 causal edges; edges {:?}",
+                graph.causal_edges().collect::<Vec<_>>()
+            );
+        }
+
+        assert_eq!(
+            c8_then_two_c4.compare(&two_c4_then_c8),
+            CausalComparison::Isomorphic,
+            "the same two components in the opposite order; edges {:?} against {:?}",
+            c8_then_two_c4.causal_edges().collect::<Vec<_>>(),
+            two_c4_then_c8.causal_edges().collect::<Vec<_>>()
         );
     }
 
