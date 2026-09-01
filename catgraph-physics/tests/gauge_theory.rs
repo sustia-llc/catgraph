@@ -199,7 +199,7 @@ fn set_state_rejects_out_of_bounds_site() {
         "set_state(&[2, 3]) on a [3, 4] lattice: got false, expected true"
     );
 
-    // One past the end on either axis is rejected, and nothing is inserted.
+    // Out of bounds on either axis is rejected, and nothing is inserted.
     for site in [[3, 0], [0, 4], [3, 4], [7, 9]] {
         assert!(
             !lattice.set_state(&site, graph.clone()),
@@ -228,29 +228,44 @@ fn record_transition_rejects_bad_sites_and_holonomies() {
         "record_transition with in-bounds sites and holonomy 2.0: got false, expected true"
     );
 
-    // Out-of-bounds source, target, or both.
+    // Out-of-bounds source, target, or both. Both directions of each pair are
+    // rejected, so the two-site loop over them has a holonomy only if a
+    // rejected call inserted a link.
     for (from, to) in [([2, 0], [0, 0]), ([0, 0], [0, 2]), ([9, 9], [9, 9])] {
         assert!(
             !lattice.record_transition(&from, &to, 2.0),
             "record_transition({from:?} -> {to:?}) on a [2, 2] lattice: got true, expected false"
         );
+        assert!(
+            !lattice.record_transition(&to, &from, 2.0),
+            "record_transition({to:?} -> {from:?}) on a [2, 2] lattice: got true, expected false"
+        );
+        assert_eq!(
+            lattice.wilson_loop(&[&from, &to]),
+            None,
+            "loop {from:?} -> {to:?} over rejected links: expected None"
+        );
     }
 
-    // Non-finite or non-positive holonomies on in-bounds sites.
+    // Non-finite or non-positive holonomies on in-bounds sites. The reverse
+    // link is recorded first, so the two-site loop closes if a rejected call
+    // inserted the forward link.
+    assert!(
+        lattice.record_transition(&[1, 1], &[0, 1], 1.0),
+        "record_transition([1, 1] -> [0, 1]) with holonomy 1.0: got false, expected true"
+    );
     for h in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, 0.0, -1.5] {
         assert!(
             !lattice.record_transition(&[0, 1], &[1, 1], h),
             "record_transition with holonomy {h}: got true, expected false"
         );
+        assert_eq!(
+            lattice.wilson_loop(&[&[0, 1], &[1, 1]]),
+            None,
+            "loop [0,1] -> [1,1] after a rejected holonomy {h}: expected None"
+        );
     }
 
-    // Nothing rejected was inserted: the only link that survives is the
-    // accepted one, so a loop through a rejected link has no holonomy.
-    assert_eq!(
-        lattice.wilson_loop(&[&[0, 1], &[1, 1]]),
-        None,
-        "loop [0,1] -> [1,1] over rejected links: expected None"
-    );
     assert!(
         lattice.record_transition(&[1, 0], &[0, 0], 0.5),
         "record_transition with holonomy 0.5: got false, expected true"
@@ -481,8 +496,9 @@ fn is_causally_invariant_trivial() {
 // find_wilson_loops: the max_length bound, the D range, the link requirement
 // ---------------------------------------------------------------------------
 
-/// Records both directions of every axis-aligned nearest-neighbour link of a
-/// `dims` lattice with holonomy `h`, so every elementary plaquette is closed.
+/// Records every axis-aligned nearest-neighbour link of a `dims` lattice with
+/// holonomy `h` forward and `1.0 / h` back, so every elementary plaquette is
+/// closed.
 fn record_all_links<const D: usize>(lattice: &mut HypergraphLattice<D>, dims: [usize; D], h: f64) {
     let total: usize = dims.iter().product();
     for flat in 0..total {
@@ -608,23 +624,54 @@ fn find_wilson_loops_3d_covers_every_coordinate_plane() {
          the D==2-only reading records 0"
     );
 
-    // Every recorded plaquette differs from its base site in exactly two axes.
+    // Every recorded plaquette differs from its base site in exactly two axes,
+    // and the axis pairs so moved are the three coordinate planes.
+    let mut planes: Vec<(usize, usize)> = Vec::new();
     for (sites, _) in big.recorded_loops() {
         assert_eq!(sites.len(), 4, "each plaquette has 4 corners");
-        let axes_moved = (0..3)
+        let moved: Vec<usize> = (0..3)
             .filter(|&axis| sites.iter().any(|s| s[axis] != sites[0][axis]))
-            .count();
+            .collect();
         assert_eq!(
-            axes_moved, 2,
-            "plaquette {sites:?} moves in {axes_moved} axes, expected 2"
+            moved.len(),
+            2,
+            "plaquette {sites:?} moves in {} axes, expected 2",
+            moved.len()
         );
+        planes.push((moved[0], moved[1]));
     }
+    planes.sort_unstable();
+    planes.dedup();
+    assert_eq!(
+        planes,
+        vec![(0, 1), (0, 2), (1, 2)],
+        "3x3x3 plaquette axis pairs: expected the three coordinate planes, \
+         a fixed-pair enumeration records only [(0, 1)]"
+    );
+}
+
+#[test]
+fn find_wilson_loops_indexes_each_axis_by_its_own_dimension() {
+    // Elementary-plaquette count of [2, 3, 4]:
+    //   (2-1)(3-1)*4 + (2-1)(4-1)*3 + (3-1)(4-1)*2 = 8 + 9 + 12 = 29.
+    let mut lattice: HypergraphLattice<3> =
+        HypergraphLattice::new([2, 3, 4], HypergraphRewriteGroup::new(2), vec![]);
+    record_all_links(&mut lattice, [2, 3, 4], 1.0);
+
+    lattice.find_wilson_loops(4);
+    assert_eq!(
+        lattice.recorded_loops().len(),
+        29,
+        "[2, 3, 4] lattice: expected 29 plaquettes; a dimensions[0] odometer bound \
+         records 16, a plane test reading dimensions[i] for both corners records 15"
+    );
 }
 
 #[test]
 fn find_wilson_loops_3d_is_not_vacuously_invariant() {
-    // A curved 3D lattice: every link carries holonomy 2.0 forward and 2.0
-    // back, so each plaquette has holonomy 16.0.
+    // A 3D lattice of holonomy-1.0 links, with the four forward links of the
+    // xy plaquette at [0, 0, 0] overwritten with holonomy 2.0, so that
+    // plaquette has holonomy 16.0.
     let mut lattice: HypergraphLattice<3> =
         HypergraphLattice::new([2, 2, 2], HypergraphRewriteGroup::new(2), vec![]);
     record_all_links(&mut lattice, [2, 2, 2], 1.0);

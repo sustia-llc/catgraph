@@ -538,16 +538,18 @@ impl<const D: usize> HypergraphLattice<D> {
         &self.group
     }
 
-    /// Computes the average holonomy across all recorded Wilson loops.
+    /// Mean of the holonomies of the recorded Wilson loops.
+    ///
+    /// Returns `None` when no Wilson loops are recorded.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     #[must_use]
-    pub fn average_holonomy(&self) -> f64 {
+    pub fn average_holonomy(&self) -> Option<f64> {
         if self.wilson_loops.is_empty() {
-            return 1.0;
+            return None;
         }
 
         let sum: f64 = self.wilson_loops.iter().map(|(_, h)| h).sum();
-        sum / self.wilson_loops.len() as f64
+        Some(sum / self.wilson_loops.len() as f64)
     }
 
     /// Reports whether every recorded Wilson loop's holonomy is within `1e-6`
@@ -566,7 +568,9 @@ impl<const D: usize> HypergraphLattice<D> {
         )
     }
 
-    /// Computes total action across all Wilson loops.
+    /// Sum of the plaquette actions of the recorded Wilson loops.
+    ///
+    /// Returns `0.0` when no Wilson loops are recorded.
     #[must_use]
     pub fn total_plaquette_action(&self) -> f64 {
         self.wilson_loops
@@ -821,7 +825,7 @@ mod tests {
             HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![]);
 
         let avg = lattice.average_holonomy();
-        assert_eq!(avg, 1.0); // No loops recorded yet
+        assert_eq!(avg, None); // No loops recorded yet
     }
 
     #[test]
