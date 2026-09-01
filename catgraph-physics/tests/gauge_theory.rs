@@ -665,6 +665,20 @@ fn find_wilson_loops_indexes_each_axis_by_its_own_dimension() {
         "[2, 3, 4] lattice: expected 29 plaquettes; a dimensions[0] odometer bound \
          records 16, a plane test reading dimensions[i] for both corners records 15"
     );
+
+    // Elementary-plaquette count of [4, 3, 2]:
+    //   (4-1)(3-1)*2 + (4-1)(2-1)*3 + (3-1)(2-1)*4 = 12 + 9 + 8 = 29.
+    let mut reversed: HypergraphLattice<3> =
+        HypergraphLattice::new([4, 3, 2], HypergraphRewriteGroup::new(2), vec![]);
+    record_all_links(&mut reversed, [4, 3, 2], 1.0);
+
+    reversed.find_wilson_loops(4);
+    assert_eq!(
+        reversed.recorded_loops().len(),
+        29,
+        "[4, 3, 2] lattice: expected 29 plaquettes; a plane test reading \
+         dimensions[j] for both corners records 15"
+    );
 }
 
 #[test]
@@ -690,6 +704,37 @@ fn find_wilson_loops_3d_is_not_vacuously_invariant() {
         Some(false),
         "2x2x2 lattice with a curved xy plaquette (holonomy 16.0): expected Some(false); \
          a D==2-only enumeration records no loops here"
+    );
+}
+
+#[test]
+fn average_holonomy_divides_the_sum_by_the_loop_count() {
+    // A 2x3 lattice of holonomy-1.0 links carries two plaquettes; the four
+    // links of the plaquette at [0, 0] are overwritten with holonomy 2.0, so
+    // the two holonomies are 16.0 and 1.0.
+    let mut lattice: HypergraphLattice<2> =
+        HypergraphLattice::new([2, 3], HypergraphRewriteGroup::new(2), vec![]);
+    record_all_links(&mut lattice, [2, 3], 1.0);
+    for (from, to) in [
+        ([0usize, 0], [1usize, 0]),
+        ([1, 0], [1, 1]),
+        ([1, 1], [0, 1]),
+        ([0, 1], [0, 0]),
+    ] {
+        assert!(lattice.record_transition(&from, &to, 2.0));
+    }
+
+    lattice.find_wilson_loops(4);
+    assert_eq!(
+        lattice.recorded_loops().len(),
+        2,
+        "2x3 lattice: expected 2 plaquettes"
+    );
+    assert_eq!(
+        lattice.average_holonomy(),
+        Some(8.5),
+        "holonomies 16.0 and 1.0: expected Some(8.5); an undivided sum reads \
+         Some(17.0), an unconditional empty reading reads None"
     );
 }
 
