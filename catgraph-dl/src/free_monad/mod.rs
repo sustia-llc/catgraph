@@ -728,40 +728,38 @@ mod tests {
         }};
     }
 
+    /// Assert `{:.2?}` renders `$carrier` differently from `{:?}` — the
+    /// precision-bearing twin assertions on an `f64` fixture hold vacuously
+    /// once the fixture or the renderer stops carrying precision.
+    macro_rules! assert_precision_visible {
+        ($carrier:expr) => {{
+            let live = &$carrier;
+            assert_ne!(
+                format!("{live:.2?}"),
+                format!("{live:?}"),
+                "{{:.2?}} rendered identically to {{:?}} on `{}`",
+                stringify!($carrier)
+            );
+        }};
+    }
+
     /// Each carrier vs a `#[derive(Debug)]` twin of the same shape, at the
     /// default `{:?}`/`{:#?}` pair and both value pairs of every
     /// spec-carrying form, for `u8`/`u32` and `f64` payloads (precision is
     /// visible only on floats).
     #[test]
     fn every_carrier_debug_is_byte_identical_to_a_derived_twin() {
-        // Anti-vacuity first: the spec-bearing forms must actually render
-        // differently from the default one, or the assertions below carrying
-        // that spec component hold vacuously the moment it stops propagating
-        // on *both* sides — which is exactly how the default-spec-only
-        // version of this oracle passed through a regression. The guard only
-        // observes that the two renderings coincided, not why.
+        // Anti-vacuity: a spec-bearing form must render differently from
+        // the default on a fixture, or the spec assertions on that fixture
+        // hold vacuously. Width is visible on every payload and checked once
+        // here; precision is visible only on floats and checked at each
+        // `f64` fixture by `assert_precision_visible!` ahead of its twin
+        // comparison.
         let (tree, tree_m) = tree_pair::<u8>(SHAPE);
-        let (tree_f, tree_fm) = tree_pair::<f64>(SHAPE);
-        let (nil_f, nil_fm) = list_pair::<f64, f64>(SHAPE * 4, true);
-        assert_ne!(
-            format!("{tree_f:.2?}"),
-            format!("{tree_f:?}"),
-            "{{:.2?}} rendered identically to {{:?}} on `tree_f`"
-        );
         assert_ne!(
             format!("{tree:12?}"),
             format!("{tree:?}"),
             "{{:12?}} rendered identically to {{:?}} on `tree`"
-        );
-        // The list hole's payload reaches the formatter inside a
-        // `(label, slot)` tuple rather than as a `debug_tuple` field; the
-        // nil-terminated tower has no `Pure` payload, so the cons labels are
-        // the only `f64`s and a spec-blind label rendering cannot hide behind
-        // the terminator.
-        assert_ne!(
-            format!("{nil_f:.2?}"),
-            format!("{nil_f:?}"),
-            "{{:.2?}} rendered identically to {{:?}} on `nil_f`"
         );
 
         // Integer payloads: the shape guard, plus `width`.
@@ -787,17 +785,27 @@ mod tests {
         assert_agrees_at_every_carried_spec!(branching, branching_m, "Cofree<TreeEndo<u8>, u32>");
 
         // Float payloads: the same four shapes, at the only payload that can
-        // see `precision` go missing. (`tree_f` built with the guards above.)
+        // see `precision` go missing.
+        let (tree_f, tree_fm) = tree_pair::<f64>(SHAPE);
+        assert_precision_visible!(tree_f);
         assert_agrees_at_every_carried_spec!(tree_f, tree_fm, "BinaryTree<f64>");
 
         let (free_f, free_fm) = free_pair::<f64>(SHAPE);
+        assert_precision_visible!(free_f);
         assert_agrees_at_every_carried_spec!(free_f, free_fm, "Free<TreeEndo<f64>, f64>");
 
         // Cons labels *and* terminator at `f64`: the two payload slots of the
         // list twin are independent, and precision has to reach both.
         let (list_f, list_fm) = list_pair::<f64, f64>(SHAPE * 4, false);
+        assert_precision_visible!(list_f);
         assert_agrees_at_every_carried_spec!(list_f, list_fm, "Free<ListEndo<f64>, f64>");
 
+        // The list hole's payload reaches the formatter inside a
+        // `(label, slot)` tuple rather than as a `debug_tuple` field; the
+        // nil-terminated tower has no `Pure` payload, so the cons labels are
+        // the only `f64`s its precision guard can see.
+        let (nil_f, nil_fm) = list_pair::<f64, f64>(SHAPE * 4, true);
+        assert_precision_visible!(nil_f);
         assert_agrees_at_every_carried_spec!(
             nil_f,
             nil_fm,
@@ -805,9 +813,11 @@ mod tests {
         );
 
         let (stream_f, stream_fm) = stream_pair::<f64>(SHAPE * 4);
+        assert_precision_visible!(stream_f);
         assert_agrees_at_every_carried_spec!(stream_f, stream_fm, "Cofree<OptionWitness, f64>");
 
         let (branching_f, branching_fm) = branching_pair::<f64, f64>(SHAPE);
+        assert_precision_visible!(branching_f);
         assert_agrees_at_every_carried_spec!(
             branching_f,
             branching_fm,
