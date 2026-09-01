@@ -22,6 +22,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - `free_mnd_to_vec` gains a `#[should_panic]` pin on a bare
   `Free::suspend(None)` reaching the panic branch with no `Pure` terminator
   above it ([#312](https://github.com/sustia-llc/catgraph/issues/312)).
+- `ListEndo` joins the `Debug`-twin, `size_of` and deep-spine pins: a
+  `#[derive(Debug)]` twin at `u8` and `f64` payloads and at both bottoms,
+  `==`/`!=` through `Free<ListEndo<_>, _>`, a `size_of` relation and 64-bit
+  byte rows, and a `DEEP` cons tower in the #200 pin, whose prose now
+  enumerates operations per carrier
+  ([#313](https://github.com/sustia-llc/catgraph/issues/313)).
 
 ## [workspace-v0.15.0] - 2026-08-16
 

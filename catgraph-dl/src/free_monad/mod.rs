@@ -433,6 +433,7 @@ mod tests {
     use super::{Cofree, Free, FreeView};
     use crate::container::Container;
     use crate::endofunctor::{DebugFunctor, Either, Functor, HKT, OptionWitness};
+    use crate::free_monad::list_endo::ListEndo;
     use crate::free_monad::tree_endo::{BinaryTree, TreeEndo, TreeView};
     use core::fmt;
     use core::fmt::Write as _;
@@ -475,6 +476,22 @@ mod tests {
         pub enum Free<A> {
             Pure(A),
             Suspend(FreeHole<A>),
+        }
+
+        pub mod list {
+            /// `ListEndo<A>`'s functor hole at the `Free` twin: label and
+            /// recursion slot in one tuple, where `super::FreeHole` keeps them
+            /// in separate `Either` summands. As there, the alias exists only
+            /// to keep `clippy::type_complexity` quiet.
+            type FreeHole<A, Z> = Option<(A, Box<Free<A, Z>>)>;
+
+            /// Twin of `Free<ListEndo<A>, Z>`. Two payload parameters, because
+            /// the carrier has two: the cons labels `A` and the terminator `Z`.
+            #[derive(Debug)]
+            pub enum Free<A, Z> {
+                Pure(Z),
+                Suspend(FreeHole<A, Z>),
+            }
         }
 
         pub mod stream {
@@ -552,6 +569,29 @@ mod tests {
             Free::suspend(Either::Right((Box::new(left), Box::new(right)))),
             mirror::Free::Suspend(Either::Right((Box::new(left_m), Box::new(right_m)))),
         )
+    }
+
+    /// A `len`-cell cons tower and its twin, labelled by cons position so a
+    /// mis-ordered slot shows up as a wrong number.
+    ///
+    /// `ListEndo`'s hole has exactly one recursion slot, so its `None` summand
+    /// can only ever sit at the **bottom** of a tower — `nil_terminated` picks
+    /// which of the two bottoms is built. `ListEndo::fmt_shape`'s `None` arm is
+    /// reached only by the nil one.
+    fn list_pair<A: From<u8>, Z: From<u8>>(
+        len: u8,
+        nil_terminated: bool,
+    ) -> (Free<ListEndo<A>, Z>, mirror::list::Free<A, Z>) {
+        let (mut carrier, mut twin) = if nil_terminated {
+            (Free::suspend(None), mirror::list::Free::Suspend(None))
+        } else {
+            (Free::pure(Z::from(0)), mirror::list::Free::Pure(Z::from(0)))
+        };
+        for step in (1..=len).rev() {
+            carrier = Free::suspend(Some((A::from(step), Box::new(carrier))));
+            twin = mirror::list::Free::Suspend(Some((A::from(step), Box::new(twin))));
+        }
+        (carrier, twin)
     }
 
     fn stream_pair<A: From<u8>>(len: u8) -> (Cofree<OptionWitness, A>, mirror::stream::Cofree<A>) {
@@ -653,6 +693,16 @@ mod tests {
         let (free, free_m) = free_pair::<u8>(SHAPE);
         assert_agrees_at_every_carried_spec!(free, free_m, "Free<TreeEndo<u8>, u8>");
 
+        // `ListEndo` — its hole tuples the cons label with the recursion slot,
+        // so `fmt_shape` renders a *pair* rather than handing the slot straight
+        // to `debug_tuple`. Both bottoms: `Pure(z)` and the nil cell
+        // `Suspend(None)`.
+        let (list, list_m) = list_pair::<u8, u8>(SHAPE * 4, false);
+        assert_agrees_at_every_carried_spec!(list, list_m, "Free<ListEndo<u8>, u8>");
+
+        let (nil, nil_m) = list_pair::<u8, u8>(SHAPE * 4, true);
+        assert_agrees_at_every_carried_spec!(nil, nil_m, "Free<ListEndo<u8>, u8> (nil-terminated)");
+
         let (stream, stream_m) = stream_pair::<u32>(SHAPE * 4);
         assert_agrees_at_every_carried_spec!(stream, stream_m, "Cofree<OptionWitness, u32>");
 
@@ -666,6 +716,18 @@ mod tests {
 
         let (free_f, free_fm) = free_pair::<f64>(SHAPE);
         assert_agrees_at_every_carried_spec!(free_f, free_fm, "Free<TreeEndo<f64>, f64>");
+
+        // Cons labels *and* terminator at `f64`: the two payload slots of the
+        // list twin are independent, and precision has to reach both.
+        let (list_f, list_fm) = list_pair::<f64, f64>(SHAPE * 4, false);
+        assert_agrees_at_every_carried_spec!(list_f, list_fm, "Free<ListEndo<f64>, f64>");
+
+        let (nil_f, nil_fm) = list_pair::<f64, f64>(SHAPE * 4, true);
+        assert_agrees_at_every_carried_spec!(
+            nil_f,
+            nil_fm,
+            "Free<ListEndo<f64>, f64> (nil-terminated)"
+        );
 
         let (stream_f, stream_fm) = stream_pair::<f64>(SHAPE * 4);
         assert_agrees_at_every_carried_spec!(stream_f, stream_fm, "Cofree<OptionWitness, f64>");
@@ -696,6 +758,53 @@ mod tests {
             format!("{tree:12?}"),
             format!("{tree:?}"),
             "the u8 payload must actually render differently under {{:12?}}"
+        );
+        // Same guard for the list hole, whose payload reaches the formatter
+        // inside a `(label, slot)` tuple rather than as a `debug_tuple` field.
+        assert_ne!(
+            format!("{list_f:.2?}"),
+            format!("{list_f:?}"),
+            "precision must reach an f64 cons label through the pair"
+        );
+    }
+
+    /// `==` and `!=` through `Free<ListEndo<A>, Z>`, over cons towers of
+    /// `SHAPE * 4` cells: identical towers at each of the two bottoms, a tower
+    /// differing in its deepest cons label, and the two bottoms against each
+    /// other.
+    ///
+    /// The label case is the one that reaches
+    /// [`EqFunctor::eq_shape`](crate::endofunctor::EqFunctor::eq_shape)'s own
+    /// verdict: every cell above the difference agrees, and both sides have
+    /// arity 1 throughout, so nothing but the label comparison separates them.
+    /// The two-bottoms case is separated by the carrier's `Suspend`/`Pure`
+    /// match, not by the witness.
+    #[test]
+    fn free_over_list_endo_compares_through_the_witness() {
+        const LEN: u8 = SHAPE * 4;
+
+        let (tower, _) = list_pair::<u8, u8>(LEN, false);
+        let (same, _) = list_pair::<u8, u8>(LEN, false);
+        assert_eq!(tower, same, "identically built cons towers compare equal");
+
+        let (nil, _) = list_pair::<u8, u8>(LEN, true);
+        let (nil_again, _) = list_pair::<u8, u8>(LEN, true);
+        assert_eq!(nil, nil_again, "…and so do two nil-terminated ones");
+
+        // The deepest cons label, and only that, differs.
+        let mut odd: Free<ListEndo<u8>, u8> = Free::pure(0);
+        for step in (1..=LEN).rev() {
+            let label = if step == LEN { step + 1 } else { step };
+            odd = Free::suspend(Some((label, Box::new(odd))));
+        }
+        assert_ne!(
+            tower, odd,
+            "a difference in the deepest cons label must make the towers unequal"
+        );
+
+        assert_ne!(
+            nil, tower,
+            "a nil bottom and a Pure bottom under identical labels are unequal"
         );
     }
 
@@ -951,6 +1060,20 @@ mod tests {
             size_of::<FreeView<TreeEndo<u8>, u8>>(),
             "…at the branching witness too"
         );
+        // `ListEndo` reaches the same relation from a different hole: its
+        // `Option<(A, Box<Free>)>` carries the cons label and the recursion
+        // slot in one tuple, where `TreeEndo`'s `Either<A, (Box, Box)>` keeps
+        // them in separate summands.
+        assert_eq!(
+            size_of::<Free<ListEndo<u8>, u8>>(),
+            size_of::<FreeView<ListEndo<u8>, u8>>(),
+            "…and at the list witness, whose hole tuples payload with slot"
+        );
+        assert_eq!(
+            size_of::<Free<ListEndo<f64>, f64>>(),
+            size_of::<FreeView<ListEndo<f64>, f64>>(),
+            "…there too, for a wider cons label and terminator"
+        );
 
         // `BinaryTree`: free as well, since `TreeView::Node` became one boxed
         // pair. A regression to the two-`Box` shape re-spends the view's niche
@@ -988,6 +1111,16 @@ mod tests {
             size_of::<CofreeCell<TreeEndo<u8>, usize>>() + size_of::<usize>(),
             "…there too, for a wider label"
         );
+        assert_eq!(
+            size_of::<Cofree<ListEndo<u8>, u8>>(),
+            size_of::<CofreeCell<ListEndo<u8>, u8>>() + size_of::<usize>(),
+            "…and at the list witness"
+        );
+        assert_eq!(
+            size_of::<Cofree<ListEndo<f64>, f64>>(),
+            size_of::<CofreeCell<ListEndo<f64>, f64>>() + size_of::<usize>(),
+            "…there too, for a wider label"
+        );
 
         // The exact 64-bit layout of every carrier the reshape touched. A
         // 32-bit host has a different (still at-most-one-word) answer, so the
@@ -1011,6 +1144,14 @@ mod tests {
             assert_eq!(size_of::<CofreeCell<TreeEndo<u8>, f64>>(), 24);
             assert_eq!(size_of::<Cofree<TreeEndo<u8>, usize>>(), 32);
             assert_eq!(size_of::<CofreeCell<TreeEndo<u8>, usize>>(), 24);
+            assert_eq!(size_of::<Free<ListEndo<u8>, u8>>(), 24);
+            assert_eq!(size_of::<FreeView<ListEndo<u8>, u8>>(), 24);
+            assert_eq!(size_of::<Free<ListEndo<f64>, f64>>(), 24);
+            assert_eq!(size_of::<FreeView<ListEndo<f64>, f64>>(), 24);
+            assert_eq!(size_of::<Cofree<ListEndo<u8>, u8>>(), 32);
+            assert_eq!(size_of::<CofreeCell<ListEndo<u8>, u8>>(), 24);
+            assert_eq!(size_of::<Cofree<ListEndo<f64>, f64>>(), 32);
+            assert_eq!(size_of::<CofreeCell<ListEndo<f64>, f64>>(), 24);
         }
     }
 }
