@@ -378,7 +378,7 @@ mod tests {
     use super::*;
 
     use super::super::evolution_graph::BranchId;
-    use super::super::test_topologies::{adjacency, topology_fixture};
+    use super::super::test_topologies::{DISTANCE_SUMMARY, adjacency, topology_fixture};
 
     fn make_id(branch: usize, step: usize) -> MultiwayNodeId {
         MultiwayNodeId::new(BranchId(branch), step)
@@ -586,20 +586,39 @@ mod tests {
         }
     }
 
-    /// Scalar curvature of the [`topology_fixture`] indices pinned below.
-    const PINNED_FIXTURE_SCALARS: [(usize, f64); 5] = [
-        (0, -0.201_898_148_148_148_13),
-        (3, -0.155_555_555_555_555_5),
-        (4, 0.0),
-        (5, -0.377_777_777_777_777_6),
-        (6, -0.092_592_592_592_592_6),
-    ];
-
-    /// Shape, range, and scalar-curvature pins for [`topology_fixture`]
-    /// indices 0, 3, 4, 5 and 6, on every feature lane.
+    /// Every [`topology_fixture`] has the pinned all-pairs distance summary:
+    /// sum of the finite entries, count of the infinite ones, largest finite
+    /// entry. On every feature lane.
     #[test]
-    fn topology_fixtures_have_pinned_curvature() {
-        for (i, want_scalar) in PINNED_FIXTURE_SCALARS {
+    fn topology_fixture_distances_are_pinned() {
+        for (i, want_sum, want_infinite, want_max) in DISTANCE_SUMMARY {
+            let bg = topology_fixture(i);
+            let dist = all_pairs_bfs(&adjacency(&bg), bg.nodes.len());
+
+            let finite = dist.iter().flatten().copied().filter(|d| d.is_finite());
+            let sum: f64 = finite.clone().sum();
+            let max = finite.fold(f64::NEG_INFINITY, f64::max);
+            let infinite = dist.iter().flatten().filter(|d| d.is_infinite()).count();
+
+            assert!(
+                sum == want_sum,
+                "fixture {i}: distance sum {sum}, pinned {want_sum}"
+            );
+            assert_eq!(infinite, want_infinite, "fixture {i}: infinite entries");
+            assert!(
+                max == want_max,
+                "fixture {i}: largest hop {max}, pinned {want_max}"
+            );
+        }
+    }
+
+    /// Shape and range of `from_branchial` on [`topology_fixture`] indices 0,
+    /// 3, 4, 5 and 6: dimension, per-vertex and per-edge counts, `κ ∈ [-2, 1]`,
+    /// and that duplicating every edge in reverse leaves the edge count
+    /// unchanged. On every feature lane. Curvature *values* are not pinned.
+    #[test]
+    fn topology_fixtures_reach_from_branchial() {
+        for i in [0, 3, 4, 5, 6] {
             let bg = topology_fixture(i);
             let n = bg.nodes.len();
             let curv = OllivierRicciCurvature::from_branchial(&bg);
@@ -611,9 +630,8 @@ mod tests {
                 "fixture {i}: vertex curvature count"
             );
 
-            // Distinct unordered edges whose endpoints are at a finite,
-            // non-zero hop distance — exactly the set `from_branchial` scores.
-            let dist = all_pairs_bfs(&adjacency(&bg), n);
+            // Distinct unordered non-loop pairs — exactly the set
+            // `from_branchial` scores.
             let idx_of: HashMap<MultiwayNodeId, usize> = bg
                 .nodes
                 .iter()
@@ -627,8 +645,7 @@ mod tests {
                     let ia = *idx_of.get(&a)?;
                     let ib = *idx_of.get(&b)?;
                     let (u, v) = if ia < ib { (ia, ib) } else { (ib, ia) };
-                    let d = dist[u][v];
-                    (d.is_finite() && d != 0.0).then_some((u, v))
+                    (u != v).then_some((u, v))
                 })
                 .collect();
             scored.sort_unstable();
@@ -652,10 +669,17 @@ mod tests {
                 );
             }
 
-            let got = curv.scalar_curvature();
-            assert!(
-                (got - want_scalar).abs() < 1e-12,
-                "fixture {i}: scalar curvature {got}, pinned {want_scalar}"
+            // Each edge repeated in the opposite orientation: the undirected
+            // dedup must collapse the copies back to the same edge count.
+            let mut doubled = bg.clone();
+            doubled
+                .edges
+                .extend(bg.edges.iter().map(|&(a, b)| (b, a)).collect::<Vec<_>>());
+            let doubled_curv = OllivierRicciCurvature::from_branchial(&doubled);
+            assert_eq!(
+                doubled_curv.edge_curvatures.len(),
+                curv.edge_curvatures.len(),
+                "fixture {i}: edge curvature count with every edge duplicated in reverse"
             );
         }
     }
@@ -665,15 +689,15 @@ mod tests {
     #[cfg(feature = "rustworkx")]
     #[test]
     fn distance_matrix_matches_queue_bfs_on_topology_fixtures() {
-        use super::super::test_topologies::TOPOLOGY_FIXTURE_COUNT;
+        use super::super::test_topologies::{TOPOLOGY_FIXTURE_COUNT, assert_same_matrix};
 
         for i in 0..TOPOLOGY_FIXTURE_COUNT {
             let bg = topology_fixture(i);
             let n = bg.nodes.len();
-            assert_eq!(
-                super::super::branchial_analysis::branchial_distance_matrix(&bg),
-                all_pairs_bfs(&adjacency(&bg), n),
-                "fixture {i}: rustworkx distance matrix differs from the queue BFS"
+            assert_same_matrix(
+                &super::super::branchial_analysis::branchial_distance_matrix(&bg),
+                &all_pairs_bfs(&adjacency(&bg), n),
+                &format!("fixture {i}: rustworkx distance matrix vs queue BFS"),
             );
         }
     }

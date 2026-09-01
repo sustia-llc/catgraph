@@ -570,28 +570,15 @@ mod tests {
 
     // --- parallel-path differentials ----------------------------------------
 
-    /// A 324-node branchial graph: a seeded `G(320, 0.01)` block plus a
-    /// disjoint 4-node path, so the distance matrix carries both
-    /// `f64::INFINITY` and a hop count of 3.
+    /// A seeded `G(320, 0.01)` branchial graph.
     fn apsp_fixture() -> BranchialGraph {
-        use super::super::evolution_graph::BranchId;
         use super::super::test_topologies::branchial_from_ungraph;
         use rustworkx_core::generators::gnp_random_graph;
         use rustworkx_core::petgraph::graph::UnGraph;
 
         let g: UnGraph<(), ()> = gnp_random_graph(320, 0.01, Some(0x0A75_0BED), || (), || ())
             .expect("gnp_random_graph(320, 0.01) has valid arguments");
-        let mut bg = branchial_from_ungraph(0, &g);
-
-        let base = bg.nodes.len();
-        let path: Vec<MultiwayNodeId> = (base..base + 4)
-            .map(|i| MultiwayNodeId::new(BranchId(i), 0))
-            .collect();
-        for pair in path.windows(2) {
-            bg.edges.push((pair[0], pair[1]));
-        }
-        bg.nodes.extend(path);
-        bg
+        branchial_from_ungraph(0, &g)
     }
 
     /// Above `APSP_PARALLEL_THRESHOLD` the rayon all-pairs sweep still matches
@@ -599,33 +586,35 @@ mod tests {
     #[test]
     fn distance_matrix_matches_bfs_above_the_parallel_threshold() {
         use super::super::ollivier_ricci::all_pairs_bfs;
-        use super::super::test_topologies::adjacency;
+        use super::super::test_topologies::{adjacency, assert_same_matrix};
 
         let bg = apsp_fixture();
         let n = bg.nodes.len();
-        assert_eq!(n, 324);
+        assert_eq!(n, 320);
         #[cfg(feature = "parallel")]
         assert!(n >= APSP_PARALLEL_THRESHOLD);
 
         let matrix = branchial_distance_matrix(&bg);
 
-        // Both ends of the value range are present: the gnp block and the
-        // appended path never reach each other, and the path itself is 3 hops
-        // end to end.
+        // Both ends of the value range are present in the gnp block itself.
         assert!(
             matrix.iter().flatten().any(|d| d.is_infinite()),
-            "the two components must leave f64::INFINITY in the matrix"
+            "the gnp block must leave f64::INFINITY in the matrix"
         );
         assert!(
             matrix.iter().flatten().any(|d| d.is_finite() && *d >= 3.0),
-            "the appended path must leave a hop count of at least 3"
+            "the gnp block must leave a hop count of at least 3"
         );
 
-        assert_eq!(matrix, all_pairs_bfs(&adjacency(&bg), n));
-        assert_eq!(
-            matrix,
-            branchial_distance_matrix(&bg),
-            "two runs of the rayon sweep must agree"
+        assert_same_matrix(
+            &matrix,
+            &all_pairs_bfs(&adjacency(&bg), n),
+            "rayon sweep vs queue BFS",
+        );
+        assert_same_matrix(
+            &matrix,
+            &branchial_distance_matrix(&bg),
+            "two runs of the rayon sweep",
         );
     }
 

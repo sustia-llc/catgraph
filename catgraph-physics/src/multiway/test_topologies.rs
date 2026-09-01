@@ -15,7 +15,6 @@ use super::branchial::BranchialGraph;
 use super::evolution_graph::{BranchId, MultiwayNodeId};
 
 /// Number of indices [`topology_fixture`] distinguishes.
-#[cfg_attr(not(feature = "rustworkx"), allow(dead_code))]
 pub(crate) const TOPOLOGY_FIXTURE_COUNT: usize = 7;
 
 /// Reinterprets an undirected graph as a branchial graph at `step`.
@@ -58,6 +57,44 @@ pub(crate) fn topology_fixture(i: usize) -> BranchialGraph {
             .expect("grid_graph(4, 6) has valid arguments"),
     };
     branchial_from_ungraph(1, &g)
+}
+
+/// All-pairs distance summary of each [`topology_fixture`], in fixture order:
+/// `(fixture, sum of every finite entry, count of infinite entries, largest
+/// finite entry)`.
+pub(crate) const DISTANCE_SUMMARY: [(usize, f64, usize, f64); TOPOLOGY_FIXTURE_COUNT] = [
+    (0, 1112.0, 246, 8.0),
+    (1, 1322.0, 0, 2.0),
+    (2, 3400.0, 0, 4.0),
+    (3, 1114.0, 0, 6.0),
+    (4, 5200.0, 0, 24.0),
+    (5, 150.0, 0, 2.0),
+    (6, 1840.0, 0, 8.0),
+];
+
+/// Asserts two distance matrices are equal, reporting the first differing
+/// entry as `(row, column)` with both values, or the two shapes.
+#[cfg_attr(not(feature = "rustworkx"), allow(dead_code))]
+pub(crate) fn assert_same_matrix(got: &[Vec<f64>], want: &[Vec<f64>], label: &str) {
+    assert_eq!(
+        got.len(),
+        want.len(),
+        "{label}: row count {} vs {}",
+        got.len(),
+        want.len()
+    );
+    for (i, (got_row, want_row)) in got.iter().zip(want).enumerate() {
+        assert_eq!(
+            got_row.len(),
+            want_row.len(),
+            "{label}: row {i} length {} vs {}",
+            got_row.len(),
+            want_row.len()
+        );
+        for (j, (&g, &w)) in got_row.iter().zip(want_row).enumerate() {
+            assert!(g == w, "{label}: first difference at ({i},{j}): {g} vs {w}");
+        }
+    }
 }
 
 /// Undirected adjacency lists over `graph.nodes` positions: every edge
