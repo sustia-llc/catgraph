@@ -72,13 +72,7 @@ impl SpanSide {
     }
 }
 
-impl std::fmt::Display for SpanSide {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.graph_name())
-    }
-}
-
-/// A kernel vertex of a [`RewriteSpan`] that does not embed in one leg.
+/// A way a [`RewriteSpan`]'s kernel fails to embed in one leg.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RewriteSpanError {
     /// The kernel vertex has no entry in the named side's morphism map.
@@ -97,6 +91,18 @@ pub enum RewriteSpanError {
         /// Its image under that side's morphism.
         image: usize,
         /// The side whose hypergraph lacks the image.
+        side: SpanSide,
+    },
+
+    /// Two kernel vertices share an image under the named side's morphism.
+    NonInjectiveMap {
+        /// The kernel vertex that took the image first.
+        vertex_a: usize,
+        /// The kernel vertex that found it taken.
+        vertex_b: usize,
+        /// The image both map to.
+        image: usize,
+        /// The side whose morphism is not injective.
         side: SpanSide,
     },
 }
@@ -118,6 +124,16 @@ impl std::fmt::Display for RewriteSpanError {
                 "kernel vertex {vertex} maps to {image} under {}, which is not a vertex of {}",
                 side.map_name(),
                 side.graph_name()
+            ),
+            Self::NonInjectiveMap {
+                vertex_a,
+                vertex_b,
+                image,
+                side,
+            } => write!(
+                f,
+                "kernel vertices {vertex_a} and {vertex_b} both map to {image} under {}",
+                side.map_name()
             ),
         }
     }
@@ -145,10 +161,12 @@ impl RewriteSpan {
     ///   absent from `left_map` or from `right_map`.
     /// - [`RewriteSpanError::ImageNotAVertex`] if a kernel vertex's image is
     ///   not a vertex of that side's hypergraph.
+    /// - [`RewriteSpanError::NonInjectiveMap`] if two kernel vertices share an
+    ///   image under `left_map` or under `right_map`.
     ///
-    /// Kernel vertices are scanned in ascending order, and within a vertex the
-    /// left checks precede the right ones, so the reported failure is the first
-    /// in that order.
+    /// Kernel vertices are scanned in ascending order; within a vertex the left
+    /// checks precede the right ones, and within a side the checks run in the
+    /// order listed above, so the reported failure is the first in that order.
     pub fn try_new(
         left: Hypergraph,
         kernel: Hypergraph,
@@ -156,10 +174,12 @@ impl RewriteSpan {
         left_map: HashMap<usize, usize>,
         right_map: HashMap<usize, usize>,
     ) -> Result<Self, RewriteSpanError> {
+        let mut left_preimages: HashMap<usize, usize> = HashMap::new();
+        let mut right_preimages: HashMap<usize, usize> = HashMap::new();
         for k_vert in kernel.vertices() {
-            for (side, map, graph) in [
-                (SpanSide::Left, &left_map, &left),
-                (SpanSide::Right, &right_map, &right),
+            for (side, map, graph, preimages) in [
+                (SpanSide::Left, &left_map, &left, &mut left_preimages),
+                (SpanSide::Right, &right_map, &right, &mut right_preimages),
             ] {
                 let image = *map
                     .get(&k_vert)
@@ -170,6 +190,14 @@ impl RewriteSpan {
                 if !graph.contains_vertex(image) {
                     return Err(RewriteSpanError::ImageNotAVertex {
                         vertex: k_vert,
+                        image,
+                        side,
+                    });
+                }
+                if let Some(vertex_a) = preimages.insert(image, k_vert) {
+                    return Err(RewriteSpanError::NonInjectiveMap {
+                        vertex_a,
+                        vertex_b: k_vert,
                         image,
                         side,
                     });
@@ -813,8 +841,9 @@ mod tests {
         );
     }
 
-    /// `try_new` on a kernel vertex missing from a map, and on one whose image
-    /// is absent from that side's hypergraph.
+    /// `try_new` on a kernel vertex missing from a map, on one whose image is
+    /// absent from that side's hypergraph, and on two sharing an image — each
+    /// on both sides.
     #[test]
     fn try_new_rejects_kernel_vertices_that_do_not_embed() {
         let left = Hypergraph::from_edges(vec![vec![0, 1]]);
@@ -860,6 +889,76 @@ mod tests {
                 side: SpanSide::Right,
             }),
             "9 is not a vertex of R = {{0,1}}"
+        );
+
+        let wide_left = Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2]]);
+        let unmapped_right = RewriteSpan::try_new(
+            wide_left,
+            kernel,
+            right.clone(),
+            full,
+            HashMap::from([(0, 0), (1, 1)]),
+        );
+        assert_eq!(
+            unmapped_right.err(),
+            Some(RewriteSpanError::UnmappedKernelVertex {
+                vertex: 2,
+                side: SpanSide::Right,
+            }),
+            "kernel vertex 2 has no right_map entry"
+        );
+
+        let stray_left = RewriteSpan::try_new(
+            left.clone(),
+            two_vertex_kernel.clone(),
+            right.clone(),
+            HashMap::from([(0, 0), (1, 9)]),
+            HashMap::from([(0, 0), (1, 1)]),
+        );
+        assert_eq!(
+            stray_left.err(),
+            Some(RewriteSpanError::ImageNotAVertex {
+                vertex: 1,
+                image: 9,
+                side: SpanSide::Left,
+            }),
+            "9 is not a vertex of L = {{0,1}}"
+        );
+
+        let collide_left = RewriteSpan::try_new(
+            left.clone(),
+            two_vertex_kernel.clone(),
+            right.clone(),
+            HashMap::from([(0, 0), (1, 0)]),
+            HashMap::from([(0, 0), (1, 1)]),
+        );
+        assert_eq!(
+            collide_left.err(),
+            Some(RewriteSpanError::NonInjectiveMap {
+                vertex_a: 0,
+                vertex_b: 1,
+                image: 0,
+                side: SpanSide::Left,
+            }),
+            "kernel vertices 0 and 1 share left image 0"
+        );
+
+        let collide_right = RewriteSpan::try_new(
+            left.clone(),
+            two_vertex_kernel.clone(),
+            right.clone(),
+            HashMap::from([(0, 0), (1, 1)]),
+            HashMap::from([(0, 0), (1, 0)]),
+        );
+        assert_eq!(
+            collide_right.err(),
+            Some(RewriteSpanError::NonInjectiveMap {
+                vertex_a: 0,
+                vertex_b: 1,
+                image: 0,
+                side: SpanSide::Right,
+            }),
+            "kernel vertices 0 and 1 share right image 0"
         );
 
         assert!(
@@ -910,6 +1009,26 @@ mod tests {
             }
             .to_string(),
             "kernel vertex 0 maps to 3 under left_map, which is not a vertex of left"
+        );
+        assert_eq!(
+            RewriteSpanError::NonInjectiveMap {
+                vertex_a: 0,
+                vertex_b: 1,
+                image: 0,
+                side: SpanSide::Left,
+            }
+            .to_string(),
+            "kernel vertices 0 and 1 both map to 0 under left_map"
+        );
+        assert_eq!(
+            RewriteSpanError::NonInjectiveMap {
+                vertex_a: 3,
+                vertex_b: 5,
+                image: 2,
+                side: SpanSide::Right,
+            }
+            .to_string(),
+            "kernel vertices 3 and 5 both map to 2 under right_map"
         );
     }
 
