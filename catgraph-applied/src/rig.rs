@@ -940,6 +940,23 @@ mod tests {
         }
     }
 
+    #[test]
+    fn verify_axioms_z_sample() {
+        let samples = [
+            crate::z::Z::from(-3_i64),
+            crate::z::Z::from(0_i64),
+            crate::z::Z::from(1_i64),
+            crate::z::Z::from(7_i64),
+        ];
+        for a in &samples {
+            for b in &samples {
+                for c in &samples {
+                    verify_rig_axioms(a, b, c).unwrap();
+                }
+            }
+        }
+    }
+
     // `-0.0 == 0.0` under IEEE `PartialEq`, so `Eq`/`Hash` must hash them
     // alike; each rig asserts both. Both values are hashed with the SAME
     // `BuildHasher` — a per-call `RandomState` reseeds.

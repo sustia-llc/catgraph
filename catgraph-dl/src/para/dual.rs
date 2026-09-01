@@ -189,3 +189,42 @@ impl<T: Copy + Zero + One + Add<Output = T> + Mul<Output = T>> One for Dual<T> {
         self.re.is_one() && self.du.is_zero()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use catgraph_applied::rig::verify_rig_axioms;
+
+    // `verify_rig_axioms` checks axioms in a fixed order and aborts on the
+    // first failure, so a `Mul` cross-term bug that breaks a rig law is caught
+    // via the multiplicative-identity check (`a * one() == a`) on whichever
+    // nonzero-`du` sample sorts first — the multiple nonzero-`du` samples below
+    // give catch redundancy for that identity check, not independent
+    // multi-operand associativity/distributivity coverage. This is a rig-axiom
+    // oracle, not a chain-rule oracle: a `Mul` corruption that stays isomorphic
+    // to a valid Rig (e.g. folding an `ε²` term into both channels) satisfies
+    // every rig axiom and is invisible to this test.
+    #[test]
+    fn verify_axioms_dual_f64_sample() {
+        let samples = [
+            Dual::new(0.0, 0.0),
+            Dual::new(1.0, 0.0),
+            Dual::new(2.5, -1.0),
+            Dual::new(-3.0, 4.0),
+            Dual::new(0.5, 2.0),
+            Dual::new(-4.0, -0.5),
+            Dual::variable(3.0),
+            Dual::variable(-1.0),
+            Dual::constant(-2.0),
+            Dual::zero(),
+            Dual::one(),
+        ];
+        for a in &samples {
+            for b in &samples {
+                for c in &samples {
+                    verify_rig_axioms(a, b, c).unwrap();
+                }
+            }
+        }
+    }
+}
