@@ -36,6 +36,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed — tests
 
+- `smc_nf`'s Step 7 block-transposition pass: `block_transposition_needs_
+  adjacency_in_every_shared_layer` pins a fixture where a braid-carrying
+  component separates two free components' runs in 2 of their 3 shared
+  layers, so `blocks_are_adjacent` must decline the pair — a targeted
+  release-mode oracle on the rewritten diagram, replacing reliance on the
+  debug-only `reorder_component_blocks` assertion
+  ([#373](https://github.com/sustia-llc/catgraph/issues/373)).
 - `mat_to_sfg` round-trip at the Tropical rig zero: `prop_5_56_tropical_rig_zero`
   pins `Tropical::zero()` (`+∞`) at 1×1, 2×2 all-zero and mixed with finite
   entries; `roundtrip_tropical` samples that zero alongside `0.0, 1.0, 2.0, 3.0`

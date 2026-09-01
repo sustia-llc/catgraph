@@ -692,7 +692,7 @@ cache-verified (2026-07-19, #117 — see the header provenance note).
 | Interchange law; `id_0` as unit ("zero wires") | Selinger Table 2 p. 10 (+ interchange example below it) | Steps 2/5; `smc_bifunctoriality_interchange` |
 | 0-arity sink/source absorption `L1;(X⊗id_k)=X⊗L1` etc. | JS-I Ch 1 §1 + §4 Thm 1.2 p. 71 | Step 2 `try_unitor_merge`; `unitor_merge_*` |
 | Strictly-commuting zero-arity atoms `ε⊗η=η⊗ε` (both connecting braids `σ_{0,n}=id`) | JS-I Ch 1 §1 p. 57 (`id_0` unit) + Ch 1 §4 Thm 1.2 p. 71 | Step 6 `reorder_tied_zero_arity` (§2.5); `zero_arity_order::*` |
-| Free component blocks commute `B1⊗B2=B2⊗B1` (both connecting braids `σ_{0,n}=id` at block level) | JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) + Ch 2 §1 axiom (S) p. 73 (degenerate case) | Step 7 `reorder_component_blocks` (§2.6); `smc_canonicality_probes::block_transposition_*` |
+| Free component blocks commute `B1⊗B2=B2⊗B1` (both connecting braids `σ_{0,n}=id` at block level) | JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) + Ch 2 §1 axiom (S) p. 73 (degenerate case) | Step 7 `reorder_component_blocks` (§2.6); `smc_canonicality_probes::block_transposition_*`; `smc_nf_regression::review_soundness_fixes::block_transposition_needs_adjacency_in_every_shared_layer` (adjacency required in every shared layer, not just one) |
 
 ### Coverage summary
 
