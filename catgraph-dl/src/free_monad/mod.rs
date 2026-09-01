@@ -43,7 +43,8 @@
 //! Surface: [`Free`] has `pure`/`suspend`/`from_view`/`into_view`/`as_view`/`fold`;
 //! [`Cofree`] has `new`/`head`/`tail`/`into_parts`/`unfold`. No `bind`/`map`
 //! on `Free`, no `extract`/`extend` on `Cofree`, no [`Functor`] impl on
-//! [`CofreeWitness`], no carrier `Clone`.
+//! [`CofreeWitness`]; `Free` and `Cofree` ship no `Clone` (`BinaryTree`
+//! derives one).
 
 mod cofree;
 mod free;
@@ -574,10 +575,10 @@ mod tests {
     /// A `len`-cell cons tower and its twin, labelled by cons position so a
     /// mis-ordered slot shows up as a wrong number.
     ///
-    /// `ListEndo`'s hole has exactly one recursion slot, so its `None` summand
-    /// can only ever sit at the **bottom** of a tower — `nil_terminated` picks
-    /// which of the two bottoms is built. `ListEndo::fmt_shape`'s `None` arm is
-    /// reached only by the nil one.
+    /// `ListEndo`'s `None` summand has arity 0, so it can only ever sit at the
+    /// **bottom** of a tower — `nil_terminated` picks which of the two bottoms
+    /// is built. `ListEndo::fmt_shape`'s `None` arm is reached only by the nil
+    /// one.
     fn list_pair<A: From<u8>, Z: From<u8>>(
         len: u8,
         nil_terminated: bool,
@@ -649,10 +650,11 @@ mod tests {
     /// Assert a carrier and its derived twin agree **character for character**
     /// across every format spec the renderer claims to carry.
     ///
-    /// The default `{:?}` / `{:#?}` pair is the shape guard; the four
-    /// spec-bearing forms are the [`Spec`](super::Spec) guard, and only bite on
-    /// a payload whose own `Debug` honours `precision` / `width` — hence the
-    /// `f64` instantiations at the call sites. `width` bites on integers too.
+    /// The default `{:?}` / `{:#?}` pair is the shape guard; the six
+    /// spec-bearing forms are the [`Spec`](super::Spec) guard — one per
+    /// spec-carrying renderer arm — and only bite on a payload whose own
+    /// `Debug` honours `precision` / `width` — hence the `f64` instantiations
+    /// at the call sites. `width` bites on integers too.
     macro_rules! assert_agrees_at_every_carried_spec {
         ($carrier:expr, $twin:expr, $what:expr) => {{
             let (live, twin, what) = (&$carrier, &$twin, $what);
@@ -678,12 +680,23 @@ mod tests {
                 format!("{twin:#12?}"),
                 "{what} {{:#12?}} — width must survive the pretty form too"
             );
+            assert_eq!(
+                format!("{live:12.2?}"),
+                format!("{twin:12.2?}"),
+                "{what} {{:12.2?}} — width and precision must combine"
+            );
+            assert_eq!(
+                format!("{live:#12.2?}"),
+                format!("{twin:#12.2?}"),
+                "{what} {{:#12.2?}} — width and precision must combine in the pretty form"
+            );
         }};
     }
 
     /// Each carrier vs a `#[derive(Debug)]` twin of the same shape, at `{:?}`,
-    /// `{:#?}`, `{:.2?}`, `{:#.2?}`, `{:12?}`, `{:#12?}`, for `u8`/`u32` and
-    /// `f64` payloads (precision is visible only on floats).
+    /// `{:#?}`, `{:.2?}`, `{:#.2?}`, `{:12?}`, `{:#12?}`, `{:12.2?}`,
+    /// `{:#12.2?}`, for `u8`/`u32` and `f64` payloads (precision is visible
+    /// only on floats).
     #[test]
     fn every_carrier_debug_is_byte_identical_to_a_derived_twin() {
         // Integer payloads: the shape guard, plus `width`.
@@ -761,9 +774,12 @@ mod tests {
         );
         // Same guard for the list hole, whose payload reaches the formatter
         // inside a `(label, slot)` tuple rather than as a `debug_tuple` field.
+        // The nil-terminated tower: no `Pure` payload, so the cons labels are
+        // the only `f64`s and a spec-blind label rendering cannot hide behind
+        // the terminator.
         assert_ne!(
-            format!("{list_f:.2?}"),
-            format!("{list_f:?}"),
+            format!("{nil_f:.2?}"),
+            format!("{nil_f:?}"),
             "precision must reach an f64 cons label through the pair"
         );
     }
