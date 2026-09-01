@@ -43,8 +43,8 @@
 //! Surface: [`Free`] has `pure`/`suspend`/`from_view`/`into_view`/`as_view`/`fold`;
 //! [`Cofree`] has `new`/`head`/`tail`/`into_parts`/`unfold`. No `bind`/`map`
 //! on `Free`, no `extract`/`extend` on `Cofree`, no [`Functor`] impl on
-//! [`CofreeWitness`]; `Free` and `Cofree` ship no `Clone` (`BinaryTree`
-//! derives one).
+//! [`CofreeWitness`]; `Free` and `Cofree` ship no `Clone` (`BinaryTree`'s
+//! is the hand-written iterative impl noted above).
 
 mod cofree;
 mod free;
@@ -648,13 +648,14 @@ mod tests {
     }
 
     /// Assert a carrier and its derived twin agree **character for character**
-    /// across every format spec the renderer claims to carry.
+    /// at the format specs below: every spec-carrying renderer arm, and a
+    /// second value pair per axis so a renderer hardcoding the first pair's
+    /// values cannot pass.
     ///
-    /// The default `{:?}` / `{:#?}` pair is the shape guard; the six
-    /// spec-bearing forms are the [`Spec`](super::Spec) guard — one per
-    /// spec-carrying renderer arm — and only bite on a payload whose own
-    /// `Debug` honours `precision` / `width` — hence the `f64` instantiations
-    /// at the call sites. `width` bites on integers too.
+    /// The default `{:?}` / `{:#?}` pair is the shape guard; the spec-bearing
+    /// forms are the [`Spec`](super::Spec) guard, and only bite on a payload
+    /// whose own `Debug` honours `precision` / `width` — hence the `f64`
+    /// instantiations at the call sites. `width` bites on integers too.
     macro_rules! assert_agrees_at_every_carried_spec {
         ($carrier:expr, $twin:expr, $what:expr) => {{
             let (live, twin, what) = (&$carrier, &$twin, $what);
@@ -690,17 +691,60 @@ mod tests {
                 format!("{twin:#12.2?}"),
                 "{what} {{:#12.2?}} — width and precision must combine in the pretty form"
             );
+            // A second value pair per axis: a renderer that hardcodes the
+            // values above (`12`/`2`) instead of forwarding the caller's
+            // passes every assert before this line.
+            assert_eq!(
+                format!("{live:.5?}"),
+                format!("{twin:.5?}"),
+                "{what} {{:.5?}} — the caller's precision value must be forwarded"
+            );
+            assert_eq!(
+                format!("{live:20.7?}"),
+                format!("{twin:20.7?}"),
+                "{what} {{:20.7?}} — the caller's width and precision values must be forwarded"
+            );
         }};
     }
 
     /// Each carrier vs a `#[derive(Debug)]` twin of the same shape, at `{:?}`,
     /// `{:#?}`, `{:.2?}`, `{:#.2?}`, `{:12?}`, `{:#12?}`, `{:12.2?}`,
-    /// `{:#12.2?}`, for `u8`/`u32` and `f64` payloads (precision is visible
-    /// only on floats).
+    /// `{:#12.2?}`, `{:.5?}`, `{:20.7?}`, for `u8`/`u32` and `f64` payloads
+    /// (precision is visible only on floats).
     #[test]
     fn every_carrier_debug_is_byte_identical_to_a_derived_twin() {
-        // Integer payloads: the shape guard, plus `width`.
+        // Anti-vacuity first: the spec-bearing forms must actually render
+        // differently from the default one, or every spec assertion below
+        // holds vacuously the moment a spec stops propagating on *both*
+        // sides — which is exactly how the default-spec-only version of this
+        // oracle passed through a regression. Ahead of the twin comparisons
+        // so a fixture drift fails here, as a fixture drift, instead of
+        // surfacing as some later byte mismatch.
         let (tree, tree_m) = tree_pair::<u8>(SHAPE);
+        let (tree_f, tree_fm) = tree_pair::<f64>(SHAPE);
+        let (nil_f, nil_fm) = list_pair::<f64, f64>(SHAPE * 4, true);
+        assert_ne!(
+            format!("{tree_f:.2?}"),
+            format!("{tree_f:?}"),
+            "the f64 payload must actually render differently under {{:.2?}}"
+        );
+        assert_ne!(
+            format!("{tree:12?}"),
+            format!("{tree:?}"),
+            "the u8 payload must actually render differently under {{:12?}}"
+        );
+        // The list hole's payload reaches the formatter inside a
+        // `(label, slot)` tuple rather than as a `debug_tuple` field; the
+        // nil-terminated tower has no `Pure` payload, so the cons labels are
+        // the only `f64`s and a spec-blind label rendering cannot hide behind
+        // the terminator.
+        assert_ne!(
+            format!("{nil_f:.2?}"),
+            format!("{nil_f:?}"),
+            "precision must reach an f64 cons label through the pair"
+        );
+
+        // Integer payloads: the shape guard, plus `width`.
         assert_agrees_at_every_carried_spec!(tree, tree_m, "BinaryTree<u8>");
 
         let (free, free_m) = free_pair::<u8>(SHAPE);
@@ -723,8 +767,7 @@ mod tests {
         assert_agrees_at_every_carried_spec!(branching, branching_m, "Cofree<TreeEndo<u8>, u32>");
 
         // Float payloads: the same four shapes, at the only payload that can
-        // see `precision` go missing.
-        let (tree_f, tree_fm) = tree_pair::<f64>(SHAPE);
+        // see `precision` go missing. (`tree_f` built with the guards above.)
         assert_agrees_at_every_carried_spec!(tree_f, tree_fm, "BinaryTree<f64>");
 
         let (free_f, free_fm) = free_pair::<f64>(SHAPE);
@@ -735,7 +778,6 @@ mod tests {
         let (list_f, list_fm) = list_pair::<f64, f64>(SHAPE * 4, false);
         assert_agrees_at_every_carried_spec!(list_f, list_fm, "Free<ListEndo<f64>, f64>");
 
-        let (nil_f, nil_fm) = list_pair::<f64, f64>(SHAPE * 4, true);
         assert_agrees_at_every_carried_spec!(
             nil_f,
             nil_fm,
@@ -756,32 +798,6 @@ mod tests {
         // compact one: at this depth they are many times longer and multi-line.
         assert!(format!("{tree:#?}").len() > 8 * format!("{tree:?}").len());
         assert!(format!("{branching:#?}").lines().count() > 100);
-
-        // …and the spec-bearing forms really are a different rendering, not a
-        // rerun of the default one. Without this, every `{:.2?}` assertion
-        // above would hold vacuously the moment precision stopped propagating
-        // on *both* sides — which is exactly how the default-spec-only version
-        // of this oracle passed through a regression.
-        assert_ne!(
-            format!("{tree_f:.2?}"),
-            format!("{tree_f:?}"),
-            "the f64 payload must actually render differently under {{:.2?}}"
-        );
-        assert_ne!(
-            format!("{tree:12?}"),
-            format!("{tree:?}"),
-            "the u8 payload must actually render differently under {{:12?}}"
-        );
-        // Same guard for the list hole, whose payload reaches the formatter
-        // inside a `(label, slot)` tuple rather than as a `debug_tuple` field.
-        // The nil-terminated tower: no `Pure` payload, so the cons labels are
-        // the only `f64`s and a spec-blind label rendering cannot hide behind
-        // the terminator.
-        assert_ne!(
-            format!("{nil_f:.2?}"),
-            format!("{nil_f:?}"),
-            "precision must reach an f64 cons label through the pair"
-        );
     }
 
     /// `==` and `!=` through `Free<ListEndo<A>, Z>`, over cons towers of

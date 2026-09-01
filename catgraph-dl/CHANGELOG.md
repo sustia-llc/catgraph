@@ -26,7 +26,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
   `#[derive(Debug)]` twin at `u8` and `f64` payloads and at both bottoms,
   `==`/`!=` through `Free<ListEndo<_>, _>`, a `size_of` relation and 64-bit
   byte rows, and a `DEEP` cons tower in the #200 pin, whose prose now
-  enumerates operations per carrier
+  enumerates operations per carrier. The twin macro grew the
+  width-and-precision forms (`{:12.2?}`/`{:#12.2?}`) and a second value pair
+  (`{:.5?}`/`{:20.7?}`)
   ([#313](https://github.com/sustia-llc/catgraph/issues/313)).
 
 ## [workspace-v0.15.0] - 2026-08-16
