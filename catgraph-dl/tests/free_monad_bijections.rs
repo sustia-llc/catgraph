@@ -36,9 +36,9 @@
 //!    witness, and `==`, `!=`, `{:?}` and `fold` on the list one; `Cofree`
 //!    `unfold`, `head`, `tail`, the witness's `contents`, `==`, `!=` and
 //!    `{:?}`; the B.19 and B.20 bijections in both directions; and drops —
-//!    explicit for the `BinaryTree` and `Cofree` values, via consumption for
-//!    the `Free` ones. `Clone` is `BinaryTree`'s alone — the other two
-//!    carriers ship none.
+//!    explicit for the `BinaryTree` and `Cofree` values, by consumption or
+//!    statement-scope `Drop` for the `Free` ones. `Clone` is `BinaryTree`'s
+//!    alone — the other two carriers ship none.
 //! 8. `free_mnd_to_vec_panics_on_bare_suspend_none` — the documented panic
 //!    contract (#312) on a non-canonical `Free::suspend(None)` reaching
 //!    `free_mnd_to_vec` with no `Pure` terminator above it. Engineering drift
