@@ -650,7 +650,8 @@ mod tests {
     /// Assert a carrier and its derived twin agree **character for character**
     /// at the format specs below: every spec-carrying renderer arm at two
     /// value pairs, so a renderer hardcoding the first pair's values in any
-    /// arm cannot pass.
+    /// arm cannot pass. A width anti-vacuity check on the carrier alone runs
+    /// first.
     ///
     /// The default `{:?}` / `{:#?}` pair is the shape guard; the spec-bearing
     /// forms are the [`Spec`](super::Spec) guard, and only bite on a payload
@@ -659,6 +660,14 @@ mod tests {
     macro_rules! assert_agrees_at_every_carried_spec {
         ($carrier:expr, $twin:expr, $what:expr) => {{
             let (live, twin, what) = (&$carrier, &$twin, $what);
+            // Anti-vacuity: a fixture whose payloads cannot show width makes
+            // every width-bearing assertion below vacuous (carrier and twin
+            // both render the default).
+            assert_ne!(
+                format!("{live:12?}"),
+                format!("{live:?}"),
+                "{what}: {{:12?}} rendered identically to {{:?}}"
+            );
             assert_eq!(format!("{live:?}"), format!("{twin:?}"), "{what} {{:?}}");
             assert_eq!(format!("{live:#?}"), format!("{twin:#?}"), "{what} {{:#?}}");
             assert_eq!(
@@ -730,7 +739,8 @@ mod tests {
 
     /// Assert `{:.2?}` renders `$carrier` differently from `{:?}` — the
     /// precision-bearing twin assertions on an `f64` fixture hold vacuously
-    /// once the fixture or the renderer stops carrying precision.
+    /// once the fixture's payloads stop showing precision (carrier and twin
+    /// both render the default).
     macro_rules! assert_precision_visible {
         ($carrier:expr) => {{
             let live = &$carrier;
@@ -749,20 +759,15 @@ mod tests {
     /// visible only on floats).
     #[test]
     fn every_carrier_debug_is_byte_identical_to_a_derived_twin() {
-        // Anti-vacuity: a spec-bearing form must render differently from
-        // the default on a fixture, or the spec assertions on that fixture
-        // hold vacuously. Width is visible on every payload and checked once
-        // here; precision is visible only on floats and checked at each
+        // Anti-vacuity: a fixture whose payloads cannot show a spec makes
+        // the spec assertions on that fixture vacuous — carrier and twin
+        // both render the default. The twin macro checks width on every
+        // fixture; precision, visible only on floats, is checked at each
         // `f64` fixture by `assert_precision_visible!` ahead of its twin
         // comparison.
-        let (tree, tree_m) = tree_pair::<u8>(SHAPE);
-        assert_ne!(
-            format!("{tree:12?}"),
-            format!("{tree:?}"),
-            "{{:12?}} rendered identically to {{:?}} on `tree`"
-        );
 
         // Integer payloads: the shape guard, plus `width`.
+        let (tree, tree_m) = tree_pair::<u8>(SHAPE);
         assert_agrees_at_every_carried_spec!(tree, tree_m, "BinaryTree<u8>");
 
         let (free, free_m) = free_pair::<u8>(SHAPE);
@@ -794,8 +799,7 @@ mod tests {
         assert_precision_visible!(free_f);
         assert_agrees_at_every_carried_spec!(free_f, free_fm, "Free<TreeEndo<f64>, f64>");
 
-        // Cons labels *and* terminator at `f64`: the two payload slots of the
-        // list twin are independent, and precision has to reach both.
+        // Cons labels and terminator both at `f64`.
         let (list_f, list_fm) = list_pair::<f64, f64>(SHAPE * 4, false);
         assert_precision_visible!(list_f);
         assert_agrees_at_every_carried_spec!(list_f, list_fm, "Free<ListEndo<f64>, f64>");
