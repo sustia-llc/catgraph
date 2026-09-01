@@ -141,10 +141,6 @@ impl RewriteSpan {
     ///   not a vertex of that side's hypergraph.
     /// - [`RewriteSpanError::NonInjectiveMap`] if two kernel vertices share an
     ///   image under `left_map` or under `right_map`.
-    ///
-    /// Kernel vertices are scanned in ascending order; within a vertex the left
-    /// checks precede the right ones, and within a side the checks run in the
-    /// order listed above, so the reported failure is the first in that order.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     pub fn to_span(&self) -> Result<Span<u32>, RewriteSpanError> {
         let left_verts: Vec<usize> = self.left.vertices().collect();

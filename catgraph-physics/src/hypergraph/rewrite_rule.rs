@@ -163,10 +163,6 @@ impl RewriteSpan {
     ///   not a vertex of that side's hypergraph.
     /// - [`RewriteSpanError::NonInjectiveMap`] if two kernel vertices share an
     ///   image under `left_map` or under `right_map`.
-    ///
-    /// Kernel vertices are scanned in ascending order; within a vertex the left
-    /// checks precede the right ones, and within a side the checks run in the
-    /// order listed above, so the reported failure is the first in that order.
     pub fn try_new(
         left: Hypergraph,
         kernel: Hypergraph,
