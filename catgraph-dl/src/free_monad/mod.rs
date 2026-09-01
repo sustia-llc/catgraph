@@ -730,33 +730,30 @@ mod tests {
 
     /// Each carrier vs a `#[derive(Debug)]` twin of the same shape, at the
     /// default `{:?}`/`{:#?}` pair and both value pairs of every
-    /// spec-carrying form (`.2`/`12` and `.5`/`20`, plain and `#`), for
-    /// `u8`/`u32` and `f64` payloads (precision is visible only on floats).
+    /// spec-carrying form, for `u8`/`u32` and `f64` payloads (precision is
+    /// visible only on floats).
     #[test]
     fn every_carrier_debug_is_byte_identical_to_a_derived_twin() {
         // Anti-vacuity first: the spec-bearing forms must actually render
         // differently from the default one, or the assertions below carrying
         // that spec component hold vacuously the moment it stops propagating
         // on *both* sides — which is exactly how the default-spec-only
-        // version of this oracle passed through a regression. A red here
-        // means the fixture lost its spec-sensitive payloads OR the renderer
-        // stopped forwarding the spec — the guard cannot tell those apart;
-        // it fails ahead of the twin comparisons so either cause surfaces
-        // with this diagnosis instead of as some later byte mismatch.
+        // version of this oracle passed through a regression. The guard only
+        // observes that the two renderings coincided, not why; it fails
+        // ahead of the twin comparisons so the coincidence surfaces as
+        // itself instead of as some later byte mismatch.
         let (tree, tree_m) = tree_pair::<u8>(SHAPE);
         let (tree_f, tree_fm) = tree_pair::<f64>(SHAPE);
         let (nil_f, nil_fm) = list_pair::<f64, f64>(SHAPE * 4, true);
         assert_ne!(
             format!("{tree_f:.2?}"),
             format!("{tree_f:?}"),
-            "{{:.2?}} matches {{:?}} — a fixture without f64 payloads, or a renderer \
-             not forwarding precision"
+            "{{:.2?}} rendered identically to {{:?}} on the f64 tree"
         );
         assert_ne!(
             format!("{tree:12?}"),
             format!("{tree:?}"),
-            "{{:12?}} matches {{:?}} — a fixture whose payloads ignore width, or a \
-             renderer not forwarding width"
+            "{{:12?}} rendered identically to {{:?}} on the u8 tree"
         );
         // The list hole's payload reaches the formatter inside a
         // `(label, slot)` tuple rather than as a `debug_tuple` field; the
@@ -766,8 +763,7 @@ mod tests {
         assert_ne!(
             format!("{nil_f:.2?}"),
             format!("{nil_f:?}"),
-            "{{:.2?}} matches {{:?}} on the nil tower — a fixture without f64 cons \
-             labels, or a renderer not forwarding precision through the pair"
+            "{{:.2?}} rendered identically to {{:?}} on the nil-terminated f64 tower"
         );
 
         // Integer payloads: the shape guard, plus `width`.
