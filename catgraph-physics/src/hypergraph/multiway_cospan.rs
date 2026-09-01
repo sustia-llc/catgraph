@@ -286,17 +286,79 @@ mod tests {
         assert_eq!(result.merge_points_checked, 0);
     }
 
+    /// `{{0,1,2},{1,2,3}}` under `A→BB` to depth 3: one merge group `[3, 4]`,
+    /// one checked pair, matching composite domains and codomains.
     #[test]
-    fn causal_invariance_multiway() {
+    fn causal_invariance_multiway_confluent() {
         let initial = Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]);
-        let rules = vec![RewriteRule::wolfram_a_to_bb()];
-        let evolution = HypergraphEvolution::run_multiway(&initial, &rules, 3, 50);
+        let evolution =
+            HypergraphEvolution::run_multiway(&initial, &[RewriteRule::wolfram_a_to_bb()], 3, 50);
+
+        let graph = evolution.to_multiway_cospan_graph();
+        assert_eq!(graph.merge_points, vec![vec![3, 4]]);
+
+        // Both composites run root → merged node.
+        let composite_a = compose_cospan_path(&graph.path_to_node(&evolution, 3))
+            .expect("invariant: a two-step path from the root composes");
+        let composite_b = compose_cospan_path(&graph.path_to_node(&evolution, 4))
+            .expect("invariant: a two-step path from the root composes");
+        assert_eq!(composite_a.domain(), vec![0u32, 1, 2, 3]);
+        assert_eq!(composite_a.codomain(), vec![0u32, 1, 2, 3]);
+        assert_eq!(composite_b.domain(), vec![0u32, 1, 2, 3]);
+        assert_eq!(composite_b.codomain(), vec![0u32, 1, 2, 3]);
 
         let result = evolution.verify_causal_invariance_via_cospans();
         assert_eq!(
-            result.is_invariant,
-            result.merge_points_checked == 0
-                || result.invariant_merges == result.merge_points_checked
+            result.merge_points_checked, 1,
+            "the single pair (3, 4) drawn from one merge group of two"
+        );
+        assert_eq!(result.invariant_merges, 1);
+        assert!(result.is_invariant);
+        assert_eq!(
+            result
+                .details
+                .iter()
+                .map(|d| (d.node_a, d.node_b, d.composites_match))
+                .collect::<Vec<_>>(),
+            vec![(3, 4, true)]
+        );
+    }
+
+    /// `{{0,1}}` under `{{x,y}} → {{x,y}}` capped at 3 nodes: every node carries
+    /// the root's fingerprint, so the merge group holds the root and the two
+    /// pairs containing it have no composite on the root side.
+    #[test]
+    fn causal_invariance_multiway_pair_without_a_composite() {
+        let initial = Hypergraph::from_edges(vec![vec![0, 1]]);
+        let identity = RewriteRule::from_pattern(vec![vec![0, 1]], vec![vec![0, 1]]);
+        let evolution = HypergraphEvolution::run_multiway(&initial, &[identity], 2, 3);
+
+        assert_eq!(evolution.node_count(), 3);
+        let graph = evolution.to_multiway_cospan_graph();
+        assert_eq!(graph.merge_points, vec![vec![0, 1, 2]]);
+        assert!(
+            graph.path_to_node(&evolution, 0).is_empty(),
+            "the root has no incoming cospan"
+        );
+        assert!(compose_cospan_path(&graph.path_to_node(&evolution, 0)).is_none());
+
+        let result = evolution.verify_causal_invariance_via_cospans();
+        assert_eq!(
+            result.merge_points_checked, 3,
+            "pairs (0,1), (0,2) and (1,2) from one group of three"
+        );
+        assert_eq!(
+            result.invariant_merges, 1,
+            "only (1,2) puts a composite on both sides"
+        );
+        assert!(!result.is_invariant);
+        assert_eq!(
+            result
+                .details
+                .iter()
+                .map(|d| (d.node_a, d.node_b, d.composites_match))
+                .collect::<Vec<_>>(),
+            vec![(0, 1, false), (0, 2, false), (1, 2, true)]
         );
     }
 
