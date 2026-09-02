@@ -188,7 +188,9 @@ pub fn free_mnd_to_vec<A, Z>(input: Free<ListEndo<A>, Z>) -> (Vec<A>, Z) {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```
+/// # use catgraph_dl::free_monad::FreeView;
+/// # use catgraph_dl::free_monad::list_endo::vec_to_free_mnd;
 /// // Empty list with `()` terminator → `Pure(())`.
 /// let empty = vec_to_free_mnd::<u32, ()>(Vec::new(), ());
 /// assert!(matches!(empty.as_view(), FreeView::Pure(())));

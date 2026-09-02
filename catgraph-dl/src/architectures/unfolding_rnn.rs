@@ -54,7 +54,8 @@ where
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use catgraph_dl::architectures::UnfoldingRnn;
     /// // Counter: cell_o = identity, cell_n = +1.
     /// let cell: UnfoldingRnn<i64, i64, fn((i64, i64)) -> i64, fn((i64, i64)) -> i64, i64> =
     ///     UnfoldingRnn::new(0, |(_p, s)| s, |(_p, s)| s + 1);
@@ -91,7 +92,8 @@ where
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use catgraph_dl::architectures::UnfoldingRnn;
     /// // Counter: cell_o = identity, cell_n = +1.
     /// let cell: UnfoldingRnn<i64, i64, fn((i64, i64)) -> i64, fn((i64, i64)) -> i64, i64> =
     ///     UnfoldingRnn::new(0, |(_p, s)| s, |(_p, s)| s + 1);

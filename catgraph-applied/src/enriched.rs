@@ -1,5 +1,5 @@
 //! V-enriched categories — hom-objects live in a monoidal category V
-//! (F&S *Seven Sketches* §1.1, §2.4).
+//! (F&S *Seven Sketches* §2.3 Def 2.46, §2.4).
 //!
 //! The V-enriched refinement of an ordinary category replaces `Hom(a, b): Set`
 //! with `Hom(a, b): V`. [`EnrichedCategory<V>`] takes V to be a [`Rig`]: the

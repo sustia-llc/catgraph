@@ -1,4 +1,4 @@
-//! Integration tests for Fong-Spivak §4 equivalence (Theorem 1.2/4.13/4.16).
+//! Integration tests for Fong-Spivak §4 equivalence (Theorem 1.2/4.13).
 //!
 //! Tests the `CospanAlgebraMorphism` construction (§4.2) and
 //! roundtrip verification (§4.3, Theorem 4.13).

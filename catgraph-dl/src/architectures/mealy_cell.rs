@@ -40,7 +40,8 @@ where
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use catgraph_dl::architectures::MealyCell;
     /// // Stateful counter: emit s+i, increment s.
     /// let cell: MealyCell<_, _, _, i64, i64> = MealyCell::new((), |((), s): ((), i64)| {
     ///     move |i: i64| (s + i, s + 1)
@@ -75,7 +76,8 @@ where
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use catgraph_dl::architectures::MealyCell;
     /// // Stateful counter: emit s+i, increment s.
     /// let cell: MealyCell<_, _, _, i64, i64> = MealyCell::new((), |((), s): ((), i64)| {
     ///     move |i: i64| (s + i, s + 1)

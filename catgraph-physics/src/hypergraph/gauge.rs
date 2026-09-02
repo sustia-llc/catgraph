@@ -1,7 +1,7 @@
 //! Lattice-gauge reading of hypergraph rewriting: rewrite rules as gauge
 //! transformations, closed rewrite paths as Wilson loops, holonomy 1 as flat.
 //!
-//! Provenance (`docs/ANCHORS.md`): inspired by \[Gor20a\] (uncached); the
+//! Provenance (`docs/ANCHORS.md`): inspired by \[Gor20a\]; the
 //! Wilson-loop / plaquette / holonomy vocabulary is standard lattice gauge
 //! theory; "causal invariance ⟺ holonomy 1" is a catgraph gloss, not a cited
 //! theorem.

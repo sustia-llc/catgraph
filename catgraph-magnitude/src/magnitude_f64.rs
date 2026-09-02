@@ -10,7 +10,8 @@
 //! The quantities are paper-anchored: weighting / coweighting at Leinster 2013
 //! §1.1 Def 1.1.1 (`ζ · w = u_I`, `v · ζ = u_J^T`) with `Σⱼ w(j) = Σᵢ v(i)` by
 //! Lemma 1.1.2; `μ = ζ⁻¹` and `w(j) = Σᵢ μ(j, i)` at Lemma 1.1.4; magnitude
-//! `Mag(tM) = Σᵢⱼ μ_t[i][j] = Σⱼ w(j) = 1ᵀ ζ⁻¹ 1` at BV 2025 §3.5 Eq (7).
+//! `Mag(tM) = Σᵢⱼ μ_t[i][j] = Σⱼ w(j) = 1ᵀ ζ⁻¹ 1` at BV 2025 Eq (7) (Def 3.1;
+//! applied in §3.5).
 //! The factorization choice is numerical, prescribed by no anchor; the route
 //! taken is recorded in [`FactorizationPath`].
 //!
@@ -143,7 +144,7 @@ enum Factorization {
 /// [`weighting`](crate::magnitude::weighting), and
 /// [`coweighting`](crate::magnitude::coweighting). Use [`magnitude_f64`] (or
 /// [`scaled_space`](crate::magnitude) followed by [`ZetaFactorization::new`])
-/// for the `t`-scaled BV 2025 §3.5 Eq (7) quantity.
+/// for the `t`-scaled BV 2025 Eq (7) (Def 3.1; applied in §3.5) quantity.
 ///
 /// The handle borrows the space because the
 /// [`GaussJordan`](FactorizationPath::GaussJordan) fallback re-enters the
@@ -302,9 +303,9 @@ impl<'a> ZetaFactorization<'a> {
         }
     }
 
-    /// Magnitude `Σⱼ w(j) = 1ᵀ ζ⁻¹ 1` of the space **as given** (BV 2025 §3.5
-    /// Eq (7) via Leinster 2013 §1.1 Lemma 1.1.4 — the weighting sum equals the
-    /// Möbius entry sum).
+    /// Magnitude `Σⱼ w(j) = 1ᵀ ζ⁻¹ 1` of the space **as given** (BV 2025
+    /// Eq (7) (Def 3.1; applied in §3.5) via Leinster 2013 §1.1 Lemma 1.1.4 —
+    /// the weighting sum equals the Möbius entry sum).
     ///
     /// No μ is materialized: one solve plus a reduction.
     ///
@@ -423,7 +424,7 @@ impl<'a> ZetaFactorization<'a> {
 /// Magnitude `Mag(tM)` of a Lawvere metric space at scale `t` through the
 /// factorization fast path — the `f64` parallel of
 /// [`magnitude`](crate::magnitude::magnitude)`::<`[`F64Rig`]`>(space, t)`
-/// (BV 2025 §3.5 Eq (7); Leinster 2013 §2.2).
+/// (BV 2025 Eq (7) (Def 3.1; applied in §3.5); Leinster 2013 §2.2).
 ///
 /// Scales through the crate-shared [`scaled_space`](crate::magnitude) helper,
 /// factors the scaled space, and returns `Σⱼ w(j)`. No μ is materialized.
