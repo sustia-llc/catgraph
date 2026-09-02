@@ -1,29 +1,17 @@
-//! Exhaustive permutation enumeration for braiding sweeps.
+//! Exhaustive enumeration of `Sₙ`, in two views.
 //!
-//! The `#258` braiding contract is decided by *exhaustive* sweeps over `Sₙ`, and
-//! every such sweep needs the same generator. It existed twice on `main`, as
-//! private copies in `catgraph-applied/tests` (`braiding_cross_carrier.rs`,
-//! `prop.rs`), and #286's core-side sweeps needed it too — so it lives here
-//! now, the workspace's designated dedup crate (#33), rather than as a third
-//! and fourth copy.
+//! - [`all_perm_indices`] yields raw `Vec<usize>` one-line notations, which
+//!   sort and dedup (`permutations::Permutation` is neither `Ord` nor `Hash`);
+//! - [`all_perms`] yields [`Permutation`] values.
 //!
-//! Two entry points, because the call sites want different things:
-//!
-//! - [`all_perm_indices`] yields raw `Vec<usize>` one-line notations, which sort
-//!   and dedup (`permutations::Permutation` is neither `Ord` nor `Hash`), so a
-//!   caller can pin *distinctness* of the enumeration itself;
-//! - [`all_perms`] yields [`Permutation`] values ready to feed a constructor.
-//!
-//! The two views are index-aligned — `all_perms(n)[k]` is the permutation whose
-//! one-line notation is `all_perm_indices(n)[k]` — and this module's tests pin
-//! that through `all_perms` itself (at `n ∈ {3, 4}`).
+//! The two views are index-aligned: `all_perms(n)[k]` is the permutation whose
+//! one-line notation is `all_perm_indices(n)[k]`.
 
 use permutations::Permutation;
 
 /// Every permutation of `0..n` in one-line notation, each exactly once.
 ///
-/// Prefix-swap (Heap-style) recursion: `n!` vectors of length `n`, so this is
-/// for small `n` only — the workspace's sweeps run `n ∈ {3, 4}`.
+/// Prefix-swap recursion yielding `n!` vectors of length `n`, so for small `n`.
 ///
 /// # Examples
 ///
@@ -56,14 +44,12 @@ pub fn all_perm_indices(n: usize) -> Vec<Vec<usize>> {
 
 /// Every permutation of `0..n` as a [`Permutation`], each exactly once.
 ///
-/// [`all_perm_indices`] with each one-line notation converted; see there for the
-/// enumeration contract.
+/// [`all_perm_indices`] with each one-line notation converted.
 ///
 /// # Panics
 ///
-/// Never, on the enumeration this produces: every vector is a bijection of
-/// `0..n` by construction, which is exactly `Permutation::try_from`'s
-/// precondition.
+/// Does not panic: every vector [`all_perm_indices`] yields is a bijection of
+/// `0..n` by construction, which is `Permutation::try_from`'s precondition.
 ///
 /// # Examples
 ///
@@ -85,10 +71,8 @@ pub fn all_perms(n: usize) -> Vec<Permutation> {
 mod tests {
     use super::*;
 
-    /// The enumeration is a helper, so "exhaustive" is a claim about *it*, not a
-    /// fact the sweeps that consume it can check. Pin count and distinctness
-    /// here: a generator that silently yielded fewer would leave every downstream
-    /// sweep covering less than its name says while still passing.
+    /// `n ∈ 0..=5`: `n!` one-line notations, pairwise distinct, each of length
+    /// `n` and a bijection of `0..n`, with `all_perms(n)` the same length.
     #[test]
     fn counts_are_factorial_and_distinct() {
         for (n, expected) in [(0usize, 1usize), (1, 1), (2, 2), (3, 6), (4, 24), (5, 120)] {
@@ -119,32 +103,12 @@ mod tests {
                 );
             }
 
-            // The `Permutation` view must agree case for case.
             assert_eq!(all_perms(n).len(), expected);
         }
     }
 
-    /// The two views are index-aligned: `all_perms(n)[k]` names the permutation
-    /// whose one-line notation is `all_perm_indices(n)[k]`. That alignment is
-    /// the only contract a caller mixing the two views can depend on, and it is
-    /// a claim about *this* helper — so the assertion goes through `all_perms`
-    /// itself. (An earlier version rebuilt a `Permutation` from the indices and
-    /// checked `apply` against them: a property of the `permutations` crate,
-    /// green under any drift in `all_perms`.)
-    ///
-    /// What a drift here can and cannot do: every consuming sweep derives its
-    /// reference from the same `p` it feeds the constructor, and `Sₙ` is closed
-    /// under inversion, so `all_perms` returning inverses would reorder a
-    /// sweep, not flip its convention — this test is the only place such a
-    /// drift is visible. Falsified: `all_perms` mapped through `.inv()` → RED
-    /// here at `all_perms(3)[3]`, the first non-involution — `[2, 0, 1]` where
-    /// `all_perm_indices(3)[3]` is `[1, 2, 0]` (16 passed, 1 failed) — while
-    /// all 66 test binaries of `cargo test -p catgraph -p catgraph-applied
-    /// --tests` stay green.
-    ///
-    /// Space: alignment is checked at `n ∈ {3, 4}` only — the only `n` any
-    /// consuming sweep runs; `counts_are_factorial_and_distinct` covers the
-    /// enumeration itself (count, distinctness, bijection) up to `n = 5`.
+    /// `n ∈ {3, 4}`: `all_perms(n)[k]` applied to `0..n` equals
+    /// `all_perm_indices(n)[k]`, over every `k`.
     #[test]
     fn permutation_view_matches_the_indices() {
         for n in [3usize, 4] {
