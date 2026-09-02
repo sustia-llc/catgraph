@@ -20,6 +20,10 @@
 //! 2-prime cross-check used to filter "good primes" in
 //! `smith_normal_form_integer` (see `crt_lift.rs` step 4).
 //!
+//! Each proptest below asserts rank agreement at both `ORACLE_PRIME` and
+//! `ORACLE_PRIME_SECONDARY`, over `n × n` integer matrices with
+//! `n ∈ {2, 3, 4}` and entries drawn from `-10..=10`.
+//!
 //! Cross-validating the full integer SNF (`smith_normal_form_integer`)
 //! against modularsnf would require either (a) re-running it with
 //! modularsnf as the per-prime SNF backend and comparing to cg-magnitude's
@@ -37,12 +41,22 @@
 use catgraph_magnitude::snf::smith_normal_form as cg_snf_mod;
 use ndarray::Array2;
 use proptest::prelude::*;
+use proptest::test_runner::TestCaseError;
 
 /// Mersenne prime `2^31 − 1`. Same primary used by
 /// `crt_lift::select_primes_for_bound` and `magnitude_homology_rank`'s
 /// 2-prime cross-check, so cross-validation at this `p` exercises the
 /// canonical hot path.
 const ORACLE_PRIME: i64 = 2_147_483_647;
+
+/// Secondary rank-recovery prime: `RANK_RECOVERY_PRIMES[1]`
+/// (`src/chain_complex/homology.rs:31`), also
+/// `LARGEST_PRIMES_BELOW_2_POW_31[1]` (`src/snf/crt.rs:24`). It is the
+/// modulus `magnitude_homology_rank` cross-checks the primary against.
+const ORACLE_PRIME_SECONDARY: i64 = 2_147_483_629;
+
+/// The moduli each proptest below cross-validates at.
+const ORACLE_PRIMES: [i64; 2] = [ORACLE_PRIME, ORACLE_PRIME_SECONDARY];
 
 fn vec_to_array2(a: &[Vec<i64>]) -> Array2<i64> {
     let rows = a.len();
@@ -62,6 +76,32 @@ fn rank_mod_p_array(s: &Array2<i64>, p: i64, dim_min: usize) -> usize {
         .count()
 }
 
+/// Asserts the two backends agree on the rank of `a` mod `p`.
+fn rank_agrees_at(a: &[Vec<i64>], p: i64) -> Result<(), TestCaseError> {
+    // cg-magnitude path: vec-of-vec, in-place modular SNF.
+    let (_u_us, _v_us, s_us) = cg_snf_mod(a, p).unwrap();
+
+    // modularsnf path: ndarray Array2, padded-to-square modular SNF.
+    let array_a = vec_to_array2(a);
+    let (_u_mod, _v_mod, s_mod) = modularsnf::smith_normal_form(&array_a, p).unwrap();
+
+    let dim_min = a.len().min(a[0].len());
+    let rank_us = rank_mod_p_vec(&s_us, p, dim_min);
+    let rank_mod = rank_mod_p_array(&s_mod, p, dim_min);
+
+    prop_assert_eq!(
+        rank_us,
+        rank_mod,
+        "cg-magnitude and modularsnf must agree on rank mod p={} \
+         on input {:?}: cg-magnitude rank = {}, modularsnf rank = {}",
+        p,
+        a,
+        rank_us,
+        rank_mod
+    );
+    Ok(())
+}
+
 proptest! {
     #[test]
     fn snf_mod_p_rank_agrees_with_modularsnf_2x2(
@@ -70,30 +110,10 @@ proptest! {
             2..=2,
         ),
     ) {
-        // cg-magnitude path: vec-of-vec, in-place modular SNF.
-        let (_u_us, _v_us, s_us) = cg_snf_mod(&a, ORACLE_PRIME).unwrap();
-
-        // modularsnf path: ndarray Array2, padded-to-square modular SNF.
-        let array_a = vec_to_array2(&a);
-        let (_u_mod, _v_mod, s_mod) =
-            modularsnf::smith_normal_form(&array_a, ORACLE_PRIME).unwrap();
-
-        let dim_min = a.len().min(a[0].len());
-        let rank_us = rank_mod_p_vec(&s_us, ORACLE_PRIME, dim_min);
-        let rank_mod = rank_mod_p_array(&s_mod, ORACLE_PRIME, dim_min);
-
-        prop_assert_eq!(
-            rank_us, rank_mod,
-            "cg-magnitude and modularsnf must agree on rank mod p={} \
-             on input {:?}: cg-magnitude rank = {}, modularsnf rank = {}",
-            ORACLE_PRIME, a, rank_us, rank_mod
-        );
+        for p in ORACLE_PRIMES {
+            rank_agrees_at(&a, p)?;
+        }
     }
-
-    // Follow-up: extend the proptest grid from `n = 2` to `n ∈ {2, 3, 4}`.
-    // n=4 is the smallest fixture where the chain-rebalance interactions at
-    // 4×4 scale (and non-trivial rank-recovery beyond rank ∈ {0, 1, 2}) get
-    // exercised.
 
     #[test]
     fn snf_mod_p_rank_agrees_with_modularsnf_3x3(
@@ -102,21 +122,9 @@ proptest! {
             3..=3,
         ),
     ) {
-        let (_u_us, _v_us, s_us) = cg_snf_mod(&a, ORACLE_PRIME).unwrap();
-        let array_a = vec_to_array2(&a);
-        let (_u_mod, _v_mod, s_mod) =
-            modularsnf::smith_normal_form(&array_a, ORACLE_PRIME).unwrap();
-
-        let dim_min = a.len().min(a[0].len());
-        let rank_us = rank_mod_p_vec(&s_us, ORACLE_PRIME, dim_min);
-        let rank_mod = rank_mod_p_array(&s_mod, ORACLE_PRIME, dim_min);
-
-        prop_assert_eq!(
-            rank_us, rank_mod,
-            "cg-magnitude and modularsnf must agree on rank mod p={} \
-             on input {:?}: cg-magnitude rank = {}, modularsnf rank = {}",
-            ORACLE_PRIME, a, rank_us, rank_mod
-        );
+        for p in ORACLE_PRIMES {
+            rank_agrees_at(&a, p)?;
+        }
     }
 
     #[test]
@@ -126,20 +134,8 @@ proptest! {
             4..=4,
         ),
     ) {
-        let (_u_us, _v_us, s_us) = cg_snf_mod(&a, ORACLE_PRIME).unwrap();
-        let array_a = vec_to_array2(&a);
-        let (_u_mod, _v_mod, s_mod) =
-            modularsnf::smith_normal_form(&array_a, ORACLE_PRIME).unwrap();
-
-        let dim_min = a.len().min(a[0].len());
-        let rank_us = rank_mod_p_vec(&s_us, ORACLE_PRIME, dim_min);
-        let rank_mod = rank_mod_p_array(&s_mod, ORACLE_PRIME, dim_min);
-
-        prop_assert_eq!(
-            rank_us, rank_mod,
-            "cg-magnitude and modularsnf must agree on rank mod p={} \
-             on input {:?}: cg-magnitude rank = {}, modularsnf rank = {}",
-            ORACLE_PRIME, a, rank_us, rank_mod
-        );
+        for p in ORACLE_PRIMES {
+            rank_agrees_at(&a, p)?;
+        }
     }
 }

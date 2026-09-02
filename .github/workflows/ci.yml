@@ -173,6 +173,13 @@ jobs:
           for ex in para_walkthrough weight_tying free_monad_basics architecture_unrollers; do
             cargo run -q -p catgraph-dl --example "$ex"
           done
+      # #276: the magnitude examples are self-checking in the same way; run
+      # the sub-second ones. `prop_3_14_acceptance` stays out — its docstring
+      # requires `--release`.
+      - run: |
+          for ex in coalition_magnitude integer_mobius lm_magnitude mock_coalition semantic_category semantic_comparison tsallis_shannon; do
+            cargo run -q -p catgraph-magnitude --example "$ex"
+          done
       # #74 PR2: the opt-in `ad` feature (forward-mode AD over the crate's own
       # `Dual<T>`, catgraph-owned since #221) is off by default. Since #230 the
       # `serde ad` lane above also compiles `para::{ad,dual}`, so this lane's
@@ -191,6 +198,11 @@ jobs:
       # uncompiled. Targeted test + clippy pass (the #81 serde-lane shape).
       - run: cargo test -p catgraph-magnitude --features f64-fast
       - run: cargo clippy -p catgraph-magnitude --features f64-fast --all-targets -- -D warnings
+      # #305: the `modularsnf-oracle` marker feature gates
+      # `tests/snf_modularsnf_integer_oracle.rs` (the `modularsnf` dev-dep
+      # itself is unconditional). Targeted test + clippy pass.
+      - run: cargo test -p catgraph-magnitude --features modularsnf-oracle --test snf_modularsnf_integer_oracle
+      - run: cargo clippy -p catgraph-magnitude --features modularsnf-oracle --all-targets -- -D warnings
       # #296: `f64-rig` is off by default, so `tests/mat_f64.rs` compiles to nothing above.
       - run: cargo test -p catgraph-applied --features f64-rig
       - run: cargo clippy -p catgraph-applied --features f64-rig --all-targets -- -D warnings
