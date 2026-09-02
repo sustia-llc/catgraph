@@ -198,8 +198,8 @@ impl OllivierRicciCurvature {
         // κ ≤ 1 holds definitionally (W₁ ≥ 0 ⇒ κ = 1 − W₁/d ≤ 1), but the
         // two-sided |κ| ≤ 1 clamp is a normalization convention, not a
         // theorem — negative Ollivier curvature on unweighted graphs is not
-        // bounded below by −1 in the standard literature ([Oll09], uncached;
-        // see docs/ANCHORS.md). The clamp just keeps this ratio in [0, 1].
+        // bounded below by −1 in the standard literature ([Oll09]; see
+        // docs/ANCHORS.md). The clamp just keeps this ratio in [0, 1].
         self.scalar.abs().min(1.0)
     }
 }

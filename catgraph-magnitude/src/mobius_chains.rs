@@ -72,7 +72,8 @@ const CHAIN_SUM_MAX_DEPTH: usize = 200;
 ///
 /// The input must be scattered ([`is_scattered`] returns `true`). On a
 /// scattered space this and [`crate::magnitude::mobius_function`] return the
-/// same matrix within `1e-9`.
+/// same matrix to `1e-9` relative on well-separated fixtures and `1e-8`
+/// relative at the scatteredness boundary (`tests/mobius_chains.rs`).
 ///
 /// # Errors
 ///
@@ -497,10 +498,7 @@ where
         }
     }
 
-    // Left inverse: ζ · μ = I (lower-triangular recursion). Equivalent to
-    // the right inverse for finite triangular `ζ` over a commutative ring,
-    // but the explicit check guards against asymmetry-introducing drift in
-    // future Möbius-implementation work.
+    // Left inverse: ζ · μ = I (lower-triangular recursion).
     let zeta_mu = matmul_q(&zeta_q, mu.entries(), n);
     for (i, row) in zeta_mu.iter().enumerate() {
         for (j, entry) in row.iter().enumerate() {

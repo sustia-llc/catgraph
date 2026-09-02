@@ -52,7 +52,8 @@ where
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use catgraph_dl::architectures::FoldingRnn;
     /// // sum-with-bias: cell_0(p) = p, cell_1((p, a, s)) = a + s + p.
     /// let cell: FoldingRnn<i64, i64, fn(i64) -> i64, fn((i64, i64, i64)) -> i64, i64> =
     ///     FoldingRnn::new(10, |p| p, |(p, a, s)| a + s + p);

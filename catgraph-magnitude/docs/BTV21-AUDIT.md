@@ -63,9 +63,10 @@
 - The 7 deferrals are all *algebra above the semantics gate*: the unenriched
   (co)limit constructions (§1.3, one item), the weighted (co)limit calculus
   (§4, four items), the M̂ weighted (co)product (§5), and the semi-tropical
-  module action (§5.1, Thm 6) — all folded into
-  [#36](https://github.com/sustia-llc/catgraph/issues/36) except the §4.4
-  implication (research track). The former eighth — the L̂-as-a-category
+  module action (§5.1, Thm 6). The §1.3 / §4.1–4.3 / §5 Thm 5 five are tracked
+  on [#405](https://github.com/sustia-llc/catgraph/issues/405), the §5.1 Thm 6
+  module action on [#36](https://github.com/sustia-llc/catgraph/issues/36); the
+  §4.4 implication is research track. The former eighth — the L̂-as-a-category
   syntax-side layer (§3.2) — resolved **implicit** via
   `examples/semantic_category.rs` ([#53](https://github.com/sustia-llc/catgraph/issues/53)
   item 2, design of record 2026-07-25): no reified wrapper, the category
@@ -88,7 +89,7 @@ enriched setting downstream (§4), so nothing implementable lands *here*.
 |---|---|---|---|
 | §1.1 Compositionality — algebraic + distributional (Harris 1954) picture of meaning | ➖ | — | Pedagogical framing; the crate encodes both operationally without recapitulating the philosophy. |
 | §1.2 Why category theory — thin subtext category, unenriched Yoneda `x ↦ hom(x,−)` | ➖ | — | Motivational; the *enriched* Yoneda embedding that carries the actual content ships at §3.1 / §3.2 (`yoneda`). |
-| §1.3 Constructions in the unenriched setting — coproduct / product / cartesian-closed internal hom | ⏭️ | — | The enriched analogues are §4; deferred with §4 into [#36](https://github.com/sustia-llc/catgraph/issues/36). |
+| §1.3 Constructions in the unenriched setting — coproduct / product / cartesian-closed internal hom | ⏭️ | — | The enriched analogues are §4; deferred with §4 into [#405](https://github.com/sustia-llc/catgraph/issues/405). |
 
 ### §2.1 Categories enriched over [0,1]
 
@@ -172,9 +173,9 @@ Theorem 4 + Eq 21 (enriched implication `[f,g]`, `x ⇒ y`). None re-expressed i
 
 | Item | Status | Location | Notes |
 |---|---|---|---|
-| §4.1 Def 9 — V-weighted limit / colimit (Eq 13–16) | ⏭️ | — | [#36](https://github.com/sustia-llc/catgraph/issues/36). |
-| §4.2 Def 10 + Theorem 2 (+ Eq 18–19, Lemma 4) — weighted product on representables `min{fc/w₁, gc/w₂, 1}` | ⏭️ | — | [#36](https://github.com/sustia-llc/catgraph/issues/36). |
-| §4.3 Def 11 + Theorem 3 + Eq 20 — weighted coproduct `max{w₁·fc, w₂·gc}` | ⏭️ | — | [#36](https://github.com/sustia-llc/catgraph/issues/36). |
+| §4.1 Def 9 — V-weighted limit / colimit (Eq 13–16) | ⏭️ | — | [#405](https://github.com/sustia-llc/catgraph/issues/405). |
+| §4.2 Def 10 + Theorem 2 (+ Eq 18–19, Lemma 4) — weighted product on representables `min{fc/w₁, gc/w₂, 1}` | ⏭️ | — | [#405](https://github.com/sustia-llc/catgraph/issues/405). |
+| §4.3 Def 11 + Theorem 3 + Eq 20 — weighted coproduct `max{w₁·fc, w₂·gc}` | ⏭️ | — | [#405](https://github.com/sustia-llc/catgraph/issues/405). |
 | §4.4 Def 12 + Lemma 5 + Def 13 + Theorem 4 + Eq 21 — enriched implication `[f,g]`, `x ⇒ y` | ⏭️ | — | Research track; the entailment surface has no consumer yet. |
 
 ### §5 A metric space interpretation
@@ -189,7 +190,7 @@ L(x,y)`, internal hom `[a,b] = max{b−a, 0}`. Theorem 5 gives the weighted
 | `−ln` iso `[0,1] ≅ [0,∞]` + Tropical `(min,+)` rig | 🔗 | `catgraph-applied::{rig::Tropical, lawvere_metric}` | The iso and the semi-tropical rig live in `applied`; re-exported here. |
 | Generalized metric space `M(x,y) = −ln π`, triangle inequality (both inequalities are equalities, inherited from Eq 8) | ✅ | `weighted_cospan::WeightedCospan::{into_metric_space, into_validated_metric_space}`, `lm_category::LmCategory::enriched_space` | `into_validated_metric_space` runs the full `O(n³)` triangle-inequality scan (BTV 2021 §5). |
 | `M̂` copresheaf distance `d̂(f,g) = sup_c max{gc − fc, 0}` | ✅ | `yoneda::semantic_distance` | The `−ln` image of the L̂ hom; `semantic_distance_sym` is the labelled symmetric wrapper for clustering. |
-| Theorem 5 — weighted product/coproduct in `M̂` (`max{fc−w₁, gc−w₂, 0}` / `min{fc+w₁, gc+w₂}`) | ⏭️ | — | [#36](https://github.com/sustia-llc/catgraph/issues/36); the `−ln` image of the §4 constructions. |
+| Theorem 5 — weighted product/coproduct in `M̂` (`max{fc−w₁, gc−w₂, 0}` / `min{fc+w₁, gc+w₂}`) | ⏭️ | — | [#405](https://github.com/sustia-llc/catgraph/issues/405); the `−ln` image of the §4 constructions. |
 
 ### §5.1 Tropical module structure
 
@@ -259,4 +260,4 @@ scope changes:
 - Companion magnitude audit: [`BV25-AUDIT.md`](BV25-AUDIT.md).
 - Enrichment / Lawvere-metric substrate audit: [`catgraph-applied/docs/FS18-AUDIT.md`](../../catgraph-applied/docs/FS18-AUDIT.md).
 - Cospan substrate audit: [`catgraph/docs/FS19-AUDIT.md`](../../catgraph/docs/FS19-AUDIT.md).
-- Salvage tracking: [#53](https://github.com/sustia-llc/catgraph/issues/53); folded algebra: [#36](https://github.com/sustia-llc/catgraph/issues/36).
+- Salvage tracking: [#53](https://github.com/sustia-llc/catgraph/issues/53); deferred weighted (co)limit calculus: [#405](https://github.com/sustia-llc/catgraph/issues/405); folded algebra: [#36](https://github.com/sustia-llc/catgraph/issues/36).

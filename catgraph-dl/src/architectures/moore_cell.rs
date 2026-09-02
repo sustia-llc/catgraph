@@ -52,7 +52,8 @@ where
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use catgraph_dl::architectures::MooreCell;
     /// // cell_o(p, s) = s * 2; cell_n(p, s, _i) = s + 1.
     /// let cell: MooreCell<_, _, _, _, (), i64> = MooreCell::new(
     ///     (),
@@ -93,7 +94,8 @@ where
     ///
     /// # Examples
     ///
-    /// ```ignore
+    /// ```
+    /// # use catgraph_dl::architectures::MooreCell;
     /// // cell_o(p, s) = s * 2; cell_n(p, s, _i) = s + 1.
     /// let cell: MooreCell<_, _, _, _, (), i64> = MooreCell::new(
     ///     (),

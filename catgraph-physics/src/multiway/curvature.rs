@@ -1,14 +1,11 @@
 //! Discrete curvature trait and foliation for multiway systems.
 //!
 //! Provides a trait-based architecture for computing curvature on branchial
-//! graphs, with pluggable backends (Ollivier-Ricci, manifold embedding).
+//! graphs.
 
 use std::fmt::{self, Debug, Display};
 
 /// Discrete curvature on a branchial graph.
-///
-/// Two backends: Ollivier-Ricci (default) and Riemannian manifold embedding
-/// (feature = "manifold-curvature").
 pub trait DiscreteCurvature: Clone + Debug {
     /// Scalar curvature R (trace of Ricci). 0 = flat, >0 = sphere-like, <0 = saddle-like.
     #[must_use]
@@ -41,10 +38,9 @@ pub trait DiscreteCurvature: Clone + Debug {
 
 /// Curvature analysis across all time steps of a multiway evolution.
 ///
-/// Generic over any [`DiscreteCurvature`] backend (Ollivier-Ricci, manifold
-/// embedding, etc.). Stores one curvature value per branchial graph in the
-/// foliation and provides aggregate metrics: global flatness, irreducibility
-/// profile, and average irreducibility indicator.
+/// Generic over any [`DiscreteCurvature`] backend. Stores one curvature value
+/// per branchial graph in the foliation and provides aggregate metrics: global
+/// flatness, irreducibility profile, and average irreducibility indicator.
 #[derive(Debug, Clone)]
 pub struct CurvatureFoliation<C: DiscreteCurvature> {
     /// Curvature at each time step.

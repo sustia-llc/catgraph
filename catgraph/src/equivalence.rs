@@ -1,5 +1,5 @@
 //! Equivalence between hypergraph categories and cospan-algebras
-//! (Fong-Spivak §4, Theorem 4.13/4.16).
+//! (Fong-Spivak §4, Theorem 4.13).
 //!
 //! Implements both directions:
 //! - §4.1 (H → A): already done via [`NameAlgebra`](crate::cospan_algebra::NameAlgebra)
