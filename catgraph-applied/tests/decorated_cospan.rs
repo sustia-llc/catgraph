@@ -415,4 +415,42 @@ fn t2_7_clone_and_debug_over_marker_with_no_derives() {
         pretty.ends_with("\n}"),
         "the alternate spec closes the struct on its own line, got: {pretty}"
     );
+
+    let padded = format!("{original:>90?}");
+    let (shadow_rendered, shadow_pretty, shadow_padded) = {
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        struct DecoratedCospan {
+            cospan: Cospan<usize>,
+            decoration: (),
+        }
+        let shadow = DecoratedCospan {
+            cospan: original.cospan.clone(),
+            decoration: original.decoration,
+        };
+        (
+            format!("{shadow:?}"),
+            format!("{shadow:#?}"),
+            format!("{shadow:>90?}"),
+        )
+    };
+
+    assert_eq!(
+        rendered, shadow_rendered,
+        "under `{{:?}}` the shipped rendering must be byte-identical to a \
+         derived-`Debug` struct of the same name and fields: shipped = \
+         {rendered:?}, derived = {shadow_rendered:?}"
+    );
+    assert_eq!(
+        pretty, shadow_pretty,
+        "under `{{:#?}}` the shipped rendering must be byte-identical to a \
+         derived-`Debug` struct of the same name and fields: shipped = \
+         {pretty:?}, derived = {shadow_pretty:?}"
+    );
+    assert_eq!(
+        padded, shadow_padded,
+        "under `{{:>90?}}` the shipped rendering must be byte-identical to a \
+         derived-`Debug` struct of the same name and fields: shipped = \
+         {padded:?}, derived = {shadow_padded:?}"
+    );
 }
