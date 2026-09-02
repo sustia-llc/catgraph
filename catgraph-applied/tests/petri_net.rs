@@ -417,6 +417,41 @@ fn compose_and_monoidal_agree_with_the_stored_boundary() {
     assert!(g.compose(&f).is_err(), "['C'] does not match ['A']");
 }
 
+/// `compose` relabels the second operand's transitions through the right half
+/// of the pushout quotient.
+///
+/// **What this ranges over.** One composite of two two-place nets over a
+/// one-wire interface, each carrying one transition, on `Lambda = char`. It
+/// does not sweep arities, transition counts or arc weights.
+#[test]
+fn compose_shifts_the_second_operand_transitions() {
+    let f: PetriNet<char> = PetriNet::new(
+        vec!['A', 'B'],
+        vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
+        vec![0],
+        vec![1],
+    )
+    .unwrap();
+    let g: PetriNet<char> = PetriNet::new(
+        vec!['B', 'C'],
+        vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
+        vec![0],
+        vec![1],
+    )
+    .unwrap();
+
+    let composed = f.compose(&g).expect("['B'] matches ['B']");
+    let observed = composed.transitions();
+    let expected = [
+        Transition::new(vec![(0, d(1))], vec![(1, d(1))]),
+        Transition::new(vec![(1, d(1))], vec![(2, d(1))]),
+    ];
+    assert_eq!(
+        observed, expected,
+        "g's transition must land on the shared place 1 and on 'C' at place 2, got: {observed:?}"
+    );
+}
+
 // ============================================================================
 // Transition::relabel arc dedup tests
 // ============================================================================

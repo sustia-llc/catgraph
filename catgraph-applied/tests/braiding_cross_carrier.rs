@@ -935,10 +935,7 @@ fn permute_side_on_an_identity_matches_the_constructors() {
 
             // ---- PetriNet ----------------------------------------------
             // The identity net carries one relay transition, which the
-            // braiding must leave alone while it moves the named leg. Both
-            // sides are cloned from one `base` because `PetriNet::from_cospan`
-            // aggregates arcs through a `HashMap`, so two separately built
-            // identities need not list the relay's arcs in the same order.
+            // braiding must leave alone while it moves the named leg.
             let base: PetriNet<char> = PetriNet::identity(&types);
             let relay = base.transitions().to_vec();
 

@@ -215,19 +215,74 @@ fn t2_4_petri_decoration_collapsed_quotient_preserves_transition_count() {
     // Quotient collapses both apex elements to 0, pushforward is a no-op
     // on transition count. Regression-guards the behaviour that
     // composition preserves all transitions across the pushout.
-    use catgraph_applied::petri_net::{PetriDecoration, Transition};
+    use catgraph_applied::petri_net::{PetriApex, PetriDecoration, Transition};
     use rust_decimal::Decimal;
 
     let c1 = Cospan::<char>::new(vec![0], vec![0], vec!['p']).unwrap();
     let t1 = Transition::new(vec![(0, Decimal::ONE)], vec![]);
-    let d1 = DecoratedCospan::<char, PetriDecoration<char>>::new(c1, vec![t1]);
+    let d1 = DecoratedCospan::<char, PetriDecoration<char>>::new(
+        c1,
+        PetriApex {
+            n: 1,
+            transitions: vec![t1],
+        },
+    );
 
     let c2 = Cospan::<char>::new(vec![0], vec![0], vec!['p']).unwrap();
     let t2 = Transition::new(vec![], vec![(0, Decimal::ONE)]);
-    let d2 = DecoratedCospan::<char, PetriDecoration<char>>::new(c2, vec![t2]);
+    let d2 = DecoratedCospan::<char, PetriDecoration<char>>::new(
+        c2,
+        PetriApex {
+            n: 1,
+            transitions: vec![t2],
+        },
+    );
 
     let composed = d1.compose(&d2).unwrap();
     // Both transitions preserved — quotient collapses both apex elements
     // to 0, so pushforward is a no-op on transition count.
-    assert_eq!(composed.decoration.len(), 2);
+    assert_eq!(composed.decoration.transitions.len(), 2);
+}
+
+/// The `PetriDecoration` laxator shifts the second operand's arc place
+/// indices into the right half of the tensored apex.
+///
+/// **What this ranges over.** One `Monoidal::monoidal` call, a one-place left
+/// operand and a two-place right operand carrying one arc on its second
+/// place, on `Lambda = char`. It does not sweep apex sizes or transition
+/// counts.
+#[test]
+fn t2_5_petri_decoration_monoidal_shifts_the_second_operand() {
+    use catgraph::monoidal::Monoidal;
+    use catgraph_applied::petri_net::{PetriApex, PetriDecoration, Transition};
+    use rust_decimal::Decimal;
+
+    let mut left = DecoratedCospan::<char, PetriDecoration<char>>::new(
+        Cospan::<char>::new(vec![0], vec![0], vec!['p']).unwrap(),
+        PetriApex {
+            n: 1,
+            transitions: vec![Transition::new(vec![(0, Decimal::ONE)], vec![])],
+        },
+    );
+    let right = DecoratedCospan::<char, PetriDecoration<char>>::new(
+        Cospan::<char>::new(vec![0], vec![1], vec!['q', 'r']).unwrap(),
+        PetriApex {
+            n: 2,
+            transitions: vec![Transition::new(vec![], vec![(1, Decimal::TWO)])],
+        },
+    );
+
+    left.monoidal(right);
+
+    assert_eq!(
+        left.decoration.n, 3,
+        "the tensored apex is 1 + 2 places, got n = {}",
+        left.decoration.n
+    );
+    let shifted = left.decoration.transitions[1].post();
+    assert_eq!(
+        shifted,
+        &[(2, Decimal::TWO)],
+        "the right operand's arc on its place 1 must land on place 1 + 1 = 2, got: {shifted:?}"
+    );
 }

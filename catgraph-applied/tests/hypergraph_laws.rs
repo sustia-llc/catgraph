@@ -12,7 +12,7 @@
 //!   2026-09-02: `catgraph/src/hypergraph_category.rs:89` and `:135`,
 //!   `catgraph/src/corel.rs:564`, `catgraph/src/equivalence.rs:564`,
 //!   `catgraph-applied/src/decorated_cospan.rs:286`,
-//!   `catgraph-applied/src/petri_net.rs:870`). Each generator is compared
+//!   `catgraph-applied/src/petri_net.rs:955`). Each generator is compared
 //!   against a partition table written out by hand, never against another
 //!   carrier. It does not range over several wire types, wider spiders, or any
 //!   morphism that is not a generator.
@@ -37,7 +37,7 @@ use catgraph::equivalence::CospanAlgebraMorphism;
 use catgraph::frobenius::{FrobeniusMorphism, frobenius_to_cospan};
 use catgraph::hypergraph_category::HypergraphCategory;
 use catgraph_applied::decorated_cospan::DecoratedCospan;
-use catgraph_applied::petri_net::{PetriDecoration, PetriNet, Transition};
+use catgraph_applied::petri_net::{PetriApex, PetriDecoration, PetriNet};
 use permutations::Permutation;
 
 /// The wire type every equation and generator is built on.
@@ -283,7 +283,7 @@ impl Carrier for Decorated {
     const NAME: &'static str = "DecoratedCospan<char, PetriDecoration<char>>";
     /// The whole value: the underlying cospan up to apex isomorphism, and the
     /// decoration on the nose.
-    type Key = (CospanCanon<char>, Vec<Transition>);
+    type Key = (CospanCanon<char>, PetriApex);
 
     fn seq(&self, other: &Self) -> Self {
         Composable::compose(self, other).expect("battery composites are type-correct by hand")
@@ -432,15 +432,21 @@ fn decorated_cospan_battery() {
 /// decoration, so the decoration half of its key decides nothing here.
 ///
 /// Stated rather than left implicit: the `PetriDecoration` generators are
-/// `D::empty(_)`, `combine` concatenates and `pushforward` maps an empty list
-/// to an empty list, so [`decorated_cospan_battery`]'s verdict rests on the
-/// cospan half alone. A decoration that stopped being empty would show up
-/// here, not there.
+/// `D::empty(_)`, `combine` concatenates the shifted lists and `pushforward`
+/// maps an empty list to an empty list, so [`decorated_cospan_battery`]'s
+/// verdict rests on the cospan half alone. A decoration that stopped being
+/// empty would show up here, not there.
 #[test]
 fn decorated_cospan_battery_decorations_stay_empty() {
     for (name, lhs, rhs) in equations::<Decorated>(Z) {
-        assert!(lhs.decoration.is_empty(), "{name}: lhs decoration");
-        assert!(rhs.decoration.is_empty(), "{name}: rhs decoration");
+        assert!(
+            lhs.decoration.transitions.is_empty(),
+            "{name}: lhs decoration"
+        );
+        assert!(
+            rhs.decoration.transitions.is_empty(),
+            "{name}: rhs decoration"
+        );
     }
 }
 

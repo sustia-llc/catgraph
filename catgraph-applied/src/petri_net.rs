@@ -515,11 +515,9 @@ where
     /// establishes the cospan bridge between Petri net firing semantics and
     /// categorical composition.
     ///
-    /// The arc lists are aggregated through a [`HashMap`], so their order
-    /// within the transition is unspecified; the arc *weights*
-    /// ([`arc_weight_pre`](Self::arc_weight_pre) /
-    /// [`arc_weight_post`](Self::arc_weight_post)) and the boundary are not
-    /// affected by it.
+    /// The arc lists are aggregated through a [`HashMap`] and then sorted
+    /// ascending by place index, so the transition's `pre` and `post` are in
+    /// that order for every input cospan.
     #[must_use]
     pub fn from_cospan(cospan: &Cospan<Lambda>) -> Self {
         let places = cospan.middle().to_vec();
@@ -531,8 +529,10 @@ where
         for &idx in cospan.right_to_middle() {
             *post_counts.entry(idx).or_insert(Decimal::ZERO) += Decimal::ONE;
         }
-        let pre: Vec<(usize, Decimal)> = pre_counts.into_iter().collect();
-        let post: Vec<(usize, Decimal)> = post_counts.into_iter().collect();
+        let mut pre: Vec<(usize, Decimal)> = pre_counts.into_iter().collect();
+        pre.sort_unstable_by_key(|&(p, _)| p);
+        let mut post: Vec<(usize, Decimal)> = post_counts.into_iter().collect();
+        post.sort_unstable_by_key(|&(p, _)| p);
         // Correct by construction: the arc indices and the stored legs are the
         // cospan's own leg entries and the places are its middle set, so every
         // arc and every leg entry is in range by `Cospan`'s bounds invariant.
@@ -681,12 +681,13 @@ where
 /// Decoration functor `F : (FinSet, +) → (Set, ×)` whose apex value is a
 /// list of Petri-net transitions on that apex.
 ///
-/// Concretely, `F(N) = Vec<Transition>`: the decorations living over an apex
+/// Concretely, `F(N) = PetriApex`: the decorations living over an apex
 /// of size `|N|` are transition lists whose pre/post arcs reference indices
-/// in `{0, …, |N|-1}`. The empty apex carries the empty transition list, the
-/// laxator `combine` concatenates the two lists, and `pushforward` applies
-/// the apex quotient to every transition's arc endpoints via
-/// [`Transition::relabel`].
+/// in `{0, …, |N|-1}`, carried alongside `|N|` itself. The empty apex carries
+/// the empty transition list, the laxator `combine` concatenates the two
+/// lists with every arc place index of the second operand shifted by the
+/// first operand's `n`, and `pushforward` applies the apex quotient to every
+/// transition's arc endpoints via [`Transition::relabel`].
 ///
 /// Used with [`DecoratedCospan`] this exhibits `PetriNet<Lambda>` as an
 /// instance of the generic decorated-cospan construction (Fong–Spivak
@@ -699,23 +700,52 @@ where
 #[derive(Debug)]
 pub struct PetriDecoration<Lambda: Sized + Eq + Copy + Debug>(std::marker::PhantomData<Lambda>);
 
+/// The apex value of [`PetriDecoration`]: a transition list together with the
+/// number of apex places its arc indices range over.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PetriApex {
+    /// The apex cardinality; the arc place indices in `transitions` lie in
+    /// `0..n`.
+    pub n: usize,
+    /// The transitions carried over that apex.
+    pub transitions: Vec<Transition>,
+}
+
 impl<Lambda> Decoration for PetriDecoration<Lambda>
 where
     Lambda: Sized + Eq + Copy + Debug + 'static,
 {
-    type Apex = Vec<Transition>;
+    type Apex = PetriApex;
 
-    fn empty(_n: usize) -> Self::Apex {
-        Vec::new()
+    fn empty(n: usize) -> Self::Apex {
+        PetriApex {
+            n,
+            transitions: Vec::new(),
+        }
     }
 
-    fn combine(mut a: Self::Apex, b: Self::Apex) -> Self::Apex {
-        a.extend(b);
-        a
+    fn combine(a: Self::Apex, b: Self::Apex) -> Self::Apex {
+        let shift = a.n;
+        let mut transitions = a.transitions;
+        transitions.extend(b.transitions.into_iter().map(|t| Transition {
+            pre: t.pre.iter().map(|&(p, w)| (p + shift, w)).collect(),
+            post: t.post.iter().map(|&(p, w)| (p + shift, w)).collect(),
+        }));
+        PetriApex {
+            n: a.n + b.n,
+            transitions,
+        }
     }
 
     fn pushforward(d: Self::Apex, quotient: &[usize]) -> Self::Apex {
-        d.into_iter().map(|t| t.relabel(quotient)).collect()
+        PetriApex {
+            n: quotient.iter().copied().max().map_or(0, |m| m + 1),
+            transitions: d
+                .transitions
+                .into_iter()
+                .map(|t| t.relabel(quotient))
+                .collect(),
+        }
     }
 }
 
@@ -737,7 +767,10 @@ where
         // `PetriNet::new` refuses a net whose legs do not index its places.
         DecoratedCospan::new(
             Cospan::new_unchecked(self.left.clone(), self.right.clone(), self.places.clone()),
-            self.transitions.clone(),
+            PetriApex {
+                n: self.places.len(),
+                transitions: self.transitions.clone(),
+            },
         )
     }
 
@@ -750,14 +783,16 @@ where
     /// other decorated cospans with a `PetriDecoration` it is still
     /// well-defined as long as every transition's arc indices lie within
     /// `dec.cospan.middle().len()` (the [`Transition`] constructor does
-    /// not check this — callers are responsible for that invariant).
+    /// not check this — callers are responsible for that invariant). The
+    /// decoration's `n` is discarded; the place count is the cospan's middle
+    /// length.
     #[must_use]
     pub fn from_decorated_cospan(dec: DecoratedCospan<Lambda, PetriDecoration<Lambda>>) -> Self {
         Self {
             places: dec.cospan.middle().to_vec(),
             left: dec.cospan.left_to_middle().to_vec(),
             right: dec.cospan.right_to_middle().to_vec(),
-            transitions: dec.decoration,
+            transitions: dec.decoration.transitions,
         }
     }
 }
@@ -849,7 +884,7 @@ where
     Lambda: Sized + Eq + Copy + Debug + 'static,
 {
     /// Braiding on a [`PetriNet`] boundary: permutes the stored leg of the
-    /// side `of_codomain` names, exactly as [`Cospan::permute_side`] does.
+    /// side `of_codomain` names.
     ///
     /// The wire at slot `i` of that side moves to slot `p.apply(i)`, which on
     /// the leg vector is `in_place_permute(leg, &p.inv())`. Places,
@@ -858,8 +893,6 @@ where
     /// If `p.len()` does not equal the permuted leg's length, the call is a
     /// no-op — the signature is non-fallible, and this is the defensive arm
     /// the trait's `# Length` section names.
-    ///
-    /// [`Cospan::permute_side`]: catgraph::monoidal::SymmetricMonoidalMorphism::permute_side
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool) {
         let leg = if of_codomain {
             &mut self.right
@@ -1067,8 +1100,8 @@ mod test {
     /// index `places` by leg entry.
     ///
     /// **What this ranges over.** A 1-place net, one out-of-range entry per
-    /// leg, and the arcs-before-legs ordering. It does not sweep leg lengths
-    /// or several simultaneous faults.
+    /// leg, the arcs-before-legs ordering, and the `left`-before-`right`
+    /// ordering. It does not sweep leg lengths.
     #[test]
     fn petri_net_new_rejects_legs_outside_its_places() {
         let err = PetriNet::new(vec!['a'], vec![], vec![0, 3], vec![])
@@ -1099,6 +1132,23 @@ mod test {
                 }
             ),
             "expected codomain/2/2/1, got: {err:?}"
+        );
+
+        // `left` is scanned before `right`: a net faulty on both reports the
+        // domain leg.
+        let err = PetriNet::new(vec!['a'], vec![], vec![3], vec![3])
+            .expect_err("both leg entries are out of range for a 1-place net");
+        assert!(
+            matches!(
+                err,
+                CatgraphError::ConstructionIndexOutOfBounds {
+                    leg: BoundaryLeg::Domain,
+                    position: 0,
+                    target: 3,
+                    target_len: 1,
+                }
+            ),
+            "left is scanned before right, expected domain/0/3/1, got: {err:?}"
         );
 
         // Arcs are scanned before legs: a net faulty on both reports the arc.
@@ -1290,6 +1340,23 @@ mod test {
         assert_eq!(net.arc_weight_post(2, 0), d(2));
     }
 
+    /// `from_cospan` emits `pre` and `post` sorted ascending by place index.
+    ///
+    /// **What this ranges over.** One cospan whose left leg `[1, 0, 0]` visits
+    /// place 1 before place 0, on `Lambda = char`. It does not sweep leg
+    /// shapes or middle sizes.
+    #[test]
+    fn from_cospan_sorts_arcs_by_place_index() {
+        let cospan: Cospan<char> = Cospan::new(vec![1, 0, 0], vec![], vec!['a', 'b']).unwrap();
+        let net = PetriNet::from_cospan(&cospan);
+        let pre = net.transitions()[0].pre();
+        assert_eq!(
+            pre,
+            &[(0, d(2)), (1, d(1))],
+            "left leg [1, 0, 0] must aggregate to pre [(0, 2), (1, 1)], got: {pre:?}"
+        );
+    }
+
     #[test]
     fn transition_as_cospan_roundtrip() {
         let net = combustion_net();
@@ -1366,8 +1433,10 @@ mod test {
         assert_eq!(dec.cospan.middle().len(), p_count);
         assert_eq!(dec.cospan.left_to_middle(), pn.left_to_place());
         assert_eq!(dec.cospan.right_to_middle(), pn.right_to_place());
-        // Decoration carries the full transition list.
-        assert_eq!(dec.decoration.len(), t_count);
+        // Decoration carries the full transition list, over an apex sized to
+        // the place set.
+        assert_eq!(dec.decoration.transitions.len(), t_count);
+        assert_eq!(dec.decoration.n, p_count);
 
         let pn2: PetriNet<char> = PetriNet::from_decorated_cospan(dec);
         assert_eq!(pn2.transition_count(), t_count);
@@ -1399,11 +1468,15 @@ mod test {
             Transition::new(vec![(2, d(2))], vec![(0, d(1))]),
         ];
         // Quotient: places 0 and 2 merge to 0, place 1 becomes 1.
-        let pushed = <PetriDecoration<char> as Decoration>::pushforward(transitions, &[0, 1, 0]);
-        assert_eq!(pushed[0].pre(), &[(0, d(1))]);
-        assert_eq!(pushed[0].post(), &[(1, d(1))]);
-        assert_eq!(pushed[1].pre(), &[(0, d(2))]);
-        assert_eq!(pushed[1].post(), &[(0, d(1))]);
+        let pushed = <PetriDecoration<char> as Decoration>::pushforward(
+            PetriApex { n: 3, transitions },
+            &[0, 1, 0],
+        );
+        assert_eq!(pushed.n, 2);
+        assert_eq!(pushed.transitions[0].pre(), &[(0, d(1))]);
+        assert_eq!(pushed.transitions[0].post(), &[(1, d(1))]);
+        assert_eq!(pushed.transitions[1].pre(), &[(0, d(2))]);
+        assert_eq!(pushed.transitions[1].post(), &[(0, d(1))]);
     }
 
     #[test]
