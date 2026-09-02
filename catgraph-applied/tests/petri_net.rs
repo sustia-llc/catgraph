@@ -1,5 +1,6 @@
 //! Integration tests for `PetriNet`: chemical reactions, reachability, composition, cospan roundtrip.
 
+use catgraph::category::Composable;
 use catgraph::cospan::Cospan;
 use catgraph_applied::petri_net::{Marking, PetriNet, Transition};
 use rust_decimal::Decimal;
@@ -19,6 +20,8 @@ fn combustion_h2_o2_h2o() {
     let net: PetriNet<&str> = PetriNet::new(
         vec!["H2", "O2", "H2O"],
         vec![Transition::new(vec![(0, d(2)), (1, d(1))], vec![(2, d(2))])],
+        vec![],
+        vec![],
     )
     .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(4)), (1, d(2))]);
@@ -38,6 +41,8 @@ fn two_step_synthesis() {
             Transition::new(vec![(0, d(1)), (1, d(1))], vec![(2, d(1))]),
             Transition::new(vec![(2, d(1)), (3, d(1))], vec![(4, d(1))]),
         ],
+        vec![],
+        vec![],
     )
     .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(1)), (1, d(1)), (3, d(1))]);
@@ -54,6 +59,8 @@ fn haber_process_stoichiometry() {
     let net: PetriNet<&str> = PetriNet::new(
         vec!["N2", "H2", "NH3"],
         vec![Transition::new(vec![(0, d(1)), (1, d(3))], vec![(2, d(2))])],
+        vec![],
+        vec![],
     )
     .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(1)), (1, d(3))]);
@@ -74,6 +81,8 @@ fn producer_consumer_bounded_buffer() {
             Transition::new(vec![(0, d(1))], vec![(1, d(1))]),
             Transition::new(vec![(1, d(1))], vec![(0, d(1))]),
         ],
+        vec![],
+        vec![],
     )
     .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(3))]);
@@ -93,6 +102,8 @@ fn deadlock_detection() {
             Transition::new(vec![(3, d(1)), (0, d(1)), (1, d(1))], vec![(5, d(1))]),
             Transition::new(vec![(5, d(1))], vec![(3, d(1)), (0, d(1)), (1, d(1))]),
         ],
+        vec![],
+        vec![],
     )
     .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(1)), (1, d(1)), (2, d(1)), (3, d(1))]);
@@ -109,11 +120,15 @@ fn sequential_pipeline() {
     let step1: PetriNet<char> = PetriNet::new(
         vec!['A', 'B'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
+        vec![0],
+        vec![1],
     )
     .unwrap();
     let step2: PetriNet<char> = PetriNet::new(
         vec!['B', 'C'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
+        vec![0],
+        vec![1],
     )
     .unwrap();
     let pipeline = step1.sequential(&step2).unwrap();
@@ -128,11 +143,15 @@ fn parallel_independence() {
     let a: PetriNet<char> = PetriNet::new(
         vec!['a', 'b'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
+        vec![0],
+        vec![1],
     )
     .unwrap();
     let b: PetriNet<char> = PetriNet::new(
         vec!['x', 'y'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
+        vec![0],
+        vec![1],
     )
     .unwrap();
     let combined = a.parallel(&b);
@@ -151,6 +170,13 @@ fn cospan_roundtrip_preserves_structure() {
     let cospan: Cospan<char> =
         Cospan::new(vec![0, 1, 1, 1], vec![2, 2], vec!['N', 'H', 'A']).unwrap();
     let net = PetriNet::from_cospan(&cospan);
+    // `from_cospan` stores both legs verbatim, so the net's boundary is the
+    // cospan's boundary rather than a re-expansion of the arc weights.
+    assert_eq!(net.left_to_place(), cospan.left_to_middle());
+    assert_eq!(net.right_to_place(), cospan.right_to_middle());
+    assert_eq!(net.domain(), cospan.domain());
+    assert_eq!(net.codomain(), cospan.codomain());
+
     let back = net.transition_as_cospan(0);
     assert_eq!(back.middle(), cospan.middle());
     let mut left_counts_orig: HashMap<usize, usize> = HashMap::new();
@@ -169,74 +195,157 @@ fn cospan_roundtrip_preserves_structure() {
 // ============================================================================
 
 #[cfg(test)]
-mod v0_3_1_braiding {
+mod braiding {
     use catgraph::category::Composable;
     use catgraph::monoidal::{Monoidal, SymmetricMonoidalMorphism};
     use catgraph_applied::petri_net::{PetriNet, Transition};
     use permutations::Permutation;
     use rust_decimal::Decimal;
 
-    fn two_transition_net() -> PetriNet<char> {
-        // Two transitions on a 2-place net, each with one pre and one post arc.
-        let places = vec!['a', 'b'];
+    /// Places `['a','b','c']`, two transitions, domain leg `[0, 1]` (arity 2)
+    /// and codomain leg `[0, 1, 2]` (arity 3).
+    ///
+    /// The three lengths — 2 domain slots, 3 codomain slots, 2 transitions —
+    /// are deliberately not all equal, so a permutation sized for one of them
+    /// is the wrong size for the others.
+    fn asymmetric_net() -> PetriNet<char> {
         let t0 = Transition::new(vec![(0, Decimal::ONE)], vec![(1, Decimal::ONE)]);
-        let t1 = Transition::new(vec![(1, Decimal::ONE)], vec![(0, Decimal::ONE)]);
-        PetriNet::new(places, vec![t0, t1]).unwrap()
+        let t1 = Transition::new(vec![(1, Decimal::ONE)], vec![(2, Decimal::ONE)]);
+        PetriNet::new(vec!['a', 'b', 'c'], vec![t0, t1], vec![0, 1], vec![0, 1, 2]).unwrap()
     }
 
     #[test]
-    fn t3_1_identity_permutation_is_no_op() {
-        let original = two_transition_net();
+    fn identity_permutation_is_a_no_op_on_either_side() {
+        let original = asymmetric_net();
+        for (of_codomain, arity) in [(false, 2usize), (true, 3)] {
+            let mut net = original.clone();
+            net.permute_side(&Permutation::identity(arity), of_codomain);
+            assert_eq!(net.places(), original.places());
+            assert_eq!(net.transitions(), original.transitions());
+            assert_eq!(net.left_to_place(), original.left_to_place());
+            assert_eq!(net.right_to_place(), original.right_to_place());
+        }
+    }
+
+    /// `permute_side` moves the wire at slot `i` of the named side to slot
+    /// `p.apply(i)`, leaving the other leg, the places and the transitions
+    /// alone.
+    ///
+    /// Values written out for `p = rotation_left(3, 1)` on the codomain and
+    /// `p = transposition(2, 0, 1)` on the domain of [`asymmetric_net`].
+    #[test]
+    fn permute_side_moves_the_named_leg_only() {
+        let original = asymmetric_net();
+
         let mut net = original.clone();
-        net.permute_side(&Permutation::identity(net.transitions().len()), false);
-        assert_eq!(net.places(), original.places());
+        net.permute_side(&Permutation::rotation_left(3, 1), true);
+        assert_eq!(net.right_to_place(), &[2, 0, 1]);
+        assert_eq!(net.codomain(), vec!['c', 'a', 'b']);
+        assert_eq!(net.left_to_place(), &[0, 1], "domain leg untouched");
+        assert_eq!(net.domain(), vec!['a', 'b']);
         assert_eq!(net.transitions(), original.transitions());
+        assert_eq!(net.places(), original.places());
+
+        let mut net = original.clone();
+        net.permute_side(&Permutation::transposition(2, 0, 1), false);
+        assert_eq!(net.left_to_place(), &[1, 0]);
+        assert_eq!(net.domain(), vec!['b', 'a']);
+        assert_eq!(net.right_to_place(), &[0, 1, 2], "codomain leg untouched");
+        assert_eq!(net.transitions(), original.transitions());
+        assert_eq!(net.places(), original.places());
     }
 
+    /// #302 — a permutation whose length is not the permuted side's arity
+    /// leaves the whole net alone.
+    ///
+    /// **What this ranges over.** One net, and three mismatch sources at
+    /// `p.len()` 2 and 3: the opposite leg's arity, the transition count (the
+    /// pre-#272 sizing), and a length matching neither. Both flag values are
+    /// driven. It does not sweep arities beyond `{2, 3}`.
+    ///
+    /// The final block is what stops the no-op assertions from passing for
+    /// free: the same `p`, at the length the permuted side does have, changes
+    /// that leg.
     #[test]
-    fn t3_2_transposition_swaps_transition_order() {
-        let original = two_transition_net();
+    fn mismatched_permutation_length_is_a_no_op() {
+        let original = asymmetric_net();
+        assert_eq!(original.transitions().len(), 2, "fixture: 2 transitions");
+
+        // `p.len() == 2` is the domain arity and the transition count, and is
+        // neither on the codomain side.
+        let p2 = Permutation::transposition(2, 0, 1);
         let mut net = original.clone();
-
-        let swap = Permutation::transposition(2, 0, 1);
-        net.permute_side(&swap, true);
-
-        // Transitions permuted
-        assert_eq!(net.transitions().len(), 2);
-        assert_eq!(net.transitions()[0], original.transitions()[1]);
-        assert_eq!(net.transitions()[1], original.transitions()[0]);
-        // Places unchanged
-        assert_eq!(net.places(), original.places());
-        // Codomain sequence reflects the swap
-        assert_ne!(
-            net.codomain(),
-            original.codomain(),
-            "codomain must observe the braiding"
+        net.permute_side(&p2, true);
+        assert_eq!(
+            net.right_to_place(),
+            original.right_to_place(),
+            "p.len() 2 != codomain arity 3: no-op"
         );
+        assert_eq!(net.left_to_place(), original.left_to_place());
+        assert_eq!(
+            net.transitions(),
+            original.transitions(),
+            "p sized to the transition count must not reorder transitions"
+        );
+
+        // `p.len() == 3` is the codomain arity, and is not the domain arity.
+        let p3 = Permutation::rotation_left(3, 1);
+        let mut net = original.clone();
+        net.permute_side(&p3, false);
+        assert_eq!(
+            net.left_to_place(),
+            original.left_to_place(),
+            "p.len() 3 != domain arity 2: no-op"
+        );
+        assert_eq!(net.right_to_place(), original.right_to_place());
+        assert_eq!(net.transitions(), original.transitions());
+
+        // A length matching no arity of this net, on both sides.
+        let p5 = Permutation::rotation_left(5, 2);
+        for of_codomain in [false, true] {
+            let mut net = original.clone();
+            net.permute_side(&p5, of_codomain);
+            assert_eq!(net.left_to_place(), original.left_to_place());
+            assert_eq!(net.right_to_place(), original.right_to_place());
+            assert_eq!(net.transitions(), original.transitions());
+        }
+
+        // Not vacuous: at the permuted side's own arity, each `p` moves it.
+        let mut net = original.clone();
+        net.permute_side(&p2, false);
+        assert_eq!(net.left_to_place(), &[1, 0]);
+        let mut net = original.clone();
+        net.permute_side(&p3, true);
+        assert_eq!(net.right_to_place(), &[2, 0, 1]);
     }
 
     #[test]
-    fn t3_3_involution() {
-        let original = two_transition_net();
+    fn permuting_the_codomain_twice_by_an_involution_restores_it() {
+        let original = asymmetric_net();
         let mut net = original.clone();
-        let swap = Permutation::transposition(2, 0, 1);
+        let swap = Permutation::transposition(3, 0, 1);
         net.permute_side(&swap, true);
         net.permute_side(&swap, true);
+        assert_eq!(net.right_to_place(), original.right_to_place());
         assert_eq!(net.places(), original.places());
         assert_eq!(net.transitions(), original.transitions());
     }
 
     #[test]
-    fn t3_4_naturality_on_tensor_codomain() {
-        // net1 ⊗ net2 followed by codomain-swap yields net2 ⊗ net1 codomain.
+    fn naturality_on_tensor_codomain() {
+        // net1 ⊗ net2 followed by codomain-swap yields net2 ⊗ net1's codomain.
         let mut net1 = PetriNet::new(
             vec!['x'],
             vec![Transition::new(vec![], vec![(0, Decimal::ONE)])],
+            vec![],
+            vec![0],
         )
         .unwrap();
         let net2 = PetriNet::new(
             vec!['y'],
             vec![Transition::new(vec![], vec![(0, Decimal::ONE)])],
+            vec![],
+            vec![0],
         )
         .unwrap();
 
@@ -244,9 +353,11 @@ mod v0_3_1_braiding {
         reverse.monoidal(net1.clone());
 
         net1.monoidal(net2);
+        assert_eq!(net1.codomain(), vec!['x', 'y']);
         let swap = Permutation::transposition(2, 0, 1);
         net1.permute_side(&swap, true);
 
+        assert_eq!(net1.codomain(), vec!['y', 'x']);
         assert_eq!(
             net1.codomain(),
             reverse.codomain(),
@@ -258,6 +369,52 @@ mod v0_3_1_braiding {
             "swap on (net1 ⊗ net2).domain equals (net2 ⊗ net1).domain"
         );
     }
+}
+
+// ============================================================================
+// The two boundary invariants #272's reading makes maintained rather than
+// derived
+// ============================================================================
+
+/// `compose` yields the first operand's domain and the second's codomain, and
+/// `monoidal` concatenates both boundary words.
+///
+/// **What this ranges over.** Two fixtures — a two-place net composed with a
+/// two-place net over a one-wire interface, and the same two tensored — on one
+/// `Lambda` (`char`). It does not sweep arities, and it says nothing about the
+/// composite's transitions.
+#[test]
+fn compose_and_monoidal_agree_with_the_stored_boundary() {
+    use catgraph::monoidal::Monoidal;
+
+    let f: PetriNet<char> = PetriNet::new(
+        vec!['A', 'B'],
+        vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
+        vec![0],
+        vec![1],
+    )
+    .unwrap();
+    let g: PetriNet<char> = PetriNet::new(
+        vec!['B', 'C'],
+        vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
+        vec![0],
+        vec![1],
+    )
+    .unwrap();
+
+    let composed = f.compose(&g).expect("['B'] matches ['B']");
+    assert_eq!(composed.domain(), f.domain());
+    assert_eq!(composed.domain(), vec!['A']);
+    assert_eq!(composed.codomain(), g.codomain());
+    assert_eq!(composed.codomain(), vec!['C']);
+
+    let mut tensored = f.clone();
+    tensored.monoidal(g.clone());
+    assert_eq!(tensored.domain(), vec!['A', 'B']);
+    assert_eq!(tensored.codomain(), vec!['B', 'C']);
+
+    // A mismatched interface is an error, not a silent splice.
+    assert!(g.compose(&f).is_err(), "['C'] does not match ['A']");
 }
 
 // ============================================================================

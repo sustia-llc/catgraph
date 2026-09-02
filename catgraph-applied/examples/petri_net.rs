@@ -22,6 +22,8 @@ fn construction() {
     let net: PetriNet<&str> = PetriNet::new(
         vec!["H2", "O2", "H2O"],
         vec![Transition::new(vec![(0, d(2)), (1, d(1))], vec![(2, d(2))])],
+        vec![0, 0, 1],
+        vec![2, 2],
     )
     .unwrap();
     println!("places:      {}", net.place_count());
@@ -44,6 +46,8 @@ fn firing() {
     let net: PetriNet<&str> = PetriNet::new(
         vec!["H2", "O2", "H2O"],
         vec![Transition::new(vec![(0, d(2)), (1, d(1))], vec![(2, d(2))])],
+        vec![0, 0, 1],
+        vec![2, 2],
     )
     .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(4)), (1, d(2))]);
@@ -72,6 +76,8 @@ fn reachability() {
             Transition::new(vec![(0, d(1))], vec![(1, d(1))]),
             Transition::new(vec![(1, d(1))], vec![(0, d(1))]),
         ],
+        vec![],
+        vec![],
     )
     .unwrap();
     let m0 = Marking::from_vec(vec![(0, d(2))]);
@@ -99,11 +105,15 @@ fn composition() {
     let step1: PetriNet<char> = PetriNet::new(
         vec!['A', 'B'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
+        vec![0],
+        vec![1],
     )
     .unwrap();
     let step2: PetriNet<char> = PetriNet::new(
         vec!['B', 'C'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
+        vec![0],
+        vec![1],
     )
     .unwrap();
 

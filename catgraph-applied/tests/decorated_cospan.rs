@@ -142,11 +142,15 @@ fn t2_3_decorated_cospan_pushforward_through_quotient() {
     // Final apex: [x, y, y, z] = 4 vertices (the two y's stay distinct because
     // c1 fans out to two separate y's and c2 fans in from two separate y's).
     //
-    // Edge images under the quotient depend on how Cospan::compose_with_quotient
-    // performs the pushout. We assert two structural invariants that must hold
-    // for any valid quotient:
-    //   (1) the four edges are preserved (no edges dropped or invented),
-    //   (2) every edge endpoint indexes a valid apex vertex.
+    // The apex numbering `Cospan::compose_with_quotient` chooses is not part
+    // of the contract, so the expected edge multiset is named through the
+    // composed cospan's own legs: the x-vertex is the domain leg's image, the
+    // z-vertex the codomain leg's image, and the two remaining apex vertices
+    // are the y's. That fixes all four edges exactly —
+    // `[(x,y1), (x,y2), (y1,z), (y2,z)]` as a sorted multiset — under any
+    // numbering, so a quotient that merged the two y's, dropped an
+    // identification, or wired x straight to z is separated from the right
+    // one.
     let c1 = Cospan::<char>::new(vec![0], vec![1, 2], vec!['x', 'y', 'y']).unwrap();
     let circ1 = DecoratedCospan::<char, Circuit>::new(
         c1,
@@ -183,18 +187,27 @@ fn t2_3_decorated_cospan_pushforward_through_quotient() {
         4,
         "all four pre-pushout edges should survive the quotient"
     );
-    // Every endpoint indexes a valid apex vertex (i.e. pushforward routed
-    // each endpoint through the quotient).
-    for (u, v) in &composed.decoration.edges {
-        assert!(
-            *u < apex_size,
-            "edge source {u} out of apex range (size {apex_size})"
-        );
-        assert!(
-            *v < apex_size,
-            "edge target {v} out of apex range (size {apex_size})"
-        );
+
+    // Name the three roles through the composed cospan's own legs.
+    let x = composed.cospan.left_to_middle()[0];
+    let z = composed.cospan.right_to_middle()[0];
+    assert_eq!(composed.cospan.middle()[x], 'x');
+    assert_eq!(composed.cospan.middle()[z], 'z');
+    let ys: Vec<usize> = (0..apex_size).filter(|v| *v != x && *v != z).collect();
+    assert_eq!(ys.len(), 2, "the two y interfaces must stay distinct");
+    for &y in &ys {
+        assert_eq!(composed.cospan.middle()[y], 'y');
     }
+
+    let mut expected = vec![(x, ys[0]), (x, ys[1]), (ys[0], z), (ys[1], z)];
+    expected.sort_unstable();
+    let mut observed = composed.decoration.edges.clone();
+    observed.sort_unstable();
+    assert_eq!(
+        observed, expected,
+        "pushforward must send the fan-out/fan-in through the quotient: \
+         x={x}, y={ys:?}, z={z}"
+    );
 }
 
 #[test]

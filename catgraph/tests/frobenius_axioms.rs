@@ -18,18 +18,10 @@
 //! **The carrier limit.** "Four carriers" is four *named* carriers, not every
 //! implementor. Six types implement `HypergraphCategory` in this workspace: the
 //! four below plus `catgraph_applied::petri_net::PetriNet` and
-//! `catgraph_applied::decorated_cospan::DecoratedCospan`, neither of which is
-//! decided here or anywhere else — the only Def 2.5 equation pins in
-//! `catgraph-applied` are for `MatKron`. That gap is not hypothetical for
-//! `PetriNet`: `catgraph-applied/tests/braiding_cross_carrier.rs` already
-//! records it as the carrier whose **constructor** is lossy —
-//! `from_decorated_cospan` keeps only the apex as places and the decoration as
-//! transitions, discarding both leg maps — so it is the last one a reader
-//! should assume this file covers. (That file separately notes a *different*
-//! fact about `permute_side`: it permutes `self.transitions`, so its `p` is
-//! sized by the transition count rather than by a boundary arity. The two are
-//! not the same mechanism and an earlier revision of this paragraph merged
-//! them. See #272, whose ratified reading retains the boundary.)
+//! `catgraph_applied::decorated_cospan::DecoratedCospan`, which live in a
+//! downstream crate and are decided in
+//! `catgraph-applied/tests/hypergraph_laws.rs` — the same eleven equations,
+//! the two snakes, and a Def 2.12 generator table that ranges over all six.
 //!
 //! **The carrier count is three decision paths, not four.** `Corel`'s row
 //! *agrees with* the `Cospan` row rather than deciding independently —
