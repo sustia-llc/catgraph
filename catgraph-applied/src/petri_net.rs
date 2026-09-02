@@ -1342,18 +1342,32 @@ mod test {
 
     /// `from_cospan` emits `pre` and `post` sorted ascending by place index.
     ///
-    /// **What this ranges over.** One cospan whose left leg `[1, 0, 0]` visits
-    /// place 1 before place 0, on `Lambda = char`. It does not sweep leg
-    /// shapes or middle sizes.
+    /// **What this ranges over.** One cospan over five middle places whose
+    /// left leg `[4, 3, 2, 1, 0, 0]` and right leg `[3, 0, 4, 1, 2, 2]` each
+    /// visit those places out of ascending order, on `Lambda = char`. It does
+    /// not sweep leg shapes or middle sizes.
     #[test]
     fn from_cospan_sorts_arcs_by_place_index() {
-        let cospan: Cospan<char> = Cospan::new(vec![1, 0, 0], vec![], vec!['a', 'b']).unwrap();
+        let cospan: Cospan<char> = Cospan::new(
+            vec![4, 3, 2, 1, 0, 0],
+            vec![3, 0, 4, 1, 2, 2],
+            vec!['a', 'b', 'c', 'd', 'e'],
+        )
+        .unwrap();
         let net = PetriNet::from_cospan(&cospan);
         let pre = net.transitions()[0].pre();
         assert_eq!(
             pre,
-            &[(0, d(2)), (1, d(1))],
-            "left leg [1, 0, 0] must aggregate to pre [(0, 2), (1, 1)], got: {pre:?}"
+            &[(0, d(2)), (1, d(1)), (2, d(1)), (3, d(1)), (4, d(1))],
+            "left leg [4, 3, 2, 1, 0, 0] must aggregate to pre \
+             [(0, 2), (1, 1), (2, 1), (3, 1), (4, 1)], got: {pre:?}"
+        );
+        let post = net.transitions()[0].post();
+        assert_eq!(
+            post,
+            &[(0, d(1)), (1, d(1)), (2, d(2)), (3, d(1)), (4, d(1))],
+            "right leg [3, 0, 4, 1, 2, 2] must aggregate to post \
+             [(0, 1), (1, 1), (2, 2), (3, 1), (4, 1)], got: {post:?}"
         );
     }
 
@@ -1477,6 +1491,43 @@ mod test {
         assert_eq!(pushed.transitions[0].post(), &[(1, d(1))]);
         assert_eq!(pushed.transitions[1].pre(), &[(0, d(2))]);
         assert_eq!(pushed.transitions[1].post(), &[(0, d(1))]);
+    }
+
+    /// `pushforward` reports the quotient's image size, `max + 1`, and 0 on an
+    /// empty quotient.
+    ///
+    /// **What this ranges over.** Two quotients on `PetriDecoration<char>`:
+    /// the non-surjective `[0, 1, 1]` over an apex of 3 carrying one
+    /// transition, and the empty quotient carrying no transitions. It does not
+    /// sweep apex sizes or quotient shapes.
+    #[test]
+    fn petri_decoration_pushforward_apex_size_is_the_quotient_image() {
+        use crate::decorated_cospan::Decoration;
+        let pushed = <PetriDecoration<char> as Decoration>::pushforward(
+            PetriApex {
+                n: 3,
+                transitions: vec![Transition::new(vec![(2, d(1))], vec![(0, d(1))])],
+            },
+            &[0, 1, 1],
+        );
+        assert_eq!(
+            pushed.n, 2,
+            "quotient [0, 1, 1] has image {{0, 1}}, so the apex size must be 2, got: {}",
+            pushed.n
+        );
+
+        let empty = <PetriDecoration<char> as Decoration>::pushforward(
+            PetriApex {
+                n: 3,
+                transitions: Vec::new(),
+            },
+            &[],
+        );
+        assert_eq!(
+            empty.n, 0,
+            "an empty quotient has empty image, so the apex size must be 0, got: {}",
+            empty.n
+        );
     }
 
     #[test]

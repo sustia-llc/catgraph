@@ -420,9 +420,10 @@ fn compose_and_monoidal_agree_with_the_stored_boundary() {
 /// `compose` relabels the second operand's transitions through the right half
 /// of the pushout quotient.
 ///
-/// **What this ranges over.** One composite of two two-place nets over a
-/// one-wire interface, each carrying one transition, on `Lambda = char`. It
-/// does not sweep arities, transition counts or arc weights.
+/// **What this ranges over.** One composite of a two-place net with a
+/// three-place net over a one-wire interface, each carrying one transition, on
+/// `Lambda = char`. It does not sweep arities, transition counts or arc
+/// weights.
 #[test]
 fn compose_shifts_the_second_operand_transitions() {
     let f: PetriNet<char> = PetriNet::new(
@@ -433,10 +434,10 @@ fn compose_shifts_the_second_operand_transitions() {
     )
     .unwrap();
     let g: PetriNet<char> = PetriNet::new(
-        vec!['B', 'C'],
+        vec!['B', 'C', 'D'],
         vec![Transition::new(vec![(0, d(1))], vec![(1, d(1))])],
         vec![0],
-        vec![1],
+        vec![2],
     )
     .unwrap();
 
