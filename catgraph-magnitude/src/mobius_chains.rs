@@ -11,42 +11,29 @@
 //!
 //! ## Algebraic identity (von Neumann series)
 //!
-//! Per Leinster 2013 Prop 2.1.3 + the geometric-series identity for matrix
+//! Per Leinster 2013 Prop 2.1.3 and the geometric-series identity for matrix
 //! inverses:
 //!
 //! ```text
 //! μ = ζ⁻¹ = (I + M)⁻¹ = Σ_{k=0}^∞ (−1)ᵏ Mᵏ
 //! ```
 //!
-//! where `M = ζ − I`. Leinster's scatteredness condition (Def 2.1.2:
-//! `d(a, b) > log(#A − 1)`) guarantees the per-entry geometric bound
-//! `|μ_{A,k}(a,b)| ≤ ((n − 1) · e^(−ε))ᵏ` (Prop 2.1.3 proof, page 11),
-//! with `ε = min_{a≠b} d(a, b)`. Equivalently the row-sum bound on `M`
-//! satisfies `‖M‖_∞ ≤ (n − 1) · e^(−ε) < 1`, which dominates the spectral
-//! radius `ρ(M) ≤ ‖M‖_∞`, ensuring absolute convergence of the
-//! Neumann series.
-//!
-//! So the chain-sum formula and the matrix-inversion path
-//! [`crate::magnitude::mobius_function`] are **algebraically identical**;
-//! they differ only in computational structure: matrix inversion is
-//! O(n³) once; matrix-power accumulation is O(K · n³) with `K` chosen so
-//! that the geometric-tail residual is below tolerance.
+//! with `M = ζ − I`. Scatteredness (Def 2.1.2: `d(a, b) > log(#A − 1)`) gives
+//! the per-entry geometric bound `|μ_{A,k}(a,b)| ≤ ((n − 1) · e^(−ε))ᵏ`
+//! (Prop 2.1.3 proof, page 11) with `ε = min_{a≠b} d(a, b)`, equivalently
+//! `‖M‖_∞ ≤ (n − 1) · e^(−ε) < 1`, so the Neumann series converges absolutely.
+//! The chain-sum formula and the matrix-inversion path
+//! [`crate::magnitude::mobius_function`] are algebraically identical; matrix
+//! inversion is `O(n³)` once, matrix-power accumulation `O(K · n³)`.
 //!
 //! ## Convergence
 //!
-//! Under scatteredness, the partial sum `Σ_{k=0}^K (−1)ᵏ Mᵏ` differs from
-//! the true `μ` by at most `rᴷ⁺¹ / (1 − r)` per entry (Leinster Prop 2.1.3
-//! per-entry bound); we use `n · rᴷ⁺¹ / (1 − r)` as a defensively-padded
-//! upper bound on the worst-case row sum across all entries simultaneously.
-//! Here `r = (n − 1) · e^(−ε)`. We pick `K = min(⌈log(τ) / log(r)⌉, K_MAX)`
-//! with `τ = 1e-13` (tighter than the `1e-9` test tolerance) and
-//! `K_MAX = 200` (defensive cap on near-boundary scattered spaces).
-//!
-//! Spaces with `r > 0.95` would require `K > 270` to reach `τ = 1e-13`;
-//! [`mobius_function_via_chains`] returns an explicit `Err` in that
-//! near-boundary regime, instructing the caller to fall back to
-//! [`crate::magnitude::mobius_function`] (which has no convergence cap
-//! since it inverts ζ directly).
+//! The partial sum `Σ_{k=0}^K (−1)ᵏ Mᵏ` differs from `μ` by at most
+//! `rᴷ⁺¹ / (1 − r)` per entry with `r = (n − 1) · e^(−ε)`. The truncation depth
+//! is `K = min(⌈log(τ) / log(r)⌉, K_MAX)` with `τ = 1e-13` and `K_MAX = 200`.
+//! On spaces with `r ≥ 0.94`, [`mobius_function_via_chains`] returns `Err`
+//! rather than truncating; [`crate::magnitude::mobius_function`] inverts ζ
+//! directly and has no such cap.
 
 use std::hash::Hash;
 
@@ -76,27 +63,16 @@ const CHAIN_SUM_MAX_DEPTH: usize = 200;
 /// `μ = Σ_{k=0}^K (−1)ᵏ Mᵏ` with `M = ζ − I` and `K` chosen so the
 /// geometric-tail residual is below `CHAIN_SUM_RESIDUAL_TOL`.
 ///
-/// **Bound: `Q: Ring + From<f64>`** — strictly weaker than
-/// [`crate::magnitude::mobius_function`]'s `Q: Ring + Div + From<f64>`.
-/// Matrix-power accumulation doesn't invert anything, so `Div` isn't
-/// needed. Currently only [`crate::F64Rig`] is exercised in tests, and
-/// the implementation's `is_zero()` short-circuits in `matmul` +
-/// `r == 0.0` early-return at the geometric-ratio check assume `Q`'s
-/// `is_zero()` matches `f64 == 0.0` semantics (which `F64Rig` provides).
-/// `Tropical`'s `is_zero` is `+∞` (the rig zero in tropical algebra),
-/// not `f64 == 0.0`, so the `Q: Ring + From<f64>` bound is technically
-/// achievable by other concrete rigs but the optimization paths assume
-/// field-with-`f64`-zero semantics. Magnitude-homology may either widen
-/// the bound semantically or carve a separate
-/// `mobius_function_via_chains_exact<Q: Ring>` (no `From<f64>`,
-/// exact-arithmetic).
+/// The bound `Q: Ring + From<f64>` is weaker than
+/// [`crate::magnitude::mobius_function`]'s `Q: Ring + Div + From<f64>` —
+/// matrix-power accumulation inverts nothing. The `is_zero()` short-circuit in
+/// `matmul` and the `r == 0.0` early return assume `Q::is_zero()` matches
+/// `f64 == 0.0`, which [`crate::F64Rig`] provides and `Tropical` (rig zero
+/// `+∞`) does not.
 ///
-/// **Precondition:** the input must be scattered ([`is_scattered`] returns
-/// `true`).
-///
-/// **Equivalence with [`crate::magnitude::mobius_function`].** On any
-/// scattered space, both functions return the same matrix to within
-/// `1e-9` numerical tolerance.
+/// The input must be scattered ([`is_scattered`] returns `true`). On a
+/// scattered space this and [`crate::magnitude::mobius_function`] return the
+/// same matrix within `1e-9`.
 ///
 /// # Errors
 ///
@@ -107,14 +83,9 @@ const CHAIN_SUM_MAX_DEPTH: usize = 200;
 /// - `CatgraphError::Composition { message: "near-boundary scattered ..." }`
 ///   when the geometric ratio `r ≥ 0.94`, requiring more than
 ///   `CHAIN_SUM_MAX_DEPTH` truncation steps to reach numerical tolerance.
-///   Indicates the space is scattered but pathologically close to the
-///   boundary; **caller fallback:** [`crate::magnitude::mobius_function`]
-///   (which inverts ζ directly without truncation).
-///
-/// # Panics
-///
-/// Does not panic. Operates on `Vec<Vec<Q>>` matrices with bounds-checked
-/// indexing throughout.
+///   Indicates the space is scattered but close to the boundary; **caller
+///   fallback:** [`crate::magnitude::mobius_function`] (which inverts ζ
+///   directly without truncation).
 pub fn mobius_function_via_chains<Q>(
     space: &LawvereMetricSpace<NodeId>,
 ) -> Result<MatR<Q>, CatgraphError>
@@ -168,17 +139,9 @@ where
             ),
         });
     }
-    // K = ⌈log(τ) / log(r)⌉, capped at CHAIN_SUM_MAX_DEPTH.
-    //
-    // r > 0 path: standard geometric-tail truncation.
-    //
-    // r == 0 path: discrete-topology case (all off-diagonal d = +∞ ⇒ ζ_off = 0
-    // ⇒ M = 0). The k = 1 iteration computes (-1)·M = -0 = 0, contributing
-    // nothing; μ ends up equal to the identity matrix. Setting K = 1 here
-    // runs the loop once (no-op accumulation) which is cheaper than special-
-    // casing μ = I and skipping the loop. Verified by `chain_sum_empty_space`
-    // / `chain_sum_one_point_space` paths and by Lemma 1.1.4 (μ on a discrete
-    // space IS the identity).
+    // K = ⌈log(τ) / log(r)⌉, capped at CHAIN_SUM_MAX_DEPTH. At r == 0 (discrete
+    // topology: every off-diagonal d = +∞, so M = 0) one no-op iteration leaves
+    // μ = I, which is the Lemma 1.1.4 answer on a discrete space.
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -233,16 +196,6 @@ where
         if k == max_k {
             break;
         }
-        // Update m_k ← m_k · M for next iteration.
-        //
-        // Performance note: m_k.clone() inside
-        // matmul allocates n² Q values per iteration. At the typical
-        // scattered K range (~30 for r ≈ 0.5), this is ~30 inner
-        // allocations bounded above by matmul's O(n³) cost. Magnitude-
-        // homology is the right place to evaluate a double-
-        // buffer pattern (`(buf_a, buf_b)` + `mem::swap` + matmul_into)
-        // since the chain complex multiplies the matmul count by the
-        // length-grading factor.
         m_k = matmul::<Q>(&m_k, &m, n);
         sign_positive = !sign_positive;
     }
@@ -274,8 +227,6 @@ where
 
 // ============================================================================
 // Length-graded chain-sum (per-grade chain-count diagnostic).
-// Renamed from `mobius_chains_graded` → `chain_count_signed_graded`
-// to surface the diagnostic role in the name itself.
 // ============================================================================
 
 /// Per-grade signed chain counts: returns `Vec<(ℓ, partial_sum_at_ell)>`
@@ -283,31 +234,13 @@ where
 /// **entry-sum** of `(-1)^k Mᵏ` restricted to the length-`ℓ` chain bucket
 /// (the un-weighted variant; see "Acceptance-gate relationship" below).
 ///
-/// # Rename
-///
-/// This function was previously named `mobius_chains_graded`. Its role is a
-/// per-grade chain-count diagnostic (NOT the numerical Möbius path), and the
-/// name `chain_count_signed_graded` surfaces that role. Behaviour, signature,
-/// and generic bounds are unchanged — this is a mechanical rename only.
-///
 /// # Acceptance-gate relationship
 ///
-/// **This function is NOT the numerical path used by the BV 2025 Prop 3.14
-/// acceptance gate.** [`crate::chain_complex::euler_char_identity_at`] uses
-/// [`crate::magnitude::magnitude`] (the matrix-inverse Möbius)
-/// as its numerical comparator — NOT `chain_count_signed_graded`.
-///
-/// To recover the BV 2025 Prop 3.14 numerical RHS from this function's
-/// per-grade `partial_sum_at_ell`, a caller must multiply by `q^ℓ = e^(−tℓ)`
-/// and accumulate: `Mag(tM) ?= Σ_ℓ e^(−tℓ) · partial_sum_at_ell`. The pre-
-/// scaling step in `euler_char_identity_at` (which pre-scales the space by
-/// `t` then weights by `e^(−ℓ_scaled)`) absorbs the `q^ℓ` factor before the
-/// magnitude call, so the matrix-inverse path is the cleaner integration.
-///
-/// Useful for debugging the structural path and for spot-checking a graded
-/// chain-sum without running the full magnitude inverse. A paper-faithful
-/// "numerical path with grading" alternative — multiply by `q^ℓ` and sum —
-/// is deferred.
+/// This is not the numerical path of the BV 2025 Prop 3.14 acceptance gate:
+/// [`crate::chain_complex::euler_char_identity_at`] compares against
+/// [`crate::magnitude::magnitude`], the matrix-inverse Möbius. Recovering the
+/// Prop 3.14 numerical RHS from the per-grade `partial_sum_at_ell` here needs
+/// the `q^ℓ = e^(−tℓ)` weighting, `Mag(tM) ?= Σ_ℓ e^(−tℓ) · partial_sum_at_ell`.
 ///
 /// # Algebraic context
 ///
@@ -317,22 +250,16 @@ where
 /// Prop 2.1.3); on a scattered space the per-grade contributions sum to the
 /// entry-sum of the Möbius matrix `μ` at each grade (un-weighted).
 ///
-/// **Bound `Q: Rig + From<f64>`** — strictly weaker than
-/// [`mobius_function_via_chains`]'s `Q: Ring + From<f64>`. This function
-/// counts chains and applies a `(-1)^k` sign by pre-negating the count in
-/// `f64` before lifting via `Q::from(_)`, so additive inverses on `Q` itself
-/// are not required. Counter-side effect: behaviour is well-defined only for
-/// rigs whose `From<f64>` honors negative `f64` values — i.e. `F64Rig`.
-/// `BoolRig`, `UnitInterval`, and `Tropical` are technically constructible
-/// via this signature but the embedding of negative chain counts is not
-/// meaningful in those rigs. Only `F64Rig` is exercised.
+/// The bound `Q: Rig + From<f64>` is weaker than
+/// [`mobius_function_via_chains`]'s `Q: Ring + From<f64>`: the `(-1)^k` sign is
+/// applied by pre-negating the count in `f64` before lifting via `Q::from(_)`,
+/// so `Q` needs no additive inverses. The result is meaningful only for rigs
+/// whose `From<f64>` honors negative values — `F64Rig`, not `BoolRig`,
+/// `UnitInterval` or `Tropical`.
 ///
 /// # Errors
 ///
-/// Returns [`CatgraphError`] if chain enumeration fails (e.g. due to
-/// non-finite distances). [`crate::chain_complex::ChainIndex::new`] itself
-/// is infallible on well-formed `LawvereMetricSpace` inputs; the `Result`
-/// signature reserves headroom for future failure modes.
+/// Returns [`CatgraphError`] if chain enumeration fails.
 pub fn chain_count_signed_graded<Q>(
     space: &LawvereMetricSpace<NodeId>,
     max_chain_length: usize,
@@ -404,32 +331,17 @@ where
 ///
 /// # Bounds
 ///
-/// `Q: Ring + ZAlgebra`. The [`ZAlgebra`] super-trait already extends [`Ring`]
-/// with `Neg + Sub` and adds the `Q::from_i64` lifting constructor — no
-/// `From<i64>` bound is needed (and is redundant). `Z(BigInt)` from
-/// `catgraph-applied` is the canonical instance.
+/// `Q: Ring + ZAlgebra`. [`ZAlgebra`] extends [`Ring`] with `Neg + Sub` and
+/// the `Q::from_i64` lifting constructor; `Z(BigInt)` from `catgraph-applied`
+/// is the canonical instance.
 ///
 /// # Errors
 ///
 /// Returns [`CatgraphError::Composition`] if [`MatR::new`] rejects the final
-/// matrix (defensive — the algorithm constructs `n × n` storage by
-/// construction, so this branch is unreachable on well-formed input), or if a
-/// `ζ` arrow count exceeds `i64::MAX` (see the caveat below).
-///
-/// # Caveats
-///
-/// Arrow counts from [`PosetCategory::zeta_matrix`] are `u64` and must cross
-/// into `i64` to be lifted via [`ZAlgebra::from_i64`]; counts above `i64::MAX`
-/// **return an error** naming the offending entry rather than wrapping into a
-/// negative. The shipped fixtures stay at ζ entry counts ≤ 3 (immediate-cover
-/// arrow band on `𝔻^inj_2` and similar small posets), astronomically below the
-/// boundary. A `Q::from_u64` extension on [`ZAlgebra`] is a deferred
-/// nice-to-have that would remove the conversion entirely (#35).
-///
-/// # Panics
-///
-/// Does not panic. All indexing is bounds-checked by `Vec` semantics; the
-/// arithmetic only uses `Q`'s trait operations.
+/// matrix, or if a `ζ` arrow count exceeds `i64::MAX`: counts from
+/// [`PosetCategory::zeta_matrix`] are `u64` and cross into `i64` for
+/// [`ZAlgebra::from_i64`], and an over-large count returns an error naming the
+/// offending entry rather than wrapping negative.
 ///
 /// # Examples
 ///
@@ -527,28 +439,15 @@ where
 /// a two-sided inverse ("by finite-dimensionality, either one implies the
 /// other") — so either direction alone is algebraically sufficient. This
 /// verifier nevertheless checks both `μ · ζ = I` (right inverse) and
-/// `ζ · μ = I` (left inverse) as a runtime asymmetry guard against
-/// implementation drift in [`mobius_function_via_chains_exact`].
-///
-/// Useful for fixtures (e.g. the order-preserving-injection lattice
-/// `𝔻^inj_2`) where the closed-form value of `μ` is harder to write down
-/// than the two-sided `μ · ζ = ζ · μ = I` invariant is to check.
+/// `ζ · μ = I` (left inverse).
 ///
 /// # Errors
 ///
 /// Returns [`CatgraphError::Composition`] when either `(μ · ζ)[i][j]` or
 /// `(ζ · μ)[i][j]` differs from the Kronecker delta `δᵢⱼ` at any `(i, j)`.
-/// The error message names the direction (right or left inverse) along with
-/// the first failing index and the expected vs actual entry values. The same
-/// variant also reports a `ζ` arrow count above `i64::MAX` (see the caveat
-/// below).
-///
-/// # Caveats
-///
-/// Arrow counts from [`PosetCategory::zeta_matrix`] are `u64` and must cross
-/// into `i64` to be lifted via [`ZAlgebra::from_i64`]; counts above `i64::MAX`
-/// **return an error** naming the offending entry rather than wrapping into a
-/// negative (same caveat as [`mobius_function_via_chains_exact`]).
+/// The error message names the direction (right or left inverse), the first
+/// failing index, and the expected vs actual entry values. The same variant
+/// reports a `ζ` arrow count above `i64::MAX`.
 ///
 /// # Examples
 ///
@@ -623,12 +522,9 @@ where
 /// Lift one `ζ` arrow count into `Q` via the `ℤ → Q` ring homomorphism
 /// [`ZAlgebra::from_i64`].
 ///
-/// [`PosetCategory::zeta_matrix`] counts arrows as `u64`; `from_i64` is the
-/// only integer-lifting constructor [`ZAlgebra`] offers, so the count must
-/// cross into `i64`. A count above `i64::MAX` is **rejected** rather than
-/// wrapped into a negative — a silently sign-flipped ζ entry would produce a
-/// plausible-looking but wrong μ. (`Q::from_u64` remains the deferred
-/// nice-to-have that would remove the conversion entirely, #35.)
+/// [`PosetCategory::zeta_matrix`] counts arrows as `u64`, so the count crosses
+/// into `i64`; a count above `i64::MAX` is rejected rather than wrapped
+/// negative.
 ///
 /// # Errors
 ///
@@ -650,9 +546,7 @@ where
 
 /// O(n³) generic matrix multiplication on row-major `Vec<Vec<Q>>`.
 ///
-/// Skips the inner-product accumulation for any zero `a[i][k]` entry (a
-/// modest sparsity optimisation: on triangular `ζ` matrices roughly half of
-/// the off-diagonal entries are zero, which compounds across iterations).
+/// Skips the inner-product accumulation for any zero `a[i][k]` entry.
 fn matmul_q<Q>(a: &[Vec<Q>], b: &[Vec<Q>], n: usize) -> Vec<Vec<Q>>
 where
     Q: Ring + Clone,

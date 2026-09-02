@@ -1,17 +1,14 @@
 //! [`WeightedCospan<Lambda, Q>`] — `catgraph::Cospan<Lambda>` decorated with
 //! per-edge weights drawn from a rig `Q`.
 //!
-//! The newtype wraps the F&S
-//! 2019 cospan with a sparse [`HashMap<(NodeId, NodeId), Q>`] of weights, one
-//! per implied edge. The "implied edges" of a cospan are the bipartite
-//! product of left-leg targets and right-leg targets via the apex (middle)
-//! set: every `(left_target, right_target)` pair receives an edge.
+//! The newtype wraps the F&S 2019 cospan with a sparse
+//! [`HashMap<(NodeId, NodeId), Q>`] of weights, one per implied edge. The
+//! implied edges are the bipartite product of left-leg and right-leg targets
+//! through the apex (middle) set: every `(left_target, right_target)` pair.
 //!
 //! When `Q = UnitInterval`, [`WeightedCospan::into_metric_space`] lifts the
 //! weighted cospan into a [`LawvereMetricSpace<NodeId>`] via the `-ln π`
-//! embedding (Lawvere 1973; BTV 2021 §5). The general `Q` case is deferred
-//! — magnitude over arbitrary rigs needs a base-change choice that
-//! is not unique.
+//! embedding (Lawvere 1973; BTV 2021 §5).
 //!
 //! ## Type aliases
 //!
@@ -152,11 +149,10 @@ where
     /// represented; the cospan's leg maps embed them into the apex.
     ///
     /// **Distance.** For `(a, b) ∈ NodeId²` the probability `prob(a, b)` is
-    /// the recorded weight (or `UnitInterval::zero() = 0.0` if absent). The
-    /// embedding then computes `d(a, b) = -ln(prob(a, b))`, with `d(a, b) =
-    /// +∞` when `prob = 0`. This is exactly the
+    /// the recorded weight, or `UnitInterval::zero() = 0.0` if absent, and
+    /// `d(a, b) = -ln(prob(a, b))` with `+∞` at `prob = 0` — the
     /// [`BaseChange<UnitInterval> for Tropical`](catgraph_applied::rig::BaseChange)
-    /// recipe; no re-derivation here.
+    /// recipe.
     ///
     /// **Identity axiom.** Lawvere metric spaces require `d(x, x) = 0`
     /// (i.e. `prob(x, x) = 1`). This method does not enforce that — callers
@@ -188,14 +184,10 @@ where
     /// malformed weight matrices at construction time rather than letting
     /// them propagate into [`magnitude`](crate::magnitude::magnitude).
     ///
-    /// **Tree-additivity fast path.** The triangle-inequality check is the
-    /// upper bound `d(x, z) ≤ d(x, y) + d(y, z)`. For "tree-shaped" LMs in
-    /// the BV 2025 §2.15 prefix-extension setting, the equality
-    /// `d(x, z) = d(x, y) + d(y, z)` holds along the unique forward path —
-    /// stronger than the inequality. This implementation does the upper
-    /// bound only; an opt-in tree-additivity equality check may be added
-    /// later (a TODO tracks the perf opportunity once a concrete profile
-    /// surfaces).
+    /// The check is the upper bound `d(x, z) ≤ d(x, y) + d(y, z)` only. On
+    /// tree-shaped LMs in the BV 2025 §2.15 prefix-extension setting the
+    /// stronger equality holds along the unique forward path; it is not
+    /// checked here.
     ///
     /// **Identity axiom.** Same caveat as
     /// [`into_metric_space`](Self::into_metric_space) — callers must seed
@@ -209,9 +201,8 @@ where
     /// Returns [`CatgraphError::Composition`] when triangle inequality is
     /// violated for some triple `(x, y, z)` by more than a small absolute
     /// float tolerance (`TRIANGLE_FLOAT_TOL`, `1e-9` in the distance/log
-    /// domain). The tolerance absorbs the ULP-scale noise from the
-    /// `−ln`-of-product vs sum-of-`−ln` rewrite; genuine violations (orders of
-    /// magnitude above the tolerance) still surface as `Err`.
+    /// domain), which absorbs the ULP-scale noise of the `−ln`-of-product
+    /// versus sum-of-`−ln` rewrite.
     pub fn into_validated_metric_space(self) -> Result<LawvereMetricSpace<NodeId>, CatgraphError> {
         let space = self.into_metric_space();
         if space.triangle_inequality_holds_within(crate::TRIANGLE_FLOAT_TOL) {

@@ -53,15 +53,10 @@
 //!
 //! [`index1_reduce_on_columns`]: crate::snf::echelon::index1_reduce_on_columns
 //!
-//! # Helper-organisation note
-//!
 //! Local helpers (`subblock`, `assign_block`, `matmul_mod_add`,
-//! `left_apply_block_pair`, `right_apply_block_pair`, `is_snf_block_zero`, `get_rank`)
-//! mirror the same names in `snf::band`. They are deliberately re-ported
-//! locally rather than de-duplicated across modules: [`snf::band`]'s helpers
-//! are kept private for encapsulation, and cross-module helper sharing at
-//! this layer would couple two
-//! paper-faithful ports that may diverge in future maintenance.
+//! `left_apply_block_pair`, `right_apply_block_pair`, `is_snf_block_zero`,
+//! `get_rank`) are private to this module and mirror same-named private
+//! helpers in [`snf::band`].
 //!
 //! [`snf::band`]: crate::snf::band
 
@@ -97,10 +92,10 @@ use crate::snf::zmod::{div, gcd_three, gcdex, mul_mod, posmod, posmod_i128};
 ///
 /// # Inputs
 ///
-/// - `d`: square diagonal matrix over `Z/nZ` stored as `Vec<Vec<i64>>`. The
-///   off-diagonal entries are read but expected to be zero; non-diagonal
-///   inputs are not rejected (matches upstream semantics) but the
-///   divisibility-chain output is only meaningful when `D` is diagonal.
+/// - `d`: square diagonal matrix over `Z/nZ` stored as `Vec<Vec<i64>>`.
+///   Off-diagonal entries are read but expected to be zero; a non-diagonal
+///   input is not rejected, and the divisibility-chain output is meaningful
+///   only on a diagonal `D`.
 /// - `n`: modulus.
 ///
 /// # Returns
@@ -109,9 +104,9 @@ use crate::snf::zmod::{div, gcd_three, gcdex, mul_mod, posmod, posmod_i128};
 ///
 /// # Panics
 ///
-/// None in normal use. Internal `unwrap_or(0)` swallows the `Err` arm of
-/// [`div`] per Storjohann §7.10 (the quotient is structurally zero in the
-/// annihilator quotient when `div` would error).
+/// None. An internal `unwrap_or(0)` takes the `Err` arm of [`div`] per
+/// Storjohann §7.10, where the quotient is structurally zero in the
+/// annihilator quotient.
 ///
 /// # Example
 ///

@@ -1,81 +1,59 @@
-//! [`Coalition`] — the §IV.5 enriched-coalition magnitude surface (#22).
+//! [`Coalition`] — enriched-coalition magnitude: a member-restricted,
+//! max-product-closed cospan-weighted subgraph of an enriched category, and its
+//! diversity as a Möbius sum on the induced Lawvere metric space.
 //!
 //! Bradley–Vigneaux 2025 (*The Magnitude of Categories of Texts Enriched by
-//! Language Models*, arXiv:2501.06662)
-//! §3.5 Eq (7) gives magnitude as the Möbius sum `Mag(tM) = Σ_{x,y} ζ_t⁻¹(x, y)`;
-//! Bradley–Terilla–Vlassopoulos 2021 (*An enriched category theory of language*,
-//! arXiv:2106.07890) supply the `[0,1]` enrichment via `d = −ln π`. This module
-//! reads a coalition as a **cospan-weighted subgraph of an enriched category**
-//! and computes its diversity as that Möbius sum on the induced Lawvere metric
-//! space — a categorical alternative to message-passing where the couplings are
-//! data (however obtained), not exchanged messages.
+//! Language Models*, arXiv:2501.06662) §3.5 Eq (7) gives magnitude as the
+//! Möbius sum `Mag(tM) = Σ_{x,y} ζ_t⁻¹(x, y)`; Bradley–Terilla–Vlassopoulos
+//! 2021 (*An enriched category theory of language*, arXiv:2106.07890) supply
+//! the `[0,1]` enrichment via `d = −ln π`. Agents are objects of an enriched
+//! category `A`, an inter-agent coupling is the hom-object `A(i, j) ∈`
+//! [`UnitInterval`], and coalition diversity is `Mag(tA|members)`, computed by
+//! [`coalition_magnitude`].
 //!
-//! # The §IV.5 mapping (gemini-spec)
-//!
-//! | §IV.5 concept          | catgraph realization                                            |
-//! |------------------------|-----------------------------------------------------------------|
-//! | agents                 | objects of an enriched category `A`                             |
-//! | inter-agent coupling   | hom-object `A(i, j) ∈ Q` with `Q = `[`UnitInterval`] (`[0,1]`)   |
-//! | coalition              | member-restricted, max-product-closed cospan-weighted subgraph  |
-//! | coalition diversity    | `Mag(tA\|members)` — this module's [`coalition_magnitude`]       |
-//!
-//! `magnitude` computes the Möbius sum (BV 2025 §3.5 Eq 7), which is well-defined
-//! for **cyclic** coupling graphs too. BV 2025 Prop 3.10's Tsallis *closed form*
-//! only applies in the acyclic tree-poset case (see
-//! [`LmCategory::magnitude`](crate::lm_category::LmCategory::magnitude)); coalitions
-//! may be cyclic, which is fine for Eq 7.
+//! Eq 7 is well-defined on **cyclic** coupling graphs; BV 2025 Prop 3.10's
+//! Tsallis closed form applies only in the acyclic tree-poset case (see
+//! [`LmCategory::magnitude`](crate::lm_category::LmCategory::magnitude)).
 //!
 //! # Coalition semantics: restrict-then-close
 //!
-//! A coalition over a member subset `S ⊆ ob(A)` is the **free `[0,1]`-category
-//! on the member-restricted coupling generators**. Construction (see
-//! [`Coalition::from_enriched`]) is two-step:
+//! A coalition over a member subset `S ⊆ ob(A)` is the free `[0,1]`-category on
+//! the member-restricted coupling generators.
+//! [`Coalition::from_enriched`] first **restricts** — reading the direct
+//! couplings `A(i, j)` for `i, j ∈ S` only, so couplings mediated through a
+//! non-member never enter the generator set — then **closes**: `A_S(i, j)` is
+//! the highest product-of-couplings over any path `i → … → j` through member
+//! nodes only, by a dense `m − 1`-round Bellman–Ford relaxation, with identity
+//! diagonal `1.0`.
 //!
-//! 1. **Restrict first.** Read the direct couplings `A(i, j)` for `i, j ∈ S`
-//!    only — the generators. Couplings mediated through a **non-member** are
-//!    dropped: they never enter the generator set, so they cannot contribute to
-//!    the closure.
-//! 2. **Then close.** `A_S(i, j)` is the highest product-of-couplings over any
-//!    path `i → … → j` using **member nodes only**, computed by a dense
-//!    Bellman–Ford relaxation (`m − 1` rounds; the optimum is a simple path of
-//!    at most `m − 1` edges, and cycles never improve a product of weights
-//!    `≤ 1`). The identity diagonal is `1.0`.
-//!
-//! Because the closure is a max-product (equivalently a min-sum of `−ln`
-//! shortest path), composition satisfies `A_S(i, j) · A_S(j, k) ≤ A_S(i, k)`,
-//! i.e. the triangle inequality `d(i, k) ≤ d(i, j) + d(j, k)` holds **by
-//! construction** under the `−ln` lift.
+//! The closure is a max-product (a min-sum `−ln` shortest path), so composition
+//! satisfies `A_S(i, j) · A_S(j, k) ≤ A_S(i, k)` — the triangle inequality
+//! `d(i, k) ≤ d(i, j) + d(j, k)` under the `−ln` lift — by construction.
 //!
 //! # Skeletalization (perfectly-coupled members)
 //!
-//! Two members `x, y` with `A_S(x, y) = A_S(y, x) = 1.0` are at distance `0` in
-//! both directions — the same object up to the enrichment's equivalence. Left in
-//! place they give ζ two identical rows, so ζ is singular at *every* `t`.
-//! Magnitude is a property of the **skeleton**: it is invariant under
-//! equivalence (Leinster 2008 *The Euler characteristic of a category*,
-//! [arXiv:math/0610260](https://arxiv.org/abs/math/0610260) — magnitude is defined on skeletal categories
-//! and invariant under equivalence), and for metric spaces the Kolmogorov
-//! quotient of a pseudometric space is an equivalent `[0,∞]`-category with equal
-//! magnitude (Leinster 2013). So [`Coalition::from_enriched`] quotients members
-//! by `x ~ y ⟺ A_S(x, y) = A_S(y, x) = 1.0` (an equivalence relation given the
-//! closure's triangle inequality) on the **closed** table and stores the
-//! **skeletal** metric space (one representative per class). The full member
-//! cospan is retained unchanged for the boundary story;
-//! [`Coalition::effective_members`] reports the skeleton size and
+//! Two members `x, y` with `A_S(x, y) = A_S(y, x) = 1.0` are at distance `0`
+//! both ways, giving ζ two identical rows and hence a singular ζ at every `t`.
+//! Magnitude is a property of the skeleton — invariant under equivalence
+//! (Leinster 2008 *The Euler characteristic of a category*,
+//! [arXiv:math/0610260](https://arxiv.org/abs/math/0610260)), and equal on the
+//! Kolmogorov quotient of a pseudometric space (Leinster 2013) — so
+//! [`Coalition::from_enriched`] quotients members by
+//! `x ~ y ⟺ A_S(x, y) = A_S(y, x) = 1.0` on the closed table and stores the
+//! skeletal metric space, one representative per class. The full member cospan
+//! is retained; [`Coalition::effective_members`] reports the skeleton size and
 //! [`Coalition::member_classes`] the per-member class index.
 //!
-//! Skeletalization removes *only* the perfectly-coupled degeneracy; other
-//! singular ζ configurations (parametric coincidences) still surface as `Err`
-//! from [`coalition_magnitude`].
+//! Skeletalization removes only the perfectly-coupled degeneracy; other singular
+//! ζ configurations surface as `Err` from [`coalition_magnitude`].
 //!
 //! # Scale `t`
 //!
-//! `t = 1` is the canonical/default arm (the downstream `MagnitudePolicy` pin).
-//! Its Shannon connection is via the **derivative**
-//! `d/dt Mag(tM)|_{t=1} = Σ_x H(p_x)` (Shannon entropy; BV 2025 Rem 3.11 /
-//! Eq (12)), not the `t = 1` value itself. `t = 2` is a collision-probability
-//! proxy (the `Σ pᵢ²` regime); `t → ∞` approaches a cardinality-like limit
-//! (effective member count). The API takes an explicit `t`.
+//! The API takes an explicit `t`; `t = 1` is the canonical arm. Its Shannon
+//! connection is through the derivative `d/dt Mag(tM)|_{t=1} = Σ_x H(p_x)`
+//! (BV 2025 Rem 3.11 / Eq (12)), not the `t = 1` value. `t = 2` is a
+//! collision-probability proxy (the `Σ pᵢ²` regime); `t → ∞` approaches a
+//! cardinality-like limit.
 
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -86,22 +64,19 @@ use crate::{CatgraphError, EnrichedCategory, F64Rig, LawvereMetricSpace, One, Un
 
 use catgraph::cospan::Cospan;
 
-/// A coalition: the §IV.5 "cospan-weighted subgraph" of an enriched category.
+/// A coalition: a cospan-weighted subgraph of an enriched category.
 ///
-/// Wraps a [`WeightedCospan<O, UnitInterval>`] whose apex/middle is the coalition
-/// members (in local [`NodeId`] order — index `i` ↔ `NodeId(i)`) and whose
-/// weights are the **max-product-closed** couplings `A_S(i, j)` (see the module
-/// docs). The legs are the discrete/identity cospan over the members for v0 —
-/// the boundary-port story is carried by the cospan type but richer legs (shared
-/// state ports between overlapping coalitions) are future work.
+/// Wraps a [`WeightedCospan<O, UnitInterval>`] whose apex/middle is the
+/// coalition members (in local [`NodeId`] order — index `i` ↔ `NodeId(i)`) and
+/// whose weights are the max-product-closed couplings `A_S(i, j)`. The legs are
+/// the discrete/identity cospan over the members.
 ///
-/// Alongside the cospan, the coalition stores a **derived** [`LawvereMetricSpace`]
-/// — the skeletal metric space (perfectly-coupled members quotiented; see the
-/// module docs) — built once at construction. It is an immutable cache of the
-/// cospan: `Coalition` exposes no mutators, so the cache never goes stale.
+/// Alongside the cospan it stores a derived [`LawvereMetricSpace`] — the
+/// skeletal metric space — built once at construction; `Coalition` exposes no
+/// mutators.
 ///
-/// Construct with [`Coalition::from_enriched`] (reads couplings from any
-/// [`EnrichedCategory`]`<UnitInterval>`) or via the plain-data entry point
+/// Construct with [`Coalition::from_enriched`] over any
+/// [`EnrichedCategory`]`<UnitInterval>`, or via the plain-data entry point
 /// [`coalition_magnitude_from_couplings`].
 #[derive(Clone, Debug)]
 pub struct Coalition<O>
@@ -125,16 +100,14 @@ where
     O: Copy + Eq + Debug,
 {
     /// Build a coalition over `members` by reading couplings from an enriched
-    /// category, applying the **restrict-then-close** max-product closure, and
-    /// **skeletalizing** perfectly-coupled members (see the module docs).
+    /// category, applying the restrict-then-close max-product closure, and
+    /// skeletalizing perfectly-coupled members.
     ///
     /// The direct generators are `cat.hom(members[i], members[j])` for
     /// `i, j ∈ members` (off-diagonal); the closure records the highest
     /// product-of-couplings path through member nodes only. The full member
     /// cospan (diagonal `1.0`) is retained; the stored metric space is the
     /// skeleton.
-    ///
-    /// `t = 1` is the canonical arm downstream — see [`coalition_magnitude`].
     ///
     /// # Errors
     ///
@@ -282,11 +255,6 @@ where
 
     /// Borrow the derived **skeletal** Lawvere metric space (one object per
     /// `~`-class) that [`coalition_magnitude`] inverts.
-    ///
-    /// `pub(crate)` so [`crate::coalition_eval`] (#31) can cache its base `μ`
-    /// off this exact space instead of re-skeletalizing the extracted closed
-    /// table — the two would agree, but reuse keeps the base value bit-identical
-    /// and saves the rebuild.
     #[must_use]
     pub(crate) fn space(&self) -> &LawvereMetricSpace<NodeId> {
         &self.space
@@ -302,9 +270,7 @@ where
 /// a no-change round. This is exact for max-product with weights `≤ 1`: the
 /// optimal path is simple (at most `m − 1` edges, since traversing a cycle
 /// multiplies by a factor `≤ 1` and never improves), so `m − 1` rounds suffice.
-/// `O(m³)` worst case, deterministic. (An earlier LIFO frontier with an `m·m`
-/// *pop* cap was defective — dense near-`1.0` couplings can require more than
-/// `m²` pops, silently truncating the closure.)
+/// `O(m³)` worst case, deterministic.
 fn bellman_ford_closure(generators: &[Vec<f64>], m: usize) -> Vec<Vec<f64>> {
     let mut closed = vec![vec![0.0_f64; m]; m];
     for s in 0..m {
@@ -361,11 +327,7 @@ fn bellman_ford_closure(generators: &[Vec<f64>], m: usize) -> Vec<Vec<f64>> {
 /// where a `1.0` two-hop product isn't yet materialized, would mis-quotient).
 // The symmetric pair scan reads BOTH `closed[i][j]` and `closed[j][i]`, and the
 // second loop indexes `parent`/`member_classes` while consuming a union-find
-// `find` — an iterator-by-value rewrite doesn't apply (mirrors the module-level
-// allow in `magnitude.rs`).
-//
-// `pub(crate)` for reuse by [`crate::coalition_eval`] (#31): the incremental
-// slow path re-skeletalizes the bordered table with this exact helper.
+// `find` — an iterator-by-value rewrite doesn't apply.
 #[allow(clippy::needless_range_loop)]
 pub(crate) fn skeletal_classes(closed: &[Vec<f64>], m: usize) -> (Vec<usize>, Vec<usize>) {
     let mut parent: Vec<usize> = (0..m).collect();
@@ -407,10 +369,6 @@ fn uf_find(parent: &mut [usize], mut x: usize) -> usize {
 /// table, using each class's representative row: `d(a, b) = −ln closed[rep_a][rep_b]`
 /// (`+∞` when the coupling is `0`). Quotient distances are well-defined — any
 /// representative gives the same value (Kolmogorov quotient of a pseudometric).
-///
-/// `pub(crate)` for reuse by [`crate::coalition_eval`] (#31): the incremental
-/// slow path builds its skeletal space with this exact helper, so incremental
-/// evaluation shares the fresh-path metric.
 ///
 /// # Preconditions
 ///
@@ -477,10 +435,6 @@ where
 /// `(from_idx, to_idx, prob)` triples with `prob` validated into `[0, 1]` via
 /// [`UnitInterval::new`]; `members` are indices into `agents`.
 ///
-/// This is the seed of C3's stable `coalition_value` (#23) — the signature is
-/// deliberately plain-data (no enriched-category type in the caller's hands) so
-/// it can back a stable public API without exposing the enrichment substrate.
-///
 /// # Errors
 ///
 /// Returns [`CatgraphError`] if:
@@ -512,7 +466,7 @@ where
 }
 
 /// Shared validation + [`HomMap`](crate::HomMap) construction for the plain-data
-/// coalition entry points (#31 dedup).
+/// coalition entry points.
 ///
 /// Validates in the order [`coalition_magnitude_from_couplings`] fixed — member
 /// indices first, then per coupling: index range, self-loop rejection, and
@@ -591,21 +545,14 @@ where
     Ok((cat, member_objs, coupling_map))
 }
 
-/// **The stable consumer entry point** (#23): coalition diversity as a single
-/// scalar, at the pinned canonical scale `t = 1`.
+/// Coalition diversity as a single scalar, at the pinned canonical scale
+/// `t = 1`.
 ///
 /// Equivalent to [`coalition_magnitude_from_couplings`]`(agents, couplings,
-/// members, 1.0)`. This is the stability-contracted scalar downstream decision
-/// policies call — koalisi #5's `MagnitudePolicy` A/Bs it against tira/aif's
-/// `−G`. The semantics are **effective-member diversity**: the magnitude of the
-/// coalition's *skeletal* Lawvere metric space (perfectly-coupled members
-/// quotiented — see the [module docs](crate::coalition)).
-///
-/// `t = 1` is the pinned canonical arm (#22 pins it; its Shannon tie is the
-/// derivative `d/dt Mag|_{t=1} = Σ_x H(p_x)`, BV 2025 Rem 3.11 / Eq (12)). The `t`-sweep
-/// (`t = 2` collision proxy, `t → ∞` cardinality limit) is an experiment axis of
-/// the downstream A/B harness, **not** a knob on this stable API — callers who
-/// need other scales reach for [`coalition_magnitude_from_couplings`] directly.
+/// members, 1.0)`. The semantics are effective-member diversity: the magnitude
+/// of the coalition's skeletal Lawvere metric space, perfectly-coupled members
+/// quotiented (see the [module docs](crate::coalition)). Other scales go through
+/// [`coalition_magnitude_from_couplings`] directly.
 ///
 /// Couplings are `(from_idx, to_idx, prob)` triples over `agents`; `members` are
 /// indices into `agents`.

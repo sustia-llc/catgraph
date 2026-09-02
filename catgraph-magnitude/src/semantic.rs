@@ -2,19 +2,11 @@
 //!
 //! Bradley–Terilla–Vlassopoulos 2021 (*An enriched category theory of language*,
 //! arXiv:2106.07890) models each text `x` as its representable copresheaf
-//! `L(x, −) = π(− | x)` — the meaning of `x` *is* its distribution of
-//! extension-probabilities over every other text ("meaning is context-change
-//! potential"). This module is the *consumer* layer over that embedding
-//! ([`crate::yoneda`]): it ranks and groups whole texts by their meanings,
-//! reusing the pinned BTV internal hom / distance without re-deriving them.
-//!
-//! # What lives here
-//!
-//! [`k_nearest_from`] / [`k_nearest_to`] and [`cluster_semantic_sym`] (see each
-//! item's docs); the batch embedding
+//! `L(x, −) = π(− | x)`. This module ranks and groups texts by those
+//! copresheaves, over the embedding in [`crate::yoneda`]: [`k_nearest_from`],
+//! [`k_nearest_to`], and [`cluster_semantic_sym`]. The batch embedding
 //! [`LmCategory::yoneda_all`](crate::lm_category::LmCategory::yoneda_all) lives
-//! beside [`LmCategory::yoneda`](crate::lm_category::LmCategory::yoneda) in
-//! [`crate::yoneda`].
+//! in [`crate::yoneda`].
 //!
 //! # Asymmetry (BTV 2021 §5)
 //!
@@ -37,10 +29,8 @@ use crate::yoneda::{Copresheaf, semantic_distance};
 /// query most **extends into** (candidates whose support contains the query's).
 ///
 /// Distance is the BTV-canonical asymmetric [`semantic_distance`] in the
-/// `(query, candidate)` direction. This is *not* interchangeable with
-/// [`k_nearest_to`]: the hom is asymmetric (BTV 2021 §5), so "the query's
-/// nearest" and "nearest to the query" rank different candidates. See the
-/// module docs.
+/// `(query, candidate)` direction, so this ranks differently from
+/// [`k_nearest_to`].
 ///
 /// The returned [`NodeId`] is each candidate's [`Copresheaf::base`]. `query`
 /// and `candidates` must all come from the **same**
@@ -106,31 +96,24 @@ fn k_nearest_by(
 /// the graph with an edge between `a, b` wherever `semantic_distance_sym(a, b)
 /// <= epsilon`.
 ///
-/// **Symmetric convenience, not the BTV enriched hom.** The edge test is
-/// equivalent to thresholding [`semantic_distance_sym`](crate::semantic_distance_sym)
-/// — the labelled, *non-canonical* symmetric variant `max(d̂(a, b), d̂(b, a))` —
-/// evaluated direction-by-direction with a short-circuit. BTV 2021 §5 keeps the
-/// asymmetric Lawvere generalized metric; symmetrizing is a caller convenience
-/// for clustering only (see the [`crate::yoneda`] module docs, and
-/// [`k_nearest_from`] / [`k_nearest_to`] for the paper-faithful asymmetric
-/// rankings).
+/// The edge test thresholds
+/// [`semantic_distance_sym`](crate::semantic_distance_sym), the non-canonical
+/// symmetric variant `max(d̂(a, b), d̂(b, a))`, evaluated direction-by-direction
+/// with a short-circuit. BTV 2021 §5 keeps the asymmetric Lawvere generalized
+/// metric; [`k_nearest_from`] / [`k_nearest_to`] are the asymmetric rankings.
 ///
-/// **`∞` semantics.** `semantic_distance_sym(a, b) < ∞` requires `support(a) =
-/// support(b)` — the meanings must be **mutually reachable** (each an extension
-/// of the other; e.g. interchangeable / synonymous texts). Meanings that are
-/// not mutually reachable sit at distance `∞` and therefore never merge at any
-/// finite `epsilon`. This clustering does *not* require the acyclic poset
-/// hypothesis that [`magnitude`](crate::lm_category::LmCategory::magnitude)
-/// needs — see [`enriched_space`](crate::lm_category::LmCategory::enriched_space)'s
-/// documented best-path semantics on mutually-reachable tables.
+/// `semantic_distance_sym(a, b) < ∞` requires `support(a) = support(b)` — the
+/// meanings must be mutually reachable — so meanings that are not sit at `∞`
+/// and never merge at any finite `epsilon`. The acyclic poset hypothesis that
+/// [`magnitude`](crate::lm_category::LmCategory::magnitude) needs does not
+/// apply here.
 ///
 /// # Determinism and cost
 ///
 /// Each cluster's members are the candidates' [`Copresheaf::base`] ids, sorted
-/// ascending; clusters are ordered by their smallest member id. O(n²) pairwise
-/// distance evaluations, each itself an O(n) inf-fold over the contexts —
-/// Θ(n³) total, sized for small BYO-LM tables. Plain union-find, no new
-/// dependencies.
+/// ascending; clusters are ordered by their smallest member id. `O(n²)`
+/// pairwise distance evaluations, each an `O(n)` inf-fold over the contexts —
+/// `Θ(n³)` total, over a plain union-find.
 ///
 /// # Panics
 ///

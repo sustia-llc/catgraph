@@ -1,35 +1,25 @@
-//! Typed-magnitude valuation surface — roles and channels over the coalition
-//! engine (#211, EQ4).
+//! Roles and channels over the coalition engine: three layers beside the
+//! coalition entry points, all valued in `UnitInterval` and lifted by
+//! `d = −ln π` into the shared `ζ_t = exp(−t·d)` kernel.
 //!
-//! Three **additive** layers sit beside the untouched coalition engine. The
-//! enrichment of record stays `UnitInterval` (the BTV 2021 `[0,1]` Viterbi rig,
-//! lifted by `d = −ln π` into the shared `ζ_t = exp(−t·d)` kernel); nothing here
-//! changes a single existing signature, and every layer either *reports* over
-//! already-computed data or *transforms the input couplings* before the ordinary
-//! entry points consume them.
-//!
-//! - **T1 — role-share diagnostics.** [`CoalitionEvaluator::role_shares`]
-//!   decomposes `Mag(S) = Σ_c w_c` (the weighting of Leinster 2013 Lemma 1.1.4,
-//!   already cached by the evaluator) across a caller-supplied role partition of
-//!   the members. Types enter *reporting only*; no number moves.
-//! - **T2 — role-modulated couplings + the role-grid certificate.**
-//!   [`modulate`] applies a role-interaction table `ρ : R × R → [0,1]`
+//! - [`CoalitionEvaluator::role_shares`] decomposes `Mag(S) = Σ_c w_c` (the
+//!   weighting of Leinster 2013 Lemma 1.1.4) across a caller-supplied role
+//!   partition of the members, reporting over already-computed data.
+//! - [`modulate`] applies a role-interaction table `ρ : R × R → [0,1]`
 //!   multiplicatively, `π′ = ρ(r_i, r_j) · π` — additively in the metric,
 //!   `d′ = d_ρ + d`. [`role_grid`] constructs the product of a role table and a
 //!   fiber table, on which the magnitude factorizes exactly
 //!   ([`RoleGrid::proof`]).
-//! - **T3 — channel-valued couplings + a declared collapse.**
-//!   [`ChannelCouplings`] carries a per-pair vector `v ∈ [0,1]^C`;
+//! - [`ChannelCouplings`] carries a per-pair vector `v ∈ [0,1]^C`;
 //!   [`ChannelCouplings::collapse`] contracts it to the scalar enrichment
-//!   through a **declared** monoid homomorphism `|v|_θ = Π_c v_c^{θ_c}`.
+//!   through a declared monoid homomorphism `|v|_θ = Π_c v_c^{θ_c}`.
 //!
 //! # Extension marker
 //!
-//! **No "typed" or "colored" magnitude exists in this crate's anchor
-//! literature** (Bradley–Vigneaux 2025, BTV 2021, Leinster 2008 / 2013,
-//! Leinster–Shulman 2017). The composite surface in this module is an
-//! **extension**, marked in the same style as `catgraph-syntax`'s `MatKron`: the
-//! individual mechanisms it rests on *are* anchored —
+//! No typed or colored magnitude exists in this crate's anchor literature
+//! (Bradley–Vigneaux 2025, BTV 2021, Leinster 2008 / 2013, Leinster–Shulman
+//! 2017). This module is an **extension**; the mechanisms it rests on are
+//! anchored —
 //!
 //! - the weighting decomposition `Mag = Σ w` — Leinster 2013 §1.1 Lemma 1.1.4;
 //! - `|A ⊗ B| = |A|·|B|` for a product of enriched categories — Leinster 2013
@@ -39,129 +29,45 @@
 //! - "magnitude is defined relative to a monoid homomorphism out of the
 //!   enriching object monoid" — Leinster 2013 §1.3;
 //!
-//! — but their assembly into a role/channel vocabulary for coalitions is ours,
-//! not a paper's.
+//! — but their assembly into a role/channel vocabulary for coalitions is not a
+//! paper's.
 //!
-//! # The role-grid factorization certificate (T2)
+//! # The role-grid factorization certificate
 //!
-//! [`role_grid`] builds the product of a role table `ρ` (`R` roles) and a fiber
-//! table `σ` (`n` positions): agents are pairs `(r, x)` laid out at the flat
-//! index `r·n + x`, and **every** ordered cross pair carries the product
-//! coupling
+//! On a [`role_grid`] product — agents are pairs `(r, x)` at the flat index
+//! `r·n + x`, every ordered cross pair carrying
+//! `π((r, x), (r′, x′)) = ρ(r, r′) · σ(x, x′)` — the max-product closure is the
+//! product of the factor closures, the scaled zeta is the Kronecker product
+//! `ζ_t = ζ_t^ρ ⊗ ζ_t^σ`, the skeleton of the product is the product of the
+//! skeletons, and the magnitude is `|ρ|_t · |σ|_t` (Leinster 2013 Prop 1.4.3 /
+//! Prop 2.3.6, with Thm 2.3.11 / Ex 2.3.12(i) for the fibration reading;
+//! weighted categorical case Leinster 2008 Prop 2.8). [`RoleGrid::proof`]
+//! reports that product. Both the closure identity and the skeleton identity
+//! rest on the exactly-`1.0` factor diagonals [`role_grid`] enforces.
 //!
-//! ```text
-//! π((r, x), (r′, x′)) = ρ(r, r′) · σ(x, x′).
-//! ```
+//! The certificate holds because [`role_grid`] *constructed* the product-form
+//! couplings; there is no detection path for arbitrary float input. Grid
+//! evaluation and certificate agree only within a **relative tolerance** — the
+//! two routes re-associate the same real products differently — and the
+//! deviation grows with the conditioning of `ζ_t`: couplings at `1 − O(1e-12)`,
+//! just below the merge knife-edge, reach relative deviations of `~1e-2`. A
+//! `1e-9` tolerance holds away from near-1 non-merged couplings. Singularity
+//! factorizes with the determinant (`det(A ⊗ B) = det(A)ⁿ det(B)ᴿ`), so in exact
+//! arithmetic [`RoleGrid::proof`] errors exactly when the grid evaluation would.
 //!
-//! On this construction the coalition magnitude factorizes exactly, and
-//! [`RoleGrid::proof`] reports `|ρ| · |σ|` as the expected value. The argument
-//! has three steps, and the **diagonal-1.0 precondition** [`role_grid`]
-//! enforces on both factors is load-bearing in the first and third.
+//! # The θ-collapse
 //!
-//! ## Step 1 — product couplings survive the max-product closure
-//!
-//! `Coalition::from_enriched` closes the coupling table under the Viterbi
-//! (max-product) Bellman–Ford closure. Write `ρ̄`, `σ̄` for the closures of the
-//! factors and `π̄` for the closure of the product table. Then `π̄ = ρ̄ ⊗ σ̄`:
-//!
-//! - **`π̄ ≤ ρ̄ ⊗ σ̄` (upper bound).** Any path
-//!   `(r₀,x₀) → (r₁,x₁) → … → (r_k,x_k)` has weight
-//!   `Π_i ρ(r_{i−1}, r_i) · σ(x_{i−1}, x_i)`, which regroups into
-//!   `[Π_i ρ(r_{i−1}, r_i)] · [Π_i σ(x_{i−1}, x_i)]` — the weight of the path's
-//!   **role projection** times the weight of its **fiber projection**. Each
-//!   projection is a walk in its own factor (a step that holds the role fixed
-//!   projects to the idle step `ρ(r, r) = 1`, which by the diagonal-1.0
-//!   precondition is free rather than an unmodelled jump), so each is bounded by
-//!   the corresponding factor closure.
-//! - **`π̄ ≥ ρ̄ ⊗ σ̄` (achieved).** Take an optimal role path
-//!   `r₀ → … → r_p` realizing `ρ̄(r₀, r_p)` and an optimal fiber path
-//!   `x₀ → … → x_q` realizing `σ̄(x₀, x_q)` (an optimal **simple** path always
-//!   exists: stripping a cycle removes factors `≤ 1` from the product, which
-//!   never decreases it). Concatenate them
-//!   as a **two-phase** path in the product: first move the role while holding
-//!   the position at `x₀` (each step costs `ρ(r_{i−1}, r_i) · σ(x₀, x₀) =
-//!   ρ(r_{i−1}, r_i) · 1`), then move the position while holding the role at
-//!   `r_p` (each step costs `ρ(r_p, r_p) · σ(x_{j−1}, x_j) = 1 · σ(x_{j−1},
-//!   x_j)`). Its total weight is exactly `ρ̄(r₀, r_p) · σ̄(x₀, x_q)`.
-//!
-//! Both inequalities hold, so `π̄ = ρ̄ ⊗ σ̄`. Under the BTV lift this is the
-//! statement that the product metric is the `ℓ¹` sum
-//! `d((r,x), (r′,x′)) = d_ρ(r, r′) + d_σ(x, x′)`.
-//!
-//! ## Step 2 — magnitude of a product is the product of magnitudes
-//!
-//! With an `ℓ¹`-additive distance the scaled zeta matrix is a Kronecker
-//! product, `ζ_t = ζ_t^ρ ⊗ ζ_t^σ` (because `exp(−t(a+b)) = exp(−ta)·exp(−tb)`),
-//! hence `ζ_t⁻¹ = (ζ_t^ρ)⁻¹ ⊗ (ζ_t^σ)⁻¹` and
-//!
-//! ```text
-//! Mag = 1ᵀ ζ_t⁻¹ 1 = (1ᵀ (ζ_t^ρ)⁻¹ 1) · (1ᵀ (ζ_t^σ)⁻¹ 1) = |ρ|_t · |σ|_t.
-//! ```
-//!
-//! This is Leinster 2013 Prop 1.4.3 / Prop 2.3.6 (`|A ⊗ B| = |A||B|`);
-//! magnitude of a metric fibration as base times fiber is Leinster 2013
-//! Thm 2.3.11, whose Ex 2.3.12(i) notes the product-projection case reduces to
-//! Prop 2.3.6 (the weighted categorical analogue is Leinster 2008 Prop 2.8,
-//! `χ(E(X)) = Σ_a k^a χ(X_a)`). Invertibility likewise factorizes: `ζ_t` is
-//! invertible iff both factor zetas are (`det(A ⊗ B) = det(A)ⁿ det(B)ᴿ`), so in
-//! exact arithmetic [`RoleGrid::proof`] errors precisely when the grid
-//! evaluation would. Two float-level caveats: the two routes compute
-//! ULP-different entries, so error parity on a numerical knife-edge is not a
-//! bitwise guarantee; and `proof` checks the role factor first, so when *both*
-//! factors are singular only the role factor's error surfaces.
-//!
-//! ## Step 3 — skeletalization commutes with the product
-//!
-//! The coalition path quotients members at mutual closure `1.0` before
-//! inverting. For values in `[0, 1]`, `fl(a·b) == 1.0 ⟺ a == 1.0 ∧ b == 1.0`
-//! (the #153 H1 lemma), so `(r,x) ~ (r′,x′)` in the product **iff** `r ~ r′` in
-//! `ρ̄` and `x ~ x′` in `σ̄`. The skeleton of the product is therefore the
-//! product of the skeletons, and the same identity holds after quotienting —
-//! which matters because [`RoleGrid::proof`] computes each factor magnitude
-//! through the ordinary [`coalition_magnitude_from_couplings`] entry point,
-//! which skeletalizes too.
-//!
-//! ## What the certificate is, and is not
-//!
-//! The certificate is **mathematical and construction-carried**: it holds
-//! because [`role_grid`] *built* the product-form couplings, not because
-//! anything was detected in the numbers. There is deliberately **no detection
-//! path** for arbitrary float inputs — recognizing "is this table a product?"
-//! from `f64` data is a bitwise knife-edge hunt, and #153 settled the house rule
-//! that we prove from structure instead.
-//!
-//! Float evaluation only *approximates* both sides: the grid closure multiplies
-//! `fl(ρ·σ)` entries along paths while the factor closures multiply `ρ` and `σ`
-//! entries separately, so the two routes re-associate the same real products
-//! differently. Tests compare within a **relative tolerance**; bit-identity is
-//! not claimed anywhere in this module. The deviation **grows with the
-//! conditioning of `ζ_t`**: adversarial fuzzing with couplings at `1 − O(1e-12)`
-//! (just below the merge knife-edge, where `ζ` is nearly singular) produced
-//! relative deviations up to `~1e-2` between grid evaluation and certificate.
-//! Tight tolerances (the doctest's `1e-9`) are safe only away from near-1
-//! non-merged couplings.
-//!
-//! # The θ-collapse (T3)
-//!
-//! A channel vector `v ∈ [0,1]^C` is contracted by
-//! `|v|_θ = Π_c v_c^{θ_c}` with `θ_c ≥ 0`. For each fixed `θ` this is a monoid
+//! For each fixed `θ` with every `θ_c ≥ 0`, `|v|_θ = Π_c v_c^{θ_c}` is a monoid
 //! homomorphism `([0,1]^C, ·, 1) → ([0,1], ·, 1)` — it maps the componentwise
-//! unit to `1` and satisfies `|v ⊙ w|_θ = |v|_θ · |w|_θ` — which is exactly the
-//! "size" datum Leinster 2013 §1.3 requires for magnitude of a `V`-enriched
-//! category to be defined. Under the `−ln` lift it reads as the convex-style
-//! combination `d = Σ_c θ_c d_c` of the per-channel metrics.
+//! unit to `1` and satisfies `|v ⊙ w|_θ = |v|_θ · |w|_θ` — the "size" datum
+//! Leinster 2013 §1.3 requires for the magnitude of a `V`-enriched category to
+//! be defined. Under the `−ln` lift it reads as `d = Σ_c θ_c d_c`. Every `θ`
+//! yields a size homomorphism and the anchor literature picks no canonical one.
 //!
-//! `θ` is an **experiment parameter, not a theorem**: every `θ` yields a
-//! legitimate size homomorphism and the anchor literature picks no canonical
-//! one. Recording which `θ` produced a number is the caller's discipline.
-//!
-//! One float trap worth naming: `powf` can round **up to exactly `1.0`** from a
-//! strictly-sub-1 base (e.g. `0.9999999999999999_f64.powf(1e-18) == 1.0`), so a
-//! θ-collapsed table can contain exact-`1.0` couplings — and hence trigger
-//! skeletal merges — between agents that **no channel** perfectly couples. The
-//! `== 1.0 ⟺ every generator is exactly 1.0` reasoning of Step 3 above holds
-//! for plain products, **not** through `powf`; do not chain T3 output into
-//! exact-1.0 arguments.
+//! `powf` can round up to exactly `1.0` from a strictly-sub-1 base (e.g.
+//! `0.9999999999999999_f64.powf(1e-18) == 1.0`), so a θ-collapsed table can
+//! carry exact-`1.0` couplings — and so trigger skeletal merges — between agents
+//! that no channel perfectly couples.
 
 use std::collections::BTreeMap;
 
@@ -169,25 +75,20 @@ use crate::coalition::{coalition_magnitude_from_couplings, skeletal_classes};
 use crate::coalition_eval::CoalitionEvaluator;
 use crate::{CatgraphError, UnitInterval};
 
-/// A role identifier. The vocabulary is **caller-owned** — this crate never
-/// interprets a role, it only partitions by equality — matching the coalition
-/// surface's plain-index discipline (agents are `usize` indices, not a domain
-/// type).
+/// A role identifier. The vocabulary is caller-owned; this module partitions by
+/// equality only.
 pub type RoleId = usize;
 
 // ---------------------------------------------------------------------------
 // T1 — role-share diagnostics
 // ---------------------------------------------------------------------------
 
-/// A skeletal class whose members do **not** all carry the same role, reported
-/// by [`RoleShares::mixed_classes`] instead of being attributed to any role.
+/// A skeletal class whose members do not all carry the same role, reported by
+/// [`RoleShares::mixed_classes`] instead of being attributed to any role.
 ///
-/// The coalition engine quotients members at mutual closure `1.0` (perfectly
-/// coupled both ways ⇒ Lawvere distance `0`), and it does so **regardless of
-/// role**. The cached weighting lives on that quotient, so a class spanning two
-/// roles carries a weight that belongs to neither: the unquotiented `ζ` is
-/// singular there and per-member weightings are not unique, so splitting the
-/// class weight would be an invention. It is flagged here instead.
+/// The coalition engine quotients members at mutual closure `1.0` regardless of
+/// role, and the cached weighting lives on that quotient; a class spanning two
+/// roles carries a weight attributed to neither.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MixedClass {
     rep: usize,
@@ -210,31 +111,25 @@ impl MixedClass {
     }
 }
 
-/// The role decomposition of a coalition's magnitude
-/// ([`CoalitionEvaluator::role_shares`], #211 T1).
-///
-/// Fields are private with accessors so later diagnostics can be added without
-/// a breaking change — the `JoinReport` / `ConditionReport` house style of
-/// #153 / #165. Not `Copy`: it owns the per-role map and the mixed-class list.
+/// The role decomposition of a coalition's magnitude, from
+/// [`CoalitionEvaluator::role_shares`].
 ///
 /// # Contract
 ///
 /// - [`share`](Self::share)`(r)` is the sum of the cached weighting over
-///   skeletal classes **all** of whose members carry role `r` (Leinster 2013
+///   skeletal classes all of whose members carry role `r` (Leinster 2013
 ///   Lemma 1.1.4: `Mag = Σ_c w_c`).
-/// - A role-mixed class contributes to **no** share; it is reported by
+/// - A role-mixed class contributes to no share; it is reported by
 ///   [`mixed_classes`](Self::mixed_classes).
-/// - [`is_exact`](Self::is_exact) is `true` iff no class is mixed. "Exact" is
-///   about **attribution**: every class weight is attributed wholly to one role,
-///   nothing is split or estimated.
-/// - **When `is_exact()`**, `Σ_r share(r)` equals
-///   [`CoalitionEvaluator::base_value`] — mathematically exactly, in floats
-///   only up to re-association (the per-role bucketed sums re-associate the
-///   row-major accumulation `base_value` uses; compare with a **relative
-///   tolerance**, bit-identity is not claimed).
-/// - **When `!is_exact()`**, the sum falls short of `base_value` by exactly
-///   the total weight of the mixed classes — a **structural** shortfall that
-///   can be arbitrarily large, not a rounding effect.
+/// - [`is_exact`](Self::is_exact) is `true` iff no class is mixed — every class
+///   weight is attributed wholly to one role, nothing split or estimated.
+/// - When `is_exact()`, `Σ_r share(r)` equals
+///   [`CoalitionEvaluator::base_value`] up to float re-association (the
+///   per-role bucketed sums re-associate the row-major accumulation
+///   `base_value` uses); compare within a relative tolerance.
+/// - When `!is_exact()`, the sum falls short of `base_value` by the total
+///   weight of the mixed classes — a structural shortfall that can be
+///   arbitrarily large, not a rounding effect.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RoleShares {
     /// Role → attributed weight. Every role appearing in the caller's partition
@@ -279,20 +174,13 @@ impl RoleShares {
 }
 
 impl CoalitionEvaluator {
-    /// Decompose the cached `Mag(S)` across a role partition of the members
-    /// (#211 T1).
+    /// Decompose the cached `Mag(S)` across a role partition of the members by
+    /// bucketing the cached weighting (`w = μ·1`, Leinster 2013 Lemma 1.1.4).
     ///
     /// `roles` is indexed by **member-local position** — `roles[i]` is the role
-    /// of `members()[i]`, *not* of agent `i` — so it must have exactly
+    /// of `members()[i]`, not of agent `i` — so it must have exactly
     /// `members().len()` entries. (Contrast [`modulate`], whose `roles` slice is
-    /// indexed by **agent** index.)
-    ///
-    /// Numbers are untouched: this reads the weighting the evaluator already
-    /// cached (`w = μ·1`, Leinster 2013 Lemma 1.1.4) and buckets it by role. See
-    /// [`RoleShares`] for the exactness contract — in particular that a
-    /// role-mixed skeletal class is reported rather than split, and that
-    /// `Σ_r share(r)` matches [`base_value`](Self::base_value) only up to
-    /// float re-association.
+    /// indexed by agent index.) See [`RoleShares`] for the exactness contract.
     ///
     /// # Examples
     ///
@@ -329,19 +217,11 @@ impl CoalitionEvaluator {
             });
         }
 
-        // The evaluator caches only the class representatives, not the
-        // member → class map, so recompute the map with the very helper the
-        // slow path uses on the very table the evaluator cached. Deterministic
-        // and identical to the partition the cached `reps`/weighting came from
-        // (asserted below in debug).
+        // The evaluator caches class representatives but not the member → class
+        // map, so recompute it with the helper the slow path uses.
         let (member_classes, recomputed_reps) = skeletal_classes(self.closed_table(), m);
         let reps = self.class_reps();
         let weighting = self.weighting_vec();
-        // Always-on (release included): the recompute is already paid above, the
-        // comparison is O(k), and a silent mismatch would attribute cached
-        // weights to the wrong roles. Structurally guaranteed today (same
-        // deterministic helper over the same cached table), so a failure means a
-        // future refactor broke the cache invariant.
         assert_eq!(
             recomputed_reps, reps,
             "invariant: role_shares must recover the same skeleton the evaluator cached"
@@ -352,8 +232,6 @@ impl CoalitionEvaluator {
             "invariant: the cached weighting is indexed by skeletal class"
         );
 
-        // Distinct roles per class, in first-seen order (`k` is small — the
-        // skeleton of one coalition — so the linear `contains` beats a set).
         let mut class_roles: Vec<Vec<RoleId>> = vec![Vec::new(); reps.len()];
         // Seed every supplied role so `share` distinguishes "0.0" from "unknown".
         let mut shares: BTreeMap<RoleId, f64> = BTreeMap::new();
@@ -390,26 +268,17 @@ impl CoalitionEvaluator {
 // T2 — role-modulated couplings
 // ---------------------------------------------------------------------------
 
-/// A validated square table of interaction strengths in `[0, 1]`.
+/// A validated square table of interaction strengths in `[0, 1]`, serving both
+/// as the role-interaction table `ρ : R × R → [0,1]` of [`modulate`] and as
+/// either factor of a [`role_grid`].
 ///
-/// Used in two roles (both are "a `[0,1]`-valued square table", so one type
-/// serves): as the role-interaction table `ρ : R × R → [0,1]` of [`modulate`],
-/// and as either factor of a [`role_grid`].
+/// Asymmetry is allowed: `ρ(r, r′)` need not equal `ρ(r′, r)`, and the
+/// coalition engine consumes asymmetric couplings. A consumer that feeds a
+/// modulated table to `magnitude_f64` directly should know that the symmetric
+/// `f64-fast` factorization engages only on exactly-symmetric ζ.
 ///
-/// **Asymmetry is explicitly allowed.** `ρ(r, r′)` need not equal `ρ(r′, r)` —
-/// "how much a planner's output matters to a worker" is genuinely not "how much
-/// a worker's output matters to a planner". The coalition engine handles
-/// asymmetric couplings natively (Lawvere `[0, ∞]`-enrichment is one-directional
-/// by construction). One consequence worth knowing — for **downstream
-/// consumers that feed couplings to `magnitude_f64` directly** (the coalition
-/// path itself never calls the `f64-fast` route): an asymmetric `ρ` makes the
-/// modulated coupling table asymmetric, and the symmetric `f64-fast`
-/// factorization only engages on exactly-symmetric ζ (measured downstream in
-/// #210).
-///
-/// Validation mirrors [`UnitInterval::new`] — every entry must be non-NaN and in
-/// `[0, 1]` — by calling it, so range errors are reported identically to every
-/// other coupling in the crate.
+/// Every entry is validated through [`UnitInterval::new`]: non-NaN and in
+/// `[0, 1]`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RoleModulation {
     rho: Vec<Vec<f64>>,
@@ -423,7 +292,6 @@ impl RoleModulation {
     /// ```
     /// use catgraph_magnitude::RoleModulation;
     ///
-    /// // Asymmetric on purpose: role 0 attends to role 1 more than the reverse.
     /// let rho = RoleModulation::new(vec![vec![1.0, 0.5], vec![0.25, 1.0]]).unwrap();
     /// assert_eq!(rho.n_roles(), 2);
     /// assert_eq!(rho.rho(0, 1), Some(0.5));
@@ -474,7 +342,7 @@ impl RoleModulation {
     }
 
     /// The first `(index, value)` whose diagonal entry is not exactly `1.0`, if
-    /// any. Exact comparison is deliberate — see [`role_grid`]'s precondition.
+    /// any. The comparison is exact.
     #[allow(clippy::float_cmp)]
     fn first_non_unit_diagonal(&self) -> Option<(usize, f64)> {
         self.rho
@@ -511,11 +379,8 @@ impl RoleModulation {
 }
 
 /// Couplings with a role modulation already applied — the output of
-/// [`modulate`], carried as its own type so a modulated table is never confused
-/// with a raw one.
-///
-/// Private field with an accessor (the #153 / #165 house style), so the witness
-/// can gain provenance later without a breaking change.
+/// [`modulate`], carried as its own type so a modulated table is distinct from
+/// a raw one.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModulatedCouplings {
     couplings: Vec<(usize, usize, f64)>,
@@ -536,14 +401,12 @@ impl ModulatedCouplings {
     }
 }
 
-/// Apply a role-interaction table to a coupling list: `π′ = ρ(r_from, r_to) · π`
-/// (#211 T2).
+/// Apply a role-interaction table to a coupling list:
+/// `π′ = ρ(r_from, r_to) · π`.
 ///
-/// This is a **pure input transformation** — the result feeds every existing
-/// coalition entry point unchanged, and the engine is not aware anything typed
-/// happened. Under the BTV lift `d = −ln π` the modulation is additive in the
-/// metric, `d′ = d_ρ + d`, so it can only *lengthen* distances (`ρ ≤ 1`), never
-/// shorten them.
+/// The result feeds every coalition entry point unchanged. Under the BTV lift
+/// `d = −ln π` the modulation is additive in the metric, `d′ = d_ρ + d`, so it
+/// only lengthens distances (`ρ ≤ 1`).
 ///
 /// `roles` is indexed by **agent** index — `roles[i]` is the role of agent `i` —
 /// and must cover every index appearing in `couplings`. (Contrast
@@ -612,17 +475,11 @@ pub fn modulate(
 // T2 — the role grid and its factorization certificate
 // ---------------------------------------------------------------------------
 
-/// The exact expected magnitude of a [`RoleGrid`], carried by construction
-/// (#211 T2).
+/// The expected magnitude of a [`RoleGrid`], carried by construction.
 ///
-/// Not a measurement of the grid: [`RoleGrid::proof`] evaluates each **factor**
-/// through the ordinary public coalition entry point and multiplies, which by
-/// the module's factorization argument is what the grid must evaluate to. Use it
-/// as ground truth against an actual grid evaluation — within a relative
-/// tolerance, since the two float routes re-associate the same real products
-/// differently.
-///
-/// Private fields with accessors (the #153 / #165 house style).
+/// Not a measurement of the grid: [`RoleGrid::proof`] evaluates each factor
+/// through the ordinary public coalition entry point and multiplies. Compare it
+/// against a grid evaluation within a relative tolerance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RoleFibrationProof {
     role_magnitude: f64,
@@ -658,13 +515,12 @@ impl RoleFibrationProof {
 }
 
 /// A product coalition `role × fiber` with product-form couplings, built by
-/// [`role_grid`] (#211 T2).
+/// [`role_grid`].
 ///
 /// Agents are pairs `(role, position)` at the flat index `role·n + position`
 /// (`n` = the fiber's size), and every ordered cross pair carries
-/// `π((r,x), (r′,x′)) = ρ(r, r′) · σ(x, x′)`. Because the grid was *constructed*
-/// this way, its magnitude factorizes exactly — see the module docs for the
-/// argument, and [`proof`](Self::proof) for the certificate.
+/// `π((r,x), (r′,x′)) = ρ(r, r′) · σ(x, x′)`. Its magnitude factorizes exactly;
+/// [`proof`](Self::proof) carries the certificate.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RoleGrid {
     role_space: RoleModulation,
@@ -690,13 +546,10 @@ impl RoleGrid {
         Some(role * n + pos)
     }
 
-    /// The product couplings, ready for any existing coalition entry point.
+    /// The product couplings, ready for any coalition entry point.
     ///
-    /// Self-pairs are omitted (the identity axiom fixes the diagonal) and so are
-    /// zero products (indistinguishable from an absent coupling in the `[0,1]`
-    /// rig). Otherwise **every** ordered cross pair is present, so the list has
-    /// up to `(R·n)² − R·n` entries — quadratic in the agent count, which bounds
-    /// the practical grid size.
+    /// Self-pairs and zero products are omitted; every other ordered cross pair
+    /// is present, so the list holds up to `(R·n)² − R·n` entries.
     #[must_use]
     pub fn couplings(&self) -> &[(usize, usize, f64)] {
         &self.couplings
@@ -705,10 +558,9 @@ impl RoleGrid {
     /// The construction-carried certificate: each factor's magnitude at scale
     /// `t`, and their product.
     ///
-    /// Both factor magnitudes are computed through the **existing public**
+    /// Both factor magnitudes go through the public
     /// [`coalition_magnitude_from_couplings`] entry point over all of that
-    /// factor's points — there is no private re-implementation of magnitude
-    /// here, so the certificate and an ordinary evaluation share every kernel
+    /// factor's points, so certificate and grid evaluation share every kernel
     /// (closure, skeletalization, `ζ_t`, Möbius inversion).
     ///
     /// # Examples
@@ -737,9 +589,8 @@ impl RoleGrid {
     /// # Errors
     ///
     /// Returns [`CatgraphError::Composition`] if either factor's `t`-scaled zeta
-    /// is singular — which by the module's Step 2 is (in exact arithmetic)
-    /// exactly when the grid's own zeta is singular. The role factor is checked
-    /// first, so if both factors are singular only its error surfaces.
+    /// is singular. The role factor is checked first, so if both factors are
+    /// singular only its error surfaces.
     pub fn proof(&self, t: f64) -> Result<RoleFibrationProof, CatgraphError> {
         Ok(RoleFibrationProof {
             role_magnitude: self.role_space.magnitude_at(t)?,
@@ -750,27 +601,20 @@ impl RoleGrid {
 }
 
 /// Build the product coalition of a role table and a fiber table, whose
-/// magnitude factorizes exactly (#211 T2).
+/// magnitude factorizes exactly.
 ///
 /// Agents are pairs `(role, position)` flattened to `role·n + position`; the
 /// coupling of an ordered pair is the product
 /// `π((r,x), (r′,x′)) = ρ(r, r′) · σ(x, x′)`. See the module docs for the
-/// factorization argument and its anchors (Leinster 2013 Prop 1.4.3 /
-/// Prop 2.3.6; Leinster 2008 Prop 2.8) — and for the statement that this is a
-/// **mathematical, construction-carried** certificate, not a detection of
-/// product structure in arbitrary floats.
+/// factorization and its anchors (Leinster 2013 Prop 1.4.3 / Prop 2.3.6;
+/// Leinster 2008 Prop 2.8).
 ///
 /// # Precondition: both diagonals are exactly `1.0`
 ///
-/// This is validated, not assumed, and it is **load-bearing**. The coalition
-/// engine forces the diagonal of the closed table to `1.0` (the identity axiom,
-/// `d(x, x) = 0`), so on the grid the self-coupling is `1` whatever the factors
-/// say. The identity `(ρ ⊗ σ)` with a forced unit diagonal `= (ρ) ⊗ (σ)` — and
-/// with it the two-phase path of the module's Step 1, whose idle steps cost
-/// `ρ(r, r)` and `σ(x, x)` — holds only when the factor diagonals are *already*
-/// `1.0`. A factor with `ρ(r, r) < 1` would be silently promoted on the grid but
-/// not in its own factor evaluation, and the certificate would be wrong. The
-/// check is exact `== 1.0`, matching the engine's own exact identity handling.
+/// Validated by an exact `== 1.0` check on each factor. The coalition engine
+/// forces the closed table's diagonal to `1.0` (the identity axiom
+/// `d(x, x) = 0`), so a factor with `ρ(r, r) < 1` would be promoted on the grid
+/// but not in its own factor evaluation, making the certificate false.
 ///
 /// # Examples
 ///
@@ -835,19 +679,13 @@ pub fn role_grid(
 // T3 — channel-valued couplings + declared collapse
 // ---------------------------------------------------------------------------
 
-/// Couplings valued in `[0,1]^C` — one component per **channel** (a facet of the
-/// interaction: a capability class, a modality, a trust dimension) — plus the
-/// declared collapse back to the scalar enrichment (#211 T3).
-///
-/// This is the full "typed coupling": rather than pre-collapsing per-facet
-/// scores by hand before calling the coalition surface, a caller records them
-/// all and declares the collapse explicitly with
+/// Couplings valued in `[0,1]^C` — one component per channel — plus the
+/// declared collapse back to the scalar enrichment via
 /// [`collapse`](Self::collapse)`(θ)`.
 ///
-/// Entries are keyed by the ordered pair `(from, to)` with **last-write-wins**
-/// on repeats, matching `HomMap::set_hom`'s overwrite and the evaluator's
-/// documented duplicate convention. Iteration and [`collapse`](Self::collapse)
-/// output are in ascending `(from, to)` order, so results are reproducible.
+/// Entries are keyed by the ordered pair `(from, to)` with last-write-wins on
+/// repeats, matching `HomMap::set_hom`'s overwrite. Iteration and
+/// [`collapse`](Self::collapse) output are in ascending `(from, to)` order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChannelCouplings {
     n_channels: usize,
@@ -859,9 +697,7 @@ impl ChannelCouplings {
     ///
     /// # Errors
     ///
-    /// Returns [`CatgraphError::Composition`] if `n_channels == 0` (the empty
-    /// product collapses every coupling to `1.0`, which is a degenerate table,
-    /// not a useful one).
+    /// Returns [`CatgraphError::Composition`] if `n_channels == 0`.
     pub fn new(n_channels: usize) -> Result<Self, CatgraphError> {
         if n_channels == 0 {
             return Err(CatgraphError::Composition {
@@ -886,8 +722,7 @@ impl ChannelCouplings {
     /// # Errors
     ///
     /// - [`CatgraphError::Composition`] if `from == to` (the identity axiom
-    ///   fixes the diagonal, so the coalition entry points reject self-couplings
-    ///   — rejected here too rather than deferred), or if `v.len()` differs from
+    ///   fixes the diagonal), or if `v.len()` differs from
     ///   [`n_channels`](Self::n_channels).
     /// - [`CatgraphError::RigAxiomViolation`] if a component is NaN or outside
     ///   `[0, 1]` (propagated from [`UnitInterval::new`]).
@@ -923,32 +758,21 @@ impl ChannelCouplings {
     ///
     /// - `θ.len()` must equal [`n_channels`](Self::n_channels), and every `θ_c`
     ///   must be finite and `≥ 0`.
-    /// - **`Σ_c θ_c = 1` is a documented convention, not an enforced
-    ///   constraint.** The simplex is the natural reading (under `−ln` the
-    ///   collapse is `d = Σ_c θ_c d_c`, a convex combination of the per-channel
-    ///   metrics, so the result stays commensurable with an untyped coupling),
-    ///   but enforcing an exact float sum is a knife-edge test that would reject
-    ///   perfectly reasonable weight vectors over rounding. Off-simplex `θ` is
-    ///   accepted and simply rescales the metric.
+    /// - `Σ_c θ_c = 1` is a convention, not an enforced constraint. Off-simplex
+    ///   `θ` is accepted and rescales the metric.
     /// - `θ = e_c` (one at channel `c`, zero elsewhere) recovers channel `c`
     ///   exactly: `v_c^1 = v_c` and `v_j^0 = 1`.
-    /// - Rust's `powf` follows IEEE 754: **`0.0_f64.powf(0.0) == 1.0`**, so a
-    ///   zero-valued channel carrying zero weight drops out of the product
-    ///   rather than annihilating it. In particular `θ = 0` (all zeros) collapses
-    ///   **every** coupling to `1.0` — a fully-coupled, fully-degenerate table.
-    ///   That is the caller's responsibility, not an error.
+    /// - `0.0_f64.powf(0.0) == 1.0`, so a zero-valued channel carrying zero
+    ///   weight drops out of the product; `θ = 0` collapses every coupling to
+    ///   `1.0`.
     ///
     /// Because every `v_c ∈ [0,1]` and every `θ_c ≥ 0`, the result is never
     /// NaN, and it is in `[0, 1]` on any libm whose `pow` error stays under one
-    /// ulp (IEEE 754 does not require correctly-rounded `pow`, and Rust
-    /// documents `powf` precision as platform-dependent — a lower-quality libm
-    /// could in principle overshoot `1.0` by one ulp near a `1 − ε` base).
+    /// ulp (Rust documents `powf` precision as platform-dependent).
     ///
     /// Anchor: each `θ` is a monoid homomorphism
     /// `([0,1]^C, ·, 1) → ([0,1], ·, 1)`, the "size" datum Leinster 2013 §1.3
-    /// requires for magnitude of a `V`-enriched category to be defined — so the
-    /// magnitude is well-defined **per choice of θ**, and the anchor literature
-    /// supplies no canonical θ.
+    /// requires for magnitude of a `V`-enriched category to be defined.
     ///
     /// # Examples
     ///
@@ -958,10 +782,8 @@ impl ChannelCouplings {
     /// let mut cc = ChannelCouplings::new(2).unwrap();
     /// cc.set(0, 1, vec![0.5, 0.8]).unwrap();
     ///
-    /// // θ = e_0 recovers channel 0 exactly.
     /// assert_eq!(cc.collapse(&[1.0, 0.0]).unwrap(), vec![(0, 1, 0.5)]);
     ///
-    /// // The even mix is the geometric mean.
     /// let mixed = cc.collapse(&[0.5, 0.5]).unwrap();
     /// assert!((mixed[0].2 - 0.4_f64.sqrt()).abs() < 1e-12);
     /// ```

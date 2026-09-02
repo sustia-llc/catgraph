@@ -1,73 +1,48 @@
 #![cfg(feature = "f64-fast")]
 //! `f64` fast path for the magnitude pipeline — feature `f64-fast`.
 //!
-//! One **symmetric factorization** of the zeta matrix replaces the three
-//! independent hand-rolled Gauss–Jordan eliminations of [`crate::magnitude`]
-//! ([`mobius_function`](crate::magnitude::mobius_function),
-//! [`weighting`](crate::magnitude::weighting), and
-//! [`coweighting`](crate::magnitude::coweighting) each carry their own copy of
-//! the elimination loop). ζ is symmetric in the typical `−ln π` case — see the
-//! symmetry discussion in [`crate::magnitude::coweighting`]'s docs, quoting
-//! Leinster 2013 §1.1's "often our matrix ζ will be symmetric, in which case
-//! weightings and coweightings are essentially the same" — so a single
-//! factorization serves every downstream query.
+//! One symmetric factorization of the zeta matrix serves weighting,
+//! coweighting, Möbius and magnitude, in place of the three independent
+//! Gauss–Jordan eliminations of [`crate::magnitude`].
 //!
 //! ## Paper anchors vs numerics
 //!
-//! The *quantities* are paper-anchored:
-//!
-//! - weighting / coweighting — Leinster 2013 §1.1 Def 1.1.1 (`ζ · w = u_I`,
-//!   `v · ζ = u_J^T`), with `Σⱼ w(j) = Σᵢ v(i)` by Lemma 1.1.2;
-//! - `μ = ζ⁻¹` and `w(j) = Σᵢ μ(j, i)` — Leinster 2013 §1.1 Lemma 1.1.4;
-//! - magnitude `Mag(tM) = Σᵢⱼ μ_t[i][j] = Σⱼ w(j) = 1ᵀ ζ⁻¹ 1` — BV 2025 §3.5
-//!   Eq (7) (see [`magnitude_f64`] for the `t`-scaled entry point).
-//!
-//! The *factorization choice* is *numerical*, not paper-anchored: nothing in
-//! Leinster 2013 / BV 2025 prescribes Cholesky, Bunch–Kaufman, or Gaussian
-//! elimination. This module picks whichever is applicable and records the
-//! choice in [`FactorizationPath`].
+//! The quantities are paper-anchored: weighting / coweighting at Leinster 2013
+//! §1.1 Def 1.1.1 (`ζ · w = u_I`, `v · ζ = u_J^T`) with `Σⱼ w(j) = Σᵢ v(i)` by
+//! Lemma 1.1.2; `μ = ζ⁻¹` and `w(j) = Σᵢ μ(j, i)` at Lemma 1.1.4; magnitude
+//! `Mag(tM) = Σᵢⱼ μ_t[i][j] = Σⱼ w(j) = 1ᵀ ζ⁻¹ 1` at BV 2025 §3.5 Eq (7).
+//! The factorization choice is numerical, prescribed by no anchor; the route
+//! taken is recorded in [`FactorizationPath`].
 //!
 //! ## Route selection
 //!
-//! [`ZetaFactorization::new`] builds ζ once (through the shared
-//! [`zeta_from_scaled_distance`](crate::magnitude) kernel, so entries are
-//! ULP-identical to the generic path's), records `‖ζ‖₁`, then:
+//! [`ZetaFactorization::new`] builds ζ once through the shared
+//! [`zeta_from_scaled_distance`](crate::magnitude) kernel, records `‖ζ‖₁`, then
+//! takes:
 //!
-//! 1. **exactly symmetric** (`ζ[i][j] == ζ[j][i]` bitwise for every pair) —
-//!    try `Cholesky` ([`FactorizationPath::Cholesky`]); ζ is positive-definite
-//!    for the common uniform-distance / negative-type cases.
-//! 2. Cholesky rejected (ζ symmetric but **indefinite** — legal: an arbitrary
-//!    symmetric `LawvereMetricSpace` need not induce a positive-definite ζ) —
-//!    Bunch–Kaufman `LBLT` ([`FactorizationPath::Lblt`]), probed once at
-//!    construction for a structurally-zero pivot.
-//! 3. **asymmetric** ζ, or an `LBLT` that reports a zero pivot — fall back to
-//!    the untouched rig-generic Gauss–Jordan functions instantiated at
-//!    `Q = `[`F64Rig`] ([`FactorizationPath::GaussJordan`]). Lawvere
-//!    `[0, ∞]`-enrichment drops the symmetry axiom, so asymmetric spaces are
-//!    legal input and must not silently take a symmetric route (nalgebra's
-//!    `Cholesky` / `LBLT` read only the lower triangle and would otherwise
-//!    factor the wrong matrix).
+//! 1. `Cholesky` ([`FactorizationPath::Cholesky`]) when ζ is bitwise symmetric
+//!    (`ζ[i][j] == ζ[j][i]` for every pair) and positive-definite;
+//! 2. Bunch–Kaufman `LBLT` ([`FactorizationPath::Lblt`]) when ζ is symmetric
+//!    but indefinite, probed once at construction for a structurally-zero
+//!    pivot;
+//! 3. the rig-generic Gauss–Jordan functions at `Q = `[`F64Rig`]
+//!    ([`FactorizationPath::GaussJordan`]) when ζ is asymmetric or the `LBLT`
+//!    probe reports a zero pivot. Lawvere `[0, ∞]`-enrichment drops the
+//!    symmetry axiom, and nalgebra's `Cholesky` / `LBLT` read the lower
+//!    triangle only, so asymmetric ζ must not take a symmetric route.
 //!
-//! **Error parity.** An **exactly** singular ζ produces
-//! [`CatgraphError::Composition`] on every route, exactly as the generic path
-//! does: routes 1 and 2 are only entered once the factorization has certified
-//! invertibility, and route 3 *is* the generic path. A merely **numerically**
-//! near-singular ζ (e.g. `t → 0`, where `ζ_t → J` is rank 1) errors on
-//! *neither* — Cholesky accepts it on a tiny positive pivot and Gauss–Jordan
-//! finds a tiny non-zero pivot, so both return garbage rather than `Err`. That
-//! parity is preserved but is not a safety net: [`ConditionReport`] is the
-//! mitigation, since `cond₁(ζ)` blows up long before either route fails.
-//!
-//! **Default builds are unaffected.** The feature is off by default and no
-//! existing function is touched, so default-build results stay bit-identical.
+//! An exactly singular ζ produces [`CatgraphError::Composition`] on every
+//! route. A numerically near-singular ζ (`t → 0`, where `ζ_t → J` is rank 1)
+//! errors on none of them: Cholesky accepts a tiny positive pivot and
+//! Gauss–Jordan finds a tiny non-zero one. [`ConditionReport`] is the signal
+//! there, since `cond₁(ζ)` grows long before a route fails.
 //!
 //! ## Conditioning
 //!
 //! [`ConditionReport`] carries the induced 1-norm condition number
 //! `cond₁(ζ) = ‖ζ‖₁ · ‖ζ⁻¹‖₁` whenever μ is materialized
 //! ([`ZetaFactorization::condition_report`]), and a solve-only lower bound
-//! otherwise ([`ZetaFactorization::condition_lower_bound`]). The struct is the
-//! extension point for richer diagnostics.
+//! otherwise ([`ZetaFactorization::condition_lower_bound`]).
 
 use nalgebra::linalg::{Cholesky, LBLT};
 use nalgebra::{DMatrix, DVector, Dyn};
@@ -81,9 +56,8 @@ use crate::{F64Rig, LawvereMetricSpace};
 
 /// Which factorization answered the queries on a [`ZetaFactorization`].
 ///
-/// Purely a **numerical** diagnostic — the route does not change the
-/// paper-anchored quantity being computed, only how it is obtained. Recorded
-/// once at construction; every method on the handle honours it.
+/// A numerical diagnostic: the route changes how the quantity is obtained, not
+/// which quantity. Recorded once at construction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum FactorizationPath {
     /// ζ is exactly symmetric and positive-definite: `ζ = L Lᵀ`.
@@ -98,9 +72,8 @@ pub enum FactorizationPath {
 
 /// Conditioning diagnostics for a [`ZetaFactorization`].
 ///
-/// All norms are the **induced 1-norm** (max absolute column sum,
-/// `nalgebra::Matrix::one_norm`). Fields are private with accessors so that
-/// later diagnostics can be added without a breaking change.
+/// All norms are the induced 1-norm — max absolute column sum,
+/// `nalgebra::Matrix::one_norm`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConditionReport {
     path: FactorizationPath,
@@ -134,12 +107,9 @@ impl ConditionReport {
     /// `cond₁(ζ) = ‖ζ‖₁ · ‖ζ⁻¹‖₁`, or `None` on a solve-only report.
     ///
     /// Submultiplicativity gives `cond₁(ζ) ≥ ‖ζ ζ⁻¹‖₁ = ‖I‖₁ = 1` for any
-    /// invertible ζ with `n ≥ 1` (up to floating-point roundoff).
-    ///
-    /// **Degenerate `n = 0`.** The empty space has `‖ζ‖₁ = ‖μ‖₁ = 0`, so an
-    /// exact report on it is `Some(0.0)` — below the `≥ 1` floor, which only
-    /// applies for `n ≥ 1`. The value is reported as-is rather than special-cased
-    /// so that `cond_1 == zeta_one_norm * mu_one_norm` holds unconditionally.
+    /// invertible ζ with `n ≥ 1`, up to floating-point roundoff. The empty
+    /// space has `‖ζ‖₁ = ‖μ‖₁ = 0` and so reports `Some(0.0)`;
+    /// `cond_1 == zeta_one_norm * mu_one_norm` holds unconditionally.
     #[must_use]
     pub fn cond_1(&self) -> Option<f64> {
         self.cond_1
@@ -150,24 +120,16 @@ impl ConditionReport {
     ///
     /// Derived from the weighting alone: `ζ w = u_I` gives `w = ζ⁻¹ u_I`, so
     /// `‖ζ⁻¹‖₁ ≥ ‖ζ⁻¹ u_I‖₁ / ‖u_I‖₁ = ‖w‖₁ / n`, hence
-    /// `cond₁(ζ) ≥ ‖ζ‖₁ · ‖w‖₁ / n`. The bound holds on **every** route,
-    /// symmetric or not, and is `0.0` for the empty space (`n = 0`).
-    ///
-    /// The tighter `‖ζ‖₁ · ‖w‖∞` is deliberately *not* used, because it is not
-    /// **route-uniform**: `w` is a row-sum vector of `ζ⁻¹`, so `‖w‖∞ ≤ ‖ζ⁻¹‖∞`,
-    /// which coincides with `‖ζ⁻¹‖₁` only when `ζ⁻¹` is symmetric. That does
-    /// hold on the two symmetric routes (where the tighter bound would be
-    /// valid), but not on the asymmetric Gauss–Jordan fallback. One bound that
-    /// holds everywhere beats three bounds that need a route to interpret.
+    /// `cond₁(ζ) ≥ ‖ζ‖₁ · ‖w‖₁ / n`. The bound holds on every route, symmetric
+    /// or not, and is `0.0` for the empty space (`n = 0`).
     #[must_use]
     pub fn cond_1_lower_bound(&self) -> f64 {
         self.cond_1_lower_bound
     }
 }
 
-/// The private factorization payload. `GaussJordan` carries nothing — that
-/// route re-enters the rig-generic functions in [`crate::magnitude`], which
-/// rebuild ζ themselves through the same shared kernel.
+/// The private factorization payload. `GaussJordan` carries nothing: that route
+/// re-enters the rig-generic functions in [`crate::magnitude`].
 enum Factorization {
     Cholesky(Cholesky<f64, Dyn>),
     Lblt(LBLT<f64, Dyn>),
@@ -213,16 +175,13 @@ impl<'a> ZetaFactorization<'a> {
     /// Build ζ from `space` and factor it, recording the route in
     /// [`path`](Self::path).
     ///
-    /// Infallible: a ζ that neither Cholesky nor Bunch–Kaufman can handle
-    /// degrades to the [`GaussJordan`](FactorizationPath::GaussJordan) route,
-    /// which reports **exact** singularity later (per method, as `Err`) exactly
-    /// as the generic functions do. Merely *near*-singular ζ is not rejected on
-    /// any route — see [`condition_report`](Self::condition_report).
+    /// Infallible: a ζ that neither Cholesky nor Bunch–Kaufman can handle takes
+    /// the [`GaussJordan`](FactorizationPath::GaussJordan) route, which reports
+    /// exact singularity per method as `Err`. A near-singular ζ is rejected on
+    /// no route — see [`condition_report`](Self::condition_report).
     ///
     /// ζ entries are built through the crate-shared
-    /// `zeta_from_scaled_distance` kernel over the
-    /// `materialize_objects` order, so they are ULP-identical to the entries
-    /// the generic path and [`crate::coalition_eval`] construct.
+    /// `zeta_from_scaled_distance` kernel over the `materialize_objects` order.
     #[must_use]
     pub fn new(space: &'a LawvereMetricSpace<NodeId>) -> Self {
         let objects: Vec<NodeId> = materialize_objects(space);
@@ -233,14 +192,9 @@ impl<'a> ZetaFactorization<'a> {
         });
         let zeta_one_norm = zeta.one_norm();
 
-        // Exact (bitwise) symmetry only. A NaN entry compares unequal to
-        // itself and therefore routes to Gauss–Jordan, which is the safe
-        // choice: nalgebra's Cholesky / LBLT read the lower triangle alone and
-        // would silently factor a *different* matrix on asymmetric input.
-        // `clippy::float_cmp` (advisory pedantic) suggests an epsilon compare —
-        // deliberately not wanted here: a merely *near*-symmetric ζ is still
-        // not the matrix the lower-triangle-only routines would factor, so
-        // anything short of bit equality must fall back.
+        // Bitwise symmetry only; a NaN entry compares unequal to itself and so
+        // routes to Gauss–Jordan. An epsilon compare would admit matrices the
+        // lower-triangle-only routines do not factor.
         #[allow(clippy::float_cmp)]
         let symmetric = (0..n).all(|i| ((i + 1)..n).all(|j| zeta[(i, j)] == zeta[(j, i)]));
 
@@ -249,16 +203,9 @@ impl<'a> ZetaFactorization<'a> {
         } else if let Some(chol) = Cholesky::new(zeta.clone()) {
             Factorization::Cholesky(chol)
         } else {
-            // Symmetric but not positive-definite — Bunch–Kaufman is the
-            // symmetric-indefinite factorization. `LBLT::new` is infallible;
-            // `solve` fails iff a structurally-zero pivot was recorded,
-            // independent of the right-hand side, so one probe here settles
-            // the route for every later query. `solve_mut` is used over `solve`
-            // to skip the RHS clone (it overwrites the buffer in place and
-            // returns the bool directly). The O(n²) forward/backward
-            // substitution the probe pays for is unavoidable: `LBLT`'s
-            // `zero_pivot` field is private, so the bool is the only public
-            // read of it.
+            // Symmetric but not positive-definite. `LBLT::solve` fails iff a
+            // structurally-zero pivot was recorded, independent of the RHS, so
+            // one probe settles the route for every later query.
             let lblt = LBLT::new(zeta);
             let mut probe = DVector::<f64>::zeros(n);
             if lblt.solve_mut(&mut probe) {
@@ -312,11 +259,11 @@ impl<'a> ZetaFactorization<'a> {
     ///
     /// # Errors
     ///
-    /// Returns [`CatgraphError::Composition`] when ζ is **exactly** singular —
-    /// reachable only on the Gauss–Jordan route, since the other two routes
-    /// certified invertibility at construction. A near-singular ζ returns `Ok`
-    /// with a numerically meaningless `w` on *every* route (including the
-    /// generic one, so parity holds); [`ConditionReport`] is the mitigation.
+    /// Returns [`CatgraphError::Composition`] when ζ is exactly singular —
+    /// reachable only on the Gauss–Jordan route, the other two having certified
+    /// invertibility at construction. A near-singular ζ returns `Ok` with a
+    /// numerically meaningless `w` on every route; [`ConditionReport`] is the
+    /// signal.
     pub fn weighting(&self) -> Result<Vec<f64>, CatgraphError> {
         match &self.factorization {
             Factorization::Cholesky(chol) => Ok(to_vec(&chol.solve(&self.ones()))),
@@ -333,10 +280,10 @@ impl<'a> ZetaFactorization<'a> {
 
     /// The coweighting `v` with `v · ζ = u_J^T` (Leinster 2013 §1.1 Def 1.1.1).
     ///
-    /// On the symmetric routes `ζᵀ = ζ`, so the coweighting **is** the
-    /// weighting (Leinster 2013 §1.1: "often our matrix ζ will be symmetric, in
-    /// which case weightings and coweightings are essentially the same") and
-    /// the same solve is reused. On the
+    /// On the symmetric routes `ζᵀ = ζ`, so the coweighting is the weighting
+    /// (Leinster 2013 §1.1: "often our matrix ζ will be symmetric, in which
+    /// case weightings and coweightings are essentially the same") and the same
+    /// solve is reused. On the
     /// [`GaussJordan`](FactorizationPath::GaussJordan) route this delegates to
     /// [`crate::magnitude::coweighting`]`::<`[`F64Rig`]`>`, which solves the
     /// transposed system and generally returns a *different* vector — with the
@@ -359,8 +306,7 @@ impl<'a> ZetaFactorization<'a> {
     /// Eq (7) via Leinster 2013 §1.1 Lemma 1.1.4 — the weighting sum equals the
     /// Möbius entry sum).
     ///
-    /// No μ is materialized: this is one solve plus a reduction, against the
-    /// generic path's full `n × 2n` inversion.
+    /// No μ is materialized: one solve plus a reduction.
     ///
     /// # Errors
     ///
@@ -381,8 +327,7 @@ impl<'a> ZetaFactorization<'a> {
     /// # Errors
     ///
     /// Returns [`CatgraphError::Composition`] when ζ is singular (Gauss–Jordan
-    /// route only), or if the `n × n` shape is somehow rejected by
-    /// [`MatR::new`] (unreachable — the shape is derived from the solve output).
+    /// route only), or if [`MatR::new`] rejects the `n × n` shape.
     pub fn mobius_function(&self) -> Result<MatR<F64Rig>, CatgraphError> {
         match &self.factorization {
             Factorization::Cholesky(chol) => mat_from_dmatrix(&chol.inverse()),
@@ -410,14 +355,11 @@ impl<'a> ZetaFactorization<'a> {
     pub fn condition_report(&self) -> Result<ConditionReport, CatgraphError> {
         let mu = self.mobius_function()?;
 
-        // One row-major pass accumulates both norms:
-        //   * `‖μ‖₁` = max absolute **column** sum (the induced 1-norm);
-        //   * `‖w‖₁` where `w = μ · u_I` is the **row**-sum vector of ζ⁻¹
-        //     (Leinster 2013 Lemma 1.1.4) — free here, and it makes the lower
-        //     bound agree with the solve-based constructor to solve tolerance.
-        //     NOT bit-identical: μ row sums and a triangular solve are
-        //     different arithmetic (measured a few ULPs apart on the asymmetric
-        //     fixture), which is why the parity test compares within `1e-9`.
+        // One row-major pass accumulates `‖μ‖₁` (max absolute column sum) and
+        // `‖w‖₁`, where `w = μ · u_I` is the row-sum vector of ζ⁻¹ (Leinster
+        // 2013 Lemma 1.1.4). μ row sums and a triangular solve are different
+        // arithmetic, so this agrees with the solve-based constructor to solve
+        // tolerance, not bitwise.
         let mut col_sums = vec![0.0_f64; self.n];
         let mut w_one_norm = 0.0_f64;
         for row in mu.entries() {
@@ -483,11 +425,8 @@ impl<'a> ZetaFactorization<'a> {
 /// [`magnitude`](crate::magnitude::magnitude)`::<`[`F64Rig`]`>(space, t)`
 /// (BV 2025 §3.5 Eq (7); Leinster 2013 §2.2).
 ///
-/// Scales through the crate-shared
-/// [`scaled_space`](crate::magnitude) helper — the same loop
-/// [`magnitude`](crate::magnitude::magnitude) and
-/// [`crate::coalition_eval`] use — then factors the scaled space and returns
-/// `Σⱼ w(j)`. No μ is materialized.
+/// Scales through the crate-shared [`scaled_space`](crate::magnitude) helper,
+/// factors the scaled space, and returns `Σⱼ w(j)`. No μ is materialized.
 ///
 /// # Errors
 ///
@@ -531,11 +470,6 @@ fn to_vec(v: &DVector<f64>) -> Vec<f64> {
 
 /// Wrap an `n × n` `DMatrix<f64>` as [`MatR<F64Rig>`], the shape the generic
 /// [`mobius_function`](crate::magnitude::mobius_function) returns.
-///
-/// Deliberately local rather than reusing `catgraph_applied::mat_f64`: that
-/// module sits behind applied's own `f64-rig` feature, and this crate's
-/// `f64-fast` feature enables only `dep:nalgebra`, so the four-line conversion
-/// is cheaper than pulling a second crate's feature into the build.
 fn mat_from_dmatrix(m: &DMatrix<f64>) -> Result<MatR<F64Rig>, CatgraphError> {
     let rows = m.nrows();
     let cols = m.ncols();

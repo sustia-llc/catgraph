@@ -39,12 +39,8 @@ use catgraph::errors::CatgraphError;
 /// circuit-free under the antisymmetry of `≤`, so no validation is needed
 /// on that path.
 ///
-/// The type is `Clone + Debug + PartialEq + Eq` (the latter pair derived
-/// when `NodeId: Eq + Hash`, which the internal `HashMap` index already
-/// requires for any operation that actually constructs the type). `Hash`
-/// is NOT derived: `HashMap` does not implement `Hash`. The
-/// `PartialEq + Eq` pair is sufficient for `assert_eq!(cat1, cat2)` in
-/// downstream tests.
+/// `Clone + Debug + PartialEq + Eq` are derived, the latter pair when
+/// `NodeId: Eq + Hash`. `Hash` is not derived: `HashMap` does not implement it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PosetCategory<NodeId: Eq + Hash> {
     objects: Vec<NodeId>,
