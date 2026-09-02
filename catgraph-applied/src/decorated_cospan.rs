@@ -147,7 +147,8 @@ where
     Lambda: Eq + Copy + Debug,
     D: Decoration,
 {
-    /// Formats as `DecoratedCospan { cospan: .., decoration: .. }`.
+    /// Formats as a struct named `DecoratedCospan` with the fields `cospan`
+    /// and `decoration`.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DecoratedCospan")
             .field("cospan", &self.cospan)

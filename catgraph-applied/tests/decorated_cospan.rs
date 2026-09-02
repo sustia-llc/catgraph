@@ -344,6 +344,25 @@ fn t2_6_clone_and_debug_over_petri_decoration_marker() {
         rendered.contains("PetriApex"),
         "Debug delegates to the apex value's own Debug, got: {rendered}"
     );
+
+    let pretty = format!("{original:#?}");
+    assert!(
+        pretty.starts_with("DecoratedCospan {\n"),
+        "the alternate spec opens the struct on its own line, got: {pretty}"
+    );
+    assert!(
+        pretty.contains("\n    cospan: "),
+        "the alternate spec indents `cospan` by four spaces, got: {pretty}"
+    );
+    assert!(
+        pretty.contains("\n    decoration: PetriApex"),
+        "the alternate spec indents `decoration` by four spaces and delegates \
+         to the apex value's own Debug, got: {pretty}"
+    );
+    assert!(
+        pretty.ends_with("\n}"),
+        "the alternate spec closes the struct on its own line, got: {pretty}"
+    );
 }
 
 #[test]
@@ -377,5 +396,23 @@ fn t2_7_clone_and_debug_over_marker_with_no_derives() {
     assert!(
         rendered.contains("decoration: ()"),
         "Debug renders the unit apex under the `decoration` field, got: {rendered}"
+    );
+
+    let pretty = format!("{original:#?}");
+    assert!(
+        pretty.starts_with("DecoratedCospan {\n"),
+        "the alternate spec opens the struct on its own line, got: {pretty}"
+    );
+    assert!(
+        pretty.contains("\n    cospan: "),
+        "the alternate spec indents `cospan` by four spaces, got: {pretty}"
+    );
+    assert!(
+        pretty.contains("\n    decoration: ()"),
+        "the alternate spec indents `decoration` by four spaces, got: {pretty}"
+    );
+    assert!(
+        pretty.ends_with("\n}"),
+        "the alternate spec closes the struct on its own line, got: {pretty}"
     );
 }
