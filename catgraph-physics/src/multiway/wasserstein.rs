@@ -357,9 +357,9 @@ mod tests {
         );
     }
 
-    /// The 3x4 instance recorded on issue #387: masses in twelfths, integer
-    /// costs, optimum 49/12 by contingency-table enumeration over the tables
-    /// with margins `[2,5,5]` and `[3,4,4,1]`.
+    /// The 3x4 instance with masses in twelfths and integer costs: optimum
+    /// 49/12 by contingency-table enumeration over the tables with margins
+    /// `[2,5,5]` and `[3,4,4,1]`.
     #[test]
     fn w1_three_by_four_rational_masses_is_forty_nine_twelfths() {
         let mu = vec![2.0 / 12.0, 5.0 / 12.0, 5.0 / 12.0];
@@ -378,9 +378,8 @@ mod tests {
         );
     }
 
-    /// Padding the #387 3x4 instance with a zero-mass row and a zero-mass
-    /// column leaves the optimum at 49/12: a support point carrying no mass
-    /// admits no transport.
+    /// Padding the 3x4 instance with a zero-mass row and a zero-mass column
+    /// leaves the optimum at 49/12.
     #[test]
     fn w1_zero_mass_padding_leaves_the_optimum() {
         let mu = vec![2.0 / 12.0, 0.0, 5.0 / 12.0, 5.0 / 12.0];

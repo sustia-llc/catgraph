@@ -1,4 +1,4 @@
-//! Ollivier-Ricci curvature over the exact transport solver (issue #387).
+//! Ollivier-Ricci curvature over the exact transport solver.
 //!
 //! `edge_ollivier_ricci` scores an edge on the *union* of the two endpoint
 //! neighbourhoods, so both marginals it hands `wasserstein_1` carry zero-mass

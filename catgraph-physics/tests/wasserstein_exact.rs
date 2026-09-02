@@ -1,5 +1,4 @@
-//! `wasserstein_1` against exact optima computed by exhaustive enumeration
-//! (issue #387).
+//! `wasserstein_1` against exact optima computed by exhaustive enumeration.
 //!
 //! Two reference oracles, each exact on the family it covers:
 //!
