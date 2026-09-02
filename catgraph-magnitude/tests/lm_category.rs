@@ -399,27 +399,41 @@ proptest! {
     /// general bound argument is monotone and the upper bound `#ob(M)` is
     /// tight only as `t → ∞`. We test with `t ∈ {1.5, 2.0, 3.0}` to stay
     /// well inside the regime where ζ_t is invertible and the bounds apply.
+    ///
+    /// The `n` stratum is swept inside the case and each stratum's evaluated
+    /// `(n, t)` pairs are counted, so a stratum that stops evaluating (an `Err`
+    /// from `magnitude`) fails the case instead of skipping silently.
     #[test]
     fn mag_bounds_intro(
-        n in 2usize..=4,
         seed in any::<u64>(),
     ) {
-        let m = build_random_tree_lm(n, seed);
-        let n_term = m.terminating().len() as f64;
-        let n_obj = m.objects().len() as f64;
-        for &t in &[1.5_f64, 2.0, 3.0] {
-            let Ok(mag) = m.magnitude(t) else {
-                // Singular zeta on the random fixture — accept and skip.
-                continue;
-            };
-            prop_assert!(
-                mag >= n_term - 1e-6,
-                "intro lower bound violated at t={t}: mag={mag}, #T(⊥)={n_term}"
-            );
-            prop_assert!(
-                mag <= n_obj + 1e-6,
-                "intro upper bound violated at t={t}: mag={mag}, #ob={n_obj}"
-            );
+        const TS: [f64; 3] = [1.5, 2.0, 3.0];
+        // Evaluated `(n, t)` pairs per stratum, indexed by `n − 2`.
+        let mut evaluated = [0usize; 3];
+        for n in 2usize..=4 {
+            let m = build_random_tree_lm(n, seed);
+            let n_term = m.terminating().len() as f64;
+            let n_obj = m.objects().len() as f64;
+            for &t in &TS {
+                let Ok(mag) = m.magnitude(t) else {
+                    continue;
+                };
+                evaluated[n - 2] += 1;
+                prop_assert!(
+                    mag >= n_term - 1e-6,
+                    "intro lower bound violated at n={n} t={t}: mag={mag}, #T(⊥)={n_term}"
+                );
+                prop_assert!(
+                    mag <= n_obj + 1e-6,
+                    "intro upper bound violated at n={n} t={t}: mag={mag}, #ob={n_obj}"
+                );
+            }
         }
+        prop_assert_eq!(
+            evaluated,
+            [3usize, 3, 3],
+            "per-stratum evaluated (n, t) pairs for n = 2, 3, 4 at seed={}",
+            seed
+        );
     }
 }
