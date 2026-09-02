@@ -1,7 +1,7 @@
 //! Benchmark: `Vec<Vec<f64>>` vs `DMatrix<f64>` for Wasserstein distance matrix.
 //!
 //! Evaluates whether switching to nalgebra `DMatrix` improves cache locality
-//! for the transportation simplex solver. Decision criteria:
+//! for the successive-shortest-path min-cost-flow solver. Decision criteria:
 //! - ≥15% faster at size 100+: create follow-up refactor task
 //! - <15% faster or slower: no action
 

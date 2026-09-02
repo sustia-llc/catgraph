@@ -171,9 +171,10 @@ impl Network {
                 push = push.min(self.arcs[arc].cap);
                 node = self.arcs[arc ^ 1].to;
             }
-            if push <= EPS {
-                return (total_flow, total_cost);
-            }
+            assert!(
+                push > EPS,
+                "augmenting path bottleneck {push} <= {EPS}, expected > {EPS}"
+            );
 
             let mut node = sink;
             while node != source {
@@ -218,9 +219,7 @@ impl Network {
                 if arc.cap <= EPS || settled[arc.to] {
                     continue;
                 }
-                // Clamped so accumulated rounding cannot make a residual arc
-                // cheaper than free, which Dijkstra does not admit.
-                let reduced = (arc.cost + potential[next] - potential[arc.to]).max(0.0);
+                let reduced = arc.cost + potential[next] - potential[arc.to];
                 let candidate = best + reduced;
                 if candidate < dist[arc.to] {
                     dist[arc.to] = candidate;

@@ -8,7 +8,9 @@
 //! - [`BranchialGraph`]: Time-slice foliation (tensor product structure at each step)
 //! - [`DiscreteCurvature`]: Trait for curvature backends on branchial graphs
 //! - [`OllivierRicciCurvature`]: Ollivier-Ricci curvature via Wasserstein transport
-//! - [`wasserstein_1`]: Transportation simplex W₁ optimal transport solver
+//! - [`wasserstein_1`]: Successive-shortest-path min-cost-flow W₁ optimal
+//!   transport solver, over equal-mass non-negative marginals and a
+//!   non-negative cost matrix
 
 pub mod branchial;
 // petgraph/rustworkx-core graph algorithms (coloring, k-core, articulation

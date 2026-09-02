@@ -8,12 +8,14 @@
 //!   over rational margins has an integral optimum at that denominator, so the
 //!   minimum over these tables is W₁ exactly.
 //! - **Permutation minimum** — for uniform 1/k margins on a k x k cost matrix,
-//!   the transportation polytope is the Birkhoff polytope, whose vertices are
-//!   the permutation matrices, so the minimum over permutations is W₁ exactly.
+//!   the transportation polytope is `(1/k)·Birkhoff`, whose vertices are
+//!   `(1/k)·P` over permutation matrices `P`, so the minimum over permutations
+//!   divided by k is W₁ exactly.
 //!
 //! Both families are drawn from the seeded `catgraph-testutil` LCG. The
-//! rational-margin family reaches zero-mass margins; the uniform family does
-//! not, and is covered at zero mass by the padded variant.
+//! rational-margin family reaches zero-mass margins; the padded variant draws
+//! rational margins over a support with zero-mass rows and columns
+//! interleaved.
 
 use catgraph_physics::multiway::wasserstein_1;
 use catgraph_testutil::Lcg;
@@ -118,8 +120,8 @@ fn random_costs(rng: &mut Lcg, rows: usize, cols: usize) -> Vec<Vec<f64>> {
         .collect()
 }
 
-/// 300 seeded 3x4 instances with margins in twelfths — zero margins included,
-/// so both marginals carry zero-mass support points — agree with the
+/// 300 seeded 3x4 instances with margins in twelfths — at least one instance
+/// carrying a zero-mass support point in a marginal — agree with the
 /// contingency-table optimum to 1e-9.
 #[test]
 fn matches_contingency_table_optimum_on_rational_margins() {

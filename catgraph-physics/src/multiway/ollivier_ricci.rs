@@ -8,7 +8,7 @@
 //!
 //! where `μ_x` is the uniform distribution over neighbors of `x`, and
 //! `W₁` is the Wasserstein-1 (earth mover's) distance computed by the
-//! transportation simplex solver in [`super::wasserstein`].
+//! successive-shortest-path min-cost-flow solver in [`super::wasserstein`].
 //!
 //! # Curvature interpretation
 //!
