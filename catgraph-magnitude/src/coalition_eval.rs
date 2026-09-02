@@ -1283,8 +1283,10 @@ mod tests {
             .schur_complement()
             .expect("invariant: the fast branch reports a Schur complement");
         assert!(
-            rel_close(s_far, 0.5),
-            "control fixture: s = 1 − 0.5·1.0, got {s_far}"
+            (s_far - 0.5).abs() <= 4.0 * f64::EPSILON,
+            "control fixture: s = 1 − 0.5·1.0, got {s_far} (|Δ| = {} > 4 ε = {})",
+            (s_far - 0.5).abs(),
+            4.0 * f64::EPSILON
         );
     }
 

@@ -425,6 +425,39 @@ proptest! {
     }
 }
 
+/// The factorization certificate on a grid carrying a coupling in the band
+/// `(0, 1e-3]`: for `ρ` off-diagonals `5e-4` and `σ` off-diagonals `0.5` at
+/// `n_roles = n_fiber = 2`, an evaluation of `RoleGrid::couplings()` through the
+/// ordinary entry point equals `proof(t).expected_magnitude()` within `REL_TOL`
+/// at `t ∈ {1.0, 1.5, 2.0}`.
+#[test]
+fn role_grid_certificate_at_a_small_coupling() {
+    let rho = unit_diagonal_factor(2, &[5e-4, 5e-4]);
+    let sigma = unit_diagonal_factor(2, &[0.5, 0.5]);
+    let grid = role_grid(&rho, &sigma).expect("both diagonals are exactly 1.0");
+    assert_eq!(grid.n_agents(), 4);
+
+    let agents = all(grid.n_agents());
+    for t in [1.0_f64, 1.5, 2.0] {
+        let actual = coalition_magnitude_from_couplings(&agents, grid.couplings(), &agents, t)
+            .expect("the grid evaluates at every t in the fixture");
+        let proof = grid.proof(t).expect("the certificate exists at every t");
+        assert!(
+            rel_close(actual, proof.expected_magnitude()),
+            "t={t}: grid {actual} vs certificate {} (|ρ| = {}, |σ| = {})",
+            proof.expected_magnitude(),
+            proof.role_magnitude(),
+            proof.fiber_magnitude()
+        );
+    }
+
+    assert!(
+        grid.couplings().iter().any(|&(_, _, p)| p <= 1e-3),
+        "the fixture's grid carries a coupling in (0, 1e-3]: {:?}",
+        grid.couplings()
+    );
+}
+
 // ===========================================================================
 // T3 — channel-valued couplings + declared collapse
 // ===========================================================================
