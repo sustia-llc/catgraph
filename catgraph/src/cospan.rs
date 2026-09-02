@@ -31,35 +31,6 @@ type MiddleIndexOrLambda<Lambda> = Either<MiddleIndex, Lambda>;
 /// [`Cospan::is_left_identity`] / [`Cospan::is_right_identity`], which are this
 /// function applied to a leg, and `perform_pushout`, which selects its two fast
 /// paths with it.
-///
-/// One spelling because, until
-/// [#289](https://github.com/sustia-llc/catgraph/issues/289), there were four —
-/// the mutators that maintained the cached flags each re-derived the answer by
-/// hand, and each got it wrong differently. Measured on `0.15.0`, in source
-/// order:
-///
-/// - `add_boundary_node`'s two `Left(idx)` arms wrote
-///   `is_left_id &= self.left.len() - 1 == tgt_idx`, which is neither half of
-///   the predicate. It holds for exactly one `tgt_idx` on an identity cospan —
-///   `middle.len()`, out of bounds — so the flag stayed `true` over an
-///   out-of-range leg entry.
-/// - `add_boundary_node`'s two `Right(label)` arms wrote
-///   `is_left_id &= self.left.len() == self.middle.len()`. That *is* the length
-///   conjunct, and since the arm pushes to leg and apex together it could never
-///   fire: a no-op that read as a guard. Its real defect was elsewhere — the
-///   arm grows the **apex**, so it is the *partner* flag that stops being true,
-///   and the partner was left untouched.
-/// - `delete_boundary_node` wrote `is_left_id &= z == self.left.len() - 1`:
-///   again neither half, and again satisfiable while the leg falls behind the
-///   apex.
-/// - `connect_pair` maintained no answer at all.
-///
-/// So the length conjunct was dropped by two of the four writers, not three;
-/// the third dropped `represents_id` and the wrong flag; the fourth wrote
-/// nothing. It was also missing from a *reader*: `assert_valid`'s retired
-/// strong arm compared `represents_id(leg)` against the flag, with no length
-/// conjunct, and so rejected valid cospans. The crate's CHANGELOG's `Fixed`
-/// entry enumerates all four with their measured consequences.
 fn leg_is_identity(leg: &[MiddleIndex], apex_len: usize) -> bool {
     leg.len() == apex_len && represents_id(leg.iter().copied())
 }
@@ -74,28 +45,19 @@ fn leg_is_identity(leg: &[MiddleIndex], apex_len: usize) -> bool {
 ///
 /// # `PartialEq` is the triple, and is only as fine as `Lambda`'s
 ///
-/// `==` compares `(left, right, middle)` field for field. That derive was
-/// blocked until [#289](https://github.com/sustia-llc/catgraph/issues/289): two
-/// cached identity flags were part of the value, and they could differ between
-/// two cospans with identical triples, so a derived `==` would have reported
-/// `false` for values nothing else could tell apart.
-/// [`structurally_equal`](Self::structurally_equal) predates the derive and is
-/// kept as its named alias.
+/// `==` compares `(left, right, middle)` field for field.
+/// [`structurally_equal`](Self::structurally_equal) is its named alias.
 ///
 /// Two cautions, in opposite directions:
 ///
 /// - **It is coarser than identity exactly as far as `Lambda`'s `Eq` is.**
 ///   `Cospan` requires `Lambda: Eq`, never that `Eq` be identity, so for a label
 ///   carrying provenance it does not compare on, two `==` cospans can differ
-///   observably. `tests/compose_identity_arms.rs`'s
-///   `both_legs_identity_keeps_the_right_operands_labels` is exactly that
-///   fixture: its two operands are `==`, and which one `compose` keeps is
-///   visible in a field their `Eq` ignores. Every `Lambda` in this workspace has
-///   `Eq` equal to identity, where the caution is vacuous.
+///   observably.
 /// - **It is finer than equality of cospans as morphisms.** `==` is apex-order
 ///   sensitive: two cospans that differ only by a relabelling of the apex are
 ///   the same morphism and compare `false`. [`CospanCanon`](crate::cospan_canon)
-///   is the semantic comparison; see that module's docs.
+///   is the semantic comparison.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cospan<Lambda: Sized + Eq + Copy + Debug> {
     /// Domain leg: maps each left boundary node to a middle index.
@@ -113,20 +75,10 @@ where
     /// Debug-asserts the one structural invariant a `Cospan` has: both legs
     /// index inside the apex.
     ///
-    /// It took two `bool` parameters until
-    /// [#289](https://github.com/sustia-llc/catgraph/issues/289), selecting two
-    /// further arms that compared a cached identity flag against the predicate
-    /// it was supposed to cache. There is no cache now — the accessors *are*
-    /// the predicate — so those arms could only have compared
-    /// `leg_is_identity(leg, apex)` with itself, and both they and the
-    /// parameters that reached them are gone.
-    ///
     /// Every check is written **inside** its `debug_assert!`, so the whole
-    /// method compiles away in release — which is what
-    /// [`Cospan::new_unchecked`] documents, and what keeps its release cost at
-    /// zero. (Its `Span` counterpart needed the same shape for a stronger
-    /// reason; see [`Span::assert_valid`](crate::span::Span::assert_valid),
-    /// which keeps its flags and therefore its parameters.)
+    /// method compiles away in release. There is no cached identity flag to
+    /// check — the accessors *are* the predicate — so it takes no parameters,
+    /// unlike [`Span::assert_valid`](crate::span::Span::assert_valid).
     pub fn assert_valid(&self) {
         debug_assert!(
             self.left.iter().all(|z| *z < self.middle.len()),
@@ -239,12 +191,7 @@ where
     /// per apex vertex, and entry `i` is vertex `i`.
     ///
     /// Derived from `(left, middle.len())` on every call — `O(left.len())`, and
-    /// exact in both directions. Until
-    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) this read a
-    /// `bool` field that the mutators tried to keep in step; four of them kept
-    /// it badly, and the ones that got it right could only ever *clear* it, so
-    /// the answer was conservative in the `false` direction and depended on how
-    /// the value had been built rather than on what it is.
+    /// exact in both directions.
     #[must_use]
     pub fn is_left_identity(&self) -> bool {
         leg_is_identity(&self.left, self.middle.len())
@@ -261,18 +208,10 @@ where
     /// Structural equality on the underlying `(left, right, middle)` triple —
     /// a named alias for `==`.
     ///
-    /// Since [#289](https://github.com/sustia-llc/catgraph/issues/289) deleted
-    /// the two cached identity flags, the triple is the whole of a `Cospan` and
-    /// `Cospan` derives `PartialEq`, so `a.structurally_equal(b)` and `a == b`
-    /// are the same expression. Both are as coarse as `Lambda`'s `Eq` and finer
-    /// than equality of cospans as morphisms; the type's own docs carry both
-    /// cautions.
-    ///
-    /// It kept its name and is not deprecated: it predates the derive (while
-    /// the flags were part of the value a derive would have been wrong, and
-    /// this method was the way around it), and dropping it would break callers
-    /// — Phase 6B (`catgraph-coalition`) snapshot-vs-expected assertions are
-    /// the motivating consumer. New code may use either.
+    /// The triple is the whole of a `Cospan` and `Cospan` derives `PartialEq`,
+    /// so `a.structurally_equal(b)` and `a == b` are the same expression. Both
+    /// are as coarse as `Lambda`'s `Eq` and finer than equality of cospans as
+    /// morphisms; the type's own docs carry both cautions.
     #[must_use]
     pub fn structurally_equal(&self, other: &Self) -> bool {
         self.left == other.left && self.right == other.right && self.middle == other.middle
@@ -316,26 +255,12 @@ where
     /// Add a boundary node that creates a new middle vertex with the given label.
     /// `Left` adds to domain, `Right` to codomain.
     ///
-    /// Infallible, and deliberately so: the new vertex is appended by this call,
-    /// so the entry it produces is in bounds by construction. There is no
-    /// precondition on the argument, so there is nothing for a `Result` to
-    /// report — unlike
-    /// [`add_boundary_node_known_target`](Self::add_boundary_node_known_target),
-    /// whose caller-supplied index can miss the apex.
+    /// Infallible: the new vertex is appended by this call, so the entry it
+    /// produces is in bounds by construction.
     ///
-    /// It grows the **apex**, so it moves *both* identity answers: the leg it
-    /// pushes to keeps whatever it had (leg and apex grow together), and the
-    /// other leg cannot be an identity afterwards. Note *which* conjunct of
-    /// `leg_is_identity` does that work, because it is not always the length
-    /// one: if the partner was an identity it is now one entry short of the
-    /// apex, but if it was not, it cannot have become one either — an in-bounds
-    /// leg's entries are all below the *old* apex size, so `represents_id`
-    /// cannot reach the new last vertex. A leg **longer** than the apex is
-    /// legal and reachable, and lands on exactly that case:
-    /// `Cospan::new(vec![0, 0], vec![], vec!['a'])` then
-    /// `add_boundary_node_unknown_target(Right('b'))` leaves the domain leg at
-    /// length 2 over a 2-vertex apex — not shorter at all, and not an identity
-    /// because `represents_id([0, 0])` is false.
+    /// It grows the **apex**, so the leg it pushes to keeps whatever identity
+    /// answer it had (leg and apex grow together) and the other leg is not an
+    /// identity afterwards.
     pub fn add_boundary_node_unknown_target(
         &mut self,
         new_arrow: Either<Lambda, Lambda>,
@@ -350,13 +275,9 @@ where
     /// Inner `Left(idx)` targets existing middle; `Right(label)` creates a new middle vertex.
     ///
     /// The `Left(idx)` target is checked against the apex **in every build
-    /// profile**, so this mutator cannot re-open the hole that
-    /// [`new`](Self::new) closes: the legs of an in-bounds cospan stay in
-    /// bounds across it.
-    /// Internal callers pushing entries that are correct by construction — the
-    /// pushout builder is the crate's only one — should use
-    /// [`add_boundary_node_unchecked`](Self::add_boundary_node_unchecked), which
-    /// costs nothing in release.
+    /// profile**, so the legs of an in-bounds cospan stay in bounds across it.
+    /// Callers pushing entries that are correct by construction should use
+    /// [`add_boundary_node_unchecked`](Self::add_boundary_node_unchecked).
     ///
     /// # Errors
     ///
@@ -451,13 +372,8 @@ where
     /// # Panics
     ///
     /// Panics — in **every** build profile — if `which_node` is at or beyond the
-    /// length of the leg it names, the empty leg included. The empty case is why
-    /// the check is explicit rather than left to `swap_remove`: the pre-#289
-    /// identity-flag update read `leg.len() - 1` first, which underflowed on an
-    /// empty leg (debug panic, release wrap to `usize::MAX`), so the failure
-    /// used to be reported as arithmetic rather than as the violated
-    /// precondition. That update is gone with the cache it maintained, but the
-    /// explicit check stays: it is what names the precondition.
+    /// length of the leg it names, the empty leg included. The check is explicit
+    /// rather than left to `swap_remove`, so the message names the precondition.
     pub fn delete_boundary_node(&mut self, which_node: Either<LeftIndex, RightIndex>) {
         match which_node {
             Left(z) => {
@@ -531,24 +447,14 @@ where
     ///
     /// A merge shrinks the apex by one while both legs keep their length, so a
     /// leg that was the identity on the old apex is not one on the new — and a
-    /// leg that was *not* may now be (one port per surviving vertex, in
-    /// order). Both directions are reported correctly by
+    /// leg that was *not* may now be (one port per surviving vertex, in order).
     /// [`is_left_identity`](Self::is_left_identity) /
-    /// [`is_right_identity`](Self::is_right_identity) for free, since they read
-    /// the merged legs and apex. Until
-    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) those answers
-    /// came from a cache this method did not update at all, so a stale `true`
-    /// survived a merge and reached `perform_pushout`'s fast path as a silent
-    /// wrong composition.
+    /// [`is_right_identity`](Self::is_right_identity) read the merged legs and
+    /// apex, so both directions come out right.
     ///
     /// The leg remap after the `swap_remove` keeps the vertex node 1 maps to
     /// even when that vertex is the **last** apex index and has just been moved
-    /// into node 2's slot. Pre-#289 it wrote node 1's old index there, which
-    /// put `middle.len()` into both legs and left the two ports unmerged
-    /// (measured: `connect_pair(Left(1), Left(0))` on
-    /// `new([0, 1], [0, 1], ['a', 'a'])` gave `left == [1, 0]` over a 1-vertex
-    /// apex, `map_to_same` false) — silently in every profile, since this
-    /// method runs no `assert_valid`.
+    /// into node 2's slot.
     ///
     /// # Panics
     ///
@@ -557,8 +463,7 @@ where
     /// entries, so a cospan built through
     /// [`new_unchecked`](Self::new_unchecked) or
     /// [`add_boundary_node_unchecked`](Self::add_boundary_node_unchecked) in
-    /// violation of the bounds invariant panics here on the raw index; that is
-    /// the deferral those methods document, not a precondition of this one.
+    /// violation of the bounds invariant panics here on the raw index.
     pub fn connect_pair(
         &mut self,
         node_1: Either<LeftIndex, RightIndex>,
@@ -718,10 +623,8 @@ where
     /// wraps this and discards the map.
     ///
     /// The result is a function of the two operands' `(left, right, middle)`
-    /// alone — which is all a `Cospan` is. `perform_pushout` derives the
-    /// identity predicate from the legs it is handed; see its docs for why each
-    /// fast path is the correct answer. Pinned in
-    /// `tests/compose_identity_arms.rs`.
+    /// alone. `perform_pushout` derives the identity predicate from the legs it
+    /// is handed.
     ///
     /// # Errors
     ///
@@ -815,11 +718,6 @@ where
     /// composite's, i.e. `old ∘ p⁻¹`, which is what precomposing `β(p⁻¹)`
     /// produces.
     ///
-    /// ⚠ **Breaking at #258.** This used to pass `p` rather than `p.inv()`, so
-    /// it realized `β(p⁻¹)` on the codomain where `MatR`/`PropExpr` realize
-    /// `β(p)`. Nothing saw it: no test drove one permutation through two
-    /// carriers, and within `Cospan` an inverted braiding is still a
-    /// consistent braiding.
     fn permute_side(&mut self, p: &Permutation, of_right_leg: bool) {
         in_place_permute(
             if of_right_leg {
@@ -838,9 +736,7 @@ where
     /// `p.inv().permute(0..n)`, so codomain wire `k` sits on apex vertex
     /// `p.inv().apply(k)`. Domain `i` and codomain `k` therefore meet exactly
     /// when `k == p.apply(i)` — the wiring the trait specifies. The inverse in
-    /// the *leg vector* is what makes the wiring non-inverted; reading `p.inv()`
-    /// off this line as "this impl realizes `p⁻¹`" is the mistake #258 was
-    /// filed about.
+    /// the *leg vector* is what makes the wiring non-inverted.
     ///
     /// The same placement is what makes `from(p₁) ; from(p₂) == from(p₁ ; p₂)`
     /// hold, with `;` cospan composition on the left and permutation
@@ -900,66 +796,31 @@ type PushoutResult = (
 /// Fast-paths when either leg is an identity. Returns reindexing maps and
 /// a representative (Left or Right original index) for each equivalence class.
 ///
-/// # Why the predicate is derived here, not passed in
+/// The predicate is derived here with [`leg_is_identity`] from the legs passed
+/// in, so the result is a function of the operand values alone.
 ///
-/// Both fast paths used to be selected by two `bool`s `Cospan` cached and
-/// [`compose_with_quotient`](Cospan::compose_with_quotient) handed down. Those
-/// were **conservative**: the mutators that maintained them could only clear,
-/// so a leg that *is* the identity could carry a `false` left behind by an
-/// earlier `delete_boundary_node`, `permute_side` or `add_middle` — and every
-/// composite **with at least one apex vertex** carried `false` on both legs,
-/// because the pushout builder below mints its result through those same
-/// mutators, `add_middle` first. (An empty-apex composite never reached
-/// `add_middle`, so it kept the `true` its empty legs were constructed with.)
-/// Reading them therefore made
-/// `compose` a function of the operands' *mutation history* as well as their
-/// `(left, right, middle)`: two structurally equal cospans could compose two
-/// different ways. Deriving the predicate with [`leg_is_identity`] makes
-/// composition a pure function of the value.
+/// # Which arm runs
 ///
-/// # Which arm is the correct one
+/// The `right_leg_id` arm returns exactly what the union-find body returns for
+/// the same input: when `right_leg == [0, …, R-1]` every right vertex has
+/// degree one, so loop 1 discovers `L` singleton classes in index order and
+/// loop 2 finds every right vertex already classed at
+/// `right_to_pushout[i] = left_leg[i]`.
 ///
-/// The `right_leg_id` arm is not a shortcut, it is an *equality*: it returns
-/// exactly what the union-find body below returns for the same input. When
-/// `right_leg == [0, …, R-1]` the union graph's edges are
-/// `(left_leg[i], right_leg[i] + L) = (left_leg[i], i + L)`, so every right
-/// vertex has degree exactly one and no two left vertices can be connected
-/// through one. Loop 1 therefore discovers `L` singleton classes in index
-/// order (`left_to_pushout = [0, …, L-1]`, `representative = Left(0..L)`), and
-/// loop 2 finds every right vertex already classed, at
-/// `right_to_pushout[i] = left_leg[i]`. Identical, field for field.
-///
-/// The `left_leg_id` arm does **not** agree with union-find, and is the arm
-/// that is right. It numbers the composite apex by the right operand's own
-/// indexing; union-find numbers it by left-leg discovery order. The two
+/// The `left_leg_id` arm numbers the composite apex by the right operand's own
+/// indexing, where union-find numbers it by left-leg discovery order; the two
 /// coincide only when the right leg first-visits the apex in increasing order.
-/// Taking the fast path is strict left unitality — `id ; g == g` on the nose —
-/// and taking union-find returns `g` with its apex permuted: for
-/// `f = Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b'])`,
+/// Taking the fast path is strict left unitality — `id ; g == g` on the nose.
+/// For `f = Cospan::new(vec![1, 0], vec![0, 1], vec!['a', 'b'])`,
 /// `Cospan::identity(&f.domain()) ; f` gives the apex `['a', 'b']` here and
-/// `['b', 'a']` through union-find. Pinned in
-/// `tests/compose_identity_arms.rs`.
+/// `['b', 'a']` through union-find.
 ///
 /// When **both** predicates hold the `left_leg_id` arm wins, and the two arms
 /// tag `representative` differently (`Right(i)` vs `Left(i)`), which selects
-/// which operand's labels fill the composite apex. Everything else about the
-/// result is literally equal between the arms — `pushout_target` is `L == R`,
-/// and both reindexing maps are the identity on either side — so the label
-/// provenance is the whole of the difference, and `self.middle[i] ==
-/// other.middle[i]` holds for every `i`: `Composable::composable` has already
-/// run `same_labels_check` over the two interfaces, and when both legs are the
-/// identity those interfaces *are* the two apexes in order.
-///
-/// So the choice is invisible **exactly as far as `Lambda`'s own `Eq` is**.
-/// For every `Lambda` in this workspace `Eq` is identity and there is nothing
-/// to see. For a `Lambda` whose `Eq` is deliberately coarser than its identity
-/// — a label carrying provenance it does not compare on — the choice becomes
-/// observable, and the answer is that the composite keeps the **right**
-/// operand's labels. That is measured, not argued, in
-/// `tests/compose_identity_arms.rs`
-/// (`both_legs_identity_keeps_the_right_operands_labels`); this arm order is
-/// therefore load-bearing for such a `Lambda` and should not be swapped
-/// casually.
+/// which operand's labels fill the composite apex; everything else about the
+/// result is equal between the arms. The composite keeps the **right**
+/// operand's labels, which is observable only for a `Lambda` whose `Eq` is
+/// coarser than its identity.
 fn perform_pushout<T>(
     left_leg: &[LeftIndex],
     left_leg_max_target: LeftIndex,
@@ -1112,9 +973,10 @@ mod test {
         assert!(Cospan::<char>::new(vec![0, 1], vec![1], vec!['a', 'b']).is_ok());
     }
 
-    /// `new_unchecked` keeps the pre-#256 contract: the bounds invariant is the
-    /// caller's, checked by `debug_assert!` only. Release-only, because in a
-    /// debug build that `debug_assert!` fires — which IS the contract.
+    /// Fixture: an out-of-bounds leg through `new_unchecked`, which `new`
+    /// refuses. Expected: it constructs — the bounds invariant is the caller's,
+    /// checked by `debug_assert!` only. Release-only, because in a debug build
+    /// that `debug_assert!` fires, which IS the contract.
     #[cfg(not(debug_assertions))]
     #[test]
     fn cospan_new_unchecked_accepts_what_new_refuses() {
@@ -1637,35 +1499,17 @@ mod test {
         assert_eq!(c.left_to_middle(), &[0, 0]);
     }
 
-    /// A boundary-node push that leaves the leg out of step with the apex ends
-    /// the identity — the #289 corruption, in both the shapes that reached it.
+    /// Fixture: two shapes on the **domain** leg only, both starting from a leg
+    /// that is legitimately the identity — `tgt_idx == leg.len()`, and the
+    /// apex-growing `Right(label)` arm on the other leg.
     ///
-    /// # What this ranges over
+    /// Expected: the first is refused with
+    /// `CatgraphError::ConstructionIndexOutOfBounds` and nothing moves; after
+    /// the second the domain leg is one short of the apex and
+    /// `is_left_identity()` is `false`.
     ///
-    /// Two shapes on the **domain** leg only, both starting from a leg that is
-    /// legitimately the identity:
-    ///
-    /// 1. `tgt_idx == leg.len()`, the one out-of-bounds target that satisfied
-    ///    the old cache's `leg.len() - 1 == tgt_idx` conjunct. It is now
-    ///    refused outright, so nothing moves.
-    /// 2. The apex-growing `Right(label)` arm on the **other** leg, which is
-    ///    what used to leave a stale `true` behind: it grew the apex past the
-    ///    domain leg while updating only the codomain flag. The domain leg is
-    ///    now one short of the apex, and `is_left_identity()` — which reads the
-    ///    leg — says so.
-    ///
-    /// It covers the **domain** leg only. The codomain mirror of shape (2) is
-    /// pinned by `tests/checked_mutators.rs`
-    /// (`cospan_unknown_target_add_grows_the_apex_past_the_partner_leg`, which
-    /// sweeps both arms) and the codomain refusal of shape (1) by
-    /// `cospan_add_boundary_node_rejects_the_boundary_index` there. The two
-    /// arms are separate expressions — while #289 was being written the
-    /// codomain one was in fact left behind while every domain-side assertion
-    /// stayed green — so do not delete any of these believing another
-    /// generalises.
-    ///
-    /// It does not range over `delete_boundary_node` (pinned separately below,
-    /// on both legs) or over apex sizes beyond the two used here.
+    /// It does not range over the codomain leg, over `delete_boundary_node`, or
+    /// over apex sizes beyond the two used here.
     #[test]
     fn cospan_add_boundary_node_survives_neither_shape_of_the_289_corruption() {
         use super::Cospan;

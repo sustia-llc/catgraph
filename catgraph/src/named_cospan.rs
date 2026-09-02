@@ -48,12 +48,6 @@ where
     RightPortName: Eq,
 {
     /// Debug-asserts cospan validity and name-count consistency (does not check uniqueness).
-    ///
-    /// It took a `check_id: bool` until
-    /// [#289](https://github.com/sustia-llc/catgraph/issues/289), forwarded to
-    /// `Cospan::assert_valid` to select an arm that compared a cached identity
-    /// flag against the predicate it cached. `Cospan` has no such cache any
-    /// more, so there is nothing left for the parameter to select.
     pub fn assert_valid_nohash(&self) {
         self.cospan.assert_valid();
         debug_assert_eq!(
@@ -78,46 +72,29 @@ where
     /// Construct from explicit legs, middle set, and port names.
     ///
     /// Both structural invariants are checked **in every build profile**: one
-    /// name per boundary port, and both leg maps landing inside the apex. This
-    /// is the trust-boundary constructor — use it for data arriving from outside
-    /// the crate, a store, a wire format, a parser, a user. Internal callers
-    /// building from data that is correct by construction should use
-    /// [`new_unchecked`](Self::new_unchecked), which costs nothing in release.
+    /// name per boundary port, and both leg maps landing inside the apex.
+    /// Callers building from data that is correct by construction should use
+    /// [`new_unchecked`](Self::new_unchecked).
     ///
-    /// Mirrors [`Cospan::new`](Cospan::new) / [`Span::new`](crate::span::Span::new):
-    /// the checked constructor owns the plain name.
-    ///
-    /// Name **uniqueness** is still assumed rather than enforced by this
-    /// constructor. Port names need only be `Eq`, so the check would be a
-    /// quadratic scan over the list — the same linear `position()` scan
-    /// [`add_boundary_node`](Self::add_boundary_node) runs once per insertion
-    /// since [#289](https://github.com/sustia-llc/catgraph/issues/289), applied
-    /// to every port — but `new` does not run it, so a duplicate admitted here
-    /// is first reported when a
-    /// later `add_boundary_node` returns
+    /// Name **uniqueness** is assumed, not enforced here: a duplicate admitted
+    /// by this constructor is first reported when a later
+    /// [`add_boundary_node`](Self::add_boundary_node) returns
     /// [`ConstructionDuplicatePortName`](crate::errors::CatgraphError::ConstructionDuplicatePortName)
-    /// with the `existing_position` of the first copy. That asymmetry between
-    /// the checked constructor and the checked mutator is a known follow-up
-    /// candidate, not a promise. See [`assert_valid`](Self::assert_valid),
-    /// which checks uniqueness under `Hash` in debug builds.
+    /// with the `existing_position` of the first copy.
+    /// [`assert_valid`](Self::assert_valid) checks uniqueness under `Hash` in
+    /// debug builds.
     ///
     /// # Errors
     ///
     /// - [`CatgraphError::ConstructionNameCountMismatch`] if
     ///   `left_names.len() != left.len()` or `right_names.len() != right.len()`.
-    ///   Before [#256](https://github.com/sustia-llc/catgraph/issues/256) these
-    ///   two were `assert!`s, so they aborted the process in every profile; they
-    ///   are now reported like every other construction failure.
     /// - [`CatgraphError::ConstructionIndexOutOfBounds`] if any `left` or `right`
-    ///   entry targets an index at or beyond `middle.len()`. This check is not
-    ///   re-implemented here — it is [`Cospan::new`](Cospan::new)'s, so the leg
-    ///   bounds have exactly one home and one error shape.
+    ///   entry targets an index at or beyond `middle.len()`; this check is
+    ///   [`Cospan::new`](Cospan::new)'s.
     ///
     /// The name counts are checked before the leg bounds, and the domain side
     /// before the codomain side, so the reported failure is the first one in
-    /// that order. Name counts come first because they are a property of the
-    /// argument lists alone: which one is reported never depends on whether the
-    /// apex happens to be malformed as well.
+    /// that order.
     pub fn new(
         left: Vec<MiddleIndex>,
         right: Vec<MiddleIndex>,
@@ -155,10 +132,6 @@ where
     ///
     /// Mirrors [`Cospan::new_unchecked`](Cospan::new_unchecked): the whole check
     /// set compiles away in release, so the constructor costs nothing there.
-    /// Note this is *uniformly* weaker than the pre-#256 `new`, whose leg bounds
-    /// were already `debug_assert!`-only but whose name counts were hard
-    /// `assert!`s — an `_unchecked` constructor that kept a release panic for one
-    /// of its two invariants would mean two different things by the same suffix.
     #[must_use]
     pub fn new_unchecked(
         left: Vec<MiddleIndex>,
@@ -225,17 +198,6 @@ where
     /// the left port names follow `prenames` as given, and the right port names
     /// are reordered by `p.inv()`, matching how the codomain *labels* are
     /// reordered.
-    ///
-    /// # #258
-    ///
-    /// This and [`from_permutation_extra_data_on_codomain`](Self::from_permutation_extra_data_on_codomain)
-    /// replace a single `from_permutation_extra_data(.., types_as_on_domain: bool, ..)`.
-    /// The bool left for the same reason it left the trait, and the return type
-    /// became fallible in the same move: the old body reached the callee's
-    /// length check through an `.unwrap()` in production code, and there is no
-    /// precondition here that makes `p.len() == types.len()` unreachable —
-    /// `p` and `types` are independent caller arguments. So this propagates
-    /// with `?` rather than asserting an invariant it does not have.
     ///
     /// # Errors
     ///
@@ -354,22 +316,13 @@ where
 
     /// Add a named boundary node to new or existing middle vertex.
     ///
-    /// Both of this method's invariants are now reported the same way. Before
-    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) it meant two
-    /// different things by them: a duplicate port name aborted the process with
-    /// a bare release `assert!`, while an out-of-bounds apex index was not
-    /// checked at all — so one call could undo the leg-bounds guarantee
-    /// [`new`](Self::new) had just established.
-    ///
     /// # Errors
     ///
     /// - [`CatgraphError::ConstructionDuplicatePortName`] if `new_name` already
     ///   names a port on the boundary it selects, giving that port's position.
     /// - [`CatgraphError::ConstructionIndexOutOfBounds`] if `new_arrow` is
-    ///   `Left(tgt_idx)` with `tgt_idx` at or beyond the apex size. This check is
-    ///   not re-implemented here — it is
-    ///   [`Cospan::add_boundary_node`](Cospan::add_boundary_node)'s, so the leg
-    ///   bounds have exactly one home and one error shape.
+    ///   `Left(tgt_idx)` with `tgt_idx` at or beyond the apex size; this check is
+    ///   [`Cospan::add_boundary_node`](Cospan::add_boundary_node)'s.
     ///
     /// The name is checked before the index, so a call that violates both is
     /// reported as the duplicate name. On `Err` the named cospan is left exactly
@@ -821,9 +774,6 @@ where
     ///
     /// A name word travels exactly as a label word does, so it takes the same
     /// `p.inv()` [`Cospan`] applies to the leg — see the trait's contract.
-    ///
-    /// ⚠ **Breaking at #258**, with `Cospan`: both the leg and the names used
-    /// to move by `p`, realizing `β(p⁻¹)`.
     fn permute_side(&mut self, p: &Permutation, of_right_leg: bool) {
         let p_inv = p.inv();
         if of_right_leg {
@@ -836,10 +786,8 @@ where
 
     /// Always fails: a named cospan cannot be built from a permutation alone.
     ///
-    /// Port names are not derivable from `types`, so there is no honest value
-    /// to return. This stays a loud, unconditional failure — the direction
-    /// split of #258 does not make it satisfiable, it only makes the redirect
-    /// name the matching direction.
+    /// Port names are not derivable from `types`, so there is no value to
+    /// return.
     ///
     /// # Errors
     ///
@@ -880,17 +828,14 @@ mod test {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
-    // ---- #256: `new` validates in EVERY profile, `new_unchecked` does not ----
+    // ---- `new` validates in EVERY profile, `new_unchecked` does not ----
 
-    /// `NamedCospan::new` refuses a leg entry that overshoots the apex, on either
-    /// side, with the same payload `Cospan::new` reports — because it *is*
-    /// `Cospan::new`'s check, delegated rather than re-implemented.
+    /// Fixture: a domain-leg and a codomain-leg entry overshooting the apex,
+    /// with correct name counts, through `NamedCospan::new`.
     ///
-    /// The check under test is unconditional, not a `debug_assert!`, so this
-    /// test states the release-build behaviour and must be run under `--release`
-    /// too. Before #256 this constructor built its cospan with
-    /// `Cospan::new_unchecked`, which made it the last public path in core that
-    /// accepted an out-of-bounds leg in a release build.
+    /// Expected: `ConstructionIndexOutOfBounds` with `Cospan::new`'s payload
+    /// and message on each side. The check is unconditional, not a
+    /// `debug_assert!`, so this states the release-build behaviour too.
     #[test]
     fn named_cospan_new_rejects_out_of_bounds_leg_entries() {
         use crate::errors::{BoundaryLeg, CatgraphError};
@@ -965,14 +910,11 @@ mod test {
         assert_eq!(repaired.cospan().right_to_middle(), &[1, 0]);
     }
 
-    /// `NamedCospan::new` refuses a port-name list whose length does not match
-    /// its boundary, on either side.
+    /// Fixture: a port-name list one short of its boundary, on the domain side
+    /// and then on the codomain side, with in-bounds legs.
     ///
-    /// Before #256 these two were `assert!`s (`named_cospan.rs:97-104`), i.e.
-    /// they aborted the process in **every** profile including release. They are
-    /// now reported like the leg-bounds failure, so a caller reconstructing a
-    /// named cospan from stored columns gets an error rather than a panic — the
-    /// whole point of `new` being the trust-boundary constructor.
+    /// Expected: `ConstructionNameCountMismatch` naming the leg, the boundary
+    /// length and the name count — an error, not a panic.
     #[test]
     fn named_cospan_new_rejects_name_count_mismatch() {
         use crate::errors::{BoundaryLeg, CatgraphError};

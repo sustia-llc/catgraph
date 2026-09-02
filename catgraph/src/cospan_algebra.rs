@@ -61,9 +61,8 @@ pub trait CospanAlgebra<Lambda: Eq + Copy + Debug> {
 
 /// The partition cospan-algebra: `Part_Λ(x) = Cospan_Λ(0, x)`.
 ///
-/// An element of `Part(x)` is a cospan from `[]` to `x` — it describes a way
-/// to partition `x` into labeled groups. This is the initial cospan-algebra
-/// (every cospan-algebra receives a unique map from `Part`).
+/// An element of `Part(x)` is a cospan from `[]` to `x`, partitioning `x` into
+/// labeled groups. This is the initial cospan-algebra.
 ///
 /// - `map_cospan`: pushout composition `e ; c` where `e: [] → m` and `c: m → p ← n`.
 /// - `lax_monoidal`: monoidal product of cospans.
@@ -120,9 +119,6 @@ use crate::frobenius::{
 ///   [`from_decomposition`], then composes with the named element.
 /// - `lax_monoidal`: monoidal product of morphisms.
 /// - `unit`: identity on `[]`.
-///
-/// The `BlackBoxLabel` type parameter is carried for compatibility with the
-/// Frobenius morphism infrastructure.
 pub struct NameAlgebra<BlackBoxLabel: Eq + Clone + Send + Sync> {
     _phantom: std::marker::PhantomData<BlackBoxLabel>,
 }
@@ -182,24 +178,11 @@ where
 /// Lemma 4.3 — induced cospan-algebra morphism `α: A_H → A_H'` from a hypergraph
 /// functor `F: H → H'`.
 ///
-/// The element-wise formula is `α_x(e) := F(e)` — a simple pointwise application
-/// of the functor to each element of `A_H(x) = H(I, P(x))`. The content of
-/// Lemma 4.3 is that this pointwise map is automatically a monoidal natural
-/// transformation between the two name-algebras whenever `F` preserves
-/// composition, tensor product, and Frobenius structure.
+/// Applies `α_x(e) := F(e)` pointwise to an element of `A_H(x) = H(I, P(x))`.
 ///
 /// The paper states Lemma 4.3 for an **io** (identity-on-objects) hypergraph
-/// functor over a fixed `Λ`; this function additionally accepts cross-label
-/// functors (`L1 ≠ L2`, e.g. `RelabelingFunctor`) — a beyond-paper
-/// generalization in the direction of the paper's Eq (29) naturality square
-/// (the cross-Λ `Cospan_f` machinery itself is not implemented; see
-/// `docs/FS19-AUDIT.md` and #109).
-///
-/// This free function is the direct embodiment of the paper's construction:
-/// it is a thin wrapper around `F.map_mor(e)` whose purpose is to make the
-/// Lemma 4.3 correspondence explicit at the type level. Callers plug in any
-/// [`HypergraphFunctor`](crate::hypergraph_functor::HypergraphFunctor) impl and
-/// obtain the induced algebra map for free.
+/// functor over a fixed `Λ`; this function also accepts cross-label functors
+/// (`L1 ≠ L2`).
 ///
 /// # Type parameters
 ///
@@ -214,16 +197,6 @@ where
 /// # Errors
 ///
 /// Propagates any [`CatgraphError`] returned by `functor.map_mor`.
-///
-/// # Verification
-///
-/// Naturality, monoidality, and unit preservation of the induced morphism are
-/// verified as proptests in `tests/cospan_algebra.rs` for two concrete cases:
-///
-/// - `F = RelabelingFunctor` on `Cospan<L1> → Cospan<L2>` with two
-///   [`PartitionAlgebra`] instances
-/// - `F = CospanToFrobeniusFunctor` on `Cospan<L> → FrobeniusMorphism<L, BL>`
-///   relating [`PartitionAlgebra`] to [`NameAlgebra`]
 pub fn functor_induced_algebra_map<L1, L2, Src, Tgt, F>(
     functor: &F,
     element: &Src,
@@ -262,24 +235,9 @@ where
     let middle = cospan.middle();
     let middle_len = middle.len();
 
-    // Identity fast path.
-    //
-    // `left == right` on its own is *not* enough: the all-merged cospan
-    // `[a,a] → {•} ← [a,a]` also satisfies it (both legs are `[0, 0]`), yet it
-    // is the 2→2 spider, not the identity. The cospan is the identity (up to
-    // apex isomorphism) exactly when the common leg is a *bijection* onto the
-    // apex (#285). `[a] → {•,•} ← [a]` with both legs `[0]` also fails the new
-    // guard — its apex carries a node no leg hits — and takes the general
-    // route below, which emits `η;ε` for the spare node. Since #350 that
-    // scalar **survives**: the answer is a depth-2 term carrying the bubble,
-    // not `identity(['a'])`, so for this shape #285 changed the output as well
-    // as the code path (pinned by `cospan_to_frobenius_unhit_apex_node_keeps_the_bubble`).
-    //
-    // `domain == codomain` is implied by `legs_agree` (both boundaries are
-    // `middle[leg[i]]`), so it is not a separate conjunct. `domain()` above has
-    // already indexed `middle` by every leg entry, so an out-of-range leg
-    // (reachable only through `Cospan::new_unchecked`) panics there, before
-    // this guard; the `get_mut` form below is merely total, not a defense.
+    // Identity fast path: the cospan is the identity up to apex isomorphism
+    // exactly when the legs agree and the common leg is a bijection onto the
+    // apex. `domain == codomain` is implied by `legs_agree`.
     let leg = cospan.left_to_middle();
     let legs_agree = leg == cospan.right_to_middle();
     // A leg of exactly `middle_len` entries hitting each apex node at most once
@@ -341,19 +299,8 @@ where
 /// [`HypergraphCategory`](crate::hypergraph_category::HypergraphCategory); the
 /// braiding `σ: [z, w] → [w, z]` is the two-vertex apex whose right leg is the
 /// transposition. `Spider(z, d1, d2)` is interpreted by recursing on the
-/// generator decomposition [`special_frobenius_morphism`] gives it, so the
-/// spider's semantics here are the crate's own rather than a second guess at
-/// them.
-///
-/// The `(0, 0)` arm builds the bubble `η;ε` directly instead of recursing.
-/// That carve-out was **load-bearing** until #350: `special_frobenius_morphism`
-/// returns the *simplified* term, and the simplifier's rule 3 cancelled `η;ε`
-/// under the extra-special axiom, so recursing returned the empty cospan for a
-/// non-identity scalar. Rule 3 is gone and the carve-out is now **measured
-/// redundant** — disabling this arm and letting `(0, 0)` recurse leaves
-/// `cargo test -p catgraph` green. It is kept so this function's bubble does
-/// not depend on what the layer simplifier does to a two-layer term; expect
-/// cargo-mutants to score its deletion MISSED, and read that as accurate.
+/// generator decomposition [`special_frobenius_morphism`] gives it, except for
+/// `(0, 0)`, whose arm builds the bubble `η;ε` directly.
 fn generator_to_cospan<Lambda, BlackBoxLabel>(
     op: &FrobeniusOperation<Lambda, BlackBoxLabel>,
 ) -> Result<Cospan<Lambda>, CatgraphError>
@@ -370,15 +317,12 @@ where
         FrobeniusOperation::Multiplication(z) => Cospan::multiplication(*z),
         FrobeniusOperation::Comultiplication(z) => Cospan::comultiplication(*z),
         FrobeniusOperation::Identity(z) => Cospan::identity(&vec![*z]),
-        // σ: [z, w] → [w, z]. Correct by construction: both legs are
-        // permutations of `0..2` and the apex has exactly two vertices.
+        // σ: [z, w] → [w, z]. Both legs are permutations of `0..2` and the apex
+        // has exactly two vertices.
         FrobeniusOperation::SymmetricBraiding(z, w) => {
             Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![*z, *w])
         }
-        // The bubble, built directly rather than through the simplifier's
-        // output. Redundant since #350 (measured — see this function's docs),
-        // kept so the `(0, 0)` scalar does not depend on the layer simplifier.
-        // Pinned by `tests::scfm_equal_scalars_have_equal_images`.
+        // The bubble, built directly rather than through the simplifier.
         FrobeniusOperation::Spider(z, 0, 0) => Cospan::unit(*z).compose(&Cospan::counit(*z))?,
         FrobeniusOperation::Spider(z, d1, d2) => frobenius_to_cospan(
             &special_frobenius_morphism::<Lambda, BlackBoxLabel>(*d1, *d2, *z),
@@ -402,67 +346,24 @@ where
 /// in spirit to [`cospan_to_frobenius`].
 ///
 /// Each layer is the monoidal product of its blocks' generator cospans, in block
-/// order, and the morphism is the pushout composite of those layers. The
-/// `Frobenius`-valued twin of this function is
-/// [`Frobenius::interpret_frob`](crate::frobenius::Frobenius::interpret_frob),
-/// which has the same shape; `Cospan` is [`Composable`], not
-/// [`ComposableMutating`](crate::category::ComposableMutating), so it cannot
-/// implement `Frobenius` and reuse that body.
-///
-/// It is also re-exported as
+/// order, and the morphism is the pushout composite of those layers; the
+/// interpretation is of the diagram **as presented**. The `Frobenius`-valued
+/// twin of this function is
+/// [`Frobenius::interpret_frob`](crate::frobenius::Frobenius::interpret_frob).
+/// Re-exported as
 /// [`frobenius::frobenius_to_cospan`](crate::frobenius::frobenius_to_cospan).
-/// That path briefly named a *second* implementation of the same map, added
-/// under #283 on a branch parallel to the one adding this one; #336 unified
-/// them after measuring that they agree over 363 terms while both bodies were
-/// live (383 now, in `frobenius::to_cospan_pin`, where the retired algorithm
-/// lives on as the oracle). ⚠ Two things changed for callers of the
-/// `frobenius::` path: the
-/// bounds now require `Send + Sync`, and an `UnSpecifiedBox` is rejected with
-/// [`CatgraphError::Interpret`] rather than `CatgraphError::Composition`.
 ///
 /// # Deciding Def 2.5 equality
 ///
-/// Because [`Cospan`] carries no presentation — only the apex quotient — this is
-/// the decision procedure for Def 2.5 equality of two *parallel*
-/// `FrobeniusMorphism`s: compare `frobenius_to_cospan(f)?.canonical_form()` with
-/// `g`'s. `FrobeniusMorphism`'s own `PartialEq` cannot serve there. It compares
-/// **presentations**, and it separates both sides of every one of the eleven
-/// Def 2.5 equations — `tests/frobenius_axioms.rs` measures that, and runs the
-/// battery through this function for the `FrobeniusMorphism` carrier.
+/// [`Cospan`] carries no presentation — only the apex quotient — so comparing
+/// `frobenius_to_cospan(f)?.canonical_form()` with `g`'s is the crate's
+/// decision procedure for Def 2.5 equality of two *parallel*
+/// `FrobeniusMorphism`s. `FrobeniusMorphism`'s own `PartialEq` compares
+/// **presentations**, and separates both sides of every one of the eleven
+/// Def 2.5 equations.
 ///
-/// ⚠ "Decision procedure" states the intent and what is measured, not a proved
-/// property. Def 2.5 *is* the definition of an SCFM, and nothing in-tree
-/// establishes that this map is sound or complete for SCFM-equality in general.
-/// What #350 established is narrower: the two *known* divergences, both on
-/// scalars, are closed, and both witnesses are pinned the other way up. Read
-/// this section against the ⚠ paragraph at the end of "What Prop 3.8 does and
-/// does not license here" below, which states the limit; the same caveat sits
-/// beside the same sentence in the crate README.
-///
-/// # Scalars, and composition
-///
-/// The interpretation is of the diagram **as presented**. `FrobeniusMorphism`'s
-/// own [`compose`](crate::category::ComposableMutating::compose) runs
-/// `two_layer_simplify`, which until #350 carried a unit/counit rule deleting
-/// an `η` feeding directly into an `ε` — the *extra*-special move. `Cospan` is
-/// the theory of **special** commutative Frobenius monoids and keeps that
-/// bubble as a genuine scalar, so a term carrying that pattern reached this
-/// function having already lost a bubble the semantics kept:
-/// `interp(f # g) != interp(f) # interp(g)`. Deleting the rule closed that gap,
-/// and the same test now measures the two routes **agreeing** on the witness
-/// that used to separate them
-/// (`tests/frobenius_axioms.rs::frobenius_scalar_loop_survives_to_interpretation`).
-///
-/// Agreement on one witness is not commutation in general, and nothing here
-/// proves the normalizer sound: the claim that the
-/// remaining rules are sound has been wrong before. `Spider(z, m, 0)` followed by
-/// `Spider(z, 0, k)` used to fuse into `Spider(z, m, k)`, wiring two disconnected
-/// components together — a *connectivity* change, strictly worse than a dropped
-/// scalar. Rule 4 now requires `n >= 1` (with a redundant zero-output filter on
-/// the placement lookup), and `spider_fusion_needs_a_wire_between_the_two_spiders`
-/// in the same test file holds the *behaviour* there — the conjunction of the two
-/// defenses, not either alone. Treat divergences as things to be measured one at
-/// a time.
+/// ⚠ Soundness and completeness of this map for SCFM-equality in general are
+/// not established in-tree.
 ///
 /// # What Prop 3.8 does and does not license here
 ///
@@ -475,43 +376,13 @@ where
 /// SCFM structure on each object `[l]` (Example 2.8), and Prop 3.8 turns that
 /// structure into the interpreting functor this function computes.
 ///
-/// **Both sides are now the *special* theory (#350).** Until then they were
-/// not: `Cospan` keeps the bubble `η;ε` as a genuine `0 → 0` non-identity,
-/// while `FrobeniusMorphism`'s layer simplifier carried rule 3 and quotiented
-/// by the *extra-special* axiom `ε ∘ η = id_I` on top of SCFM. That axiom is
-/// not among the nine equations of Def 2.5 (F&S 2019 §2), and adding it is a
-/// **quotient**, not an extension — Baez–Erbele's description of the free
-/// symmetric monoidal category on a commutative *extra-special* Frobenius
-/// monoid (equivalence relations on `X ⊔ Y`) matches what this crate calls
-/// [`Corel`](crate::corel::Corel), a carrier kept apart from `Cospan`
-/// everywhere else. Nothing in-tree proves that identification; it is a match
-/// of descriptions, not a theorem. So the two ends of this map named two
-/// different theories, and the measured unsoundness and incompleteness on
-/// scalars were that mismatch showing through. Deleting rule 3 removes it, at
-/// the cost named in the CHANGELOG: `η;ε` no longer collapses.
-///
-/// Both refuting witnesses are gone, measured — they are now pinned the other
-/// way up in this module's `tests::scalar_bubbles_survive_in_both_directions`:
-///
-/// - The **soundness** witness. A spelled `η;ε` and `Spider(z, 0, 0)` are the
-///   same scalar; they used to interpret to `apex 0` and `apex 1` respectively,
-///   and now both give the bubble (`apex 1`, one scalar class). Also pinned in
-///   `tests::scfm_equal_scalars_have_equal_images`.
-/// - The **completeness** witness. A spelled `η;ε` and
-///   `FrobeniusMorphism::identity(&vec![])` used to share the empty cospan
-///   though they are not SCFM-equal; they now have different images
-///   (`apex 1` against `apex 0`).
-///
-/// ⚠ Two refuted counterexamples are not a proof: nothing here establishes
-/// that this map is sound or complete for SCFM-equality in general, and the
-/// normalizer's remaining rules have been wrong before (see the spider-fusion
-/// paragraph above). What the measurements support is the narrower statement
-/// that the *known* scalar divergences are closed. See also
-/// [`cospan_canon`](crate::cospan_canon)'s module docs. Read
-/// [`Cospan::canonical_form`](crate::cospan_canon::CospanCanon) on these images
-/// as a *semantic* equality — far better than `==` on `FM`, whose derived `Eq`
-/// compares layer vectors and so separates diagrams that are equal on any
-/// reading.
+/// Both ends are the *special* theory: `Cospan` keeps the bubble `η;ε` as a
+/// `0 → 0` non-identity, and `FrobeniusMorphism`'s layer simplifier does not
+/// cancel it. The *extra-special* axiom `ε ∘ η = id_I` is not among the nine
+/// equations of Def 2.5 (F&S 2019 §2). A spelled `η;ε` and `Spider(z, 0, 0)`
+/// both interpret to apex 1; a spelled `η;ε` and
+/// `FrobeniusMorphism::identity(&vec![])` interpret to apex 1 and apex 0
+/// respectively.
 ///
 /// # Examples
 ///
@@ -542,8 +413,7 @@ where
 ///   [`UnSpecifiedBox`](FrobeniusOperation::UnSpecifiedBox): a black box denotes
 ///   nothing in the free hypergraph category. Pass it through
 ///   [`MorphismSystem`](crate::frobenius::MorphismSystem) first if it needs one.
-///   The message names the generator and its arities; both are pinned in
-///   `frobenius::to_cospan_pin::black_boxes_are_rejected_by_both`.
+///   The message names the generator and its arities.
 /// - [`CatgraphError::Interpret`] if a layer has no blocks but a non-empty
 ///   interface (a malformed morphism). A block-free layer whose interface is
 ///   empty is `id_I` and is interpreted, not rejected — that is how
@@ -723,21 +593,9 @@ mod tests {
         );
     }
 
-    /// The identity fast path must not fire on an all-merged cospan (#285).
-    ///
-    /// `[a,a] → {•} ← [a,a]` satisfies `domain == codomain` and
-    /// `left == right == [0, 0]`, yet it is the 2→2 spider. Guarding only on
-    /// those two conditions returned `identity` (depth 1) for it; the correct
-    /// answer is `special_frobenius_morphism(2, 2, 'a')` (depth 2). The same
-    /// confusion hit `[a,a,a] → {•} ← [a,a,a]` (identity depth 1 vs spider
-    /// depth 4).
-    ///
-    /// Scope: the four `m = n` single-apex cospans for `m ∈ {1,…,4}`. The old
-    /// guard also fired at `m = 0` (the bubble — empty legs, empty boundaries);
-    /// that case is left to `scalar_bubbles_survive_in_both_directions`, which
-    /// pins the bubble the general route now returns there. The `m ≠ n` cases
-    /// were never affected by the guard and are pinned in
-    /// `tests/hypergraph_functor.rs::ctf_single_apex_cospan_is_the_spider`.
+    /// Fixture: the four single-apex cospans `[a;m] → {•} ← [a;m]`,
+    /// `m ∈ {1,…,4}`. Expected: `special_frobenius_morphism(m, m, 'a')`, and
+    /// for `m > 1` not `identity(['a'; m])`.
     #[test]
     fn cospan_to_frobenius_all_merged_is_not_the_identity() {
         use crate::frobenius::special_frobenius_morphism;
@@ -764,24 +622,9 @@ mod tests {
         }
     }
 
-    /// A cospan whose apex carries a node neither leg hits is still handled,
-    /// keeps the boundary of the identity it wraps, and — since #350 — keeps
-    /// the spare node as a scalar.
-    ///
-    /// The **known gap this test used to carry is closed.** Until #350 it could
-    /// not pin which code path produced the answer: the old fast path returned
-    /// `identity(['a'])` directly, and the general route the #285 guard sends
-    /// this shape down emitted `η ; ε` for the spare node which rule 3 then
-    /// simplified away, so both returned `identity(['a'])` and reverting the
-    /// #285 guard left this test green. With rule 3 deleted the two routes give
-    /// different answers, so the `depth`/non-identity assertions below now
-    /// distinguish them: reverting the #285 guard makes this test red.
-    ///
-    /// **Space of the claim:** the single witness `[a] → {•,•} ← [a]`, one
-    /// label. It ranges over totality, the resulting boundary, and the presence
-    /// of exactly the one extra layer the spare node contributes — not over
-    /// multi-node leftovers, mixed labels, or the interpretation back into
-    /// `Cospan` (`scalar_bubbles_survive_in_both_directions` covers that).
+    /// Fixture: the single witness `[a] → {•,•} ← [a]`, one label, whose apex
+    /// carries a node neither leg hits. Expected: domain and codomain `['a']`,
+    /// `depth() == 2`, and not `identity(['a'])`.
     #[test]
     fn cospan_to_frobenius_unhit_apex_node_keeps_the_bubble() {
         // [a] → {•, •} ← [a], right/left legs both hit node 0 only.
@@ -804,7 +647,7 @@ mod tests {
         );
     }
 
-    // --- frobenius_to_cospan (#284) ---
+    // --- frobenius_to_cospan ---
 
     /// Every generator lands on the cospan `HypergraphCategory` names for it.
     ///
@@ -862,23 +705,10 @@ mod tests {
         }
     }
 
-    /// Prop 3.8 as a round trip: `cospan → frobenius → cospan` returns the
-    /// cospan you started with, up to apex isomorphism.
-    ///
-    /// This is what makes [`frobenius_to_cospan`] usable as a *semantic oracle*
-    /// (see `tests/compact_closed.rs`): it is checked against
-    /// [`cospan_to_frobenius`], written independently in this module, rather
-    /// than against itself.
-    ///
-    /// **Space:** the nine cospans below, over `{'a','b'}` — identities, all
-    /// four generators, a merge-and-pass, and two scalar-carrying shapes (a
-    /// bare bubble, and `id_a` beside a bubble). The scalar cases were
-    /// *excluded* until #350, when rule 3 stopped erasing them on the way out;
-    /// `scalar_bubbles_survive_in_both_directions` below is where they are
-    /// measured against the values they used to have, and this list carries
-    /// them only so the round trip is not silently scalar-free. The converse
-    /// round trip (`frobenius → cospan → frobenius`) is *not* claimed: it
-    /// cannot hold on the nose, since many layer vectors share one cospan.
+    /// Fixture: nine cospans over `{'a','b'}` — two identities, the four
+    /// generators, a merge-and-pass, a bare bubble, and `id_a` beside a bubble.
+    /// Expected: `cospan → frobenius → cospan` returns the starting cospan's
+    /// `canonical_form()`. The converse round trip is not claimed.
     #[test]
     fn cospan_frobenius_cospan_round_trips() {
         use crate::hypergraph_category::HypergraphCategory;
@@ -894,7 +724,7 @@ mod tests {
                 "merge_and_pass",
                 Cospan::new(vec![0, 0], vec![0, 1], vec!['a', 'a']).unwrap(),
             ),
-            // Scalar-carrying, reachable only since #350.
+            // Scalar-carrying.
             ("bubble", Cospan::new(vec![], vec![], vec!['a']).unwrap()),
             (
                 "id_a_beside_bubble",
@@ -916,27 +746,10 @@ mod tests {
         }
     }
 
-    /// The **sound** direction, pinned on the pair that refuted it.
-    ///
-    /// `Spider(z, 0, 0)` *is* the bubble `η;ε`, and `η ; δ ; (ε ⊗ ε)` is
-    /// SCFM-equal to it (counitality on one leg of `δ`). Soundness —
-    /// SCFM-equal terms have equal images — therefore requires equal canonical
-    /// forms here. Before the `generator_to_cospan` fix this was **false**:
-    /// the spider arm interpreted `special_frobenius_morphism`'s *simplified*
-    /// output, in which the then-live rule 3 had already cancelled the `η;ε`,
-    /// so the spider gave `apex 0 / scalars 0` against the spelled term's
-    /// `apex 1 / scalars 1`. `Cospan` is the **special**, not extra-special,
-    /// theory: the bubble is a genuine `0 → 0` non-identity and must survive.
-    /// Since #350 the term algebra agrees, and the `(0, 0)` arm is a measured
-    /// redundancy rather than the repair (see `generator_to_cospan`'s docs).
-    ///
-    /// **Space:** the `0 → 0` scalar and the same scalar beside `id_a`. The
-    /// second case shows the failure was not confined to the empty object: it
-    /// is an `a → a` endomorphism — the interface of `id_a` and `delta_then_mu`,
-    /// two of the ten `samples()` in `tests/compact_closed.rs`, which is why an
-    /// interface-only check could not see a bubble beside an identity.
-    /// (`samples()` itself is scalar-free; the compact_closed pins do not
-    /// exercise this shape.)
+    /// Fixture: the SCFM-equal `0 → 0` pair `Spider('a', 0, 0)` and
+    /// `η ; δ ; (ε ⊗ ε)`, and the same pair tensored beside `id_a`. Expected:
+    /// equal `canonical_form()` within each pair, and `scalar_count() == 1` for
+    /// the bare bubble.
     #[test]
     fn scfm_equal_scalars_have_equal_images() {
         use crate::monoidal::Monoidal;
@@ -994,15 +807,9 @@ mod tests {
         );
     }
 
-    /// Spiders go through the crate's own generator decomposition, so an
-    /// `(m, n)` spider is one apex vertex joining all `m + n` boundary wires.
-    ///
-    /// **Space:** `(m, n)` for `m, n <= 3` **except `(0, 0)`**, label `'a'` only.
-    /// `(0, 0)` is the bubble: since the `generator_to_cospan` fix it interprets
-    /// to apex 1 with one scalar (pinned by `scfm_equal_scalars_have_equal_images`),
-    /// which the `scalar_count() == 0` assertion here does not fit (it *is* one
-    /// apex vertex, so the apex assertion alone would pass), so it is pinned
-    /// there rather than quietly skipped.
+    /// Fixture: `Spider('a', m, n)` for `m, n <= 3` except `(0, 0)`. Expected:
+    /// `dom_len() == m`, `cod_len() == n`, `apex_len() == 1`,
+    /// `scalar_count() == 0`.
     #[test]
     fn frobenius_to_cospan_spiders_are_single_apex_vertices() {
         for m in 0..=3usize {
@@ -1026,59 +833,19 @@ mod tests {
         }
     }
 
-    /// Scalars survive **both** maps, and the two witnesses that used to refute
-    /// soundness and completeness are pinned the other way up (#350).
+    /// Fixture: six witnesses at one or two labels — one bubble, two bubbles,
+    /// `id_a` beside a `'b'` bubble, a spelled `η;ε`, `Spider('a', 0, 0)`, and
+    /// `FM::identity(&vec![])` — compared through `canonical_form`.
     ///
-    /// `Cospan` is the theory of **special**, not extra-special, commutative
-    /// Frobenius monoids: the closed bubble `η # ε` is a genuine `0 → 0`
-    /// non-identity and `k` bubbles are distinguished from `k-1` (see
-    /// [`cospan_canon`](crate::cospan_canon)'s module docs). Until #350 neither
-    /// `cospan_to_frobenius` nor `frobenius_to_cospan` preserved that, for two
-    /// causes, both now closed:
+    /// Expected: `scalar_count()` 1 and 2 for one and two bubbles, with
+    /// different canonical forms and different terms; each bubble cospan
+    /// round-trips; `id_a` beside a bubble is apex 2 / scalars 1 and its term
+    /// is not `identity(['a'])`; the spelled `η;ε` is apex 1 / scalars 1 and
+    /// shares its image with `Spider('a', 0, 0)`; `FM::identity(&vec![])` is
+    /// apex 0 and differs from the spelled `η;ε`.
     ///
-    /// 1. ~~`cospan_to_frobenius`'s identity fast path~~ — **closed by #285.**
-    ///    Its guard was `domain == codomain && left_to_middle() ==
-    ///    right_to_middle()`, so it returned `identity(&domain)` and discarded
-    ///    every apex vertex neither leg reaches. The guard now also requires
-    ///    the common leg to be a bijection onto the apex, which reaches every
-    ///    apex vertex by construction (a bubble makes `leg.len() < middle_len`,
-    ///    so `0 → 0` with a bubble falls through too).
-    /// 2. ~~`two_layer_simplify` rule 3~~ — **closed by #350.** It cancelled
-    ///    `η(z);ε(z)` outright, the *extra-special* axiom. The decomposition
-    ///    path emits one `η;ε` per unreached apex vertex and rule 3 ate each,
-    ///    so a bubble interpreted to nothing and a spelled-out `η;ε` to
-    ///    `apex_len() == 0`. `FrobeniusMorphism` is now the special theory and
-    ///    each bubble is carried through as spelled.
-    ///
-    /// **This pin signals rule 3.** Measured: restoring rule 3 and nothing else
-    /// reddens this test at `one_term != two_term`, the first assertion that
-    /// reaches the *term* algebra — both bubbles come back as the empty term
-    /// (`layers: [FrobeniusLayer { blocks: [], … }]`, printed by that message).
-    /// Every later assertion that goes through `cospan_to_frobenius` or through
-    /// a composed `FM` is rule-3-dependent in the same way, and each carries the
-    /// measured value it used to have: the `id_a`-beside-a-bubble case comes
-    /// back as `identity(['a'])`, and the spelled `η;ε` interprets to `apex 0`.
-    ///
-    /// ⚠ Not every assertion below is rule-3-dependent, and the ones that are
-    /// not are fixtures rather than claims: `one_bubble`/`two_bubbles`'
-    /// `scalar_count`s and the `assert_ne!` between them, the two on
-    /// `id_a_and_bubble.canonical_form()`, and `id_empty_canon.apex_len() == 0`
-    /// stay green under restoration. They evaluate `Cospan::new(…)` and
-    /// `FM::identity(&vec![])` only — neither reaches `two_layer_simplify`,
-    /// which is where rule 3 lived, so rule 3 could not move them. They fix the
-    /// values the rule-3-dependent assertions are measured against.
-    ///
-    /// The #285 fast path cannot fire on any witness here
-    /// (`leg.len() < middle_len` in each), so nothing below is shared with
-    /// cause 1.
-    ///
-    /// **Space of the claim:** six witnesses — one bubble, two bubbles, `id_a`
-    /// beside a `'b'` bubble, a spelled `η;ε`, `Spider(a, 0, 0)`, and
-    /// `FM::identity(&vec![])` — at one or two labels, compared through
-    /// `canonical_form`. It does *not* range
-    /// over scalars beside larger diagrams, over three or more bubbles, or over
-    /// any non-scalar shape; and two closed counterexamples are not a proof
-    /// that the maps are sound or complete (see [`frobenius_to_cospan`]'s docs).
+    /// The claim does not range over scalars beside larger diagrams, over three
+    /// or more bubbles, or over any non-scalar shape.
     #[test]
     fn scalar_bubbles_survive_in_both_directions() {
         let one_bubble = Cospan::new(vec![], vec![], vec!['a']).unwrap();

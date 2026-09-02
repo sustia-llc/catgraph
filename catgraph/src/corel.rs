@@ -53,60 +53,33 @@ impl<Lambda: Eq + Sized + Debug + Copy> Corel<Lambda> {
     /// The **total** map `Cospan → Corel`: drop every apex vertex neither leg
     /// reaches, then reindex both legs onto the survivors.
     ///
-    /// [`new`](Self::new) *rejects* a cospan that is not jointly surjective, so
-    /// until this existed a bubble-carrying cospan could not enter the
-    /// corelation world at all. This is the map that lets it: it is defined on
-    /// every `Cospan<Lambda>` and its image is jointly surjective by
-    /// construction, so `Corel::new(q(c).as_cospan().clone())` always succeeds
-    /// (pinned in `tests/corel_quotient.rs`).
+    /// Defined on every `Cospan<Lambda>`, with a jointly-surjective image, so
+    /// [`new`](Self::new) accepts `q(c).as_cospan().clone()` for every `c`.
     ///
-    /// # What it does, precisely
-    ///
-    /// A dropped vertex is exactly a [scalar / bubble] in
+    /// A dropped vertex is exactly a scalar / bubble in
     /// [`CospanCanon`](crate::cospan_canon::CospanCanon)'s sense — both
     /// preimages empty — so `q(c).as_cospan().canonical_form().scalar_count()`
     /// is `0` for every `c`. The surviving vertices keep their **relative
     /// order**: survivor `i` precedes survivor `j` in the image apex iff it did
     /// in `c`'s apex. Both legs are rewritten through the same
     /// old-index → new-index renumbering, so no boundary wire changes which
-    /// class it sits in. Domain and codomain are therefore untouched:
-    /// `q(c).domain() == c.domain()` and likewise for the codomain.
+    /// class it sits in, and `q(c).domain() == c.domain()` and likewise for the
+    /// codomain.
     ///
-    /// On an already jointly-surjective input it is the **identity**, returning
-    /// the cospan unchanged rather than a rebuilt copy.
+    /// On an already jointly-surjective input it returns the cospan unchanged.
     ///
-    /// # Why not via `CospanCanon`
-    ///
-    /// [`CospanCanon::classes`](crate::cospan_canon::CospanCanon::classes) plus
-    /// [`to_cospan`](crate::cospan_canon::CospanCanon::to_cospan) would express
-    /// the same partition, but that route (a) needs `Lambda: Ord + Hash`, which
-    /// `Corel` itself does not require, and (b) returns a *canonical witness*
-    /// rather than *this* witness — the apex comes back in canonical
-    /// (label, preimage) order, not the originating one. Going straight over
-    /// `left_to_middle` / `right_to_middle` / `middle` keeps the bound at
-    /// `Corel`'s own and keeps the surviving apex order.
-    ///
-    /// # Not the `canonical_form` bubble drop
-    ///
-    /// `CospanCanon` deliberately **keeps** scalars: `Cospan` is the theory of
-    /// *special*, not extra-special, commutative Frobenius monoids, and a
-    /// `classes.retain(|c| !c.is_scalar())` inside
-    /// [`Cospan::canonical_form`](crate::cospan::Cospan::canonical_form) is a
-    /// defect that `tests/property_laws.rs`'s
-    /// `canonical_form_decides_apex_isomorphism` exists to catch. The same
-    /// expression is a *feature* here and a *bug* there, because here it is
-    /// applied on the way into `Corel`, whose objects are equivalence relations
-    /// on the boundary alone and have nowhere to record a bubble. Keep the two
-    /// apart.
+    /// This is not
+    /// [`Cospan::canonical_form`](crate::cospan::Cospan::canonical_form)'s
+    /// treatment of scalars: a canonical form keeps them, and this map drops
+    /// them on the way into `Corel`, whose objects are equivalence relations on
+    /// the boundary alone.
     ///
     /// # Panics
     ///
     /// Panics if `cospan` violates the leg-bounds invariant every `Cospan`
-    /// constructor upholds (a leg entry at or beyond `middle().len()`). Only
-    /// reachable through a release-mode
-    /// [`Cospan::new_unchecked`](crate::cospan::Cospan::new_unchecked) misuse,
-    /// which that method documents as deferring the failure to whatever indexes
-    /// the leg next — this is one such place.
+    /// constructor upholds (a leg entry at or beyond `middle().len()`), which
+    /// is reachable only through a release-mode
+    /// [`Cospan::new_unchecked`](crate::cospan::Cospan::new_unchecked) misuse.
     ///
     /// # Examples
     ///
@@ -416,8 +389,8 @@ impl<Lambda: Eq + Sized + Debug + Copy> Corel<Lambda> {
 }
 
 // Trait impls — all delegate to the underlying Cospan EXCEPT `Composable`,
-// which since #351 performs F&S 2018 Ex 4.61 fn. 2's step (iii) on top of the
-// pushout. `Corel` is no longer a transparent newtype for composition.
+// which performs F&S 2018 Ex 4.61 fn. 2's step (iii) on top of the pushout, so
+// `Corel` is not a transparent newtype for composition.
 
 impl<Lambda> crate::category::HasIdentity<Vec<Lambda>> for Corel<Lambda>
 where
@@ -446,30 +419,16 @@ where
     /// [`from_cospan_dropping_bubbles`](Self::from_cospan_dropping_bubbles),
     /// and it is not optional.
     ///
-    /// # Breaking at #351
+    /// Step (iii) is load-bearing: the pushout of two jointly-surjective
+    /// cospans need not be jointly surjective. `0 → {m} ← 1` composed with
+    /// `1 → {m} ← 0` glues the two boundary-only vertices into a class no
+    /// outer leg reaches; with step (iii) the composite is the empty
+    /// corelation.
     ///
-    /// This used to be `self.0.compose(&other.0).map(Self::new_unchecked)`,
-    /// under a comment claiming pushout composition of jointly-surjective
-    /// cospans is jointly surjective. It is not, and the smallest witness is
-    /// two one-vertex corelations:
+    /// # Encoding of a composite
     ///
-    /// ```text
-    /// a = Cospan::new(vec![],  vec![0], vec!['m'])   //  0 → {m} ← 1
-    /// b = Cospan::new(vec![0], vec![],  vec!['m'])   //  1 → {m} ← 0
-    /// ```
-    ///
-    /// Both are jointly surjective, so both pass [`new`](Self::new). The
-    /// pushout glues `a`'s right-leg-only vertex to `b`'s left-leg-only vertex
-    /// into one class that no *outer* leg reaches — a bubble born mid-composition
-    /// — and `new_unchecked` then wrapped it, so `compose` returned a value
-    /// `new` would reject: apex `['m']`, both legs empty. With step (iii) in
-    /// place the composite is the empty corelation.
-    ///
-    /// # What moves for consumers
-    ///
-    /// The **relation** on `domain ⊔ codomain` is unchanged — a dropped class
-    /// contains no boundary element by definition. Its **encoding** is not, and
-    /// that is the public surface:
+    /// The **relation** on `domain ⊔ codomain` carries no dropped class, so it
+    /// is unchanged by step (iii); the encoding is:
     ///
     /// - a smaller apex wherever a composition merged two boundary-only
     ///   vertices, so anything counting apex vertices, reading
@@ -483,20 +442,10 @@ where
     ///   [`is_identity_partition`](Self::is_identity_partition) and
     ///   `equivalence_classes().len()` all change on such a composite.
     ///
-    /// Worked witness, pinned in `tests/corel_quotient.rs`'s
-    /// `compose_shifts_the_flat_index_layout`: for `a : 1 → {a,a} ← 2` **then**
-    /// `b : 2 → {a,a} ← 1` (diagrammatic order — the test runs
-    /// `a.compose(&b)`) the raw pushout gave classes `[{0,1,3}, {2}]`,
-    /// `len 2`, `merges(0, 3) == true`, `is_identity_partition() == false`; the
-    /// restricted composite gives `[{0,1,2}]`, `len 1`, `merges(0, 3) == false`
-    /// (`merges(0, 2) == true` instead), `is_identity_partition() == true`.
-    ///
-    /// ⚠ Pre-existing, and more reachable now: [`refines`](Self::refines)
-    /// matches classes by flat index across two values and, as its own docs
-    /// say, silently skips elements it cannot find in the other. With
-    /// composites now systematically carrying smaller apexes than their
-    /// operands, codomain offsets disagree more often, so `refines` can skip
-    /// the whole boundary and answer `true`. Not introduced here.
+    /// ⚠ [`refines`](Self::refines) matches classes by flat index across two
+    /// values and silently skips elements it cannot find in the other, so on a
+    /// composite whose apex shrank it can skip the whole boundary and answer
+    /// `true`.
     ///
     /// # Errors
     ///
