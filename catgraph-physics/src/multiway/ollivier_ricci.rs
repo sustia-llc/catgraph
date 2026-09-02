@@ -56,6 +56,10 @@ impl OllivierRicciCurvature {
     /// uniform neighbour distributions, `κ(x, y) = 1 − W₁(μ_x, μ_y) / d(x, y)`
     /// per edge, vertex Ricci = mean of incident edge curvatures, scalar =
     /// normalised sum of vertex curvatures.
+    ///
+    /// A pair listed more than once in `branchial.edges`, in either
+    /// orientation, is one undirected edge; a self-loop `(a, a)` enters neither
+    /// the adjacency nor the scored edges.
     #[must_use]
     #[allow(
         clippy::cast_precision_loss,
@@ -87,8 +91,15 @@ impl OllivierRicciCurvature {
         let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
         for &(a, b) in &branchial.edges {
             if let (Some(&ia), Some(&ib)) = (idx_of.get(&a), idx_of.get(&b)) {
-                adj[ia].push(ib);
-                adj[ib].push(ia);
+                if ia == ib {
+                    continue;
+                }
+                if !adj[ia].contains(&ib) {
+                    adj[ia].push(ib);
+                }
+                if !adj[ib].contains(&ia) {
+                    adj[ib].push(ia);
+                }
             }
         }
 
@@ -612,10 +623,53 @@ mod tests {
         }
     }
 
+    /// Asserts every curvature `from_branchial` exposes for `label` equals the
+    /// one `want` exposes: scalar, `ricci_curvature` on `0..n`, and
+    /// `sectional_curvature` on each pair of `scored`.
+    fn assert_same_curvature(
+        got: &OllivierRicciCurvature,
+        want: &OllivierRicciCurvature,
+        scored: &[(usize, usize)],
+        n: usize,
+        label: &str,
+    ) {
+        assert_eq!(
+            got.edge_curvatures.len(),
+            want.edge_curvatures.len(),
+            "{label}: edge curvature count {} vs {}",
+            got.edge_curvatures.len(),
+            want.edge_curvatures.len()
+        );
+        assert!(
+            got.scalar_curvature() == want.scalar_curvature(),
+            "{label}: scalar {} vs {}",
+            got.scalar_curvature(),
+            want.scalar_curvature()
+        );
+        for v in 0..n {
+            assert!(
+                got.ricci_curvature(v) == want.ricci_curvature(v),
+                "{label}: vertex {v} Ricci {} vs {}",
+                got.ricci_curvature(v),
+                want.ricci_curvature(v)
+            );
+        }
+        for &(u, v) in scored {
+            assert!(
+                got.sectional_curvature(u, v) == want.sectional_curvature(u, v),
+                "{label}: edge ({u},{v}) κ {} vs {}",
+                got.sectional_curvature(u, v),
+                want.sectional_curvature(u, v)
+            );
+        }
+    }
+
     /// Shape and range of `from_branchial` on [`topology_fixture`] indices 0,
     /// 3, 4, 5 and 6: dimension, per-vertex and per-edge counts, `κ ∈ [-2, 1]`,
-    /// and that duplicating every edge in reverse leaves the edge count
-    /// unchanged. On every feature lane. Curvature *values* are not pinned.
+    /// and that scalar, every per-vertex and every per-edge curvature is
+    /// unchanged both by duplicating every edge in reverse and by appending one
+    /// self-loop on an endpoint of the first listed edge. On every feature lane.
+    /// Curvature *values* are not pinned against literals.
     #[test]
     fn topology_fixtures_reach_from_branchial() {
         for i in [0, 3, 4, 5, 6] {
@@ -670,16 +724,70 @@ mod tests {
             }
 
             // Each edge repeated in the opposite orientation: the undirected
-            // dedup must collapse the copies back to the same edge count.
+            // dedup must collapse the copies back to the same curvatures.
             let mut doubled = bg.clone();
             doubled
                 .edges
                 .extend(bg.edges.iter().map(|&(a, b)| (b, a)).collect::<Vec<_>>());
-            let doubled_curv = OllivierRicciCurvature::from_branchial(&doubled);
-            assert_eq!(
-                doubled_curv.edge_curvatures.len(),
-                curv.edge_curvatures.len(),
-                "fixture {i}: edge curvature count with every edge duplicated in reverse"
+            assert_same_curvature(
+                &OllivierRicciCurvature::from_branchial(&doubled),
+                &curv,
+                &scored,
+                n,
+                &format!("fixture {i}: every edge duplicated in reverse"),
+            );
+
+            // One self-loop on an endpoint of the first listed edge — a vertex
+            // with an incident scored edge — appended: it contributes no
+            // adjacency, so every curvature is the plain one.
+            let mut looped = bg.clone();
+            let loop_at = bg.edges[0].0;
+            looped.edges.push((loop_at, loop_at));
+            assert_same_curvature(
+                &OllivierRicciCurvature::from_branchial(&looped),
+                &curv,
+                &scored,
+                n,
+                &format!("fixture {i}: one self-loop on an edge endpoint appended"),
+            );
+        }
+    }
+
+    /// Every edge of the path [`topology_fixture`] (index 4) has κ = 0 exactly,
+    /// under `sectional_curvature`, plain and with every edge duplicated in
+    /// reverse.
+    #[test]
+    fn path_fixture_edges_are_exactly_flat() {
+        let bg = topology_fixture(4);
+        let n = bg.nodes.len();
+        assert_eq!(n, 25, "path fixture node count");
+        assert_eq!(bg.edges.len(), 24, "path fixture edge count");
+
+        let mut doubled = bg.clone();
+        doubled
+            .edges
+            .extend(bg.edges.iter().map(|&(a, b)| (b, a)).collect::<Vec<_>>());
+
+        for (label, graph) in [("plain", &bg), ("reverse-duplicated", &doubled)] {
+            let curv = OllivierRicciCurvature::from_branchial(graph);
+            assert_eq!(curv.edge_curvatures.len(), 24, "{label}: scored edge count");
+            for u in 0..24 {
+                assert!(
+                    curv.edge_curvatures.iter().any(|&(e, _)| e == (u, u + 1)),
+                    "{label}: path edge ({u},{}) is not scored",
+                    u + 1
+                );
+                let kappa = curv.sectional_curvature(u, u + 1);
+                assert!(
+                    kappa == 0.0,
+                    "{label}: path edge ({u},{}) κ {kappa}, expected 0",
+                    u + 1
+                );
+            }
+            assert!(
+                curv.scalar_curvature() == 0.0,
+                "{label}: path scalar {}, expected 0",
+                curv.scalar_curvature()
             );
         }
     }
