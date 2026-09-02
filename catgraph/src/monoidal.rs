@@ -445,7 +445,7 @@ use permutations::Permutation;
 
 /// Symmetric monoidal morphism: supports pre/post-composition with permutations.
 ///
-/// # The braiding contract (#258)
+/// # The braiding contract
 ///
 /// Both constructors build the **same underlying wiring**: the pure braiding
 /// that routes domain wire `i` to codomain wire `p.apply(i)`. They differ only
@@ -468,17 +468,7 @@ use permutations::Permutation;
 ///
 /// For single-sorted carriers — those whose objects are bare arities, i.e.
 /// `T = ()` — there is no label to place on either side, so the two methods
-/// necessarily return the *same* morphism. That is a consequence of the
-/// contract, not an exemption from it.
-///
-/// ## Why two names rather than a `bool`
-///
-/// These replace a single `from_permutation(p, types, types_as_on_domain: bool)`.
-/// A `bool` is a parameter on which an implementation can be silently inverted:
-/// three of the workspace's implementations had drifted onto three different
-/// conventions and no test could see it, because nothing exercised the same
-/// permutation across two carriers. Two names make the wrong direction
-/// unrepresentable at the call site.
+/// return the *same* morphism.
 #[allow(clippy::module_name_repetitions)]
 pub trait SymmetricMonoidalMorphism<T: Eq> {
     /// Pre- or post-composes this morphism with the braiding realizing `p`,
@@ -496,27 +486,17 @@ pub trait SymmetricMonoidalMorphism<T: Eq> {
     /// | `false` | <code>from_permutation_on_codomain(p.inv(), &self.domain()) ; self</code> |
     ///
     /// ⚠ **The two sides are not symmetric.** The codomain side splices the
-    /// braiding for `p`; the domain side splices the braiding for `p⁻¹`. That
-    /// is forced by the geometry, not a convention: post-composition puts the
-    /// braiding's *domain* against `self`, so its wiring `i ↦ p.apply(i)`
-    /// already moves codomain wire `i` to slot `p.apply(i)`. Pre-composition
-    /// puts the braiding's *codomain* against `self`, and a braiding `β` there
-    /// routes the **new** domain slot `j` to the **old** domain slot
-    /// `β.apply(j)` — so `β` must be `p⁻¹` for old slot `i` to land at new slot
-    /// `p.apply(i)`. Passing `p` on both sides transposes one of them, and
-    /// nothing within a single carrier can see it: an inverted braiding is
-    /// still a perfectly consistent braiding.
+    /// braiding for `p`; the domain side splices the braiding for `p⁻¹`.
+    /// Post-composition puts the braiding's *domain* against `self`, so its
+    /// wiring `i ↦ p.apply(i)` already moves codomain wire `i` to slot
+    /// `p.apply(i)`. Pre-composition puts the braiding's *codomain* against
+    /// `self`, and a braiding `β` there routes the **new** domain slot `j` to
+    /// the **old** domain slot `β.apply(j)`, so `β` must be `p⁻¹` for old slot
+    /// `i` to land at new slot `p.apply(i)`.
     ///
-    /// The cheap check that *does* see it is conjugation — permuting **both**
-    /// sides of an identity by the same `p` must give the identity back, since
-    /// `β(p⁻¹) ; id ; β(p) == β(p⁻¹ ; p) == id`. Under the swapped reading it
-    /// gives `β(p²)`, which is the identity only when `p` is an involution.
-    ///
-    /// Note that the *labels* relabel the same way on both sides — the chosen
-    /// side's word becomes `p.inv().permute(old)` — so an assertion on the word
-    /// cannot separate the codomain rule from the domain rule, and (as `Span`
-    /// demonstrated) a word can be right over an inverted wiring. Assertions
-    /// that pin this method must reach the wiring.
+    /// The *labels* relabel the same way on both sides — the chosen side's word
+    /// becomes `p.inv().permute(old)` — so an assertion on the word cannot
+    /// separate the codomain rule from the domain rule.
     ///
     /// # Length
     ///
@@ -557,25 +537,14 @@ pub trait SymmetricMonoidalMorphism<T: Eq> {
 /// Like [`SymmetricMonoidalMorphism`] but for the discrete category (`FinSet`),
 /// where objects are `usize` cardinalities rather than typed tensor factor slices.
 ///
-/// # Why this trait has *one* constructor and not two (#258)
+/// # One constructor, not two
 ///
 /// [`SymmetricMonoidalMorphism`] splits its constructor in two because its
 /// object is a *labelled* tensor word, so the caller's slice has to say which
 /// boundary it labels. This trait's object is a bare cardinality: both
 /// boundaries of a permutation braiding are the same `usize`, and there are no
-/// labels to place on either. Applying the sibling trait's contract here
-/// collapses it — `on_domain` and `on_codomain` would be the same function of
-/// the same two arguments — so the split would add a name without adding a
-/// distinction, and a caller choosing between two identical methods learns
-/// nothing from the choice.
-///
-/// ⚠ This is *not* inferred from [`Decomposition`](crate::finset::Decomposition)
-/// having ignored the old `types_as_on_domain` flag; that would be circular.
-/// It is inferred from the contract above, and `Decomposition`'s own
-/// `permute_side` corroborates it: `permute_side` needs the braiding for
-/// `p.inv()`, and it gets it by inverting the *permutation* at the call site
-/// (`from_permutation(p.inv(), ..)`) rather than by flipping the flag —
-/// because flipping the flag never produced an inverse in the first place.
+/// labels to place on either, so `on_domain` and `on_codomain` would be the
+/// same function of the same two arguments.
 #[allow(clippy::module_name_repetitions)]
 pub trait SymmetricMonoidalDiscreteMorphism<T: Eq> {
     /// Pre- or post-composes this morphism with the braiding realizing `p`,
@@ -594,22 +563,17 @@ pub trait SymmetricMonoidalDiscreteMorphism<T: Eq> {
     ///
     /// Read as a function `f: [n] → [m]` (which is what the discrete category's
     /// morphisms are), that is `p ∘ f` on the codomain side and `f ∘ p⁻¹` on
-    /// the domain side. The asymmetry is the same one the sibling trait
-    /// documents, and for the same reason.
+    /// the domain side.
     ///
     /// # Length
     ///
     /// ⚠ **This trait signals an arity mismatch by panicking, where every
     /// constructor on the sibling trait returns `Err`.** Both methods here are
-    /// infallible by signature — the discrete category's object is a bare
-    /// `usize`, so there is no `types` slice whose length could disagree, and
-    /// the only mismatch possible is `p.len()` against the morphism's own
-    /// arity. The sole implementation,
+    /// infallible by signature, and the only mismatch possible is `p.len()`
+    /// against the morphism's own arity. The sole implementation,
     /// [`Decomposition`](crate::finset::Decomposition), asserts it: on
     /// `permute_side` against `domain()` / `codomain()` as selected, and on
     /// `from_permutation` against `types`.
-    ///
-    /// Do not read the sibling trait's `Err` contract across to this one.
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool);
     /// Constructs the braiding routing wire `i` to wire `p.apply(i)` on a set
     /// of the given size.

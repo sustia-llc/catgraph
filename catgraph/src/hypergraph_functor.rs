@@ -78,7 +78,7 @@ where
 /// This is the component `Cospan_f` at a single set map `f: L1 → L2` of the free
 /// functor `Cospan_-` (Fong-Spivak Prop 2.1, upgraded by Cor 3.13). The cross-Λ
 /// functor `Cospan_-` itself (functoriality across varying label sets, Eq 9) is
-/// deferred — see `docs/FS19-AUDIT.md` and #109.
+/// deferred — see `docs/FS19-AUDIT.md`.
 pub struct RelabelingFunctor<F> {
     relabel: F,
 }

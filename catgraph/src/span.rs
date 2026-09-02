@@ -42,36 +42,14 @@ where
     /// Debug-asserts structural invariants: leg indices in bounds, type consistency, identity flags.
     ///
     /// Every check is written **inside** its `debug_assert!`, so the whole
-    /// method compiles away in release. That is load-bearing rather than
-    /// cosmetic: the label-agreement check indexes both boundaries, so when it
-    /// was computed into a `let` first (as it was before
-    /// [#256](https://github.com/sustia-llc/catgraph/issues/256)) an
-    /// out-of-bounds middle pair panicked with a bare "index out of bounds"
-    /// even in release — which is neither what the method's name promises nor
-    /// what [`Span::new_unchecked`] documents. The bounds assertions still
-    /// precede the label assertion, so a debug build reports the specific
-    /// invariant rather than an index panic.
+    /// method compiles away in release. The bounds assertions precede the label
+    /// assertion, so a debug build reports the specific invariant rather than
+    /// an index panic.
     ///
-    /// ⚠ **The two `bool` parameters are on their way out, and the divergence
-    /// from `Cospan` is tracked, not accidental.**
-    /// [`Cospan::assert_valid`](crate::cospan::Cospan::assert_valid) lost both
-    /// of them at [#289](https://github.com/sustia-llc/catgraph/issues/289),
-    /// because they selected arms that compared a cached identity flag against
-    /// the predicate it cached and `Cospan` no longer caches one. `Span` still
-    /// does, so the arms below still have something to check and the parameters
-    /// still mean something — but that leaves the two sibling types with
-    /// different arities for the same method, which reads as an oversight and
-    /// is not: it is **axis 2** of
-    /// [#345](https://github.com/sustia-llc/catgraph/issues/345) ("`Span` still
-    /// caches a predicate `Cospan` computes"), whose recommended first step is
-    /// to delete `Span`'s `is_left_id` / `is_right_id`, compute the accessors,
-    /// and drop these parameters. Axis 1 of the same issue is the separate
-    /// question of whether the predicate should gain `Cospan`'s
-    /// boundary-length conjunct — see
-    /// [`add_boundary_node`](Self::add_boundary_node). Four call sites pass
-    /// these parameters today, all in
-    /// `catgraph-applied/tests/braiding_cross_carrier.rs`, and all pass
-    /// `(false, false)`.
+    /// The two `bool` parameters select the arms that compare `Span`'s cached
+    /// identity flags against the predicate they cache: `check_id_strong`
+    /// checks both legs unconditionally, `check_id_weak` only a leg whose flag
+    /// is already `true`.
     pub fn assert_valid(&self, check_id_strong: bool, check_id_weak: bool) {
         debug_assert!(
             self.middle.iter().all(|(z, _)| *z < self.left.len()),
@@ -107,14 +85,8 @@ where
     ///
     /// Every middle pair is checked against both boundaries **in every build
     /// profile**: each component must be in bounds, and the two labels it names
-    /// must agree. This is the trust-boundary constructor: use it for pairs
-    /// arriving from outside the crate — a store, a wire format, a parser, a
-    /// user. Internal callers building a span from data that is correct by
-    /// construction should use [`new_unchecked`](Self::new_unchecked), which
-    /// costs nothing in release.
-    ///
-    /// Mirrors [`Rel::new`](Rel::new) / [`Corel::new`](crate::corel::Corel::new):
-    /// the checked constructor owns the plain name.
+    /// must agree. Callers building a span from data that is correct by
+    /// construction should use [`new_unchecked`](Self::new_unchecked).
     ///
     /// # Errors
     ///
@@ -122,10 +94,6 @@ where
     ///   is at or beyond `left.len()`, or its `.1` at or beyond `right.len()`,
     ///   naming which half was out of range, the pair's position **in the
     ///   middle-pair list**, the out-of-range target and the boundary size.
-    ///   Deliberately *not*
-    ///   [`CatgraphError::ConstructionIndexOutOfBounds`], which a cospan raises:
-    ///   there the offending element is an entry of the named leg, here it is a
-    ///   middle pair, so the position fields index different things.
     /// - [`CatgraphError::ConstructionLabelMismatch`] if a pair is in bounds on
     ///   both sides but `left[pair.0] != right[pair.1]`, naming the pair's
     ///   position, both indices and both labels.
@@ -239,39 +207,22 @@ where
     /// The new node is not yet in the image of any middle pair; the caller should
     /// add middle entries via [`add_middle`](Self::add_middle) to connect it.
     ///
-    /// Infallible, and unlike its `Cospan` / `NamedCospan` namesakes by design
-    /// rather than by omission: a span's legs point *out* of the apex, so a
-    /// boundary node here is a **label rather than an index**. There is no
-    /// argument to bounds-check, appending one leaves every existing middle pair
-    /// in bounds and label-agreeing, and the identity flags are computed from
-    /// the middle pairs alone, which this call does not touch.
-    /// [`Cospan::add_boundary_node`](crate::cospan::Cospan::add_boundary_node)
-    /// is fallible because its caller-supplied index can miss the apex, and
-    /// [`NamedCospan::add_boundary_node`](crate::named_cospan::NamedCospan::add_boundary_node)
-    /// because its port name can collide; neither hazard exists on this
-    /// signature. [`add_middle`](Self::add_middle) is the `Span` mutator that
-    /// does have preconditions, and it does return a `Result`.
+    /// Infallible: a span's legs point *out* of the apex, so a boundary node
+    /// here is a **label rather than an index**. There is no argument to
+    /// bounds-check, appending one leaves every existing middle pair in bounds
+    /// and label-agreeing, and the identity flags are computed from the middle
+    /// pairs alone, which this call does not touch.
     ///
-    /// ⚠ **The flags this leaves alone mean less than a `Cospan`'s answer** —
-    /// tracked as [#345](https://github.com/sustia-llc/catgraph/issues/345).
+    /// ⚠ **The flags this leaves alone mean less than a `Cospan`'s answer.**
     /// [`new_unchecked`](Self::new_unchecked) computes `is_left_id` /
     /// `is_right_id` as `represents_id` over the middle-pair components with
     /// **no** conjunct against `left.len()` / `right.len()` — the conjunct
     /// [`Cospan`](crate::cospan::Cospan) carries. So after
     /// `Span::identity(&['a', 'b']).add_boundary_node(Left('c'))` the span is no
     /// longer an identity (the middle no longer covers the domain) while
-    /// `is_left_identity()` still reports `true`. Nothing mis-composes on it:
-    /// `Span::compose` reads the middle pairs, never the flags, so the lie is
-    /// confined to the accessor. (`Cospan`'s flags used to steer its pushout
-    /// and to be cached; [#289](https://github.com/sustia-llc/catgraph/issues/289)
-    /// stopped the first and then deleted them outright, so `Cospan` computes
-    /// its answer per call while `Span` still caches — a second axis on which
-    /// the two differ, and one #345 will have to settle along with the
-    /// conjunct.) Tightening this one is a
-    /// separate change with its own breaking surface — the current behaviour is
-    /// pinned in `tests/checked_mutators.rs`
-    /// (`span_identity_flag_ignores_the_boundary_length`), and that pin is
-    /// meant to go red and be inverted when #345 lands.
+    /// `is_left_identity()` still reports `true`. `Span::compose` reads the
+    /// middle pairs, never the flags, so the divergence is confined to the
+    /// accessor.
     pub fn add_boundary_node(
         &mut self,
         new_boundary: Either<Lambda, Lambda>,
@@ -293,19 +244,9 @@ where
     /// Both invariants [`new`](Self::new) checks for a whole pair list are
     /// checked here for the one new pair, and in the same order: bounds first,
     /// on the domain half before the codomain half, then label agreement. The
-    /// **bounds** failure is reported with `new`'s own variant, so those two
-    /// ways of arriving at a middle pair report the identical error. The label
-    /// failure is not: this method keeps its pre-existing
-    /// [`CatgraphError::Composition`] where `new` raises
-    /// [`CatgraphError::ConstructionLabelMismatch`] — a difference #289 did not
-    /// close, since changing it would break every caller matching on the
-    /// current variant. See `# Errors` below for what each arm actually
-    /// returns. Before
-    /// [#289](https://github.com/sustia-llc/catgraph/issues/289) this method
-    /// reached the labels through `self.left[new_middle.0]` first, so an
-    /// out-of-bounds pair panicked with a bare slice message even though
-    /// [`CatgraphError::ConstructionMiddlePairOutOfBounds`] exists precisely to
-    /// name it.
+    /// **bounds** failure carries `new`'s own variant; the label failure does
+    /// not — this method raises [`CatgraphError::Composition`] where `new`
+    /// raises [`CatgraphError::ConstructionLabelMismatch`].
     ///
     /// # Errors
     ///
@@ -488,13 +429,6 @@ where
     /// other by construction, which is exactly the identity
     /// [`assert_valid`](Span::assert_valid) checks.
     ///
-    /// ⚠ **Breaking at #258.** This used to apply `p` to *both*, which is not
-    /// two conventions but a broken span: the pair said the wire had moved one
-    /// way and the word said its label had moved the other, so
-    /// `Span::identity(&['a','b','c']).permute_side(&rotation_left(3,1), true)`
-    /// wired domain `'a'` to a codomain slot labelled `'c'`. Since workstream A
-    /// moved `assert_valid` inside a `debug_assert!`, a release build accepted
-    /// it silently.
     fn permute_side(&mut self, p: &permutations::Permutation, of_codomain: bool) {
         let p_inv = p.inv();
         if of_codomain {
@@ -537,25 +471,9 @@ where
 
     /// `codomain() == types`, `domain()[i] == types[p.apply(i)]`.
     ///
-    /// # ⚠ Behaviour change at #258
-    ///
-    /// The pre-#258 `from_permutation(p, types, /* types_as_on_domain */ false)`
-    /// built `left: p.inv().permute(types)` with apex pairs
-    /// `(p.apply(idx), idx)`, i.e. it linked domain wire `j` to codomain wire
-    /// `p.inv().apply(j)`. That realized **`p⁻¹`**, not `p`, and put the domain
-    /// labels in the matching inverted order — so it disagreed with
-    /// [`Cospan::from_permutation_on_codomain`](crate::cospan::Cospan) on both
-    /// the wiring *and* the domain object for every non-involutive `p`. The
-    /// `types_as_on_domain = true` branch was always correct; only this one
-    /// drifted, and the two in-crate tests covering it asserted only
-    /// `codomain()`, `domain().len()`, and label agreement across the apex —
-    /// all of which an inverted wiring satisfies.
-    ///
-    /// The identity flags moved with the wiring, and for the same reason: they
-    /// describe the two *apex leg maps*, not the label vectors. The apex pairs
-    /// are now `(idx, p.apply(idx))`, so the left leg is the identity map and
-    /// the right leg is `p` — the mirror image of what the old pairs
-    /// `(p.apply(idx), idx)` gave.
+    /// The apex pairs are `(idx, p.apply(idx))`, so the left leg is the
+    /// identity map and the right leg is `p`. The identity flags describe those
+    /// two apex leg maps, not the label vectors.
     fn from_permutation_on_codomain(
         p: permutations::Permutation,
         types: &[Lambda],
@@ -846,7 +764,7 @@ mod test {
     use crate::category::{Composable, HasIdentity};
     use crate::monoidal::Monoidal;
 
-    // ---- #256: `new` validates in EVERY profile, `new_unchecked` does not ----
+    // ---- `new` validates in EVERY profile, `new_unchecked` does not ----
 
     /// `Span::new` refuses a middle pair that points outside either boundary,
     /// and says which leg, which pair, which target, and how big that boundary
@@ -964,9 +882,11 @@ mod test {
         assert!(Span::new(vec!['a', 'b'], vec!['b', 'a'], vec![(0, 1), (1, 0)]).is_ok());
     }
 
-    /// `new_unchecked` keeps the pre-#256 contract: both invariants are the
-    /// caller's, checked by `debug_assert!` only. Release-only, because in a
-    /// debug build those `debug_assert!`s fire — which IS the contract.
+    /// Fixture: an out-of-bounds middle pair and a label-mismatched one through
+    /// `new_unchecked`, both of which `new` refuses. Expected: both construct —
+    /// the invariants are the caller's, checked by `debug_assert!` only.
+    /// Release-only, because in a debug build those `debug_assert!`s fire,
+    /// which IS the contract.
     #[cfg(not(debug_assertions))]
     #[test]
     fn span_new_unchecked_accepts_what_new_refuses() {
@@ -1348,14 +1268,11 @@ mod test {
         }
     }
 
-    /// `on_codomain` on the same fixture — the #258 regression pin.
+    /// Fixture: `from_permutation_on_codomain(rotation_left(3, 1), ['a','b','c'])`.
     ///
-    /// With `types` on the codomain the contract forces
-    /// `domain[i] = types[p(i)] = ['b','c','a']`, and the wiring is still
-    /// `i ↦ p(i)`. The pre-#258 body produced `domain = ['c','a','b']` and
-    /// pairs `[(1,0),(2,1),(0,2)]`, i.e. it realized `p⁻¹`. Both of the old
-    /// assertions here — `codomain()` and label agreement across the apex —
-    /// are satisfied by that wrong answer, which is why it survived.
+    /// Expected: `codomain() == ['a','b','c']`, `domain() == ['b','c','a']`
+    /// (`domain[i] == types[p(i)]`), and pairs `[(0,1),(1,2),(2,0)]`
+    /// (wiring `i ↦ p(i)`).
     #[test]
     fn span_from_permutation_rotation_codomain() {
         use crate::monoidal::SymmetricMonoidalMorphism;
@@ -1381,11 +1298,12 @@ mod test {
         }
     }
 
-    /// Both constructors of #258 build the *same* underlying span, differing
-    /// only in the labels — so relabelling one gives the other exactly.
+    /// Fixture: random permutations on `n ∈ 2..7` at seed `0x258`, each fed to
+    /// both constructors.
     ///
-    /// Anchored independently of either body: `p.permute(types)` is computed
-    /// here, and the two sides come from two different functions.
+    /// Expected: `from_permutation_on_codomain(p, types)` equals
+    /// `from_permutation_on_domain(p, &p.permute(types))` on middle pairs,
+    /// domain and codomain.
     #[test]
     fn span_from_permutation_relabelling_law() {
         use crate::monoidal::SymmetricMonoidalMorphism;
@@ -1408,21 +1326,15 @@ mod test {
         }
     }
 
-    // ---- #289: `add_middle` reports the bound it used to panic on ----
-
-    /// `Span::add_middle` rejects an out-of-bounds pair with the variant
-    /// `Span::new` already raises for the identical input shape, and leaves the
-    /// span untouched.
+    /// Fixture: three pairs handed to `Span::add_middle` — one out of range on
+    /// the domain half (`usize::MAX`), one on the codomain half, and one on
+    /// both.
     ///
-    /// # What this ranges over
-    ///
-    /// Three pairs: one out of range on the domain half (`usize::MAX`, the
-    /// falsification-priority value from the audit), one out of range on the
-    /// codomain half, and one out of range on **both**, which pins the
-    /// domain-before-codomain order. It does not range over boundary sizes or
-    /// `Lambda` types, and it says nothing about the label-mismatch arm, which
-    /// `span_add_middle_type_mismatch_returns_error` in
-    /// `tests/mutation_workflows.rs` already covers.
+    /// Expected: each is rejected with the
+    /// `ConstructionMiddlePairOutOfBounds` variant `Span::new` raises for the
+    /// same input shape, the both-out-of-range pair reporting the domain half,
+    /// and the span left untouched. It does not range over boundary sizes,
+    /// `Lambda` types, or the label-mismatch arm.
     #[test]
     fn span_add_middle_rejects_out_of_bounds_pairs() {
         use crate::errors::BoundaryLeg;

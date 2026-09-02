@@ -452,21 +452,9 @@ fn permutation_sort<T: Ord>(x: &mut [T]) -> Permutation {
 ///
 /// # Panics
 ///
-/// Panics — in **every** build profile, and before any recursion — if the cycle
-/// is not one: if any element is at or beyond `n`, or if any element is
-/// repeated. Both are checked because the documented meaning above is only
-/// well-defined for a cycle of distinct in-range elements
-/// ([#289](https://github.com/sustia-llc/catgraph/issues/289)):
-///
-/// - An out-of-range element used to reach a bare `assert!(i < n && j < n)`
-///   inside the `permutations` crate, from a recursive call, so the message
-///   named neither this function nor the offending element. A cycle of length
-///   `< 2` did not even reach that: `from_cycle(3, &[7])` silently returned the
-///   identity.
-/// - A repeated element used to return, silently, a permutation that is **not**
-///   the cycle described: `from_cycle(3, &[0, 1, 0])` is a product of two
-///   transpositions of `0` and `1`, i.e. the identity, not a 3-cycle — and no
-///   3-cycle exists on the two distinct elements it names.
+/// Panics — in **every** build profile, and before any recursion — if any
+/// element is at or beyond `n`, or if any element is repeated. The meaning
+/// above is defined only for a cycle of distinct in-range elements.
 #[must_use]
 pub fn from_cycle(n: usize, cycle: &[usize]) -> Permutation {
     assert!(
@@ -586,13 +574,6 @@ impl SymmetricMonoidalDiscreteMorphism<usize> for Decomposition {
     /// the leading `perm` factor, and `a * b` in the `permutations` crate is
     /// diagrammatic (`(a * b).apply(i) == b.apply(a.apply(i))`), which makes
     /// `p.inv() * perm` exactly `perm ∘ p⁻¹`.
-    ///
-    /// ⚠ **Breaking at #258.** Both branches were inverted relative to the
-    /// contract — `f ∘ p` on the domain and `p⁻¹ ∘ f` on the codomain — which
-    /// matched the `Cospan` family's own inverted convention (this method's
-    /// test doc said so outright) rather than `MatR`'s. Both traits' impls now
-    /// agree, so a `Decomposition` and a `Cospan` permuted by the same `p`
-    /// move the same wires the same way.
     ///
     /// # Panics
     ///
@@ -1171,11 +1152,6 @@ mod test {
     /// of the permuted side moves to slot `p.apply(i)`:
     ///   - `permute_side(p, true)` → the function becomes `p ∘ f`
     ///   - `permute_side(p, false)` → the function becomes `f ∘ p.inv()`
-    ///
-    /// ⚠ Both read the other way round before #258 (`p.inv() ∘ f` and `f ∘ p`),
-    /// matching `Cospan`'s then-inverted convention — this doc comment said so
-    /// in as many words. `Cospan` moved onto `MatR`'s convention and this
-    /// followed, so the two traits now agree.
     #[test]
     fn decomposition_permute_side_domain_identity() {
         use crate::category::HasIdentity;

@@ -45,15 +45,9 @@ pub trait Frobenius<
     /// supertraits require, so it cannot implement `Frobenius` and reuse this
     /// body.
     ///
-    /// `Spider(z, 0, 0)` — the bubble `η;ε` — is special-cased in **both**
-    /// twins, for the same reason: [`special_frobenius_morphism`] hands back the
-    /// *simplified* term, and the simplifier's rule 3 used to cancel `η;ε` under
-    /// the extra-special axiom, which the special theories these functions
-    /// interpret into do not satisfy, so recursing returned `id_I` for a
-    /// non-identity scalar. Rule 3 was deleted at #350 and both carve-outs are
-    /// now **measured redundant** (`cargo test -p catgraph` is green with the
-    /// `(0, 0)` arms disabled); they are kept so the bubble does not depend on
-    /// the layer simplifier. Every other arity recurses.
+    /// `Spider(z, 0, 0)` — the bubble `η;ε` — is built directly in **both**
+    /// twins rather than through [`special_frobenius_morphism`]. Every other
+    /// arity recurses.
     ///
     /// # Errors
     ///
@@ -74,27 +68,15 @@ pub trait Frobenius<
             FrobeniusOperation::SymmetricBraiding(z1, z2) => {
                 // σ: [z1, z2] → [z2, z1]. The permutation is the
                 // *transposition* `[1, 0]`; `[0, 1]` is the identity and would
-                // make this default silently interpret every braiding as `id`
-                // (this line read `[0, 1]` until #284 — the bug was invisible
-                // because `FrobeniusMorphism`, the only implementor, overrides
-                // `basic_interpret`).
+                // interpret every braiding as `id`.
                 let transposition = Permutation::try_from(vec![1, 0])
                     .expect("invariant: [1, 0] is a permutation of 0..2");
                 Self::from_permutation_on_domain(transposition, &[*z1, *z2])?
             }
             FrobeniusOperation::UnSpecifiedBox(bbl, z1, z2) => black_box_interpreter(bbl, z1, z2)?,
             FrobeniusOperation::Spider(z, 0, 0) => {
-                // The bubble `η;ε`, built directly — the same carve-out
-                // `generator_to_cospan` takes, and for the same reason (#284):
-                // `special_frobenius_morphism` returns the **simplified** term,
-                // and rule 3 used to cancel `η;ε` outright (the *extra-special*
-                // axiom), so the general arm below recursed into an emptied
-                // term and handed back `Self::identity(&[])` — unsound in the
-                // merely *special* theories this trait interprets into.
-                // Redundant since #350 deleted rule 3 (measured), kept so the
-                // bubble does not depend on the layer simplifier. Pinned by
-                // `tests::basic_interpret_default_spider_zero_zero_is_the_bubble`
-                // on a `Cospan`-backed implementor.
+                // The bubble `η;ε`, built directly rather than through the
+                // simplifier — the same carve-out `generator_to_cospan` takes.
                 let mut bubble = Self::interpret_unit(*z);
                 bubble.compose(Self::interpret_counit(*z))?;
                 bubble
@@ -115,17 +97,15 @@ pub trait Frobenius<
     /// fold, compose in order); see [`basic_interpret`](Self::basic_interpret)
     /// for why it is a separate function rather than a call into this one.
     ///
-    /// ⚠ **They differ on a block-free layer**, contrary to what this
-    /// cross-reference used to claim. This default `continue`s past one;
-    /// `frobenius_to_cospan` builds `Cospan::identity(&Vec::new())` and composes
-    /// it. On a malformed morphism whose block-free *empty-interface* layer
-    /// follows a layer with a non-empty `right_type`, `frobenius_to_cospan`
-    /// returns `CatgraphError::Composition` while this default silently skips
-    /// the layer and returns a morphism whose codomain disagrees with
-    /// `morphism.codomain()`. Unreachable through the public constructors today
-    /// (`layers` is `pub(crate)` and `rebuild_from_ops` recomputes types), so it
-    /// is a latent divergence rather than a live bug — but this path is the
-    /// weaker of the two, because it succeeds.
+    /// ⚠ **They differ on a block-free layer.** This default `continue`s past
+    /// one; `frobenius_to_cospan` builds `Cospan::identity(&Vec::new())` and
+    /// composes it. On a malformed morphism whose block-free *empty-interface*
+    /// layer follows a layer with a non-empty `right_type`,
+    /// `frobenius_to_cospan` returns `CatgraphError::Composition` while this
+    /// default skips the layer and returns a morphism whose codomain disagrees
+    /// with `morphism.codomain()`. `layers` is `pub(crate)` and
+    /// `rebuild_from_ops` recomputes types, so that shape is not reachable
+    /// through the public constructors.
     ///
     /// # Errors
     ///
@@ -133,8 +113,7 @@ pub trait Frobenius<
     /// - A layer has no blocks *and* a non-empty interface — a malformed
     ///   morphism. A block-free layer whose interface is empty is `id_I` and is
     ///   interpreted, not rejected: that is how `FrobeniusMorphism::identity`
-    ///   represents the identity on the empty type list, and rejecting it (as
-    ///   this default did before #284) makes a legal value uninterpretable.
+    ///   represents the identity on the empty type list.
     fn interpret_frob<F>(
         morphism: &FrobeniusMorphism<Lambda, BlackBoxLabel>,
         black_box_interpreter: &F,
@@ -254,14 +233,8 @@ mod tests {
     /// difference between the default and the override is a difference in the
     /// default, not in the carrier.
     ///
-    /// ⚠ **Was blind at `Spider(z, 0, 0)` until #350.** The carrier is a
-    /// `FrobeniusMorphism`, whose layer simplifier used to cancel `η;ε` (rule 3,
-    /// the extra-special axiom), so the bubble and `id_I` were the *same value*
-    /// here and no assertion on this type could separate the fixed `(0, 0)` arm
-    /// from the broken one. Rule 3 is gone and this carrier is the special
-    /// theory too, but that generator stays pinned on [`CospanBacked`]: it is
-    /// the carrier whose theory the `(0, 0)` arm exists for, and its answer is
-    /// a `Cospan` the pin can compare by apex and scalar count.
+    /// The `Spider(z, 0, 0)` generator is pinned on [`CospanBacked`] instead,
+    /// whose answer is a `Cospan` comparable by apex and scalar count.
     #[derive(PartialEq, Eq, Clone)]
     struct Defaulting(Inner);
 
@@ -333,13 +306,10 @@ mod tests {
     /// A second `Frobenius` implementor that also runs the trait *defaults*, but
     /// over a [`Cospan`] carrier instead of a `FrobeniusMorphism` one.
     ///
-    /// [`Defaulting`] could not see the `Spider(z, 0, 0)` arm at all before
-    /// #350 — its carrier quotiented by the extra-special axiom, which
-    /// identifies the bubble with `id_I`. `Cospan` has always been the merely
-    /// **special** theory: there the bubble is a genuine `0 → 0` non-identity
-    /// (apex 1, one scalar class), so the two answers are distinguishable by
-    /// apex and scalar count, and this is the carrier the crate's own
-    /// `Cospan`-valued twin `frobenius_to_cospan` uses.
+    /// `Cospan` is the merely **special** theory: the bubble is a genuine
+    /// `0 → 0` non-identity there (apex 1, one scalar class), so it and `id_I`
+    /// are distinguishable by apex and scalar count. It is also the carrier the
+    /// crate's `Cospan`-valued twin `frobenius_to_cospan` uses.
     ///
     /// The wrapper exists only because `Cospan` is
     /// [`Composable`] (immutable) while `Frobenius` requires
@@ -419,19 +389,13 @@ mod tests {
         })
     }
 
-    /// The `basic_interpret` default sends `σ: [z, w] → [w, z]` to a real
-    /// transposition.
+    /// Fixture: `SymmetricBraiding('a', 'b')` through the `basic_interpret`
+    /// default on [`Defaulting`] — two *distinct* labels, so the identity and
+    /// the transposition are distinguishable.
     ///
-    /// This line built `Permutation::try_from(vec![0, 1])` — the *identity* —
-    /// until #284. Nothing caught it because `FrobeniusMorphism`, the crate's
-    /// only `Frobenius` implementor, overrides `basic_interpret`; `Defaulting`
-    /// exists to reach the default body. The assertion is on the **codomain**,
-    /// which is what the permutation decides: the identity permutation leaves
-    /// it `['a', 'b']`, the transposition makes it `['b', 'a']`.
-    ///
-    /// **Space:** one braiding, `('a', 'b')` — two *distinct* labels, so the
-    /// identity and the transposition are distinguishable at all (`('a', 'a')`
-    /// would make this vacuous).
+    /// Expected: domain `['a', 'b']` and codomain `['b', 'a']` (the identity
+    /// permutation would leave the codomain `['a', 'b']`), agreeing with the
+    /// `FrobeniusMorphism` override.
     #[test]
     fn basic_interpret_default_braiding_is_a_transposition() {
         let braid = FrobeniusOperation::SymmetricBraiding('a', 'b');
@@ -449,18 +413,12 @@ mod tests {
         assert_eq!(got.codomain(), via_override.codomain());
     }
 
-    /// The `interpret_frob` default accepts `identity(&vec![])`.
+    /// Fixture: `identity(&vec![])`, whose single layer is block-free with an
+    /// empty interface, plus `identity(&vec!['a'])` and `μ;δ` as controls.
     ///
-    /// That value's single layer is block-free with an empty interface — `id_I`
-    /// — and the default rejected *every* block-free layer until #284
-    /// ("somehow an empty layer in a frobenius morphism???"), so a legal value
-    /// the crate constructs was uninterpretable. A block-free layer with a
-    /// non-empty interface is still rejected; that half is unreachable through
-    /// the public constructors (`rebuild_from_ops` recomputes the types from
-    /// the ops), so it is not asserted here.
-    ///
-    /// **Space:** `identity(&vec![])` and, as a control that the accept is not
-    /// an accept-everything, `identity(&vec!['a'])` and `μ;δ`.
+    /// Expected: the `interpret_frob` default accepts all three. A block-free
+    /// layer with a non-empty interface is rejected; that shape is unreachable
+    /// through the public constructors, so it is not asserted here.
     #[test]
     fn interpret_frob_default_accepts_the_empty_identity() {
         let empty_id: Inner = Inner::identity(&vec![]);
@@ -487,35 +445,15 @@ mod tests {
         }
     }
 
-    /// The `basic_interpret` default sends `Spider(z, 0, 0)` to the bubble
-    /// `η;ε`, not to `id_I`.
+    /// Fixture: `Spider('a', 0, 0)` through the `basic_interpret` default on a
+    /// `Cospan`-backed implementor, with `(1, 1)` and `(2, 2)` spiders as
+    /// controls.
     ///
-    /// Until #284 this arm recursed into `special_frobenius_morphism(0, 0, z)`,
-    /// whose `η;ε` the layer simplifier's rule 3 had *already cancelled* under
-    /// the extra-special axiom; the resulting empty term then interpreted to
-    /// `Self::identity(&[])`. The `Cospan`-valued twin `generator_to_cospan`
-    /// had the identical bug and was fixed under #284 as well (see its `(0, 0)`
-    /// arm and `scfm_equal_scalars_have_equal_images`); with only that side
-    /// repaired, the two disagreed at exactly this generator — contradicting
-    /// [`basic_interpret`](Frobenius::basic_interpret)'s own "must agree
-    /// generator-for-generator". Any *special-but-not-extra-special*
-    /// implementor inheriting the default got `id_I` for a non-identity scalar.
-    /// Rule 3 itself was deleted at #350, which makes both carve-outs
-    /// redundant (measured) rather than load-bearing; they are kept so this
-    /// arm does not depend on what the layer simplifier does.
-    ///
-    /// **Why the carrier is a `Cospan` and not a `FrobeniusMorphism`:**
-    /// [`Defaulting`] was structurally incapable of observing this before #350
-    /// — its carrier quotiented by rule 3, so the bubble and `id_I` were the
-    /// same value there and every assertion on it passed either way. `Cospan`
-    /// is the theory this arm exists for, and its apex and scalar counts are
-    /// what the assertions below read.
-    ///
-    /// **Space (narrow, stated honestly):** one generator, `Spider('a', 0, 0)`,
-    /// on one label, through one `Cospan`-backed implementor. It does *not*
-    /// range over other labels, other carriers, or the `(0, n)`/`(m, 0)` spiders
-    /// — those still recurse, and the `(1, 1)`/`(2, 2)` controls below check
-    /// only that the new arm did not swallow the general one.
+    /// Expected: `apex_len() == 1` and `scalar_count() == 1` for the `(0, 0)`
+    /// image, equal to the hand-spelled `η;ε` and to `frobenius_to_cospan`'s
+    /// image of the same generator; the controls agree with the twin too. It
+    /// does not range over other labels, other carriers, or the `(0, n)` /
+    /// `(m, 0)` spiders.
     #[test]
     fn basic_interpret_default_spider_zero_zero_is_the_bubble() {
         let bubble_op: FrobeniusOperation<char, String> = FrobeniusOperation::Spider('a', 0, 0);

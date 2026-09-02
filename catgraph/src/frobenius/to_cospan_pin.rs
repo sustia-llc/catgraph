@@ -1,78 +1,36 @@
-//! Differential pin for the surviving `frobenius_to_cospan` (#336).
+//! Differential pin for `frobenius_to_cospan`.
 //!
-//! The audit sweep's G1 merge left the crate with *two* public functions for one
-//! semantics map — `frobenius::frobenius_to_cospan` (G1-T1, #283) and
-//! `cospan_algebra::frobenius_to_cospan` (G1-T2, #284). Each branch was reviewed
-//! against `96cfea7`, so no reviewer could see the other. #336 kept the G1-T2
-//! body and made the `frobenius::` path a re-export of it.
+//! [`reference_to_cospan`] is a second reading of the same semantics map; the
+//! two are measured equal up to
+//! [`canonical_form`](crate::cospan_canon::CospanCanon) over 383 terms. The
+//! independence is partial: the spider route (one apex vertex built directly,
+//! versus a recursion into `special_frobenius_morphism`) and the layer fold
+//! differ; the six arms other than `Spider` and `UnSpecifiedBox` — the
+//! hand-built braiding literal included — are byte-identical to the survivor's,
+//! so a convention error applied to both copies alike is not visible here.
 //!
-//! The G1-T1 algorithm did not go with it: it lives on here as
-//! [`reference_to_cospan`], an **independent oracle** the survivor is measured
-//! against up to [`canonical_form`](crate::cospan_canon::CospanCanon) over 383
-//! terms — a space far wider than the 19 probe samples the issue recorded. The
-//! independence is partial and stated exactly: the spider route (one apex
-//! vertex, built directly, versus a recursion into
-//! `special_frobenius_morphism`) and the layer fold are genuinely different;
-//! the six arms other than `Spider` and `UnSpecifiedBox` — the hand-built
-//! braiding literal included — are byte-identical to the survivor's, so a
-//! type-correct convention error applied to both copies alike cannot be
-//! compared away here (measured; see *What it cannot see* on the pin for
-//! exactly what E showed).
+//! The module sits inside the crate because the reference algorithm walks
+//! `FrobeniusMorphism::layers`, which is `pub(crate)`.
 //!
-//! It lives inside the crate because the T1 algorithm walks
-//! `FrobeniusMorphism::layers`, which is `pub(crate)`; an integration test
-//! cannot express it.
+//! # Falsification
 //!
-//! In the commit that introduced this module both implementations were still
-//! live, and `the_reference_copy_is_the_live_g1_t1_implementation` measured the
-//! copy below against the original **byte-identically** over this same space
-//! before the original was deleted — over the 363-term version of it, the
-//! `(m, n) ≤ 3` spider grid this file has since widened to `≤ 5`. That test went
-//! with the body it checked; its record is in git.
-//!
-//! # Falsification (re-measured 2026-08-21 on the 383-term space, each
-//! perturbation reverted after; the bubble row **re-measured again at #350** —
-//! see the note under the table)
-//!
-//! Perturbing the **survivor** — `cospan_algebra::generator_to_cospan` — takes
+//! Perturbing `cospan_algebra::generator_to_cospan` takes
 //! [`the_two_frobenius_to_cospan_agree_over_the_wide_space`] red two ways:
 //!
 //! | perturbation | result |
 //! |---|---|
 //! | braiding right leg `vec![1, 0]` → `vec![0, 1]` | red at `random_5`: the ill-typed braiding makes the layer fold fail outright (`'a'` vs `'b'` at a common interface) |
-//! | delete the `Spider(z, 0, 0)` carve-out, i.e. recurse as the pre-#284 body did | **no longer red — 0 of 383** since #350; was **48 of 383** while rule 3 lived |
+//! | delete the `Spider(z, 0, 0)` carve-out, i.e. recurse | **0 of 383** — not red |
 //! | `Comultiplication(z)` → the *disconnected* `Cospan::new_unchecked(vec![0], vec![0, 1], vec![z, z])` | red, **169 of 383** terms disagree — `delta`: survivor `apex=2` vs reference `apex=1` |
 //!
-//! ⚠ **The bubble row is dead, and that is the correct reading — not a
-//! tooling fault.** While `two_layer_simplify` still cancelled `η;ε`, deleting
-//! the carve-out made the `(0, 0)` arm recurse into an *already-emptied* term,
-//! so the survivor said `apex=0 scalars=0` against the reference's
-//! `apex=1 scalars=1` and 48 terms disagreed. #350 deleted rule 3, so that
-//! recursion now yields the depth-2 `η;ε`, which interprets to `apex=1
-//! scalars=1` — exactly what the carve-out builds directly. Measured on this
-//! branch, control and treatment: **48 of 383 red at `90a8824`, 0 of 383 red
-//! here** (`cargo test -p catgraph --no-fail-fast`, 26 targets, no failures).
-//! The carve-out is therefore **measured redundant**, and `cargo-mutants` will
-//! score its deletion MISSED. Read that as accurate. It is kept so the `(0, 0)`
-//! scalar does not depend on what the layer simplifier does — see
-//! `cospan_algebra::generator_to_cospan`'s own note.
+//! [`black_boxes_are_rejected_by_both`] goes red when the survivor's variant is
+//! switched to `CatgraphError::Composition`.
 //!
-//! The `Comultiplication` row is a pure connectivity change with no scalar in
-//! sight, so the green run does not rest on the bubble arm — which now matters
-//! more than it did, since the bubble arm no longer separates the two bodies at
-//! all. [`black_boxes_are_rejected_by_both`]
-//! goes red when the survivor's variant is switched to
-//! `CatgraphError::Composition`, and the retired copy-fidelity test went red
-//! when the live T1 spider arm was given one apex vertex per output
-//! (`spider_2_3`: right leg `[0, 0, 0]` vs `[0, 1, 2]`).
-//!
-//! **The space itself is falsified too**, which is a different question from
-//! "does a production perturbation redden the pin": short-circuiting
-//! [`random_generator`] to `None` — the shape a regression in its position
-//! guards would take — leaves 300 identities that *agree perfectly*, so the
-//! differential assertion stays green. The [`MIN_RANDOM_DISTINCT`] floor is what
-//! catches it: **7 distinct canonical forms over the 300 random terms, against
-//! the 175 measured here**. `SPACE_SIZE` alone would not have noticed.
+//! The space is falsified separately: short-circuiting [`random_generator`] to
+//! `None` leaves 300 identities that agree perfectly, so the differential
+//! assertion stays green and the [`MIN_RANDOM_DISTINCT`] floor is what catches
+//! it — **7 distinct canonical forms over the 300 random terms, against the 175
+//! measured here**.
 
 use crate::{
     category::{Composable, ComposableMutating, HasIdentity},
@@ -87,8 +45,8 @@ use rand::{RngExt, SeedableRng, rngs::StdRng};
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-// The surviving implementation, reached through the `frobenius::` re-export
-// #336 put in place — so the re-export itself is exercised, not bypassed.
+// The surviving implementation, reached through the `frobenius::` re-export,
+// so that path is exercised rather than bypassed.
 use super::frobenius_to_cospan as survivor_to_cospan;
 
 type FM = FrobeniusMorphism<char, String>;
@@ -107,40 +65,16 @@ const SPACE_SIZE: usize = 83 + RANDOM_TERMS;
 /// Floor on the number of **distinct canonical forms** among the random terms.
 ///
 /// `SPACE_SIZE` guards the space's *count*; this guards its *content*.
-/// [`random_generator`] returns `None` whenever the drawn generator has no legal
-/// position, and the caller skips that step, so a regression in its guards (say,
-/// every arm falling through to `None`) would leave 300 identities behind with
-/// `SPACE_SIZE` still satisfied and the differential assertion still green.
-///
 /// Measured on the pinned seed: **175** distinct canonical forms over the 300
-/// random terms (**172** before #350). ⚠ That **+3 is the net change in
-/// distinct forms, not the number of terms that moved**: measured
-/// term-by-term, **eleven** random terms changed image at #350 (`random_11`,
-/// `_30`, `_63`, `_118`, `_124`, `_140`, `_159`, `_217`, `_230`, `_263`,
-/// `_271`), each gaining one or more scalar `ApexClass` because the `η;ε` it
-/// carries is no longer cancelled at compose time.
-///
-/// The +3 decomposes as follows, every figure measured on the two trees rather
-/// than derived from the others: the **289 unmoved** random terms carry **169**
-/// distinct forms on both sides. The eleven movers' *old* images were **9**
-/// distinct, **3** of which no unmoved term also carried — those 3 vanish
-/// (169 + 3 = 172). Their *new* images are likewise **9** distinct, **3** of
-/// them already carried by an unmoved term, so **6** are added
-/// (169 + 6 = 175). Net −3 + 6 = **+3**. Whole-space the structure is
-/// identical, measured the same way: **206** unmoved distinct forms, the same
-/// 3 vanishing and 6 added (206 + 3 = 209, 206 + 6 = 212).
-///
-/// The floor sits a little below the measured value so an incidental reshuffle
-/// of the draw does not red the pin, while a collapse cannot pass.
+/// random terms. The floor sits below the measured value so an incidental
+/// reshuffle of the draw does not red the pin, while a collapse cannot pass.
 const MIN_RANDOM_DISTINCT: usize = 150;
 
 /// Floor on the number of distinct canonical forms over the **whole** space.
 ///
-/// Measured on the pinned seed: **212** (**209** before #350, moved by the same
-/// eleven terms — again a net +3, not a count of terms). Same rationale as
-/// [`MIN_RANDOM_DISTINCT`]; this one additionally notices a hand-built block
-/// (the spider grid, the Def 2.5 battery, the compact-closed terms) degenerating
-/// without its length changing.
+/// Measured on the pinned seed: **212**. This one additionally notices a
+/// hand-built block (the spider grid, the Def 2.5 battery, the compact-closed
+/// terms) degenerating without its length changing.
 const MIN_TOTAL_DISTINCT: usize = 180;
 
 // ---------------------------------------------------------------------------
@@ -522,69 +456,36 @@ fn space() -> Vec<(String, FM)> {
 // The pin
 // ---------------------------------------------------------------------------
 
-/// The surviving `frobenius_to_cospan` denotes what the G1-T1 algorithm denoted.
+/// Compares `cospan_algebra::frobenius_to_cospan`, reached through the
+/// `frobenius::` re-export, against [`reference_to_cospan`] up to
+/// `canonical_form`.
 ///
-/// Compares the survivor — `cospan_algebra::frobenius_to_cospan`, reached
-/// through the `frobenius::` re-export so that path is exercised too — against
-/// [`reference_to_cospan`], the retired G1-T1 algorithm, up to `canonical_form`.
+/// **Fixture (383 terms):** the ten `tests/compact_closed.rs::samples()` terms;
+/// the thirty-six `(m, n) ≤ 5` spiders including the `(0, 0)` bubble; both
+/// sides of all eleven Def 2.5 equations (22 terms); fifteen cup / cap / name /
+/// unname terms; and 300 pseudo-random terms of up to 8 extension attempts over
+/// two labels, seeded at `0x0336_0001`. All at `Lambda = char`,
+/// `BlackBoxLabel = String` — one instantiation. No term here carries a black
+/// box; that arm is [`black_boxes_are_rejected_by_both`].
 ///
-/// **Space (383 terms, stated exactly):** the ten
-/// `tests/compact_closed.rs::samples()` terms; the thirty-six `(m, n) ≤ 5`
-/// spiders including the `(0, 0)` bubble; both sides of all eleven Def 2.5
-/// equations as `tests/frobenius_axioms.rs` builds them (22 terms); fifteen cup
-/// / cap / name / unname terms; and 300 pseudo-random terms of **up to 8
-/// extension attempts** over two labels, seeded at `0x0336_0001`. All at
-/// `Lambda = char`, `BlackBoxLabel = String` — **one instantiation**, not "every
-/// carrier". No term here carries a black box; that arm is
-/// [`black_boxes_are_rejected_by_both`].
-///
-/// "Attempts", not steps: [`random_generator`] returns `None` when the drawn
-/// generator fits nowhere in the running codomain and the caller skips that
-/// step, and its `Identity` arm contributes a no-op layer — so the terms are
-/// shorter than the attempt count and many are short. Measured on the pinned
-/// seed: 212 distinct canonical forms over the 383 terms and 175 over the 300
-/// random ones; of the 300 random *terms*, 46 have scalar (`0 → 0`) images,
-/// spread over 6 distinct scalar-shaped forms. (Before #350: 209 and 172, the
-/// same 46 terms, 4 distinct forms — the term count is unchanged because
-/// deleting rule 3 does not change which terms have a `0 → 0` **boundary**,
-/// only how many of those scalars are told apart. ⚠ That holds for *this*
-/// sentence's `0 → 0` reading of "scalar" and no other: under the "carries a
-/// scalar `ApexClass`" reading the count does move, 64 → 71 random terms.)
-/// The count alone would not notice that collapsing, so
-/// [`MIN_RANDOM_DISTINCT`] and [`MIN_TOTAL_DISTINCT`] are asserted beside
-/// [`SPACE_SIZE`].
+/// **Expected:** no survivor/oracle mismatch, `terms.len() == SPACE_SIZE`, and
+/// the two distinct-form floors. Measured on the pinned seed: 212 distinct
+/// canonical forms over the 383 terms and 175 over the 300 random ones; 46 of
+/// the random terms have `0 → 0` images, spread over 6 distinct scalar-shaped
+/// forms.
 ///
 /// **What it cannot see:** both sides fold with the same `Cospan::compose`,
 /// `Monoidal` and `HypergraphCategory` generator cospans, so this is a
 /// *differential* claim about the two interpretation functions, not an absolute
-/// one about the cospan machinery underneath them. A bug in the pushout moves
-/// both sides together and stays green here — `tests/frobenius_axioms.rs` and
-/// `cospan_canon`'s own tests are what hold that. The oracle's six arms other
-/// than `Spider` and `UnSpecifiedBox` are byte-identical to the survivor's,
-/// the braiding's hand-written
+/// one about the cospan machinery underneath them. The oracle's six arms other
+/// than `Spider` and `UnSpecifiedBox` are byte-identical to the survivor's, the
+/// braiding's hand-written
 /// `Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![z, w])` literal
-/// included — it is not a `HypergraphCategory` generator cospan, so a
-/// convention error applied to both copies (the natural shape of a "fix" to two
-/// identical-looking lines) is not something this pin can *compare* away.
-/// Measured (perturbation E, right leg `[1, 0]` → `[0, 1]` in **both** copies,
-/// reverted after): this test still goes red, but at `random_5` through the
-/// fold's label check — the flipped literal is ill-typed on a mixed-label σ
-/// (`[z, w] → [z, w]`), so the term is rejected before any comparison happens.
-/// On a same-label σ the flipped literal is type-correct and both copies agree
-/// on the wrong answer — measured under E: this pin restricted to the spider
-/// grid plus the Def 2.5 battery (58 terms, the σ-bearing `comm_lhs` /
-/// `cocomm_lhs` among them) has 0 survivor/oracle mismatches, and `σ_zz` is
-/// identity-shaped on both sides. What catches that case is the tests built
-/// through the `Carrier::swap` default (`from_permutation_on_domain` on each
-/// carrier), not this pin:
-/// `tests/frobenius_axioms.rs::frobenius_to_cospan_agrees_with_the_cospan_generators`
-/// compares the FM braiding against `Cospan::from_permutation_on_domain`, and
-/// `braiding_is_a_genuine_crossing_per_carrier` asserts σ ≠ `id` on all four
-/// carriers — only the FM row reddens, because its `key()` is the one carrier
-/// key routed through `frobenius_to_cospan`, i.e. through the perturbed
-/// literal; both went red under E on label `'z'` (a full `--no-fail-fast` run
-/// under E reddens 15 tests crate-wide, eleven of them in
-/// `tests/compact_closed.rs`).
+/// included, so a convention error applied to both copies is not something this
+/// pin can compare away. Measured with the right leg flipped to `[0, 1]` in
+/// **both** copies: this test goes red at `random_5` through the fold's label
+/// check, while the same pin restricted to the spider grid plus the Def 2.5
+/// battery (58 terms) has 0 mismatches.
 #[test]
 fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
     let terms = space();
@@ -652,23 +553,13 @@ fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
     );
 }
 
-/// Both readings refuse an `UnSpecifiedBox` — but **not with the same error**,
-/// which is the one place a `pub use` could not bridge them.
+/// Fixture: one `UnSpecifiedBox`, `1 → 2` wires, at `char`/`String`, through
+/// both readings.
 ///
-/// G1-T1 returned [`CatgraphError::Composition`] naming the box's arities and
-/// the word `UnSpecifiedBox`; G1-T2 returns [`CatgraphError::Interpret`] naming
-/// the arities as `N in, M out`. #336 kept the survivor's **variant** — so
-/// `frobenius::` callers now get `Interpret` where they got `Composition`, a
-/// behaviour change recorded in the CHANGELOG — and merged T1's wording into it,
-/// so the message names both the generator and the arities and *both* existing
-/// black-box tests keep their assertions:
-/// `tests/frobenius_axioms.rs::frobenius_to_cospan_rejects_black_boxes` (the
-/// `UnSpecifiedBox` substring) and
-/// `cospan_algebra::tests::frobenius_to_cospan_rejects_black_boxes` (the
-/// `Interpret` variant). This pins all three facts in one place.
-///
-/// **Space:** one black box, `1 → 2` wires, at `char`/`String`. It says nothing
-/// about a black box nested inside a larger term.
+/// Expected: the reference returns [`CatgraphError::Composition`] and the
+/// survivor [`CatgraphError::Interpret`], whose message names both the
+/// generator and the arities as `N in, M out`. It says nothing about a black
+/// box nested inside a larger term.
 #[test]
 fn black_boxes_are_rejected_by_both() {
     let boxed: FM =

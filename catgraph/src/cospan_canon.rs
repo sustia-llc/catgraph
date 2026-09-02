@@ -5,32 +5,25 @@
 //! of the cospan category* iff there is a bijection of apexes `a ≅ a'`
 //! commuting with both legs (F&S 2019, §3; the boundary objects `X`, `Y` are
 //! fixed, only the apex is quotiented). Raw structural equality on a
-//! [`Cospan`] — the derived `==`, and [`Cospan::structurally_equal`], which
-//! since [#289](https://github.com/sustia-llc/catgraph/issues/289) is a named
-//! alias for it — is apex-order sensitive and so answers a strictly finer
-//! question, which is why this module supplies the *semantic* comparison.
-//! Deriving `PartialEq` did not narrow that gap: it is the same triple
-//! comparison the method always was.
+//! [`Cospan`] — the derived `==`, and its named alias
+//! [`Cospan::structurally_equal`] — is apex-order sensitive and answers a
+//! strictly finer question.
 //!
-//! # Why this is a complete decision for special Frobenius monoids
+//! # Completeness for special Frobenius monoids
 //!
 //! By F&S 2019 **Proposition 3.8**, `(Cospan, ⊕)` is the theory of **special**
 //! commutative Frobenius monoids: SCFMs in a symmetric monoidal `(C, ⊗)`
 //! correspond one-to-one with strict SM functors `Cospan → C`. So two
 //! spider/Frobenius terms are equal under the SCFM axioms iff their images in
-//! `Cospan` are isomorphic. [`CospanCanon`] decides that isomorphism, hence
-//! decides SCFM-equality — the target of the [#80] complete-functor route in
-//! `catgraph-syntax`.
+//! `Cospan` are isomorphic, and [`CospanCanon`] decides that isomorphism.
 //!
 //! **Special, not extra-special.** Cospan keeps *scalars*: the closed bubble
 //! `η # ε` is a `0 → 0` cospan whose single apex vertex is hit by neither leg,
 //! and it is a genuine non-identity (distinct from `id₀`). The canonical form
 //! records apex-only vertices as classes with empty preimages, so `k` bubbles
-//! are distinguished from `k-1`. (Corelations — jointly-surjective cospans,
+//! are distinguished from `k-1`. Corelations — jointly-surjective cospans,
 //! [`crate::corel::Corel`] — are the *extra-special* quotient that discards
-//! scalars; they are the wrong target for the special theory.)
-//!
-//! [#80]: https://github.com/sustia-llc/catgraph/issues/80
+//! scalars.
 
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -43,35 +36,28 @@ use crate::errors::{BoundaryLeg, CatgraphError};
 ///
 /// # Invariants
 ///
-/// - Both preimage vectors are **sorted ascending**, and callers may rely on
-///   it: [`Cospan::canonical_form`] walks each leg in boundary-index order, so
-///   the indices are appended already in order.
+/// - Both preimage vectors are **sorted ascending**, and callers may rely on it.
 /// - Each leg is a *function*, so across the whole
 ///   [`classes`](CospanCanon::classes) slice every domain index occurs in
 ///   exactly one `dom_preimage` and every codomain index in exactly one
 ///   `cod_preimage`.
 ///
-/// [`new`](Self::new) does **not** establish either — a single class cannot,
-/// since both are statements about the whole class vector.
-/// [`CospanCanon::from_parts`] is where they are checked, and it rejects rather
-/// than repairs.
+/// [`new`](Self::new) establishes neither; [`CospanCanon::from_parts`] checks
+/// both and rejects rather than repairs.
 ///
 /// # Scalars
 ///
 /// A class whose two preimages are **both** empty is a *scalar* — the closed
 /// bubble `η # ε`, an apex vertex no leg reaches — and that both-empty case is
-/// exactly [`is_scalar`](Self::is_scalar). `Cospan` is the theory of
-/// **special**, not extra-special, commutative Frobenius monoids, so such
-/// vertices are kept and counted rather than discarded: `k` bubbles are
-/// distinguished from `k-1`. See the [module documentation](self).
+/// exactly [`is_scalar`](Self::is_scalar). Such vertices are kept and counted:
+/// `k` bubbles are distinguished from `k-1`.
 ///
 /// # Ordering
 ///
 /// `Ord` is the derived lexicographic order on
 /// `(label, dom_preimage, cod_preimage)`, in that field order. [`CospanCanon`]
-/// sorts its classes under it, and that sort is what makes the canonical form
-/// invariant under relabelling of apex vertices — the field order is
-/// load-bearing, not cosmetic.
+/// sorts its classes under it, which makes the canonical form invariant under
+/// relabelling of apex vertices.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ApexClass<Lambda> {
     /// The apex vertex's label.
@@ -85,22 +71,9 @@ pub struct ApexClass<Lambda> {
 
 impl<Lambda> ApexClass<Lambda> {
     /// Assemble a class signature from its parts, **without establishing either
-    /// invariant above**.
-    ///
-    /// This is the reload path's building block: a [`CospanCanon`] read back out
-    /// of a store is reassembled class by class and handed to
-    /// [`CospanCanon::from_parts`], which is where the invariants are checked.
-    /// A class cannot check them on its own — the partition property is a
-    /// statement about the *whole* class vector, and the preimage-ordering one
-    /// has to be re-checked there anyway, since a class can also arrive from
-    /// [`CospanCanon::classes`].
-    ///
-    /// It deliberately does **not** sort the preimages. An unsorted preimage is
-    /// corrupt data, `from_parts` reports it as
-    /// [`CatgraphError::CanonPreimageNotAscending`], and silently repairing it
-    /// here would hide the corruption at exactly the point a caller most needs
-    /// to hear about it — as well as making that rejection untestable, since no
-    /// test could then build the malformed value to feed in.
+    /// invariant above** and without sorting the preimages. An unsorted
+    /// preimage reaches [`CospanCanon::from_parts`] as
+    /// [`CatgraphError::CanonPreimageNotAscending`].
     ///
     /// # Examples
     ///
@@ -172,28 +145,20 @@ impl<Lambda> ApexClass<Lambda> {
 /// domain preimage, sorted codomain preimage)`. Because each leg is a
 /// *function*, every boundary index lands in exactly one vertex's preimage, so
 /// non-bubble vertices carry pairwise-distinct signatures; only apex-only
-/// **bubbles** (empty preimages, equal label) can share a signature, and those
-/// are exactly the scalars we want to compare by multiplicity. Sorting the
-/// vector of signatures canonicalises the (multi)set, making the whole value
+/// **bubbles** (empty preimages, equal label) can share a signature. Sorting
+/// the vector of signatures canonicalises the multiset, making the whole value
 /// order-invariant under apex relabelling. [`classes`](Self::classes) exposes
-/// that sorted vector for inspection, logging, or re-encoding.
+/// that sorted vector.
 ///
 /// # Round trip
 ///
-/// The form is reconstructible, not merely readable:
 /// [`from_parts`](Self::from_parts) rebuilds one from `(dom_len, cod_len,
 /// classes)` after re-establishing every invariant above, and
-/// [`to_cospan`](Self::to_cospan) turns it back into a witnessing [`Cospan`].
-/// Those invariants are exactly *sufficient* for that reconstruction, which is
-/// what makes the validation testable rather than merely asserted:
+/// [`to_cospan`](Self::to_cospan) turns it back into a witnessing [`Cospan`]:
 ///
 /// ```text
 /// c.canonical_form().to_cospan().canonical_form() == c.canonical_form()
 /// ```
-///
-/// So a consumer can persist a canonical form and reload it without keeping the
-/// originating cospan — the round trip is the oracle that says the reloaded
-/// value is the same comparison value it was.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CospanCanon<Lambda> {
     /// Domain (left boundary) size — pins the object `X`.
@@ -253,31 +218,15 @@ impl<Lambda: Ord> CospanCanon<Lambda> {
     /// the private construction path guarantees.
     ///
     /// This is the reload half of [`classes`](Self::classes): a consumer that
-    /// persisted a canonical form can read it back without keeping (or
-    /// re-encoding) the originating [`Cospan`]. Because `CospanCanon`'s `Eq` and
-    /// `Hash` decide *apex isomorphism* only by virtue of those invariants, a
-    /// constructor that skipped them would hand back a value comparing unequal
-    /// to the [`canonical_form`](Cospan::canonical_form) of every cospan — worse
-    /// than no constructor at all.
-    ///
-    /// The invariants are not merely necessary, they are **sufficient**: they
-    /// are exactly enough to rebuild a witnessing cospan, which is what
-    /// [`to_cospan`](Self::to_cospan) does and what makes this validation
-    /// testable rather than merely asserted —
-    /// `c.canonical_form().to_cospan().canonical_form() == c.canonical_form()`.
+    /// persisted a canonical form can read it back without keeping the
+    /// originating [`Cospan`].
     ///
     /// **Scalars survive.** A class with both preimages empty is a bubble
-    /// (`η # ε`), legal, and kept: `Cospan` is the theory of *special*, not
-    /// extra-special, commutative Frobenius monoids. Bubbles are also the only
-    /// legitimate *duplicate* classes, so the sortedness check accepts equal
-    /// neighbours.
+    /// (`η # ε`), legal, and kept. Bubbles are the only legitimate *duplicate*
+    /// classes, so the sortedness check accepts equal neighbours.
     ///
-    /// # Rejects, does not repair
-    ///
-    /// Nothing here sorts the input into shape. The intended input is reloaded
-    /// data, and silently repairing a malformed value would hide corruption
-    /// exactly where the caller most needs to hear about it. Same posture as
-    /// [`Cospan::new`], one type up.
+    /// Nothing here sorts the input into shape: a malformed value is rejected,
+    /// not repaired.
     ///
     /// # Errors
     ///
@@ -294,20 +243,14 @@ impl<Lambda: Ord> CospanCanon<Lambda> {
     ///    strictly exceed its predecessor.
     /// 3. [`CatgraphError::CanonPreimageCardinalityMismatch`] — the class
     ///    preimages for a leg do not have `dom_len` / `cod_len` members in
-    ///    total, so no distribution of them could partition the boundary. **Both
-    ///    legs are checked here, domain then codomain, before step 4 runs on
-    ///    either.** That ordering is load-bearing rather than incidental: this
-    ///    is the reload constructor, so `dom_len` / `cod_len` are untrusted, and
-    ///    step 4 sizes an occurrence tally from them. A corrupt length is
-    ///    refused here instead of becoming an enormous allocation.
+    ///    total. **Both legs are checked here, domain then codomain, before
+    ///    step 4 runs on either.**
     /// 4. [`CatgraphError::CanonPreimageNotAPartition`] — the totals agree but
     ///    some index in `0..dom_len` (then `0..cod_len`) does not occur in
-    ///    exactly one class's preimage, i.e. the right *number* of members
-    ///    distributed wrongly.
+    ///    exactly one class's preimage.
     ///
-    /// Because step 3 clears both legs before step 4 begins, a value that is
-    /// mis-distributed on the domain *and* mis-counted on the codomain reports
-    /// the codomain fault — the steps are ordered, not the legs.
+    /// A value mis-distributed on the domain *and* mis-counted on the codomain
+    /// reports the codomain fault — the steps are ordered, not the legs.
     ///
     /// # Examples
     ///
@@ -442,9 +385,8 @@ where
     /// The apex is the classes in canonical order, one vertex per class carrying
     /// that class's label; `left[i]` is the class whose `dom_preimage` contains
     /// `i`, and `right[k]` the class whose `cod_preimage` contains `k`. The
-    /// three invariants [`from_parts`](Self::from_parts) checks are exactly what
-    /// makes that reconstruction total and unambiguous, so this method is the
-    /// oracle for that validation rather than a convenience on top of it:
+    /// invariants [`from_parts`](Self::from_parts) checks make that
+    /// reconstruction total and unambiguous:
     ///
     /// ```
     /// use catgraph::cospan::Cospan;
@@ -457,9 +399,7 @@ where
     /// **A witness, not *the* witness.** The apex comes back in canonical
     /// (sorted) order, which need not be the order the originating cospan used,
     /// so the result is generally not
-    /// [`structurally_equal`](Cospan::structurally_equal) to it. That is the
-    /// point: everything a canonical form retains is retained, and the apex
-    /// labelling it deliberately forgot stays forgotten.
+    /// [`structurally_equal`](Cospan::structurally_equal) to it.
     ///
     /// **Scalars are placed.** A bubble class contributes an apex vertex that no
     /// leg reaches, so `k` bubbles round-trip as `k` bubbles.
@@ -583,7 +523,8 @@ mod tests {
             Cospan::<char>::new(vec![0, 3, 1], vec![2, 0], vec!['c', 'a', 'a', 'b']).unwrap();
         let canon = cospan.canonical_form();
 
-        // Reference: exactly what the pre-#254 tuple implementation produced.
+        // Reference: the plain `(label, dom_preimage, cod_preimage)` tuples,
+        // built here and sorted lexicographically.
         let mut reference: Vec<(char, Vec<usize>, Vec<usize>)> = cospan
             .middle()
             .iter()

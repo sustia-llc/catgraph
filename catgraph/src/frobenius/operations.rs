@@ -302,16 +302,10 @@ where
     ///
     /// Returns `(self_is_identity, next_is_identity, mutations_occurred)`.
     ///
-    /// **The rule numbers have a gap, deliberately.** Rule 3 — unit/counit
-    /// cancellation, `Unit(z)` feeding directly into `Counit(z)` — was
-    /// **deleted** at #350: it is the *extra-special* axiom `ε ∘ η = id_I`,
-    /// which is not one of the nine equations of F&S 2019 Def 2.5, so
-    /// normalizing by it made `FrobeniusMorphism` a strictly smaller theory
-    /// than the [`Cospan`](crate::cospan::Cospan) semantics it is interpreted
-    /// into. The surviving rules keep the numbers they always had, so every
-    /// "Rule 4" reference in this crate's tests, CHANGELOG and audit docs still
-    /// points at spider fusion; renumbering them would have silently
-    /// invalidated that prose.
+    /// **The rule numbers have a gap.** There is no rule 3: unit/counit
+    /// cancellation, `Unit(z)` feeding directly into `Counit(z)`, is the
+    /// *extra-special* axiom `ε ∘ η = id_I` and not one of the nine equations
+    /// of F&S 2019 Def 2.5, so `η;ε` is carried through as spelled.
     ///
     /// **Rule 1 — Identity elimination**: layers consisting entirely of
     /// identity blocks are flagged so the caller can drop them.
@@ -325,35 +319,18 @@ where
     /// The spider theorem fuses two spiders across the wires that join them, and
     /// with `n == 0` there are no such wires: `Spider(z, m, 0) ; Spider(z, 0, k)`
     /// is a monoidal product of two *disconnected* components, and fusing it
-    /// would wire them together. Pinned as behaviour by
-    /// `spider_fusion_needs_a_wire_between_the_two_spiders` in
-    /// `tests/frobenius_axioms.rs` — i.e. the conjunction of the `n >= 1` guard
-    /// and the lookup filter described next, not either one alone (see the
-    /// Rule 4 comment in the body).
+    /// would wire them together.
     ///
     /// # The connection invariant every rule rests on
     ///
     /// A `self` block and a `next_layer` block are candidates only when the
     /// former's outputs *are* the latter's inputs: same wire position, same
     /// non-zero count. Blocks with no outputs (`Counit`, `Spider(z, m, 0)`, a
-    /// zero-target `UnSpecifiedBox`) are therefore excluded from the lookup
-    /// below — besides never being connected to anything, they do not advance
-    /// `target_side_placement`, so they share a key with the emitting block at
-    /// the same placement. `HashMap::insert` keeps the last writer, and blocks
-    /// are visited in layer order with the placement taken at append, so the
-    /// emitting block always came last and always won; the collision never
-    /// displaced an emitting block. What the filter removes is the lookup at a
-    /// placement with no emitting block — the trailing one, where only a
-    /// zero-input `next` block can sit. Of those pairings only a spider pair
-    /// `Spider(z, m, 0) ; Spider(w, 0, k)` gets past a rule's patterns (Rule
-    /// 4's): `z1 == z2` stops it when `z ≠ w`, and when `z == w` only the
-    /// `*n1 > 0` guard does. `Counit ; Unit`, `Counit ; Spider(z, 0, k)`,
-    /// `Spider(z, m, 0) ; Unit`, and every pairing with a zero-arity
-    /// `UnSpecifiedBox` on either side fall through unmatched (no rule's
-    /// patterns name a black box). So the filter's only *observable* effect is
-    /// that `n == 0` spider case, which is why it is redundant with Rule 4's
-    /// guard. Excluding them also makes the remaining keys strictly increasing,
-    /// hence unique.
+    /// zero-target `UnSpecifiedBox`) are excluded from the lookup below, which
+    /// makes the remaining keys strictly increasing, hence unique. That
+    /// exclusion's only observable effect is on the `n == 0` spider pair
+    /// `Spider(z, m, 0) ; Spider(z, 0, k)`, which Rule 4's `n >= 1` guard also
+    /// stops.
     pub(crate) fn two_layer_simplify(&mut self, next_layer: &mut Self) -> (bool, bool, bool) {
         // Rule 1: identity check (no mutations needed)
         let self_id = self.is_identity();
@@ -852,30 +829,17 @@ where
     /// inverse (`β(p)ᵒᵖ == β(p⁻¹)`), so
     /// `((selfᵒᵖ ; β(p))ᵒᵖ == β(p)ᵒᵖ ; self == β(p⁻¹) ; self`.
     ///
-    /// ⚠ **Breaking at #258.** The codomain branch used to postcompose
-    /// `from_permutation_on_domain(p.inv(), ..)`, i.e. `β(p⁻¹)` — the inverse
-    /// of what the trait specifies, matching the `Cospan` family's inverted
-    /// convention rather than `MatR`'s. The `hflip` sandwich then inherited it
-    /// on the domain side, so both branches moved together and no
-    /// within-carrier test could see it.
-    ///
     /// # Panics
     ///
     /// Panics if `p.len()` does not match the permuted side's arity. **`self`
     /// is not modified before that check on either branch** — the domain branch
     /// validates up front rather than inheriting the codomain branch's check
-    /// through its recursive call, because the `hflip` sandwich would otherwise
-    /// have already flipped `self` when the panic escaped. A caller holding the
-    /// `&mut` across a caught unwind would then see the morphism silently
-    /// replaced by its opposite.
+    /// through its recursive call.
     fn permute_side(&mut self, p: &permutations::Permutation, of_codomain: bool) {
         if of_codomain {
             assert_eq!(p.len(), self.codomain().len());
             // The `assert_eq!` above pins `p.len() == self.codomain().len()`,
-            // so the constructor's only failure mode is unreachable. Before
-            // #258 that failure mode was an `assert_eq!` inside the callee
-            // rather than an `Err`, so the `.unwrap()` here was documenting
-            // nothing; now it has to say which invariant retires it.
+            // so the constructor's only failure mode is unreachable.
             let p_frob = Self::from_permutation_on_domain(p.clone(), &self.codomain())
                 .expect("invariant: p.len() == codomain().len() was just asserted");
             self.compose(p_frob).expect(
@@ -1387,13 +1351,10 @@ mod test {
     /// slot `p.apply(i)`, so the side's *word* becomes
     /// `p.inv().permute(old_word)` — on both sides.
     ///
-    /// ⚠ These assertions used to read `p.permute(old_word)`, which pinned the
-    /// pre-#258 inverted convention. A word-level assertion does separate `p`
-    /// from `p⁻¹` when the labels are distinct, but it cannot see the wiring
-    /// underneath — `Span` had the right words over inverted pairs — and it
-    /// cannot separate the codomain rule from the domain rule, since both
-    /// relabel by `p.inv().permute`. The wiring is pinned across carriers in
-    /// `catgraph-applied/tests/braiding_cross_carrier.rs`.
+    /// ⚠ A word-level assertion separates `p` from `p⁻¹` when the labels are
+    /// distinct, but it cannot see the wiring underneath, and it cannot
+    /// separate the codomain rule from the domain rule, since both relabel by
+    /// `p.inv().permute`.
     #[test]
     fn frobenius_permute_side_codomain_with_swap() {
         use crate::category::HasIdentity;
@@ -1657,33 +1618,13 @@ mod test {
         assert!(!mutations, "non-inverse braidings should not cancel");
     }
 
-    /// `η(z)` feeding `ε(z)` is **kept**: the simplifier normalizes by the nine
-    /// equations of Def 2.5, and `ε ∘ η = id_I` is not one of them (#350).
+    /// Fixture: two single-block layer pairings under `two_layer_simplify` —
+    /// `η(z)` feeding `ε(z)`, and the mismatched `η(a)` feeding `ε(b)`.
     ///
-    /// This is the inverse of the assertion that stood here until #350
-    /// (`test_unit_counit_cancel`, which required `mutations` and two emptied
-    /// layers). Measured: restoring rule 3 and nothing else reddens this test at
-    /// its very first assertion, `!mutations` — the rule reports `true` there.
-    /// The block-count, block-shape and `right_type`/`left_type` assertions that
-    /// follow are rule-3-dependent in the same way and carry their falsified
-    /// values in their messages: both layers were emptied to 0 blocks and `[]`
-    /// interfaces.
-    ///
-    /// ⚠ Three assertions below are *not* rule-3-dependent and stay green under
-    /// restoration: `layer1.left_type.is_empty()` and
-    /// `layer2.right_type.is_empty()` (an emptied layer has empty interfaces on
-    /// both sides, so these hold either way), and the mismatched `a`/`b` pairing
-    /// at the end, which never fired even with rule 3 live — the docstring below
-    /// says so, and it is kept as a record, not as a claim.
-    ///
-    /// **Space of the claim:** two block pairings at the layer level — one
-    /// matched-label (`z`/`z`, the pairing rule 3 used to fire on, and the only
-    /// load-bearing one) and one mismatched (`a`/`b`, which never fired even
-    /// with rule 3 live and is here only so its now-vacuous predecessor
-    /// `test_unit_counit_no_cancel_different_labels` is not silently dropped).
-    /// It ranges over `two_layer_simplify` on a single-block layer pair, not
-    /// over `compose` (see `test_unit_counit_scalar_survives_compose`) and not
-    /// over `η`/`ε` embedded beside other blocks.
+    /// Expected: no mutation on either pairing; on the `z` pairing both layers
+    /// keep their one block and the wire stays in `layer1.right_type` /
+    /// `layer2.left_type`. It does not range over `compose` or over `η`/`ε`
+    /// embedded beside other blocks.
     #[test]
     fn test_unit_counit_does_not_cancel() {
         // Unit(z) then Counit(z) → both blocks survive (the scalar is real).
@@ -1837,20 +1778,12 @@ mod test {
         );
     }
 
-    /// Integration test: `η ; ε` through `compose` is a `0 → 0` morphism that
-    /// still **spells** the scalar — two layers, not an emptied one (#350).
+    /// Fixture: `η('z') ; ε('z')` at one wire type, through
+    /// `ComposableMutating::compose`.
     ///
-    /// Until #350 this test asserted the boundary only, and the boundary is
-    /// `[] → []` under either theory, so it stayed green when rule 3 was
-    /// disabled — a pin that could not see the thing it was named for. The
-    /// depth assertion is the part that moves: with rule 3 restored `depth()`
-    /// is 1 (a retained vacuous identity layer); without it, 2.
-    ///
-    /// **Space of the claim:** one term, `η('z') ; ε('z')`, at one wire type,
-    /// through `ComposableMutating::compose`. It says nothing about scalars
-    /// beside other blocks — `cospan_algebra::tests` covers `id_a` beside a
-    /// bubble — and nothing about the interpretation into `Cospan`, which
-    /// `tests/frobenius_axioms.rs` covers.
+    /// Expected: domain and codomain empty, and `depth() == 2` — the scalar is
+    /// still spelled, not collapsed to one layer. It says nothing about scalars
+    /// beside other blocks, or about the interpretation into `Cospan`.
     #[test]
     fn test_unit_counit_scalar_survives_compose() {
         let unit: FrobeniusMorphism<char, ()> = FrobeniusOperation::Unit('z').into();
@@ -1869,7 +1802,7 @@ mod test {
         );
     }
 
-    // ── hflip determinism / involution (rayon-site guard, #48) ──
+    // ── hflip determinism / involution (rayon-site guard) ──
     //
     // `FrobeniusLayer::hflip` fans block flips across rayon workers via
     // `par_iter_mut().with_min_len(PARALLEL_BLOCK_THRESHOLD)` (min length 64,
@@ -1881,9 +1814,8 @@ mod test {
     // subdivided) and pin that equivalence against an in-test sequential
     // reference, plus the hflip involution: `hflip ∘ hflip == id` whenever the
     // block-label changer is involutive, and `std::convert::identity` is.
-    // `FrobeniusLayer`/`FrobeniusMorphism` derive `Debug` (added at #283, so a
-    // failed presentation comparison can print more than `depth()`), so these
-    // use `assert_eq!`/`assert_ne!` and get both values on failure.
+    // `FrobeniusLayer`/`FrobeniusMorphism` derive `Debug`, so these use
+    // `assert_eq!`/`assert_ne!` and get both values on failure.
 
     /// A single layer of `n` heterogeneous blocks, so `hflip` actually
     /// transforms every block (Unit↔Counit, Mul↔Comul, braiding swap, spider
@@ -1924,8 +1856,7 @@ mod test {
     /// layer holds `m / 2` blocks. Rayon's
     /// `with_min_len(PARALLEL_BLOCK_THRESHOLD)` subdivides only at length
     /// ≥ 2·64 = 128, so **m = 128 does not reach the subdividing arm** (widest
-    /// layer 64) and m = 256 does (widest layer 128). `frobenius_hflip_above_threshold`
-    /// ran at 128 until #283 and so never exercised the arm it names.
+    /// layer 64) and m = 256 does (widest layer 128).
     #[test]
     fn special_frobenius_layer_widths_straddle_the_rayon_split() {
         #[cfg(feature = "parallel")]

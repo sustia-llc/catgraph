@@ -28,17 +28,14 @@ use crate::{
 /// The left leg maps both Y copies to the same middle nodes; X and Z pass through.
 /// The right leg maps X and Z through, skipping Y.
 ///
-/// # Arity arithmetic (#196)
+/// # Arity arithmetic
 ///
 /// Every index sum below is bounded by `middle`, which is built first: a `Vec`
 /// holds at most `usize::MAX` elements, so reaching the next line at all proves
 /// `m + n + k` fits — and with it `m + n`, `m + k`, and the `m + n .. m + n + k`
-/// range bound. The one sum that is *not* covered by that argument is the left
-/// leg's own length, `m + 2n + k`, which adds a second copy of `Y`; it is
-/// spelled against `middle.len()` so the bound is visible rather than assumed.
-/// No saturating sentinel is used or wanted here: unlike a `PropExpr` arity,
-/// these are lengths of slices the caller already holds, not values a caller can
-/// name.
+/// range bound. The one sum not covered by that argument is the left leg's own
+/// length, `m + 2n + k`, which adds a second copy of `Y`; it is spelled against
+/// `middle.len()`.
 #[allow(clippy::many_single_char_names)]
 pub fn comp_cospan<Lambda>(x: &[Lambda], y: &[Lambda], z: &[Lambda]) -> Cospan<Lambda>
 where
@@ -408,16 +405,7 @@ where
     /// [`Monoidal::monoidal`] uses an interchange cospan. On an identity this
     /// composes to
     /// [`from_permutation_on_domain`](Self::from_permutation_on_domain)'s own
-    /// element, which is what
-    /// `catgraph-applied/tests/braiding_cross_carrier.rs` pins.
-    ///
-    /// ⚠ **Fixed at #258; BREAKING.** The old body permuted the label word and
-    /// left `element` untouched, so the morphism advertised a permuted boundary
-    /// while still pairing domain wire `i` with the *old* codomain slot;
-    /// [`compose`](Composable::compose) then fed that stale element through
-    /// `comp_cospan` built from the new labels and produced a wrong composite.
-    /// The word it produced was inverted relative to the contract as well
-    /// (`p.permute` where the contract asks for `p.inv().permute`).
+    /// element.
     fn permute_side(&mut self, p: &Permutation, of_codomain: bool) {
         let m = self.domain.len();
         let n = self.codomain.len();
@@ -466,32 +454,10 @@ where
     ///
     /// Requires `A: Default` to create an algebra instance.
     ///
-    /// # ⚠ Behaviour change at #258
-    ///
-    /// The pre-#258 `from_permutation` was wrong in two independent ways, and
-    /// nothing caught either because no test in the workspace exercised this
-    /// impl at all — it was reachable only through the generic trait, and every
-    /// caller of the trait used a cospan or matrix carrier.
-    ///
-    /// 1. **The labels were inverted.** It set the non-`types` side to
-    ///    `p.permute(types)` where the whole cospan family uses
-    ///    `p.inv().permute(types)`, so on `p = rotation_left(3, 1)` over
-    ///    `['A','B','C']` it reported a codomain of `['B','C','A']` where
-    ///    [`Cospan`] reports `['C','A','B']`.
-    /// 2. **The element was not a braiding at all.** The structural cospan was
-    ///    built over an apex of `2n` vertices — `domain ++ codomain` — with a
-    ///    *bijective* right leg, so no domain wire shared an apex vertex with
-    ///    any codomain wire and the resulting element was the all-singletons
-    ///    partition. A braiding must merge domain wire `i` with codomain wire
-    ///    `p.apply(i)` on **one** apex vertex, exactly as
-    ///    [`identity_in`](Self::identity_in) does with `(0..n) ++ (0..n)` over
-    ///    an `n`-vertex apex. The clinching evidence is that
-    ///    `from_permutation(Permutation::identity(n), ..)` did **not** equal
-    ///    `identity(..)`, which no symmetric monoidal category permits.
-    ///
-    /// Both are fixed here: the apex is `types` (`n` vertices) and the right
-    /// leg is `(0..n) ++ (p.inv().apply(0..n))`, which degenerates to
-    /// `identity_in`'s `(0..n) ++ (0..n)` exactly when `p` is the identity.
+    /// The apex is `types` (`n` vertices) and the right leg is
+    /// `(0..n) ++ (p.inv().apply(0..n))`, which degenerates to
+    /// [`identity_in`](Self::identity_in)'s `(0..n) ++ (0..n)` exactly when `p`
+    /// is the identity.
     ///
     /// # Errors
     ///
@@ -525,9 +491,8 @@ where
 
     /// `codomain() == types`, `domain()[i] == types[p.apply(i)]`.
     ///
-    /// Mirror of [`from_permutation_on_domain`](Self::from_permutation_on_domain);
-    /// see that method for the #258 behaviour change, which applies equally to
-    /// what used to be the `types_as_on_domain = false` branch.
+    /// Mirror of
+    /// [`from_permutation_on_domain`](Self::from_permutation_on_domain).
     ///
     /// # Errors
     ///
@@ -610,11 +575,10 @@ where
 /// which is exactly a morphism `X → Y` in `H_B`. On objects, `F_α` is the
 /// identity (both `H_A` and `H_B` share the same object set `List(Λ)`).
 ///
-/// Lemma 4.9's content is that this pointwise construction automatically
-/// preserves composition, tensor product, identity, and Frobenius structure
-/// whenever `α` is a monoidal natural transformation between the source and
-/// target cospan-algebras. The tests in `tests/equivalence.rs` verify each of
-/// these laws for several concrete witnesses.
+/// Lemma 4.9's content is that this pointwise construction preserves
+/// composition, tensor product, identity, and Frobenius structure whenever `α`
+/// is a monoidal natural transformation between the source and target
+/// cospan-algebras.
 ///
 /// # Arguments
 ///

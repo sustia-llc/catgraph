@@ -12,12 +12,9 @@
 //! (id_X ⊗ cup_X) ; (cap_X ⊗ id_X) = id_X
 //! ```
 //!
-//! The composition order matters and is fixed by the types: `cup_X: I → X ⊗ X`
-//! has to come first, so that `cup_X ⊗ id_X: X → X ⊗ X ⊗ X` is followed by
-//! `id_X ⊗ cap_X: X ⊗ X ⊗ X → X`. Writing the two factors the other way round
-//! does not typecheck as `id_X` at all — it is an endomorphism of `X ⊗ X ⊗ X`.
-//! `tests/compact_closed.rs::zigzag_snakes_reduce_to_the_identity` builds
-//! exactly the composites written above.
+//! The composition order is fixed by the types: `cup_X: I → X ⊗ X` comes
+//! first, so that `cup_X ⊗ id_X: X → X ⊗ X ⊗ X` is followed by
+//! `id_X ⊗ cap_X: X ⊗ X ⊗ X → X`.
 //!
 //! ## Name bijection (Prop 3.2)
 //!

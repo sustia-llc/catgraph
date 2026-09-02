@@ -1,9 +1,7 @@
 //! Category-theoretic graph structures with source/target (cospan) semantics.
 //!
-//! **catgraph** implements applied category theory for compositional systems,
-//! focusing on Fong-Spivak-style string diagrams and cospans. Hyperedges connect
-//! *source sets* to *target sets* (cospan semantics), as opposed to path-based
-//! semantics where vertices are chained sequentially.
+//! Hyperedges connect *source sets* to *target sets* (cospan semantics), over
+//! finite sets and Fong-Spivak string diagrams.
 //!
 //! ## Core abstractions
 //!
