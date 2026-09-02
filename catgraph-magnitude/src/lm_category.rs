@@ -7,24 +7,21 @@
 //! Eq (11), this terminal mass appears in the Tsallis-entropy sum
 //! `H_t(p_x)` because `p_x` is a probability mass function on `A ∪ {†}`.
 //!
-//! This crate is "BYO-LM": callers populate the transition
-//! table from their own model. No closures, no LM runtime, no inference.
-//! [`LmCategory::magnitude`] consumes the table by lifting it into a
+//! Callers populate the transition table from their own model; the crate runs
+//! no inference. [`LmCategory::magnitude`] lifts the table into a
 //! [`LawvereMetricSpace<NodeId>`] via the `-ln π` embedding (Lawvere 1973;
-//! BV 2025 §2.17) and calling [`magnitude::<F64Rig>`](crate::magnitude::magnitude).
+//! BV 2025 §2.17) and calls
+//! [`magnitude::<F64Rig>`](crate::magnitude::magnitude).
 //!
 //! # BV 2025 paper anchors
 //!
-//! - §2.17 "Every LM defines a `[0, ∞]`-category": distance `d(x, y) :=
-//!   −ln π(y|x)`; we materialize this directly.
+//! - §2.17 "Every LM defines a `[0, ∞]`-category": distance
+//!   `d(x, y) := −ln π(y|x)`.
 //! - §3.5 Eq (7): `Mag(tM) = Σ_{x,y} ζ_t⁻¹(x, y)`.
-//! - §3.10 Closed form: `Mag(tM) = (t − 1) · Σ_{x ∉ T(⊥)} H_t(p_x) +
-//!   #(T(⊥))`. The two acceptance tests in `tests/bv_2025_acceptance.rs`
-//!   verify this against the Möbius-sum form computed by
-//!   [`magnitude`] function.
-//! - Rem 3.11 / Eq (12): `d/dt Mag(tM)|_{t=1} = Σ_{x ∉ T(⊥)} H(p_x)` (Shannon
-//!   entropy). Verified by central finite difference with `h = 1e-4 >
-//!   TSALLIS_SHANNON_EPS`.
+//! - §3.10 closed form:
+//!   `Mag(tM) = (t − 1) · Σ_{x ∉ T(⊥)} H_t(p_x) + #(T(⊥))`.
+//! - Rem 3.11 / Eq (12): `d/dt Mag(tM)|_{t=1} = Σ_{x ∉ T(⊥)} H(p_x)`, the
+//!   Shannon entropy.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -84,17 +81,10 @@ impl LmCategory {
 
     /// Set the next-symbol probability `π(to | from) = prob`.
     ///
-    /// Overwrites any prior value. Does NOT validate row normalization
-    /// — leaky rows (`Σ_y π(y|from) < 1`) are intentional and represent
-    /// the BV 2025 †-terminal mass at state `from`.
-    ///
-    /// Validation of `prob ∈ [0, 1]` is a release-mode
-    /// `Result<(), CatgraphError>` rather than a `debug_assert!` (prevents
-    /// unbounded BFS in [`magnitude`](Self::magnitude) on `prob > 1.0`
-    /// inputs that survived a release build). Membership in `objects` and
-    /// non-trivial self-loop rejection (BV 2025 §3 hypothesis forbids
-    /// them — see [`magnitude`](Self::magnitude) acyclicity note) are also
-    /// promoted.
+    /// Overwrites any prior value. Row normalization is not validated: a leaky
+    /// row (`Σ_y π(y|from) < 1`) is the BV 2025 †-terminal mass at state
+    /// `from`. Membership in `objects`, `prob ∈ [0, 1]`, and non-trivial
+    /// self-loops are checked in release builds too.
     ///
     /// # Errors
     ///
@@ -152,11 +142,8 @@ impl LmCategory {
     /// list, terminating-states set, and an iterator of `(from, to, prob)`
     /// transition triples.
     ///
-    /// Designed for `magnitude_history` and `EventLogStore::replay`
-    /// callers that reconstruct the LM state from an append-only audit log.
-    /// Each triple is dispatched through [`add_transition`](Self::add_transition),
-    /// so the same validation applies — invalid entries fail-fast with
-    /// [`CatgraphError::Composition`].
+    /// Each triple goes through [`add_transition`](Self::add_transition), so
+    /// the same validation applies.
     ///
     /// # Errors
     ///
@@ -191,52 +178,41 @@ impl LmCategory {
     ///
     /// BTV 2021 §2.2 Definition 4 defines the syntax category by
     /// `L(x, y) := π(y | x)` — the probability that expression `y` extends
-    /// expression `x` (`0` if `x` is not a subtext of `y`) — and §2.2 Eq (8)
-    /// states the chain rule `π(z | y) · π(y | x) = π(z | x)` as an *equality*.
-    /// The paper notes that language models learn these `π` from corpora but
-    /// prescribes **no** estimator; the maximum-likelihood construction below
-    /// is this crate's realization.
+    /// expression `x`, `0` if `x` is not a subtext of `y` — and §2.2 Eq (8)
+    /// states the chain rule `π(z | y) · π(y | x) = π(z | x)` as an equality.
+    /// The paper prescribes no estimator; the maximum-likelihood construction
+    /// here is this crate's realization.
     ///
     /// # States are observed prefixes
     ///
-    /// Every distinct prefix of every trace — **including the empty prefix ε**
-    /// — becomes a state. A state name is its tokens joined by a single
-    /// space (`" "`); ε is the empty string `""`. Transitions therefore only
-    /// go `p → p·t` (one-token extensions), so the table is a tree: no
-    /// self-loops and no cycles by construction, which structurally satisfies
-    /// the acyclicity hypothesis of [`magnitude`](Self::magnitude) (BV 2025
-    /// tree-poset, Prop 3.10).
+    /// Every distinct prefix of every trace, including the empty prefix ε,
+    /// becomes a state, named by its tokens joined with a single space (ε is
+    /// `""`). Transitions run only `p → p·t`, so the table is a tree — no
+    /// self-loops, no cycles — which satisfies the acyclicity hypothesis of
+    /// [`magnitude`](Self::magnitude) (BV 2025 tree-poset, Prop 3.10).
     ///
     /// # Maximum-likelihood probabilities
     ///
-    /// Let `N(p)` be the number of traces having `p` as a prefix (every trace
-    /// counts toward all of its prefixes, so `N(ε)` is the total trace count).
-    /// For each observed one-token extension `p → p·t` the estimate is
-    /// `π(p·t | p) = N(p·t) / N(p)`, which lies in `(0, 1]` because
-    /// `N(p·t) ≤ N(p)` and both are positive. BTV 2021 §2.2 Eq (8) then holds
-    /// **exactly** by construction (up to `f64` rounding): along a prefix chain
-    /// `x → y → z`, `N(z)/N(y) · N(y)/N(x) = N(z)/N(x)`.
+    /// With `N(p)` the number of traces having `p` as a prefix (so `N(ε)` is
+    /// the trace count), each observed one-token extension is estimated at
+    /// `π(p·t | p) = N(p·t) / N(p)`, in `(0, 1]`. BTV 2021 §2.2 Eq (8) then
+    /// holds exactly up to `f64` rounding: along `x → y → z`,
+    /// `N(z)/N(y) · N(y)/N(x) = N(z)/N(x)`.
     ///
     /// # Terminating set and terminal mass
     ///
-    /// A prefix is marked terminating (added to `T(⊥)` via
-    /// [`mark_terminating`](Self::mark_terminating)) when at least one trace
-    /// ends *exactly* there — including ε when an empty trace is present. The
-    /// leaky-row terminal mass at state `p`,
-    /// `1 − Σ_children π(p·t | p) = #ends(p) / N(p)`, is exactly the BV 2025
-    /// `†` (`T(⊥)`) mass, so this corpus constructor feeds
-    /// [`magnitude`](Self::magnitude) coherently.
+    /// A prefix joins `T(⊥)` via [`mark_terminating`](Self::mark_terminating)
+    /// when at least one trace ends exactly there, ε included. The leaky-row
+    /// terminal mass at `p`, `1 − Σ_children π(p·t | p) = #ends(p) / N(p)`, is
+    /// the BV 2025 `†` mass.
     ///
     /// # Object order
     ///
-    /// Objects are listed in **ascending lexicographic order** of their state
-    /// names (ε, the empty string, sorts first). Prefixes are collected into a
-    /// [`BTreeMap`], so the order is deterministic and names are unique by
-    /// construction.
+    /// Objects are listed in ascending lexicographic order of state name (ε
+    /// first), collected through a [`BTreeMap`], so names are deterministic and
+    /// unique.
     ///
-    /// Construction routes every edge through
-    /// [`add_transition`](Self::add_transition) (matching the
-    /// [`from_transition_log`](Self::from_transition_log) precedent), so its
+    /// Every edge goes through [`add_transition`](Self::add_transition), so its
     /// membership / range / self-loop validation applies.
     ///
     /// # Errors
@@ -355,35 +331,23 @@ impl LmCategory {
     ///   (i.e. `ζ_t[i][j] = 0`), per the convention `π(y | x) = 0` when `y`
     ///   is not an extension of `x` (BV 2025 §2.15).
     ///
-    /// The transitive-closure computation is a forward BFS from each
-    /// source node, multiplying probabilities along each path. **The
-    /// transition table must be acyclic** for the resulting metric to
-    /// satisfy BV 2025's tree-poset structure — otherwise the BFS may
-    /// loop and the magnitude will not match the closed form of Prop 3.10.
-    /// Acyclicity is the caller's responsibility; a debug-only assertion
-    /// catches obvious self-loop cases. (Cyclic LMs are mathematically
-    /// well-defined via the chain-sum Möbius formula but fall outside the
-    /// poset hypothesis of Prop 3.10 — see BV 2025 §3.7 Remark.)
+    /// The closure is a forward BFS from each source, multiplying
+    /// probabilities along each path. The transition table must be acyclic for
+    /// the metric to satisfy BV 2025's tree-poset structure; on a cyclic table
+    /// the magnitude does not match the Prop 3.10 closed form. Acyclicity is
+    /// the caller's responsibility.
     ///
     /// # Errors
     ///
-    /// Returns [`CatgraphError::Composition`] if the t-scaled zeta is
-    /// singular at this scale. Per BV 2025 Prop 3.6 `ζ_t` is invertible for
-    /// any `t > 0` in the LM setting; singular results indicate caller
-    /// inputs that violate the LM assumptions (e.g. degenerate parametric
-    /// coincidences from cyclic transitions).
-    ///
-    /// Also returns [`CatgraphError::Composition`] if the BFS frontier cap
-    /// (`n*n` steps per source) is exhausted (defense-in-depth
-    /// against malformed inputs that bypass [`add_transition`](Self::add_transition)
-    /// validation — e.g. table populated by a future release-mode caller
-    /// that constructs `transitions` directly via the `pub` API).
+    /// Returns [`CatgraphError::Composition`] if the t-scaled zeta is singular
+    /// at this scale (BV 2025 Prop 3.6 gives invertibility for any `t > 0` in
+    /// the LM setting), or if the BFS frontier cap of `n*n` steps per source is
+    /// exhausted.
     ///
     /// # Panics
     ///
-    /// Debug-only: panics if `t <= 0.0`. BV 2025 §3 only studies `t > 0`;
-    /// behavior at `t ≤ 0` is unspecified (Tropical(`+∞`) vs Tropical(`-∞`)
-    /// semantics on unset distances diverge). Release builds skip the check.
+    /// Debug-only: panics if `t <= 0.0`. BV 2025 §3 studies `t > 0`; behavior
+    /// at `t ≤ 0` is unspecified.
     pub fn magnitude(&self, t: f64) -> Result<f64, CatgraphError> {
         debug_assert!(
             t > 0.0,
@@ -407,31 +371,26 @@ impl LmCategory {
     ///   [`LawvereMetricSpace::distance`] reports `Tropical(+∞)` (i.e.
     ///   `π(j | i) = 0`; BV 2025 §2.15).
     ///
-    /// Shared substrate: [`magnitude`](Self::magnitude) lifts it through the
-    /// Möbius sum; [`yoneda`](Self::yoneda) reads its rows as representable
-    /// copresheaves (BTV 2021).
+    /// [`magnitude`](Self::magnitude) lifts this space through the Möbius sum;
+    /// [`yoneda`](Self::yoneda) reads its rows as representable copresheaves
+    /// (BTV 2021).
     ///
-    /// # Cyclic tables and the max-probability-path contract
+    /// # DAG-with-rejoin and cyclic tables: the max-probability-path contract
     ///
-    /// **Acyclicity is required only by [`magnitude`](Self::magnitude)** — BV
-    /// 2025's tree-poset hypothesis (Prop 3.10). `enriched_space` itself is
-    /// well-defined on any [`add_transition`](Self::add_transition)-legal table,
-    /// including cyclic (mutually-reachable) ones: `d(i, j)` is the
-    /// max-probability path from `i` to `j`, computed by a strict-improvement
-    /// label-correcting relaxation. Termination is guaranteed because a node is
-    /// only revisited when its path probability strictly improves and edge
-    /// probabilities are `≤ 1` — traversing a cycle never increases the product
-    /// (a `prob = 1.0` cycle re-derives an equal value, which is *not* a strict
-    /// improvement, so it does not oscillate). The semantic layer
-    /// ([`yoneda_all`](Self::yoneda_all), `cluster_semantic_sym`, #21) relies on
-    /// this contract to model mutual reachability (synonymy).
+    /// Acyclicity is required only by [`magnitude`](Self::magnitude) (BV 2025's
+    /// tree-poset hypothesis, Prop 3.10). `enriched_space` is defined on any
+    /// [`add_transition`](Self::add_transition)-legal table, DAG-with-rejoin and
+    /// mutually-reachable ones included: `d(i, j)` is the max-probability path
+    /// from `i` to `j` under a strict-improvement label-correcting relaxation,
+    /// so on such tables the chain-rule equality of BTV 2021 Eq 8 becomes a
+    /// bound rather than an equality. A node is revisited only on a strict
+    /// improvement and edge probabilities are `≤ 1`, so a `prob = 1.0` cycle
+    /// re-derives an equal value and does not oscillate.
     ///
     /// # Errors
     ///
     /// Returns [`CatgraphError::Composition`] if the per-source BFS frontier cap
-    /// (`n*n` steps) is exhausted — defense-in-depth against malformed inputs
-    /// (`prob > 1.0` entries) that bypass
-    /// [`add_transition`](Self::add_transition) validation.
+    /// of `n*n` steps is exhausted.
     pub fn enriched_space(&self) -> Result<LawvereMetricSpace<NodeId>, CatgraphError> {
         let n = self.objects.len();
         let objects: Vec<NodeId> = (0..n).collect();
@@ -450,20 +409,11 @@ impl LmCategory {
             space.set_distance(i, i, Tropical(0.0));
         }
 
-        // Forward-extension closure. For each source `i`, BFS through the
-        // transition table, accumulating the multiplicative probability.
-        // `best[j]` records the best (highest-probability) path so far — the
-        // documented max-probability-path contract (see rustdoc above). On the
-        // acyclic tree-poset tables magnitude() needs, the path is unique; on
-        // DAG-with-rejoin or cyclic tables the highest weight wins, and the
-        // strict `>` improvement test below is what guarantees termination
-        // (equal-probability rederivations, e.g. a prob = 1.0 cycle, do not
-        // re-enter the frontier).
-        //
-        // BFS termination cap: at most `n * n` step transitions per
-        // source. A well-formed acyclic LM yields O(n) steps; the n² cap is
-        // defense-in-depth for callers who bypass `add_transition` validation
-        // (see Errors note above).
+        // Forward-extension closure: per source `i`, BFS the transition table
+        // accumulating the multiplicative probability. `best[j]` holds the
+        // highest-probability path so far, and the strict `>` test below is
+        // what terminates the relaxation. The `n * n` cap bounds callers who
+        // bypass `add_transition` validation.
         let frontier_cap = n.saturating_mul(n).max(1);
         for i in 0..n {
             let mut best: HashMap<usize, f64> = HashMap::new();
@@ -494,10 +444,6 @@ impl LmCategory {
                     let Some(&next) = idx.get(next_name.as_str()) else {
                         continue;
                     };
-                    // Self-loops are rejected by add_transition — this
-                    // guard is unreachable on well-formed tables. Kept
-                    // defensive for direct-mutation callers (none today;
-                    // the field is private).
                     let new_p = cur_p * edge_p;
                     let prior = best.get(&next).copied().unwrap_or(0.0);
                     if new_p > prior {

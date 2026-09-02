@@ -7,10 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > **Lineage note:** pre-reboot version links below (`catgraph-magnitude-v0.x`
 > tags) point at the private predecessor repo `tsondru/catgraph` and will not
-> resolve publicly; they are kept as an honest record of the crate's history.
-> In-tree paper PDFs mentioned in historical entries were removed from the
-> tree on 2026-07-10 (arXiv licensing); fetch papers from the arXiv links in
-> `docs/`.
+> resolve publicly. In-tree paper PDFs mentioned in historical entries were
+> removed from the tree on 2026-07-10 (arXiv licensing); fetch papers from the
+> arXiv links in `docs/`.
 
 ## [Unreleased]
 
@@ -18,449 +17,144 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **clippy 1.98 compatibility**
-  ([#340](https://github.com/sustia-llc/catgraph/issues/340)). The pairwise
-  block merge in `smith_from_diagonal_raw` (`src/snf/diagonal.rs`) tripped
-  `clippy::chunks_exact_to_as_chunks`, new in clippy 1.98 and a hard error
-  under `-D warnings`; `blocks.chunks_exact(2)` is now
-  `blocks.as_chunks::<2>().0`, the rewrite the lint prescribes, and the
-  function's terminating `expect` message was updated to name it. Both forms
-  drop the same remainder — and the `blocks` length is a power of two here, so
-  there is never one. No behaviour change.
+- `smith_from_diagonal_raw` uses `blocks.as_chunks::<2>().0` instead of
+  `blocks.chunks_exact(2)`, for clippy 1.98 under `-D warnings`; no behaviour
+  change ([#340](https://github.com/sustia-llc/catgraph/issues/340)).
 
 ## [workspace-v0.11.0] - 2026-08-10
 
 ### Changed
 
-- **`rand` leaves this crate's normal-dependency graph**
+- `rand` leaves this crate's normal-dependency graph: catgraph-applied's lib
+  edge now carries `rand_core` alone
   ([#239](https://github.com/sustia-llc/catgraph/issues/239), changed in
-  `catgraph-applied`). This crate's only path to `rand` was
-  catgraph-applied's lib edge, which now carries `rand_core` alone
-  (`E1::random` takes a caller-supplied generator; sampling in-tree) — so
-  `rand` no longer appears in this crate's lib graph at all. See
-  catgraph-applied's #239 entry for the supply contract and caveats (the
-  catgraph-physics feature-unification caveat is unchanged).
+  `catgraph-applied`).
 
 ## [workspace-v0.10.0] - 2026-08-09
 
 ### Fixed
 
-- **Browser-wasm lib builds no longer fail in `getrandom`**
+- `cargo check --lib -p catgraph-magnitude --target wasm32-unknown-unknown`
+  passes: the workspace `rand` entry is slimmed to no default features
   ([#232](https://github.com/sustia-llc/catgraph/issues/232), fixed in
-  `catgraph-applied`). This crate's only path to `getrandom` was
-  `catgraph-applied`'s `rand` edge; with the workspace `rand` entry slimmed to
-  no default features, `cargo check --lib -p catgraph-magnitude --target
-  wasm32-unknown-unknown` now passes. Dev graphs still reach `getrandom` via
-  `proptest`, and any build graph containing `catgraph-physics` re-enables
-  rand's defaults by feature unification — see `catgraph-applied`'s #232 entry
-  for the full caveats.
+  `catgraph-applied`). Dev graphs still reach `getrandom` via `proptest`, and a
+  build graph containing `catgraph-physics` re-enables rand's defaults by
+  feature unification.
 
 ## [workspace-v0.9.0] - 2026-08-04
 
 ### Changed
 
-- **`deep_causality_num` is no longer a dependency of this crate**
-  ([#219](https://github.com/sustia-llc/catgraph/issues/219), D1 of the
-  [#218](https://github.com/sustia-llc/catgraph/issues/218) dependency
-  streamlining). The rig identities now come from `catgraph-applied`'s own
-  `rig::{Zero, One}`, which this crate re-exports at its root alongside `Rig`,
-  `BoolRig`, `F64Rig`, `Tropical`, and `UnitInterval` — so
-  `use catgraph_magnitude::{One, Zero};` replaces the upstream import with no
-  new dependency for consumers. No numeric behaviour changes; `num` stays for
-  BigInt / ToPrimitive in the integer-exact SNF and CRT lift.
-
-- **Möbius and (co)weighting test tolerances migrated to `approx_rel`**
-  ([#169](https://github.com/sustia-llc/catgraph/issues/169), tests only — no
-  library change). `tests/mobius_chains.rs` and `tests/weighting_coweighting.rs`
-  replace bare absolute epsilons with named relative + absolute-floor constants,
-  so each assertion states which regime it polices.
-
-  The migration **surfaced a real accuracy fact the absolute epsilon was
-  hiding**: on the 4-state *boundary* fixture (`slack = 0.1`, where
-  `r = (n − 1)·e^(−d) → 1⁻` and the truncated chain-sum DFS converges slowly),
-  the two Möbius routes disagree by **1.08e-9 relative** — `2.448e-10` on an
-  entry of `0.2267`. The old `1e-9` absolute bound passed it only because the
-  entries are below 1. That fixture now carries its own documented
-  `MOBIUS_BOUNDARY_REL_TOL = 1e-8`, distinct from the `1e-9` used in the
-  converged regime; the random-slack proptest (`slack ∈ 0.5..3.0`) passes at the
-  tighter bound unchanged — a sweep of that whole domain measures a worst
-  relative disagreement of `9.99e-14`, four orders under it.
-
-  Where the new bounds differ from the old absolute epsilons, each is recorded
-  at its constant rather than glossed. The migration is **not** uniformly
-  tightening: entry-wise comparisons (sub-unit values) get tighter, the
-  boundary fixture and the sum identities against the `2.8449` magnitude get
-  looser, and the two singleton assertions — which are bit-exact — keep their
-  `1e-12` via pure-absolute mode (`rel = 0.0`) rather than being widened to
-  `1e-9` by a relative bound against `1.0`.
+- `deep_causality_num` is no longer a dependency: the rig identities come from
+  catgraph-applied's `rig::{Zero, One}`, re-exported at this crate's root
+  alongside `Rig`, `BoolRig`, `F64Rig`, `Tropical`, and `UnitInterval`. `num`
+  stays for BigInt / ToPrimitive in the integer-exact SNF and CRT lift
+  ([#219](https://github.com/sustia-llc/catgraph/issues/219), D1 of
+  [#218](https://github.com/sustia-llc/catgraph/issues/218)).
+- Möbius and (co)weighting test tolerances migrated to `approx_rel`; the
+  4-state boundary fixture carries `MOBIUS_BOUNDARY_REL_TOL = 1e-8`
+  ([#169](https://github.com/sustia-llc/catgraph/issues/169), tests only).
 
 ## [workspace-v0.7.0] - 2026-08-02
 
 ### Added
 
-- **`coalition_typed` — typed-magnitude valuation surface (EQ4)**
-  ([#211](https://github.com/sustia-llc/catgraph/issues/211)): the coalition
-  surface was deliberately index/`f64`-typed — `CoalitionEvaluator` has no type
-  parameters, and per-agent metadata passed through `EnrichedCategory` is
-  collapsed to bare `f64` couplings at construction — so a consumer with
-  role-typed agents had to pre-collapse by hand, off the record. The new module
-  adds three **additive** layers beside the untouched engine: no existing
-  signature changes, no new `CatgraphError` variant, `UnitInterval` stays the
-  enrichment of record, and the BTV21 lift `d = −ln π` / `ζ_t = exp(−t·d)`
-  kernel is not touched.
-  - **T1 — role-share diagnostics.** `CoalitionEvaluator::role_shares(&[RoleId])`
-    (roles indexed by **member-local** position) returns a `RoleShares`
-    decomposing `Mag(S) = Σ_c w_c` — the cached weighting, Leinster 2013
-    Lemma 1.1.4 — across the role partition: `share(role)` / `is_exact()` /
-    `mixed_classes()` / `n_roles()`. Types enter *reporting only*; no number
-    moves. The honest part is the **skeletal subtlety**: the engine quotients
-    perfectly-coupled members regardless of role, so a class spanning two roles
-    carries a weight attributable to neither (the unquotiented ζ is singular
-    there and per-member weightings are non-unique). Such a class is
-    **reported** as a `MixedClass { rep(), roles() }`, never silently split —
-    the proof-or-flagged house style of #153. "Exact" is an **attribution**
-    claim (nothing split or estimated), not a bit-identity claim:
-    `Σ_r share(r)` equals `base_value()` only up to float re-association, since
-    per-role bucketed sums re-associate the row-major accumulation.
-    `share(r)` distinguishes `Some(0.0)` (role supplied, pure nowhere) from
-    `None` (role id never supplied).
-  - **T2 — role-modulated couplings + a role-grid certificate.**
-    `RoleModulation::new(rho)` is a validated square `[0,1]` table (entries
-    checked through the crate's own `UnitInterval::new`); **asymmetric ρ is
-    explicitly allowed** — with the documented downstream seam that asymmetric
-    tables limit `f64-fast` engagement for consumers calling `magnitude_f64`
-    directly (the coalition path never calls that route), strengthening the
-    case for #210.
-    `modulate(couplings, roles, &rho)` (roles indexed by **agent** index) is a
-    pure input transformation, `π′ = ρ(r_from, r_to)·π` — additively in the
-    metric, `d′ = d_ρ + d` — returning `ModulatedCouplings` whose
-    `couplings()` feeds every existing entry point unchanged.
-    `role_grid(&role_space, &fiber)` builds the product coalition — agents
-    `(r, x)` at the flat index `r·n + x`, `π((r,x),(r′,x′)) = ρ(r,r′)·σ(x,x′)` —
-    and `RoleGrid::proof(t)` returns a `RoleFibrationProof` with
-    `role_magnitude()` / `fiber_magnitude()` / `expected_magnitude()` / `t()`,
-    each factor evaluated through the **existing public**
-    `coalition_magnitude_from_couplings` (no private re-implementation).
-    Both factors must have an **exact `1.0` diagonal**, validated and rejected
-    otherwise: the engine forces a unit diagonal on the grid, and
-    `(ρ ⊗ σ) with forced diag = (ρ) ⊗ (σ)` only holds when the factor diagonals
-    are already `1`. The certificate is **mathematical and
-    construction-carried** — it holds because `role_grid` *built* the
-    product-form couplings; there is deliberately **no detection path** on
-    arbitrary floats (#153's lesson: prove from structure, don't detect from
-    floats). The module rustdoc carries the argument in full: product couplings
-    survive the max-product Bellman–Ford closure (any path's weight factors into
-    its role- and fiber-projection weights, each bounded by the corresponding
-    factor closure — diagonal-`1` makes idle steps free — and the two-phase path
-    achieves the bound, so `closure(ρ⊗σ) = closure(ρ)⊗closure(σ)`), the
-    `ℓ¹`-additive metric makes `ζ_t` a Kronecker product so
-    `Mag = |ρ|_t·|σ|_t` (Leinster 2013 [arXiv:1012.5857] Prop 1.4.3 /
-    Prop 2.3.6; weighted categorical case Leinster 2008 [arXiv:math/0610260]
-    Prop 2.8), and skeletalization commutes with the product (the #153 H1
-    lemma). Float evaluation only *approximates* both sides — the two routes
-    re-associate the same real products differently — so tests compare within a
-    **relative tolerance**; bit-identity is claimed nowhere.
-  - **T3 — channel-valued couplings + a declared collapse.**
-    `ChannelCouplings::new(n_channels)` / `set(from, to, v)` records a per-pair
-    vector `v ∈ [0,1]^C` (one component per interaction facet), last-write-wins
-    on duplicates and deterministic ascending `(from, to)` iteration;
-    `collapse(theta)` contracts it to ordinary coupling triples through
-    `|v|_θ = Π_c v_c^{θ_c}`. Each θ is a monoid homomorphism
-    `([0,1]^C, ·, 1) → ([0,1], ·, 1)` — precisely the "size" datum Leinster 2013
-    §1.3 requires for magnitude of a `V`-enriched category to be defined, so the
-    magnitude is well-defined **per choice of θ** and the anchor literature
-    supplies **no canonical θ** (it is an experiment parameter, not a theorem).
-    `θ.len() == n_channels` and each `θ_c` finite and `≥ 0` are enforced;
-    **`Σ θ = 1` is a documented convention, not enforced** — an exact float-sum
-    test is a knife-edge that would reject reasonable weight vectors over
-    rounding. `θ = e_c` recovers channel `c` exactly; Rust's
-    `0.0_f64.powf(0.0) == 1.0`, so a zero channel with zero weight drops out
-    of the product, and `θ = 0` collapses every coupling to `1.0` (degenerate,
-    the caller's responsibility).
-  - **Anchor honesty:** no "typed" or "colored" magnitude exists in this crate's
-    anchor literature. The composite is an **extension**, marked in the
-    `MatKron` style; the mechanisms it rests on (Lemma 1.1.4 weightings,
-    `|A ⊗ B| = |A||B|`, §1.3 size homomorphisms) are anchored, their assembly
-    into a role/channel vocabulary for coalitions is not.
-  - Reports follow the private-fields + accessors pattern of #153 / #165, and
-    typed proofs are **new structs**, not new variants of `ZeroDiversityProof` /
-    `EvalPath` — nothing downstream that matches those enums exhaustively is
-    affected.
+- `coalition_typed` — typed-magnitude valuation surface over the coalition
+  engine, re-exported at the crate root as `ChannelCouplings`, `MixedClass`,
+  `ModulatedCouplings`, `RoleFibrationProof`, `RoleGrid`, `RoleId`,
+  `RoleModulation`, `RoleShares`, `modulate`, and `role_grid`, plus the
+  `CoalitionEvaluator::role_shares` method. Additive: no existing signature
+  changes, no new `CatgraphError` variant, `UnitInterval` stays the enrichment
+  of record ([#211](https://github.com/sustia-llc/catgraph/issues/211)).
 
 ## [workspace-v0.6.0] - 2026-08-02
 
 ### Added
 
-- **`JoinReport` / `ZeroDiversityProof` — exact zero-diversity reporting on
-  `CoalitionEvaluator`**
-  ([#153](https://github.com/sustia-llc/catgraph/issues/153)): `value_with`
-  returned a bare `f64`, so a caller could not tell "this candidate provably adds
-  zero diversity" from "adds something too small to measure" and had to re-derive
-  the distinction from a float margin (koalisi's `KNIFE_EDGE_REL_BAND = 1e-6`
-  guard, which refunds ~22% of the fast path's win). `value_with_report(candidate)`
-  and `value_with_report_scratch(candidate, &mut EvalScratch)` return a
-  `JoinReport` carrying `value()` / `base()` / `increment()` / `path()` /
-  `schur_complement()` / `zero_proof()` / `is_provably_zero()`. **Purely
-  additive** — `value_with` / `value_with_scratch` are unchanged and, because the
-  proof scans sit behind a `const REPORT: bool` parameter on the shared
-  evaluation body, are compiled without them; the reported `value()` is
-  **bit-identical** to `value_with`, and the report-scratch variant is
-  bit-identical to the allocating one. Fields are private with accessors (the
-  `ConditionReport` house style of #165), so later diagnostics are additive.
-  `EvalPath` (`Fast` / `Slow`) is now public. Three **exactly decidable**
-  proof classes, all from already-computed data with no tolerance anywhere:
-  `SkeletalMerge { member }` (`(∃i: c[i]==1 ∧ r[i]==1) ∧ ¬interior_improvement`),
-  `IncomingProfileDuplicate { member }` (`∃a: c[a]==1 ∧ ∀i: c[i]==closed[i][a]`
-  ⇒ `u = ζ_S·e_a` ⇒ `p = 1`), and `OutgoingProfileDuplicate { member }` (the
-  transpose ⇒ `q = 1`). Exactness rests on the design memo's H1 lemma —
-  `fl(a·b) == 1.0 ⟺ a == 1.0 ∧ b == 1.0` on `[0,1]`, and the closure/border
-  passes are products-and-maxima seeded at `1.0` with no additions — so the
-  `== 1.0` comparisons admit neither false positives nor false negatives.
-  **The `¬interior_improvement` conjunct corrects issue #153's own premise:**
-  a mutual-`1.0` clone can simultaneously open a better `j → x → k` shortcut and
-  move the magnitude by up to **50% relative**, so skeletal merge *alone* does
-  not imply zero diversity and no proof is issued there. The duplicate proofs are
-  **fast-path-scoped** (under interior improvement `ζ_S` is stale and the
-  derivation fails — measured deviation up to 0.568 relative; a near-singular
-  `SCHUR_SLOW_FALLBACK_TOL` diversion likewise reports nothing). Contract, in the
-  rustdoc and worth repeating: a proof means the **real** increment is exactly
-  `0` while the *returned* value may differ from the base by roundoff (measured
-  max 1.38e-14 absolute / 1.32e-14 relative), so **callers branch on the proof,
-  never on `increment() == 0.0`**; and `None` means **not proven**, never
-  "nonzero". **Honest scope: the knife-edge tax is reduced, not removed** —
-  exact detection covers **55.9%** of the knife-edge population in the memo's
-  seeded model (merge-only 19.4% + profile duplicates 36.5%); 39.5% slow/interior
-  and 4.6% affine-combination zeros are intrinsically tolerance-only. Cost is
-  negligible (6.4 ns at m=8 / 9.7 ns at m=16 for the prefiltered duplicate scan,
-  <1% of a `value_with_scratch` call) and paid only by the reporting entry
-  points. Full evidence, method, and reproduction are recorded on
-  [#153](https://github.com/sustia-llc/catgraph/issues/153) (closing record).
-- **`magnitude_f64` — off-by-default `f64-fast` feature**
-  ([#165](https://github.com/sustia-llc/catgraph/issues/165)): **one** symmetric
-  factorization of the zeta matrix replaces the three independent hand-rolled
-  Gauss–Jordan eliminations (`mobius_function`, `weighting`, `coweighting` each
-  carried their own copy of the elimination loop). `ZetaFactorization::new`
-  builds ζ through the crate-shared `zeta_from_scaled_distance` /
-  `materialize_objects` kernels, records `‖ζ‖₁`, checks **exact** symmetry, then
-  routes: `Cholesky` for symmetric positive-definite ζ → Bunch–Kaufman `LBLT`
-  (new in nalgebra 0.35) for symmetric **indefinite** ζ → the untouched
-  rig-generic Gauss–Jordan at `Q = F64Rig` for asymmetric ζ (legal under Lawvere
-  `[0, ∞]`-enrichment) or a structurally-zero pivot. The route is exposed as
-  `FactorizationPath`. `weighting` / `coweighting` / `magnitude` are one solve
-  each (`Mag = Σⱼ w(j) = 1ᵀζ⁻¹1`, no μ materialized — BV 2025 §3.5 Eq (7) via
-  Leinster 2013 §1.1 Lemma 1.1.4); `mobius_function` returns `ζ⁻¹` in the same
-  `MatR<F64Rig>` shape as the generic path; `magnitude_f64(space, t)` is the
-  `t`-scaled parallel of `magnitude::<F64Rig>(space, t)`. **Singular ζ errors
-  with `CatgraphError::Composition` on every route**, matching the generic path.
-  Feature is **off by default** and no existing function was touched, so
-  **default-build results are unchanged**; `nalgebra` enters only as an optional
-  dependency, per the workspace's field-bounded-paths-only rule.
-- **`ConditionReport` — `cond₁(ζ)` diagnostics**
-  ([#165](https://github.com/sustia-llc/catgraph/issues/165)):
-  `ZetaFactorization::condition_report()` materializes μ and reports the exact
-  induced-1-norm condition number `‖ζ‖₁·‖μ‖₁`;
-  `condition_lower_bound()` is the solve-only variant, reporting the documented
-  **lower** bound `‖ζ‖₁·‖w‖₁/n` (from `w = ζ⁻¹u_I`) with `cond_1() == None`.
-  Fields are private with accessors so later diagnostics are additive.
-- **`tests/magnitude_f64.rs`**
-  ([#165](https://github.com/sustia-llc/catgraph/issues/165)) — route selection
-  per fixture, three-witness Möbius agreement (Gauss–Jordan vs von-Neumann chain
-  sum vs factorization) at `1e-9` per entry, magnitude / weighting / coweighting
-  parity across all three routes, singular-ζ and empty-space error parity, the
-  conditioning sanity + `t → 0` growth checks, and a Bunch–Kaufman structural
-  guard (a 5×5 symmetric-indefinite star exercises `LBLT`'s rank-2
-  trailing-submatrix update, which a 3×3 cannot reach, plus a
-  `‖L·D·Lᵀ − ζ‖₁ / (‖ζ‖₁·n) < 1e-14` backward-error check). Two feature-gated
-  criterion groups: `magnitude_f64/mag_lm/{10,100,1000}` on the existing
-  `build_chain_lm` fixtures — the chain LM is forward-only, so **ζ is
-  asymmetric and that group measures the Gauss–Jordan fallback**, an honest
-  baseline, pinned by a test — and
-  `magnitude_f64_symmetric` / `magnitude_generic_symmetric` on a
-  uniform-distance space, which is where the **Cholesky** route is actually
-  timed. Plus a targeted CI lane (`--features f64-fast` test + clippy).
+- `CoalitionEvaluator::value_with_report` / `value_with_report_scratch` return a
+  `JoinReport` with `value()` / `base()` / `increment()` / `path()` /
+  `schur_complement()` / `zero_proof()` / `is_provably_zero()`. `EvalPath`,
+  `JoinReport` and `ZeroDiversityProof` are re-exported at the crate root;
+  `value_with` / `value_with_scratch` are unchanged and bit-identical
+  ([#153](https://github.com/sustia-llc/catgraph/issues/153)).
+- `magnitude_f64` module behind the off-by-default `f64-fast` feature:
+  `ZetaFactorization`, `FactorizationPath`, `ConditionReport`, and
+  `magnitude_f64(space, t)`. `nalgebra` enters as an optional dependency;
+  default-build results are unchanged
+  ([#165](https://github.com/sustia-llc/catgraph/issues/165)).
+- `tests/magnitude_f64.rs` plus two feature-gated criterion groups and a
+  `--features f64-fast` CI lane (test + clippy). The chain-LM group measures
+  the Gauss–Jordan fallback, since that fixture's ζ is asymmetric — pinned by a
+  test — while `magnitude_f64_symmetric` times the Cholesky route
+  ([#165](https://github.com/sustia-llc/catgraph/issues/165)).
 
 ## [workspace-v0.5.0] - 2026-07-30
 
 ### Added
 
-- **`examples/semantic_category.rs`**
-  ([#53](https://github.com/sustia-llc/catgraph/issues/53) item 2) — BTV 2021
-  **Def 8** demonstrated end-to-end: `from_traces` corpus-MLE → `yoneda_all`
-  meanings with Eq 12 support behavior → `semantic_hom` pairs (Lemma 2 Eq 11) →
-  the enriched **composition inequality `Ĉ(f,g)·Ĉ(g,h) ≤ Ĉ(f,h)` asserted over
-  all triples** (the `[0,1]`-category structure of `L̂`, demonstrated not
-  claimed) → the §5 triangle inequality as its `−ln` image. Per the 2026-07-25
-  design of record, `L̂` ships **implicitly** — a reified wrapper was assessed
-  pure bundling and declined, and the archived `catgraph-coalition` crate's
-  inert `GrammarPort`/`PortKind` surface (never part of this repo) is not
-  re-expressed here. No library code changes.
+- `examples/semantic_category.rs` — BTV 2021 Def 8 end to end, no library
+  change ([#53](https://github.com/sustia-llc/catgraph/issues/53) item 2).
 
 ### Changed
 
-- **`docs/BTV21-AUDIT.md`** — §3.2 Def 8 row flipped ⏭️ → ✅ (implicit),
-  citing `examples/semantic_category.rs` as evidence; summary table, headline
-  percentages and deferrals prose resynced (13→14 DONE, 8→7 DEFERRED,
-  41%→44% / 25%→22%)
+- `mobius_function_via_chains_exact` and `verify_mobius_recursion` route their
+  ζ-count `u64 → i64` casts through a checked `zeta_entry_to_q` helper; a count
+  above `i64::MAX` returns `CatgraphError::Composition` instead of wrapping.
+  Both `#[allow(clippy::cast_possible_wrap)]` sites removed; no signature
+  changed ([#88](https://github.com/sustia-llc/catgraph/issues/88)).
+- `docs/BTV21-AUDIT.md` §3.2 Def 8 row and summary counts resynced
   ([#53](https://github.com/sustia-llc/catgraph/issues/53) item 2).
-- **`mobius_chains` ζ-count `u64 → i64` casts are now checked**
-  ([#88](https://github.com/sustia-llc/catgraph/issues/88)): the two
-  `#[allow(clippy::cast_possible_wrap)]` sites in
-  `mobius_function_via_chains_exact` and `verify_mobius_recursion` are replaced
-  by a shared `zeta_entry_to_q` helper using `i64::try_from`; a count above
-  `i64::MAX` now returns `CatgraphError::Composition` naming the offending
-  `(i, j)` entry instead of wrapping into a negative (a sign-flipped ζ entry
-  would have produced a plausible-looking but wrong μ). Both `allow`s removed.
-  The nested collects lift to `collect::<Result<_, _>>()?`; both enclosing
-  functions already returned `Result`, so no signature changed.
-- **Both functions' "counts ≥ 2⁶³ wrap silently" rustdoc caveats corrected**
-  ([#88](https://github.com/sustia-llc/catgraph/issues/88)) — they now error,
-  and the `# Errors` sections name the new failure. The `Q::from_u64`
-  `ZAlgebra` extension that would remove the conversion entirely stays deferred
-  ([#35](https://github.com/sustia-llc/catgraph/issues/35)).
 
 ## [workspace-v0.4.0] - 2026-07-25
 
 ### Added
 
-- **`snf::integer::hadamard_bound_matr<R>` + `hadamard_bound_integer`**
-  ([#35](https://github.com/sustia-llc/catgraph/issues/35)) — two new public
-  Hadamard-bound entry points beside the existing f64 `hadamard_bound`.
-  `hadamard_bound_matr<R: IntegerLikeRig>(&MatR<R>)` is the `MatR<R>` round-trip
-  wrapper (mirrors `smith_normal_form_matr`'s conversion idiom).
-  `hadamard_bound_integer(&[Vec<i64>])` computes a **valid, float-free** bound —
-  per-row `⌊√(Σ a²)⌋ + 1` via integer `isqrt`, product accumulated in `u128`
-  with `checked_mul`; `∏(⌊√·⌋+1) ≥ ∏√· = H(A)`, so it is always ≥ the f64
-  variant (generally slightly looser) and equally usable by
-  `select_primes_for_bound`.
+- `snf::integer::hadamard_bound_matr<R: IntegerLikeRig>` and
+  `snf::integer::hadamard_bound_integer` — `MatR<R>` round-trip and float-free
+  Hadamard bounds beside the existing `hadamard_bound`
+  ([#35](https://github.com/sustia-llc/catgraph/issues/35)).
+- `EvalScratch` and `CoalitionEvaluator::value_with_scratch` — caller-owned
+  buffers reused across a candidate sweep, bit-identical to `value_with`.
+  `EvalScratch` is re-exported at the crate root beside `CoalitionEvaluator`
+  ([#33](https://github.com/sustia-llc/catgraph/issues/33) item 1).
+- `benches/magnitude_bench.rs` gains the `evaluator_rebuild` and
+  `coalition_value_with` groups
+  ([#33](https://github.com/sustia-llc/catgraph/issues/33)).
+- `LmCategory::from_traces` — prefix-state corpus-MLE constructor for the
+  BTV 2021 syntax category (arXiv:2106.07890v2 §2.2 Def 4, Eq 8)
+  ([#53](https://github.com/sustia-llc/catgraph/issues/53)).
+- `docs/BTV21-AUDIT.md` — BTV 2021 coverage audit, joined to the CI
+  audit-count guard ([#53](https://github.com/sustia-llc/catgraph/issues/53)
+  item 3).
 
 ### Changed
 
-- **`snf::smith_normal_form_integer`: polynomial-DP chain rebalance**
-  ([#35](https://github.com/sustia-llc/catgraph/issues/35)) — the
-  determinantal-divisor computation `D_k = gcd of all k-subset products` now
-  runs in `O(r²)` via a dynamic program (`G'[j] = gcd(G[j], d_i·G[j−1])`, exact
-  for positive integers because `gcd({s·d_i}) = d_i·gcd(S)`) instead of the
-  prior `O(2^r)` subset enumeration. Same results (cross-checked against the
-  enumeration, now a `#[cfg(test)]` oracle, over random small-prime diagonals);
-  overflow escalates strictly less often since `d_i·G[j−1]` is bounded by an
-  actual `j`-subset product.
-- **`snf::crt::select_primes_for_bound`: const prime table, `primal` dropped**
-  ([#35](https://github.com/sustia-llc/catgraph/issues/35)) — replaced the
-  ~72 MB `primal::Sieve::new(1 << 31)` allocation (mod-30 wheel bitset; measured) (walked with a `VecDeque`
-  window) with a baked-in, self-verifying const array of the 16 largest primes
-  below `2^31`. `k_max` is now additionally clamped to the table length. The
-  `primal` dependency is removed from `catgraph-magnitude`. The integer-lift
-  tests drop from ~9 s to <0.01 s each.
-- **`snf::crt_lift` split into `snf::crt` + `snf::integer`**
-  ([#35](https://github.com/sustia-llc/catgraph/issues/35)) — clarity refactor:
-  CRT primitives (prime selection, signed reconstruction, i128 modular helpers)
-  live in `snf::crt`; the integer-SNF composition (Hadamard bound + variants,
-  `smith_normal_form_integer`, chain rebalance) in `snf::integer`. `snf::crt_lift`
-  is retained as a `pub use` shim, so all prior `snf::crt_lift::*` paths keep
-  compiling unchanged.
-
-- **`EvalScratch` + `CoalitionEvaluator::value_with_scratch`**
-  ([#33](https://github.com/sustia-llc/catgraph/issues/33) item 1) — an
-  allocation-free variant of `value_with` for the koalisi candidate-sweep hot
-  path. `value_with` heap-allocates seven short-lived `Vec`s per call
-  (`g_in`/`g_out`/`c`/`r` of length `m`, `u`/`v`/`w_u` of length `k`);
-  `value_with_scratch(candidate, &mut EvalScratch)` draws them from a
-  caller-owned `EvalScratch` reused across the sweep. The scratch carries **no
-  cross-call state** (each call resizes and fully overwrites the buffers it
-  reads), so results are **bit-identical** to `value_with` — verified across the
-  seeded fast/slow grid with `==`, plus a reuse contamination guard (fast → slow
-  → fast on one scratch) and a differently-sized-coalition reuse test. The
-  evaluator stays `&self` / `Sync` (no interior mutability); `value_with` is
-  unchanged and delegates through a fresh local scratch. Additive; `EvalScratch`
-  is re-exported at the crate root beside `CoalitionEvaluator`, and
-  `value_with_scratch` is a method on it. Bench
-  `coalition_value_with/{hit,hit_scratch}`: ~15%/~9% faster at `m = 8`/`16` on the
-  fast path.
-- **`benches/magnitude_bench.rs`: `evaluator_rebuild` + `coalition_value_with`
-  groups** ([#33](https://github.com/sustia-llc/catgraph/issues/33)) —
-  `evaluator_rebuild/{fresh,new}` isolates `CoalitionEvaluator::new` against the
-  fresh `coalition_magnitude_from_couplings` path; `coalition_value_with/{hit,
-  hit_scratch}` isolates the fast-path `value_with` against `value_with_scratch`.
-  Both at `m = 8`/`16`. The `new()`-rebuild measurement **refutes** the koalisi
-  K6 report of a ~10–15× `new()`/fresh ratio attributed to cache extraction: on
-  the same fixture the ratio is **~1.05×** (1.02–1.16× across `m ∈ {3..16}`,
-  dense and sparse), so no `new()` optimization was warranted — the koalisi gap
-  is a consumer-side measurement artifact, not cache-extraction cost.
-- **`LmCategory::from_traces` corpus MLE constructor**
-  ([#53](https://github.com/sustia-llc/catgraph/issues/53)) — a prefix-state
-  maximum-likelihood realization of the BTV 2021 syntax category
-  (arXiv:2106.07890v2 §2.2 Def 4 `L(x, y) := π(y | x)`, Eq 8 chain rule
-  `π(z|y)·π(y|x) = π(z|x)`). States are the observed prefixes of the corpus
-  (ε included; state name = tokens joined by a single space), so the table is
-  a tree — no self-loops, no cycles — structurally satisfying the
-  [`magnitude`] acyclicity hypothesis. Probabilities are the MLE
-  `π(p·t | p) = N(p·t) / N(p)` (paper prescribes no estimator; this is the
-  crate's realization), under which Eq (8) holds exactly by construction. A
-  prefix is terminating when some trace ends there; its leaky-row terminal
-  mass `#ends(p)/N(p)` is the BV 2025 `†` mass, so the constructor feeds
-  `magnitude` coherently. Objects are ordered ascending-lexicographically (ε
-  first); edges route through `add_transition` for validation. Rejects an
-  empty corpus and any empty / whitespace-containing token
-  (state-name collision hazard). Tests: hand-checked π/objects/terminating,
-  Eq (8) distance exactness on a depth-≥3 corpus, terminal-mass identity,
-  `magnitude` smoke, the three error cases, and the empty-trace ε case.
-- **`docs/BTV21-AUDIT.md`** ([#53](https://github.com/sustia-llc/catgraph/issues/53)
-  item 3) — section-by-section BTV 2021 coverage audit, ported from the
-  archived `catgraph-coalition` audit and re-expressed against the shipped
-  magnitude surfaces (#19–#23 + `from_traces`): 32 items — 13 DONE /
-  8 DEFERRED / 7 N/A / 4 IN-APPLIED. Corrects legacy citation drift
-  ("§3 Def 4/Eq 8" → §2.2; a phantom "Theorem 2" → Def 10 + Eq (17)–(19) +
-  Lemma 4) and joins the CI audit-count guard (now four docs).
-
-### Changed
-
-- **Inline LCG copies replaced by `catgraph-testutil::Lcg`**
-  ([#33](https://github.com/sustia-llc/catgraph/issues/33) item 2) — the seeded
-  test/bench/example fixtures (`coalition_eval` test module, `tests/lm_category.rs`,
-  `tests/magnitude.rs`, `benches/magnitude_bench.rs`, `examples/tsallis_shannon.rs`)
-  drop their near-identical inline LCG for the shared, dev-only
-  `catgraph-testutil` crate. Random streams are **byte-identical**: the
-  multiplier/increment/extraction are unchanged, `seed | 1` preparation stays at
-  the call sites, and the `build_coalition_fixture` `(0.05, 0.95]` remap stays as
-  call-site arithmetic (the `2^31` divisor is an exact power of two, so the
-  regrouping is bit-identical). No behavior change; a golden-value unit test in
-  `catgraph-testutil` pins the stream contract.
-- **Paper-audit citation reconciliation (Phase 3, PR #120)** — verified every
-  BV25 / Leinster13 / Leinster08 / Leinster–Shulman anchor in `src/**`, tests,
-  examples, README, and `docs/BV25-AUDIT.md` against the cached papers and fixed
-  the drifted citations: `Thm 3.10 → Prop 3.10`; the Shannon-entropy derivative
-  `Cor 3.14 → Remark 3.11 + Eq (12)` (3.14 is the Euler-characteristic
-  Proposition); the `#T(⊥) ≤ Mag(tM) ≤ #ob(M)` bounds re-anchored to BV25's
-  un-numbered intro prose (the "Eq 4.3" label was phantom; the `t ≥ 1` form
-  confirmed derivable from Prop 3.10); LS `Def 2.5 → Def 3.3`, `Example 2.7 →
-  2.9`, and the chain-complex framing `§2 → §3`; `Prop 2.4.17 → Def 2.1.2 +
-  Prop 2.1.3` for Möbius invertibility; the phantom `§1.4` dropped from Leinster08
-  `Cor 1.5`; paper title corrected to *The Magnitude of Categories of Texts
-  Enriched by Language Models*; the `magnitude.rs` ζ-matrix quote fixed to the
-  paper's "**Often** our matrix ζ…". Storjohann / Newman SNF anchors are not in
-  the local cache and were left unchanged (cache-unverifiable).
-- **`docs/BV25-AUDIT.md` §2/§3 recount** — the summary rows had drifted from
-  their own (correct) detail tables: §2 `[4,0,0,2,3] → [5,0,0,1,3]`, §3
-  `[6,0,1,1,0] → [8,0,0,0,0]`; headline → 21 implementable / 100% DONE / 0
-  deferred (the #37 Tsallis-side perf optimization is out-of-scope backlog, not a
-  deferred paper anchor, and correctly has no detail row). BV25-AUDIT is now
-  wired into the `scripts/check_audit_counts.py` CI guard alongside FS19/FS18.
-- **`docs/BV25-AUDIT.md` §3 acyclicity-hypothesis status ✅ → ➖ (owner
-  decision, Phase-3 follow-up)** — BV25's acyclicity hypothesis is prose
-  standing-hypothesis, not an implementable numbered result; its runtime
-  enforcement stays audited at the §2.17 row. §3 recount `[8,0,0,0,0] →
-  [7,0,0,1,0]`, TOTAL `[21,0,0,3,3] → [20,0,0,4,3]` (20 implementable, 100%
-  DONE).
-- **`docs/BV25-AUDIT.md` completeness rows added (owner decision, audit
-  Phase 7)** — five previously untracked numbered items now have audited
-  rows: Leinster 2013 **Def 1.1.3** (magnitude via weighting/coweighting, ✅
-  `magnitude::{magnitude, weighting, coweighting}`); BV25 **Prop 2.9** (LM
-  determines a pmf — ➖, materializes as the BYO-LM input contract asserted
-  per-fixture); **Prop 3.6** (ζ_t invertibility + the Eq (9) expansion — ✅,
-  the chain-sum von-Neumann series is exactly Eq (9)); **Cor 3.8/3.9**
-  (proof-layer factorization/closed form — ➖, consequence verified exactly by
-  the Prop 3.10 acceptance gate). Summary `[20,0,0,4,3] of 27 →
-  [22,0,0,7,3] of 32` (22 implementable, 100% DONE); count-guard green.
+- `snf::smith_normal_form_integer` computes the determinantal divisors
+  `D_k = gcd of all k-subset products` by an `O(r²)` dynamic program instead of
+  `O(2^r)` subset enumeration; same results
+  ([#35](https://github.com/sustia-llc/catgraph/issues/35)).
+- `snf::crt::select_primes_for_bound` uses a baked-in const array of the 16
+  largest primes below `2^31` and clamps `k_max` to the table length; the
+  `primal` dependency is removed from `catgraph-magnitude`
+  ([#35](https://github.com/sustia-llc/catgraph/issues/35)).
+- `snf::crt_lift` split into `snf::crt` and `snf::integer`; `snf::crt_lift` is
+  retained as a `pub use` shim, so all prior `snf::crt_lift::*` paths keep
+  compiling ([#35](https://github.com/sustia-llc/catgraph/issues/35)).
+- Inline LCG copies in the seeded test / bench / example fixtures replaced by
+  the dev-only `catgraph-testutil::Lcg`; random streams are byte-identical and
+  a golden-value unit test in `catgraph-testutil` pins the stream contract
+  ([#33](https://github.com/sustia-llc/catgraph/issues/33) item 2).
+- Paper-audit citation reconciliation across `src/**`, tests, examples, README
+  and `docs/BV25-AUDIT.md` (PR #120): `Thm 3.10 → Prop 3.10`; the
+  Shannon-entropy derivative `Cor 3.14 → Rem 3.11 + Eq (12)`; the
+  `#T(⊥) ≤ Mag(tM) ≤ #ob(M)` bounds re-anchored to BV25's un-numbered intro
+  prose; LS `Def 2.5 → Def 3.3`, `Example 2.7 → 2.9`, `§2 → §3`;
+  `Prop 2.4.17 → Def 2.1.2 + Prop 2.1.3`; the phantom `§1.4` dropped from
+  Leinster08 Cor 1.5.
+- `docs/BV25-AUDIT.md` §2/§3 summary rows recounted, §3 acyclicity-hypothesis
+  status ✅ → ➖, and five completeness rows added (Leinster 2013 Def 1.1.3;
+  BV25 Prop 2.9, Prop 3.6, Cor 3.8/3.9); BV25-AUDIT wired into the
+  `scripts/check_audit_counts.py` CI guard.
 
 > **Reconciliation note
 > ([#158](https://github.com/sustia-llc/catgraph/issues/158)).** Workspace tags
@@ -468,1064 +162,327 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > between the two sections below) — were cut without per-crate sections here;
 > this crate's changes across them are recorded only in git history
 > (`git log v0.1.0..v0.3.0 -- catgraph-magnitude/`) and the workspace-level
-> release record. Backfill was deferred out of the v0.4.0 release (owner,
-> 2026-07-25) and resolved as this note (#158, option 2).
+> release record.
 
 ## [workspace-v0.2.0] - 2026-07-02
 
-Incremental coalition magnitude for the decision hot path (#31, PR #32).
-
 ### Added
 
-- **`CoalitionEvaluator`** (`coalition_eval` module) — caches a base coalition
-  `S` (closed coupling table, skeletal `t`-scaled Möbius inverse, weighting /
-  coweighting) so per-candidate `Mag(S ∪ {x})` queries skip the O(m³) fresh
-  closure and, on the fast path, the O(k³) inversion: an O(m²) closure border
-  plus the bordered-Schur update `Mag′ = Mag + (1−p)(1−q)/s`. Near-singular
-  borders (`|s|` within `SCHUR_SLOW_FALLBACK_TOL`) and candidates that improve
-  interior couplings or merge skeletal classes fall back to a slow path that
-  re-skeletalizes the bordered table (still skipping the fresh closure).
-  ~6×/6×/4.4× per 8-candidate sweep at m = 4/8/16 vs two fresh
-  `coalition_value` calls per candidate.
-- **`coalition_value_delta(agents, couplings, members, candidate)`** — one-shot
-  `(Mag(S), Mag(S ∪ {x}))` pair at the pinned `t = 1` arm.
-- **`INCREMENTAL_REL_TOL`** (re-exported at the crate root) — the #31-amendment
-  numerical contract: base value bit-identical to fresh, incremental values
-  within 1e-9 relative, rank-order identity over candidate sweeps. The leave
-  path stays fresh (max-product closures do not downdate).
+- `CoalitionEvaluator` (`coalition_eval` module) — caches a base coalition `S`
+  so per-candidate `Mag(S ∪ {x})` queries take an `O(m²)` closure border plus
+  the bordered-Schur update `Mag′ = Mag + (1−p)(1−q)/s`, falling back to a slow
+  path on near-singular borders, interior improvement or skeletal merge
+  ([#31](https://github.com/sustia-llc/catgraph/issues/31)).
+- `coalition_value_delta(agents, couplings, members, candidate)` — one-shot
+  `(Mag(S), Mag(S ∪ {x}))` at the pinned `t = 1` arm
+  ([#31](https://github.com/sustia-llc/catgraph/issues/31)).
+- `INCREMENTAL_REL_TOL`, re-exported at the crate root — base value
+  bit-identical to fresh, incremental values within `1e-9` relative, rank-order
+  identity over candidate sweeps. The leave path stays fresh
+  ([#31](https://github.com/sustia-llc/catgraph/issues/31)).
 
 ### Changed
 
-- Internal (no public-surface change): one shared validation / scaling / ζ-kernel
-  code path (`build_coupling_category`, `scaled_space`,
-  `zeta_from_scaled_distance`) now backs both fresh and incremental evaluation,
-  keeping the two routes in lockstep by construction.
+- One shared validation / scaling / ζ-kernel path
+  (`build_coupling_category`, `scaled_space`, `zeta_from_scaled_distance`)
+  backs both fresh and incremental evaluation; no public-surface change.
 
 ## [workspace-v0.1.0] - 2026-07-01
 
-First monorepo release: workspace-wide tag `v0.1.0` (supersedes the pre-reboot
-crate-scoped version lineage below). The coalition semantic-layer handoff to
-downstream koalisi (#19–#23).
+First monorepo release: workspace-wide tag `v0.1.0`, superseding the pre-reboot
+crate-scoped version lineage below.
 
 ### Added
 
-- **Stable consumer entry point `coalition_value`** (`coalition` module, #23).
-  `coalition_value(agents, couplings, members) -> Result<f64, CatgraphError>` =
-  `coalition_magnitude_from_couplings(agents, couplings, members, 1.0)` — the
-  stability-contracted scalar downstream decision policies call (koalisi #5's
-  `MagnitudePolicy`, A/B'd against tira/aif's `−G`). Semantics =
-  effective-member diversity (skeletalized magnitude); `t = 1` is the pinned
-  canonical arm (#22 pins it — the `t`-sweep is an experiment axis of the
-  downstream A/B harness, not a knob on this API). Re-exported at the crate
-  root. Errors inherited verbatim from `coalition_magnitude_from_couplings`.
-- `tests/coalition_consumer.rs` (#23) — the cross-crate **K1 → K2** consumer
-  path exercised end to end: `catgraph_applied::Hypergraph` coalition members →
-  `VertexIndex`→agent-index mapping → couplings → `coalition_value`. Pins the
-  chain fixture (`a→b 0.7, b→c 0.5 ⇒ Mag(1) = 1.8`), the
-  `coalition_value == coalition_magnitude_from_couplings(.., 1.0)` identity, the
-  dedup-before-magnitude contract (duplicate members rejected until deduped),
-  and the skeletalization seam (mutual-`1.0` pair ⇒ `Mag = 1.0`).
-- **Enriched-coalition magnitude surface** (`coalition` module, #22; gemini-spec
-  §IV.5). Reads a coalition as a **cospan-weighted subgraph of an enriched
-  category** — agents = objects, inter-agent couplings = `UnitInterval` (`[0,1]`)
-  hom-objects (BTV 2021, arXiv:2106.07890), coalition diversity = `Mag(tA|members)`
-  via the BV 2025 §3.5 Eq 7 Möbius sum (arXiv:2501.06662; Thm 3.10's Tsallis
-  closed form is the acyclic tree-poset special case — coalitions may be cyclic,
-  which Eq 7 handles). `Coalition<O>` wraps a `WeightedCospan<O, UnitInterval>`
-  over the members and stores a **derived, immutable** skeletal
-  `LawvereMetricSpace` built once at construction. `Coalition::from_enriched`
-  applies:
-  - **restrict-then-close** — restrict to member homs first, then max-product
-    transitive closure through **member nodes only** (dense Bellman–Ford, `m−1`
-    rounds; exact for weights `≤ 1` since the optimal path is simple and cycles
-    never improve). Coupling mediated through a non-member does **not** count.
-    The closure makes composition `A(i,j)·A(j,k) ≤ A(i,k)` hold, so the triangle
-    inequality holds by construction under the `−ln` lift.
-  - **skeletalization** — members with `A(x,y)=A(y,x)=1.0` (distance `0` both
-    ways) are quotiented on the **closed** table (Kolmogorov quotient; magnitude
-    is skeleton-invariant, Leinster 2008 / 2013). This removes the singular-ζ
-    "identical rows" degeneracy that would otherwise make a perfectly-coupled
-    coalition error at every `t`; other singular configurations still return
-    `Err`. `effective_members()` reports the skeleton size and `member_classes()`
-    the per-member class index; the full member cospan is retained for the
-    boundary story.
-
-  `coalition_magnitude(coalition, t)` reads the cached skeletal space (no
-  per-call allocation) and calls `magnitude::<F64Rig>` — `t = 1` is the
-  canonical arm (its Shannon tie is the derivative `d/dt Mag|_{t=1}=ΣH(p_x)`,
-  BV 2025 §3.14 Cor, not the `t=1` value), `t = 2` a collision proxy, `t → ∞` a
-  cardinality-like limit. `coalition_magnitude_from_couplings(agents, couplings,
-  members, t)` is the plain-data entry point — validates member indices first,
-  then coupling indices, rejects self-coupling triples `(i,i,_)` (the identity
-  axiom fixes the diagonal), validates probs ∈ `[0,1]` via `UnitInterval::new` —
-  the seed of C3's stable `coalition_value` (#23). Hand-computed acceptance
-  tests: chain (`A(a,c)=0.35`, cross-checks `LmCategory::magnitude` to 1e-9),
-  diamond (`A(a,d)=max(0.30, 0.36)=0.36`, hand-derived `Mag(1)=1.90` via
-  back-substitution on the upper-triangular ζ), restrict-before-close pin, cyclic
-  couplings (`Mag(1)=4/3`), skeletalization (mutual-1.0 pair → 1 effective agent,
-  `Mag=1`; 1.0 three-cycle collapses via the closed table; two clones + one ≡ the
-  2-member coalition; asymmetric-1.0 not merged), singleton (`Mag=1` at any `t`),
-  construction errors (empty / unknown / duplicate member; self-coupling), and
-  `t ≥ 1` monotonicity bounds. New worked example
-  `examples/coalition_magnitude.rs` (5-agent table, two overlapping coalitions,
-  restrict-then-close `∞` demo, self-asserting). Re-exported at the crate root:
-  `Coalition`, `coalition_magnitude`, `coalition_magnitude_from_couplings`.
-  No new dependencies.
-
-- **Semantic comparison / clustering over the Yoneda embedding** (`semantic`
-  module, #21). Consumer layer over `yoneda` (#19) that ranks and groups whole
-  texts by their meanings (Bradley–Terilla–Vlassopoulos 2021, arXiv:2106.07890;
-  Lemma 2 Eq 11 hom / §5 asymmetry). Adds `LmCategory::yoneda_all()` — the full
-  Yoneda image (one `Copresheaf` per object) from a **single**
-  `enriched_space()` pass rather than `n` per-object rebuilds. Adds
-  `k_nearest_from` / `k_nearest_to` — the `k` nearest meanings to a query in
-  **both** directions of the asymmetric `semantic_distance` (BTV keep the
-  Lawvere generalized metric, so "query's nearest" ≠ "nearest to query"); `∞`
-  distances are rankable (sort last via `f64::total_cmp`, `NodeId` tie-break),
-  self is excluded, `k > len` returns all. Adds `cluster_semantic_sym` —
-  single-linkage threshold clustering (connected components where
-  `semantic_distance_sym(a, b) <= epsilon`) via plain union-find, O(n²)
-  distance evaluations; labelled a **symmetric convenience** over the
-  non-canonical `semantic_distance_sym` (mutually-unreachable meanings sit at
-  `∞` and never merge). Deterministic output (members ascending, clusters by
-  smallest member). New worked example `examples/semantic_comparison.rs`
-  (bidirectional nearest-meaning ranking + ≥2 nontrivial clusters, with
-  assertions). Re-exported at the crate root: `k_nearest_from`, `k_nearest_to`,
-  `cluster_semantic_sym`. No new dependencies.
-
-- **BTV 2021 Yoneda semantic embedding** (`yoneda` module, #19). `LmCategory::yoneda(name)`
-  returns the representable copresheaf `L(x, −)` in probability form as a `Copresheaf`
-  (`base` / `extension_to` / `distance_to` / `support` / `extensions`, `π = exp(−d)`) —
-  meaning-as-distribution over continuations (Bradley–Terilla–Vlassopoulos 2021,
-  arXiv:2106.07890). Adds the **asymmetric** semantic internal hom
-  `semantic_hom(a, b) = inf_c min{1, b(c)/a(c)}` (BTV 2021 Lemma 2 Eq 11; internal hom
-  Eq 6) and `semantic_distance(a, b) = −ln semantic_hom(a, b)` (§5; kept asymmetric per
-  BTV "symmetry not required"), plus a non-canonical symmetric `semantic_distance_sym`.
-  The shared `LmCategory::enriched_space()` builder was extracted out of `magnitude()`
-  (no behaviour change; BV 2025 acceptance tests pass unchanged). Re-exported at the
-  crate root: `Copresheaf`, `semantic_hom`, `semantic_distance`, `semantic_distance_sym`.
-
-- **`LmCategory::deterministic_transition_rank()`** (`determinism` module, #20). The rank
-  of the first magnitude homology `MH₁` at grade `ℓ = 0`. Since the LS 2017 interior-only
-  boundary gives `∂_1 = 0` (so `MH₁(ℓ) = C₁(ℓ) / im ∂₂`), this counts the *covering*
-  deterministic transitions — `π = 1` forced continuations / memorisation — of the LM
-  transition graph. A structural invariant (BV 2025 / Leinster–Shulman 2017), **not** a
-  coherence or hallucination detector (the earlier MH₁-as-obstruction framing was
-  falsified and dropped). Reuses `chain_complex::{ChainIndex, magnitude_homology_rank}`;
-  no new dependencies.
+- `coalition_value(agents, couplings, members)` — the `t = 1` scalar,
+  equivalent to `coalition_magnitude_from_couplings(.., 1.0)`; re-exported at
+  the crate root ([#23](https://github.com/sustia-llc/catgraph/issues/23)).
+- `tests/coalition_consumer.rs` — the cross-crate consumer path from
+  `catgraph_applied::Hypergraph` members through `coalition_value`
+  ([#23](https://github.com/sustia-llc/catgraph/issues/23)).
+- `coalition` module — `Coalition<O>` over a `WeightedCospan<O, UnitInterval>`
+  with restrict-then-close max-product closure and skeletalization of
+  perfectly-coupled members, plus `coalition_magnitude(coalition, t)` and the
+  plain-data `coalition_magnitude_from_couplings(agents, couplings, members, t)`.
+  Re-exported at the crate root: `Coalition`, `coalition_magnitude`,
+  `coalition_magnitude_from_couplings`. New example
+  `examples/coalition_magnitude.rs`; no new dependencies
+  ([#22](https://github.com/sustia-llc/catgraph/issues/22)).
+- `semantic` module — `LmCategory::yoneda_all()`, `k_nearest_from`,
+  `k_nearest_to`, and `cluster_semantic_sym`. Re-exported at the crate root:
+  `k_nearest_from`, `k_nearest_to`, `cluster_semantic_sym`. New example
+  `examples/semantic_comparison.rs`; no new dependencies
+  ([#21](https://github.com/sustia-llc/catgraph/issues/21)).
+- `yoneda` module — `LmCategory::yoneda(name)` returning a `Copresheaf`, the
+  asymmetric `semantic_hom` / `semantic_distance` (BTV 2021 Lemma 2 Eq 11, §5)
+  and the non-canonical `semantic_distance_sym`. `LmCategory::enriched_space()`
+  extracted out of `magnitude()` with no behaviour change. Re-exported at the
+  crate root: `Copresheaf`, `semantic_hom`, `semantic_distance`,
+  `semantic_distance_sym` ([#19](https://github.com/sustia-llc/catgraph/issues/19)).
+- `LmCategory::deterministic_transition_rank()` (`determinism` module) — the
+  rank of `MH₁` at grade `ℓ = 0`, counting covering `π = 1` transitions; reuses
+  `chain_complex::{ChainIndex, magnitude_homology_rank}`, no new dependencies
+  ([#20](https://github.com/sustia-llc/catgraph/issues/20)).
 
 ## [0.5.0] - 2026-05-13
 
 Co-releases with **catgraph-applied v0.6.0** at workspace umbrella `v0.14.0`.
-Primary change: consumer-side migration from the `Integer` trait to `ZAlgebra`
-(renamed in cg-applied v0.6.0; see that crate's CHANGELOG for the full Bourbaki
-*Algèbre* Ch. I §8 — ℤ as initial object of the category of unital rings — rationale). Three design fold-ins shipped
-alongside (see Added below).
+
+### Breaking
+
+- The `catgraph_applied::Integer` re-export is renamed to
+  `catgraph_applied::ZAlgebra`: `use catgraph_magnitude::Integer` must become
+  `use catgraph_magnitude::ZAlgebra`. Bounds updated to
+  `mobius_function_via_chains_exact<N, Q: Ring + ZAlgebra>`,
+  `verify_mobius_recursion<N, Q: Ring + ZAlgebra + Debug>`, and the internal
+  `matmul_q`. The trait is otherwise unchanged in structure.
 
 ### Added
 
-- **Closed-form Möbius cross-check fixture:** `cor_1_5_chain_3_linear_poset`
-  test fixture extended with a closed-form Phil Hall Möbius cross-check.
-  `verify_mobius_recursion` at the fixture tail cross-verifies the integer-exact
-  chain-sum against the analytic `[[1,-1,0],[0,1,-1],[0,0,1]]` matrix (Leinster
-  2008 Cor 1.5).
-
-- **`verify_mobius_recursion` bidirectional widening:** now checks BOTH
-  `μ · ζ = I` (right inverse) and `ζ · μ = I` (left inverse) on every fixture,
-  providing a runtime asymmetry guard for the Möbius implementation. Leinster
-  2008 Def 1.1 (p. 4) two-sided inverse anchor added to the function's rustdoc.
-  Function signature unchanged; internal change only.
-
-- **`modularsnf-oracle` proptest grid extension:** grid widened from `n=2` only
-  to `n ∈ {2, 3, 4}`. Three parallel proptest functions
-  (`snf_mod_p_rank_agrees_with_modularsnf_2x2`, `_3x3`, `_4x4`); 768 cases
-  under `--features modularsnf-oracle` (up from 256). The `n=4` case exercises
-  non-trivial rank-recovery and Newman 1972 chain-rebalance interactions at
-  4×4 scale.
+- `cor_1_5_chain_3_linear_poset` carries a closed-form Phil Hall Möbius
+  cross-check against `[[1,-1,0],[0,1,-1],[0,0,1]]` (Leinster 2008 Cor 1.5).
+- `verify_mobius_recursion` checks both `μ · ζ = I` and `ζ · μ = I` on every
+  fixture; signature unchanged.
+- The `modularsnf-oracle` proptest grid widens from `n = 2` to `n ∈ {2, 3, 4}`.
 
 ### Changed
 
-- **`Integer` → `ZAlgebra` migration:** `catgraph_applied::Integer` re-export
-  renamed to `catgraph_applied::ZAlgebra` via cg-applied v0.6.0. Downstream code
-  using `use catgraph_magnitude::Integer` must migrate to
-  `use catgraph_magnitude::ZAlgebra`. See cg-applied v0.6.0 CHANGELOG for the
-  full rationale (Bourbaki *Algèbre* Ch. I §8 — ℤ as initial object of the category of unital rings) and migration guide.
-
-- **Trait bounds updated:** `mobius_function_via_chains_exact<N, Q: Ring +
-  ZAlgebra>` (was `Q: Ring + Integer`); `verify_mobius_recursion<N, Q: Ring +
-  ZAlgebra + Debug>`; internal `matmul_q` helper bound updated accordingly.
-
-- **`modularsnf` dev-dep portability:** converted from machine-local path dep to
-  git dep (`{ git = "https://github.com/events555/modularsnf", rev = "d62535e",
-  optional = true }`). Enables the `modularsnf-oracle` feature on any developer
-  machine and in CI without a local checkout of the `modularsnf` repo.
-
-- **Scope header version-stamps stripped:** `src/lib.rs` `## Scope (v0.3.0)` →
-  `## Scope`; subsection `## Algebraic scoping (v0.3.0)` → `## Algebraic
-  scoping`. Version stamps in doc comments drift silently across releases; the
-  crate version in `Cargo.toml` is the authoritative version indicator.
+- The `modularsnf` dev-dependency moves from a machine-local path dep to a git
+  dep at `rev = "d62535e"`, `optional = true`.
+- `src/lib.rs` scope headers drop their `(v0.3.0)` version stamps.
 
 ### Fixed
 
-- **I-5 (citation role labels):** `mobius_chains.rs` rustdoc clarifies the
-  distinct roles of Cor 1.5 and Prop 2.10 in Leinster 2008. Cor 1.5 (page 6)
-  anchors the integer Möbius formula `μ = Σ (-1)^k M^k`; Prop 2.10 (§1.2)
-  anchors the termination bound on circuit-free 𝔸. They are complementary,
-  not substitutes.
-
-- **I-6 (Def 1.1 rustdoc anchor):** Leinster 2008 Def 1.1 (p. 4) anchor
-  explicitly added to `verify_mobius_recursion` rustdoc, documenting the
-  two-sided inverse property `μ · ζ = I` AND `ζ · μ = I`.
-
-### Migration
-
-Downstream code consuming `catgraph_magnitude::Integer` (re-exported from
-`catgraph_applied`) must update the import:
-
-```rust
-// v0.4.0 (OLD)
-use catgraph_magnitude::Integer;
-fn foo<Q: Ring + Integer>(...) { ... }
-
-// v0.5.0 (NEW)
-use catgraph_magnitude::ZAlgebra;
-fn foo<Q: Ring + ZAlgebra>(...) { ... }
-```
-
-The trait is otherwise identical in structure; only the name changed. See
-cg-applied v0.6.0 CHANGELOG for the `private::Sealed` supertrait addition that
-accompanies the rename (prevents accidental out-of-crate impls; behaviour of
-existing `impl Integer for Z` sites updated to `impl ZAlgebra for Z`).
-
-Examples-coverage + benches-coverage baselines for v0.5.0 land at the release boundary (first minor bump for this crate's reviewer workflow).
+- `mobius_chains.rs` rustdoc separates the roles of Leinster 2008 Cor 1.5
+  (integer Möbius formula) and Prop 2.10 (termination on circuit-free 𝔸).
+- `verify_mobius_recursion` rustdoc carries the Leinster 2008 Def 1.1 (p. 4)
+  two-sided-inverse anchor.
 
 ## [0.4.0] - 2026-05-13
 
 ### Added
 
-- **§1.17 Leinster 2008 Cor 1.5 integer-exact Möbius via chain enumeration**
-  (T16-T17). New module `poset_category` with `PosetCategory<NodeId>` input
-  type (`from_partial_order` + `from_arrow_counts` with circuit-free DFS
-  validation). New `mobius_chains::mobius_function_via_chains_exact<N, Q: Ring
-  + Integer>` realising `μ = Σ_{k=0}^K (-1)^k M^k` (M = ζ - I, K =
-  |objects|) with early-termination on zero matrix. New
-  `mobius_chains::verify_mobius_recursion<N, Q>` checking μ · ζ = I. Paper
-  anchor: `docs/Leinster-0610260v1.pdf` §1.4 Cor 1.5 page 6.
-- **§1.10 multi-prime CRT for full integer SNF lift** (T11-T14 from Session 2;
-  integrated). `snf::crt_lift::smith_normal_form_integer` returns
-  integer-exact invariants via Hadamard bound (T11) + prime selection (T12) +
-  per-prime SNF + sign-symmetric CRT reconstruction (T13) + integer chain
-  rebalance per Newman 1972 §1.4 Thm II.9 (T14, O(2^r) subset enumeration
-  acceptable for r ≤ 20).
-- **§1.18 pseudo-metric `is_finite_in` gate** (T6 from Session 2):
-  `Chain::is_finite_in<NodeId>` widened to accept Leinster–Shulman 2017
-  pseudo-metric spaces (`d(a, b) = 0` for distinct points permitted).
-- **§1.20 `smith_normal_form_matr<R: IntegerLikeRig>` round-trip API**
-  (T10 from Session 2).
-- **§1.21 `IntegerLikeRig` trait** (T9 from Session 2) — parameterises
-  rank-recovery surface over generic `IntegerLikeRig` instead of concrete
-  `F64Rig`.
-- **`integer_mobius.rs` example** (T20) — §1.17 Cor 1.5 demo with Phil Hall
-  / Rota / terminal-object fixtures.
-- **`prop_3_14_acceptance.rs` example** (T19) — BV 2025 Prop 3.14 5-fixture
-  path-C demo with regression-detection `exit(1)` on any margin violation.
-- **Examples-coverage baseline** — first walk against the crate's full public
-  surface; tracked alongside the release.
-- **§1.10 `modularsnf-oracle` Cargo feature** (T15 from Session 2) —
-  dev-only cross-validation against external `modularsnf` Rust crate;
-  activates `dep:modularsnf` + `dep:ndarray`.
+- `poset_category` module with `PosetCategory<NodeId>`
+  (`from_partial_order`, `from_arrow_counts` with circuit-free DFS validation),
+  `mobius_chains::mobius_function_via_chains_exact<N, Q: Ring + Integer>`
+  realising `μ = Σ (-1)^k M^k`, and `mobius_chains::verify_mobius_recursion`
+  (Leinster 2008 Cor 1.5).
+- `snf::crt_lift::smith_normal_form_integer` — integer-exact invariants via
+  Hadamard bound, prime selection, per-prime SNF, sign-symmetric CRT
+  reconstruction, and the Newman 1972 §1.4 Thm II.9 chain rebalance.
+- `Chain::is_finite_in<NodeId>` widened to Leinster–Shulman 2017 pseudo-metric
+  spaces (`d(a, b) = 0` permitted for distinct points).
+- `snf::smith_normal_form_matr<R: IntegerLikeRig>` round-trip API.
+- `IntegerLikeRig` trait, parameterising the rank-recovery surface over a
+  generic rig instead of concrete `F64Rig`.
+- `examples/integer_mobius.rs` and `examples/prop_3_14_acceptance.rs`.
+- `modularsnf-oracle` Cargo feature — dev-only cross-validation, activating
+  `dep:modularsnf` + `dep:ndarray`.
 
 ### Changed
 
-- **§1.19 rename:** `mobius_chains::mobius_chains_graded` →
-  `chain_count_signed_graded` (T7 from Session 2) — clarifies role as
-  per-grade signed chain count diagnostic, NOT the numerical path used by
-  `euler_char_identity_at`.
-- **§1.12 split:** `chain_complex.rs` →
-  `chain_complex/{mod.rs, homology.rs}` (T8 from Session 2) — separates
-  type definitions from algorithm implementations.
-- **`mock_coalition.rs` refresh** (T18) — adds Prop 3.14 +
-  `magnitude_homology_rank` panels demonstrating the v0.3.0 surface beyond
-  the v0.1.x baseline.
-
-### Internal
-
-- **R4 nalgebra workspace hoist** (T2 from Session 1) — nalgebra promoted to
-  `[workspace.dependencies]` since 2+ crates consume it.
-- **R5 rustworkx feature gate propagation** (T22-T23) — `catgraph`,
-  `catgraph-applied`, and `catgraph-magnitude` all gain a default-on
-  `rustworkx` feature; `--no-default-features` produces a genuinely slim
-  build with no rustworkx-core / ndarray / petgraph in cg-mag's compile
-  graph.
-- **2026-05-13 fixture_3 debug-mode guard** —
-  `tests/euler_char_identity.rs::fixture_3_5point_path_t_2_5` carries
-  `#[cfg_attr(debug_assertions, ignore)]` (30s release / 15+ min debug under
-  SNF + chain enumeration; CI runs in release and exercises it; local
-  debug-mode runs auto-skip cleanly).
-- **Pre-existing `tests/z_substrate.rs:7` `clippy::doc_markdown` warning**
-  fixed (Session 2 T5 deferred finding).
-
-### Refactored
-
-- **`catgraph-applied` substrate bump** v0.5.5 → v0.5.6 — adds `Integer`
-  trait + `Z(BigInt)` newtype (T3 + T4 from Session 1).
+- `mobius_chains::mobius_chains_graded` renamed to `chain_count_signed_graded`.
+- `chain_complex.rs` split into `chain_complex/{mod.rs, homology.rs}`.
+- `examples/mock_coalition.rs` gains Prop 3.14 and `magnitude_homology_rank`
+  panels.
+- `nalgebra` promoted to `[workspace.dependencies]`.
+- `catgraph`, `catgraph-applied` and `catgraph-magnitude` gain a default-on
+  `rustworkx` feature; `--no-default-features` builds without rustworkx-core,
+  ndarray or petgraph in this crate's compile graph.
+- `tests/euler_char_identity.rs::fixture_3_5point_path_t_2_5` carries
+  `#[cfg_attr(debug_assertions, ignore)]`.
+- catgraph-applied substrate bump v0.5.5 → v0.5.6, adding the `Integer` trait
+  and the `Z(BigInt)` newtype.
 
 ## [0.3.1] - 2026-05-10
 
-Phase G post-shipping multi-reviewer pass per workspace `CLAUDE.md` release
-rule 7. Strictly additive on v0.3.0; no API break.
+Strictly additive on v0.3.0; no API break.
 
-**Reviewer substitution flag (release rule 7 case (b)):**
-`superpowers:code-reviewer` was unavailable in the current environment;
-substituted with `feature-dev:code-reviewer` per the cg-dl v0.3.0 + v0.3.1
-precedent. Other three reviewer seats ran as designed (`rust-v2:rust-dev-v2`,
-`rust-v2:rust-practical`, `general-purpose` deep paper-audit briefed with
-BV 2025 + Leinster–Shulman 2017 + Leinster 2013 PDFs).
+### Fixed
 
-### Important fixes
+- `snf_rank_over_zp` returns `Result<usize, CatgraphError>` instead of
+  panicking inside a `Result`-returning call chain.
+- `boundary_matrix<Q>` rustdoc records that the rank-recovery path coerces to
+  `F64Rig`; the private alias `Q` is renamed `RankQ`.
+- `mobius_chains_graded` rustdoc demoted to "per-grade chain-count diagnostic";
+  `euler_char_identity_at`'s numerical path is `magnitude::magnitude`.
+- `is_mobius_invertible_at` citation corrected from Leinster 2013 Prop 2.4.17
+  to the §2.1 scatteredness threshold (Def 2.1.2 + Prop 2.1.3).
+- 12 source files reformatted via `cargo fmt`.
+- `catgraph-magnitude/CLAUDE.md` header refreshed to the v0.3.1 surface.
 
-- **`snf_rank_over_zp` → `Result<usize, CatgraphError>`** (`chain_complex.rs`;
-  Phase G code-quality I-2 + rust-dev-v2 I-1, duplicate). Was a `panic!` in
-  a `Result`-returning call chain (`magnitude_homology_rank` →
-  `snf_rank_with_cross_check` → `snf_rank_over_zp`). v0.3.1 propagates via
-  `?` so a future regression in `smith_normal_form` (e.g. tightened modulus
-  precondition) returns `Err` instead of aborting the process. The
-  function's invariants (positive prime `p`, rectangular `a`) hold by
-  construction in v0.3.0, so this is defensive.
-- **`boundary_matrix<Q>` rustdoc clarifies generic-vs-mono coupling**
-  (`chain_complex.rs`; rust-dev-v2 I-2). The public surface is generic in
-  `Q: Rig + From<i64>`, but the rank-recovery path
-  ([`magnitude_homology_rank`], [`euler_char_identity_at`]) silently coerces
-  to `F64Rig` via the private type alias. v0.3.1 documents this explicitly
-  + renames the alias `Q` → `RankQ` to remove the future-confusion trap.
-- **`mobius_chains_graded` rustdoc reconciled** (`mobius_chains.rs`; paper-
-  audit I-1). v0.3.0 rustdoc claimed it was "the numerical path of the BV
-  2025 Prop 3.14 acceptance gate" but `euler_char_identity_at` does NOT use
-  it; the numerical path is `magnitude::magnitude` (matrix-inverse Möbius).
-  v0.3.1 demotes the function's role to "per-grade chain-count diagnostic"
-  with explicit cross-link to the acceptance-gate flow + a paper-faithful
-  alternative (multiply by `q^ℓ`, sum) folded forward to v0.4.0 §1.19.
-- **`is_mobius_invertible_at` citation corrected** (`magnitude.rs`; paper-
-  audit I-2). v0.3.0 cited "Leinster 2013 Prop 2.4.17"; the actual
-  threshold the function checks (`t > log(n − 1)`) is the §2.1 scatteredness
-  threshold (Def 2.1.2 + Prop 2.1.3 chain-sum convergence). v0.3.1 fixes
-  the citation; behaviour unchanged.
-- **12 cg-magnitude source files reformatted via `cargo fmt`** (rust-
-  practical I-1). The release rule 4 verification checklist did not include
-  `cargo fmt --check`; v0.3.1 cleans the 12 files. The workspace CLAUDE.md
-  release rule 4 update to add `cargo fmt --check` is a follow-up
-  (architectural-tier item; deferred to a future workspace-doc patch).
-- **`catgraph-magnitude/CLAUDE.md` header refreshed** to v0.3.1 with the
-  new `chain_complex` + `snf` + `mobius_chains_graded` + `is_mobius_invertible_at`
-  scope entries (rust-practical I-2). v0.3.0's CLAUDE.md still described
-  only the v0.2.0 surface.
+### Changed
 
-### Minor ride-alongs
+- Rustdoc additions: `ChainIndex::grades` round-trip invariant;
+  `Chain::is_finite_in` pseudo-metric caveat (LS 2017 Ex 2.9);
+  `euler_char_identity_at` `q^ℓ ↔ e^(−ℓ_scaled)` equivalence with the LS 2017
+  Theorem 3.5 / Cor 7.15 cross-link; `snf/diagonal.rs::merge_scalars`
+  unimodularity comment; `bidiag_step5_to_8_gcd_chain` `stab` search note.
+- `snf/diagonal.rs::is_zero` renamed `is_snf_block_zero` with a
+  caller-contract docstring.
+- `snf/diagonal.rs::chain_matmul_left` uses `split_first().expect(...)` in
+  place of `factors[0]` indexing plus a `debug_assert!`.
+- `BV25-AUDIT.md` §3.14 row states the `q^ℓ ↔ e^(−ℓ_scaled)` weight
+  equivalence.
+- Workspace `CLAUDE.md`: Members table `catgraph-dl v0.3.0` → `v0.3.1`, and the
+  Sibling-repos catgraph-coalition pin-bump prerequisite `v0.13.2` → `v0.13.3`.
 
-- `chain_complex.rs::ChainIndex::grades` rustdoc — round-trip invariant
-  (bucketise / reconstruct via `tolerance`) documented (code-quality M-3).
-- `chain_complex.rs::Chain::is_finite_in` rustdoc — pseudo-metric
-  caveat (LS 2017 Example 2.9) documented; reactivation condition
-  (v0.4.0 forward-look §1.18) flagged (paper M-1).
-- `chain_complex.rs::euler_char_identity_at` rustdoc — `q^ℓ ↔ e^(−ℓ_scaled)`
-  weight equivalence under t-prescaling explicitly stated; LS 2017
-  Theorem 3.5 / Cor 7.15 cross-link added (paper M-2 + M-3).
-- `snf/diagonal.rs::merge_scalars` — unimodularity proof comment
-  `det(V) = 1·(1+q) − q·1 = 1 (mod n)` added (code-quality M-1).
-- `snf/diagonal.rs::is_zero` → `is_snf_block_zero` rename (rust-dev-v2 M-4)
-  with caller-contract docstring; protects against future reuse on
-  non-SNF blocks.
-- `snf/diagonal.rs::chain_matmul_left` — replaced `factors[0]` indexing
-  + `debug_assert!` with `split_first().expect(...)` for unified
-  dev/release behaviour (rust-dev-v2 M-5).
-- `snf/diagonal.rs::bidiag_step5_to_8_gcd_chain` — performance note on
-  the inline `stab` `O(n)` exhaustive search added (code-quality M-2).
-- Workspace `CLAUDE.md` Members table: `catgraph-dl v0.3.0` → `v0.3.1`
-  (was a pre-existing oversight from v0.13.2; rust-practical M-1).
-- Workspace `CLAUDE.md` Sibling repos catgraph-coalition pin-bump
-  prerequisite: `v0.13.2` → `v0.13.3` (rust-practical M-2).
-- `BV25-AUDIT.md` §3.14 row: weight equivalence `q^ℓ ↔ e^(−ℓ_scaled)`
-  explicitly stated; numerical-comparator clarification cross-linked
-  (paper M-3).
+### Added (v0.3.0)
 
-### Architectural items folded forward
+Strictly additive on v0.2.x. Dual-tagged with **catgraph-applied v0.5.5** at
+the same release commit.
 
-The 7 architectural findings across the 4 reviewers are deferred to a future
-release (SNF backend `Vec<Vec<i64>>` vs `MatR<R>` reconciliation; `RANK_RECOVERY_PRIMES`
-parameterisation; `chain_complex::RankQ` generic widening; pseudo-metric
-chain enumeration; `mobius_chains_graded` chain-sum-graded reconciliation;
-rustworkx-core transitive dep audit; `cargo audit` / `cargo deny` integration).
-These are NOT v0.3.1 scope.
+- `chain_complex` module (Leinster–Shulman 2017 §2): `Chain`,
+  `enumerate_chains`, `ChainIndex` with `grades()` / `chains_at(k, ℓ)`,
+  `boundary_matrix<Q: Rig + From<i64>>`, `magnitude_homology_rank<Q>` via SNF
+  over `Z/p` with single-prime + 2-prime cross-check (Mersenne `2^31 − 1`
+  primary), and `euler_char_identity_at(space, t, max_degree)` returning
+  `(via_homology, via_magnitude)`.
+- `snf` subsystem — a custom Storjohann §7 port over `MatR<Q>`: `snf::zmod`,
+  `snf::echelon`, `snf::band`, `snf::phase_1_to_bidiagonal`,
+  `snf::diagonal_to_smith`, `snf::bidiagonal_to_smith`,
+  `snf::smith_normal_form`, and `snf::verify_snf_invariants`.
+- `mobius_chains::mobius_chains_graded<Q: Ring + From<i64>>` — length-graded
+  chain-sum μ (Leinster 2013 Prop 2.1.3 + LS 2017 §2 grading).
+- `magnitude::is_mobius_invertible_at(space, t) -> bool`.
+- `tests/euler_char_identity.rs` — 5-fixture BV 2025 Prop 3.14 acceptance suite
+  compared within the analytical residual bound
+  `|Δ| ≤ n · r^(max_deg+1) / (1−r) + 1e-9`, `r = (n−1) · exp(−d_min_scaled)`.
 
+### Substrate (v0.3.0)
 
-
-Phase E (magnitude-homology Euler-characteristic identity) shipped. Closes
-the v0.2.0 §3.14 deferral via the chain-complex / Storjohann SNF /
-Euler-char-identity stack. Dual-tagged with **catgraph-applied v0.5.5** at
-the same release commit per workspace `CLAUDE.md` release rule 3 (target
-workspace umbrella **v0.13.3**).
-
-This release ships the **headline acceptance gate** for the crate's
-primary anchor paper: BV 2025 Prop 3.14
-`Mag(tM) = Σ_ℓ e^(−tℓ) · Σ_k (−1)ᵏ · rank(H_{k,ℓ}(M))` is verified
-end-to-end on 5 fixtures via a dual-path numerical-vs-structural
-comparison with a mathematically-justified analytical residual bound.
-
-Strictly additive on v0.2.x; v0.2.0 chain-sum equivalence + Prop 3.10 +
-Rem 3.11 acceptance residuals unchanged.
-
-### Added
-
-- **`chain_complex` module** (Leinster–Shulman 2017 §2; Phase B Tasks 6–11):
-  - `Chain` simple-chain newtype `(a₀, …, a_k)` with `a_{j−1} ≠ a_j`.
-  - `enumerate_chains` DFS over `LawvereMetricSpace<NodeId>` returning all
-    simple chains up to a caller-supplied length cutoff.
-  - `ChainIndex` materialised `(k, ℓ)`-bucketed index over enumerated
-    chains; `grades()` and `chains_at(k, ℓ)` per LS 2017 §2 grading by
-    `ℓ = Σ d(a_{j−1}, a_j)`.
-  - `boundary_matrix<Q>(idx, k, ℓ)` — alternating-sum drop-one-vertex face
-    map yielding the LS 2017 §2 boundary `∂_k: C_{k,ℓ} → C_{k−1,ℓ}` as a
-    `MatR<Q>`. Bound `Q: Rig + From<i64>`.
-  - `magnitude_homology_rank<Q>(idx, k, ℓ)` — `rank(H_{k,ℓ}(M))` via SNF
-    over `Z/p` with single-prime + 2-prime cross-check rank recovery
-    (Mersenne `2^31 − 1` primary). Multi-prime CRT for full integer SNF
-    lift deferred to v0.4.0 §1.10.
-  - `euler_char_identity_at(space, t, max_degree) -> Result<(f64, f64), _>`
-    — **headline acceptance gate**. Returns `(via_homology, via_magnitude)`
-    at the requested `t` and chain-length cutoff. Compares the structural
-    path (Σ_ℓ e^(−tℓ) · Σ_k (−1)ᵏ · rank(H_{k,ℓ}(M))) against the
-    numerical path (entry-sum of `(-1)^k Mᵏ` per LS 2017 §2 grading).
-    Inline `prev_rank` cache absorbs v0.4.0 forward-look §1.15 (boundary
-    matrix recomputation across consecutive `k` iterations) at the call
-    site; ~2× SNF speedup on slow-converging fixtures.
-
-- **`snf` subsystem** (custom Storjohann §7 port over `MatR<Q>`; Phase C
-  Tasks 12–15 + Phase D Tasks 16′–18′ + Phase E pre-flight Task 20.5):
-  - `snf::zmod` — `Z/p` modular helpers (`posmod`, `mulmod_safe`,
-    `gcdex`).
-  - `snf::echelon` — row-echelon form over `Z/p` (Lemma 7.4).
-  - `snf::band` — Phase 1 band reduction.
-  - `snf::phase_1_to_bidiagonal` — Phase 1 entry: `(MatR<Q>, n) ↦ (U, B,
-    V)` upper-2-banded form.
-  - `snf::diagonal_to_smith` — Storjohann §7.7 diagonal-to-Smith via GCD
-    chain.
-  - `snf::bidiagonal_to_smith` — Storjohann §7.12 fused 9-step pipeline
-    end-to-end (port of `events555/modularsnf::snf::smith_from_upper_2_banded`).
-  - `snf::smith_normal_form` — top-level entry composing Phase 1 + Phase
-    2 + Phase 3.
-  - `snf::verify_snf_invariants` — pre-flight invariant verifier (`UAV =
-    diag(s_i)` + chain-divisibility); confirms SNF interior soundness
-    (no unimodularity panics on Wikipedia 3×3 retrofit).
-
-- **`mobius_chains::mobius_chains_graded<Q>`** (Phase E Task 22) —
-  numerical Prop 3.14 path: length-graded chain-sum `μ` per Leinster
-  2013 Prop 2.1.3 + LS 2017 §2 grading. Bound `Q: Ring + From<i64>`.
-
-- **`magnitude::is_mobius_invertible_at(space, t) -> bool`** (Phase E
-  Task 22) — ergonomic Möbius-existence oracle per Leinster 2013 Prop
-  2.4.17 threshold check.
-
-- **5-fixture path C analytical-bound acceptance suite** at
-  `tests/euler_char_identity.rs`. Verifies BV 2025 Prop 3.14 across:
-  - 4state-scattered (`n=4`, `t=2.0`, `max_deg=4`)
-  - 3point-line (`n=3`, `t=3.0`, `max_deg=4`)
-  - 5point-path (`n=5`, `t=2.5`, `max_deg=4`)
-  - Random 4point (`n=4`, `t=3.0`, `max_deg=3`)
-  - 2point (`n=2`, `t=4.0`, `max_deg=2`)
-
-### Acceptance gate (v0.3.0)
-
-Four BV 2025 / Leinster 2013 / LS 2017 verifications must pass at any
-v0.3.x tag (v0.1.x + v0.2.0 + new):
-
-1. **BV 2025 Prop 3.10 closed form** — unchanged from v0.1.0, `0e0` (exact `f64`).
-2. **BV 2025 Rem 3.11 Shannon recovery** — unchanged from v0.1.0, `~6.46e-10`.
-3. **Leinster 2013 Prop 2.1.3 chain-sum equivalence** — unchanged from v0.2.0, `< 1e-9`.
-4. **BV 2025 Prop 3.14 magnitude-homology Euler-char identity (NEW)** — `(via_homology, via_magnitude)` from `chain_complex::euler_char_identity_at` agree within an analytical residual bound `|Δ| ≤ n · r^(max_deg+1) / (1−r) + 1e-9` where `r = (n−1) · exp(−d_min_scaled)`. Tight on fixtures 1+5 (chain count saturates the bound); loose on 3+4 where alternating-sum cancellation reduces the actual residual ~100×. Conservative-but-true; tests Prop 3.14 modulo provable finite-truncation residual rather than the (unattainable at locked `max_degree`) absolute `1e-9` claim.
-
-### Path C ratification (math-level decision)
-
-User picked **path C** (analytical residual bound) on 2026-05-09 over
-path A (per-fixture engineered tolerance) and path B (re-pick fixtures)
-after a 2026-05-08 first attempt surfaced a plan-level calibration bug:
-the originally-locked `1e-9` absolute tolerance was unattainable on
-slow-converging fixtures at locked `max_degree`. Path C tests the
-BV 2025 / LS 2017 identity modulo the provable upper bound on the
-omitted-`k > max_degree` chain contribution. See
-[`docs/BV25-AUDIT.md`](docs/BV25-AUDIT.md) v0.3.0 deltas section "Why path
-C" for the full rationale.
-
-### Substrate
-
-- Depends on **catgraph-applied v0.5.5** mutable `MatR` API (8 mutator
-  methods + `LawvereMetricSpace` accessors + `impl From<i64> for F64Rig`).
-  Dual-tagged at the same release commit per release rule 3.
-- Algorithmic reference: [`events555/modularsnf`](https://github.com/events555/modularsnf)
-  at SHA `d62535e` (Apache-2.0). **Dev-only oracle** gated by the
-  `modularsnf-oracle` feature flag; **NOT** a runtime dep — workspace
-  stays ndarray-free per design doc §2.4 option (c) custom Storjohann
-  port over `MatR<Q>`.
-
-### Anchor papers added in-tree
-
-- `docs/2501.06662v2.pdf` — BV 2025 (already in-tree from v0.1.x).
-- `docs/1711.00802v4.pdf` — Leinster–Shulman 2017 (already in-tree from v0.2.0; promoted from forward reference to active anchor at v0.3.0).
-- Storjohann 2000 §7 — algorithmic reference for the SNF backend; not in-tree (open-access via author's institutional repository); `events555/modularsnf` is the working reference.
-
-### Performance baseline (v0.3.0)
-
-- 5-fixture acceptance suite finishes in **35.5s** release-mode (single-threaded).
-- Fixture 3 (5point-path, `n=5`, slowest converger) finishes in **~28s** single-test mode (vs ~300s pre-`prev_rank`-cache).
-- `mag_lm/<N>` v0.1.0 baseline unchanged.
-- SNF over `MatR<Q>` at `n ≤ ~50` (typical chain-complex differential size for `n ≤ 5`-vertex fixtures at `max_deg ≤ 4`): sub-second per matrix.
-
-### Out of scope (v0.3.x)
-
-- **`mobius_function_via_chains_exact<Q: Ring>`** (design doc §3.6) was
-  STRUCK from v0.3.0 on 2026-05-09 after a spec-tension surfaced (the
-  `Q: Ring` bound is incompatible with mirroring v0.2.0's body, which
-  requires `Q: Ring + From<f64>`). Paper-faithful `Q: Ring + Integer`
-  requires anchoring a NEW paper (Leinster 2008 finite-category Möbius)
-  outside the crate's BV/LS/Leinster-2013 anchor surface, plus carving
-  a new input type (`PosetCategory<NodeId>`), plus adding a Z-ring
-  substrate. Folded forward to v0.4.0 forward-look §1.17. **User-flagged
-  trigger**: catgraph-coalition v0.5.0 (slot 4) integer-exact Möbius
-  use cases.
-- **Multi-prime CRT for full integer SNF lift** — currently single-prime
-  + 2-prime cross-check rank recovery (Mersenne `2^31 − 1` primary);
-  multi-prime CRT deferred to v0.4.0 §1.10.
-- **All v0.2.x out-of-scope items** carry forward unchanged.
-
-### Workspace test counts at v0.3.0
-
-86 integration + lib unit tests + 5 doctests across 18 sets
-(catgraph + catgraph-applied + catgraph-magnitude). Clippy pedantic
-clean workspace-wide. `cargo doc --workspace --no-deps` clean.
-
-### v0.4.0 forward-look
-
-17 architectural items consolidated for a future release. Headline items:
-SNF interior perf (§1.1–§1.4); Storjohann §7.12
-paper-faithful bidiag→diag isolation (§1.5); SNF private-helper
-duplication (§1.6); `chain_complex.rs` file-size split (§1.12);
-multi-prime CRT for full integer SNF lift (§1.10); `boundary_matrix`
-recomputation cache pattern generalisation (§1.15); `scale_lawvere_space`
-allocation cost (§1.16); **`mobius_function_via_chains_exact<Q: Ring +
-Integer>` paper-anchor + input-type expansion (§1.17)** — newest 2026-05-09
-from struck Task 24 fold-forward.
-
-v0.4.0 stays dormant until ANY trigger fires (Phase E benchmarks show
-SNF interior on hot path; downstream consumer surfaces with non-trivially
-sized matrices; **catgraph-coalition v0.5.0 design phase crystallises a
-concrete integer-exact Möbius use case**; research goal sharpens for
-catgraph-coalition-dl; user opens for research-driven reasons).
-
-### Why this release closes the BV 2025 audit-doc deferral
-
-The crate's anchored claim — that BV 2025 Prop 3.14 (magnitude as the
-Euler characteristic of magnitude homology) holds in code — is now backed
-by a dual-path numerical-vs-structural acceptance gate on 5 fixtures with
-mathematically-justified tolerances. v0.3.0 advances the implementable-DONE
-percentage from 89% (v0.2.0: 17/19) to 95% (v0.3.0: 18/19); the remaining
-deferred item (§3 Tsallis-side optimization stash) is performance-oriented,
-not paper-coverage-oriented.
+- Depends on **catgraph-applied v0.5.5** for the mutable `MatR` API,
+  `LawvereMetricSpace` accessors, and `impl From<i64> for F64Rig`.
+- Algorithmic reference:
+  [`events555/modularsnf`](https://github.com/events555/modularsnf) at SHA
+  `d62535e` (Apache-2.0), a dev-only oracle behind the `modularsnf-oracle`
+  feature and never a runtime dependency.
 
 ## [0.2.1] - 2026-05-04
 
-Phase 6F post-shipping three-reviewer patch pass per workspace `CLAUDE.md`
-release rule 7. Reviewers: `superpowers:code-reviewer` (general code
-quality), `causality:causality-theory` (Leinster 2013 paper-fidelity),
-`rust-v2:rust-dev-v2` (Rust idioms / trait bounds / perf).
-
-**Verdict: GO for v0.2.0 as shipped — zero Blocking findings.** v0.2.1
-is the additive patch bundling 11 Important + 6 Minor findings before
-v0.3.0 magnitude-homology design phase opens. Strictly additive; v0.2.0
-API unchanged; BV 2025 Prop 3.10 + Rem 3.11 acceptance residuals
-unchanged (`0e0` and `~6.46e-10`). v0.2.0 chain-sum equivalence
-acceptance residual unchanged (`< 1e-9`).
+Strictly additive; v0.2.0 API unchanged.
 
 ### Added
 
 - `magnitude::scatteredness_witness(space) -> Option<((NodeId, NodeId), f64, f64)>`
-  — diagnostic companion to `is_scattered`. Returns the first violator
-  pair `((a, b), d(a, b), log(#A − 1))` if the space is not scattered, or
-  `None` if scattered. v0.3.0 substrate hook (per the three-reviewer
-  Rust A-2): the chain complex will use violator pairs as boundary-map
-  kernel generators. Includes a doctest verifying the contract on a
-  4-state non-scattered fixture.
-
-- One new test in `tests/mobius_chains.rs`: `boundary_near_non_scattered_returns_err_on_chain_sum`
-  — fixture at `d = 1.05 < log(3) ≈ 1.0986` (boundary-near, not below by
-  much). Verifies `is_scattered`'s strict `>` in Def 2.1.2 has no
-  off-by-epsilon issue at the boundary (per Causality Minor #4).
+  — the first scatteredness violator pair, or `None` when scattered.
+- `tests/mobius_chains.rs::boundary_near_non_scattered_returns_err_on_chain_sum`
+  at `d = 1.05 < log(3)`.
 
 ### Fixed
 
-- **`tsallis_entropy` precondition guard.** Added
-  `debug_assert!(t > 0.0)` mirroring `LmCategory::magnitude`'s v0.1.1
-  documentary check. At `t < 0`, `0.0_f64.powf(t)` returns `+∞` and
-  pollutes the sum with non-finite values (per Rust I-2). Function does
-  not return `Result` — release-mode callers with `t ≤ 0` get the
-  documented NaN/`+∞` pollution. Hot path stays branch-free.
+- `tsallis_entropy` gains a `debug_assert!(t > 0.0)` precondition guard.
+- `weighting` / `coweighting` use `swap_remove(n)` per row instead of
+  `nth(n).expect(...)`; the `# Panics` section is dropped.
+- `mobius_chains.rs` drops the dead `let _ = &mut m;` line and corrects the
+  `r == 0.0` branch comment to the discrete-topology case.
 
-- **`weighting` / `coweighting` ergonomics.** Replaced
-  `nth(n).expect(...)` after `into_iter()` with `swap_remove(n)` per row
-  (per Code I-1). No behavior change; reads safer to a maintainer
-  scanning for unwrap-class concerns. `# Panics` section dropped (no
-  longer applicable).
+### Changed
 
-- **`mobius_chains.rs` `let _ = &mut m;` dead-code line removed.** `m`
-  doesn't mutate after construction (per Code I-2 + Rust Minor #1).
-  Changed `let mut m: Vec<Vec<Q>>` to `let m: Vec<Vec<Q>>`; dropped the
-  `let _ = &mut m;` incantation. Cleaner read.
-
-- **`mobius_chains.rs` `r == 0.0` else-branch comment.** Old comment
-  ("K=1 step suffices and contributes nothing") was misleading — the
-  loop *does* iterate at K=1, computing `(-1)·M = 0`. New comment
-  documents the discrete-topology case (`r == 0` ⇒ all off-diagonal
-  `d = +∞` ⇒ `M = 0` ⇒ `μ = I`) and explains why the K=1 path is fine
-  (per Code I-3). Behavior unchanged.
-
-### Documented (no behavior change)
-
-- **`mobius_chains.rs` operator-norm wording correction.** Old docstring
-  claimed "‖M‖ < 1 operator-norm condition." Replaced with the actual
-  per-entry geometric bound `|μ_{A,k}(a,b)| ≤ ((n − 1)·e^(−ε))ᵏ` from
-  Leinster Prop 2.1.3 proof (page 11), with the row-sum bound
-  `‖M‖_∞ ≤ (n − 1)·e^(−ε) < 1` dominating `ρ(M)` as the absolute-
-  convergence justification (per Causality I-1).
-
-- **`mobius_chains.rs` truncation-residual `n` factor.** Annotated the
-  `n · rᴷ⁺¹ / (1 − r)` bound as defensively-padded over Leinster's tight
-  per-entry `rᴷ⁺¹ / (1 − r)` (per Causality I-2). Behavior unchanged
-  (the cap is conservative, which is fine).
-
-- **`mobius_chains.rs` `Q: Ring + From<f64>` bound clarification.** Old
-  docstring claimed forward-compat to "any future `Ring`-rig." Tightened
-  to acknowledge that the implementation's `is_zero()` short-circuits in
-  `matmul` + the `r == 0.0` branch assume `Q::is_zero()` matches
-  `f64 == 0.0` semantics (which `F64Rig` provides; `Tropical`'s
-  `is_zero` is `+∞`). v0.3.0 magnitude-homology will either widen the
-  bound semantically or carve `mobius_function_via_chains_exact<Q: Ring>`
-  (per Rust I-1, I-7; v0.3.0 design doc §3.6).
-
-- **`mobius_chains.rs` `# Errors` block fallback hints.** Added
-  caller-side fallback bullets for both `Err` paths pointing at
-  `magnitude::mobius_function` (per Rust I-4).
-
-- **`weighting` / `coweighting` Lemma citations.** `weighting` doc now
-  spells out `μ(j, i)` indexing convention for Lemma 1.1.4 (per
-  Causality Minor #1). `coweighting` doc now cites Leinster 2013 §1.1
-  last paragraph "weightings and coweightings are essentially the same"
-  on symmetric ζ (per Causality Minor #2).
-
-- **`tsallis_entropy` `#[inline]` attribute.** Hot-path branch in BV 2025
-  Prop 3.10 evaluator (per Rust I-6).
-
-- **`m_k.clone()` vs double-buffering note** added inline in
-  `mobius_function_via_chains` matrix-power loop, deferring to v0.3.0
-  magnitude-homology design (per the user-flagged carry-forward of
-  Rust Minor #4 from the v0.2.1 skip list to the v0.3.0 design doc).
-
-### Internal refactoring (no public API change)
-
-- **Private `materialize_objects(space) -> Vec<NodeId>` helper** in
-  `magnitude.rs`. Replaces 6 duplicated FQN dispatch sites of
-  `<LawvereMetricSpace<NodeId> as crate::EnrichedCategory<crate::Tropical>>::objects(space).collect()`
-  across `mobius_function`, `magnitude`, `weighting`, `coweighting`,
-  `is_scattered`, and `mobius_chains::mobius_function_via_chains` (per
-  Code Minor #1 + Rust Minor #3).
-
-- **Module-level `#![allow(clippy::needless_range_loop)]`** in
-  `magnitude.rs` replaces 6 per-site annotations. Single rationale
-  comment in module docs (per Rust Minor #6).
-
-- **Standardized error messages** across `mobius_function`,
-  `weighting`, `coweighting`. Now use the consistent prefix
-  `"zeta matrix is singular at column {col} (X solve)"` for X ∈
-  {weighting, coweighting} (per Code Minor #2).
-
-### Skipped — surfaced explicitly
-
-Per workspace `CLAUDE.md` rule "NEVER silently skip … reviewer-agent
-finding. Apply every finding … If you judge a finding is not worth
-applying, STOP and surface it to the user with your reasoning so they
-decide." User-ratified skips:
-
-- **Replace bool sign-tracking with `signum: i32` flip** (Code Minor #3) —
-  pure aesthetic; bool toggle is just as readable.
-- **`Q::from((-d.0).exp())` shared helper** (Rust Minor #4) — 4 sites,
-  inline form readable, over-DRY.
-- **`m_k.clone()` vs double-buffering** (Rust Minor #4 carry-forward) —
-  user-flagged carry-forward to v0.3.0 design doc §3.9 instead of skip.
-  Inline note added in `mobius_function_via_chains` matrix-power loop.
-- **`test_case` dev-dep** (Rust Minor #5) — dev-dep churn unwelcome.
-- **`weighting_coweighting.rs` test docstring inconsistency**
-  (Code Minor #4) — trivial, folded into the standardize-error-prefix
-  pass instead.
-
-### Architectural — consolidated for v0.3.0
-
-All Architectural findings consolidated into the v0.3.0 design:
-
-- BV 2025 §3.13 length grading + Leinster–Shulman §6 Euler char identity
-  (Causality A-1, A-2).
-- Leinster 2013 Prop 2.4.17 Möbius-invertibility-at-`t` oracle
-  (Causality A-3).
-- `MatR<Q>` mutable API (`row_swap`, `scale_row`, `add_scaled_row`) for
-  SNF — affects catgraph-applied v0.5.5 too (Rust A-1).
-- `is_scattered` returning `bool` won't carry magnitude-homology;
-  `scatteredness_witness` (Rust A-2) — closed by v0.2.1 Important #10.
-- `mobius_function_via_chains_exact<Q: Ring>` no-`From<f64>` variant
-  (Rust A-3).
-- Pervasive `Vec<Vec<Q>>` representation duplicates across magnitude.rs +
-  mobius_chains.rs; SNF will magnify (Code Architectural).
-- `is_scattered` NaN-distance silent classification defense (Code
-  Architectural).
-- `m_k.clone()` vs double-buffering (Rust Minor #4 carry-forward).
-
-### v0.3.0 SNF dependency reference
-
-User-flagged 2026-05-04: <https://github.com/events555/modularsnf/tree/main/crates/modularsnf>
-as a candidate dep for `rank(H_{k,ℓ}(M))` computation in BV 2025
-Prop 3.14. Local clone planned. Decision deferred to v0.3.0 design phase
-(see v0.3.0 design doc §2.4).
+- Rustdoc corrections in `mobius_chains.rs`: the per-entry geometric bound
+  `|μ_{A,k}(a,b)| ≤ ((n − 1)·e^(−ε))ᵏ` (Leinster Prop 2.1.3, p. 11) with the
+  row-sum bound `‖M‖_∞ ≤ (n − 1)·e^(−ε) < 1`; the `n · rᴷ⁺¹ / (1 − r)`
+  truncation residual annotated as padded over Leinster's per-entry bound; the
+  `Q: Ring + From<f64>` bound scoped to rigs whose `is_zero()` matches
+  `f64 == 0.0`; `# Errors` fallback hints pointing at
+  `magnitude::mobius_function`.
+- `weighting` rustdoc spells out the `μ(j, i)` indexing convention for
+  Lemma 1.1.4; `coweighting` cites Leinster 2013 §1.1 on symmetric ζ.
+- `tsallis_entropy` marked `#[inline]`.
+- Private `materialize_objects(space) -> Vec<NodeId>` helper in `magnitude.rs`
+  replaces six duplicated FQN dispatch sites.
+- Module-level `#![allow(clippy::needless_range_loop)]` in `magnitude.rs`
+  replaces six per-site annotations.
+- Singular-ζ error messages standardised to
+  `"zeta matrix is singular at column {col} (X solve)"`.
 
 ## [0.2.0] - 2026-05-04
 
-Phase 6F — chain-sum Möbius via Leinster 2013 Prop 2.1.3, plus the
-paper-foundational (co)weighting primitives that v0.1.x bypassed.
-Strictly additive; v0.1.x API unchanged; BV 2025 Prop 3.10 + Rem 3.11
-acceptance residuals unchanged (`0e0` and `~6.46e-10`).
-
-This release is the **paper-faithful redesign** of the earlier
-v0.2.0 spec. Re-reading Leinster 2013 §1, §2, §1.4 + BV 2025 §3
-against the spec surfaced five corrections. The
-earlier `SignTwist: Rig` trait + `Tropical`/`BoolRig` magnitude
-framing was a misattribution that doesn't trace back to BV 2025,
-Leinster 2013, or Leinster–Shulman 2017; v0.2.0 ships the actual
-Prop 2.1.3 chain-sum (over `Q: Ring`, scattered-space precondition).
-
-Anchor papers added in-tree at `catgraph-magnitude/docs/`:
-- `Leinster-1012.5857v3.pdf` — Leinster, *The magnitude of metric spaces* (2013).
-- `1711.00802v4.pdf` — Leinster & Shulman, *Magnitude homology* (2017/2021). Forward reference for v0.3.0.
-- `1606.00095v2.pdf` — Leinster & Meckes (2016) survey.
-- `2201.11363v3.pdf` — Gimperlein, Goffeng, Louca, *The magnitude and spectral geometry* (2025). Downstream of Leinster 2013.
+Strictly additive; v0.1.x API unchanged.
 
 ### Added
 
-- `magnitude::weighting::<Q: Ring + Div + From<f64>>(space) -> Result<Vec<Q>, CatgraphError>`
-  — Leinster 2013 §1.1 Def 1.1.1. Solves `ζ · w = u_I` (all-ones RHS)
-  via Gaussian-Jordan elimination on the augmented `[ζ | u_I]` system.
-  By Leinster Lemma 1.1.4, `w(j) = Σᵢ μ(j, i)` (row-sum of `μ = ζ⁻¹`)
-  when ζ is invertible. Foundational primitive that v0.1.x bypassed in
-  favour of the more restrictive matrix-inversion path.
-
-- `magnitude::coweighting::<Q: Ring + Div + From<f64>>(space) -> Result<Vec<Q>, CatgraphError>`
-  — symmetric primitive; solves `v · ζ = u_J^T` via the transposed
-  augmented system. By Lemma 1.1.2, `Σⱼ w(j) = Σᵢ v(i) = magnitude`.
-
+- `magnitude::weighting::<Q: Ring + Div + From<f64>>(space)` — Leinster 2013
+  §1.1 Def 1.1.1, solving `ζ · w = u_I` by Gaussian-Jordan elimination on
+  `[ζ | u_I]`.
+- `magnitude::coweighting::<Q: Ring + Div + From<f64>>(space)` — the transposed
+  system `v · ζ = u_J^T`; `Σⱼ w(j) = Σᵢ v(i)` by Lemma 1.1.2.
 - `magnitude::is_scattered(space) -> bool` — Leinster 2013 Def 2.1.2
-  predicate `d(a, b) > log(#A − 1)` for all distinct `a, b`. Vacuous
-  for `n ≤ 1`; unset (`+∞`) distances auto-pass. Convergence
-  precondition for the chain-sum Möbius formula.
-
-- `mobius_chains` module + `mobius_chains::mobius_function_via_chains::<Q: Ring + From<f64>>(space) -> Result<MatR<Q>, CatgraphError>`
-  — Leinster 2013 Prop 2.1.3 chain-sum formula
-  `μ(a, b) = Σ_{k≥0} (−1)ᵏ · Σ_{a=a₀≠…≠a_k=b} ζ(a₀,a₁) · … · ζ(a_{k−1},a_k)`.
-  Realized as the von-Neumann series `μ = Σ (−1)ᵏ Mᵏ` with `M = ζ − I`
-  (algebraically identical to the chain-sum-of-ζ-products by
-  `Mᵏ[a][b] = Σ chain-products of length k`; the diagonal-zero of M
-  enforces the simple-chain `a_{j-1} ≠ a_j` constraint automatically).
-  O(K · n³) matrix-power accumulation with adaptive truncation depth
-  `K = ⌈log(τ) / log(r)⌉` where `r = (n − 1) · e^(−ε)` is the
-  geometric ratio (`τ = 1e-13`, capped at `K_MAX = 200`). Returns
-  `Err(CatgraphError::Composition)` on non-scattered input or
-  near-boundary `r ≥ 0.94` regime — caller falls back to
-  `magnitude::mobius_function::<Q>` (which inverts ζ directly without
-  truncation).
-
-- 13 new tests across two integration test files
-  (`tests/weighting_coweighting.rs` 6/6, `tests/mobius_chains.rs` 6/6,
-  + 1 v0.1.1-carryover sanity case). Acceptance highlights:
-  - Lemma 1.1.2 verification (`Σw == Σv == magnitude`) on uniform 4-state space.
-  - Lemma 1.1.4 verification (`w(j) == Σᵢ μ(j, i)`) on invertible ζ.
-  - Symmetric-ζ `weighting == coweighting` agreement.
-  - Chain-sum vs matrix-inversion agreement to `1e-9` on hand-built
-    4-state scattered fixture + proptest n=2-5, slack ∈ [0.5, 3.0].
-
-### Acceptance gate (v0.2.0)
-
-Three verifications must pass at any v0.2.x tag:
-
-1. **BV 2025 Prop 3.10 closed form** — `Mag(tM) = (t−1)·Σ H_t(p_x) + #(T(⊥))` to `0e0` (exact f64) on hand-computed 4-state LM at `t ∈ {0.5, 1.5, 2.0, 5.0}`.
-2. **BV 2025 Rem 3.11 Shannon recovery** — `d/dt Mag|_{t=1} = Σ H(p_x)` by central FD (`h = 1e-4`) to `~6.46e-10`.
-3. **Leinster 2013 Prop 2.1.3 chain-sum equivalence** — `mobius_function_via_chains::<F64Rig>(scattered_space) ≈ mobius_function::<F64Rig>(scattered_space)` to `1e-9`.
-
-### Algebraic scoping (v0.2.0)
-
-Two Möbius paths ship with distinct trait bounds:
-
-- **Field-fast path** — `mobius_function::<Q: Ring + Div + From<f64>>` (v0.1.x). Gaussian elimination on `[ζ | I]`; requires invertible ζ; works on any space.
-- **Chain-sum path** — `mobius_function_via_chains::<Q: Ring + From<f64>>` (v0.2.0). Von-Neumann series; requires scattered input; doesn't need `Div`.
-
-Among the workspace's four concrete rigs, only `F64Rig` satisfies either bound in v0.2.0; the wider `Q: Ring + From<f64>` is forward-compat for any future `Ring`-rig.
-
-**Out of scope: `Tropical`-valued / `BoolRig`-valued magnitude.** Per Leinster 2013 §1.3 Examples 1.3.1, the scalar rig `k` is determined by V (V = `[0,∞]` ⇒ k = ℝ). See `docs/BV25-AUDIT.md` §"Out of scope (v0.2.x)" for the full citation chain rejecting the original Phase 6A.6 spec's `Tropical`/`BoolRig` framing.
-
-### Performance baseline (v0.2.0)
-
-Chain-sum is O(K · n³) where K is the adaptive truncation depth. For the typical scattered regime (`r ≤ 0.5`), `K ~ 30` so the chain-sum path costs ~30× more than `mobius_function`'s single O(n³) inversion. Use `mobius_function` as the default for performance; `mobius_function_via_chains` is the algebraically-clean reference path for Prop 2.1.3 verification and any future `Ring`-rig that doesn't admit cheap inversion.
-
-`mag_lm/<N>` v0.1.0 baseline unchanged: `N = 10` ~30 µs / `N = 100` ~11 ms / `N = 1000` ~11 s. v0.2.0 ships no new criterion bench; chain-sum performance is bounded above by `K · mobius_function` cost.
+  `d(a, b) > log(#A − 1)`; vacuous for `n ≤ 1`, unset `+∞` distances auto-pass.
+- `mobius_chains` module with
+  `mobius_function_via_chains::<Q: Ring + From<f64>>(space)` — Leinster 2013
+  Prop 2.1.3 as the von-Neumann series `μ = Σ (−1)ᵏ Mᵏ`, `M = ζ − I`, with
+  truncation depth `K = ⌈log(τ) / log(r)⌉` (`τ = 1e-13`, `K_MAX = 200`) and
+  `Err(CatgraphError::Composition)` on non-scattered input or `r ≥ 0.94`.
+- 13 tests across `tests/weighting_coweighting.rs` and `tests/mobius_chains.rs`.
 
 ### Dependencies
 
-Unchanged from v0.1.1: `catgraph` (path), `catgraph-applied` (path), `num` (workspace), `proptest`+`criterion` (dev). No tokio, no serde, no rayon.
-
-### Why this release reframes the earlier spec
-
-An earlier internal spec called for `mobius_function_via_chains<Q: Rig>` with a `SignTwist` trait providing `negate_at_parity` for `Tropical` / `BoolRig`. Re-reading Leinster 2013 §1, §2, §1.4 + BV 2025 §3 against the spec surfaced five corrections:
-
-1. The chain-sum is `Σ (−1)ᵏ · ζ-product` (Prop 2.1.3), not `Σ (−1)ᵏ · #chains`.
-2. The convergence condition is **scatteredness** (Def 2.1.2), not "acyclic poset."
-3. `(−1)ᵏ` requires `Neg`, i.e. `Q: Ring` (not `Q: Rig`).
-4. The rig `k` is determined by V (§1.3 Ex 1.3.1) — `Tropical`/`BoolRig` magnitude isn't a thing in our setting.
-5. The spec's `BaseChange<Tropical>` recipe doesn't exist in any sibling crate; it was invented and never grounded.
-
-The shipped v0.2.0 surface is paper-faithful: `Q: Ring`; chain-sum-of-ζ-products; scattered; no `SignTwist`. The chain-sum body is the von-Neumann series — algebraically identical to matrix inversion, polynomial-cost, and converges absolutely under scatteredness.
-
-### Roadmap forward — v0.3.0 (deferred)
-
-**BV 2025 Prop 3.14 magnitude-homology Euler-characteristic identity** — `Mag(tM) = Σ_ℓ e^(−tℓ) · Σ_{k≥0} (−1)ᵏ · rank(H_{k,ℓ}(M))`. Headline closing result of BV 2025 that v0.1.x audit missed; deferred to v0.3.0 with own design phase. Requires Leinster–Shulman 2017 §2 chain complex + integer Smith normal form. SNF reference candidate: <https://github.com/events555/modularsnf/tree/main/crates/modularsnf>.
+Unchanged from v0.1.1: `catgraph` (path), `catgraph-applied` (path), `num`
+(workspace), `proptest` + `criterion` (dev). No tokio, no serde, no rayon.
 
 ## [0.1.1] - 2026-04-28
 
-Additive patch closing five soundness and pre-flight items surfaced
-during a deep review. Co-released with catgraph v0.12.2 +
-catgraph-applied v0.5.4 at the same workspace SHA.
-
-The BV 2025 Prop 3.10 + Rem 3.11 acceptance gate residuals are unchanged
-(`0e0` and `~6.46e-10` respectively).
+Co-released with catgraph v0.12.2 and catgraph-applied v0.5.4 at the same
+workspace SHA.
 
 ### Breaking
 
-- `LmCategory::add_transition` signature changed from `fn(&mut self, &str,
-  &str, f64)` to `fn(&mut self, &str, &str, f64) -> Result<(),
-  CatgraphError>`. The previous `debug_assert!` on `prob ∈ [0, 1]` and
-  state membership are now release-mode `Err` returns; non-trivial
-  self-loops (`from == to && prob > 0.0`) — forbidden by BV 2025 §3
-  acyclicity hypothesis — are also rejected. Existing callers must append
-  `.unwrap()` (test/example/bench fixtures) or `?` (library code).
-  Justified for a v0.1.x patch by the absence of any external published
-  consumer at this point in the workspace timeline; all known callers
-  (3 examples, 2 test files, 1 bench) are updated in this same release.
+- `LmCategory::add_transition` returns `Result<(), CatgraphError>` instead of
+  `()`. The former `debug_assert!` on `prob ∈ [0, 1]` and state membership are
+  release-mode `Err` returns, and a non-trivial self-loop
+  (`from == to && prob > 0.0`) is rejected. Existing callers append `.unwrap()`
+  or `?`.
 
 ### Added
 
-- `LmCategory::from_transition_log<I, S, T>(objects, terminating, log) ->
-  Result<Self, CatgraphError>` — replay constructor that reconstructs an
-  `LmCategory` from an append-only sequence of `(from, to, prob)` triples.
-  Designed for the upcoming Phase 6C `magnitude_history` and
-  catgraph-surreal `EventLogStore::replay` callers. Validation is
-  delegated to `add_transition`, so an invalid entry fails-fast with
-  `CatgraphError::Composition`.
-- `WeightedCospan::into_validated_metric_space() -> Result<LawvereMetricSpace<NodeId>,
-  CatgraphError>` — `Q = UnitInterval` specialization that lifts the
-  weighted cospan via `-ln π` AND validates the triangle inequality
-  before returning. Returns `Err(CatgraphError::Composition)` on the
-  first triple violating `d(x, z) ≤ d(x, y) + d(y, z)`. The
-  tree-additivity equality fast path (BV 2025 §2.15 prefix-extension
-  semantics) is documented as a v0.2.0+ optimization; v0.1.1 ships the
-  full O(n³) scan for correctness.
-- `LmCategory::magnitude` — `frontier_steps_remaining = n*n` BFS cap
-  (S1.1 defense-in-depth from H.3 verdict #2) and `debug_assert!(t > 0.0)`
-  entry guard (S1.4 from H.3 verdict #4). The BFS cap returns
-  `CatgraphError::Composition` if exhausted; the `t > 0` check is
-  debug-only since `add_transition` already enforces `prob ∈ [0, 1]`,
-  making malformed BFS inputs reachable only through future direct-mutation
-  callers.
-- Five new unit tests in `tests/lm_category.rs` exercising the new error
-  paths (`add_transition_*_errors`, `from_transition_log_*`) and two new
-  unit tests in `tests/weighted_cospan.rs`
-  (`into_validated_metric_space_*_v0_1_1`).
-
-### Why
-
-These items unblock Phase 6C's `EnrichedCoalition::magnitude_history`
-replay-from-event-log path and harden the public API surface against the
-S1.1/S1.2/S1.4 soundness gaps documented in the 2026-04-27 deep review.
-Per H.3 verdict #4, S1.4's root cause is **not** `t < 0` but the
-`Tropical(+∞)` vs `Tropical(-∞)` semiring-zero confusion at unset entries;
-v0.1.1 ships the documentary `debug_assert` and leaves the
-catgraph-applied `LawvereMetricSpace::distance` `+∞` convention intact
-(verified at v0.5.4 audit time).
+- `LmCategory::from_transition_log<I, S, T>(objects, terminating, log)` —
+  replay constructor delegating validation to `add_transition`.
+- `WeightedCospan::into_validated_metric_space()` — the `Q = UnitInterval` lift
+  plus a triangle-inequality scan, returning `Err` on the first violating
+  triple.
+- `LmCategory::magnitude` gains an `n*n` BFS frontier cap returning
+  `CatgraphError::Composition` when exhausted, and a `debug_assert!(t > 0.0)`
+  entry guard.
+- Five tests in `tests/lm_category.rs` and two in `tests/weighted_cospan.rs`.
 
 ## [0.1.0] - 2026-04-25
 
 First publishable release. Anchored to BV 2025 (Bradley & Vigneaux,
-*Magnitude of Language Models*, arXiv:2501.06662v2).
+arXiv:2501.06662v2).
 
 ### Added
 
-- Phase 6A.5 criterion bench (`benches/magnitude_bench.rs`) — three
-  `mag_lm/<N>` benches (N = 10, 100, 1000) on acyclic forward-chain LMs at
-  `t = 2.0`. Baseline median wall-clock (optimized, `--quick`):
-  `mag_lm/10` ~30 µs, `mag_lm/100` ~11 ms, `mag_lm/1000` ~11 s.
-  O(n³) Gaussian elimination dominates — 1000-state is the practical limit
-  for the v0.1.0 dense-matrix Möbius implementation.
-
-- Phase 6A.4 `examples/lm_magnitude.rs` — BV 2025 magnitude bounds
-  demonstration on two contrasting LMs (deterministic 3-state, uniform
-  5-state). Prints `Mag(tM)` at `t ∈ {0.5, 1.0, 2.0, 10.0, 1e6}` with
-  Prop 3.10 closed-form comparison. Asserts four properties from BV 2025
-  p.4 for `t ≥ 1`: (A) lower bound `≥ #T(⊥)`, (B) upper bound `≤ #ob(M)`,
-  (C) monotone non-decreasing in `t`, (D) `Mag(1e6·M) ∈ [#T(⊥), #ob(M)]`.
-  Verifies closed form = Möbius sum to `< 1e-9` at `t ∈ {0.5, 2.0, 10.0}`.
-  Note: the `t → ∞` limit equals `#T(⊥)` only for fully-deterministic LMs
-  (all-Dirac rows); for non-degenerate rows it is
-  `#T(⊥) + #{non-degenerate non-terminal states}`.
-
-- Phase 6A.4 `examples/tsallis_shannon.rs` — Tsallis-to-Shannon recovery
-  (BV 2025 Rem 3.11) over 50 seeded random distributions (size 2–5) at
-  `δt ∈ {1e-2, …, 1e-7}`. Asserts exact zero error within the
-  `TSALLIS_SHANNON_EPS = 1e-6` special-case branch; asserts worst error
-  `< 5e-3` at `δt = 1e-3`. Uses a minimal deterministic PCG-64-style LCG —
-  same as `tests/lm_category.rs`. No `rand` dev-dep.
-
-- Phase 6A.4 `examples/mock_coalition.rs` — 5-agent
-  `WeightedCospan<&str, UnitInterval>` + 3-agent `LmCategory` diversity
-  demo without any transport deps. Builds the 5-agent interaction graph
-  (including a cycle), prints the Lawvere distance matrix, highlights
-  `d(alice, bob) = -ln 0.7` and `d(alice, carol) = ∞` (no transitive
-  closure in `into_metric_space`). Builds an acyclic 3-agent prefix-poset
-  sub-coalition and prints four magnitude-derived indicators (`Mag(1.0)`,
-  `Mag(2.0)`, `Mag(1e6)`, Shannon FD). Asserts BV 2025 p.4 bounds at
-  `t = 2.0` and that `Mag(1e6·M) ∈ [#T(⊥), #ob(M)]`. Demonstrates the
-  `WeightedCospan`/`LmCategory` API split (cyclic vs. acyclic view) before
-  Phase 6B wires in `catgraph-coalition` transport.
-
-- Phase 6A.4 `README.md` — replaced Phase 6A.0 stub with a v0.1.0-quality
-  landing page. Includes: quickstart code snippet, two-point acceptance
-  gate, full API surface table, algebraic + numerical scoping sections,
-  three example descriptions, and roadmap.
-
-- Phase 6A.4 rustdoc audit — fixed 3 pre-existing doc warnings: broken
-  intra-doc link `catgraph::Cospan` (replaced with plain text), redundant
-  explicit target in `ring.rs`, redundant explicit target in
-  `lm_category.rs`. Zero doc warnings on `cargo doc`.
-
-- Phase 6A.3 `magnitude::<Q>(space, t)` — magnitude
-  `Mag(tM) = Σᵢⱼ μ_t[i][j]` of a Lawvere metric space at scale `t` via
-  Möbius sum (BV 2025 §3.5, Eq 7). Builds a t-scaled copy of the input
-  space, Möbius-inverts the resulting zeta matrix, and sums every entry.
-  Same algebraic surface as `mobius_function`: `Q: Ring + Div + From<f64>`
-  (only `F64Rig` qualifies in v0.1.0).
-
-- Phase 6A.3 `LmCategory` — materialized language-model transition table
-  per BV 2025 §3. Public API: `new`, `add_transition`, `mark_terminating`,
-  `objects`, `terminating`, `transitions`, `magnitude(t)`. The `magnitude`
-  method lifts the transition table into a `LawvereMetricSpace<NodeId>` via
-  the prefix-extension semantics of BV 2025 §2.10–2.17: a forward BFS from
-  each source state multiplies edge probabilities along every directed path,
-  recording `d(x, y) = -ln π(y|x)` where `π(y|x)` is the product of
-  intermediate transitions (Eq 6). Identity axiom `d(x, x) = 0` is
-  enforced internally. The transition graph must be acyclic for magnitude to
-  match Prop 3.10's closed form.
-
-- Phase 6A.3 BV 2025 acceptance gate (`tests/bv_2025_acceptance.rs`):
-  - **Prop 3.10 closed form** `Mag(tM) = (t−1)·Σ H_t(p_x) + #(T(⊥))`
-    verified to `0e0` (exact `f64`) at `t ∈ {0.5, 1.5, 2.0, 5.0}` on a
-    hand-computed 4-state LM (`A = {a}, N = 1`; states `⊥, ⊥a, ⊥†, ⊥a†`;
-    `#T(⊥) = 2`).
-  - **Rem 3.11 Shannon recovery** `d/dt Mag|_{t=1} = Σ H(p_x)` verified by
-    central finite difference `(f(1+h) − f(1−h))/(2h)` with `h = 1e-4`.
-    Observed residual `~6.46e-10`.
-
-- Phase 6A.3 `LmCategory` unit tests (`tests/lm_category.rs`): empty-LM
-  baseline (`Mag = n` for the identity zeta), round-trip on
-  `add_transition` / `mark_terminating`, smoke test on the same 4-state
-  tree fixture, and a BV 2025 Eq 4.3 bounds proptest
-  (`#T(⊥) ≤ Mag(tM) ≤ #ob(M)` for `t ≥ 1`) on randomly generated
-  forward-chain LMs of size 2–4.
-
-- Phase 6A.2 `tsallis_entropy(p, t)` — Tsallis q-entropy
-  `H_t(p) = (1 − Σ pᵢᵗ) / (t − 1)` with Shannon-recovery special case at
-  `|t − 1| < TSALLIS_SHANNON_EPS = 1e-6`. The special-case branch returns
-  `-Σ pᵢ ln pᵢ` directly, avoiding catastrophic cancellation in the `0/0`
-  regime around `t = 1`. The Rem 3.11 finite-difference step `h` MUST stay
-  above the threshold so both `f(1±h)` evaluate the Tsallis branch.
-
-- Phase 6A.2 `mobius_function::<Q>(space)` — Möbius inversion `ζ · μ = I`
-  via Gaussian elimination on an `n × 2n` augmented matrix `[ζ | I]`. Bound
-  `Q: Ring + Div + From<f64>` — a (commutative) field for v0.1.0; only
-  `F64Rig` qualifies among the workspace's four concrete rigs. Returns
-  `Err(CatgraphError::Composition)` when zeta is singular. The chain-sum
-  variant `mobius_function_via_chains<Q: Rig>` per Leinster-Shulman is
-  deferred to v0.2.0.
-
-- Tests: 4 proptest arms (Shannon recovery within ε threshold,
-  Tsallis-to-Shannon limit on normalized distributions, μ·ζ=I on random
-  Lawvere metric spaces) + 3 spot checks (basic Tsallis values, all-∞
-  singular zeta, all-zero singular zeta).
-
-- Re-exports: `MatR` (from `catgraph-applied`), `CatgraphError` (from
-  `catgraph::errors`).
-
-- Phase 6A.0 scaffold: workspace member, `Cargo.toml`, `lib.rs` with module
-  stubs + re-exports of the Tier 3 enrichment substrate from
-  `catgraph-applied` v0.5.x (`Rig`, `UnitInterval`, `Tropical`, `F64Rig`,
-  `BoolRig`, `EnrichedCategory`, `HomMap`, `LawvereMetricSpace`).
-
-- `Ring` super-trait over `Rig` with blanket impl over `Neg + Sub`. Required
-  by Möbius inversion.
-
-- `TSALLIS_SHANNON_EPS = 1e-6` public constant — Shannon special-case
-  threshold for `tsallis_entropy` and lower bound for the Rem 3.11
-  finite-difference step.
-
-- Phase 6A.1 `WeightedCospan<Λ, Q>` newtype wrapper over
-  `catgraph::Cospan<Λ>` carrying per-edge weights in a rig `Q`. Public API:
-  `from_cospan_uniform`, `from_cospan_with_weights`, `weight`, `set_weight`,
-  `as_cospan`. Absent entries return `Q::zero()`. Type aliases
-  `ProbCospan<Λ>` (= `WeightedCospan<Λ, UnitInterval>`) and
-  `TropCospan<Λ>` (= `WeightedCospan<Λ, Tropical>`). Specialized
-  `into_metric_space` on `WeightedCospan<Λ, UnitInterval>` lifts to a
-  `LawvereMetricSpace<NodeId>` via the `-ln π` embedding (Lawvere 1973).
-  Tests: 2 proptest arms (round-trip + `set_weight` idempotence on
-  `Q = F64Rig`) + 3 spot checks (metric-space embedding on `Q = UnitInterval`,
-  absent-edge zero on `Q = Tropical`, per-pair `from_cospan_with_weights`).
-
-### Acceptance gate
-
-Both BV 2025 verifications pass at v0.1.0:
-
-- **Prop 3.10 closed form** — `Mag(tM) = (t−1)·Σ H_t(p_x) + #(T(⊥))`
-  verified to **0e0** (exact `f64`) on a 4-state hand-computed LM
-  at `t ∈ {0.5, 1.5, 2.0, 5.0}`.
-- **Rem 3.11 Shannon recovery** — `d/dt Mag|_{t=1} = Σ H(p_x)` by central
-  finite difference (`h = 1e-4`) verified to **6.46e-10** on the same
-  fixture.
-
-### Numerical scoping
-
-- `TSALLIS_SHANNON_EPS = 1e-6` — threshold below which `tsallis_entropy`
-  returns `-Σ pᵢ ln pᵢ` directly to avoid catastrophic cancellation.
-- Tsallis-Shannon worst-case recovery error: `0` (exact) at
-  `δt < TSALLIS_SHANNON_EPS` (special-case branch); `< 5e-3` at
-  `δt = 1e-3` (Tsallis branch).
-
-### Performance baseline
-
-`mag_lm/<N>` (criterion median wall-clock, optimized, `--quick`):
-
-- `N = 10`: ~30 µs
-- `N = 100`: ~11 ms
-- `N = 1000`: ~11 s
+- `WeightedCospan<Λ, Q>` over `catgraph::Cospan<Λ>` with per-edge weights in a
+  rig `Q`: `from_cospan_uniform`, `from_cospan_with_weights`, `weight`,
+  `set_weight`, `as_cospan`, absent entries reading `Q::zero()`; type aliases
+  `ProbCospan<Λ>` and `TropCospan<Λ>`; `into_metric_space` on
+  `WeightedCospan<Λ, UnitInterval>` lifting via the `-ln π` embedding
+  (Lawvere 1973).
+- `tsallis_entropy(p, t)` — `H_t(p) = (1 − Σ pᵢᵗ) / (t − 1)` with the Shannon
+  branch at `|t − 1| < TSALLIS_SHANNON_EPS`.
+- `TSALLIS_SHANNON_EPS = 1e-6` public constant.
+- `mobius_function::<Q: Ring + Div + From<f64>>(space)` — Möbius inversion
+  `ζ · μ = I` by Gaussian elimination on `[ζ | I]`, `Err` on singular ζ.
+- `magnitude::<Q>(space, t)` — `Mag(tM) = Σᵢⱼ μ_t[i][j]` (BV 2025 §3.5 Eq 7).
+- `LmCategory` — materialized LM transition table with `new`, `add_transition`,
+  `mark_terminating`, `objects`, `terminating`, `transitions`, `magnitude(t)`.
+- `Ring` super-trait over `Rig`, blanket-impl'd over `Neg + Sub`.
+- `tests/bv_2025_acceptance.rs` (Prop 3.10 closed form; Rem 3.11 Shannon
+  recovery by central finite difference at `h = 1e-4`), `tests/lm_category.rs`,
+  and the proptest / spot-check suites for `tsallis_entropy`,
+  `mobius_function` and `WeightedCospan`.
+- `benches/magnitude_bench.rs` — `mag_lm/<N>` at `N ∈ {10, 100, 1000}`.
+- `examples/lm_magnitude.rs`, `examples/tsallis_shannon.rs`,
+  `examples/mock_coalition.rs`, and a v0.1.0 `README.md`.
+- Re-exports at the crate root: `MatR` and the Tier 3 enrichment substrate from
+  `catgraph-applied` (`Rig`, `UnitInterval`, `Tropical`, `F64Rig`, `BoolRig`,
+  `EnrichedCategory`, `HomMap`, `LawvereMetricSpace`), plus `CatgraphError`
+  from `catgraph::errors`.
 
 ### Dependencies
 
-- `catgraph = "0.12"` (path dep during development; crates.io strips path on publish)
+- `catgraph = "0.12"` (path dep during development)
 - `catgraph-applied = "0.5"` (requires v0.5.3+ for `F64Rig` ring + field ops)
 - `num` (workspace dep)
 - `proptest`, `criterion` (dev only)

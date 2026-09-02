@@ -14,14 +14,9 @@
 //!   the convergence precondition for the chain-sum Möbius formula in
 //!   [`crate::mobius_chains`].
 //!
-//! ## Module-level lints
-//!
-//! All Gaussian-elimination loops in this module index into BOTH `aug[col]`
-//! (read pivot row) AND `aug[r]` (write target row) inside the inner loop.
-//! `clippy::needless_range_loop` would suggest iterating-by-value, but we
-//! need indexed writes back into `aug[r][k]`, so the index `k` is the
-//! primary loop variable, not just a counter. Module-level `#![allow]` below
-//! removes 6 per-site duplicates.
+// The Gaussian-elimination loops index BOTH `aug[col]` (read pivot row) and
+// `aug[r]` (write target row) inside the inner loop, so `k` is the primary loop
+// variable and an iterate-by-value rewrite does not apply.
 #![allow(clippy::needless_range_loop)]
 
 use std::ops::Div;
@@ -33,32 +28,22 @@ use crate::{LawvereMetricSpace, Ring, TSALLIS_SHANNON_EPS};
 use catgraph_applied::mat::MatR;
 
 /// Materialize the object list of a Lawvere metric space as `Vec<NodeId>`.
-///
-/// Private helper. Replaces the verbose
-/// `<LawvereMetricSpace<NodeId> as crate::EnrichedCategory<crate::Tropical>>::objects(space).collect()`
-/// FQN dispatch repeated across `mobius_function`, `magnitude`, `weighting`,
-/// `coweighting`, `is_scattered`, and `mobius_chains::mobius_function_via_chains`.
 pub(crate) fn materialize_objects(space: &LawvereMetricSpace<NodeId>) -> Vec<NodeId> {
     <LawvereMetricSpace<NodeId> as crate::EnrichedCategory<crate::Tropical>>::objects(space)
         .collect()
 }
 
-/// The single zeta kernel: `ζ = exp(−d)` from a **scaled** Lawvere distance `d`.
+/// The zeta kernel: `ζ = exp(−d)` from a **scaled** Lawvere distance `d`.
 ///
-/// The one place the `exp(−distance)` embedding lives. [`mobius_function`],
-/// [`weighting`], and [`coweighting`] all build their zeta entries through this,
-/// and [`crate::coalition_eval`]'s incremental border reuses it (as
-/// `zeta_from_scaled_distance(t · −ln π)`) so its similarities are ULP-identical
-/// to the cached inversion. `d = +∞` (unset / probability-0) ⇒ `exp(−∞) = 0`.
+/// `d = +∞` (unset distance, or probability `0`) gives `exp(−∞) = 0`.
 #[inline]
 pub(crate) fn zeta_from_scaled_distance(d: f64) -> f64 {
     (-d).exp()
 }
 
 /// Build the `t`-scaled copy of a Lawvere metric space: every recorded distance
-/// multiplied by `t` (unset `Tropical(+∞)` preserved by `f64` infinity
-/// arithmetic). This is the scaling [`magnitude`] Möbius-inverts; factored out
-/// so [`crate::coalition_eval`] caches its base `μ` through the identical loop.
+/// multiplied by `t`, with unset `Tropical(+∞)` preserved by `f64` infinity
+/// arithmetic. This is the scaling [`magnitude`] Möbius-inverts.
 pub(crate) fn scaled_space(
     space: &LawvereMetricSpace<NodeId>,
     t: f64,
@@ -81,41 +66,27 @@ pub(crate) fn scaled_space(
 /// uses it as the per-state language-model entropy in the closed-form
 /// magnitude expression of Prop 3.10.
 ///
-/// **Shannon special case.** When `|t − 1| < TSALLIS_SHANNON_EPS` (= `1e-6`),
-/// the function returns `-Σ pᵢ ln pᵢ` directly to avoid catastrophic
-/// cancellation in the `(1 − Σ pᵢᵗ) / (t − 1) ≈ 0/0` regime. The Rem 3.11 / Eq (12)
-/// finite-difference step `h` MUST
-/// satisfy `h > TSALLIS_SHANNON_EPS`; otherwise both `f(1+h)` and `f(1−h)`
-/// evaluate the Shannon branch and the central difference collapses
-/// identically to zero.
+/// When `|t − 1| < TSALLIS_SHANNON_EPS` (= `1e-6`) the Shannon branch is taken
+/// directly. A Rem 3.11 / Eq (12) finite-difference step `h` must satisfy
+/// `h > TSALLIS_SHANNON_EPS`; at `h ≤ ε` both `f(1+h)` and `f(1−h)` take the
+/// Shannon branch and the central difference is identically zero.
 ///
-/// **Conventions.**
-/// - Shannon branch: `0 · ln 0 = 0` by limit (terms with `pᵢ = 0` are skipped).
-/// - Tsallis branch: `0^t = 0` for `t > 0`; `f64::powf` already returns `0.0`
-///   for `0.0_f64.powf(t)` when `t > 0`, so zero-probability terms contribute
-///   `0` to the sum without special handling.
-/// - The function does NOT validate `Σ pᵢ = 1` — callers requiring a true
-///   probability distribution must normalize beforehand. This keeps the
-///   function compatible with random-vector proptest fixtures.
+/// Conventions: the Shannon branch skips `pᵢ = 0` terms (`0 · ln 0 = 0` by
+/// limit); the Tsallis branch relies on `0.0_f64.powf(t) == 0.0` for `t > 0`.
+/// `Σ pᵢ = 1` is not validated — callers needing a true probability
+/// distribution normalize beforehand.
 ///
 /// # Precondition
 ///
-/// `t > 0` per BV 2025 Prop 3.6 (and per Tsallis 1988 §2 — the Tsallis
-/// q-entropy family is defined for `q > 0`). At `t < 0`, `0.0_f64.powf(t)`
-/// returns `+∞` and propagates to the sum, polluting the result with
-/// non-finite values; at `t = 0`, the Tsallis formula degenerates to
-/// `(1 − n) / (−1)` for any non-zero distribution. A
-/// `debug_assert!(t > 0.0)` entry guard mirrors `LmCategory::magnitude`'s
-/// documentary check.
-/// Callers operating in release mode with `t ≤ 0` get the documented NaN /
-/// `+∞` pollution; the function does not return `Result` to keep the hot path
-/// branch-free.
+/// `t > 0` per BV 2025 Prop 3.6 and Tsallis 1988 §2, checked by a
+/// `debug_assert!`. At `t < 0` a zero entry gives `0.0_f64.powf(t) = +∞`, which
+/// propagates to the sum; at `t = 0` the Tsallis formula degenerates to
+/// `(1 − n) / (−1)` for any non-zero distribution.
 ///
 /// # Returns
 ///
-/// `f64::NAN` only if `p` contains a NaN entry (propagates through `ln` and
-/// `powf`), or `+∞` if `t < 0` and `p` contains a zero entry. Otherwise a
-/// finite value.
+/// `f64::NAN` if `p` contains a NaN entry, `+∞` if `t < 0` and `p` contains a
+/// zero entry, otherwise a finite value.
 #[inline]
 #[must_use]
 pub fn tsallis_entropy(p: &[f64], t: f64) -> f64 {
@@ -150,31 +121,18 @@ pub fn tsallis_entropy(p: &[f64], t: f64) -> f64 {
 /// `ζ[i][j] = exp(-d(objects[i], objects[j]))` embedded into `Q` via
 /// `Q::from(_: f64)`. Here `d` is the Lawvere distance carried by `space`.
 ///
-/// **Bound: `Q: Ring + Div + From<f64>` — i.e. `Q` is a (commutative)
-/// field.** Gaussian elimination needs additive inverses (the `Ring`
-/// bound, supplied by `Neg + Sub`) AND multiplicative inverses (the `Div`
-/// bound, supplied by `Q / Q → Q`). Among the workspace's four concrete
-/// rigs only [`crate::F64Rig`] satisfies all three; [`crate::BoolRig`],
-/// [`crate::UnitInterval`], and [`crate::Tropical`] are excluded. The
-/// chain-sum variant `mobius_function_via_chains` per Leinster-
-/// Shulman's explicit formula relaxes this — see crate root docs.
-///
-/// **Conversion `f64 → Q`.** The zeta matrix entries `exp(-d(i, j))` are
-/// computed in `f64` then converted to `Q` via `Q::from(_)`. The only
-/// `Ring + Div`-satisfying rig is `F64Rig`, which has the conversion
-/// trivially.
+/// The bound `Q: Ring + Div + From<f64>` makes `Q` a field: Gaussian
+/// elimination needs additive inverses (`Ring`, via `Neg + Sub`) and
+/// multiplicative inverses (`Div`). Zeta entries are computed in `f64` and
+/// converted through `Q::from(_)`. [`crate::BoolRig`], [`crate::UnitInterval`]
+/// and [`crate::Tropical`] do not satisfy the bound; the chain-sum variant
+/// `mobius_function_via_chains` relaxes it.
 ///
 /// # Errors
 ///
-/// Returns [`CatgraphError::Composition`] when zeta is singular — i.e. when
-/// Gaussian elimination cannot find a non-zero pivot in some column. No
-/// Möbius function exists for that enriched category.
-///
-/// # Panics
-///
-/// Does not panic. Singular zeta returns `Err`; the implementation never
-/// indexes out of bounds (matrix is `n × 2n` augmented and indices are
-/// always `< n` or `< 2n` by construction).
+/// Returns [`CatgraphError::Composition`] when zeta is singular — Gaussian
+/// elimination finds no non-zero pivot in some column, and no Möbius function
+/// exists for that enriched category.
 pub fn mobius_function<Q>(space: &LawvereMetricSpace<NodeId>) -> Result<MatR<Q>, CatgraphError>
 where
     Q: Ring + Div<Output = Q> + From<f64>,
@@ -276,29 +234,23 @@ where
 /// the t-scaled space — distances multiplied by `t`, equivalently
 /// `ζ_t[i][j] = exp(-t · d(i, j))` (BV 2025 §3.5; Leinster 2013, Section 2.2).
 ///
-/// **Bound: `Q: Ring + Div + From<f64>`.** Same algebraic surface as
-/// [`mobius_function`]. Among the workspace's four concrete rigs only
-/// [`crate::F64Rig`] satisfies all three; callers needing a scalar `f64`
-/// reduction can apply `.0` (for `F64Rig`) or `.into()` to the returned `Q`.
+/// The bound `Q: Ring + Div + From<f64>` is the algebraic surface of
+/// [`mobius_function`]; a scalar `f64` comes from `.0` on the returned
+/// `F64Rig`.
+///
+/// Scaling constructs a fresh [`LawvereMetricSpace`] with every recorded
+/// distance multiplied by `t`; unset distances (`Tropical(+∞)`) stay `+∞`.
+/// BV 2025 Prop 3.6 establishes invertibility for any `t > 0` in the
+/// language-model setting.
 ///
 /// # Errors
 ///
 /// Returns [`CatgraphError::Composition`] when the t-scaled zeta is singular
 /// (propagated from [`mobius_function`]).
-///
-/// # Notes on `t`
-///
-/// BV 2025 Prop 3.6 establishes invertibility for any `t > 0` in the
-/// language-model setting. The scaling is performed by constructing a fresh
-/// [`LawvereMetricSpace`] with every recorded distance multiplied by `t`;
-/// unset distances (`Tropical(+∞)`) remain `+∞` because `t · ∞ = ∞` for any
-/// finite positive `t` (`f64` arithmetic gives `t * f64::INFINITY = +∞`).
 pub fn magnitude<Q>(space: &LawvereMetricSpace<NodeId>, t: f64) -> Result<Q, CatgraphError>
 where
     Q: Ring + Div<Output = Q> + From<f64>,
 {
-    // Build the t-scaled copy and Möbius-invert it. `scaled_space` is shared
-    // with `coalition_eval`'s base-μ cache so both scale distances identically.
     let scaled = scaled_space(space, t);
     let mu = mobius_function::<Q>(&scaled)?;
     let n = mu.rows();
@@ -323,18 +275,14 @@ where
 /// `Σⱼ w(j)`. By Lemma 1.1.2, this equals `Σᵢ v(i)` where `v` is any
 /// coweighting (see [`coweighting`]).
 ///
-/// **Bound: `Q: Ring + Div + From<f64>`** — same algebraic surface as
-/// [`mobius_function`]. The right-hand side `u_I` and the Gaussian-elimination
-/// solve are both performed in `Q`. Among the workspace's four concrete rigs
-/// only [`crate::F64Rig`] satisfies all three.
+/// The bound `Q: Ring + Div + From<f64>` is the algebraic surface of
+/// [`mobius_function`]; the right-hand side `u_I` and the solve are both
+/// performed in `Q`.
 ///
-/// **Relationship to [`mobius_function`].** When ζ is invertible, the unique
-/// weighting equals the j-th row sum of `μ = ζ⁻¹` (Leinster Lemma 1.1.4):
-/// `w(j) = Σᵢ μ(j, i)` where `μ(j, i)` is the matrix entry at row `j`,
-/// column `i` (source-target convention). This function takes the more
-/// direct path — solve `ζ · w = u_I` by Gaussian-Jordan elimination on
-/// the augmented system `[ζ | u_I]`. The two paths agree numerically to
-/// within `f64` tolerance.
+/// The solve is Gaussian-Jordan elimination on `[ζ | u_I]`. When ζ is
+/// invertible the unique weighting equals the `j`-th row sum of `μ = ζ⁻¹`
+/// (Leinster Lemma 1.1.4), `w(j) = Σᵢ μ(j, i)`; the two routes agree within
+/// `f64` tolerance.
 ///
 /// # Errors
 ///
@@ -499,14 +447,9 @@ where
 /// `r = (n − 1) · e^(−ε) < 1` holds (with `ε = min_{a≠b} d(a, b)`), so the
 /// infinite chain-sum converges absolutely.
 ///
-/// **Vacuous cases.** Empty spaces and one-point spaces are trivially
-/// scattered (no distinct-pair to check). The implementation returns
-/// `true` immediately for `n ≤ 1` and skips computing `log(n − 1)`
-/// (which would yield `log(-1) = NaN` or `log(0) = −∞`).
-///
-/// **Distance representation.** Distances live in `Tropical(f64)`. The
-/// `+∞` sentinel for unset pairs satisfies `+∞ > log(n − 1)` for any
-/// finite `n`, so unset pairs auto-pass the scatteredness check.
+/// `n ≤ 1` returns `true` without computing `log(n − 1)`. Unset pairs carry the
+/// `Tropical(+∞)` sentinel, which exceeds `log(n − 1)` for any finite `n` and so
+/// passes the check.
 #[must_use]
 pub fn is_scattered(space: &LawvereMetricSpace<NodeId>) -> bool {
     let objects: Vec<NodeId> = materialize_objects(space);
@@ -536,28 +479,11 @@ pub fn is_scattered(space: &LawvereMetricSpace<NodeId>) -> bool {
 /// **scattered**, i.e. `t · d(a, b) > log(n − 1)` for all distinct `a, b ∈ M`.
 /// Scatteredness is sufficient for the Möbius series
 /// `μ = Σ_{k≥0} (−1)ᵏ Mᵏ` (with `M = ζ − I`) to converge absolutely
-/// (Prop 2.1.3), which in turn implies `ζ_{tM}` is invertible. With distances
-/// uniformly bounded below by `min_{a≠b} d(a, b)` and `t · min ≥ log(n − 1)`,
-/// the per-row infinity-norm of `M` is at most `(n − 1) · e^(−t · min) ≤ 1 − ε`,
-/// giving the von-Neumann convergence criterion.
+/// (Prop 2.1.3), which in turn implies `ζ_{tM}` is invertible.
 ///
-/// The threshold is the §2.1 scatteredness threshold (Def 2.1.2) plus
-/// Prop 2.1.3 chain-sum convergence, not Prop 2.4.17 (an earlier revision
-/// cited Prop 2.4.17 in error).
-///
-/// This is **conservative**: returning `false` here does not prove `tM` is
-/// non-invertible (the predicate merely fails the cheap scatteredness
-/// sufficient condition); returning `true` proves invertibility.
-///
-/// Implementation: returns `true` iff `t > log(n − 1) + ε` for `ε = 1e-9`;
-/// otherwise `false`. Caller can still call [`magnitude`] and let it fail
-/// numerically — this is purely an ergonomic short-circuit to avoid Möbius
-/// inversion on inputs that are guaranteed to require fallback paths.
-///
-/// **Vacuous cases.** For `n ≤ 1`, the space is degenerate (single-point or
-/// empty); the function returns `true`. The threshold `t > log(n − 1)` is
-/// `log(0) = −∞` (always true) at `n = 1` and `log(−1) = NaN` at `n = 0`,
-/// neither of which is useful — early-return short-circuits both.
+/// The predicate is conservative: `true` proves invertibility, `false` only
+/// fails the cheap sufficient condition and does not prove `tM` non-invertible.
+/// It returns `true` iff `t > log(n − 1) + 1e-9`, and `true` for `n ≤ 1`.
 ///
 /// # Examples
 ///
@@ -586,19 +512,9 @@ pub fn is_mobius_invertible_at(space: &LawvereMetricSpace<NodeId>, t: f64) -> bo
 /// `((a, b), d(a, b), log(#A − 1))` if the space is not scattered, or `None`
 /// if scattered (or vacuously scattered for `n ≤ 1`).
 ///
-/// Useful for caller-side error reporting when
-/// [`crate::mobius_chains::mobius_function_via_chains`] returns
-/// `Err(CatgraphError::Composition)` with the "not scattered" message —
-/// `scatteredness_witness` identifies *which* pair triggered the rejection.
-///
 /// Both directions of the Lawvere asymmetry are checked; the returned `(a, b)`
 /// is the pair with the violating direction (`a → b` if that direction failed,
 /// otherwise the `b → a` direction).
-///
-/// **Substrate hook.** The magnitude-homology chain complex uses the
-/// violator pairs as boundary-map kernel generators (the pairs at the
-/// scatteredness boundary correspond to chain-complex elements with
-/// non-trivial `H_{0,ℓ}` for some `ℓ`).
 ///
 /// # Examples
 ///

@@ -86,12 +86,7 @@ pub fn hadamard_bound(a: &[Vec<i64>]) -> Result<u128, CatgraphError> {
 /// Round-trip wrapper around [`hadamard_bound`] for `MatR<R>` inputs.
 ///
 /// `MatR<R>` → `Vec<Vec<i64>>` (via [`IntegerLikeRig::to_i64`]) →
-/// [`hadamard_bound`]. Mirrors the conversion idiom of
-/// [`smith_normal_form_matr`](super::smith_normal_form_matr) so consumers
-/// holding boundary matrices in `MatR<R>` form can size the prime product
-/// without dropping to the raw `Vec<Vec<i64>>` backend.
-///
-/// Returns ⌈H(A)⌉ as `u128`; see [`hadamard_bound`] for the bound's meaning.
+/// [`hadamard_bound`]. Returns ⌈H(A)⌉ as `u128`.
 ///
 /// # Errors
 ///
@@ -123,9 +118,8 @@ where
 /// the row-norm, and multiply the row-norms in `u128` with `checked_mul`.
 ///
 /// Because `⌊√s⌋ + 1 ≥ ⌈√s⌉ ≥ √s`, the result satisfies
-/// `∏ (⌊√(Σa²)⌋ + 1) ≥ ∏ √(Σa²) = H(A)`, so it is always a **valid** Hadamard
-/// bound — generally slightly looser than [`hadamard_bound`], but free of any
-/// floating-point precision hedging. Both are usable by
+/// `∏ (⌊√(Σa²)⌋ + 1) ≥ ∏ √(Σa²) = H(A)`, so it is a valid Hadamard bound,
+/// looser than [`hadamard_bound`]. Both are accepted by
 /// [`select_primes_for_bound`].
 ///
 /// # Errors
@@ -188,37 +182,16 @@ pub fn hadamard_bound_integer(a: &[Vec<i64>]) -> Result<u128, CatgraphError> {
 ///    the consensus on the count of unit-coprime diagonal entries (a
 ///    rank-mod-`p` proxy). The first prime sets the canonical rank; any
 ///    subsequent prime with a different rank is "bad" and skipped.
-/// 5. **CRT-reconstruct diagonal** — for each diagonal index `j`,
-///    reconstruct the per-prime diagonal product `∏ s_i (mod p)` into an
-///    integer in `[−⌊P/2⌋, ⌊P/2⌋]` via [`crt_reconstruct_signed`]. This
-///    yields `d_j ∈ ℤ` such that `∏_j d_j = det(A)` (up to sign), but
-///    `(d_0, …, d_{r−1})` is generally **not** in Smith form: the modular
-///    SNF normalises divisibility differently from the integer SNF, and
-///    for `p` coprime to the invariant factors the diagonal can be any
-///    factorisation of `det(A)` permitted by `Z/pZ` units.
-/// 6. **Chain rebalance** — apply the integer SNF of a diagonal integer
-///    matrix via the elementary-divisor identity `s_k = D_k / D_{k−1}`
-///    where `D_k = gcd of all k×k principal minors of diag(|d_0|, …)`.
-///    For a diagonal matrix this reduces to `D_k = gcd of all k-subset
-///    products of {|d_0|, …, |d_{r−1}|}`. The recurrence
-///    `s_k = gcd(d_0, …, d_{r−1}) / (s_0 · … · s_{k−1})` is a fold
-///    over per-step GCDs; implementation detail in `integer_chain_rebalance`
-///    (private fn).
-/// 7. **Return U + V from the first good prime** — a simplification.
-///    Full per-entry CRT for U + V is deferred (#35; consumers requesting
-///    integer-exact U + V will surface the need).
-///
-/// # Why the chain rebalance is needed
-///
-/// The modular SNF over `Z/pZ` is **not canonical when `p` is coprime to
-/// the invariant factors**: it places any units-of-`Z/p` factorisation of
-/// `det(A)` on the diagonal, not specifically the integer invariant factors.
-/// For the Wikipedia 3×3 with integer SNF `diag(2, 2, 156)`, the modular
-/// SNF over `p = 2^31 − 1` returns `diag(2, 6, −52)` (whose product is
-/// `−det(A) = −624`); each entry is correct mod `p` but the chain
-/// `2 | 6 | −52` is not the integer chain `2 | 2 | 156`. Rebalancing
-/// via GCD-of-subset-products produces the canonical integer chain
-/// (Newman 1972 §1.4 Theorem II.9; cross-ref Smith 1861).
+/// 5. **CRT-reconstruct diagonal** — for each diagonal index `j`, reconstruct
+///    the per-prime diagonal product `∏ s_i (mod p)` into an integer in
+///    `[−⌊P/2⌋, ⌊P/2⌋]` via [`crt_reconstruct_signed`], giving `d_j ∈ ℤ` with
+///    `∏_j d_j = det(A)` up to sign. `(d_0, …, d_{r−1})` is generally not in
+///    Smith form: for `p` coprime to the invariant factors the modular
+///    diagonal can be any factorisation of `det(A)` the `Z/pZ` units permit.
+/// 6. **Chain rebalance** — the integer SNF of `diag(|d_0|, …)` via the
+///    elementary-divisor identity `s_k = D_k / D_{k−1}`, where `D_k` is the
+///    gcd of all `k`-subset products (Newman 1972 §1.4 Thm II.9).
+/// 7. **Return U + V from the first good prime.**
 ///
 /// # Inputs
 ///
@@ -228,35 +201,26 @@ pub fn hadamard_bound_integer(a: &[Vec<i64>]) -> Result<u128, CatgraphError> {
 /// # Returns
 ///
 /// `Ok((U, V, S))` with shapes `(rows × rows, cols × cols, rows × cols)`.
-/// `S` is in integer Smith Normal Form with non-negative invariant factors
-/// on the principal diagonal and zeros elsewhere. `U` + `V` are the
-/// modular transforms from the first good prime (a simplification;
-/// full per-entry CRT for `U` + `V` is deferred, #35).
+/// `S` is in integer Smith Normal Form with non-negative invariant factors on
+/// the principal diagonal and zeros elsewhere. `U` and `V` are the modular
+/// transforms from the first good prime.
 ///
 /// # Edge cases
 ///
-/// - Empty input (`rows == 0 || cols == 0`): returns `Ok((vec![], vec![],
-///   vec![]))` — the empty SNF is trivially valid.
-/// - Zero matrix: returns `S = 0` (the chain rebalance preserves zeros).
-/// - Identity matrix: returns `S = I_{min(rows,cols)}` padded with zeros.
+/// - Empty input (`rows == 0 || cols == 0`): `Ok((vec![], vec![], vec![]))`.
+/// - Zero matrix: `S = 0`.
+/// - Identity matrix: `S = I_{min(rows,cols)}` padded with zeros.
 ///
 /// # Errors
 ///
 /// - [`hadamard_bound`] error (matrix too large or too dense for `f64` /
 ///   `u128` accumulation).
-/// - [`select_primes_for_bound`] error (more than `k_max = 16` primes
-///   needed for the lift; vanishingly unlikely for the shipped fixtures, but
-///   surfaced rather than silently truncated).
-/// - All selected primes are "bad" (rank inconsistent across all 16
-///   primes). Defensively unreachable: it would require every prime in
-///   `(2^30, 2^31)` to divide an invariant factor of `A`, which has
-///   measure zero for any fixed matrix.
-/// - [`crt_reconstruct_signed`] error (e.g. final value exceeds `i64`
-///   range — defensive; the magnitude-homology fixtures stay well
-///   under `i64::MAX`).
-/// - [`smith_normal_form`](super::smith_normal_form) error propagated
-///   from the per-prime call (non-rectangular input, non-positive modulus
-///   — neither fires here since the modulus is `> 2^30`).
+/// - [`select_primes_for_bound`] error (more than `k_max = 16` primes needed
+///   for the lift).
+/// - All selected primes are bad — every one gives a different rank.
+/// - [`crt_reconstruct_signed`] error, e.g. a final value beyond `i64` range.
+/// - [`smith_normal_form`](super::smith_normal_form) error from the per-prime
+///   call.
 ///
 /// # Example
 ///
@@ -274,11 +238,10 @@ pub fn hadamard_bound_integer(a: &[Vec<i64>]) -> Result<u128, CatgraphError> {
 ///
 /// # References
 ///
-/// Storjohann (2000) §7 + Bradley-Vigneaux 2025 (algorithm sketch)
-/// augmented with Newman (1972) §1.4 Thm II.9 integer
-/// chain rebalance via determinantal divisors. Cross-validated dev-only
-/// against `events555/modularsnf` at SHA `d62535e` under the
-/// `modularsnf-oracle` feature flag.
+/// Storjohann (2000) §7 and Bradley–Vigneaux 2025 (algorithm sketch), with the
+/// Newman (1972) §1.4 Thm II.9 integer chain rebalance via determinantal
+/// divisors. Cross-validated dev-only against `events555/modularsnf` at SHA
+/// `d62535e` under the `modularsnf-oracle` feature.
 pub fn smith_normal_form_integer(
     a: &[Vec<i64>],
 ) -> Result<(Vec<Vec<i64>>, Vec<Vec<i64>>, Vec<Vec<i64>>), CatgraphError> {
@@ -376,14 +339,11 @@ pub fn smith_normal_form_integer(
 /// D_r = |∏ d_i|
 /// ```
 ///
-/// The `D_k` are computed by an `O(r²)` dynamic program
-/// ([`determinantal_divisors`]) rather than enumerating all `2^r` subsets:
-/// with `G[j]` = gcd of all `j`-subset products of the entries seen so far,
-/// folding in a new entry `d_i` is one multiplication per subset size,
-/// `G'[j] = gcd(G[j], d_i · G[j−1])`. This is exact for positive integers via
-/// the identity `gcd({s · d_i : s ∈ S}) = d_i · gcd(S)` (a common factor
-/// distributes through a gcd), so the "include `d_i`" branch collapses to a
-/// single `d_i · G[j−1]`.
+/// The `D_k` come from an `O(r²)` dynamic program
+/// ([`determinantal_divisors`]): with `G[j]` the gcd of all `j`-subset
+/// products of the entries seen so far, folding in a new entry `d_i` is
+/// `G'[j] = gcd(G[j], d_i · G[j−1])`, exact for positive integers by
+/// `gcd({s · d_i : s ∈ S}) = d_i · gcd(S)`.
 ///
 /// Returns absolute values throughout (canonical Smith form has
 /// non-negative invariant factors).
@@ -391,16 +351,8 @@ pub fn smith_normal_form_integer(
 /// # Errors
 ///
 /// - A `d_i · G[j−1]` product overflows `i128` during `D_k` accumulation
-///   ([`determinantal_divisors`]). Because `G[j−1]` divides — hence is no
-///   larger than — the smallest `(j−1)`-subset product, `d_i · G[j−1]` is
-///   bounded by an actual `j`-subset product, so this overflows strictly
-///   less often than the old subset-enumeration path did. For the
-///   magnitude-homology fixtures (CRT-lifted entries bounded by `|det(A)|`)
-///   it is unreachable, but the explicit error prevents a silent wrap from
-///   corrupting an invariant factor.
-/// - An invariant factor `s_k` exceeds `i64` range. Defensive: for the
-///   magnitude-homology consumer, individual factors are bounded
-///   by `|det(A)|` which fits comfortably in i64.
+///   ([`determinantal_divisors`]).
+/// - An invariant factor `s_k` exceeds `i64` range.
 ///
 /// Worked example (Wikipedia 3×3): pre-rebalance diag `(2, 6, 52)` (taking
 /// absolute values of CRT-lifted `(2, 6, −52)`). `D_0 = 1`,
@@ -452,24 +404,20 @@ fn integer_chain_rebalance(diag: &[i64]) -> Result<Vec<i64>, CatgraphError> {
 /// all `> 0`). `D_k = gcd of all k×k principal minors` = gcd of all `k`-subset
 /// products of the entries; `D_0 = 1`.
 ///
-/// Computed by an `O(m²)` dynamic program rather than enumerating all `2^m`
-/// subsets. Invariant: after folding the first `i` entries, `det_divisors[j]`
-/// holds the gcd of all `j`-subset products drawn from those `i` entries (with
-/// `det_divisors[0] = 1` and `det_divisors[j] = 0` while `j > i`, using
-/// `gcd(0, x) = |x|`). Folding in `d_i` uses
-/// `G'[j] = gcd(G[j], d_i · G[j−1])`, exact because for positive integers
-/// `gcd({s · d_i : s ∈ S}) = d_i · gcd(S)`. The descending `j` sweep keeps
-/// `det_divisors[j−1]` at its pre-fold value while `det_divisors[j]` updates
-/// in place, so a single rolling array suffices.
+/// Computed by an `O(m²)` dynamic program. Invariant: after folding the first
+/// `i` entries, `det_divisors[j]` holds the gcd of all `j`-subset products
+/// drawn from those `i` entries, with `det_divisors[0] = 1` and
+/// `det_divisors[j] = 0` while `j > i` (using `gcd(0, x) = |x|`). Folding in
+/// `d_i` uses `G'[j] = gcd(G[j], d_i · G[j−1])`, exact because for positive
+/// integers `gcd({s · d_i : s ∈ S}) = d_i · gcd(S)`. The descending `j` sweep
+/// keeps `det_divisors[j−1]` at its pre-fold value, so one rolling array
+/// suffices.
 ///
 /// Returns `Vec<i128>` of length `nonzero.len() + 1`.
 ///
 /// # Errors
 ///
-/// - `d_i · G[j−1]` overflows `i128`. This is strictly rarer than a raw
-///   subset-product overflow: `G[j−1]` divides the smallest `(j−1)`-subset
-///   product, so the operand is bounded by an actual `j`-subset product. The
-///   escalation error mirrors the enumeration path it replaced.
+/// - `d_i · G[j−1]` overflows `i128`.
 fn determinantal_divisors(nonzero: &[i128]) -> Result<Vec<i128>, CatgraphError> {
     let m = nonzero.len();
     let mut det_divisors: Vec<i128> = vec![0; m + 1];
@@ -495,9 +443,8 @@ fn determinantal_divisors(nonzero: &[i128]) -> Result<Vec<i128>, CatgraphError> 
     Ok(det_divisors)
 }
 
-/// `i128` GCD via Euclid's algorithm, treating `gcd(0, x) = |x|` and
-/// `gcd(0, 0) = 0`. Used by [`determinantal_divisors`] for the
-/// determinantal-divisor accumulation.
+/// `i128` GCD via Euclid's algorithm, with `gcd(0, x) = |x|` and
+/// `gcd(0, 0) = 0`.
 fn gcd_i128(a: i128, b: i128) -> i128 {
     let (mut a, mut b) = (a.abs(), b.abs());
     while b != 0 {
@@ -515,12 +462,9 @@ mod tests {
     /// Iterate every `k`-subset of `{0, …, n−1}` in lexicographic order,
     /// invoking `f` on each subset as a borrowed `&[usize]`.
     ///
-    /// Test-only `O(2^n)` oracle: the production [`determinantal_divisors`]
-    /// path uses the `O(n²)` DP; this brute-force enumeration cross-checks it.
-    /// Because it multiplies subset entries unchecked, overflow-parity against
-    /// the production `checked_mul` path is not meaningful here — the DP's
-    /// overflow branch is exercised directly by
-    /// [`chain_rebalance_overflow_escalates`] instead.
+    /// Test-only `O(2^n)` oracle cross-checking the production `O(n²)` DP in
+    /// [`determinantal_divisors`]. Subset entries multiply unchecked, so this
+    /// carries no overflow parity with the production `checked_mul` path.
     fn enumerate_subsets<F>(n: usize, k: usize, f: &mut F)
     where
         F: FnMut(&[usize]),

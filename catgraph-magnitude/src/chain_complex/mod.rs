@@ -6,19 +6,11 @@
 //! - [`ChainIndex`]: `(k, ℓ)`-bucketed index per LS 2017 §3 grading.
 //! - [`boundary_matrix<Q>`]: alternating-sum drop-one-vertex face map.
 //!
-//! ## Pseudo-metric widening
+//! [`Chain::is_finite_in`] accepts pseudo-metric spaces (LS 2017 Ex 2.9), in
+//! which distinct points may have zero distance: there is no `d > 0.0` clause.
 //!
-//! [`Chain::is_finite_in`] accepts pseudo-metric spaces (LS 2017
-//! Ex 2.9) — distinct points may have zero distance. There is no
-//! `d > 0.0` clause; the widening is monotone for strict
-//! metrics (the acceptance fixtures continue to pass).
-//!
-//! ## Module split
-//!
-//! Rank-recovery + acceptance gate live in the sibling
-//! [`homology`] submodule. Public API surface is preserved via the
-//! re-exports below; external callers continue to import through
-//! `chain_complex::{magnitude_homology_rank, euler_char_identity_at}`.
+//! Rank recovery and the acceptance gate live in the sibling [`homology`]
+//! submodule, re-exported below.
 
 pub mod homology;
 pub use homology::{IntegerLikeRig, euler_char_identity_at, magnitude_homology_rank};

@@ -3,21 +3,16 @@
 //! Bradley–Terilla–Vlassopoulos 2021 (*An enriched category theory of language*)
 //! models a language model as a category `L` enriched over the unit interval:
 //! objects are texts, and the hom-object `L(x, y) = π(y | x) ∈ [0, 1]` is the
-//! probability that `y` is an extension of `x`. The **representable copresheaf**
-//! `L(x, −)` — the function sending each text `y` to `π(y | x)` — *is* the
-//! meaning of `x`: its distribution of extension-probabilities over every other
-//! text. This is the computable form of relational, reference-free meaning
-//! ("meaning is context-change potential").
+//! probability that `y` is an extension of `x`. The representable copresheaf
+//! `L(x, −)` sends each text `y` to `π(y | x)`.
 //!
 //! # Relationship to [`LmCategory`]
 //!
 //! [`LmCategory::enriched_space`](crate::lm_category::LmCategory::enriched_space)
-//! already materializes the full hom-matrix as a [`LawvereMetricSpace`] under the
+//! materializes the full hom-matrix as a [`LawvereMetricSpace`] under the
 //! `d(x, y) = −ln π(y | x)` embedding (BTV 2021 §5; the isomorphism
-//! `[0, 1] ≅ [0, ∞]^op`). A copresheaf is one **row** of that space, read back in
-//! probability form via `π = exp(−d)`. So [`LmCategory::yoneda`] introduces no new
-//! traversal — it reuses the same space [`magnitude`](crate::lm_category::LmCategory::magnitude)
-//! consumes.
+//! `[0, 1] ≅ [0, ∞]^op`). A copresheaf is one row of that space, read back in
+//! probability form via `π = exp(−d)`.
 //!
 //! # Semantic distance (BTV 2021)
 //!

@@ -5,32 +5,19 @@
 //! distance-0 (probability-1) sub-order** — the "atomic" deterministic
 //! transitions `π(y | x) = 1`.
 //!
-//! # Derivation
-//!
 //! In the Leinster–Shulman magnitude-homology complex the boundary omits only
-//! *interior* vertices of a chain (endpoints would change the length grade), so
-//! a 1-chain `(x₀, x₁)` has no interior vertex and `∂_1 = 0`. Hence
-//! `MH_1(ℓ) = C_1(ℓ) / im ∂_2`. At `ℓ = 0`:
+//! interior vertices of a chain, so a 1-chain `(x₀, x₁)` has none and
+//! `∂_1 = 0`, giving `MH_1(ℓ) = C_1(ℓ) / im ∂_2`. At `ℓ = 0`, `C_1(0)` is free
+//! abelian on the distance-0 edges `(x, y)`, `x ≠ y`, where
+//! `d(x, y) = −ln π(y | x) = 0 ⟺ π(y | x) = 1`, and `im ∂_2` is spanned by the
+//! distance-0 edges factoring through an intermediate. The quotient is free
+//! abelian on the covering relations of the distance-0 order, so
+//! `rank MH_1(0)` counts covering deterministic transitions and is `> 0` iff
+//! the LM has at least one deterministic transition.
 //!
-//! - `C_1(0)` is the free abelian group on the **distance-0 edges** `(x, y)`, `x ≠ y`,
-//!   `d(x, y) = 0` — and `d(x, y) = −ln π(y | x) = 0 ⟺ π(y | x) = 1`, a
-//!   deterministic transition (or a chain of them).
-//! - `∂_2` sends a geodesic 2-chain `(x, z, y)` (all-distance-0) to `±(x, y)`,
-//!   so `im ∂_2` is the span of the distance-0 edges that **factor** through an
-//!   intermediate.
-//!
-//! The quotient is therefore free abelian on the distance-0 edges with **no** distance-0
-//! intermediate — the *covering* relations of the (acyclic) distance-0 order —
-//! giving `rank MH_1(0) = #covering deterministic transitions`. In particular it
-//! is `> 0` **iff** the LM has at least one deterministic transition. (Verified
-//! against the engine on chains, diamonds, and probabilistic LMs in the tests.)
-//!
-//! # Interpretation
-//!
-//! This is a structural invariant (BV 2025 / Leinster–Shulman 2017), **not** a
-//! coherence or "hallucination" detector: a deterministic transition is a
-//! *forced* continuation (memorisation / rigidity), the opposite of
-//! hallucination. It measures how much of the LM is deterministic.
+//! The quantity is a structural invariant (BV 2025 / Leinster–Shulman 2017): a
+//! deterministic transition is a forced continuation, so it measures how much
+//! of the LM is deterministic.
 
 use crate::chain_complex::{ChainIndex, magnitude_homology_rank};
 use crate::lm_category::LmCategory;

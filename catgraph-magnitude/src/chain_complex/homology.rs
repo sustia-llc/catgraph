@@ -1,17 +1,11 @@
 //! Magnitude-homology rank recovery + BV 2025 Prop 3.14 acceptance gate.
 //!
-//! Module split: the chain-complex substrate (LS 2017 §3 materialisation —
+//! The chain-complex substrate (LS 2017 §3 materialisation —
 //! [`Chain`](super::Chain), [`enumerate_chains`](super::enumerate_chains),
-//! [`ChainIndex`], [`boundary_matrix`]) lives in [`super`]; the
-//! rank-recovery + acceptance machinery lives here.
+//! [`ChainIndex`], [`boundary_matrix`]) lives in [`super`].
 //!
-//! ## Rig widening
-//!
-//! [`IntegerLikeRig`] parameterizes the rank-recovery surface over both
-//! `F64Rig` and `Z(BigInt)`. Existing `F64Rig` callers
-//! compile unchanged via the blanket impl; `magnitude_homology_rank::<Z>`
-//! and `euler_char_identity_at::<F64Rig>` produce identical ranks on
-//! identical inputs.
+//! [`IntegerLikeRig`] parameterizes the rank-recovery surface over `F64Rig`
+//! and `Z(BigInt)`, which produce identical ranks on identical inputs.
 
 use catgraph::errors::CatgraphError;
 use catgraph_applied::lawvere_metric::LawvereMetricSpace;
@@ -23,9 +17,7 @@ use super::{ChainIndex, boundary_matrix};
 use crate::weighted_cospan::NodeId;
 
 /// Rank-recovery primes: primary Mersenne `2^31 − 1`, secondary cross-check,
-/// tertiary fallback. All three are large primes near `i64::MAX/2` so
-/// divisibility by any small integer invariant factor is vanishingly
-/// unlikely. Multi-prime CRT reconstruction is deferred (#35).
+/// tertiary fallback.
 const RANK_RECOVERY_PRIMES: [i64; 3] = [
     2_147_483_647, // primary — Mersenne 2^31 − 1
     2_147_483_629, // secondary — cross-check
@@ -36,58 +28,26 @@ const RANK_RECOVERY_PRIMES: [i64; 3] = [
 /// rank-recovery interior of [`magnitude_homology_rank`] and
 /// [`euler_char_identity_at`].
 ///
-/// Replaces a private `type RankQ = F64Rig;` alias. Existing
-/// `F64Rig` callers continue to compile unchanged via the blanket impl;
-/// `Z(BigInt)` is a first-class rank-recovery rig.
-///
-/// ## Why a trait, not a type alias
-///
-/// A type alias would coerce any `Rig` argument to `F64Rig`, since the
-/// private `snf_rank_over_zp` helper reads the `F64Rig` tuple-struct field
-/// `x.0` directly. With [`Z(BigInt)`](Z) as a second integer-exact rig
-/// (Leinster 2008 Cor 1.5 substrate), the trait lets both share the
+/// Implemented for [`F64Rig`] and for [`Z(BigInt)`](Z), which share the
 /// rank-recovery interior without runtime branching.
 ///
-/// ## Fallibility
-///
-/// [`to_i64`](IntegerLikeRig::to_i64) is fallible: [`Z(BigInt)`](Z)
-/// values may exceed `i64` range. In practice, boundary-matrix entries
-/// carry only `±1` or `0` (LS 2017 Def 3.3 alternating-sum face map),
-/// so the fallible signature defends against future regressions (e.g.
-/// a magnitude-homology fixture that builds non-binary boundary entries)
-/// rather than guarding the shipped path.
-///
-/// ## Forward-look
-///
-/// Multi-prime CRT extends the rank-recovery interior to multi-prime
-/// reconstruction; the [`IntegerLikeRig`] surface is the natural seam for
-/// that work.
-///
-/// ## Bounds
-///
-/// `Rig` already entails `Clone`; an explicit `+ Clone` would be
-/// redundant and would obscure the actual added bound (`From<i64>`).
-/// `'static` is likewise unnecessary — no callee in the rank-recovery
-/// interior boxes or downcasts `Q`, so omitting it leaves room for
-/// borrowed-arena rigs (e.g. a `&'a BigInt` arena rig).
+/// [`to_i64`](IntegerLikeRig::to_i64) is fallible because [`Z(BigInt)`](Z)
+/// values may exceed `i64` range; boundary-matrix entries carry only `±1` or
+/// `0` (LS 2017 Def 3.3 alternating-sum face map).
 pub trait IntegerLikeRig: Rig + From<i64> {
     /// Convert to an `i64` for the SNF-mod-p rank-recovery interior.
     ///
     /// # Errors
     ///
     /// Returns [`CatgraphError::Composition`] if the value exceeds `i64`
-    /// range. Boundary-matrix entries are bounded `±1` or `0` on the shipped
-    /// fixtures, so the error path defends against future regressions.
+    /// range.
     fn to_i64(&self) -> Result<i64, CatgraphError>;
 }
 
 impl IntegerLikeRig for F64Rig {
     fn to_i64(&self) -> Result<i64, CatgraphError> {
-        // Boundary-matrix entries are integer-valued f64 (±1 or 0);
-        // round-to-nearest is a no-op in practice. Debug-only regression
-        // guard: if a future fixture builds non-integer-valued boundary
-        // entries, the assertion fires; release builds preserve the
-        // round-to-nearest defence.
+        // Boundary-matrix entries are integer-valued f64 (±1 or 0), so
+        // round-to-nearest is a no-op.
         debug_assert!(
             (self.0 - self.0.round()).abs() < 1e-9,
             "F64Rig::to_i64: non-integer-valued boundary entry {} would be silently rounded; \
@@ -119,27 +79,21 @@ impl IntegerLikeRig for Z {
 /// Rank of `H_{k,ℓ}(M) = ker(∂_k) / im(∂_{k+1})` over ℤ via single-prime SNF
 /// + 2-prime cross-check.
 ///
-/// Computes `rank(B mod p) over Z/p` for the primary Mersenne prime; cross-
-/// checks against a secondary large prime; on disagreement, falls through to
-/// a tertiary prime. For all shipped magnitude-homology fixtures,
-/// the primary prime is sufficient — the cross-check exists to catch
-/// pathological matrices where invariant factors happen to be divisible by
-/// `2^31 − 1`. Multi-prime CRT reconstruction (full integer invariant-factor
-/// recovery, not just rank) is deferred (#35).
-///
-/// Computes: `rank(H_{k,ℓ}) = cols(∂_k) − rank(∂_k) − rank(∂_{k+1})`.
+/// Computes `rank(H_{k,ℓ}) = cols(∂_k) − rank(∂_k) − rank(∂_{k+1})`, each
+/// boundary rank taken as `rank(B mod p)` over `Z/p` at the primary Mersenne
+/// prime, cross-checked against a secondary large prime and, on disagreement,
+/// a tertiary one.
 ///
 /// Special cases:
-/// - `k == 0`: `rank(H_{0,ℓ}) = cols(∂_0) − rank(∂_1)` (∂_0 has empty image,
-///   so subtract only ∂_1's rank).
+/// - `k == 0`: `rank(H_{0,ℓ}) = cols(∂_0) − rank(∂_1)`, ∂_0 having empty
+///   image.
 /// - Empty bucket: returns 0.
 ///
 /// # Errors
 ///
 /// - Boundary-matrix construction failure (length-grade tolerance issue).
 /// - All three rank-recovery primes disagree on at least one boundary
-///   matrix's rank (vanishingly unlikely on representative fixtures; if it
-///   fires, escalate to the multi-prime CRT path).
+///   matrix's rank.
 pub fn magnitude_homology_rank<Q: IntegerLikeRig>(
     idx: &ChainIndex,
     space: &LawvereMetricSpace<NodeId>,
@@ -229,53 +183,38 @@ fn snf_rank_over_zp<Q: IntegerLikeRig>(m: &MatR<Q>, p: i64) -> Result<usize, Cat
 
 /// BV 2025 Prop 3.14 acceptance gate.
 ///
-/// **Mixed parametricity:** the structural rank-recovery path
-/// is parameterised over `Q: IntegerLikeRig`, but the numerical path always
-/// runs through `crate::magnitude::magnitude::<F64Rig>` — the matrix-inverse
-/// Möbius requires `Ring + Div + From<f64>`, strictly narrower than
-/// `IntegerLikeRig`. Q-typed numerical computation is deferred
-/// (multi-prime CRT). Both invocations of `euler_char_identity_at::<F64Rig>`
-/// and `euler_char_identity_at::<Z>` therefore return `(f64, f64)` with the
-/// same numerical second component.
+/// The structural rank-recovery path is parameterised over
+/// `Q: IntegerLikeRig`; the numerical path always runs through
+/// `crate::magnitude::magnitude::<F64Rig>`, whose `Ring + Div + From<f64>`
+/// bound is narrower than `IntegerLikeRig`. So
+/// `euler_char_identity_at::<F64Rig>` and `euler_char_identity_at::<Z>`
+/// return `(f64, f64)` with the same second component.
 ///
 /// Returns `(via_homology, via_magnitude)`:
 ///
-/// - `via_homology = Σ_ℓ e^(−ℓ) · Σ_k (−1)^k · rank(H_{k,ℓ}(M_t))`
-///   computed over the t-pre-scaled space `M_t = scale(M, t)`. The BV 2025
-///   Prop 3.14 statement reads `Mag(tM) = Σ_ℓ q^ℓ · Σ_k (−1)^k · rank(H_{k,ℓ}(M))`
-///   with `q = e^(−t)`; because the space is pre-scaled by `t`, the weight
-///   `q^ℓ_orig = e^(−t · ℓ_orig)` collapses to `e^(−ℓ_scaled)` in our pre-
-///   scaled coordinates. (Cross-link to Leinster–Shulman 2017 Theorem 3.5 /
-///   Cor 7.15 for the metric-space specialisation directly used here.)
-/// - `via_magnitude = Mag(tM)` via
-///   [`crate::magnitude::magnitude`] (chain-sum Möbius value when ζ is
-///   invertible). **Note:** this is NOT [`crate::mobius_chains::chain_count_signed_graded`]
-///   (renamed from `mobius_chains_graded`), which is a per-grade
-///   chain-count diagnostic that does not weight by `e^(−ℓ)`; see that
-///   function's rustdoc for the reconciliation.
+/// - `via_homology = Σ_ℓ e^(−ℓ) · Σ_k (−1)^k · rank(H_{k,ℓ}(M_t))` over the
+///   `t`-pre-scaled space `M_t = scale(M, t)`. BV 2025 Prop 3.14 reads
+///   `Mag(tM) = Σ_ℓ q^ℓ · Σ_k (−1)^k · rank(H_{k,ℓ}(M))` with `q = e^(−t)`;
+///   pre-scaling collapses `q^ℓ_orig = e^(−t · ℓ_orig)` to `e^(−ℓ_scaled)`.
+///   Leinster–Shulman 2017 Theorem 3.5 / Cor 7.15 is the metric-space
+///   specialisation used here.
+/// - `via_magnitude = Mag(tM)` via [`crate::magnitude::magnitude`]. This is
+///   not [`crate::mobius_chains::chain_count_signed_graded`], which does not
+///   weight by `e^(−ℓ)`.
 ///
-/// Both should agree per BV 2025 Prop 3.14, **modulo the geometric
-/// truncation residual** at finite `max_degree`. The numerical path is
-/// exact via Möbius matrix inverse; the structural path truncates the
-/// homology sum at `max_degree`. The exact upper bound on the omitted
-/// contribution is `n · r^(max_degree+1) / (1 − r)` where
-/// `r = (n − 1) · exp(−d_min_scaled)`; see
-/// `tests/euler_char_identity.rs` for the analytical-bound tolerance
-/// used by the acceptance suite.
+/// The two agree per BV 2025 Prop 3.14 up to the geometric truncation
+/// residual at finite `max_degree`: the numerical path is exact via the
+/// Möbius matrix inverse, the structural path truncates at `max_degree`, and
+/// the omitted contribution is bounded by `n · r^(max_degree+1) / (1 − r)`
+/// with `r = (n − 1) · exp(−d_min_scaled)`.
 ///
-/// `space` is the Lawvere metric space `M`; `t` scales it (so the test
-/// computes `Mag(tM)`); `max_degree` truncates the inner homology sum
-/// `Σ_k (−1)^k · rank(H_{k,ℓ})` at `k ≤ max_degree`. Larger `max_degree`
-/// drives the truncation residual toward 0 at cost `O(n^(max_degree+1))`
-/// chain enumeration.
-///
-/// # Performance
+/// `space` is the Lawvere metric space `M`, `t` scales it, and `max_degree`
+/// truncates the inner sum `Σ_k (−1)^k · rank(H_{k,ℓ})` at `k ≤ max_degree`,
+/// at cost `O(n^(max_degree+1))` chain enumeration.
 ///
 /// The outer-`k` loop caches `prev_rank = rank(∂_k)` from the previous
-/// iteration so each ∂_k is built and SNF'd exactly once per `(k, ℓ)`
-/// cell. This bypasses [`magnitude_homology_rank`], which would otherwise
-/// rebuild ∂_k twice per outer iteration (once as ∂_k at step `k`, once
-/// as ∂_{k+1} at step `k − 1`). ~2× SNF speedup over the naïve loop.
+/// iteration, so each ∂_k is built and SNF'd once per `(k, ℓ)` cell rather
+/// than the twice [`magnitude_homology_rank`] would cost.
 ///
 /// # Errors
 ///

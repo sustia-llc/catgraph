@@ -226,14 +226,11 @@ pub fn compute_upper_bandwidth(m: &[Vec<i64>], n: i64) -> usize {
 /// the effective working width is `n − t_param`, and the padded matrix has
 /// size `n + 2b − t_param`.
 ///
-/// Mirrors `modularsnf::band::band_reduction` (Storjohann §7 Phase 1 driver).
-///
 /// # Preconditions
 ///
-/// - `b >= 1` — bandwidth must be positive (`s2 = b - 1` would underflow `usize`).
-/// - `t_param <= 2 * b` — the padding `pad = 2 * b - t_param` must not underflow
-///   `usize`. The typical caller passes `t_param = 0` (full-matrix anchor) or a
-///   small offset row; both are well within this bound.
+/// - `b >= 1` — a zero bandwidth underflows `s2 = b - 1`.
+/// - `t_param <= 2 * b` — the padding `pad = 2 * b - t_param` must not
+///   underflow `usize`.
 /// - `m` is square (`m.len() == m[0].len()`).
 ///
 /// Violations are caught by `debug_assert!` in debug builds; in release builds
@@ -269,9 +266,7 @@ pub fn compute_upper_bandwidth(m: &[Vec<i64>], n: i64) -> usize {
 ///
 /// **Result.** The top-left `n × n` slice of the padded `n_big × n_big`
 /// working matrix is the band-reduced output `A_reduced`; analogous slices of
-/// `u_big` / `v_big` form `U_band` / `V_band`. The new bandwidth `b_new =
-/// b / 2 + 1` is achieved by construction (one pass at most halves the
-/// bandwidth).
+/// `u_big` / `v_big` form `U_band` / `V_band`, with `b_new = b / 2 + 1`.
 #[must_use]
 pub fn band_reduction(
     m: &[Vec<i64>],

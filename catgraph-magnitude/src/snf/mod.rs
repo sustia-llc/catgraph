@@ -37,9 +37,7 @@ use crate::snf::zmod::posmod;
 /// (bandwidth ≤ 2: only `T[i][i]` and `T[i][i+1]` may be nonzero).
 ///
 /// Composes Lemma 3.1 row echelon ([`echelon::lemma_3_1`]) with iterated
-/// Lemma 7.3 / 7.4 band reduction ([`band::band_reduction`]) per
-/// `modularsnf::snf::smith_square` Phase 1 (lines 28-46 of the upstream
-/// reference at SHA `d62535e`).
+/// Lemma 7.3 / 7.4 band reduction ([`band::band_reduction`]).
 ///
 /// # Inputs
 ///
@@ -63,14 +61,13 @@ use crate::snf::zmod::posmod;
 ///
 /// # Edge case
 ///
-/// If `n_rows == 0`, returns `(empty, empty, empty)` (mirrors upstream).
+/// If `n_rows == 0`, returns `(empty, empty, empty)`.
 ///
 /// # Panics
 ///
-/// None in practice. The inner [`band_reduction`] preconditions
-/// (`b >= 1`, `t_param <= 2 * b`) are statically satisfied by this
-/// call shape: the `while b > 2` loop guard ensures `b >= 1` at every
-/// `band_reduction` call site, and `t_param = 0` is hard-coded.
+/// None: the inner [`band_reduction`] preconditions (`b >= 1`,
+/// `t_param <= 2 * b`) hold at every call site here — the `while b > 2` guard
+/// gives `b >= 1`, and `t_param = 0` is hard-coded.
 ///
 /// [`echelon::lemma_3_1`]: crate::snf::echelon::lemma_3_1
 /// [`band::band_reduction`]: crate::snf::band::band_reduction
@@ -123,49 +120,27 @@ pub fn phase_1_to_bidiagonal(
 ///
 /// # Interpretation
 ///
-/// **This is the modular SNF over `Z/nZ`, not the classical integer SNF over
-/// `Z`.** The two coincide iff the modulus `n` exceeds a Hadamard bound on
-/// `A` (so the integer invariant factors lift faithfully out of `Z/nZ`); for
-/// smaller `n` the modular result is a paper-faithful Storjohann 2000 SNF
-/// over the quotient ring `Z/nZ`, which is the correct object for:
-///
-/// - rank computation modulo `n` (caller picks `n` prime → `rank_p`),
-/// - magnitude-homology rank recovery (`magnitude_homology_rank`
-///   uses single-prime SNF + majority vote across primes),
-/// - any consumer that operates internally over `Z/nZ`.
-///
-/// Implications:
-///
-/// - **`U`, `V` are unimodular over `Z/nZ`**, meaning `gcd(det U, n) = 1` and
-///   `gcd(det V, n) = 1`. Over `Z` they may have determinant outside `±1`.
-/// - **The chain is `gcd(s_i, n) | gcd(s_{i+1}, n)`**, not the integer chain
-///   `s_i | s_{i+1}`. The two agree under the lift condition above.
-/// - **Diagonal entries are canonicalised into `[0, n)`** via `posmod`; over
-///   `Z` the standard normalisation is the non-negative associate.
-///
-/// Consumers wanting the integer SNF (full invariant-factor structure, not
-/// just rank) need either a Hadamard-bound modulus or multi-prime CRT
-/// reconstruction; both are deferred (#35). For integer rank recovery, the
-/// `chain_complex::magnitude_homology_rank` consumer uses single-prime SNF
-/// over a Mersenne prime + majority vote across primes.
+/// This is the modular SNF over `Z/nZ`, not the classical integer SNF over
+/// `Z`. The two coincide iff the modulus `n` exceeds a Hadamard bound on `A`;
+/// below that, the result is the Storjohann 2000 SNF over the quotient ring.
+/// Consequently `U` and `V` are unimodular over `Z/nZ` — `gcd(det U, n) = 1`
+/// and `gcd(det V, n) = 1`, with determinants over `Z` possibly outside `±1`;
+/// the divisibility chain is `gcd(s_i, n) | gcd(s_{i+1}, n)` rather than the
+/// integer `s_i | s_{i+1}`; and diagonal entries are canonicalised into
+/// `[0, n)` by `posmod`.
 ///
 /// # Algorithm
 ///
-/// Composes the full Storjohann 2000 pipeline:
-///
-/// 1. **Phase 1** ([`phase_1_to_bidiagonal`]) — Lemma 3.1 row echelon
-///    composed with iterated Lemma 7.3 / 7.4 band reduction down to upper
-///    bi-diagonal form (bandwidth ≤ 2).
-/// 2. **Phase 2** ([`crate::snf::diagonal::bidiagonal_to_smith`]) — fused
-///    9-step pipeline: Storjohann §7.12 split-with-spike, recursive block
-///    diagonalisation, permutation, §7.7 / Thm 7.11 / Lemma 7.10
-///    diagonal-to-Smith on the leading `(n-1)×(n-1)` block, gcd-chain
-///    enforcement, and §3 index-1 reduction.
+/// 1. **Phase 1** ([`phase_1_to_bidiagonal`]) — Lemma 3.1 row echelon composed
+///    with iterated Lemma 7.3 / 7.4 band reduction to upper bi-diagonal form
+///    (bandwidth ≤ 2).
+/// 2. **Phase 2** ([`crate::snf::diagonal::bidiagonal_to_smith`]) — Storjohann
+///    §7.12 split-with-spike, recursive block diagonalisation, permutation,
+///    §7.7 / Thm 7.11 / Lemma 7.10 diagonal-to-Smith on the leading
+///    `(n-1)×(n-1)` block, gcd-chain enforcement, and §3 index-1 reduction.
 /// 3. **Rectangular handling** — non-square inputs are zero-padded to a
 ///    `max(rows, cols)`-square at entry and the resulting `(U_pad, V_pad,
-///    S_pad)` cropped to `(rows×rows, cols×cols, rows×cols)` on exit
-///    (mirrors `modularsnf::smith_normal_form` lib.rs lines 22-39 at SHA
-///    `d62535e`).
+///    S_pad)` cropped to `(rows×rows, cols×cols, rows×cols)` on exit.
 ///
 /// # Inputs
 ///
@@ -181,8 +156,7 @@ pub fn phase_1_to_bidiagonal(
 ///
 /// # Edge case
 ///
-/// If `rows == 0` or `cols == 0`, returns `Ok((I_rows, I_cols, A.clone()))`
-/// — the empty SNF is trivially valid (mirrors upstream).
+/// If `rows == 0` or `cols == 0`, returns `Ok((I_rows, I_cols, A.clone()))`.
 ///
 /// # Errors
 ///
@@ -291,33 +265,17 @@ pub fn smith_normal_form(
 /// `MatR<R>` → `Vec<Vec<i64>>` (via [`IntegerLikeRig::to_i64`]) →
 /// [`smith_normal_form`] → `MatR<R>` (via `R::from(i64)`).
 ///
-/// Useful when a downstream consumer holds matrices in `MatR<R>` form
-/// (e.g. `catgraph-magnitude` boundary matrices over `F64Rig` or
-/// [`Z`](catgraph_applied::z::Z)) and wants SNF without dropping to the
-/// raw `Vec<Vec<i64>>` backend.
-///
 /// Returns `(U, V, S)` matching the [`smith_normal_form`] convention:
-/// `U · A · V ≡ S (mod n)` with `S` in Smith Normal Form over `Z/nZ`.
-///
-/// # Caveats
-///
-/// Same modular-vs-integer caveats as [`smith_normal_form`] apply: this
-/// is the modular SNF over `Z/nZ`, not the classical integer SNF over
-/// `Z`. The two coincide iff `n` exceeds a Hadamard bound on the input;
-/// see [`smith_normal_form`] docs for the full discussion.
+/// `U · A · V ≡ S (mod n)` with `S` in Smith Normal Form over `Z/nZ`, and
+/// carries the same modular-versus-integer reading as that function.
 ///
 /// # Errors
 ///
 /// - Any entry of `m` exceeds `i64` range (propagated from
 ///   [`IntegerLikeRig::to_i64`]).
-/// - Modulus `n` exceeds `i64` range (same).
-/// - Any [`smith_normal_form`] error (non-positive modulus, etc.).
-/// - Internal [`MatR::new`] shape mismatch (should not occur in practice;
-///   the shapes are propagated from [`smith_normal_form`]'s contract).
-///
-/// # References
-///
-/// Substrate for the multi-prime CRT integer SNF lift.
+/// - Modulus `n` exceeds `i64` range.
+/// - Any [`smith_normal_form`] error.
+/// - A [`MatR::new`] shape mismatch on lift-back.
 pub fn smith_normal_form_matr<R>(
     m: &MatR<R>,
     n: &R,
