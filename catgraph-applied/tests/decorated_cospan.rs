@@ -142,11 +142,15 @@ fn t2_3_decorated_cospan_pushforward_through_quotient() {
     // Final apex: [x, y, y, z] = 4 vertices (the two y's stay distinct because
     // c1 fans out to two separate y's and c2 fans in from two separate y's).
     //
-    // Edge images under the quotient depend on how Cospan::compose_with_quotient
-    // performs the pushout. We assert two structural invariants that must hold
-    // for any valid quotient:
-    //   (1) the four edges are preserved (no edges dropped or invented),
-    //   (2) every edge endpoint indexes a valid apex vertex.
+    // The apex numbering `Cospan::compose_with_quotient` chooses is not part
+    // of the contract, so the expected edge multiset is named through the
+    // composed cospan's own legs: the x-vertex is the domain leg's image, the
+    // z-vertex the codomain leg's image, and the two remaining apex vertices
+    // are the y's. That fixes all four edges exactly —
+    // `[(x,y1), (x,y2), (y1,z), (y2,z)]` as a sorted multiset — under any
+    // numbering, so a quotient that merged the two y's, dropped an
+    // identification, or wired x straight to z is separated from the right
+    // one.
     let c1 = Cospan::<char>::new(vec![0], vec![1, 2], vec!['x', 'y', 'y']).unwrap();
     let circ1 = DecoratedCospan::<char, Circuit>::new(
         c1,
@@ -183,18 +187,27 @@ fn t2_3_decorated_cospan_pushforward_through_quotient() {
         4,
         "all four pre-pushout edges should survive the quotient"
     );
-    // Every endpoint indexes a valid apex vertex (i.e. pushforward routed
-    // each endpoint through the quotient).
-    for (u, v) in &composed.decoration.edges {
-        assert!(
-            *u < apex_size,
-            "edge source {u} out of apex range (size {apex_size})"
-        );
-        assert!(
-            *v < apex_size,
-            "edge target {v} out of apex range (size {apex_size})"
-        );
+
+    // Name the three roles through the composed cospan's own legs.
+    let x = composed.cospan.left_to_middle()[0];
+    let z = composed.cospan.right_to_middle()[0];
+    assert_eq!(composed.cospan.middle()[x], 'x');
+    assert_eq!(composed.cospan.middle()[z], 'z');
+    let ys: Vec<usize> = (0..apex_size).filter(|v| *v != x && *v != z).collect();
+    assert_eq!(ys.len(), 2, "the two y interfaces must stay distinct");
+    for &y in &ys {
+        assert_eq!(composed.cospan.middle()[y], 'y');
     }
+
+    let mut expected = vec![(x, ys[0]), (x, ys[1]), (ys[0], z), (ys[1], z)];
+    expected.sort_unstable();
+    let mut observed = composed.decoration.edges.clone();
+    observed.sort_unstable();
+    assert_eq!(
+        observed, expected,
+        "pushforward must send the fan-out/fan-in through the quotient: \
+         x={x}, y={ys:?}, z={z}"
+    );
 }
 
 #[test]
@@ -202,19 +215,74 @@ fn t2_4_petri_decoration_collapsed_quotient_preserves_transition_count() {
     // Quotient collapses both apex elements to 0, pushforward is a no-op
     // on transition count. Regression-guards the behaviour that
     // composition preserves all transitions across the pushout.
-    use catgraph_applied::petri_net::{PetriDecoration, Transition};
+    use catgraph_applied::petri_net::{PetriApex, PetriDecoration, Transition};
     use rust_decimal::Decimal;
 
     let c1 = Cospan::<char>::new(vec![0], vec![0], vec!['p']).unwrap();
     let t1 = Transition::new(vec![(0, Decimal::ONE)], vec![]);
-    let d1 = DecoratedCospan::<char, PetriDecoration<char>>::new(c1, vec![t1]);
+    let d1 = DecoratedCospan::<char, PetriDecoration<char>>::new(
+        c1,
+        PetriApex {
+            n: 1,
+            transitions: vec![t1],
+        },
+    );
 
     let c2 = Cospan::<char>::new(vec![0], vec![0], vec!['p']).unwrap();
     let t2 = Transition::new(vec![], vec![(0, Decimal::ONE)]);
-    let d2 = DecoratedCospan::<char, PetriDecoration<char>>::new(c2, vec![t2]);
+    let d2 = DecoratedCospan::<char, PetriDecoration<char>>::new(
+        c2,
+        PetriApex {
+            n: 1,
+            transitions: vec![t2],
+        },
+    );
 
     let composed = d1.compose(&d2).unwrap();
     // Both transitions preserved — quotient collapses both apex elements
     // to 0, so pushforward is a no-op on transition count.
-    assert_eq!(composed.decoration.len(), 2);
+    assert_eq!(composed.decoration.transitions.len(), 2);
+}
+
+/// The `PetriDecoration` laxator shifts the second operand's arc place
+/// indices into the right half of the tensored apex.
+///
+/// **What this ranges over.** One `Monoidal::monoidal` call, a one-place left
+/// operand and a two-place right operand carrying one arc on its second
+/// place, on `Lambda = char`. It does not sweep apex sizes or transition
+/// counts.
+#[test]
+fn t2_5_petri_decoration_monoidal_shifts_the_second_operand() {
+    use catgraph::monoidal::Monoidal;
+    use catgraph_applied::petri_net::{PetriApex, PetriDecoration, Transition};
+    use rust_decimal::Decimal;
+
+    let mut left = DecoratedCospan::<char, PetriDecoration<char>>::new(
+        Cospan::<char>::new(vec![0], vec![0], vec!['p']).unwrap(),
+        PetriApex {
+            n: 1,
+            transitions: vec![Transition::new(vec![(0, Decimal::ONE)], vec![])],
+        },
+    );
+    let right = DecoratedCospan::<char, PetriDecoration<char>>::new(
+        Cospan::<char>::new(vec![0], vec![1], vec!['q', 'r']).unwrap(),
+        PetriApex {
+            n: 2,
+            transitions: vec![Transition::new(vec![], vec![(1, Decimal::TWO)])],
+        },
+    );
+
+    left.monoidal(right);
+
+    assert_eq!(
+        left.decoration.n, 3,
+        "the tensored apex is 1 + 2 places, got n = {}",
+        left.decoration.n
+    );
+    let shifted = left.decoration.transitions[1].post();
+    assert_eq!(
+        shifted,
+        &[(2, Decimal::TWO)],
+        "the right operand's arc on its place 1 must land on place 1 + 1 = 2, got: {shifted:?}"
+    );
 }

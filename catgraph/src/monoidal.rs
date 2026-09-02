@@ -518,15 +518,6 @@ pub trait SymmetricMonoidalMorphism<T: Eq> {
     /// demonstrated) a word can be right over an inverted wiring. Assertions
     /// that pin this method must reach the wiring.
     ///
-    /// # Known deviation
-    ///
-    /// `catgraph_applied::petri_net::PetriNet` does **not** implement this
-    /// contract: its `p` is sized by the transition count rather than by a
-    /// boundary arity, and it permutes `self.transitions` on either value of
-    /// the flag. See its own rustdoc; a pure braiding `PetriNet` has no
-    /// observable wiring at all
-    /// ([#272](https://github.com/sustia-llc/catgraph/issues/272)).
-    ///
     /// # Length
     ///
     /// `p.len()` must equal the permuted side's arity. The signature is

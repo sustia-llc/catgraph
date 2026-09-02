@@ -114,6 +114,13 @@ fn cam_wiring(m: &CospanAlgebraMorphism<PartitionAlgebra, char>) -> Vec<usize> {
         .collect()
 }
 
+/// A `PetriNet`'s boundary legs are the cospan
+/// [`PetriNet::to_decorated_cospan`] exposes, so its wiring is read the same
+/// way as any other cospan's.
+fn petri_wiring(net: &PetriNet<char>) -> Vec<usize> {
+    cospan_wiring(&net.to_decorated_cospan().cospan)
+}
+
 /// `PropExpr` over the SFG signature, pushed through the functor `S` of
 /// F&S Thm 5.53 so it lands in the same shape as a matrix.
 fn prop_wiring(e: Sfg) -> Vec<usize> {
@@ -266,23 +273,18 @@ fn every_carrier_realizes_p_on_both_constructors() {
                 "DecoratedCospan on_domain n={n} p={p:?}"
             );
 
-            // ⚠ `PetriNet` is the one carrier on which the braid direction is
-            // *not* observable, and that is pre-existing rather than something
-            // #258 changed: `from_decorated_cospan` keeps only the apex
-            // (`cospan.middle()`) as places and the decoration as transitions,
-            // discarding both leg maps — and `PetriNet::domain`/`codomain`
-            // rebuild their words from the transitions, of which a pure
-            // braiding has none. So all this can pin is that the apex word
-            // survives and both boundaries come back empty.
             let net = PetriNet::<char>::from_permutation_on_domain(p.clone(), &types).unwrap();
+            assert_eq!(petri_wiring(&net), want, "PetriNet on_domain n={n} p={p:?}");
             assert_eq!(net.places(), types, "PetriNet on_domain apex n={n} p={p:?}");
             assert!(
                 net.transitions().is_empty(),
                 "a pure braiding has no transitions; n={n} p={p:?}"
             );
-            assert!(
-                net.domain().is_empty() && net.codomain().is_empty(),
-                "PetriNet boundary words come from transitions; n={n} p={p:?}"
+            assert_eq!(net.domain(), types, "PetriNet on_domain dom n={n} p={p:?}");
+            assert_eq!(
+                net.codomain(),
+                cod_labels,
+                "PetriNet on_domain cod n={n} p={p:?}"
             );
 
             let m = MatR::<F64Rig>::from_permutation_on_domain(p.clone(), &unit).unwrap();
@@ -365,8 +367,12 @@ fn every_carrier_realizes_p_on_both_constructors() {
                 "DecoratedCospan on_codomain n={n} p={p:?}"
             );
 
-            // Same lossiness as the on-domain side above.
             let net = PetriNet::<char>::from_permutation_on_codomain(p.clone(), &types).unwrap();
+            assert_eq!(
+                petri_wiring(&net),
+                want,
+                "PetriNet on_codomain n={n} p={p:?}"
+            );
             assert_eq!(
                 net.places(),
                 types,
@@ -375,6 +381,16 @@ fn every_carrier_realizes_p_on_both_constructors() {
             assert!(
                 net.transitions().is_empty(),
                 "a pure braiding has no transitions; n={n} p={p:?}"
+            );
+            assert_eq!(
+                net.domain(),
+                dom_labels,
+                "PetriNet on_codomain dom n={n} p={p:?}"
+            );
+            assert_eq!(
+                net.codomain(),
+                types,
+                "PetriNet on_codomain cod n={n} p={p:?}"
             );
 
             let m = MatR::<F64Rig>::from_permutation_on_codomain(p.clone(), &unit).unwrap();
@@ -806,13 +822,6 @@ fn hand_anchored_permute_side_values() {
 /// Both sides of each comparison are checked against `reference_wiring`, which
 /// is computed from `p` alone and anchored by hand in
 /// `hand_anchored_reference_values` — never carrier against carrier.
-///
-/// ⚠ `PetriNet` cannot participate: its `permute_side` permutes
-/// `self.transitions`, so its `p` is sized by the transition count rather than
-/// by a boundary arity, and a pure braiding has no transitions at all — the
-/// same unobservability [#272] records for its constructors.
-///
-/// [#272]: https://github.com/sustia-llc/catgraph/issues/272
 #[test]
 fn permute_side_on_an_identity_matches_the_constructors() {
     use catgraph::named_cospan::NamedCospan;
@@ -923,6 +932,26 @@ fn permute_side_on_an_identity_matches_the_constructors() {
                 want_dom,
                 "DecoratedCospan dom n={n} p={p:?}"
             );
+
+            // ---- PetriNet ----------------------------------------------
+            // The identity net carries one relay transition, which the
+            // braiding must leave alone while it moves the named leg.
+            let base: PetriNet<char> = PetriNet::identity(&types);
+            let relay = base.transitions().to_vec();
+
+            let mut net = base.clone();
+            net.permute_side(&p, true);
+            assert_eq!(petri_wiring(&net), want_cod, "PetriNet cod n={n} p={p:?}");
+            assert_eq!(net.domain(), types, "PetriNet cod dom n={n} p={p:?}");
+            assert_eq!(net.codomain(), permuted, "PetriNet cod cod n={n} p={p:?}");
+            assert_eq!(net.transitions(), relay, "PetriNet cod transitions n={n}");
+
+            let mut net = base.clone();
+            net.permute_side(&p, false);
+            assert_eq!(petri_wiring(&net), want_dom, "PetriNet dom n={n} p={p:?}");
+            assert_eq!(net.domain(), permuted, "PetriNet dom dom n={n} p={p:?}");
+            assert_eq!(net.codomain(), types, "PetriNet dom cod n={n} p={p:?}");
+            assert_eq!(net.transitions(), relay, "PetriNet dom transitions n={n}");
 
             // ---- NamedCospan: the port names must travel with the wires --
             let mut nc = NamedCospan::<char, char, char>::identity(&types, &types, |z| (z, z));
