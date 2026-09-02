@@ -667,9 +667,12 @@ mod tests {
     /// Shape and range of `from_branchial` on [`topology_fixture`] indices 0,
     /// 3, 4, 5 and 6: dimension, per-vertex and per-edge counts, `κ ∈ [-2, 1]`,
     /// and that scalar, every per-vertex and every per-edge curvature is
-    /// unchanged both by duplicating every edge in reverse and by appending one
-    /// self-loop on an endpoint of the first listed edge. On every feature lane.
-    /// Curvature *values* are not pinned against literals.
+    /// unchanged by duplicating every edge in reverse, by duplicating every
+    /// edge in the same orientation, and by appending two self-loops on every
+    /// vertex. Index 4 has scalar, every per-vertex and every per-edge
+    /// curvature 0; indices 0, 3, 5 and 6 each have a non-zero scalar and at
+    /// least one non-zero per-edge and one non-zero per-vertex curvature. On
+    /// every feature lane. Curvature *values* are not pinned against literals.
     #[test]
     fn topology_fixtures_reach_from_branchial() {
         for i in [0, 3, 4, 5, 6] {
@@ -723,39 +726,87 @@ mod tests {
                 );
             }
 
-            // Each edge repeated in the opposite orientation: the undirected
-            // dedup must collapse the copies back to the same curvatures.
-            let mut doubled = bg.clone();
-            doubled
-                .edges
-                .extend(bg.edges.iter().map(|&(a, b)| (b, a)).collect::<Vec<_>>());
-            assert_same_curvature(
-                &OllivierRicciCurvature::from_branchial(&doubled),
-                &curv,
-                &scored,
-                n,
-                &format!("fixture {i}: every edge duplicated in reverse"),
-            );
+            // What the identity checks below range over: fixture 4 is flat, so
+            // they compare zeros there; the others compare non-zero values.
+            let nonzero_edges = curv
+                .edge_curvatures
+                .iter()
+                .filter(|&&(_, kappa)| kappa != 0.0)
+                .count();
+            let nonzero_vertices = curv
+                .vertex_curvatures
+                .iter()
+                .filter(|&&kappa| kappa != 0.0)
+                .count();
+            if i == 4 {
+                assert!(
+                    curv.scalar_curvature() == 0.0,
+                    "fixture {i}: scalar {}, expected 0",
+                    curv.scalar_curvature()
+                );
+                assert_eq!(nonzero_edges, 0, "fixture {i}: non-zero edge curvatures");
+                assert_eq!(
+                    nonzero_vertices, 0,
+                    "fixture {i}: non-zero vertex curvatures"
+                );
+            } else {
+                assert!(
+                    curv.scalar_curvature() != 0.0,
+                    "fixture {i}: scalar {}, expected non-zero",
+                    curv.scalar_curvature()
+                );
+                assert!(
+                    nonzero_edges > 0,
+                    "fixture {i}: {nonzero_edges} non-zero edge curvatures of {}, expected at least 1",
+                    curv.edge_curvatures.len()
+                );
+                assert!(
+                    nonzero_vertices > 0,
+                    "fixture {i}: {nonzero_vertices} non-zero vertex curvatures of {n}, expected at least 1"
+                );
+            }
 
-            // One self-loop on an endpoint of the first listed edge — a vertex
-            // with an incident scored edge — appended: it contributes no
+            // Each edge repeated, once in the opposite orientation and once in
+            // the same one: the undirected dedup must collapse the copies back
+            // to the same curvatures.
+            for (how, copies) in [
+                (
+                    "reverse",
+                    bg.edges.iter().map(|&(a, b)| (b, a)).collect::<Vec<_>>(),
+                ),
+                ("the same", bg.edges.clone()),
+            ] {
+                let mut doubled = bg.clone();
+                doubled.edges.extend(copies);
+                assert_same_curvature(
+                    &OllivierRicciCurvature::from_branchial(&doubled),
+                    &curv,
+                    &scored,
+                    n,
+                    &format!("fixture {i}: every edge duplicated in {how} orientation"),
+                );
+            }
+
+            // Two self-loops on every vertex appended: they contribute no
             // adjacency, so every curvature is the plain one.
             let mut looped = bg.clone();
-            let loop_at = bg.edges[0].0;
-            looped.edges.push((loop_at, loop_at));
+            for &node in &bg.nodes {
+                looped.edges.push((node, node));
+                looped.edges.push((node, node));
+            }
             assert_same_curvature(
                 &OllivierRicciCurvature::from_branchial(&looped),
                 &curv,
                 &scored,
                 n,
-                &format!("fixture {i}: one self-loop on an edge endpoint appended"),
+                &format!("fixture {i}: two self-loops on every vertex appended"),
             );
         }
     }
 
     /// Every edge of the path [`topology_fixture`] (index 4) has κ = 0 exactly,
-    /// under `sectional_curvature`, plain and with every edge duplicated in
-    /// reverse.
+    /// under `sectional_curvature`, plain, with every edge duplicated in
+    /// reverse, and with every edge duplicated in the same orientation.
     #[test]
     fn path_fixture_edges_are_exactly_flat() {
         let bg = topology_fixture(4);
@@ -763,12 +814,19 @@ mod tests {
         assert_eq!(n, 25, "path fixture node count");
         assert_eq!(bg.edges.len(), 24, "path fixture edge count");
 
-        let mut doubled = bg.clone();
-        doubled
+        let mut reversed = bg.clone();
+        reversed
             .edges
             .extend(bg.edges.iter().map(|&(a, b)| (b, a)).collect::<Vec<_>>());
 
-        for (label, graph) in [("plain", &bg), ("reverse-duplicated", &doubled)] {
+        let mut same = bg.clone();
+        same.edges.extend(bg.edges.clone());
+
+        for (label, graph) in [
+            ("plain", &bg),
+            ("reverse-duplicated", &reversed),
+            ("same-orientation-duplicated", &same),
+        ] {
             let curv = OllivierRicciCurvature::from_branchial(graph);
             assert_eq!(curv.edge_curvatures.len(), 24, "{label}: scored edge count");
             for u in 0..24 {
