@@ -402,9 +402,7 @@ proptest! {
     ///
     /// The `n` stratum is swept inside the case and each stratum's evaluated
     /// `(n, t)` pairs are counted, so a stratum that stops evaluating (an `Err`
-    /// from `magnitude`) fails the case instead of skipping silently: over
-    /// `n ∈ {2, 3, 4}` × `t ∈ {1.5, 2.0, 3.0}` every pair evaluates, counts
-    /// `[3, 3, 3]`.
+    /// from `magnitude`) fails the case instead of skipping silently.
     #[test]
     fn mag_bounds_intro(
         seed in any::<u64>(),
