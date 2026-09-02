@@ -286,3 +286,171 @@ fn t2_5_petri_decoration_monoidal_shifts_the_second_operand() {
         "the right operand's arc on its place 1 must land on place 1 + 1 = 2, got: {shifted:?}"
     );
 }
+
+#[test]
+fn t2_6_clone_and_debug_over_petri_decoration_marker() {
+    // `PetriDecoration` derives `Debug` and not `Clone`; both calls below
+    // resolve through the impls on `DecoratedCospan`, which bound
+    // `D: Decoration` alone.
+    use catgraph_applied::petri_net::{PetriDecoration, PetriNet, Transition};
+    use rust_decimal::Decimal;
+
+    let pn: PetriNet<char> = PetriNet::new(
+        vec!['a', 'b'],
+        vec![Transition::new(
+            vec![(0, Decimal::ONE)],
+            vec![(1, Decimal::ONE)],
+        )],
+        vec![0],
+        vec![1],
+    )
+    .expect("invariant: arcs and legs index the two declared places");
+
+    let original: DecoratedCospan<char, PetriDecoration<char>> = pn.to_decorated_cospan();
+    let cloned = original.clone();
+
+    assert_eq!(
+        cloned, original,
+        "the clone must compare equal to the original through the shipped \
+         PartialEq; original = {original:?}, clone = {cloned:?}"
+    );
+    assert_eq!(
+        cloned.cospan.middle(),
+        original.cospan.middle(),
+        "the clone carries the same apex: expected {:?}, got {:?}",
+        original.cospan.middle(),
+        cloned.cospan.middle()
+    );
+    assert_eq!(
+        cloned.decoration, original.decoration,
+        "the clone carries the same decoration: expected {:?}, got {:?}",
+        original.decoration, cloned.decoration
+    );
+
+    let rendered = format!("{original:?}");
+    assert!(
+        rendered.starts_with("DecoratedCospan {"),
+        "Debug names the struct, got: {rendered}"
+    );
+    assert!(
+        rendered.contains("cospan:"),
+        "Debug names the `cospan` field, got: {rendered}"
+    );
+    assert!(
+        rendered.contains("decoration:"),
+        "Debug names the `decoration` field, got: {rendered}"
+    );
+    assert!(
+        rendered.contains("PetriApex"),
+        "Debug delegates to the apex value's own Debug, got: {rendered}"
+    );
+
+    let pretty = format!("{original:#?}");
+    assert!(
+        pretty.starts_with("DecoratedCospan {\n"),
+        "the alternate spec opens the struct on its own line, got: {pretty}"
+    );
+    assert!(
+        pretty.contains("\n    cospan: "),
+        "the alternate spec indents `cospan` by four spaces, got: {pretty}"
+    );
+    assert!(
+        pretty.contains("\n    decoration: PetriApex"),
+        "the alternate spec indents `decoration` by four spaces and delegates \
+         to the apex value's own Debug, got: {pretty}"
+    );
+    assert!(
+        pretty.ends_with("\n}"),
+        "the alternate spec closes the struct on its own line, got: {pretty}"
+    );
+}
+
+#[test]
+fn t2_7_clone_and_debug_over_marker_with_no_derives() {
+    // `LocalTrivial` derives nothing at all.
+    let cospan = Cospan::<usize>::new(vec![0], vec![0], vec![7]).unwrap();
+    let original = DecoratedCospan::<usize, LocalTrivial>::new(cospan, ());
+    let cloned = original.clone();
+
+    assert_eq!(
+        cloned, original,
+        "the clone must compare equal to the original through the shipped \
+         PartialEq; original = {original:?}, clone = {cloned:?}"
+    );
+    assert_eq!(
+        cloned.cospan.middle(),
+        &[7],
+        "the clone carries the same apex: expected [7], got {:?}",
+        cloned.cospan.middle()
+    );
+
+    let rendered = format!("{original:?}");
+    assert!(
+        rendered.starts_with("DecoratedCospan {"),
+        "Debug names the struct, got: {rendered}"
+    );
+    assert!(
+        rendered.contains("cospan:"),
+        "Debug names the `cospan` field, got: {rendered}"
+    );
+    assert!(
+        rendered.contains("decoration: ()"),
+        "Debug renders the unit apex under the `decoration` field, got: {rendered}"
+    );
+
+    let pretty = format!("{original:#?}");
+    assert!(
+        pretty.starts_with("DecoratedCospan {\n"),
+        "the alternate spec opens the struct on its own line, got: {pretty}"
+    );
+    assert!(
+        pretty.contains("\n    cospan: "),
+        "the alternate spec indents `cospan` by four spaces, got: {pretty}"
+    );
+    assert!(
+        pretty.contains("\n    decoration: ()"),
+        "the alternate spec indents `decoration` by four spaces, got: {pretty}"
+    );
+    assert!(
+        pretty.ends_with("\n}"),
+        "the alternate spec closes the struct on its own line, got: {pretty}"
+    );
+
+    let padded = format!("{original:>90?}");
+    let (shadow_rendered, shadow_pretty, shadow_padded) = {
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        struct DecoratedCospan {
+            cospan: Cospan<usize>,
+            decoration: (),
+        }
+        let shadow = DecoratedCospan {
+            cospan: original.cospan.clone(),
+            decoration: original.decoration,
+        };
+        (
+            format!("{shadow:?}"),
+            format!("{shadow:#?}"),
+            format!("{shadow:>90?}"),
+        )
+    };
+
+    assert_eq!(
+        rendered, shadow_rendered,
+        "under `{{:?}}` the shipped rendering must be byte-identical to a \
+         derived-`Debug` struct of the same name and fields: shipped = \
+         {rendered:?}, derived = {shadow_rendered:?}"
+    );
+    assert_eq!(
+        pretty, shadow_pretty,
+        "under `{{:#?}}` the shipped rendering must be byte-identical to a \
+         derived-`Debug` struct of the same name and fields: shipped = \
+         {pretty:?}, derived = {shadow_pretty:?}"
+    );
+    assert_eq!(
+        padded, shadow_padded,
+        "under `{{:>90?}}` the shipped rendering must be byte-identical to a \
+         derived-`Debug` struct of the same name and fields: shipped = \
+         {padded:?}, derived = {shadow_padded:?}"
+    );
+}

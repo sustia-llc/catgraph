@@ -107,14 +107,16 @@ pub trait Decoration: Sized {
 /// [`Cospan`]; the `D` parameter is a [`Decoration`] functor whose associated
 /// apex type determines the shape of the decoration.
 ///
-/// `PartialEq` compares both fields — the underlying cospan and the decoration
-/// — and is hand-written so that it asks only for `D: Decoration`, not the
-/// `D: PartialEq` a derive would demand of the marker type. There is no `Eq`:
-/// [`Decoration::Apex`] is bounded by `PartialEq`, not `Eq`, so nothing here can
-/// promise reflexivity. Comparing the `cospan` field alone still works through
-/// [`Cospan::structurally_equal`] (equivalently `==`) or the public leg/middle
-/// accessors.
-#[derive(Clone, Debug)]
+/// `Clone`, `Debug` and `PartialEq` are available for every
+/// `Lambda: Eq + Copy + Debug` and every `D: Decoration`, with no further bound
+/// on the marker type `D`. `Clone` copies both fields; `Debug` prints the
+/// struct name with the field names `cospan` and `decoration`.
+///
+/// `PartialEq` compares both fields — the underlying cospan and the decoration.
+/// There is no `Eq`: [`Decoration::Apex`] is bounded by `PartialEq`, not `Eq`,
+/// so nothing here can promise reflexivity. Comparing the `cospan` field alone
+/// still works through [`Cospan::structurally_equal`] (equivalently `==`) or
+/// the public leg/middle accessors.
 pub struct DecoratedCospan<Lambda, D>
 where
     Lambda: Eq + Copy + Debug,
@@ -124,6 +126,35 @@ where
     pub cospan: Cospan<Lambda>,
     /// The decoration on the cospan's apex, valued in `F(|middle|)`.
     pub decoration: D::Apex,
+}
+
+impl<Lambda, D> Clone for DecoratedCospan<Lambda, D>
+where
+    Lambda: Eq + Copy + Debug,
+    D: Decoration,
+{
+    /// Clones the underlying cospan and the decoration.
+    fn clone(&self) -> Self {
+        Self {
+            cospan: self.cospan.clone(),
+            decoration: self.decoration.clone(),
+        }
+    }
+}
+
+impl<Lambda, D> Debug for DecoratedCospan<Lambda, D>
+where
+    Lambda: Eq + Copy + Debug,
+    D: Decoration,
+{
+    /// Formats as a struct named `DecoratedCospan` with the fields `cospan`
+    /// and `decoration`.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DecoratedCospan")
+            .field("cospan", &self.cospan)
+            .field("decoration", &self.decoration)
+            .finish()
+    }
 }
 
 impl<Lambda, D> PartialEq for DecoratedCospan<Lambda, D>
