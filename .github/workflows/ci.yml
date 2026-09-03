@@ -70,6 +70,8 @@ jobs:
       # this script; a bump commit now fails CI until every reference moves.
       - name: version-refs guard
         run: python3 scripts/check_version_refs.py
+      - name: canonical-test guard (#409)
+        run: python3 scripts/check_canonical_tests.py
       # The measured-claims guard's own failure modes. Pure python, sub-second,
       # and deliberately placed with the other script guards rather than after
       # `cargo test`: it has no cargo dependency, and behind the suite it would

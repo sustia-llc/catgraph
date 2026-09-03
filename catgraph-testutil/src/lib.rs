@@ -10,6 +10,8 @@
 //! - [`strategy`] — `proptest` float strategies over the full `f64` exponent
 //!   range and over near-cancelling pairs.
 //! - [`all_perms`] and [`all_perm_indices`] — exhaustive `Sₙ` enumeration.
+//! - [`wiring`] — index-wiring references: shift-concatenation for tensor
+//!   claims and a union-find pushout for composition claims.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -17,6 +19,7 @@
 mod approx;
 mod perm;
 pub mod strategy;
+pub mod wiring;
 
 pub use approx::approx_rel;
 pub use perm::{all_perm_indices, all_perms};

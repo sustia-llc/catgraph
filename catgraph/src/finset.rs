@@ -628,6 +628,15 @@ impl Decomposition {
         }
     }
 
+    /// The underlying finite-set morphism `ι ∘ π ∘ σ`, as a map from every
+    /// domain element together with the codomain elements the map misses.
+    ///
+    /// [`Composable::codomain`] agrees on both values.
+    #[must_use]
+    pub fn to_finset_morphism(&self) -> FinSetMorphism {
+        self.to_ordinary()
+    }
+
     /// Returns references to the `(σ, π, ι)` components of the factorization.
     #[must_use]
     pub const fn get_parts(&self) -> (&Permutation, &OrderPresSurj, &OrderPresInj) {

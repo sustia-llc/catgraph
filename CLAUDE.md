@@ -10,7 +10,7 @@ cargo nextest run <scope> --no-fail-fast                  # suites; cargo test o
 cargo clippy <scope> --all-targets -- -D warnings         # the CI gate, on every feature lane (.github/workflows/ci.yml)
 cargo fmt    --all --check
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
-python3 scripts/check_version_refs.py ; scripts/check_rand_dev_only.py ; scripts/check_audit_counts.py <audit docs> ; scripts/check_measured_claims.py <nocapture log>
+python3 scripts/check_version_refs.py ; scripts/check_rand_dev_only.py ; scripts/check_audit_counts.py <audit docs> ; scripts/check_measured_claims.py <nocapture log> ; scripts/check_canonical_tests.py
 ```
 
 `<scope>` while iterating = the touched crate **and its dependents** (core or
@@ -87,6 +87,12 @@ crate's `docs/`.
    goes red, restore) with observed vs expected in the failure message; a
    docstring never quantifies more than the assertions do. Existing tests are
    not retro-audited — the 2026-09 triage folded that queue.
+7. **One canonical integration test per published crate**,
+   `<crate>/tests/canonical.rs`, whose header names the public types and traits
+   it ranges over and the ones it does not;
+   `python3 scripts/check_canonical_tests.py` fails CI when a
+   `pub struct|enum|trait|type` under `src` is in neither list. A PR that adds
+   one edits that header in the same PR — an arm or a `not-covered` line.
 
 Work is tracked as GitHub issues (`taskmap.md` §Triage in `.claude/docs/` is
 the live order). Contributing: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
