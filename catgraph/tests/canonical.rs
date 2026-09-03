@@ -593,7 +593,7 @@ fn generator_table_failures<C: Carrier>() -> Vec<String> {
     failures
 }
 
-/// Every carrier's eight Def 2.12 generators against the hand-written table.
+/// Four carriers' eight Def 2.12 generators against the hand-written table.
 #[test]
 fn def_2_12_generator_table_on_every_carrier() {
     let rows = [

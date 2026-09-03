@@ -172,7 +172,7 @@ def check_doc(path: Path) -> None:
 
     # 4. test-count citations
     for l in lines:
-        for fm in re.finditer(r"tests/([A-Za-z0-9_]+\.rs).*?\((\d+) tests\)", l):
+        for fm in re.finditer(r"tests/([A-Za-z0-9_]+\.rs)[^/]*?\((\d+) tests\)", l):
             fname, stated_n = fm.group(1), int(fm.group(2))
             hits = list(WORKSPACE.glob(f"*/tests/{fname}"))
             if len(hits) != 1:
