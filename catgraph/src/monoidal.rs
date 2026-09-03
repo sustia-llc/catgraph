@@ -154,7 +154,14 @@ where
         self.layers.len()
     }
 
-    fn append_layer(
+    /// Appends `next_layer` after the current last layer, on an empty morphism
+    /// or on one whose last layer's `right_type` equals `next_layer.left_type`.
+    ///
+    /// # Errors
+    ///
+    /// [`CatgraphError::Composition`] when the current last layer's
+    /// `right_type` differs from `next_layer.left_type`.
+    pub fn append_layer(
         &mut self,
         next_layer: GenericMonoidalMorphismLayer<BoxType, Lambda>,
     ) -> Result<(), CatgraphError> {

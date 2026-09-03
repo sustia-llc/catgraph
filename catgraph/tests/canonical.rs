@@ -34,7 +34,10 @@
 //! (`frobenius/trait_impl.rs:241`) and `CospanBacked` (`:322`) — are not
 //! reachable from an integration test. `FrobeniusLayer`
 //! (`frobenius/operations.rs:206`) is `pub(crate)` and is reached only through
-//! `FrobeniusMorphism`'s layer-wise `monoidal`.
+//! `FrobeniusMorphism`'s layer-wise `monoidal`. The `GenericMonoidalMorphism`
+//! tensor row runs two two-layer operands, asserted at equal depth below, so
+//! its assertions touch `GenericMonoidalMorphism::monoidal`'s equal-depth
+//! pairing and not the identity padding it applies at unequal depth.
 //!
 //! # covers:
 //!
@@ -1353,24 +1356,38 @@ fn tensor_is_shift_concat_on_every_public_monoidal_implementor() {
             .collect();
         Wiring::new(legs)
     };
-    let mut generic_a =
-        <GenericMonoidalMorphism<WireBox, char> as HasIdentity<Vec<char>>>::identity(&vec![
-            'a', 'b',
-        ]);
-    ComposableMutating::compose(
-        &mut generic_a,
-        <GenericMonoidalMorphism<WireBox, char> as HasIdentity<Vec<char>>>::identity(&vec![
-            'a', 'b',
-        ]),
-    )
-    .expect("an identity composes with itself");
-    let mut generic_b =
-        <GenericMonoidalMorphism<WireBox, char> as HasIdentity<Vec<char>>>::identity(&vec!['c']);
-    ComposableMutating::compose(
-        &mut generic_b,
-        <GenericMonoidalMorphism<WireBox, char> as HasIdentity<Vec<char>>>::identity(&vec!['c']),
-    )
-    .expect("an identity composes with itself");
+    fn generic_layer(
+        blocks: &[char],
+        left: &[char],
+        right: &[char],
+    ) -> GenericMonoidalMorphismLayer<WireBox, char> {
+        GenericMonoidalMorphismLayer {
+            blocks: blocks.iter().copied().map(WireBox).collect(),
+            left_type: left.to_vec(),
+            right_type: right.to_vec(),
+        }
+    }
+    fn generic_morphism(
+        first: GenericMonoidalMorphismLayer<WireBox, char>,
+        second: GenericMonoidalMorphismLayer<WireBox, char>,
+    ) -> GenericMonoidalMorphism<WireBox, char> {
+        let mut morphism = GenericMonoidalMorphism::new();
+        morphism
+            .append_layer(first)
+            .expect("an empty morphism accepts any layer");
+        morphism
+            .append_layer(second)
+            .expect("the second layer's left_type is the first layer's right_type");
+        morphism
+    }
+    let generic_a = generic_morphism(
+        generic_layer(&['p'], &['a', 'b'], &['c']),
+        generic_layer(&['q'], &['c'], &['d', 'e']),
+    );
+    let generic_b = generic_morphism(
+        generic_layer(&['s', 't'], &['g'], &['h', 'i']),
+        generic_layer(&['u'], &['h', 'i'], &['j']),
+    );
     assert_eq!(
         (generic_a.depth(), generic_b.depth()),
         (2, 2),
