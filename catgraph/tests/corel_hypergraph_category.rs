@@ -62,7 +62,7 @@ fn comultiplication_1_to_2() {
 /// "delegation" about the one call in the body that no longer delegates.
 ///
 /// Arities only: this is a shape check, not the unitality *equation*, which the
-/// Def 2.5 battery in `frobenius_axioms.rs` decides.
+/// Def 2.5 battery in `canonical.rs` decides.
 ///
 /// ⚠ **The `is_jointly_surjective` assertion below cannot go red, and the name
 /// deliberately does not advertise it.** Since #351 `Corel::compose` ends in

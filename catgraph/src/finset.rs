@@ -628,8 +628,10 @@ impl Decomposition {
         }
     }
 
-    /// The underlying finite-set morphism `ι ∘ π ∘ σ`, as a map from every
-    /// domain element together with the codomain elements the map misses.
+    /// The underlying finite-set morphism `ι ∘ π ∘ σ`: the image of every domain
+    /// element, paired with the [`FinSetMorphism`] extra-codomain component —
+    /// `codomain - (max(map) + 1)`, saturating, or the whole codomain when the
+    /// map is empty.
     ///
     /// [`Composable::codomain`] agrees on both values.
     #[must_use]

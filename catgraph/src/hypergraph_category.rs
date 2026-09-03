@@ -23,7 +23,7 @@
 //! `universal-property-API`. So every mention of "free" in this module names
 //! the paper's theorem about `Cospan_Λ`, never a property this crate has
 //! checked. What *is* checked is that `Cospan<Lambda>` satisfies Def 2.12 —
-//! `tests/frobenius_axioms.rs` decides all eleven Def 2.5 equations on it.
+//! `tests/canonical.rs` decides all eleven Def 2.5 equations on it.
 
 use std::fmt::Debug;
 
@@ -231,7 +231,7 @@ mod tests {
     // of its equation.
     //
     // The equations themselves — both sides, decided — live in
-    // `tests/frobenius_axioms.rs`. Do not read anything here as a law pin.
+    // `tests/canonical.rs`. Do not read anything here as a law pin.
 
     /// Arity of the left unit law's composite `(η ⊗ id) ; μ`.
     #[test]
@@ -299,7 +299,7 @@ mod tests {
     /// ⚠ This is **not** a side of the Frobenius law, and no second side is
     /// built. The law relates `[z,z] → [z,z]` morphisms:
     /// `(δ ⊗ id) ; (id ⊗ μ) = μ ; δ = (id ⊗ δ) ; (μ ⊗ id)`, decided in
-    /// `tests/frobenius_axioms.rs`.
+    /// `tests/canonical.rs`.
     #[test]
     fn frobenius_law_lhs_arities() {
         let z = 'a';
@@ -317,7 +317,7 @@ mod tests {
     // --- Zigzag via HypergraphCategory ---
 
     /// Arity of the left snake `(cup ⊗ id) ; (id ⊗ cap)`; the snake *equation*
-    /// is `zigzag_identities_per_carrier` in `tests/frobenius_axioms.rs`.
+    /// is `zigzag_identities_on_every_carrier` in `tests/canonical.rs`.
     #[test]
     fn zigzag_via_trait_arities() {
         let z = 'z';
@@ -387,7 +387,7 @@ mod tests {
     /// The equation `δ ; μ = id` does **not** hold for this carrier under
     /// structural equality at all — its normalizer has no fusion rule for the
     /// lettered generators — so it is decided through `frobenius_to_cospan` in
-    /// `tests/frobenius_axioms.rs`, not here.
+    /// `tests/canonical.rs`, not here.
     #[test]
     fn frobenius_morphism_special_arities() {
         use crate::category::ComposableMutating;

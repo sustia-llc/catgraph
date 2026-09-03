@@ -3,16 +3,17 @@
 //! Every `HypergraphCategory` implementor in `catgraph/src` — `Cospan`,
 //! `Corel`, `CospanAlgebraMorphism<PartitionAlgebra, _>` and
 //! `FrobeniusMorphism` (`rg -n '^impl.*HypergraphCategory<' catgraph/src` → 4)
-//! — satisfies the eleven Def 2.5 equations, the Def 2.12 generator table, both
-//! zigzags and strict left/right unitality, decided by `CospanCanon` equality,
-//! over generator words of length ≤ 3 and every permutation of ≤ 4 wires;
-//! `compose` on each equals a union-find partition reference computed from the
-//! operand wirings; and `wiring(f ⊗ g) == wiring(f) ++ shift(wiring(g))` on the
-//! 13 public `Monoidal` implementors in `catgraph/src`.
+//! — satisfies the eleven Def 2.5 equations, the Def 2.12 generator table and
+//! both zigzags, decided by `CospanCanon` equality, over generator words of
+//! length ≤ 3 and every permutation of ≤ 4 wires; `Cospan<char>` satisfies
+//! strict left/right unitality under `Cospan`'s derived `PartialEq`; `compose`
+//! on each equals a union-find partition reference computed from the operand
+//! wirings; and `wiring(f ⊗ g) == wiring(f) ++ shift(wiring(g))` on the 13
+//! public `Monoidal` implementors in `catgraph/src`.
 //!
 //! # Input space
 //!
-//! One wire type (`'z'`) except where a fixture names two; the exhaustive
+//! One wire type (`'z'`) except where a fixture names more; the exhaustive
 //! `Cospan` corpus is every cospan with domain, codomain and apex each at most
 //! 2 (`cospan_corpus`, size asserted below); the generator-word sweep is every
 //! composable word of length 2 and 3 over the nine generators `eta eps mu delta
@@ -78,7 +79,7 @@ use catgraph_testutil::{
 };
 use permutations::Permutation;
 
-/// The wire type every claim is built on unless a fixture names two.
+/// The wire type every claim is built on unless a fixture names more.
 const Z: char = 'z';
 
 /// Def 2.5's nine equations, with unitality and counitality split into halves.
@@ -749,13 +750,27 @@ fn braiding_is_the_permutation_wiring_on_every_carrier() {
         .collect();
     assert!(report.is_empty(), "{}", report.join("\n"));
 
-    // Two different wire types: the braiding exchanges the words.
-    let hetero =
-        <Cospan<char> as Carrier>::braiding(&Permutation::transposition(2, 0, 1), &['a', 'b']);
-    assert_eq!(
-        (Carrier::dom(&hetero), Carrier::cod(&hetero)),
-        (vec!['a', 'b'], vec!['b', 'a']),
-        "the braiding did not exchange the two wire types"
+    // Two different wire types: the braiding exchanges the words, on every
+    // carrier.
+    fn hetero_row<C: Carrier>() -> (&'static str, (Vec<char>, Vec<char>)) {
+        let hetero = C::braiding(&Permutation::transposition(2, 0, 1), &['a', 'b']);
+        (C::NAME, (Carrier::dom(&hetero), Carrier::cod(&hetero)))
+    }
+    let expected = (vec!['a', 'b'], vec!['b', 'a']);
+    let hetero_report: Vec<String> = [
+        hetero_row::<Cospan<char>>(),
+        hetero_row::<Corel<char>>(),
+        hetero_row::<CospanAlgebraMorphism<PartitionAlgebra, char>>(),
+        hetero_row::<FrobeniusMorphism<char, String>>(),
+    ]
+    .into_iter()
+    .filter(|(_, observed)| *observed != expected)
+    .map(|(name, observed)| format!("  [{name}] observed = {observed:?}"))
+    .collect();
+    assert!(
+        hetero_report.is_empty(),
+        "the braiding did not exchange the two wire types, expected {expected:?}:\n{}",
+        hetero_report.join("\n")
     );
 }
 
@@ -1183,8 +1198,8 @@ fn inj_map(i: &OrderPresInj) -> Vec<usize> {
 /// rows; the two apex-indexed legs into the boundaries for `Span` and `Rel`;
 /// the layer type words for the two `Generic*` rows, which the tensor does not
 /// renumber. The `FrobeniusMorphism` row reads the wiring off
-/// `frobenius_to_cospan`, which is the only route to `FrobeniusLayer::monoidal`
-/// from an integration test.
+/// `frobenius_to_cospan`; `FrobeniusMorphism::monoidal` is the only route to
+/// `FrobeniusLayer::monoidal` from an integration test.
 #[test]
 fn tensor_is_shift_concat_on_every_public_monoidal_implementor() {
     let mut failures = Vec::new();
@@ -1257,6 +1272,21 @@ fn tensor_is_shift_concat_on_every_public_monoidal_implementor() {
         decomposition_wiring,
         &mut failures,
     );
+    // The extra-codomain component of each of the three operands, hand-derived
+    // as `codomain - (max(map) + 1)`: `[1, 0, 1]` into 3 leaves 1, `[2, 2]` into
+    // 4 leaves 1, and the two-wire braiding `[1, 0]` into 2 leaves 0.
+    let decomposition_extras = (
+        decomposition(vec![1, 0, 1], 1).to_finset_morphism().1,
+        decomposition(vec![2, 2], 1).to_finset_morphism().1,
+        Decomposition::from_permutation(Permutation::transposition(2, 0, 1), 2)
+            .to_finset_morphism()
+            .1,
+    );
+    assert_eq!(
+        decomposition_extras,
+        (1, 1, 0),
+        "Decomposition: to_finset_morphism's extra-codomain component moved"
+    );
 
     // --- NamedCospan ---
     let named_wiring = |n: &NamedCospan<char, u8, u8>| cospan_wiring(n.cospan()).to_wiring();
@@ -1294,14 +1324,21 @@ fn tensor_is_shift_concat_on_every_public_monoidal_implementor() {
             Leg::word(l.blocks.iter().map(|b| code(b.0)).collect()),
         ])
     };
+    // Neither operand is an identity — the two type words differ from each
+    // other and from the block word — so a tensor that paired the wrong pair of
+    // words moves the wiring.
     check_tensor(
         "GenericMonoidalMorphismLayer",
-        <GenericMonoidalMorphismLayer<WireBox, char> as HasIdentity<Vec<char>>>::identity(&vec![
-            'a', 'b',
-        ]),
-        <GenericMonoidalMorphismLayer<WireBox, char> as HasIdentity<Vec<char>>>::identity(&vec![
-            'c',
-        ]),
+        GenericMonoidalMorphismLayer::<WireBox, char> {
+            blocks: vec![WireBox('p')],
+            left_type: vec!['a', 'b'],
+            right_type: vec!['c'],
+        },
+        GenericMonoidalMorphismLayer::<WireBox, char> {
+            blocks: vec![WireBox('q'), WireBox('r')],
+            left_type: vec!['d'],
+            right_type: vec!['e', 'f'],
+        },
         layer_wiring,
         &mut failures,
     );

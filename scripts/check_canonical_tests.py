@@ -15,13 +15,16 @@ Header parsing: the `covers:` section runs from the `//!` line ending in
 to the end of the `//!` block. Names are the backtick-quoted tokens in each.
 
 A crate with no `tests/canonical.rs` is reported and skipped, so the rows of
-G18 can land one at a time. Run from anywhere: pass the repo root as argv[1],
-default `.`.
+G18 can land one at a time; a crate listed in `LANDED` whose file is absent is
+an error instead, and each G18 row adds its crate to `LANDED` as it lands. Run
+from anywhere: pass the repo root as argv[1], default `.`.
 """
 
 import pathlib
 import re
 import sys
+
+LANDED = {"catgraph"}
 
 DECLARATION = re.compile(r"^\s*pub (?:struct|enum|trait|type) ([A-Za-z_][A-Za-z0-9_]*)")
 BACKTICKED = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
@@ -68,6 +71,8 @@ def header_sections(canonical: pathlib.Path) -> tuple[set[str], set[str]]:
 def check(crate: pathlib.Path) -> list[str]:
     canonical = crate / "tests" / "canonical.rs"
     if not canonical.is_file():
+        if crate.name in LANDED:
+            return [f"{crate.name}: landed crate has no {canonical}"]
         print(f"  {crate.name}: no tests/canonical.rs yet, skipped")
         return []
 
@@ -107,7 +112,8 @@ def main() -> int:
     for crate in crates:
         problems.extend(check(crate))
     if problems:
-        print("every public type and trait must be in `covers:` or `not-covered:`:")
+        print("a landed crate needs its tests/canonical.rs, and every public")
+        print("type and trait must be in its `covers:` or `not-covered:`:")
         print("\n".join(problems))
         return 1
     return 0

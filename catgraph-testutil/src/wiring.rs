@@ -169,21 +169,6 @@ impl<L> CospanWiring<L> {
     }
 }
 
-impl<L: Clone> CospanWiring<L> {
-    /// The disjoint-union tensor: apexes concatenated, both legs shift-concatenated.
-    #[must_use]
-    pub fn tensor(&self, other: &Self) -> Self {
-        let wiring = self.to_wiring().shift_concat(&other.to_wiring());
-        let mut apex = self.apex.clone();
-        apex.extend(other.apex.iter().cloned());
-        Self {
-            apex,
-            dom: wiring.legs[0].entries.clone(),
-            cod: wiring.legs[1].entries.clone(),
-        }
-    }
-}
-
 /// A canonical partition signature: boundary sizes plus one sorted entry per
 /// apex class.
 ///
@@ -208,23 +193,6 @@ impl<L> PartitionSignature<L> {
             .iter()
             .filter(|(_, dom, cod)| dom.is_empty() && cod.is_empty())
             .count()
-    }
-
-    /// The signature with the both-preimages-empty classes removed.
-    #[must_use]
-    pub fn without_scalars(self) -> Self
-    where
-        L: Clone,
-    {
-        Self {
-            dom_len: self.dom_len,
-            cod_len: self.cod_len,
-            classes: self
-                .classes
-                .into_iter()
-                .filter(|(_, dom, cod)| !(dom.is_empty() && cod.is_empty()))
-                .collect(),
-        }
     }
 }
 
@@ -436,16 +404,5 @@ mod tests {
                 dom_len: 2,
             }
         );
-    }
-
-    /// `tensor` is `shift_concat` on the two legs plus apex concatenation.
-    #[test]
-    fn tensor_is_shift_concat_plus_apex_concat() {
-        let f = CospanWiring::new(vec!['a'], vec![0, 0], vec![0]).unwrap();
-        let g = CospanWiring::new(vec!['b', 'c'], vec![1], vec![0, 1]).unwrap();
-        let t = f.tensor(&g);
-        assert_eq!(t.apex(), &['a', 'b', 'c'][..]);
-        assert_eq!((t.dom(), t.cod()), (&[0, 0, 2][..], &[0, 1, 2][..]));
-        assert_eq!(t.to_wiring(), f.to_wiring().shift_concat(&g.to_wiring()));
     }
 }

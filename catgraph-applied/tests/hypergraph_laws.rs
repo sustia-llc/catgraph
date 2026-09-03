@@ -26,7 +26,7 @@
 //!   table.
 //!
 //! The same eleven equations on `Cospan`, `Corel`, `CospanAlgebraMorphism` and
-//! `FrobeniusMorphism` are `catgraph/tests/frobenius_axioms.rs`.
+//! `FrobeniusMorphism` are `catgraph/tests/canonical.rs`.
 
 use catgraph::category::{Composable, HasIdentity};
 use catgraph::corel::Corel;
@@ -60,7 +60,7 @@ type Shape = (usize, usize, Partition);
 ///
 /// Bubbles carry no boundary slot, so they cannot change the partition; the
 /// `CospanAlgebraMorphism` row is the one that has any, and their exact count
-/// is measured in `catgraph/tests/frobenius_axioms.rs`'s
+/// is measured in `catgraph/tests/canonical.rs`'s
 /// `cospan_algebra_morphism_bubble_ledger`.
 fn shape(canon: &CospanCanon<char>) -> Shape {
     let mut partition: Partition = canon
@@ -196,7 +196,7 @@ fn generator_partitions_match_the_hand_anchored_table() {
 /// discards nothing on those five rows.
 ///
 /// `CospanAlgebraMorphism` is deliberately absent: its μ and δ carry bubbles by
-/// construction, ledgered in `catgraph/tests/frobenius_axioms.rs`.
+/// construction, ledgered in `catgraph/tests/canonical.rs`.
 #[test]
 fn the_five_bubble_free_rows_have_no_scalars() {
     fn assert_no_scalars<C, F>(name: &str, to_canon: F)
