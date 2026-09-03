@@ -247,7 +247,7 @@ fn spider_grid() -> Vec<(String, FM)> {
 }
 
 /// Both sides of each of the eleven Def 2.5 equations, built exactly as
-/// `tests/frobenius_axioms.rs::equations` builds them on this carrier.
+/// `tests/canonical.rs::equations` builds them on this carrier.
 fn def_2_5_battery() -> Vec<(String, FM)> {
     const Z: char = 'z';
     let eta = || -> FM { FrobeniusOperation::Unit(Z).into() };

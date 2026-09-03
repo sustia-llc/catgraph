@@ -174,7 +174,7 @@ fn spider_fusion() {
 /// **Space of the claim:** the single term `η('z') ; ε('z')` and the factory's
 /// `(0, 0)` spider, at one wire type, compared on boundary, depth and (for the
 /// pair) presentation equality. It says nothing about scalars beside other
-/// blocks, nor about the interpretation into `Cospan` — `frobenius_axioms.rs`
+/// blocks, nor about the interpretation into `Cospan` — `canonical.rs`
 /// and `cospan_algebra`'s tests carry those.
 ///
 /// Falsification: restoring rule 3 gives depth 1 for both terms. The **first**

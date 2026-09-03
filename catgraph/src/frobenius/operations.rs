@@ -437,7 +437,7 @@ where
                 // `cargo test -p catgraph` fully green (276 lib tests + every
                 // integration target), and deleting the lookup filter alone is
                 // likewise green; only removing BOTH reddens
-                // `frobenius_axioms.rs::spider_fusion_needs_a_wire_between_the_two_spiders`.
+                // `canonical.rs::spider_fusion_needs_a_wire_between_the_two_spiders`.
                 // So expect cargo-mutants to report either deletion as a MISSED
                 // mutant: that is the true state of the cover, not a stale
                 // result. The pin covers the conjunction.

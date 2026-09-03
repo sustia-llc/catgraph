@@ -122,7 +122,7 @@ fn monoidal_with_empty() {
 // Frobenius axiom ARITIES in H_Part
 //
 // ⚠ The three tests below assert domains and codomains only. The equations
-// themselves are decided in `tests/frobenius_axioms.rs`, where this carrier
+// themselves are decided in `tests/canonical.rs`, where this carrier
 // needs its bubbles quotiented first — `(η ⊗ id) ; μ` and `id` differ by two
 // scalar classes, so an equality here would not even have been true.
 // ---------------------------------------------------------------------------
