@@ -9,6 +9,12 @@ version history.
 
 ## [Unreleased]
 
+### Changed
+
+- Rustdoc in `src/` states what each item does over what input space; this
+  CHANGELOG is one bullet per change
+  ([#365](https://github.com/sustia-llc/catgraph/issues/365)).
+
 ### Added
 
 - `all_perms` + `all_perm_indices`, re-exported at the crate root: exhaustive

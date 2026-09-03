@@ -13,8 +13,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.17.0] - 2026-09-03
+
+### Changed — BREAKING
+
+- `PetriNet` carries declared boundary legs: `new` and `new_unchecked` take
+  `left` and `right` place-index legs after `transitions` (`new` rejects an
+  entry at or beyond `places.len()`); `from_cospan` stores the cospan's legs
+  and emits each transition's `pre`/`post` sorted by place index; `parallel`
+  concatenates legs with `other`'s shifted, `sequential` keeps `self`'s
+  domain leg and remaps `other`'s codomain leg; `Composable::compose` goes
+  through the decorated cospan and needs `Lambda: 'static`; `permute_side`
+  permutes the named side's leg and is a no-op when `p.len()` is not that
+  leg's length. `PetriDecoration`'s apex is `PetriApex { n, transitions }`,
+  whose `combine` shifts the second operand's place indices by the first's
+  `n` ([#275](https://github.com/sustia-llc/catgraph/issues/275)).
+
 ### Changed
 
+- `DecoratedCospan<Lambda, D>`'s `Clone` and `Debug` are hand-written over
+  `Lambda: Eq + Copy + Debug, D: Decoration`, matching `PartialEq`; `Debug`
+  renders the struct name and the two field names
+  ([#348](https://github.com/sustia-llc/catgraph/issues/348)).
+- `enriched` module doc cites F&S §2.3 Def 2.46
+  ([#407](https://github.com/sustia-llc/catgraph/pull/407)).
 - `MatR::permute_side` takes its two `matmul` results with `.expect`, whose
   message names the length guard checked above, instead of silently discarding
   an `Err` ([#298](https://github.com/sustia-llc/catgraph/issues/298)).
@@ -36,6 +58,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ### Fixed — tests
 
+- `tests/hypergraph_laws.rs`: the eleven Def 2.5 equations and the two snakes
+  on `DecoratedCospan` and `PetriNet`, and a Def 2.12 generator partition
+  table the six `HypergraphCategory` implementors are compared against;
+  `PetriNet` enters `braiding_cross_carrier.rs` on both constructors and on
+  `permute_side` ([#275](https://github.com/sustia-llc/catgraph/issues/275)).
+- `verify_rig_axioms` call sites for `Z` (`rig.rs`) and, in `catgraph-dl`,
+  `Dual` ([#292](https://github.com/sustia-llc/catgraph/issues/292)).
+- `MatKron` law pins swept over `n` and over `BoolRig`; the `n = 0` and
+  coassociativity doc claims scoped to what is asserted (`mat_kron.rs`)
+  ([#278](https://github.com/sustia-llc/catgraph/issues/278)).
+- `PerfectMatching::non_crossing` against a boundary-walk planarity decision
+  and a Catalan count, `Pair::contains` against `min`/`max` normalisation,
+  and `monoidal` against side-by-side placement (`temperley_lieb.rs`)
+  ([#294](https://github.com/sustia-llc/catgraph/issues/294)).
+- Hand-derived dyadic oracles for `E1` and `E2` `operadic_substitution`
+  (`e1_operad.rs`, `e2_operad.rs`)
+  ([#295](https://github.com/sustia-llc/catgraph/issues/295)).
+- `smc_nf_differential_sweep.rs` records a dated pass of the five
+  `--ignored` corpus sweeps and gains
+  `braid_mode_smoke_prefix_of_the_published_corpus`
+  ([#300](https://github.com/sustia-llc/catgraph/issues/300)).
 - `smc_nf`'s Step 7 block-transposition pass:
   `block_transposition_needs_adjacency_in_every_shared_layer` pins a fixture
   where a braid-carrying component separates two free components' runs in 2
@@ -843,7 +886,8 @@ Co-released with catgraph v0.12.2 and catgraph-magnitude v0.1.1.
   `temperley_lieb`, `e1_operad`, `e2_operad` extracted from `catgraph` core;
   Criterion bench `rayon_thresholds`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.15.0]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...v0.15.0
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0

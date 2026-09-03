@@ -13,6 +13,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.17.0] - 2026-09-03
+
+### Changed — BREAKING
+
+- `EvalPath` is `#[non_exhaustive]` and gains `SlowNearSingular`, the path
+  taken when the `SCHUR_SLOW_FALLBACK_TOL` guard diverts a near-singular
+  Schur complement; `schur_complement()` is `Some` iff the path is `Fast`
+  ([#307](https://github.com/sustia-llc/catgraph/issues/307)).
+
+### Changed
+
+- Rustdoc across `src/` states what each item does over what input space;
+  this CHANGELOG is one bullet per change
+  ([#403](https://github.com/sustia-llc/catgraph/pull/403)).
+- `magnitude_f64` labels BV 2025 Eq (7) with its Def 3.1 / §3.5 loci;
+  `mobius_chains` states the relative tolerances its tests assert;
+  `docs/BTV21-AUDIT.md` deferred rows point at #405
+  ([#407](https://github.com/sustia-llc/catgraph/pull/407)).
+- CI `check` runs the sub-second examples, and runs
+  `tests/snf_modularsnf_integer_oracle.rs` plus clippy under
+  `modularsnf-oracle`; its three rank-mod-p proptests run at a second prime
+  ([#305](https://github.com/sustia-llc/catgraph/issues/305),
+  [#276](https://github.com/sustia-llc/catgraph/issues/276)).
+
+### Added — tests
+
+- A deterministic near-singular fixture; per-stratum evaluated-pair counters
+  in `mag_bounds_intro`; `EvalPath` hit counters in the seeded sweeps and
+  `rank_order_identity`; an argsort rank comparison on the seeded grid; a
+  role-grid factorization proptest over product couplings
+  ([#307](https://github.com/sustia-llc/catgraph/issues/307)).
+
 ## [workspace-v0.16.0] - 2026-08-24
 
 ### Changed
@@ -488,7 +520,8 @@ arXiv:2501.06662v2).
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.11.0]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...v0.11.0
 [workspace-v0.10.0]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...v0.10.0

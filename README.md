@@ -13,7 +13,7 @@ applied-CT, magnitude, Wolfram-physics, and categorical-deep-learning extensions
 > of the latter two originated as a port from `deep_causality_haft` 0.4.2, whose
 > MIT notice is therefore retained in `THIRD-PARTY.md` and the defining files.
 > Zero external algebraic dependencies, with `nalgebra`
-> kept optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.16.0)
+> kept optional and numeric-only. Versioning is workspace-wide (tags v0.1.0 → v0.17.0)
 > and work is tracked as GitHub issues. Phase 6 (`catgraph-syntax`, the Arrow
 > presentation frontend, #5): the S1–S5 milestone surface is **complete**
 > (printer, parser + presentation files, interpreter, Frobenius layer, Traced

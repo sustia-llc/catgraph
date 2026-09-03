@@ -8,8 +8,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [workspace-v0.17.0] - 2026-09-03
+
 ### Changed
 
+- The `ignore` doctest fences in `architectures/{folding_rnn, mealy_cell,
+  moore_cell, unfolding_rnn}` and `free_monad/list_endo` compile and run as
+  doctests ([#407](https://github.com/sustia-llc/catgraph/pull/407)).
+- `docs/2402.15332v2-SUMMARY.md` line-audited against the paper: appendix
+  range A–J, the free-monad formula at Proposition B.18, Definition G.1,
+  Remark H.6 and Example H.8
+  ([#406](https://github.com/sustia-llc/catgraph/pull/406)).
+- `Dual` gains `verify_rig_axioms` call sites (`para/dual.rs`)
+  ([#292](https://github.com/sustia-llc/catgraph/issues/292)).
 - Rustdoc reduced to contract statements; this CHANGELOG rewritten to one
   bullet per change. `architectures` module doc no longer describes
   `RecursiveNn::unroll` as fallible (it has returned `S` since v0.15.0).
@@ -294,7 +305,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
   `F64Rig`, `BoolRig`, `EnrichedCategory`, `HomMap`, `LawvereMetricSpace`;
   private `hopf_fibration` stub.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.15.0]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...v0.15.0
 [workspace-v0.11.0]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...v0.11.0
 [workspace-v0.10.0]: https://github.com/sustia-llc/catgraph/compare/v0.9.0...v0.10.0

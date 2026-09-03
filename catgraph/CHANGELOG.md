@@ -6,6 +6,19 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+## [workspace-v0.17.0] - 2026-09-03
+
+### Changed
+
+- Rustdoc in `src/` states what each item does over what input space; this
+  CHANGELOG is one bullet per change
+  ([#404](https://github.com/sustia-llc/catgraph/pull/404)).
+- `SymmetricMonoidalMorphism::permute_side` rustdoc drops its `PetriNet`
+  known-deviation section
+  ([#275](https://github.com/sustia-llc/catgraph/issues/275)).
+- `equivalence` module doc cites F&S §4 Theorem 4.13 alone
+  ([#407](https://github.com/sustia-llc/catgraph/pull/407)).
+
 ### Fixed — tests
 
 - `tests/corel_quotient.rs`'s six `MEASURED` emitters each print a leading
@@ -818,8 +831,9 @@ All notable changes to `catgraph` are documented here. The format follows
   constructor it must equal on both sides for every permutation of `n = 3` and
   `n = 4`, the composite law `β(q).permute_side(p, true) == β(q ; p)` over every
   ordered pair at both arities, and the conjugation law. `NamedCospan` is
-  included and `PetriNet` excluded
-  ([#272](https://github.com/sustia-llc/catgraph/issues/272)).
+  included and `PetriNet` excluded until v0.17.0
+  ([#272](https://github.com/sustia-llc/catgraph/issues/272),
+  [#275](https://github.com/sustia-llc/catgraph/issues/275)).
 
 ## [workspace-v0.14.0] - 2026-08-16
 
@@ -1059,7 +1073,8 @@ downstream koalisi.
   §3.3 io/ff factorization, the global Grothendieck form, LinRel examples) are
   catalogued in [`docs/FS19-AUDIT.md`](docs/FS19-AUDIT.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.15.0]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...v0.15.0
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0

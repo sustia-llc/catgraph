@@ -7,6 +7,18 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+## [workspace-v0.17.0] - 2026-09-03
+
+### Changed
+
+- Rustdoc reduced to contract statements and stale section-name
+  cross-references repointed; this CHANGELOG is one bullet per change
+  ([#365](https://github.com/sustia-llc/catgraph/issues/365)).
+- `docs/ANCHORS.md` lists `Wire`, `WireCount`, `PairSwap`,
+  `FrobeniusEquation` and `MAX_NESTING_DEPTH` on the row of the module
+  defining each; its header names the enumeration command
+  ([#407](https://github.com/sustia-llc/catgraph/pull/407)).
+
 ### Fixed — tests
 
 - `FrobeniusOr::Delta`/`Eta` print/parse pinned at the implicit sort (token
@@ -224,7 +236,8 @@ surface for hypergraph-category morphisms over catgraph-applied's
   coherence law `eval(t.term(), &m, in.flatten()) == Ok(t.run(in).flatten())`
   ([#90](https://github.com/sustia-llc/catgraph/pull/90)).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0
 [workspace-v0.11.0]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...v0.11.0
