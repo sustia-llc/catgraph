@@ -63,8 +63,8 @@ This crate packages applied-CT modules that build on catgraph's strict Fong-Spiv
 - **`MatR<Q>` in-place mutators** (`row_swap`, `scale_row`, `add_scaled_row`,
   and the column duals, plus `entries_mut`/`entry_mut`) are the substrate for
   the Storjohann SNF port in `catgraph-magnitude`.
-- **Thm 5.60 test naming.** The 12 integration tests in `tests/graphical_linalg.rs`
-  are named `cc_completeness_tracking_*` (not `thm_5_60_faithful_*`): they measure
+- **Thm 5.60 test naming.** The `cc_completeness_tracking_*` integration tests in
+  `tests/graphical_linalg.rs` are not named `thm_5_60_faithful_*`: they measure
   the default CC engine's syntactic incompleteness vs the matrix ground truth, not
   Thm 5.60 itself (F&S Thm 5.60 proves that abstractly — via Baez-Erbele 2015 for
   fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs). They stay

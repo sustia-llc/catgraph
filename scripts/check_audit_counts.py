@@ -15,7 +15,7 @@ Checks, for each audit doc passed as an argument:
      and skipped (some docs carry section-level rows with no table).
 
 Additionally (always, regardless of arguments):
-  4. CC collision-pin guard (#55 A′ landing, 2026-07-27) — the four
+  CC collision-pin guard (#55 A′ landing, 2026-07-27) — the four
      `BASELINE_*_D2` consts in `catgraph-applied/tests/graphical_linalg.rs`
      are the single source of truth for the depth-2 collision pins. Every
      prose site that states a *current* pin (docstring table, FS18-AUDIT
@@ -169,7 +169,7 @@ def check_doc(path: Path) -> None:
 
 
 def check_cc_pins() -> None:
-    """Guard 4: prose CC-pin sites vs the BASELINE_*_D2 consts (#55)."""
+    """CC collision-pin guard: prose CC-pin sites vs the BASELINE_*_D2 consts (#55)."""
     truth_file = WORKSPACE / "catgraph-applied/tests/graphical_linalg.rs"
     truth = truth_file.read_text()
     consts: dict[str, int] = {}

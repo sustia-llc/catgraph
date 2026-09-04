@@ -764,7 +764,7 @@ fn compose_names_direct_rejects_mismatched_y() {
 // `depth() >= 1`). That is a type-level check: the audit measured that
 // replacing `unname` with discard-inputs/create-outputs junk, and
 // `compose_names_direct` with one that drops f̂ and ĝ for bare units, both left
-// all 44 tests green. The pins below compare the *content* — the image in
+// every test above this line green. The pins below compare the *content* — the image in
 // `Cospan` up to apex isomorphism, i.e. SCFM-equality of the *images* (`Cospan`
 // is the free SCFM prop, F&S 2019 Prop 3.8); on *terms* this relation used to
 // be incomparable with SCFM-equality on scalars, a gap closed at #350 — see the
