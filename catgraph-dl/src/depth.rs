@@ -112,7 +112,7 @@ mod tests {
     //! Unit coverage is the *measure semantics* on tiny hand-built shapes.
     //! The opt-in guard's at-limit / one-over boundary (exact `{ depth, limit }`
     //! payload included) is pinned integration-side —
-    //! `tests/free_monad_bijections.rs::opt_in_depth_guard_boundary` — using the
+    //! `tests/canonical.rs::opt_in_depth_guard_boundary` — using the
     //! shared `tests/common` spine fixtures, so the boundary and the fixture
     //! builders have exactly one home each.
 

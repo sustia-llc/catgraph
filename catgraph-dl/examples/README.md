@@ -10,15 +10,13 @@ asserting its results, so `cargo run --example <name>` doubles as a smoke check.
 | [`para_walkthrough`](para_walkthrough.rs) | `Para` 1-morphisms: build, sequential `compose`, `Reparameterization` | §3.1 |
 | [`weight_tying`](weight_tying.rs) | the diagonal `Comonoid` and `tie_weights` (shared parameters) | Thm G.10 / §3.1 |
 | [`free_monad_basics`](free_monad_basics.rs) | `Free`/`Cofree` construction, list/tree bijections, an `FAlgebra` catamorphism | App B |
-| [`architecture_unrollers`](architecture_unrollers.rs) | `FoldingRnn`/`RecursiveNn`/`UnfoldingRnn`/`MealyCell`/`MooreCell` as (co)algebra unrollers; GDL invariance | App I & J, Ex 2.6 |
 | [`gradient_descent_para`](gradient_descent_para.rs) † | forward-mode AD over `RModule<Dual<f64>>`; a descent step as a `Para` 2-morphism | §3.1, Ex G.3 |
 
 † requires `--features ad` (off by default).
 
-`free_monad_basics` and `architecture_unrollers` return
-`Result<(), DepthError>`: the tree bijection helpers and `RecursiveNn::unroll`
-pre-flight the `depth` recursion guard
-([#231](https://github.com/sustia-llc/catgraph/issues/231)). Their fixtures are
+`free_monad_basics` returns `Result<(), DepthError>`: the tree bijection
+helpers pre-flight the `depth` recursion guard
+([#231](https://github.com/sustia-llc/catgraph/issues/231)). Its fixtures are
 depth 3, so the `?`s never fire — they are there to show the shape callers
 write.
 
@@ -26,7 +24,6 @@ write.
 cargo run -p catgraph-dl --example para_walkthrough
 cargo run -p catgraph-dl --example weight_tying
 cargo run -p catgraph-dl --example free_monad_basics
-cargo run -p catgraph-dl --example architecture_unrollers
 cargo run -p catgraph-dl --features ad --example gradient_descent_para
 ```
 

@@ -192,7 +192,7 @@ mod tests {
         assert_eq!(fc, (Z2Group(false), "7".to_string()));
 
         // The full identity + composition functor laws for `GroupActionEndo`
-        // are covered generically in `tests/functor_laws.rs` via the shared
+        // are covered generically in `tests/canonical.rs` via the shared
         // `assert_functor_laws` helper; not duplicated here.
     }
 }

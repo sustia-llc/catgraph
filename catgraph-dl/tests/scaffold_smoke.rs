@@ -9,7 +9,7 @@
 //! methods). The endofunctor placeholders below are aliases of the shared
 //! trivial `common::UnitEndo` witness (unit `Type<X> = ()` projection) because
 //! no semantics are exercised here; semantics for `ListEndo` / `TreeEndo` are
-//! tested in `tests/functor_laws.rs` and `tests/free_monad_bijections.rs`.
+//! tested in `tests/canonical.rs`.
 
 #![allow(clippy::type_complexity, clippy::float_cmp)]
 

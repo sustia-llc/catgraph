@@ -20,7 +20,7 @@ PR (this is the #70 discipline). Style: reference `<file>::<test_fn>`.
 
 | Witness | Anchor | Law |
 |---|---|---|
-| `functor_laws::list_endo_functor_laws`, `::tree_endo_functor_laws`, `::group_action_endo_functor_laws` | CDL Def 1.4 | Functor identity + composition |
+| `canonical::functor_laws_hold_on_every_shipped_witness`, `::list_endo_functor_laws_proptest`, `::tree_endo_functor_laws_proptest`, `::free_and_cofree_functor_laws_proptest` | CDL Def 1.4 | Functor identity + composition, plus a hand-built `fmap` target per carrier witness |
 | `natural_pointed_laws::*_natural_transformation*` | CDL Def 1.5 | Naturality square `transform ∘ F(f) == G(f) ∘ transform` |
 | `natural_pointed_laws::*_pointed_sigma_naturality` | CDL Def B.3 | σ-naturality `fmap(pure(x), f) == pure(f(x))` |
 | `natural_pointed_laws::*_iso_*` (via `endofunctor::assert_natural_iso_*`) | CDL Def 1.5 | `NaturalIso` round-trip + naturality |
@@ -30,7 +30,7 @@ PR (this is the #70 discipline). Style: reference `<file>::<test_fn>`.
 
 | Witness | Anchor | Law |
 |---|---|---|
-| `container_laws::{list_endo,tree_endo,group_action_endo}_container_laws` | Abbott–Altenkirch–Ghani 2003 (via CDL) | Shape/arity round-trip + `fmap` coherence |
+| `canonical::container_laws_hold_on_every_container_witness` | Abbott–Altenkirch–Ghani 2003 (via CDL) | Shape/arity round-trip + `fmap` coherence |
 | `common::assert_container_laws` | (helper) | witness-generic container-law driver |
 
 ## Monoidal / actegory / module laws
@@ -76,24 +76,22 @@ it has no paper anchor to link. Registering them would fake traceability.
 
 | Witness | Anchor | Law |
 |---|---|---|
-| `architecture_unrollers::folding_rnn_equivalent_to_free_mnd_unroller` (+ proptest) | CDL Remark 2.13 / Prop B.18 | RNN unroll = unique algebra hom from initial `FreeMnd(1 + A × −)` |
-| `architecture_unrollers::recursive_nn_equivalent_to_free_mnd_unroller` (+ proptest) | CDL Remark 2.13 / Prop B.18 | tree unroll = unique algebra hom (tree direction) |
-| `architecture_unrollers::unfolding_rnn_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.3 | UnfoldingRnn unroll = finite prefix of unique coalgebra hom into `Stream(O)` |
-| `architecture_unrollers::mealy_cell_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.4 | Mealy run = input-driven `Cofree<OptionWitness, O>` prefix walk |
-| `architecture_unrollers::moore_cell_equivalent_to_cofree_cmnd_unroller` (+ proptest) | **CDL Remark H.6** / App I.5 | Moore run = output-then-step `Cofree<OptionWitness, O>` prefix walk |
-| `architecture_unrollers::unfolding_rnn_unroll_iter_agrees_and_is_lazy` (+ proptest) | **CDL Remark H.6** / App I.3 | `UnfoldingRnn::unroll_iter`: `.take(n)` prefix = `unroll_to_vec` = `Cofree` walk; laziness witness |
-| `architecture_unrollers::mealy_cell_run_iter_agrees` (+ proptest) | **CDL Remark H.6** / App I.4 | `MealyCell::run_iter`: full/prefix consumption = `run` = `Cofree` walk |
-| `architecture_unrollers::moore_cell_run_iter_agrees` (+ proptest) | **CDL Remark H.6** / App I.5 | `MooreCell::run_iter`: output-then-step consumption = `run` = `Cofree` walk |
-| `architecture_unrollers::gdl_recovery_via_z2_invariant_folding` | CDL Example 2.6 | GDL recovery: Z2-invariant fold |
-| `free_monad_bijections::*` | CDL Example B.19/B.20, Prop B.18 | owned `Free`/`Cofree` ↔ concrete-carrier bijections |
+| `canonical::folding_rnn_unroll_equals_the_free_walker` (+ proptest) | CDL Remark 2.13 / Prop B.18 | RNN unroll = unique algebra hom from initial `FreeMnd(1 + A × −)` |
+| `canonical::recursive_nn_unroll_equals_the_free_walker` (+ proptest) | CDL Remark 2.13 / Prop B.18 | tree unroll = unique algebra hom (tree direction) |
+| `canonical::unfolding_rnn_unroll_equals_the_cofree_walker` (+ proptest) | **CDL Remark H.6** / App I.3 | UnfoldingRnn unroll = finite prefix of unique coalgebra hom into `Stream(O)` |
+| `canonical::mealy_cell_run_equals_the_cofree_walker` (+ proptest) | **CDL Remark H.6** / App I.4 | Mealy run = input-driven `Cofree<OptionWitness, O>` prefix walk |
+| `canonical::moore_cell_run_equals_the_cofree_walker` (+ proptest) | **CDL Remark H.6** / App I.5 | Moore run = output-then-step `Cofree<OptionWitness, O>` prefix walk |
+| `canonical::lazy_iterators_advance_exactly_once_per_pulled_item` (+ proptests) | **CDL Remark H.6** / App I.3–I.5 | `unroll_iter` / `run_iter`: prefix = eager surface = `Cofree` walk; one cell call per pulled item |
+| `canonical::gdl_recovery_via_z2_invariant_folding` | CDL Example 2.6 | GDL recovery: Z2-invariant fold |
+| `canonical::b19_b20_bijections_round_trip`, `::vec_round_trip_proptest`, `::cofree_cmnd_constructs_and_reads_back` | CDL Example B.19/B.20, Prop B.18 | owned `Free`/`Cofree` ↔ concrete-carrier bijections |
 | `free_monad_fold_laws::*` | CDL Example 2.12/2.14, Prop B.18 | `Free::fold` catamorphism: `Pure` arm, position order, `Assemble` recompose |
 
 > **Not law tests (#231 → #200):**
-> `free_monad_bijections::opt_in_depth_guard_boundary`,
-> `free_monad_bijections::deep_spine_survives_carrier_operations` and
-> `architecture_unrollers::recursive_nn_unroll_survives_a_deep_spine` are the
-> recursion-depth tests, so the `free_monad_bijections::*` glob above reaches
-> two of them. They carry **no paper anchor** and get no row of their own:
+> `canonical::opt_in_depth_guard_boundary`,
+> `canonical::deep_spine_survives_carrier_operations` and the `common::DEEP`
+> caterpillar leg of `canonical::recursive_nn_unroll_equals_the_free_walker`
+> are the recursion-depth checks.
+> They carry **no paper anchor** and get no row of their own:
 > stack discipline is engineering, not a CDL statement. It is also
 > non-interfering — the carrier walks became explicit heap worklists at #200,
 > computing exactly what the recursive ones computed (the deep-spine tests pin
@@ -106,13 +104,12 @@ it has no paper anchor to link. Registering them would fake traceability.
 > window.
 
 > **Not a law test (#312):**
-> `free_monad_bijections::free_mnd_to_vec_panics_on_bare_suspend_none` pins
+> `canonical::free_mnd_to_vec_panics_on_bare_suspend_none` pins
 > the documented panic contract on a non-canonical `Free::suspend(None)`
 > reaching `free_mnd_to_vec`. It carries no paper anchor and gets no row of
 > its own: a panic message and a well-formedness precondition are
-> engineering, not a CDL statement — so it is excluded from the
-> `free_monad_bijections::*` row above the same way the recursion-depth
-> tests already are.
+> engineering, not a CDL statement — so it is excluded from the bijection
+> row above the same way the recursion-depth checks already are.
 
 > **Anchor correction (#64):** the coalgebra-direction dual of Remark 2.13 is
 > **Remark H.6** ("streams are a terminal object in the category of
