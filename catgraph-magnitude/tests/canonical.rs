@@ -44,24 +44,18 @@
 //! debug lane does not exercise it; the CI release-test job runs this file with
 //! `--release` (#11). The `verify_mobius_recursion` arm perturbs one entry of
 //! one fixture, and its assertions touch the right-inverse (`μ · ζ`) branch,
-//! not the left-inverse (`ζ · μ`) branch. `INCREMENTAL_REL_TOL` and
-//! `coalition_value_delta` are crate-root re-exports that no file under
-//! `catgraph-magnitude/tests` or `catgraph-magnitude/examples` names (`rg -n
-//! 'INCREMENTAL_REL_TOL|coalition_value_delta' catgraph-magnitude/tests
-//! catgraph-magnitude/examples -l` → no matches); they are a `const` and a
-//! `fn`, so the lists below, which range over `pub struct|enum|trait|type`
-//! declarations, do not name them.
+//! not the left-inverse (`ζ · μ`) branch.
 //!
 //! # covers:
 //!
-//! `LmCategory` `NodeId` `PosetCategory`
+//! `IntegerLikeRig` `LmCategory` `NodeId` `PosetCategory` `Ring`
 //!
 //! # not-covered:
 //!
 //! `Chain` `ChainIndex` `ChannelCouplings` `Coalition` `CoalitionEvaluator`
 //! `ConditionReport` `Copresheaf` `EvalPath` `EvalScratch` `FactorizationPath`
-//! `IntegerLikeRig` `JoinReport` `MixedClass` `ModulatedCouplings`
-//! `ProbCospan` `Ring` `RoleFibrationProof` `RoleGrid` `RoleId`
+//! `JoinReport` `MixedClass` `ModulatedCouplings`
+//! `ProbCospan` `RoleFibrationProof` `RoleGrid` `RoleId`
 //! `RoleModulation` `RoleShares` `TropCospan` `WeightedCospan`
 //! `ZeroDiversityProof` `ZetaFactorization`
 
@@ -90,7 +84,7 @@ use proptest::prelude::*;
 // ---------------------------------------------------------------------------
 
 /// `Mag(2M)` on [`build_bv_lm`], computed by hand from BV 2025 Eq (10):
-/// `4 − (0.36 + 0.16 + 0.36) − 1`.
+/// `(2 − 1)·[H_2(p_⊥) + H_2(p_⊥a)] + #T(⊥) = 1·(0.48 + 0) + 2`.
 const HAND_MAG_AT_T_2: f64 = 2.48;
 
 /// Agreement demanded of `magnitude` against the two Prop 3.10 references.
@@ -381,6 +375,11 @@ const F64_FLOOR: f64 = 1e-9;
 
 /// Upper bound on the omitted-`k > max_degree` chain contribution:
 /// `n · r^(max_degree+1) / (1 − r)` with `r = (n − 1) · exp(−d_min_scaled)`.
+///
+/// The chain count at degree `k` is bounded by `n · (n − 1)^k`; each chain has
+/// length `≥ k · d_min_scaled`; summing over `ℓ` gives
+/// `n · ((n − 1) · e^(−d_min_scaled))^k`; the geometric tail from
+/// `k = max_degree + 1` collapses to `n · r^(max_degree+1) / (1 − r)`.
 fn analytical_residual_bound(n: usize, d_min_scaled: f64, max_degree: usize) -> f64 {
     assert!(n >= 2, "trivial space; acceptance test does not apply");
     let n_f = n as f64;

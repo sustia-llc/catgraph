@@ -9,7 +9,7 @@
 //! ([`ZetaFactorization::mobius_function`]). Comparison is by **tolerance**,
 //! never bitwise — the factorization reassociates the arithmetic and moves the
 //! last ULPs. The `1e-9` absolute per-entry tolerance mirrors the existing
-//! `tests/mobius_chains.rs` cross-check.
+//! `tests/canonical.rs` cross-check.
 
 use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 use catgraph_applied::rig::{F64Rig, Tropical};
@@ -21,7 +21,7 @@ use catgraph_testutil::Lcg;
 use nalgebra::DMatrix;
 use nalgebra::linalg::LBLT;
 
-/// Per-entry absolute tolerance, matching `tests/mobius_chains.rs`.
+/// Per-entry absolute tolerance, matching `tests/canonical.rs`.
 const TOL: f64 = 1e-9;
 
 // ---------------------------------------------------------------------------
