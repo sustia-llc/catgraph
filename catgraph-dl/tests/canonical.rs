@@ -15,7 +15,8 @@
 //! `UnfoldingRnn`, `MealyCell` and `MooreCell` unrolls to what a `Free` /
 //! `Cofree` walker written in this file computes from the same cell; and
 //! `UnfoldingRnn::unroll_iter`, `MealyCell::run_iter` and `MooreCell::run_iter`
-//! call their cells exactly once per pulled item.
+//! call their cells exactly once per pulled item, the two `run_iter`s pulling a
+//! non-`Vec` source exactly once per item too.
 //!
 //! # Input space
 //!
@@ -32,7 +33,9 @@
 //! `Vec<i64>` up to 16 elements, `BinaryTree<u8>` at depth ≤ 4 and ≤ 16 nodes,
 //! and seed/depth or seed/input pairs with depth and length up to 16. The
 //! call counters run at `n = 0`, `1`, `5` on `unroll_iter`'s unbounded stream
-//! and at `k = 0`, `1`, `3` against a five-item input on the two `run_iter`s.
+//! and at `k = 0`, `1`, `3` against a five-item input on the two `run_iter`s;
+//! the non-`Vec` source row runs at the same `k` against a five-item counting
+//! iterator.
 //! The depth rows are a left caterpillar at `MAX_TREE_DEPTH`, one cell deeper,
 //! and the `common::DEEP` (32 768) spine.
 //!
@@ -41,8 +44,7 @@
 //! The two functor laws and the four container laws are equations between two
 //! expressions built from the witness's own operations — the reference is the
 //! law. Beside them each carrier `fmap` row compares against a hand-built
-//! target value written cell by cell — a target neither law leg supplies,
-//! since both are satisfied by a `fmap` that ignores its morphism. The
+//! target value written cell by cell — a target neither law leg supplies. The
 //! architecture rows compare
 //! against `unroll_list_via_free_mnd` / `unroll_tree_via_free_mnd` (the
 //! algebra direction, walking the `Free` tower — the tree one deliberately
@@ -55,9 +57,10 @@
 //!
 //! `StrayWitness` (`free_monad/mod.rs:1003`) implements `HKT`, `Functor` and
 //! `Container` inside a `#[cfg(test)]` module, so an integration test cannot
-//! name it; its laws are not reachable from here. The seven root re-exports
+//! name it; its laws are not reachable from here. The ten root re-exports
 //! `EnrichedCategory`, `HomMap`, `LawvereMetricSpace`, `BoolRig`, `F64Rig`,
-//! `Rig` and `UnitInterval` (`src/lib.rs:80-82`) are `catgraph-applied` types,
+//! `One`, `Rig`, `Tropical`, `UnitInterval` and `Zero`
+//! (`src/lib.rs:80-82`) are `catgraph-applied` types,
 //! covered by `catgraph-applied/tests/canonical.rs`, and are not declared under
 //! `catgraph-dl/src`. The `Para` / actegory / module surface and the
 //! F-(co)algebra and monad-algebra newtypes are exercised by the other files
@@ -202,10 +205,9 @@ fn cofree_spine(depth: usize, head: i32) -> Cofree<TreeEndo<u8>, i32> {
 /// The identity and composition laws on all six shipped witnesses, and a
 /// hand-built `fmap` target value for each carrier witness beside them.
 ///
-/// The two laws alone are satisfied by a `fmap` that ignores its morphism
-/// entirely (both legs then return the input), so each carrier row also asserts
-/// where a concrete `fmap` sends a concrete value: every `Pure` payload (resp.
-/// every `head`) mapped exactly once, every operation-functor label untouched.
+/// Each carrier row also asserts where a concrete `fmap` sends a concrete
+/// value: every `Pure` payload (resp. every `head`) mapped exactly once, every
+/// operation-functor label untouched.
 #[test]
 fn functor_laws_hold_on_every_shipped_witness() {
     // `1 + A × −`, both summands.
@@ -837,7 +839,7 @@ fn arb_binary_tree() -> impl Strategy<Value = BinaryTree<u8>> {
 /// **`FoldingRnn::unroll` is the algebra hom** (CDL Remark 2.13 / Prop B.18,
 /// Example 2.12): it equals the `Free<ListEndo<i64>, ()>` tower walk on five
 /// sampled `Vec<i64>`s including the empty one, and carries the hand-computed
-/// sum-with-bias and length-counter values.
+/// sum-with-bias, fold-direction and length-counter values.
 #[test]
 fn folding_rnn_unroll_equals_the_free_walker() {
     // Sum-with-bias: cell_0(p) = p, cell_1((p, a, s)) = a + s + p, p = 10.
@@ -859,6 +861,17 @@ fn folding_rnn_unroll_equals_the_free_walker() {
         FoldingRnn::unroll(&biased, vec![5_i64]),
         25,
         "singleton input: cell_1((10, 5, cell_0(10)))"
+    );
+
+    // Fold direction: cell_1((p, a, s)) = s·2 + a, neither commutative nor
+    // associative in (a, s).
+    let doubling: FoldingRnn<i64, i64, Cell0, Cell1, i64> =
+        FoldingRnn::new(0_i64, |p| p, |(_p, a, s)| s * 2 + a);
+    assert_eq!(
+        FoldingRnn::unroll(&doubling, vec![1_i64, 2, 3]),
+        17,
+        "right fold on [1, 2, 3] from seed 0: ((0·2 + 3)·2 + 2)·2 + 1 = 17; \
+         a left fold gives 11"
     );
 
     // Length counter: cell_0(_) = 0, cell_1((_, _, s)) = s + 1.
@@ -895,8 +908,10 @@ fn folding_rnn_unroll_equals_the_free_walker() {
 
 /// **`RecursiveNn::unroll` is the algebra hom, tree direction** (CDL Remark
 /// 2.13 / Prop B.18, Example J.3): it equals the recursive
-/// `Free<TreeEndo<u8>, Infallible>` walk on four hand-built trees, carries the
-/// hand-computed node counts, and walks the `common::DEEP` caterpillar to its
+/// `Free<TreeEndo<u8>, Infallible>` walk on four hand-built trees under two
+/// cells, carries the hand-computed node counts and the asymmetric-cell value
+/// that reads the leftmost-leaf payload, and walks the `common::DEEP`
+/// caterpillar to its
 /// closed-form value (issue #200 — that walk was the crate's only recursive
 /// unroller).
 #[test]
@@ -930,12 +945,30 @@ fn recursive_nn_unroll_equals_the_free_walker() {
             "node count of {tree:?}"
         );
     }
-    // And against the recursive oracle, on the leaf and all three nodes.
+    // Asymmetric cell: cell_1((p, a, l, r)) = 2·l + r + a weights the two
+    // subtrees differently and reads the leftmost-leaf payload.
+    let asymmetric: RecursiveNn<i64, i64, TreeCell0, TreeCell1, u8> =
+        RecursiveNn::new(1_i64, |p| p, |(_p, a, l, r)| 2 * l + r + i64::from(a));
+    assert_eq!(
+        RecursiveNn::unroll(&asymmetric, trees[1].clone()),
+        10,
+        "node(node(leaf 1, leaf 2), leaf 3): inner = 2·1 + 1 + 1 = 4, \
+         root = 2·4 + 1 + 1 = 10; l/r swapped gives 7, a rightmost-leaf \
+         payload gives 11"
+    );
+
+    // And against the recursive oracle, on the leaf and all three nodes, under
+    // both cells.
     for tree in core::iter::once(BinaryTree::leaf(7_u8)).chain(trees.iter().cloned()) {
         assert_eq!(
             RecursiveNn::unroll(&cell, tree.clone()),
             unroll_tree_via_free_mnd(&cell, tree_to_free_mnd(tree.clone())),
             "RecursiveNn::unroll(cell, {tree:?}) must equal the recursive oracle"
+        );
+        assert_eq!(
+            RecursiveNn::unroll(&asymmetric, tree.clone()),
+            unroll_tree_via_free_mnd(&asymmetric, tree_to_free_mnd(tree.clone())),
+            "RecursiveNn::unroll(asymmetric, {tree:?}) must equal the recursive oracle"
         );
     }
 
@@ -1159,10 +1192,14 @@ fn lazy_iterators_advance_exactly_once_per_pulled_item() {
     );
 
     for n in [0_usize, 1, 5] {
+        let outputs = core::cell::Cell::new(0_usize);
         let advances = core::cell::Cell::new(0_usize);
         let counting = UnfoldingRnn::new(
             0_i64,
-            |(_p, s): (i64, i64)| s,
+            |(_p, s): (i64, i64)| {
+                outputs.set(outputs.get() + 1);
+                s
+            },
             |(_p, s): (i64, i64)| {
                 advances.set(advances.get() + 1);
                 s + 1
@@ -1171,17 +1208,21 @@ fn lazy_iterators_advance_exactly_once_per_pulled_item() {
         let _ = UnfoldingRnn::unroll_iter(&counting, 0)
             .take(n)
             .collect::<Vec<_>>();
-        let iter_advances = advances.get();
+        let via_iter = (outputs.get(), advances.get());
+        outputs.set(0);
         advances.set(0);
         let _ = UnfoldingRnn::unroll_to_vec(&counting, 0, n);
+        let via_vec = (outputs.get(), advances.get());
         assert_eq!(
-            iter_advances,
-            advances.get(),
-            "unroll_iter.take({n}) must call cell_n exactly as often as unroll_to_vec(_, {n})"
+            via_iter, via_vec,
+            "unroll_iter.take({n}) must call cell_o and cell_n exactly as often as \
+             unroll_to_vec(_, {n}) (observed {via_iter:?}, expected {via_vec:?})"
         );
         assert_eq!(
-            iter_advances, n,
-            "exactly one cell_n advance per pulled element"
+            via_iter,
+            (n, n),
+            "UnfoldingRnn::unroll_iter must call cell_o and cell_n exactly once each per \
+             pulled item (observed {via_iter:?}, expected ({n}, {n}))"
         );
     }
 
@@ -1310,6 +1351,89 @@ fn lazy_iterators_advance_exactly_once_per_pulled_item() {
 /// Moore cell-map types, spelled once for the arm above.
 type CellO2 = fn(((), i64)) -> i64;
 type CellN2 = fn(((), i64, ())) -> i64;
+
+/// An `Iterator` that is not a `Vec` iterator: it yields `remaining` clones of
+/// `item` and counts every `next()` call, the exhausting one included, in a
+/// borrowed `Cell`.
+struct PullCounter<'c, I> {
+    pulls: &'c core::cell::Cell<usize>,
+    remaining: usize,
+    item: I,
+}
+
+impl<I: Clone> Iterator for PullCounter<'_, I> {
+    type Item = I;
+
+    fn next(&mut self) -> Option<I> {
+        self.pulls.set(self.pulls.get() + 1);
+        if self.remaining == 0 {
+            return None;
+        }
+        self.remaining -= 1;
+        Some(self.item.clone())
+    }
+}
+
+/// **The two `run_iter`s pull a non-`Vec` source exactly once per item**
+/// (issue #314, the `It: IntoIterator` half).
+///
+/// `MealyCell::run_iter` and `MooreCell::run_iter` are fed a `PullCounter`
+/// instead of a `Vec`, `.take(k)` for `k` in `{0, 1, 3}` against a five-item
+/// source, and the assertion is that the source was pulled exactly `k` times —
+/// the count an implementation that drains its input at construction does not
+/// produce for a `k` below the source length. Neither `run_iter` peeks: the
+/// measured count is `k`, not `k + 1`.
+#[test]
+fn run_iter_pulls_a_non_vec_source_exactly_once_per_item() {
+    let mealy: MealyCell<(), i64, _, i64, i64> =
+        MealyCell::new((), |((), s): ((), i64)| move |i: i64| (s + i, s + 1));
+    let moore: MooreCell<(), i64, CellO2, CellN2, (), i64> =
+        MooreCell::new((), |((), s)| s * 2, |((), s, ())| s + 1);
+
+    for k in [0_usize, 1, 3] {
+        let mealy_pulls = core::cell::Cell::new(0_usize);
+        let pulled: Vec<i64> = MealyCell::run_iter(
+            &mealy,
+            0_i64,
+            PullCounter {
+                pulls: &mealy_pulls,
+                remaining: 5,
+                item: 1_i64,
+            },
+        )
+        .take(k)
+        .collect();
+        assert_eq!(pulled.len(), k, "run_iter yielded exactly the pulled items");
+        assert_eq!(
+            mealy_pulls.get(),
+            k,
+            "MealyCell::run_iter must pull a non-`Vec` source exactly once per pulled \
+             item (observed {}, expected {k} over a 5-item source)",
+            mealy_pulls.get()
+        );
+
+        let moore_pulls = core::cell::Cell::new(0_usize);
+        let pulled: Vec<i64> = MooreCell::run_iter(
+            &moore,
+            0_i64,
+            PullCounter {
+                pulls: &moore_pulls,
+                remaining: 5,
+                item: (),
+            },
+        )
+        .take(k)
+        .collect();
+        assert_eq!(pulled.len(), k, "run_iter yielded exactly the pulled items");
+        assert_eq!(
+            moore_pulls.get(),
+            k,
+            "MooreCell::run_iter must pull a non-`Vec` source exactly once per pulled \
+             item (observed {}, expected {k} over a 5-item source)",
+            moore_pulls.get()
+        );
+    }
+}
 
 /// **GDL recovery at the architecture level** (CDL Example 2.6): a
 /// `Z2`-invariant aggregator `(p, a, s) ↦ s + |a|` makes `FoldingRnn::unroll`
