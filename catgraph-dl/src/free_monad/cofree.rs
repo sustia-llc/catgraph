@@ -14,7 +14,7 @@ use core::fmt;
 use core::marker::PhantomData;
 
 use crate::container::Container;
-use crate::endofunctor::{DebugFunctor, EndoWitness, EqFunctor, HKT};
+use crate::endofunctor::{DebugFunctor, EndoWitness, EqFunctor, Functor, HKT};
 
 /// The message on every `expect` guarding the transient empty cell — the dual
 /// of `free.rs`'s. [`Cofree`]'s cell is `None` only between
@@ -298,4 +298,68 @@ where
     F: EndoWitness,
 {
     type Type<T> = Cofree<F, T>;
+}
+
+/// One step of the explicit-worklist [`Functor`] map over a [`Cofree`] spine.
+/// A local `enum` inside the method body cannot name the method's generics, so
+/// it lives here.
+enum MapStep<F, A, B>
+where
+    F: Container,
+{
+    /// Take this node apart.
+    Descend(Cofree<F, A>),
+    /// Its `arity` children are mapped: pop them and assemble this node.
+    Assemble(B, F::Shape, usize),
+}
+
+/// The morphism map of the cofree comonad: `fmap` applies `f` to the `head` of
+/// every node and leaves each node's `F`-structure shape as it stands, in
+/// position order.
+///
+/// Iterative over a heap worklist, like [`Cofree::unfold`], so a spine of any
+/// depth maps without touching the stack. `F: `[`Container`] is what supplies
+/// the shape/contents split the worklist reassembles from — the same bound
+/// [`Cofree::unfold`], `==` and `{:?}` carry.
+impl<F> Functor<CofreeWitness<F>> for CofreeWitness<F>
+where
+    F: Container,
+{
+    fn fmap<A, B, Func>(m_a: Cofree<F, A>, mut f: Func) -> Cofree<F, B>
+    where
+        Func: FnMut(A) -> B,
+    {
+        let mut work: Vec<MapStep<F, A, B>> = vec![MapStep::Descend(m_a)];
+        let mut done: Vec<Cofree<F, B>> = Vec::new();
+        while let Some(step) = work.pop() {
+            match step {
+                MapStep::Descend(node) => {
+                    let (head, tail) = node.into_parts();
+                    let (shape, children) = F::decompose(tail);
+                    work.push(MapStep::Assemble(f(head), shape, children.len()));
+                    // Pushed in reverse so the first position is popped first
+                    // and results land in position order.
+                    for child in children.into_iter().rev() {
+                        work.push(MapStep::Descend(*child));
+                    }
+                }
+                MapStep::Assemble(head, shape, arity) => {
+                    let children: Vec<Box<Cofree<F, B>>> = done
+                        .split_off(done.len() - arity)
+                        .into_iter()
+                        .map(Box::new)
+                        .collect();
+                    // `arity` came from the same `decompose` that produced
+                    // `shape`, so container law 2 makes `recompose` total here.
+                    let tail = F::recompose(shape, children).expect(
+                        "invariant: recompose is given the exact arity decompose reported \
+                         for this shape (Container law 2)",
+                    );
+                    done.push(Cofree::new(head, tail));
+                }
+            }
+        }
+        done.pop()
+            .expect("invariant: the walk pushes exactly one node for the root")
+    }
 }

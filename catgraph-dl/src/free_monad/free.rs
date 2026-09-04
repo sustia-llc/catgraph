@@ -14,7 +14,7 @@ use core::fmt;
 use core::marker::PhantomData;
 
 use crate::container::Container;
-use crate::endofunctor::{DebugFunctor, EndoWitness, EqFunctor, HKT, Pure};
+use crate::endofunctor::{DebugFunctor, EndoWitness, EqFunctor, Functor, HKT, Pure};
 
 /// The message on every `expect` guarding the transient empty cell.
 ///
@@ -337,6 +337,59 @@ where
     #[inline]
     fn pure<T>(value: T) -> Free<F, T> {
         Free::pure(value)
+    }
+}
+
+/// The morphism map of the free monad: `fmap` applies `f` to the payload of
+/// every [`FreeView::Pure`] leaf and leaves every [`FreeView::Suspend`] node's
+/// shape as it stands, in position order.
+///
+/// Iterative over a heap worklist, like [`Free::fold`], so a spine of any depth
+/// maps without touching the stack. `F: `[`Container`] is what supplies the
+/// shape/contents split the worklist reassembles from — the same bound
+/// [`Free::fold`], `==` and `{:?}` carry.
+impl<F> Functor<FreeWitness<F>> for FreeWitness<F>
+where
+    F: Container,
+{
+    fn fmap<A, B, Func>(m_a: Free<F, A>, mut f: Func) -> Free<F, B>
+    where
+        Func: FnMut(A) -> B,
+    {
+        let mut work: Vec<FoldStep<F, A>> = vec![FoldStep::Descend(m_a)];
+        let mut done: Vec<Free<F, B>> = Vec::new();
+        while let Some(step) = work.pop() {
+            match step {
+                FoldStep::Descend(node) => match node.into_view() {
+                    FreeView::Pure(a) => done.push(Free::pure(f(a))),
+                    FreeView::Suspend(fa) => {
+                        let (shape, children) = F::decompose(fa);
+                        work.push(FoldStep::Assemble(shape, children.len()));
+                        // Pushed in reverse so the first position is popped
+                        // first and results land in position order.
+                        for child in children.into_iter().rev() {
+                            work.push(FoldStep::Descend(*child));
+                        }
+                    }
+                },
+                FoldStep::Assemble(shape, arity) => {
+                    let contents: Vec<Box<Free<F, B>>> = done
+                        .split_off(done.len() - arity)
+                        .into_iter()
+                        .map(Box::new)
+                        .collect();
+                    // `arity` came from the same `decompose` that produced
+                    // `shape`, so container law 2 makes `recompose` total here.
+                    let fx = F::recompose(shape, contents).expect(
+                        "invariant: recompose is given the exact arity decompose reported \
+                         for this shape (Container law 2)",
+                    );
+                    done.push(Free::suspend(fx));
+                }
+            }
+        }
+        done.pop()
+            .expect("invariant: the walk pushes exactly one result for the root")
     }
 }
 

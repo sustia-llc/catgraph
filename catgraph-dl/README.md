@@ -322,13 +322,13 @@ GitHub issue where one exists, otherwise plainly deferred.
   `unroll_to_vec` stays the bounded eager surface. A
   `tokio_stream::Stream` adapter remains unbuilt by design (no async deps).
 - ~~**`examples/` closure**~~ — **shipped**
-  ([#34](https://github.com/sustia-llc/catgraph/issues/34), closed): four
+  ([#34](https://github.com/sustia-llc/catgraph/issues/34), closed):
   self-checking examples in `examples/`, run by CI.
 - ~~**Property-based exhaustive testing** of `verify_commutes` and
   `FreeMnd`-equivalence~~ — **shipped** ([#40](https://github.com/sustia-llc/catgraph/issues/40)).
   `tests/algebra_homomorphisms.rs` proptests the abs-value equivariance square
   (positive) and the projection failure (negative);
-  `tests/architecture_unrollers.rs` proptests the list- and tree-direction
+  `tests/canonical.rs` proptests the list- and tree-direction
   `FreeMnd`-equivalence over generated inputs (the coalgebra-direction
   equivalence tests remain open —
   [#64](https://github.com/sustia-llc/catgraph/issues/64)). The individual

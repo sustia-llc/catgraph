@@ -97,8 +97,7 @@ const ASSEMBLE: &str = "invariant: a Combine step is pushed only after its two s
 /// shape needs an `A` value at internal-node combination, but the
 /// [`TreeView::Node`] variant carries no internal-node payload. The
 /// convention here is to re-use the leftmost leaf's payload as the
-/// branching `a`. Tests pass payload-agnostic cells so this choice does
-/// not bias the acceptance harness.
+/// branching `a`.
 fn leftmost_leaf<A: Clone>(tree: &BinaryTree<A>) -> A {
     let mut current = tree;
     loop {

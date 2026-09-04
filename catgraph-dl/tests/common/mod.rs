@@ -3,10 +3,10 @@
 //! Reusables:
 //!
 //! - [`assert_functor_laws`] — a witness-generic identity + composition law
-//!   check, fed per-witness sample values (`tests/functor_laws.rs`).
+//!   check, fed a per-witness sample builder (`tests/canonical.rs`).
 //! - [`UnitEndo`] — the single trivial endofunctor with `Type<X> = ()`, used as
 //!   a type-level placeholder wherever a test needs "an endofunctor witness"
-//!   with no semantics (`tests/scaffold_smoke.rs`, `tests/free_monad_bijections.rs`).
+//!   with no semantics (`tests/scaffold_smoke.rs`, `tests/canonical.rs`).
 //!   Per-file tag types alias it back to descriptive names.
 //! - The law helpers for the #41/#40 surfaces
 //!   ([`assert_natural_transformation_naturality`], [`assert_pointed_naturality`],
@@ -17,8 +17,7 @@
 //!   the [`Z2Endo`] / [`Z2Action`] / [`VecMap`] aliases, and the NaN-free
 //!   [`finite_f64`] proptest strategy.
 //! - The deep-carrier fixtures for the #231 recursion guard,
-//!   [`spine_tree`] / [`spine_free_mnd`], shared by
-//!   `tests/free_monad_bijections.rs` and `tests/architecture_unrollers.rs`.
+//!   [`spine_tree`] / [`spine_free_mnd`], used by `tests/canonical.rs`.
 //!
 //! `#![allow(dead_code)]`: each integration-test binary `mod common;`-includes
 //! this whole module but uses only the parts it needs, so the unused items are
@@ -145,29 +144,34 @@ pub fn finite_f64() -> impl Strategy<Value = f64> {
 }
 
 /// Assert the functor **identity** and **composition** laws for the witness
-/// `F` on a single sample `fx : F::Type<i32>`.
+/// `F` on the sample `sample()` builds.
 ///
 /// - Identity: `fmap(fx, id) == fx`.
 /// - Composition: `fmap(fmap(fx, f), g) == fmap(fx, g ∘ f)`.
+///
+/// The sample arrives as a **builder** rather than a value: each law consumes
+/// its operands, and the `Free` / `Cofree` carriers ship no `Clone`, so every
+/// leg calls `sample()` for a fresh equal value. `sample` must be
+/// deterministic.
 ///
 /// The morphisms are pure `i32 -> i32` maps using wrapping arithmetic, so both
 /// legs stay equal across the full `i32` range without overflow panics (see the
 /// pure-morphism caveat in `catgraph_dl::endofunctor`). Cites that module's
 /// `Functor` law docs and Gavranović et al., ICML 2024.
-pub fn assert_functor_laws<F>(fx: F::Type<i32>)
+pub fn assert_functor_laws<F>(sample: impl Fn() -> F::Type<i32>)
 where
     F: EndoWitness,
-    F::Type<i32>: Clone + PartialEq + core::fmt::Debug,
+    F::Type<i32>: PartialEq + core::fmt::Debug,
 {
     // Identity law.
-    let id = F::fmap(fx.clone(), |x| x);
-    assert_eq!(id, fx, "functor identity law");
+    let id = F::fmap(sample(), |x| x);
+    assert_eq!(id, sample(), "functor identity law");
 
     // Composition law: fmap(fmap(fx, f), g) == fmap(fx, g ∘ f).
     let f = |v: i32| v.wrapping_add(3);
     let g = |v: i32| v.wrapping_mul(2);
-    let seq = F::fmap(F::fmap(fx.clone(), f), g);
-    let fused = F::fmap(fx, |v| g(f(v)));
+    let seq = F::fmap(F::fmap(sample(), f), g);
+    let fused = F::fmap(sample(), |v| g(f(v)));
     assert_eq!(seq, fused, "functor composition law");
 }
 
@@ -558,7 +562,7 @@ impl<Tag> Functor<Self> for UnitEndo<Tag> {
 
 // Capability impls so `Cofree<UnitEndo<Tag>, Z>` (and `Free`) get opt-in
 // `Eq`/`Debug`: the functor hole is the unit `()`, which is all shape and no
-// content. Used by `free_monad_bijections::cofree_cmnd_smoke`.
+// content. Used by `canonical::cofree_cmnd_constructs_and_reads_back`.
 impl<Tag> EqFunctor for UnitEndo<Tag> {
     fn eq_shape<T>(_a: &(), _b: &()) -> bool {
         // One shape only.

@@ -41,7 +41,7 @@ pub trait HKT {
 /// ```
 ///
 /// These are documented obligations, not machine-checked at compile time; the
-/// shipped witnesses discharge them in `tests/functor_laws.rs`. The laws are
+/// shipped witnesses discharge them in `tests/canonical.rs`. The laws are
 /// stated for **pure** morphisms — see the [module docs](crate::endofunctor)
 /// for why a stateful `FnMut` can make the composition law appear to fail
 /// without the witness being non-functorial.

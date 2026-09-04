@@ -166,7 +166,7 @@ jobs:
       # each so a wrong-value regression fails CI, per the issue's acceptance
       # criterion ("each runs green under cargo run --example").
       - run: |
-          for ex in para_walkthrough weight_tying free_monad_basics architecture_unrollers; do
+          for ex in para_walkthrough weight_tying free_monad_basics; do
             cargo run -q -p catgraph-dl --example "$ex"
           done
       # #276: the magnitude examples are self-checking in the same way.
