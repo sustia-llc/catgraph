@@ -1383,6 +1383,10 @@ impl<I: Clone> Iterator for PullCounter<'_, I> {
 /// the count an implementation that drains its input at construction does not
 /// produce for a `k` below the source length. Neither `run_iter` peeks: the
 /// measured count is `k`, not `k + 1`.
+///
+/// Drained to exhaustion, the same five-item source is pulled six times against
+/// five `cell` calls (five `cell_o` and five `cell_n` for Moore); over an empty
+/// `Vec` source, two consecutive `next()` calls are both `None`.
 #[test]
 fn run_iter_pulls_a_non_vec_source_exactly_once_per_item() {
     let mealy: MealyCell<(), i64, _, i64, i64> =
@@ -1433,6 +1437,104 @@ fn run_iter_pulls_a_non_vec_source_exactly_once_per_item() {
             moore_pulls.get()
         );
     }
+
+    {
+        let mealy_calls = core::cell::Cell::new(0_usize);
+        let mealy_pulls = core::cell::Cell::new(0_usize);
+        let counting: MealyCell<(), i64, _, i64, i64> = MealyCell::new((), |((), s): ((), i64)| {
+            mealy_calls.set(mealy_calls.get() + 1);
+            move |i: i64| (s + i, s + 1)
+        });
+        let drained: Vec<i64> = MealyCell::run_iter(
+            &counting,
+            0_i64,
+            PullCounter {
+                pulls: &mealy_pulls,
+                remaining: 5,
+                item: 1_i64,
+            },
+        )
+        .collect();
+        assert_eq!(
+            drained.len(),
+            5,
+            "run_iter yielded every item of the source"
+        );
+        assert_eq!(
+            (mealy_calls.get(), mealy_pulls.get()),
+            (5, 6),
+            "MealyCell::run_iter drained to exhaustion must call its cell once per item \
+             and pull once past the last item (observed ({}, {}), expected (5, 6))",
+            mealy_calls.get(),
+            mealy_pulls.get()
+        );
+    }
+
+    {
+        let moore_outputs = core::cell::Cell::new(0_usize);
+        let moore_steps = core::cell::Cell::new(0_usize);
+        let moore_pulls = core::cell::Cell::new(0_usize);
+        let counting: MooreCell<(), i64, _, _, (), i64> = MooreCell::new(
+            (),
+            |((), s): ((), i64)| {
+                moore_outputs.set(moore_outputs.get() + 1);
+                s * 2
+            },
+            |((), s, ()): ((), i64, ())| {
+                moore_steps.set(moore_steps.get() + 1);
+                s + 1
+            },
+        );
+        let drained: Vec<i64> = MooreCell::run_iter(
+            &counting,
+            0_i64,
+            PullCounter {
+                pulls: &moore_pulls,
+                remaining: 5,
+                item: (),
+            },
+        )
+        .collect();
+        assert_eq!(
+            drained.len(),
+            5,
+            "run_iter yielded every item of the source"
+        );
+        assert_eq!(
+            (moore_outputs.get(), moore_steps.get(), moore_pulls.get()),
+            (5, 5, 6),
+            "MooreCell::run_iter drained to exhaustion must call cell_o and cell_n once \
+             each per item and pull once past the last item (observed ({}, {}, {}), \
+             expected (5, 5, 6))",
+            moore_outputs.get(),
+            moore_steps.get(),
+            moore_pulls.get()
+        );
+    }
+
+    let mut mealy_empty = MealyCell::run_iter(&mealy, 0_i64, Vec::<i64>::new());
+    assert_eq!(
+        mealy_empty.next(),
+        None,
+        "MealyCell::run_iter over an empty source yields `None`"
+    );
+    assert_eq!(
+        mealy_empty.next(),
+        None,
+        "MealyCell::run_iter stays `None` on a second poll after its source is exhausted"
+    );
+
+    let mut moore_empty = MooreCell::run_iter(&moore, 0_i64, Vec::<()>::new());
+    assert_eq!(
+        moore_empty.next(),
+        None,
+        "MooreCell::run_iter over an empty source yields `None`"
+    );
+    assert_eq!(
+        moore_empty.next(),
+        None,
+        "MooreCell::run_iter stays `None` on a second poll after its source is exhausted"
+    );
 }
 
 /// **GDL recovery at the architecture level** (CDL Example 2.6): a
