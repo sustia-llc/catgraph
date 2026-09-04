@@ -45,9 +45,7 @@
 //! debug lane does not exercise it; the CI release-test job runs this file with
 //! `--release` (#11). The `verify_mobius_recursion` arm perturbs one entry of
 //! one fixture, and its assertions touch the right-inverse (`μ · ζ`) branch,
-//! not the left-inverse (`ζ · μ`) branch. The `magnitude_homology_rank` arm
-//! evaluates one `(k, ℓ)` cell, `(2, 2)`, of the three-point geodesic line at
-//! `t = 1`.
+//! not the left-inverse (`ζ · μ`) branch.
 //!
 //! # covers:
 //!
