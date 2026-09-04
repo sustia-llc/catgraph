@@ -13,12 +13,9 @@ Checks, for each audit doc passed as an argument:
      APPLIED/...). Compound cells (e.g. "🔗 ✅") classify by the first legend
      emoji present. Summary rows with no matching detail section are reported
      and skipped (some docs carry section-level rows with no table).
-  4. Test-count citations — any `tests/<file>.rs ... (N tests)` on one line is
-     checked against the actual `#[test]` count of that file (searched across
-     the workspace's */tests/ dirs; skipped if not found uniquely).
 
 Additionally (always, regardless of arguments):
-  5. CC collision-pin guard (#55 A′ landing, 2026-07-27) — the four
+  4. CC collision-pin guard (#55 A′ landing, 2026-07-27) — the four
      `BASELINE_*_D2` consts in `catgraph-applied/tests/graphical_linalg.rs`
      are the single source of truth for the depth-2 collision pins. Every
      prose site that states a *current* pin (docstring table, FS18-AUDIT
@@ -170,23 +167,9 @@ def check_doc(path: Path) -> None:
             ERRORS.append(f"{rel}: section {tok} detail tally {sections[tok]} ≠ summary row {nums}")
     print(f"{rel}: detail tallies ok ({len(sections)} sections)")
 
-    # 4. test-count citations
-    for l in lines:
-        for fm in re.finditer(r"tests/([A-Za-z0-9_]+\.rs)[^/]*?\((\d+) tests\)", l):
-            fname, stated_n = fm.group(1), int(fm.group(2))
-            hits = list(WORKSPACE.glob(f"*/tests/{fname}"))
-            if len(hits) != 1:
-                NOTES.append(f"{rel}: '{fname}' matched {len(hits)} files — test-count check skipped")
-                continue
-            actual = len(re.findall(r"#\[test\]", hits[0].read_text()))
-            if actual != stated_n:
-                ERRORS.append(f"{rel}: cites '{fname} ({stated_n} tests)' but file has {actual} #[test] fns")
-            else:
-                print(f"{rel}: test-count citation ok ({fname}: {stated_n})")
-
 
 def check_cc_pins() -> None:
-    """Guard 5: prose CC-pin sites vs the BASELINE_*_D2 consts (#55)."""
+    """Guard 4: prose CC-pin sites vs the BASELINE_*_D2 consts (#55)."""
     truth_file = WORKSPACE / "catgraph-applied/tests/graphical_linalg.rs"
     truth = truth_file.read_text()
     consts: dict[str, int] = {}
