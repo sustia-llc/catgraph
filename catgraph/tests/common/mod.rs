@@ -8,8 +8,8 @@
 //! [#289](https://github.com/sustia-llc/catgraph/issues/289): with the cached
 //! identity flags gone it derives `PartialEq`, so `assert_eq!(a, b)` now works
 //! directly and `cospan_eq` / `assert_cospan_eq` / `assert_cospan_eq_msg` are
-//! `==` plus a per-field failure message. They are kept — twelve test files
-//! call them, and their messages name which of the three fields moved — but new
+//! `==` plus a per-field failure message. They are kept — test files call
+//! them, and their messages name which of the three fields moved — but new
 //! `Cospan` comparisons need no helper.
 
 use catgraph::{

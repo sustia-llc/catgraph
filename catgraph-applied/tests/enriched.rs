@@ -1,8 +1,8 @@
 //! Integration tests for [`catgraph_applied::enriched`] and
 //! [`catgraph_applied::lawvere_metric`].
 //!
-//! The `EnrichedCategory<V>` trait + `HomMap<O, V>` concrete impl are covered
-//! first; then [`LawvereMetricSpace<T>`] over [`Tropical`].
+//! Covers the `EnrichedCategory<V>` trait + `HomMap<O, V>` concrete impl and
+//! [`LawvereMetricSpace<T>`] over [`Tropical`].
 
 use catgraph_applied::{
     enriched::{EnrichedCategory, HomMap},

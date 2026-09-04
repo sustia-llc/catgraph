@@ -1,6 +1,5 @@
-//! Functoriality tests for `sfg_to_mat`: verifies F&S Thm 5.53 structural
-//! preservation of compose / tensor / identity on all 4 concrete rigs, plus
-//! the Eq 5.52 generator table.
+//! Functoriality tests for `sfg_to_mat`: F&S Thm 5.53 structural preservation
+//! of compose / tensor / identity, plus the Eq 5.52 generator table.
 
 use catgraph_applied::{
     mat::MatR,
