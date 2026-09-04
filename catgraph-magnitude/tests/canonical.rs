@@ -10,7 +10,8 @@
 //! Prop 3.14's magnitude-homology Euler-characteristic identity within an
 //! analytical truncation bound. Alongside them, `verify_mobius_recursion`
 //! returns `Err` naming the direction and the index when it is handed a μ with
-//! one entry perturbed.
+//! one entry perturbed, and `magnitude_homology_rank` returns the hand-counted
+//! `rank(H_{2,2}) = 4` on the three-point geodesic line.
 //!
 //! # Input space
 //!
@@ -44,7 +45,9 @@
 //! debug lane does not exercise it; the CI release-test job runs this file with
 //! `--release` (#11). The `verify_mobius_recursion` arm perturbs one entry of
 //! one fixture, and its assertions touch the right-inverse (`μ · ζ`) branch,
-//! not the left-inverse (`ζ · μ`) branch.
+//! not the left-inverse (`ζ · μ`) branch. The `magnitude_homology_rank` arm
+//! evaluates one `(k, ℓ)` cell, `(2, 2)`, of the three-point geodesic line at
+//! `t = 1`.
 //!
 //! # covers:
 //!
@@ -68,7 +71,9 @@
 use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 use catgraph_applied::rig::{F64Rig, Tropical};
 use catgraph_magnitude::Z;
-use catgraph_magnitude::chain_complex::euler_char_identity_at;
+use catgraph_magnitude::chain_complex::{
+    ChainIndex, euler_char_identity_at, magnitude_homology_rank,
+};
 use catgraph_magnitude::lm_category::LmCategory;
 use catgraph_magnitude::magnitude::{is_scattered, mobius_function, tsallis_entropy};
 use catgraph_magnitude::mobius_chains::{
@@ -465,6 +470,31 @@ fn fixture_5_2point_t_4() {
     // 2-point space; d_min_original = 1.0
     let space = LawvereMetricSpace::from_distance_fn(2, |a, b| if a == b { 0.0 } else { 1.0 });
     check_agrees_within_bound(&space, 4.0, 2, 1.0);
+}
+
+/// `rank(H_{2,2})` on the [`fixture_2_3point_line_t_3`] space, counted by hand
+/// from LS 2017 Def 3.3: six simple 2-chains carry length 2 — `(0,1,0)`,
+/// `(0,1,2)`, `(2,1,0)`, `(2,1,2)`, `(1,0,1)`, `(1,2,1)`; `∂_2` at that grade
+/// has rank 2, only `(0,1,2)` and `(2,1,0)` meeting the geodesic condition
+/// `d(x_0, x_2) = d(x_0, x_1) + d(x_1, x_2)` and mapping to the distinct
+/// 1-chains `(0,2)` and `(2,0)`; three edges of length ≥ 1 put every simple
+/// 3-chain at length ≥ 3, so `∂_3` at grade 2 is empty. `6 − 2 − 0 = 4`.
+const HAND_RANK_H_2_2_3POINT_LINE: usize = 4;
+
+#[test]
+fn magnitude_homology_rank_h_2_2_on_3point_line() {
+    let space = LawvereMetricSpace::from_distance_fn(3, |a, b| {
+        let table = [[0.0, 1.0, 2.0], [1.0, 0.0, 1.0], [2.0, 1.0, 0.0]];
+        table[a][b]
+    });
+    let idx = ChainIndex::new(&space, 3);
+    let rank = magnitude_homology_rank::<F64Rig>(&idx, &space, 2, 2.0)
+        .expect("rank recovery succeeds on the 3-point line at (k, ℓ) = (2, 2)");
+    assert_eq!(
+        rank, HAND_RANK_H_2_2_3POINT_LINE,
+        "rank(H_2,2) on the 3-point geodesic line: observed {rank}, \
+         expected {HAND_RANK_H_2_2_3POINT_LINE}"
+    );
 }
 
 // ---------------------------------------------------------------------------
