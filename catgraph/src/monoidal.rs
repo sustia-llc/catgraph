@@ -769,6 +769,9 @@ mod test {
     fn morphism_append_layer_type_mismatch_keeps_the_layers() {
         let mut morphism: GenericMonoidalMorphism<SimpleBox, char> =
             GenericMonoidalMorphism::identity(&vec!['a']);
+        morphism
+            .append_layer(GenericMonoidalMorphismLayer::identity(&vec!['a']))
+            .unwrap();
         let before = morphism.clone();
 
         let mismatched: GenericMonoidalMorphismLayer<SimpleBox, char> =
@@ -777,9 +780,15 @@ mod test {
         assert!(morphism.append_layer(mismatched).is_err());
         assert!(
             morphism == before,
-            "layers after the rejected append: observed {}, expected {}",
+            "layers after the rejected append: observed depth {} domain {:?} codomain {:?} labels {}, expected depth {} domain {:?} codomain {:?} labels {}",
             morphism.depth(),
-            before.depth()
+            morphism.domain(),
+            morphism.codomain(),
+            morphism.contained_labels().len(),
+            before.depth(),
+            before.domain(),
+            before.codomain(),
+            before.contained_labels().len()
         );
     }
 

@@ -589,6 +589,7 @@ where
         */
         if let Some(mut v) = self.layers.pop() {
             if v.right_type != next_layer.left_type {
+                self.layers.push(v);
                 return Err(CatgraphError::Composition {
                     message: "type mismatch in frobenius morphims composition".to_string(),
                 });
@@ -1120,6 +1121,17 @@ mod test {
         let exp_id_spider: FrobeniusMorphism<_, _> = FrobeniusOperation::Identity(()).into();
         assert!(exp_id_spider == id_spider);
         assert_eq!(id_spider.depth(), 1);
+    }
+
+    #[test]
+    fn frobenius_append_layer_type_mismatch_keeps_the_layers() {
+        let mut morphism: FrobeniusMorphism<char, ()> = FrobeniusMorphism::identity(&vec!['a']);
+        let before = morphism.clone();
+
+        let mismatched: FrobeniusLayer<char, ()> = FrobeniusLayer::identity(&vec!['b']);
+
+        assert!(morphism.append_layer(mismatched).is_err());
+        assert_eq!(morphism, before, "layers after the rejected append");
     }
 
     #[allow(clippy::items_after_statements)]
