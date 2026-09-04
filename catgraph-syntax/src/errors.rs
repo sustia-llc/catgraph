@@ -113,7 +113,8 @@ pub enum SyntaxError {
     },
 
     /// A term interpreter ([`eval`](crate::eval::eval),
-    /// [`to_mat_kron`](crate::frobenius::to_mat_kron)) refused a term whose
+    /// [`to_mat_kron`](crate::frobenius::to_mat_kron)) or the user-term
+    /// inclusion [`lift_user`](crate::frobenius::lift_user) refused a term whose
     /// structural nesting depth exceeds
     /// [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH), measured pre-flight
     /// by [`term_depth`](crate::depth::term_depth) before the interpreter

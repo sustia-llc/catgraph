@@ -341,12 +341,28 @@ where
 ///
 /// # Errors
 ///
-/// Returns [`SyntaxError::Catgraph`] if an interior `Compose` node's interfaces
-/// do not meet. A term built through the [`Free`] smart constructors is
-/// arity-sound and cannot trigger this — but a `PropExpr` assembled by raw
-/// variant construction (documented-legal in applied) may be ill-formed, and a
-/// `Result`-returning API must surface that transparently rather than panic.
+/// - [`SyntaxError::RecursionLimit`] if the term's structural depth exceeds
+///   [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH), measured pre-flight the
+///   way the term interpreters measure it.
+/// - [`SyntaxError::Catgraph`] if an interior `Compose` node's interfaces
+///   do not meet. A term built through the [`Free`] smart constructors is
+///   arity-sound and cannot trigger this — but a `PropExpr` assembled by raw
+///   variant construction (documented-legal in applied) may be ill-formed, and a
+///   `Result`-returning API must surface that transparently rather than panic.
 pub fn lift_user<G>(expr: PropExpr<G>) -> Result<PropExpr<FrobeniusOr<G>>, SyntaxError>
+where
+    G: PropSignature,
+    G::Color: Ord,
+{
+    // Pre-flight the recursion depth so `lift_user_inner` cannot overflow the
+    // stack on an unbounded programmatically-built term.
+    crate::depth::guard_term_depth(&expr)?;
+    lift_user_inner(expr)
+}
+
+/// Recursion behind [`lift_user`]; the depth guard runs once in the public entry
+/// so this can recurse freely.
+fn lift_user_inner<G>(expr: PropExpr<G>) -> Result<PropExpr<FrobeniusOr<G>>, SyntaxError>
 where
     G: PropSignature,
     G::Color: Ord,
@@ -355,8 +371,8 @@ where
         PropExpr::Identity(n) => Free::identity(n),
         PropExpr::Braid(m, n) => Free::braid(m, n),
         PropExpr::Generator(g) => Free::generator(FrobeniusOr::User(g)),
-        PropExpr::Compose(f, g) => Free::compose(lift_user(*f)?, lift_user(*g)?)?,
-        PropExpr::Tensor(f, g) => Free::tensor(lift_user(*f)?, lift_user(*g)?),
+        PropExpr::Compose(f, g) => Free::compose(lift_user_inner(*f)?, lift_user_inner(*g)?)?,
+        PropExpr::Tensor(f, g) => Free::tensor(lift_user_inner(*f)?, lift_user_inner(*g)?),
     })
 }
 
@@ -621,7 +637,9 @@ where
 /// Returns [`SyntaxError::Catgraph`] if any lifted user equation is
 /// non-parallel or ill-formed (surfaced transparently from [`lift_user`] or from
 /// [`add_equation`](catgraph_applied::prop::presentation::Presentation::add_equation),
-/// whose check is boundary-*word* equality).
+/// whose check is boundary-*word* equality), or
+/// [`SyntaxError::RecursionLimit`] if a user equation's side is deeper than
+/// [`MAX_TERM_DEPTH`](crate::depth::MAX_TERM_DEPTH).
 /// The built-in equations are parallel by construction; an error here
 /// can only originate in a caller-supplied user equation.
 pub fn hypergraph_presentation<G>(
