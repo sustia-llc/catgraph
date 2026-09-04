@@ -33,9 +33,11 @@ use catgraph_syntax::text::{ColorSyntax, GeneratorSyntax};
 use proptest::prelude::*;
 use std::borrow::Cow;
 
-/// The shared `i64` SFG interpreter model — used by both the S3 interpreter suite
-/// ([`eval`](../eval.rs)) and the S5 typed-builder coherence suite
-/// ([`traced`](../traced.rs)), so the two exercise the *same* semantics.
+/// The shared `i64` SFG interpreter model — used by the canonical suite
+/// ([`canonical`](../canonical.rs)), the depth-guard suite
+/// ([`recursion_guard`](../recursion_guard.rs)), the S5 typed-builder coherence
+/// suite ([`traced`](../traced.rs)) and the presentation-file suite
+/// ([`persistence`](../persistence.rs)), so they exercise the *same* semantics.
 pub fn sfg_model() -> SfgModel<i64> {
     SfgModel::<i64>::new()
 }

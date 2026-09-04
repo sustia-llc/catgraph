@@ -629,8 +629,8 @@ Witness: `closed_blocks_sort_by_content_key` (formerly the `#[ignore]`d
 `(η;ε) ⊗ μ = μ ⊗ (η;ε)` in the SCFM fragment — out of catgraph-syntax's
 congruence-closure gap and into Layer 1: the closed `η;ε` block now sorts
 leftmost on both sides, so `eq_mod` decides it without consulting `E_frob`. The
-`complete_where_congruence_closure_is_not` test in
-`catgraph-syntax/tests/cospan_complete_functor.rs` was re-pointed at a harder
+congruence-closure-gap witness in
+`catgraph-syntax/tests/canonical.rs` was re-pointed at a harder
 witness accordingly.
 
 - Source: issue #55 owner decision 2026-07-26, diagnosis-note addendum
