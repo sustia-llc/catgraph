@@ -1,7 +1,7 @@
 //! [`LmCategory`] unit tests + BV 2025 intro magnitude-bounds proptest.
 //!
 //! The two paper-anchored acceptance tests (Prop 3.10 closed form,
-//! Rem 3.11 / Eq (12) Shannon recovery) live in `tests/bv_2025_acceptance.rs`
+//! Rem 3.11 / Eq (12) Shannon recovery) live in `tests/canonical.rs`
 //! so they appear as
 //! a distinct test binary in `cargo test` output — they are the
 //! acceptance gate and visibility matters.

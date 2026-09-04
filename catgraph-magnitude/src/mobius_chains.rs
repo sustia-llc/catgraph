@@ -73,7 +73,7 @@ const CHAIN_SUM_MAX_DEPTH: usize = 200;
 /// The input must be scattered ([`is_scattered`] returns `true`). On a
 /// scattered space this and [`crate::magnitude::mobius_function`] return the
 /// same matrix to `1e-9` relative on well-separated fixtures and `1e-8`
-/// relative at the scatteredness boundary (`tests/mobius_chains.rs`).
+/// relative at the scatteredness boundary (`tests/canonical.rs`).
 ///
 /// # Errors
 ///

@@ -70,14 +70,16 @@ println!("Mag(2M) = {mag:.6}");   // 1.000000 (deterministic chain)
 
 ## Acceptance gates
 
-Four anchor verifications must pass for any tag:
+Four anchor verifications must pass for any tag. All four live in
+[`tests/canonical.rs`](tests/canonical.rs), whose header names the public types
+the file ranges over and the ones it does not:
 
-1. **BV 2025 Prop 3.10 closed form** — `Mag(tM) = (t−1) · Σ H_t(p_x) + #(T(⊥))` to `0e0` on a
-   hand-computed 4-state LM.
+1. **BV 2025 Prop 3.10 closed form** — `Mag(tM) = (t−1) · Σ H_t(p_x) + #(T(⊥))` to `1e-9` on a
+   hand-computed 4-state LM, alongside the absolute anchor `|Mag(2M) − 2.48| < 1e-9`.
 2. **BV 2025 Rem 3.11 Shannon recovery** — `d/dt Mag|_{t=1} = Σ H(p_x)` by central finite difference
-   (`h = 1e-4`) to `~6e-10`.
+   (`h = 1e-4`) to `1e-6`.
 3. **Leinster 2013 Prop 2.1.3 chain-sum equivalence** — `mobius_function_via_chains::<F64Rig>(space) ≈ mobius_function::<F64Rig>(space)` to `1e-9` relative (proptest n=2-5) and `1e-8` relative on the hand-built 4-state boundary fixture (#169).
-4. **BV 2025 Prop 3.14 magnitude-homology Euler-char identity** — `chain_complex::euler_char_identity_at(space, t, max_degree)` returns `(via_homology, via_magnitude)` agreeing within an analytical residual bound `|Δ| ≤ n · r^(max_deg+1) / (1−r) + 1e-9` where `r = (n−1) · exp(−d_min_scaled)`. 5 fixtures pass (release suite ~31s).
+4. **BV 2025 Prop 3.14 magnitude-homology Euler-char identity** — `chain_complex::euler_char_identity_at(space, t, max_degree)` returns `(via_homology, via_magnitude)` agreeing within an analytical residual bound `|Δ| ≤ n · r^(max_deg+1) / (1−r) + 1e-9` where `r = (n−1) · exp(−d_min_scaled)`. The 5-point-path fixture is `ignore`d under `debug_assertions` and runs in the CI release lane.
 
 Two integer-exact Möbius cross-checks (Leinster 2008 Cor 1.5) ship alongside,
 migrated in reboot Phase 3:
@@ -188,7 +190,6 @@ The default feature set is empty — everything above except the rows marked
 cargo run --example lm_magnitude          # BV 2025 p.4 bounds on deterministic vs. uniform LMs
 cargo run --example tsallis_shannon       # Shannon recovery to exactly-0 for δt < TSALLIS_SHANNON_EPS
 cargo run --example mock_coalition        # 5-agent WeightedCospan + 3-agent LmCategory diversity demo
-cargo run --example prop_3_14_acceptance  # BV 2025 Prop 3.14 magnitude-homology Euler-char identity
 cargo run --example integer_mobius        # Leinster 2008 Cor 1.5 integer-exact Möbius via Z(BigInt)
 cargo run --example semantic_comparison   # BTV 2021 nearest-meaning ranking (both directions) + clustering (#21)
 cargo run --example semantic_category     # BTV 2021 Def 8 — the semantic category L̂, composition inequality over all triples (#53)
