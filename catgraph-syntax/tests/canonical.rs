@@ -75,7 +75,7 @@ use catgraph_applied::prop::{Free, PropExpr, mono_word};
 use catgraph_applied::rig::{BoolRig, Checked};
 use catgraph_applied::sfg::SfgGenerator;
 use catgraph_syntax::cospan_functor::{CospanFunctor, to_cospan};
-use catgraph_syntax::depth::MAX_TERM_DEPTH;
+use catgraph_syntax::depth::{MAX_TERM_DEPTH, term_depth};
 use catgraph_syntax::errors::SyntaxError;
 use catgraph_syntax::eval::{ArrowModel, SfgModel, eval};
 use catgraph_syntax::frobenius::{
@@ -161,7 +161,11 @@ fn deep_right_fold_round_trips_at_the_parser_bound() {
         Err(SyntaxError::Parse { message, .. }) => {
             assert!(message.contains("MAX_NESTING_DEPTH"), "got: {message}");
         }
-        other => panic!("expected a depth-bound Parse error, got {other:?}"),
+        Ok(_) => panic!(
+            "expected a depth-bound Parse error, parsed Ok at {} nesting parentheses (bound {MAX_NESTING_DEPTH})",
+            over_text.matches("; (").count()
+        ),
+        Err(other) => panic!("expected a depth-bound Parse error, got {other:?}"),
     }
 }
 
@@ -441,6 +445,11 @@ fn cospan_functor_decides_the_nine_e_frob_equations() {
     let f = CospanFunctor::new();
     let pres = hypergraph_presentation::<Sig>([()], []).expect("no user equations to lift");
     let equations: Vec<FrobeniusEquation<Sig>> = scfm_equations::<Sig>(());
+    assert_eq!(
+        equations.len(),
+        9,
+        "the E_frob presentation must present nine equations"
+    );
     for (lhs, rhs) in &equations {
         let fa = f.apply(lhs).expect("the spider fragment is User-free");
         let fb = f.apply(rhs).expect("the spider fragment is User-free");
@@ -669,7 +678,11 @@ fn lift_user_guards_its_recursion_depth() {
         Err(SyntaxError::RecursionLimit { depth, limit }) => {
             assert_eq!((depth, limit), (MAX_TERM_DEPTH + 1, MAX_TERM_DEPTH));
         }
-        other => panic!("expected RecursionLimit, got {other:?}"),
+        Ok(lifted) => panic!(
+            "expected RecursionLimit, lifted a term of depth {} (limit {MAX_TERM_DEPTH})",
+            term_depth(&lifted)
+        ),
+        Err(other) => panic!("expected RecursionLimit, got {other:?}"),
     }
     assert!(
         lift_user(deep(MAX_TERM_DEPTH)).is_ok(),
