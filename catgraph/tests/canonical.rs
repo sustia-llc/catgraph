@@ -35,9 +35,10 @@
 //! reachable from an integration test. `FrobeniusLayer`
 //! (`frobenius/operations.rs:206`) is `pub(crate)` and is reached only through
 //! `FrobeniusMorphism`'s layer-wise `monoidal`. The `GenericMonoidalMorphism`
-//! tensor row runs two two-layer operands, asserted at equal depth below, so
-//! its assertions touch `GenericMonoidalMorphism::monoidal`'s equal-depth
-//! pairing and not the identity padding it applies at unequal depth.
+//! tensor row runs the shift-concat law on two two-layer operands, asserted at
+//! equal depth below, and the identity padding `monoidal` applies at unequal
+//! depth on a 2-against-1 and a 1-against-2 operand pair, whose expected
+//! wirings are written from the padding rule rather than from that law.
 //!
 //! # covers:
 //!
@@ -1400,6 +1401,75 @@ fn tensor_is_shift_concat_on_every_public_monoidal_implementor() {
         generic_b,
         morphism_wiring,
         &mut failures,
+    );
+
+    // --- GenericMonoidalMorphism, at unequal depth ---
+    //
+    // `wiring(f ⊗ g) == wiring(f) ++ shift(wiring(g))` does not reach here:
+    // the two operands have different leg counts. `monoidal` pads the
+    // shallower side with `GenericMonoidalMorphismLayer::identity` on the
+    // other side's last type, so the expected wiring below is written from
+    // that rule instead — the deeper-left case pads with `other`'s last
+    // `right_type`, and the deeper-right case pads with `self`'s last
+    // `right_type` as it stood *before* the layer-wise tensor.
+    let single = |layer: GenericMonoidalMorphismLayer<WireBox, char>| {
+        let mut morphism = GenericMonoidalMorphism::new();
+        morphism
+            .append_layer(layer)
+            .expect("an empty morphism accepts any layer");
+        morphism
+    };
+    let word = |cs: &[char]| Leg::word(cs.iter().copied().map(code).collect());
+
+    let mut deeper_left = generic_morphism(
+        generic_layer(&['p'], &['a', 'b'], &['c']),
+        generic_layer(&['q'], &['c'], &['d', 'e']),
+    );
+    let shallow_right = single(generic_layer(&['s', 't'], &['g'], &['h', 'i']));
+    assert_eq!(
+        (deeper_left.depth(), shallow_right.depth()),
+        (2, 1),
+        "the deeper-left fixture pair is not at unequal depth"
+    );
+    deeper_left.monoidal(shallow_right);
+    assert_eq!(
+        morphism_wiring(&deeper_left),
+        Wiring::new(vec![
+            word(&['a', 'b', 'g']),
+            word(&['c', 'h', 'i']),
+            word(&['p', 's', 't']),
+            word(&['c', 'h', 'i']),
+            word(&['d', 'e', 'h', 'i']),
+            word(&['q', 'h', 'i']),
+        ]),
+        "the second layer must tensor with the identity on ['h', 'i'], the right operand's last \
+         right_type"
+    );
+
+    let mut shallow_left = single(generic_layer(&['u'], &['j'], &['k', 'l']));
+    let deeper_right = generic_morphism(
+        generic_layer(&['m'], &['n'], &['o']),
+        generic_layer(&['r'], &['o'], &['v']),
+    );
+    assert_eq!(
+        (shallow_left.depth(), deeper_right.depth()),
+        (1, 2),
+        "the deeper-right fixture pair is not at unequal depth"
+    );
+    shallow_left.monoidal(deeper_right);
+    assert_eq!(
+        morphism_wiring(&shallow_left),
+        Wiring::new(vec![
+            word(&['j', 'n']),
+            word(&['k', 'l', 'o']),
+            word(&['u', 'm']),
+            word(&['k', 'l', 'o']),
+            word(&['k', 'l', 'v']),
+            word(&['k', 'l', 'r']),
+        ]),
+        "the appended layer must be the identity on ['k', 'l'] — the left operand's last \
+         right_type before the layer-wise tensor, not after it — tensored with the right \
+         operand's second layer"
     );
 
     // --- FrobeniusMorphism (and, through it, FrobeniusLayer) ---

@@ -172,6 +172,7 @@ where
             }
             Some(v) => {
                 if v.right_type != next_layer.left_type {
+                    self.layers.push(v);
                     return Err(CatgraphError::Composition {
                         message: "type mismatch in morphims composition".to_string(),
                     });
@@ -762,6 +763,33 @@ mod test {
         let result = morphism.append_layer(layer);
         assert!(result.is_ok());
         assert_eq!(morphism.depth(), 2);
+    }
+
+    #[test]
+    fn morphism_append_layer_type_mismatch_keeps_the_layers() {
+        let mut morphism: GenericMonoidalMorphism<SimpleBox, char> =
+            GenericMonoidalMorphism::identity(&vec!['a']);
+        morphism
+            .append_layer(GenericMonoidalMorphismLayer::identity(&vec!['a']))
+            .unwrap();
+        let before = morphism.clone();
+
+        let mismatched: GenericMonoidalMorphismLayer<SimpleBox, char> =
+            GenericMonoidalMorphismLayer::identity(&vec!['b']);
+
+        assert!(morphism.append_layer(mismatched).is_err());
+        assert!(
+            morphism == before,
+            "layers after the rejected append: observed depth {} domain {:?} codomain {:?} labels {}, expected depth {} domain {:?} codomain {:?} labels {}",
+            morphism.depth(),
+            morphism.domain(),
+            morphism.codomain(),
+            morphism.contained_labels().len(),
+            before.depth(),
+            before.domain(),
+            before.codomain(),
+            before.contained_labels().len()
+        );
     }
 
     #[test]
