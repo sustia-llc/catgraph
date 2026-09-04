@@ -450,6 +450,11 @@ fn cospan_functor_decides_the_nine_e_frob_equations() {
         9,
         "the E_frob presentation must present nine equations"
     );
+    assert_eq!(
+        pres.equations().len(),
+        9,
+        "hypergraph_presentation must install the nine E_frob equations"
+    );
     for (lhs, rhs) in &equations {
         let fa = f.apply(lhs).expect("the spider fragment is User-free");
         let fb = f.apply(rhs).expect("the spider fragment is User-free");
