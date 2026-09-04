@@ -169,9 +169,7 @@ jobs:
           for ex in para_walkthrough weight_tying free_monad_basics architecture_unrollers; do
             cargo run -q -p catgraph-dl --example "$ex"
           done
-      # #276: the magnitude examples are self-checking in the same way; run
-      # the sub-second ones. `prop_3_14_acceptance` stays out — its docstring
-      # requires `--release`.
+      # #276: the magnitude examples are self-checking in the same way.
       - run: |
           for ex in coalition_magnitude integer_mobius lm_magnitude mock_coalition semantic_category semantic_comparison tsallis_shannon; do
             cargo run -q -p catgraph-magnitude --example "$ex"
@@ -204,7 +202,7 @@ jobs:
       - run: cargo clippy -p catgraph-applied --features f64-rig --all-targets -- -D warnings
 
   # #11: the slow BV 2025 Prop 3.14 acceptance fixture
-  # (euler_char_identity::fixture_3_5point_path_t_2_5) is ignored under
+  # (canonical::fixture_3_5point_path_t_2_5) is ignored under
   # debug_assertions ("30s release / 15+ min debug"), so the debug
   # `cargo test --workspace` above never exercises it. This targeted
   # release run covers it. Deliberately NOT `--workspace --release --
@@ -219,7 +217,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test -p catgraph-magnitude --release --test euler_char_identity
+      - run: cargo test -p catgraph-magnitude --release --test canonical
       # #256: the `*_new_unchecked_accepts_what_new_refuses` tests in
       # cospan.rs / span.rs / named_cospan.rs are `#[cfg(not(debug_assertions))]`
       # — they pin that `new_unchecked` is `debug_assert!`-only and so accepts

@@ -75,7 +75,7 @@
 | §2.10–2.17 Prefix-extension semantics | ✅ | `lm_category::LmCategory` | Materialized BYO-LM transition table. Forward BFS multiplies edge probabilities along directed paths per Eq 6; `d(x, y) = -ln π(y\|x)` recorded (the `d` definition itself is unnumbered §2.17 prose). |
 | Identity axiom `d(x, x) = 0` | ✅ | `LmCategory::magnitude` (internal) | Enforced before Möbius inversion. `LawvereMetricSpace::hom` diagonal default also returns `Tropical::one()` at `a == b`. |
 | §2.17 Acyclicity hypothesis | ✅ | `LmCategory::add_transition` (v0.1.1) | v0.1.1 rejects non-trivial self-loops (`from == to && prob > 0.0`) at insert time. Cycle-via-path forbidden by BV 2025 §3 acyclicity hypothesis but not detected ahead of `magnitude(t)` (BFS cap surfaces it). |
-| Prop 2.9 (p.9): every autoregressive LM determines a probability mass function `π(−\|x)` on the terminating states `T(x)` | ➖ | `LmCategory` input contract + `tests/bv_2025_acceptance.rs` fixtures | Justification result (why `π` deserves to be called a probability, incl. `⊥`/`†` and the cutoff — the paper flags it as novel vs BTV22/GV24). No computational content to implement: in the BYO-LM crate the pmf property is the *input contract* — `add_transition` documents that row normalization is NOT validated at insert; the acceptance fixtures assert `p_x` is a true pmf per test. |
+| Prop 2.9 (p.9): every autoregressive LM determines a probability mass function `π(−\|x)` on the terminating states `T(x)` | ➖ | `LmCategory` input contract + `tests/canonical.rs` fixtures | Justification result (why `π` deserves to be called a probability, incl. `⊥`/`†` and the cutoff — the paper flags it as novel vs BTV22/GV24). No computational content to implement: in the BYO-LM crate the pmf property is the *input contract* — `add_transition` documents that row normalization is NOT validated at insert; the acceptance fixtures assert `p_x` is a true pmf per test. |
 
 ### §2.1 Scatteredness (anchored at Leinster 2013 Def 2.1.2; convergence precondition for chain-sum Möbius)
 
@@ -89,7 +89,7 @@
 |---|---|---|---|
 | Tsallis q-entropy `H_t(p) = (1 - Σ pᵢᵗ) / (t-1)` (stated **unnumbered** in BV25 — not "Eq (4)"; Eq (4) is a `π`-normalization step in the Prop 2.9 proof) | ✅ | `magnitude::tsallis_entropy(p, t)` | Shannon special case at `\|t-1\| < TSALLIS_SHANNON_EPS = 1e-6` returns `-Σ pᵢ ln pᵢ` directly (avoids `0/0` cancellation around `t = 1`). |
 | Rem 3.11 Shannon recovery as `t → 1` | ✅ | `magnitude::tsallis_entropy` + acceptance test | Acceptance residual `~6.46e-10` by central FD `h = 1e-4` on 4-state LM. |
-| Prop 3.10 closed form `Mag(tM) = (t-1)·Σ H_t(p_x) + #(T(⊥))` | ✅ | `tests/bv_2025_acceptance.rs` | v0.1.0 acceptance residual `0e0` (exact `f64`) at `t ∈ {0.5, 1.5, 2.0, 5.0}` on hand-computed 4-state tree (`A = {a}, N = 1`; `#T(⊥) = 2`). |
+| Prop 3.10 closed form `Mag(tM) = (t-1)·Σ H_t(p_x) + #(T(⊥))` | ✅ | `tests/canonical.rs` | v0.1.0 acceptance residual `0e0` (exact `f64`) at `t ∈ {0.5, 1.5, 2.0, 5.0}` on hand-computed 4-state tree (`A = {a}, N = 1`; `#T(⊥) = 2`), plus the absolute anchor `\|Mag(2M) − 2.48\| < 1e-9` (#309). |
 | Acyclicity hypothesis (tree-shaped prefix poset) | ➖ | `LmCategory` runtime contract | Fixture rebuilt from cyclic to a 4-state acyclic prefix poset. **Note:** acyclicity is a *prose* standing hypothesis in BV25 §3, not a numbered result — "3.4" is the *Example* that an initial object gives magnitude 1, a different statement. Marked N/A as a hypothesis (not an implementable item); its runtime enforcement is audited at the §2.17 row above. |
 | Eq (7) (Def 3.1; applied in §3.5) magnitude as Möbius sum `Mag = Σᵢⱼ μ[i][j]` | ✅ | `magnitude::magnitude::<Q>(space, t)` | Builds t-scaled zeta, Möbius-inverts, sums every entry. Algebraic surface `Q: Ring + Div + From<f64>`. |
 | Def 3.1 Möbius inversion `ζ·μ = I` | ✅ | `magnitude::mobius_function::<Q>(space)` | Gaussian elimination on `[ζ \| I]` augmented matrix. `Err(CatgraphError::Composition)` on singular zeta. v0.1.0 limit ~1000 states (O(n³)). |
@@ -126,7 +126,7 @@
 | Tsallis-Shannon worst @ `δt = 1e-3` | `< 5e-3` (Tsallis branch) | **`1.226e-3`** |
 | Tsallis-Shannon worst @ `δt < 1e-6` | exact zero (special-case branch) | **`0`** (exact) |
 
-Both v0.1.x acceptance verifications live in `tests/bv_2025_acceptance.rs` and pass at every release.
+Both v0.1.x acceptance verifications live in `tests/canonical.rs` and pass at every release.
 
 ---
 
