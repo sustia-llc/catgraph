@@ -14,11 +14,13 @@
 //!
 //! # Input space
 //!
-//! The term corpus is every `PropExpr<SfgGenerator<R>>` reachable by two rounds
-//! of `compose` / `tensor` from the atom set (`Identity(0..=2)`, `Braid(1, 1)`,
-//! `Braid(1, 2)`, `Braid(2, 1)`, the five generators, two `Scalar` values per
-//! rig), keeping the terms whose source and target are both at most
-//! `ARITY_CAP`; its size and its variant coverage are asserted below, per rig.
+//! The term corpus is the closure of the atom set (`Identity(0..=2)`,
+//! `Braid(1, 1)`, `Braid(1, 2)`, `Braid(2, 1)`, the five generators, two
+//! `Scalar` values per rig) under two rounds of `compose` / `tensor`, each
+//! round dropping the terms whose source or target exceeds `ARITY_CAP` before
+//! the next round reads them, so the second round composes and tensors only
+//! in-cap first-round terms; its size is asserted below per rig, its variant
+//! coverage at `F64Rig`.
 //! The `compose` and `tensor` squares range over the ordered pairs of the
 //! one-round pool, not of that corpus; the `permute_side` square runs every
 //! element of `S₃` and `S₄` on both sides of one `F64Rig` witness. The wiring
@@ -48,7 +50,7 @@
 //! position; `PetriDecoration` is reached as `DecoratedCospan`'s decoration
 //! parameter and the other two are not reached. `Sealed` (`integer.rs:44`) is
 //! declared inside `pub(crate) mod private`, so an integration test cannot name
-//! it. The corpus reaches all five `PropExpr` variants and all five
+//! it. The `F64Rig` corpus reaches all five `PropExpr` variants and all five
 //! `SfgGenerator` variants (asserted in `corpus_reaches_every_variant`), but
 //! only at the two rig values each rig's atom list carries, so a defect that
 //! needs a third scalar value is outside it. Both functor squares read `S` of
