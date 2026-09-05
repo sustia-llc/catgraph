@@ -6,7 +6,9 @@ numbered theorem, and the crate deliberately has no audit doc. This note
 records where each attribution comes from and its verification status against
 the private papers cache (paper PDFs are not kept in-tree; fetch via the
 links below). Formalized from paper-audit Phase 4 findings (#124; the audit
-umbrella is #116).
+umbrella is #116). The crate's own two claims — causal invariance on the
+`A→BB` and `collapse` fixtures, and the branchial pipeline — are pinned in
+[`tests/canonical.rs`](../tests/canonical.rs), whose header cites this note.
 
 Status legend:
 

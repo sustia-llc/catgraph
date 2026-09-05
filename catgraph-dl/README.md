@@ -419,8 +419,9 @@ cargo test -p catgraph-dl --features "serde ad"
 
 [`tests/canonical.rs`](tests/canonical.rs) is the crate's canonical integration
 test: every shipped `HKT` witness satisfies the CDL Def 1.4 functor laws, and
-each witness that presents as a container satisfies the container laws; the
-CDL Example B.19 / B.20 bijections round-trip in both directions; each of
+each witness that presents as a container satisfies the container laws at one
+sample per constructor of its shape set; the CDL Example B.19 / B.20
+bijections round-trip in both directions; each of
 `FoldingRnn`, `RecursiveNn`, `UnfoldingRnn`, `MealyCell` and `MooreCell`
 unrolls to what a `Free` / `Cofree` walker computes from the same cell; and
 `unroll_iter` and the two `run_iter`s call their cells exactly once per pulled
