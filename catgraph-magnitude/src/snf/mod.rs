@@ -65,9 +65,8 @@ use crate::snf::zmod::posmod;
 ///
 /// # Panics
 ///
-/// None: the inner [`band_reduction`] preconditions (`b >= 1`,
-/// `t_param <= 2 * b`) hold at every call site here — the `while b > 2` guard
-/// gives `b >= 1`, and `t_param = 0` is hard-coded.
+/// Panics in debug builds when [`band_reduction`] returns `b_new >= b` for
+/// the current `b > 2`.
 ///
 /// [`echelon::lemma_3_1`]: crate::snf::echelon::lemma_3_1
 /// [`band::band_reduction`]: crate::snf::band::band_reduction
@@ -98,6 +97,10 @@ pub fn phase_1_to_bidiagonal(
 
     while b > 2 {
         let (b_new_mat, u_step, v_step, b_new) = band_reduction(&b_mat, b, 0, n);
+        debug_assert!(
+            b_new < b,
+            "invariant: band_reduction returns b_new = b/2 + 1 < b for b > 2; got b={b}, b_new={b_new}"
+        );
         b_mat = b_new_mat;
         // Left-multiply U: U_band_total ← U_step · U_band_total.
         u_band_total = matmul_mod(&u_step, &u_band_total, n);

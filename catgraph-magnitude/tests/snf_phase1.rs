@@ -6,8 +6,12 @@
     reason = "single-char bindings (n, a, u, t, v) are Storjohann §7 textbook names and the (i, j) index pair is needed simultaneously to test specific cells of T"
 )]
 
+mod common;
+
 use catgraph_magnitude::snf::band::matmul_mod;
 use catgraph_magnitude::snf::phase_1_to_bidiagonal;
+use catgraph_magnitude::snf::zmod::gcd_raw;
+use common::snf_invariants::{assert_unimodular, det_mod};
 
 #[test]
 fn phase1_4x4_yields_bidiagonal() {
@@ -39,6 +43,19 @@ fn phase1_4x4_yields_bidiagonal() {
             assert_eq!(uav[i][j], t[i][j], "U @ A @ V ≢ T at ({i}, {j})");
         }
     }
+    // `U` and `V` are unimodular over Z/36.
+    assert_unimodular(&u, n, "U");
+    assert_unimodular(&v, n, "V");
+    // Determinant class is preserved: unimodular U, V multiply det A by units
+    // of Z/36, so gcd(det T, 36) = gcd(det A, 36). det A = -191 ≡ 25 (mod 36),
+    // gcd(25, 36) = 1.
+    let g_a = gcd_raw(det_mod(&a, n), n);
+    assert_eq!(g_a, 1, "observed gcd(det A, {n}) = {g_a}, expected 1");
+    let g_t = gcd_raw(det_mod(&t, n), n);
+    assert_eq!(
+        g_t, g_a,
+        "observed gcd(det T, {n}) = {g_t}, expected gcd(det A, {n}) = {g_a}"
+    );
 }
 
 #[test]
@@ -76,4 +93,14 @@ fn phase1_already_bidiagonal_short_circuits() {
             assert_eq!(uav[i][j], t[i][j], "U @ A @ V ≢ T at ({i}, {j})");
         }
     }
+    // `U` and `V` are unimodular over Z/12.
+    assert_unimodular(&u, n, "U");
+    assert_unimodular(&v, n, "V");
+    // The whole triple, literal: `lemma_3_1` skips the zero sub-diagonal entry
+    // t[1][0] = 0 and returns (I, A, 2); the bandwidth of A is 2, so the
+    // `while b > 2` loop leaves U_band / V_band at identity(2).
+    let identity2 = vec![vec![1, 0], vec![0, 1]];
+    assert_eq!(u, identity2, "observed U {u:?}, expected {identity2:?}");
+    assert_eq!(t, a, "observed T {t:?}, expected {a:?}");
+    assert_eq!(v, identity2, "observed V {v:?}, expected {identity2:?}");
 }
