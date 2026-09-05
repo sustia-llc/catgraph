@@ -116,18 +116,19 @@ pub fn magnitude_homology_rank<Q: IntegerLikeRig>(
 }
 
 /// Single-prime + cross-check rank recovery over `RANK_RECOVERY_PRIMES`.
-/// Returns the rank if the primary and secondary primes agree; falls through
-/// to the tertiary if they disagree; errors if all three disagree.
+/// Returns the rank if the primary and secondary primes agree; on
+/// disagreement returns the maximum of the three prime ranks when the
+/// tertiary matches either of the first two; errors if all three disagree.
 fn snf_rank_with_cross_check<Q: IntegerLikeRig>(m: &MatR<Q>) -> Result<usize, CatgraphError> {
     let r0 = snf_rank_over_zp(m, RANK_RECOVERY_PRIMES[0])?;
     let r1 = snf_rank_over_zp(m, RANK_RECOVERY_PRIMES[1])?;
     if r0 == r1 {
         return Ok(r0);
     }
-    // Disagreement: probe the tertiary prime; majority wins.
+    // Disagreement: probe the tertiary prime; the largest rank wins.
     let r2 = snf_rank_over_zp(m, RANK_RECOVERY_PRIMES[2])?;
     if r0 == r2 || r1 == r2 {
-        return Ok(r2);
+        return Ok(r0.max(r1).max(r2));
     }
     Err(CatgraphError::Composition {
         message: format!(
@@ -326,4 +327,62 @@ pub fn euler_char_identity_at<Q: IntegerLikeRig>(
 fn scale_lawvere_space(space: &LawvereMetricSpace<NodeId>, t: f64) -> LawvereMetricSpace<NodeId> {
     let n = space.size();
     LawvereMetricSpace::from_distance_fn(n, |a, b| space.distance(&a, &b).0 * t)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::snf::zmod::gcd_raw;
+
+    /// `RANK_RECOVERY_PRIMES[0] · RANK_RECOVERY_PRIMES[2]`
+    /// `= (2^31 − 1)(2^31 − 61) = 2^62 − 62·2^31 + 61`.
+    const P0_TIMES_P2: i64 = 4_611_685_885_283_401_789;
+
+    /// Per-prime ranks of `[[P0_TIMES_P2]]`: the primary and tertiary divide it,
+    /// the secondary does not.
+    const EXPECTED_PER_PRIME_RANKS: [usize; 3] = [0, 1, 0];
+
+    /// `P0_TIMES_P2 mod RANK_RECOVERY_PRIMES[1]`, from `2^31 ≡ 19 (mod 2^31 − 19)`:
+    /// `361 − 1178 + 61 = −756`.
+    const RESIDUE_AT_SECONDARY: i64 = 2_147_482_873;
+
+    #[test]
+    fn cross_check_takes_the_max_over_the_three_prime_ranks() {
+        assert_eq!(
+            P0_TIMES_P2,
+            RANK_RECOVERY_PRIMES[0] * RANK_RECOVERY_PRIMES[2],
+            "P0_TIMES_P2: observed {P0_TIMES_P2}, expected the product of primes 0 and 2"
+        );
+        assert_eq!(
+            P0_TIMES_P2 % RANK_RECOVERY_PRIMES[1],
+            RESIDUE_AT_SECONDARY,
+            "residue at the secondary prime: observed {}, expected {RESIDUE_AT_SECONDARY}",
+            P0_TIMES_P2 % RANK_RECOVERY_PRIMES[1]
+        );
+        assert_eq!(
+            gcd_raw(RANK_RECOVERY_PRIMES[1], P0_TIMES_P2),
+            1,
+            "gcd(secondary prime, P0_TIMES_P2): observed {}, expected 1",
+            gcd_raw(RANK_RECOVERY_PRIMES[1], P0_TIMES_P2)
+        );
+
+        let m = MatR::<Z>::new(1, 1, vec![vec![Z::from(P0_TIMES_P2)]])
+            .expect("invariant: one entry matches the declared 1x1 shape");
+
+        for (i, &p) in RANK_RECOVERY_PRIMES.iter().enumerate() {
+            let observed = snf_rank_over_zp(&m, p).expect("invariant: p > 0 and m is rectangular");
+            assert_eq!(
+                observed, EXPECTED_PER_PRIME_RANKS[i],
+                "snf_rank_over_zp at prime {p}: observed {observed}, expected {}",
+                EXPECTED_PER_PRIME_RANKS[i]
+            );
+        }
+
+        let observed = snf_rank_with_cross_check(&m)
+            .expect("invariant: the primary and tertiary ranks agree, so no error branch");
+        assert_eq!(
+            observed, 1,
+            "snf_rank_with_cross_check on [[p0·p2]]: observed {observed}, expected 1"
+        );
+    }
 }
