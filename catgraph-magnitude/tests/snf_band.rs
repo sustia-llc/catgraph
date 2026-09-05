@@ -42,6 +42,11 @@ fn band_reduction_halves_bandwidth() {
         b_rec <= b_new,
         "self-reported bandwidth is not an upper bound: observed b_rec={b_rec}, b_new={b_new}"
     );
+    assert!(
+        b_new <= b.div_ceil(2) + 1,
+        "bandwidth should at least halve: observed b_new={b_new}, expected <= {} (b={b})",
+        b.div_ceil(2) + 1
+    );
     assert_eq!(m_new.len(), m.len());
     // `U_step` and `V_step` are unimodular over Z/36.
     assert_unimodular(&u_step, n, "U_step");

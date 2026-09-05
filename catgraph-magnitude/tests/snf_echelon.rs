@@ -52,6 +52,19 @@ fn echelon_simple_2x2_yields_upper_triangular() {
 }
 
 #[test]
+fn echelon_rank_deficient_2x2_separates_rank_from_column_count() {
+    let n = 12;
+    let a = vec![vec![3, 5], vec![6, 10]];
+    let (_u, t, rank) = lemma_3_1(&a, n);
+    assert_eq!(rank, 1, "observed rank {rank}, expected 1 (n_cols = 2)");
+    assert_eq!(
+        t,
+        vec![vec![3, 5], vec![0, 0]],
+        "observed T {t:?}, expected [[3, 5], [0, 0]]"
+    );
+}
+
+#[test]
 fn index1_reduce_smoke_test_diagonal() {
     // 3x3 with non-zero off-diagonals in the upper triangle.
     let n = 12;

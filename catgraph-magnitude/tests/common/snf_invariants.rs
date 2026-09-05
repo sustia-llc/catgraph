@@ -30,8 +30,6 @@ const MAX_DET_DIM: usize = 8;
 /// determinant if a future change raises the cap).
 ///
 /// Internal to integration-test invariant helpers; not a stable API surface.
-/// `pub` only to satisfy cargo's integration-test reachability for
-/// `verify_snf_invariants` callers across multiple test targets.
 pub fn det_mod(m: &[Vec<i64>], n: i64) -> i64 {
     let dim = m.len();
     assert!(
