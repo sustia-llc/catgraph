@@ -445,6 +445,19 @@ fn multiway_evolution_enumerates_every_match() {
 fn confluent_fixture_branch_pairs_are_causally_isomorphic() {
     let evolution = confluent_fixture();
 
+    let expected_node_1 = CausalGraph::from_events(vec![CausalEvent {
+        rule_index: 0,
+        consumed: vec![EdgeId(0)],
+        produced: vec![EdgeId(2), EdgeId(3)],
+    }]);
+    assert_eq!(
+        evolution.causal_graph(1),
+        Some(expected_node_1.clone()),
+        "node 1: expected {:?}, got {:?}",
+        Some(&expected_node_1),
+        evolution.causal_graph(1)
+    );
+
     let pairs = isomorphic_state_pairs(&evolution);
     assert_eq!(
         pairs.len(),
