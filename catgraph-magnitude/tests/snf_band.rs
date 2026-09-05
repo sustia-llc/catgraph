@@ -58,3 +58,39 @@ fn band_reduction_halves_bandwidth() {
     let umv = matmul_mod(&um, &v_step, n);
     assert_eq!(umv, m_new, "unimodular invariant U @ M @ V == M_new failed");
 }
+
+#[test]
+fn band_reduction_odd_bandwidth_halves() {
+    let m = vec![
+        vec![1, 2, 3, 4, 5],
+        vec![0, 6, 7, 8, 9],
+        vec![0, 0, 10, 11, 13],
+        vec![0, 0, 0, 14, 15],
+        vec![0, 0, 0, 0, 17],
+    ];
+    let n = 36;
+    let b = compute_upper_bandwidth(&m, n);
+    assert_eq!(b, 5, "fixture bandwidth: observed b={b}, expected 5");
+    let (m_new, u_step, v_step, b_new) = band_reduction(&m, b, 0, n);
+    assert_eq!(
+        b_new,
+        b / 2 + 1,
+        "documented return: observed b_new={b_new}, expected {} (b={b})",
+        b / 2 + 1
+    );
+    let b_rec = compute_upper_bandwidth(&m_new, n);
+    assert!(
+        b_rec <= b / 2 + 1,
+        "bandwidth should at least halve: observed b_rec={b_rec}, expected <= {} (b={b})",
+        b / 2 + 1
+    );
+    assert!(
+        b_rec <= b_new,
+        "self-reported bandwidth is not an upper bound: observed b_rec={b_rec}, b_new={b_new}"
+    );
+    assert_unimodular(&u_step, n, "U_step");
+    assert_unimodular(&v_step, n, "V_step");
+    let um = matmul_mod(&u_step, &m, n);
+    let umv = matmul_mod(&um, &v_step, n);
+    assert_eq!(umv, m_new, "unimodular invariant U @ M @ V == M_new failed");
+}
