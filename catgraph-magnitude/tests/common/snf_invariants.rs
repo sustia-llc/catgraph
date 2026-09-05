@@ -72,6 +72,21 @@ pub fn det_mod(m: &[Vec<i64>], n: i64) -> i64 {
     posmod_i128(acc, n)
 }
 
+/// Assert that `m` is unimodular over `Z/nZ`: `gcd(det m, n) = 1`
+/// (Storjohann 2000). `label` names the transform in the failure message,
+/// which carries the observed determinant and gcd.
+///
+/// Panics when `gcd(det m, n) ≠ 1`, and (via [`det_mod`]) when
+/// `m.len() > MAX_DET_DIM`.
+pub fn assert_unimodular(m: &[Vec<i64>], n: i64, label: &str) {
+    let d = det_mod(m, n);
+    let g = gcd_raw(d, n);
+    assert_eq!(
+        g, 1,
+        "{label} not unimodular mod {n}: observed gcd(det {label} = {d}, {n}) = {g}, expected 1"
+    );
+}
+
 /// Verify the four Wikipedia / Storjohann SNF correctness properties for a
 /// returned `(U, V, S)` triple over `Z/nZ`:
 ///
@@ -151,16 +166,6 @@ pub fn verify_snf_invariants(
     }
 
     // (4) Unimodularity.
-    let du = det_mod(u, n);
-    assert_eq!(
-        gcd_raw(du, n),
-        1,
-        "U not unimodular mod {n}: gcd(det U = {du}, {n}) ≠ 1"
-    );
-    let dv = det_mod(v, n);
-    assert_eq!(
-        gcd_raw(dv, n),
-        1,
-        "V not unimodular mod {n}: gcd(det V = {dv}, {n}) ≠ 1"
-    );
+    assert_unimodular(u, n, "U");
+    assert_unimodular(v, n, "V");
 }
