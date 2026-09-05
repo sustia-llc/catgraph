@@ -7,6 +7,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [workspace-v0.18.0] - 2026-09-05
+
+### Added
+
+- `tests/canonical.rs`: causal invariance on the `A→BB` and `collapse`
+  fixtures with `CausalGraph::compare` against a brute-force permutation
+  search; `wasserstein_1` against exhaustive optima and as identity / symmetry
+  proptests; the Petersen edge curvature; the `to_petgraph` parallel-edge and
+  dangling-edge contracts
+  ([#417](https://github.com/sustia-llc/catgraph/pull/417)).
+
+### Changed
+
+- README gains §Canonical test; `docs/ANCHORS.md` points at
+  `tests/canonical.rs` ([#418](https://github.com/sustia-llc/catgraph/pull/418)).
+
+### Removed
+
+- `tests/hypergraph_rewriting.rs`, `tests/wasserstein_exact.rs` and
+  `tests/ollivier_ricci_exact_transport.rs`, subsumed by `tests/canonical.rs`
+  ([#417](https://github.com/sustia-llc/catgraph/pull/417)).
+
 ## [workspace-v0.17.0] - 2026-09-03
 
 ### Changed — BREAKING
@@ -210,7 +232,8 @@ First monorepo release.
   `ConfluenceDiamond`, `confluence_diamonds`, `parallel_independent_events`,
   `events_commute`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0
 [workspace-v0.9.0]: https://github.com/sustia-llc/catgraph/compare/v0.8.0...v0.9.0

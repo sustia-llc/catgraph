@@ -17,6 +17,10 @@ version history.
 
 ### Added
 
+- `wiring`: `Leg`, `Wiring::shift_concat`, `CospanWiring::pushout` /
+  `signature` / `to_wiring`, `PartitionSignature` — index-wiring references
+  for tensor and pushout claims
+  ([#410](https://github.com/sustia-llc/catgraph/pull/410)).
 - `all_perms` + `all_perm_indices`, re-exported at the crate root: exhaustive
   `Sₙ` enumeration by prefix swaps, in two index-aligned views —
   `all_perms(n)[k]` is the permutation whose one-line notation is

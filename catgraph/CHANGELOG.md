@@ -6,6 +6,42 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+## [workspace-v0.18.0] - 2026-09-05
+
+### Added
+
+- `tests/canonical.rs`: the eleven Def 2.5 equations, the Def 2.12 generator
+  table, both zigzags and strict left/right unitality on the
+  `HypergraphCategory` implementors, decided by `CospanCanon`; `compose`
+  against a union-find partition reference; the tensor wiring law on the
+  public `Monoidal` implementors
+  ([#410](https://github.com/sustia-llc/catgraph/pull/410)).
+- `Decomposition::to_finset_morphism`; `GenericMonoidalMorphism::append_layer`
+  is `pub` ([#410](https://github.com/sustia-llc/catgraph/pull/410)).
+
+### Added — tooling
+
+- `scripts/check_canonical_tests.py`, its `ci.yml` row and CLAUDE.md rule 7:
+  every `pub struct|enum|trait|type` under a published crate's `src` is named
+  in its `tests/canonical.rs` header's `covers:` or `not-covered:` list
+  ([#410](https://github.com/sustia-llc/catgraph/pull/410)).
+
+### Changed
+
+- `GenericMonoidalMorphism::append_layer` and `FrobeniusMorphism::append_layer`
+  keep the popped layer on the type-mismatch `Err`; the `tests/canonical.rs`
+  `GenericMonoidalMorphism` tensor row runs at unequal depths
+  ([#414](https://github.com/sustia-llc/catgraph/pull/414)).
+- `tests/common/mod.rs` and `tests/compact_closed.rs` cite test files without a
+  count ([#412](https://github.com/sustia-llc/catgraph/pull/412)).
+- README §Testing describes `tests/canonical.rs`
+  ([#418](https://github.com/sustia-llc/catgraph/pull/418)).
+
+### Removed
+
+- `tests/frobenius_axioms.rs`, subsumed by `tests/canonical.rs`
+  ([#410](https://github.com/sustia-llc/catgraph/pull/410)).
+
 ## [workspace-v0.17.0] - 2026-09-03
 
 ### Changed
@@ -1073,7 +1109,8 @@ downstream koalisi.
   §3.3 io/ff factorization, the global Grothendieck form, LinRel examples) are
   catalogued in [`docs/FS19-AUDIT.md`](docs/FS19-AUDIT.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.15.0]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...v0.15.0

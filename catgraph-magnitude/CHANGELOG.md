@@ -13,6 +13,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.18.0] - 2026-09-05
+
+### Added
+
+- `tests/canonical.rs`: the four README acceptance gates, a wrong-μ `Err` arm
+  for `verify_mobius_recursion`, and `magnitude_homology_rank` at `(2, 2)` on
+  the three-point geodesic line
+  ([#413](https://github.com/sustia-llc/catgraph/pull/413)).
+
+### Changed
+
+- The CI release lane runs `--test canonical`; README §Acceptance gates and
+  the `mobius_function_via_chains` rustdoc point at `tests/canonical.rs`
+  ([#413](https://github.com/sustia-llc/catgraph/pull/413)).
+- `docs/BV25-AUDIT.md` cites test files without a count
+  ([#412](https://github.com/sustia-llc/catgraph/pull/412)).
+
+### Removed
+
+- `tests/bv_2025_acceptance.rs`, `tests/mobius_chains.rs`,
+  `tests/euler_char_identity.rs`, `tests/mobius_chains.proptest-regressions`
+  and `examples/prop_3_14_acceptance.rs`, subsumed by `tests/canonical.rs`
+  ([#413](https://github.com/sustia-llc/catgraph/pull/413)).
+
 ## [workspace-v0.17.0] - 2026-09-03
 
 ### Changed — BREAKING
@@ -520,7 +544,8 @@ arXiv:2501.06662v2).
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.11.0]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...v0.11.0

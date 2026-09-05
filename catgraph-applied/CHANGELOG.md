@@ -13,6 +13,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.18.0] - 2026-09-05
+
+### Added
+
+- `tests/canonical.rs`: `S` against a basis-vector evaluator on a
+  depth-bounded corpus over four rigs, the `compose` / `tensor` /
+  `permute_side` squares, the Prop 5.56 round-trip, the Def 5.2 / 5.25
+  arities, `compose` on `DecoratedCospan` and `PetriNet` against the partition
+  reference, `zero_matrix` on `Tropical`
+  ([#414](https://github.com/sustia-llc/catgraph/pull/414)).
+
+### Changed
+
+- `tests/hypergraph_laws.rs` points at `catgraph/tests/canonical.rs`
+  ([#410](https://github.com/sustia-llc/catgraph/pull/410)).
+- README, `docs/FS18-AUDIT.md` and `tests/enriched.rs` cite test files without
+  a count ([#412](https://github.com/sustia-llc/catgraph/pull/412)).
+- README gains §Canonical test
+  ([#418](https://github.com/sustia-llc/catgraph/pull/418)).
+
+### Removed
+
+- `tests/prop.rs`, `tests/sfg_to_mat.rs`, `tests/mat_to_sfg_roundtrip.rs`,
+  `examples/sfg_to_mat.rs` and `examples/petri_net_braiding.rs`, subsumed by
+  `tests/canonical.rs` ([#414](https://github.com/sustia-llc/catgraph/pull/414)).
+
 ## [workspace-v0.17.0] - 2026-09-03
 
 ### Changed — BREAKING
@@ -886,7 +912,8 @@ Co-released with catgraph v0.12.2 and catgraph-magnitude v0.1.1.
   `temperley_lieb`, `e1_operad`, `e2_operad` extracted from `catgraph` core;
   Criterion bench `rayon_thresholds`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.15.0]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...v0.15.0

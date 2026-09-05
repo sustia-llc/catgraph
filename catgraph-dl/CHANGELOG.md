@@ -8,6 +8,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [workspace-v0.18.0] - 2026-09-05
+
+### Added
+
+- `Functor<FreeWitness<F>>` and `Functor<CofreeWitness<F>>` for
+  `F: Container` ([#416](https://github.com/sustia-llc/catgraph/pull/416)).
+- `tests/canonical.rs`: the functor laws on every shipped `HKT` witness, the
+  container laws on the four `Container` implementors, the B.19 / B.20
+  bijections, the five architectures against `Free` / `Cofree` walkers, and
+  `unroll_iter` / `run_iter` call counters
+  ([#416](https://github.com/sustia-llc/catgraph/pull/416)).
+
+### Changed
+
+- README, `tests/THEOREM_MAP.md`, `docs/2402.15332v2-AUDIT.md`,
+  `examples/README.md` and the `hkt.rs` / `depth.rs` / `group_action.rs`
+  comments point at `tests/canonical.rs`; the `leftmost_leaf` rustdoc
+  sentence on payload-agnostic cells is cut
+  ([#416](https://github.com/sustia-llc/catgraph/pull/416)).
+- README gains §Canonical test
+  ([#418](https://github.com/sustia-llc/catgraph/pull/418)).
+
+### Removed
+
+- `tests/functor_laws.rs`, `tests/container_laws.rs`,
+  `tests/architecture_unrollers.rs`, `tests/free_monad_bijections.rs` and
+  `examples/architecture_unrollers.rs` with its `ci.yml` loop entry, subsumed
+  by `tests/canonical.rs` ([#416](https://github.com/sustia-llc/catgraph/pull/416)).
+
 ## [workspace-v0.17.0] - 2026-09-03
 
 ### Changed
@@ -305,7 +334,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
   `F64Rig`, `BoolRig`, `EnrichedCategory`, `HomMap`, `LawvereMetricSpace`;
   private `hopf_fibration` stub.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.15.0]: https://github.com/sustia-llc/catgraph/compare/v0.14.0...v0.15.0
 [workspace-v0.11.0]: https://github.com/sustia-llc/catgraph/compare/v0.10.0...v0.11.0

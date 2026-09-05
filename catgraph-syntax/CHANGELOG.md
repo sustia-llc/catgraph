@@ -7,6 +7,29 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+## [workspace-v0.18.0] - 2026-09-05
+
+### Added
+
+- `tests/canonical.rs`: the print / parse round trip, `eval` against
+  `MatrixNFFunctor`, `CospanFunctor` on the nine `E_frob` equations, the
+  `MatKron` golden, the `lift_user` pin and the serde variant list
+  ([#415](https://github.com/sustia-llc/catgraph/pull/415)).
+
+### Changed
+
+- `lift_user` returns `SyntaxError::RecursionLimit` past `MAX_TERM_DEPTH`; the
+  `RecursionLimit` rustdoc names it
+  ([#415](https://github.com/sustia-llc/catgraph/pull/415)).
+- README gains §Canonical test
+  ([#418](https://github.com/sustia-llc/catgraph/pull/418)).
+
+### Removed
+
+- `tests/cospan_complete_functor.rs`, `tests/eval.rs` and
+  `tests/serde_roundtrip.rs`, subsumed by `tests/canonical.rs`
+  ([#415](https://github.com/sustia-llc/catgraph/pull/415)).
+
 ## [workspace-v0.17.0] - 2026-09-03
 
 ### Changed
@@ -236,7 +259,8 @@ surface for hypergraph-category morphisms over catgraph-applied's
   coherence law `eval(t.term(), &m, in.flatten()) == Ok(t.run(in).flatten())`
   ([#90](https://github.com/sustia-llc/catgraph/pull/90)).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0
