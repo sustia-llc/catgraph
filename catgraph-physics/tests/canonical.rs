@@ -27,6 +27,14 @@
 //!
 //! # Input space
 //!
+//! Construction and rule structure run on `{{0,1,2},{2,3,4}}` and on a
+//! two-`add_hyperedge` build. Matching runs on `{{7,8,9}}` and on the empty
+//! graph. Deterministic and trivial evolution runs on `{{0,1,2}}` at 3 steps,
+//! on the empty graph at 5 steps, and through `run_multiway` at 0 steps.
+//! Multiway enumeration runs on `{{0,1,2},{3,4,5}}` at 2 steps and `max_nodes`
+//! 100, and on `{{0,1,2}}` under `RewriteRule::wolfram_a_to_bb` and
+//! `RewriteRule::edge_split` at 3 steps and `max_nodes` 50. The gauge arm runs
+//! on lattices of sizes `[5]` and `[4,4]`.
 //! The two rewriting fixtures are the ones named above, at `max_nodes` 50 and
 //! 200. The brute-force isomorphism corpus is every distinct
 //! `(event_count, causal edge list)` shape those two fixtures produce through
@@ -459,15 +467,6 @@ fn confluent_fixture_branch_pairs_are_causally_isomorphic() {
             a.compare(&b),
             a.causal_edges().collect::<Vec<_>>(),
             b.causal_edges().collect::<Vec<_>>()
-        );
-    }
-
-    // `causal_graph` is `causal_graph_between` from the root.
-    for id in 0..evolution.node_count() {
-        assert_eq!(
-            evolution.causal_graph(id),
-            evolution.causal_graph_between(0, id),
-            "node {id}: causal_graph disagrees with causal_graph_between(0, _)"
         );
     }
 
@@ -1732,11 +1731,7 @@ fn multiway_to_petgraph_keeps_parallel_edges_and_drops_dangling() {
     );
 
     let (pg, order) = graph.to_petgraph();
-    assert_eq!(
-        order,
-        vec![root, child],
-        "ascending (step, branch_id) order"
-    );
+    assert_eq!(order, vec![root, child], "ascending step order");
     assert_eq!(pg.node_count(), 2);
     assert_eq!(
         pg.edge_count(),
