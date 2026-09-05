@@ -24,7 +24,14 @@ import pathlib
 import re
 import sys
 
-LANDED = {"catgraph", "catgraph-applied", "catgraph-dl", "catgraph-magnitude", "catgraph-syntax"}
+LANDED = {
+    "catgraph",
+    "catgraph-applied",
+    "catgraph-dl",
+    "catgraph-magnitude",
+    "catgraph-physics",
+    "catgraph-syntax",
+}
 
 DECLARATION = re.compile(r"^\s*pub (?:struct|enum|trait|type) ([A-Za-z_][A-Za-z0-9_]*)")
 BACKTICKED = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
