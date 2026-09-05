@@ -85,6 +85,18 @@ See [`docs/FS18-AUDIT.md`](docs/FS18-AUDIT.md) for the section-by-section Seven 
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release history.
 
+## Canonical test
+
+[`tests/canonical.rs`](tests/canonical.rs) is the crate's canonical integration
+test: `S : SFG_R → Mat(R)` (F&S 2018 Thm 5.53) equals a basis-vector evaluator
+on every term of a depth-bounded corpus over the five `SfgGenerator` variants,
+over `BoolRig`, `UnitInterval`, `Tropical` and `F64Rig`; `S` commutes with
+`compose`, `tensor` and `permute_side`; `mat_to_sfg` round-trips through `S`
+(Prop 5.56); and `compose` on `DecoratedCospan` and on `PetriNet` equals a
+union-find partition reference computed from the operand wirings. Its header
+names the public types and traits it ranges over and the ones it does not
+([root README](../README.md#canonical-tests)).
+
 ## Build
 
 ```sh

@@ -45,6 +45,22 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
   its seeded topology generators in proptest and bench fixtures. That edge is
   dev-only and does not widen the published dependency tree.
 
+## Canonical test
+
+[`tests/canonical.rs`](tests/canonical.rs) is the crate's canonical integration
+test, labelled inspiration-anchored: `RewriteRule::wolfram_a_to_bb` reaches
+isomorphic states whose root-based causal graphs compare `Isomorphic`, with
+holonomy `1.0` on every Wilson loop, `RewriteRule::collapse` has a pair
+comparing `NotIsomorphic` with holonomy `0.0`, and on every causal-graph shape
+the two fixtures produce and on hand-built pairs `CausalGraph::compare` agrees
+with a brute-force permutation search; `run_multiway_bfs` →
+`BranchialGraph` → `OllivierRicciCurvature` via `wasserstein_1` reproduces
+hand-computed curvature on a K₄ branchial slice, `wasserstein_1` agrees with
+exhaustive transport optima on three seeded families, and `to_petgraph` keeps
+parallel edges and drops an edge with an unregistered endpoint. Its header
+names the public types and traits it ranges over and the ones it does not
+([root README](../README.md#canonical-tests)).
+
 ## Build
 
 ```sh

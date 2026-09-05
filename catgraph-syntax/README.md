@@ -217,3 +217,15 @@ the owned `ThenFn` alias added at #222 (the 11th public name), are live
 public API, law-tested in `tests/arrow_laws.rs`; the Arrow surface is
 first exercised by the S5 `Traced` builder
 ([typed builder](#typed-builder-s5) above).
+
+## Canonical test
+
+[`tests/canonical.rs`](tests/canonical.rs) is the crate's canonical integration
+test: `parse(print(t)) == t` on a proptest corpus and on a right fold at the
+parser's deepest accepted nesting; `eval` reproduces `MatrixNFFunctor` row by
+row and both agree with a hand-written generator table (F&S 2018 Thm 5.53 /
+5.60); `CospanFunctor` decides the nine `E_frob` equations equal and separates
+`braid(1,1)` from `id(2)` (F&S 2019 Prop 3.8); `lift_user` refuses a term past
+`MAX_TERM_DEPTH`; and every `FrobeniusOr` variant survives a JSON round trip.
+Its header names the public types and traits it ranges over and the ones it
+does not ([root README](../README.md#canonical-tests)).

@@ -101,6 +101,16 @@ cargo run -p catgraph --example corel
 
 ## Testing
 
+[`tests/canonical.rs`](tests/canonical.rs) is the crate's canonical integration
+test: every `HypergraphCategory` implementor in `src` satisfies the eleven
+Def 2.5 equations, the Def 2.12 generator table and both zigzags, decided by
+`CospanCanon` equality over generator words of length ≤ 3 and every
+permutation of ≤ 4 wires; `compose` on each equals a union-find partition
+reference computed from the operand wirings; and
+`wiring(f ⊗ g) == wiring(f) ++ shift(wiring(g))` on every public `Monoidal`
+implementor in `src`. Its header names the public types and traits it ranges
+over and the ones it does not ([root README](../README.md#canonical-tests)).
+
 ```bash
 cargo test   -p catgraph
 cargo test   -p catgraph --examples
