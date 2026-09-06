@@ -7,7 +7,12 @@
 //! 2. `Cospan::is_left_identity` / `is_right_identity` answer
 //!    `leg.len() == middle.len() && represents_id(leg)` — including the length
 //!    conjunct, which is the half that keeps being dropped — and they answer it
-//!    about the value in hand rather than about how it was built.
+//!    about the value in hand rather than about how it was built; the four
+//!    `span_identity_predicate_*` tests in the same section make the transposed
+//!    claim for `Span`, whose accessors compare the apex against a **boundary**
+//!    and are pinned over `add_boundary_node`, `add_middle`, `new`, `map`,
+//!    `dagger`, `compose`, `monoidal`, `permute_side` and the two permutation
+//!    constructors (#345).
 //!
 //!    ⚠ **This claim shrank twice.** #289 opened with two cached `bool` fields
 //!    that four mutators left a stale `true`, and `perform_pushout` selected
@@ -38,7 +43,7 @@ use catgraph::{
     cospan::Cospan,
     errors::{BoundaryLeg, CatgraphError},
     finset::from_cycle,
-    monoidal::SymmetricMonoidalMorphism,
+    monoidal::{Monoidal, SymmetricMonoidalMorphism},
     named_cospan::NamedCospan,
     span::Span,
     utils::remove_multiple,
@@ -750,20 +755,22 @@ fn cospan_connect_pair_merges_when_node_1s_vertex_is_the_last_apex_index() {
     );
 }
 
-/// `Span::is_left_identity` requires the apex to have one pair per domain
-/// element, so appending a domain label makes it `false`.
+/// Each of `Span`'s identity accessors requires the apex to have one pair per
+/// element of **its own** boundary, so appending a label to that boundary makes
+/// it `false`.
 ///
-/// `represents_id` over the middle-pair domain components answers only
-/// `pair[i].0 == i` for the pairs present, so without the
-/// `middle.len() == left.len()` conjunct an apex strictly smaller than the
-/// domain passes. The append leaves the pairs `[(0, 0), (1, 1)]` in order and
-/// grows the domain to three: in order, so `represents_id` is not what decides
-/// the answer, and short, so the length conjunct is.
+/// `represents_id` over the middle-pair components answers only
+/// `pair[i].0 == i` (resp. `pair[i].1 == i`) for the pairs present, so without
+/// the `middle.len() == left.len()` / `middle.len() == right.len()` conjunct an
+/// apex strictly smaller than the boundary passes. Each append leaves the pairs
+/// `[(0, 0), (1, 1)]` in order and grows one boundary to three: in order, so
+/// `represents_id` is not what decides the answer, and short, so the length
+/// conjunct is.
 ///
-/// **What this ranges over.** One domain-side append on one fixture, with one
-/// `Cospan` contrast beside it so the two claims cannot be read as one. It does
-/// not range over the codomain side, over apex sizes, or over out-of-order
-/// pairs.
+/// **What this ranges over.** One append on the domain side and its mirror on
+/// the codomain side, one fixture each, with one `Cospan` contrast beside them
+/// so the two claims cannot be read as one. It does not range over apex sizes
+/// or over out-of-order pairs.
 ///
 /// ⚠ **The contrast is `Cospan`'s mirror, not its twin, and it has to be.** The
 /// two halves grow in opposite directions: the `Span` gains a *boundary* entry
@@ -792,6 +799,21 @@ fn span_identity_predicate_takes_the_boundary_length() {
          expected false; without the `middle.len() == left.len()` conjunct \
          `represents_id([0, 1])` carries it to true",
         s.is_left_identity()
+    );
+
+    // The codomain mirror: `is_right_identity` compares the apex against
+    // `right`, so the append that grows `right` alone is what decides it.
+    let mut t = Span::<char>::identity(&vec!['a', 'b']);
+    assert!(t.is_right_identity());
+    t.add_boundary_node(Right('c'));
+    assert_eq!(t.right().len(), 3);
+    assert_eq!(t.middle_pairs().len(), 2);
+    assert!(
+        !t.is_right_identity(),
+        "two apex pairs over a three-element codomain: is_right_identity() = \
+         {}, expected false; without the `middle.len() == right.len()` conjunct \
+         `represents_id([0, 1])` carries it to true",
+        t.is_right_identity()
     );
 
     // The `Cospan` shape, in the opposite direction: a domain leg that no
@@ -841,6 +863,196 @@ fn span_identity_predicate_is_recomputed_not_cached() {
         s.is_left_identity(),
         s.is_right_identity()
     );
+}
+
+/// The two permutation constructors' identity answers, read off the value they
+/// build.
+///
+/// Both wire apex element `idx` to the pair `(idx, p.apply(idx))` over
+/// boundaries of `types.len()`, so the apex has one pair per boundary element
+/// on both sides, the domain component is `[0, 1, …]` and the codomain
+/// component is `p`. Under the identity permutation both accessors therefore
+/// answer `true`; under `rotation_left(3, 1)` the codomain component is out of
+/// order and only the domain side stays `true`.
+///
+/// **What this ranges over.** Both constructors under two permutations — the
+/// identity on 3 and `rotation_left(3, 1)` — on one 3-element type list. It
+/// does not range over type-list lengths, other permutations, or the
+/// length-mismatch `Err` arm.
+#[test]
+fn span_identity_predicate_over_the_permutation_constructors() {
+    let types = vec!['a', 'b', 'c'];
+
+    for (constructor, span) in [
+        (
+            "from_permutation_on_domain",
+            Span::<char>::from_permutation_on_domain(Permutation::identity(3), &types)
+                .expect("the permutation's length matches the type list"),
+        ),
+        (
+            "from_permutation_on_codomain",
+            Span::<char>::from_permutation_on_codomain(Permutation::identity(3), &types)
+                .expect("the permutation's length matches the type list"),
+        ),
+    ] {
+        assert_eq!(
+            span.middle_pairs(),
+            &[(0, 0), (1, 1), (2, 2)],
+            "{constructor}"
+        );
+        assert_eq!(
+            (span.is_left_identity(), span.is_right_identity()),
+            (true, true),
+            "{constructor} under the identity permutation: \
+             (is_left_identity(), is_right_identity()) = ({}, {}), expected \
+             (true, true) for middle {:?} over three-element boundaries",
+            span.is_left_identity(),
+            span.is_right_identity(),
+            span.middle_pairs()
+        );
+    }
+
+    for (constructor, span) in [
+        (
+            "from_permutation_on_domain",
+            Span::<char>::from_permutation_on_domain(Permutation::rotation_left(3, 1), &types)
+                .expect("the permutation's length matches the type list"),
+        ),
+        (
+            "from_permutation_on_codomain",
+            Span::<char>::from_permutation_on_codomain(Permutation::rotation_left(3, 1), &types)
+                .expect("the permutation's length matches the type list"),
+        ),
+    ] {
+        assert_eq!(
+            span.middle_pairs(),
+            &[(0, 1), (1, 2), (2, 0)],
+            "{constructor}"
+        );
+        assert_eq!(
+            (span.is_left_identity(), span.is_right_identity()),
+            (true, false),
+            "{constructor} under rotation_left(3, 1): \
+             (is_left_identity(), is_right_identity()) = ({}, {}), expected \
+             (true, false) — the domain components of {:?} are [0, 1, 2] and \
+             the codomain components are [1, 2, 0]",
+            span.is_left_identity(),
+            span.is_right_identity(),
+            span.middle_pairs()
+        );
+    }
+}
+
+/// The identity predicate over six `Span` paths that build a new `middle`,
+/// `left` or `right`.
+///
+/// Each row runs one path and asserts the pair
+/// `(is_left_identity(), is_right_identity())` against a value measured off the
+/// tree, with the span's three vectors in the failure message.
+///
+/// **What this ranges over.** Six paths — `new`, `map`, `dagger`, `compose`,
+/// `monoidal` and `permute_side` — over a three-element short-apex span and the
+/// identities on `['a']`, `['b']`, `['a', 'b']` and `['a', 'b', 'c']`, with
+/// `monoidal` and `permute_side` taking two rows each. `Rel::union`,
+/// `Rel::intersection` and `Rel::complement` also change the middle and are
+/// **not** covered here.
+#[test]
+fn span_identity_predicate_over_the_mutators() {
+    // Short apex: two pairs, in order, over three-element boundaries — so the
+    // length conjunct is what decides both answers.
+    let short = || {
+        Span::<char>::new(
+            vec!['a', 'b', 'c'],
+            vec!['a', 'b', 'c'],
+            vec![(0, 0), (1, 1)],
+        )
+        .expect("both pairs are in bounds and label-agreeing")
+    };
+
+    let id_ab = Span::<char>::identity(&vec!['a', 'b']);
+    let composed = id_ab
+        .compose(&id_ab)
+        .expect("an identity composes with itself");
+
+    let mut mixed = Span::<char>::identity(&vec!['a']);
+    mixed.monoidal(short());
+
+    let mut both_ids = Span::<char>::identity(&vec!['a']);
+    both_ids.monoidal(Span::<char>::identity(&vec!['b']));
+
+    let types = vec!['a', 'b', 'c'];
+    let mut permuted_domain = Span::<char>::identity(&types);
+    permuted_domain.permute_side(&Permutation::identity(3), false);
+    let mut permuted_codomain = Span::<char>::identity(&types);
+    permuted_codomain.permute_side(&Permutation::identity(3), true);
+    let mut rotated_domain = Span::<char>::identity(&types);
+    rotated_domain.permute_side(&Permutation::rotation_left(3, 1), false);
+
+    for (path, span, expected) in [
+        (
+            "new: short apex over three-element boundaries",
+            short(),
+            (false, false),
+        ),
+        // A relabelling that keeps the labels distinct, so only the lengths and
+        // the pairs can decide the answer.
+        (
+            "map: successor labels on the short-apex span",
+            short().map(|c| ((c as u8) + 1) as char),
+            (false, false),
+        ),
+        (
+            "dagger: the short-apex span",
+            short().dagger(),
+            (false, false),
+        ),
+        (
+            "compose: identity(['a', 'b']) with itself",
+            composed,
+            (true, true),
+        ),
+        (
+            "monoidal: identity(['a']) (x) the short-apex span",
+            mixed,
+            (false, false),
+        ),
+        (
+            "monoidal: identity(['a']) (x) identity(['b'])",
+            both_ids,
+            (true, true),
+        ),
+        (
+            "permute_side: the identity permutation on the domain",
+            permuted_domain,
+            (true, true),
+        ),
+        (
+            "permute_side: the identity permutation on the codomain",
+            permuted_codomain,
+            (true, true),
+        ),
+        // The rotation moves the domain components out of order and leaves the
+        // codomain components alone, so exactly one side survives.
+        (
+            "permute_side: rotation_left(3, 1) on the domain",
+            rotated_domain,
+            (false, true),
+        ),
+    ] {
+        assert_eq!(
+            (span.is_left_identity(), span.is_right_identity()),
+            expected,
+            "{path}: (is_left_identity(), is_right_identity()) = ({}, {}), \
+             expected ({}, {}) for middle {:?} over left {:?} and right {:?}",
+            span.is_left_identity(),
+            span.is_right_identity(),
+            expected.0,
+            expected.1,
+            span.middle_pairs(),
+            span.left(),
+            span.right()
+        );
+    }
 }
 
 // ===========================================================================

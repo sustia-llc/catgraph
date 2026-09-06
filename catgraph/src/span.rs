@@ -37,7 +37,7 @@ impl<Lambda> Span<Lambda>
 where
     Lambda: Sized + Eq + Copy + Debug,
 {
-    /// Debug-asserts the two structural invariants a `Span` has: both
+    /// Debug-asserts the structural invariants: both
     /// components of every middle pair index inside their boundary, and the two
     /// labels a pair names agree.
     ///
@@ -167,7 +167,7 @@ where
     /// **apex** size against the **domain** size — the transpose of
     /// [`Cospan::is_left_identity`](crate::cospan::Cospan::is_left_identity),
     /// whose legs run the other way. Derived from `(middle, left.len())` on
-    /// every call — `O(middle.len())`, and exact in both directions.
+    /// every call — `O(middle.len())`.
     #[must_use]
     pub fn is_left_identity(&self) -> bool {
         self.middle.len() == self.left.len() && represents_id(self.middle.iter().map(|tup| tup.0))
@@ -201,7 +201,6 @@ where
     /// bounds-check, and appending one leaves every existing middle pair in
     /// bounds and label-agreeing.
     ///
-    /// It does move the identity predicate on the side it grows.
     /// [`is_left_identity`](Self::is_left_identity) /
     /// [`is_right_identity`](Self::is_right_identity) require the apex to have
     /// one pair per boundary element, so appending to a boundary the apex
