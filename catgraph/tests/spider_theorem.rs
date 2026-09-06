@@ -65,15 +65,14 @@
 //!
 //! That rustdoc *used to* record the map as neither sound nor complete against
 //! SCFM-equality **on scalars**, both witnesses measured, and that
-//! incomparability is why the exclusions below were drawn where they are:
-//! `m == n == 0` and every component-closing recipe are exactly the
+//! incomparability is why two shapes — `m == n == 0` and every
+//! component-closing recipe — were once excluded: they are exactly the
 //! scalar-shaped inputs the oracle was known to disagree with the syntax on.
 //! #350 closed that gap — `two_layer_simplify`'s rule 3 is gone, both witnesses
-//! are now pinned the other way up, and the rustdoc says so. The exclusions
-//! therefore outlived their cause; lifting them is possible and tracked as
-//! #353, and is **not** done here (see "Excluded by design" below, which states
-//! the same thing at the point the exclusions are listed). Every term this file
-//! does range over is additionally asserted to carry no scalar class at all.
+//! are now pinned the other way up, and the rustdoc says so. #353 lifted both
+//! exclusions on the strength of it, and the scalar count is now asserted
+//! against the recipe's own count of closed components rather than against
+//! zero.
 //!
 //! It is the theorem *over the corpus it ranges over*, and the shape of that
 //! corpus is stated rather than implied. The measure that matters is a
@@ -91,9 +90,9 @@
 //! at `m == n == 1` the factorisation phrase is satisfied vacuously by
 //! `id ; D ; id` without splitting anything (over-reports).
 //!
-//! Measured over the 1280 connected terms: **1030** have an interior waist of
+//! Measured over the 1307 connected terms: **1030** have an interior waist of
 //! two or more — 15 of those at `1 → 1`, where the over-reporting reading
-//! applies — 205 have an internal cut of one wire, and 45 have no internal cut
+//! applies — 232 have an internal cut of one wire, and 45 have no internal cut
 //! at all (fewer than two blocks — nothing to narrow). All four counts are
 //! pinned by the census, so the accounting is complete rather than stated for
 //! the favourable part. [`wide_waist_permutation_family`] is what supplies the bulk
@@ -124,35 +123,49 @@
 //!
 //! ## Excluded by design
 //!
-//! Three shapes are excluded, the first two for one shared reason:
+//! One shape is excluded:
 //!
-//! - **`m == n == 0`.** A `0 → 0` diagram has no boundary at all, so its single
-//!   component is closed (below).
-//! - **Any recipe that closes a component** — an η whose whole descendance is
-//!   counit-ed off, leaving a component that touches neither boundary.
 //! - **Any recipe with *no* component at all** — a random walk that started at
 //!   width 0 and never drew an η, so no block could ever apply. Such a recipe is
 //!   the empty term, `[] → []`, depth 0; `components == 0` makes it neither
-//!   connected nor closed, and `apex_len() == components` would hold on it for
-//!   free (`0 == 0`) while saying nothing. It is counted in the census
+//!   connected nor disconnected, and `apex_len() == components` would hold on it
+//!   for free (`0 == 0`) while saying nothing. It is counted in the census
 //!   ([`MEASURED_EMPTY_RECIPES`]) and asserted to be exactly that shape, but no
 //!   claim test ranges over it.
 //!
-//! The first two sat on the *special* vs *extra-special* line, which this file
-//! deliberately stayed out of: `two_layer_simplify`'s rule 3 cancelled `η;ε`
-//! outright (the extra-special axiom) while `Cospan` is the **special** theory,
-//! in which a closed bubble is a genuine `0 → 0` scalar. Measured on `d6c7bd5`,
-//! before the rule was deleted: `(η ⊗ id);(id ⊗ id);(ε ⊗ id)` normalised to a
-//! depth-1 term with the bubble gone, whose canonical form is
-//! `apex_len = 1, scalars = 0`.
+//! ## The two exclusions #353 lifted, and what they assert now
 //!
-//! **That line was decided at #350** — rule 3 is gone and `FrobeniusMorphism`
-//! is the special theory, so a closed component now keeps its scalar on both
-//! sides. Lifting these two exclusions is therefore possible and is tracked as
-//! a follow-up (#353); it is **not** done here, and the exclusions below stand
-//! exactly as they were. Both tests additionally assert `scalar_count() == 0`
-//! on every term they *do* range over, so a surviving scalar class reddens the
-//! pin rather than being quietly absorbed.
+//! `m == n == 0` and every component-closing recipe — an η whose whole
+//! descendance is counit-ed off, leaving a component that touches neither
+//! boundary — used to be excluded as well. They sat on the *special* vs
+//! *extra-special* line, which this file deliberately stayed out of:
+//! `two_layer_simplify`'s rule 3 cancelled `η;ε` outright (the extra-special
+//! axiom) while `Cospan` is the **special** theory, in which a closed bubble is
+//! a genuine `0 → 0` scalar. Measured on `d6c7bd5`, before the rule was deleted:
+//! `(η ⊗ id);(id ⊗ id);(ε ⊗ id)` normalised to a depth-1 term with the bubble
+//! gone, whose canonical form is `apex_len = 1, scalars = 0`.
+//!
+//! **#350 decided that line** — rule 3 is gone and `FrobeniusMorphism` is the
+//! special theory, so a closed component keeps its scalar on both sides — and
+//! #353 lifted both exclusions on the strength of it. Where the two tests used
+//! to assert `scalar_count() == 0`, each now asserts it against the recipe's own
+//! count of components that touch neither boundary:
+//!
+//! - [`connected_diagrams_denote_the_spider_in_cospan`] ranges over every
+//!   one-component recipe, `m == n == 0` included, and asserts `apex_len() == 1`
+//!   with `scalar_count()` equal to that count — `1` exactly on the `0 → 0`
+//!   terms, whose one component is the closed one, and `0` elsewhere. It reads
+//!   its wire label off the recipe's component rather than off the boundary,
+//!   since a `0 → 0` term has no boundary to read, and then checks every
+//!   boundary wire against it.
+//! - [`disconnected_recipes_denote_more_than_one_apex_vertex`] ranges over every
+//!   recipe with two or more components, closing ones included, and asserts
+//!   `apex_len() == components` with `scalar_count()` equal to the closed count
+//!   — so the open components are `apex_len() - scalar_count()`.
+//!
+//! Both counts are floored ([`MIN_CONNECTED_CLOSING`],
+//! [`MIN_DISCONNECTED_CLOSING`]), so neither assertion can quietly return to
+//! reading `0 == 0` over its whole arm.
 //!
 //! ## What the corpus is, and what it is not
 //!
@@ -161,11 +174,10 @@
 //! `special_frobenius_morphism` never appears inside a term under test, only on
 //! the right-hand side of the comparison. All terms are at `Lambda = char`,
 //! `BlackBoxLabel = String`: **one instantiation**, not "every carrier". Depth
-//! is counted as *recipe layers appended*, not as the simplified term's layer
-//! count — `FrobeniusMorphism::layers` is `pub(crate)` and an integration test
-//! cannot see it, so the reported depth is an upper bound on the term's own.
+//! is counted as *recipe layers appended*, not as the simplified term's own
+//! layer count, so the reported depth is an upper bound on the latter.
 //! The corpus is finite and seeded; it is a wide sample, not a proof. Its
-//! *arity* spread is the narrow part — 24 distinct `(m, n)` pairs, none beyond
+//! *arity* spread is the narrow part — 25 distinct `(m, n)` pairs, none beyond
 //! 4 — while its structural spread is answered by the permutation sweep (§2
 //! above). Nothing here is uniform over connected diagrams — it is a corpus,
 //! and the census pins exactly which one.
@@ -304,9 +316,19 @@ fn spider_1_3_via_double_delta() {
 /// `η;ε` (the extra-special axiom), so both sides were the empty term and the
 /// comparison held for a reason that had nothing to do with the builder. With
 /// rule 3 deleted both sides are two-layer terms and the equality is a real
-/// shape comparison. `(0, 0)` remains excluded from
-/// [`connected_diagrams_denote_the_spider_in_cospan`] — lifting that exclusion
-/// is the #353 follow-up, not this file's business here; see the module header.
+/// shape comparison. That is asserted here rather than left as prose: the
+/// composite is checked against the empty term on the empty object, which is
+/// what it collapsed to under rule 3.
+///
+/// `(0, 0)` is also in [`connected_diagrams_denote_the_spider_in_cospan`]'s
+/// range since #353, where the same builder is compared at the semantics
+/// instead — see the module header.
+///
+/// **Falsification (production at `88800f6`, reverted after).** Reinstating
+/// rule 3 in `two_layer_simplify` reddens the empty-term check with
+/// `η;ε reduced to the empty term (depth 1)`, and reddens the semantic arm on
+/// the same shape; adding a `(0, 0) => FrobeniusMorphism::new()` arm to
+/// `special_frobenius_morphism` reddens the equality below instead.
 #[test]
 fn spider_0_0_via_eta_epsilon() {
     let z = 'z';
@@ -317,6 +339,13 @@ fn spider_0_0_via_eta_epsilon() {
 
     assert!(eta.domain().is_empty());
     assert!(eta.codomain().is_empty());
+    let empty: FM = <FM as HasIdentity<Vec<char>>>::identity(&Vec::new());
+    assert!(
+        eta != empty,
+        "s_0_0: η;ε reduced to the empty term (depth {}), so the equality below compares two \
+         empty terms and says nothing about the builder",
+        eta.depth(),
+    );
 
     let spider: FM = special_frobenius_morphism(0, 0, z);
     assert_eq!(spider.domain(), eta.domain());
@@ -361,18 +390,18 @@ const LABELS: [char; 2] = ['a', 'b'];
 const RANDOM_TERMS: usize = 400;
 
 /// The exact size of [`corpus`]. Asserted, so the space cannot shrink silently.
-/// 192 scripted connected + 16 scripted wide-waist + 1488 permutation-swept
+/// 200 scripted connected + 16 scripted wide-waist + 1488 permutation-swept
 /// wide-waist (`2 · 4!` at `m = 2` plus `2 · 6!` at `m = 3`) + 9 scripted
 /// disconnected + [`RANDOM_TERMS`].
-const CORPUS_SIZE: usize = 192 + 16 + 1488 + 9 + RANDOM_TERMS;
+const CORPUS_SIZE: usize = 200 + 16 + 1488 + 9 + RANDOM_TERMS;
 
 /// Floor on the number of **connected** terms
 /// [`connected_diagrams_denote_the_spider_in_cospan`] ranges over.
-/// Measured 1280. [`wide_waist_permutation_family`] alone contributes 992 of
+/// Measured 1307. [`wide_waist_permutation_family`] alone contributes 992 of
 /// them with no RNG involved, so this floor is safe from seed drift.
 const MIN_CONNECTED: usize = 900;
 
-/// Floor on connected terms carrying at least one σ block. Measured 1105.
+/// Floor on connected terms carrying at least one σ block. Measured 1109.
 ///
 /// The permutation family supplies 992 of those *structurally*: a term of that
 /// family is connected only when its permutation is non-identity, and a
@@ -405,30 +434,29 @@ const MIN_CONNECTED_WIDE_WAIST: usize = 900;
 const MIN_CONNECTED_MAX_DEPTH: usize = 15;
 
 /// Floor on the number of distinct `(m, n)` arities among the connected terms.
-/// Measured 24 — exactly the scripted grid `0..=4 × 0..=4` minus `(0, 0)`. The
-/// *floor* holds by construction (the scripted grid alone supplies 24); the
-/// *equality* is *measured on this seed*, not structural. Nothing in
+/// Measured 25 — exactly the scripted grid `0..=4 × 0..=4`. The *floor* holds by
+/// construction (the scripted grid alone supplies 25, `(0, 0)` included since
+/// #353); the *equality* is *measured on this seed*, not structural. Nothing in
 /// [`random_term`] bounds a connected walk's arity — the start width is drawn
 /// from `0..4` and up to ten δ layers may be appended, so a connected `(1, 5)`
 /// is reachable in principle. It simply did not occur at seed `0x6055_0001`, so
 /// a seed or `rand` change may legitimately move the exact census number.
-const MIN_CONNECTED_ARITIES: usize = 24;
+const MIN_CONNECTED_ARITIES: usize = 25;
 
-/// Floor on the number of **disconnected** terms with at least two components
-/// and no closed component — the arm
-/// [`disconnected_recipes_denote_more_than_one_apex_vertex`] ranges over.
-/// Measured 716, of which [`wide_waist_permutation_family`] contributes 496 with
-/// no RNG involved. (The component-free empty recipes are *not* in this arm; see
-/// the module header's *Excluded by design*.)
+/// Floor on the number of **disconnected** terms with at least two components —
+/// the arm [`disconnected_recipes_denote_more_than_one_apex_vertex`] ranges
+/// over. Measured 759, of which [`wide_waist_permutation_family`] contributes
+/// 496 with no RNG involved. (The component-free empty recipes are *not* in this
+/// arm; see the module header's *Excluded by design*.)
 const MIN_DISCONNECTED: usize = 400;
 
 /// Floor on distinct canonical forms in the disconnected arm. A generator that
 /// degenerated to one repeated shape would still satisfy [`MIN_DISCONNECTED`];
-/// this is what notices. Measured 203.
+/// this is what notices. Measured 243.
 const MIN_DISCONNECTED_DISTINCT: usize = 150;
 
 /// Floor on σ blocks that still lie **between two distinct components** when
-/// their recipe ends. Measured 2169.
+/// their recipe ends. Measured 2199.
 ///
 /// This is the load-bearing count for one of the two falsification
 /// perturbations: making the braiding arm a merge instead of a permutation
@@ -438,9 +466,18 @@ const MIN_DISCONNECTED_DISTINCT: usize = 150;
 /// — it cannot see that perturbation either. See [`Recipe::braid_pairs`].
 const MIN_CROSS_COMPONENT_BRAIDINGS: usize = 1200;
 
-/// Floor on corpus terms excluded for closing a component, so the exclusion is
-/// visibly non-empty rather than a clause about nothing. Measured 62.
-const MIN_CLOSED_EXCLUDED: usize = 30;
+/// Floor on the connected terms whose one component is **closed** — the `0 → 0`
+/// shapes, where `scalar_count() == closed components` reads `1 == 1` rather
+/// than `0 == 0`. Measured 27, of which [`connected_family`]'s `(0, 0)` cell
+/// supplies 8 with no RNG involved, so the floor is safe from seed drift.
+const MIN_CONNECTED_CLOSING: usize = 8;
+
+/// Floor on the disconnected-arm terms carrying at least one closed component,
+/// where `scalar_count() == closed components` reads something other than
+/// `0 == 0`. Measured 43, all 43 from random walks and none from a scripted
+/// family (both counted on the census corpus), so unlike
+/// [`MIN_CONNECTED_CLOSING`] this floor rests on the seed.
+const MIN_DISCONNECTED_CLOSING: usize = 20;
 
 /// One wire in a recipe's running codomain: its label and which construction
 /// component it belongs to.
@@ -482,6 +519,10 @@ struct Recipe {
     /// Whether component `c` was seeded by a domain wire — such a component
     /// touches the boundary forever, even after its wires are counit-ed off.
     domain_seeded: Vec<bool>,
+    /// The wire label component `c` was created with. [`Recipe::finish`] asserts
+    /// that the members of a union class agree on it, so the label of a class is
+    /// the label of any of its members.
+    comp_label: Vec<char>,
     wires: Vec<Wire>,
     domain: Vec<char>,
     term: FM,
@@ -518,6 +559,7 @@ impl Recipe {
         Self {
             parent: (0..domain.len()).collect(),
             domain_seeded: vec![true; domain.len()],
+            comp_label: domain.to_vec(),
             wires,
             domain: domain.to_vec(),
             term: <FM as HasIdentity<Vec<char>>>::identity(&domain.to_vec()),
@@ -545,11 +587,12 @@ impl Recipe {
         ra
     }
 
-    /// Start a component that no domain wire seeded — an η.
-    fn fresh_component(&mut self) -> usize {
+    /// Start a component that no domain wire seeded — an η on label `z`.
+    fn fresh_component(&mut self, z: char) -> usize {
         let id = self.parent.len();
         self.parent.push(id);
         self.domain_seeded.push(false);
+        self.comp_label.push(z);
         id
     }
 
@@ -620,7 +663,7 @@ impl Recipe {
                     return Err(format!("η at {i}: only {} wires", self.wires.len()));
                 }
                 self.push_layer(i, 0, FrobeniusOperation::Unit(z).into());
-                let comp = self.fresh_component();
+                let comp = self.fresh_component(z);
                 self.wires.insert(i, Wire { label: z, comp });
                 Ok(())
             }
@@ -653,8 +696,9 @@ impl Recipe {
         }
     }
 
-    /// Close the recipe out into a [`Built`], computing the connectivity verdict
-    /// and the closed-component verdict from the disjoint-set alone.
+    /// Close the recipe out into a [`Built`], computing the component count, the
+    /// per-component closed verdict and each component's label from the
+    /// disjoint-set alone.
     fn finish(mut self, name: String) -> Built {
         let codomain: Vec<char> = self.wires.iter().map(|w| w.label).collect();
         let wire_comps: Vec<usize> = self.wires.iter().map(|w| w.comp).collect();
@@ -662,11 +706,22 @@ impl Recipe {
         // A component touches the boundary iff a domain wire seeded it or one of
         // its wires survived to the codomain.
         let mut boundary: HashMap<usize, bool> = HashMap::new();
+        let mut label_of: HashMap<usize, char> = HashMap::new();
         for c in 0..self.parent.len() {
             let seeded = self.domain_seeded[c];
+            let label = self.comp_label[c];
             let root = self.find(c);
             let entry = boundary.entry(root).or_insert(false);
             *entry = *entry || seeded;
+            // Checked rather than argued: which member writes the class's label
+            // only fails to matter while the members agree, and the connected
+            // arm reads its comparison label from here.
+            let seen = label_of.entry(root).or_insert(label);
+            assert_eq!(
+                *seen, label,
+                "{name}: component {c} joins class {root} carrying '{label}', which already \
+                 carries '{seen}' — a union spanned two labels",
+            );
         }
         for c in wire_comps {
             let root = self.find(c);
@@ -674,7 +729,12 @@ impl Recipe {
         }
 
         let components = boundary.len();
-        let closed = boundary.values().any(|&touches| !touches);
+        let closed_components = boundary.values().filter(|&&touches| !touches).count();
+        let sole_component_label = if components == 1 {
+            boundary.keys().next().map(|root| label_of[root])
+        } else {
+            None
+        };
 
         // Resolved against the FINAL disjoint-set, not against the one that
         // stood when the σ was laid: a braiding whose two sides a later μ merges
@@ -695,7 +755,8 @@ impl Recipe {
             codomain,
             components,
             connected: components == 1,
-            closed,
+            closed_components,
+            sole_component_label,
             depth: self.depth,
             braidings: self.braidings,
             cross_component_braidings,
@@ -716,8 +777,14 @@ struct Built {
     /// no block could apply; excluded by design (see the module header).
     components: usize,
     connected: bool,
-    /// Some component touches neither boundary — excluded by design.
-    closed: bool,
+    /// How many of those components touch neither boundary — an η whose whole
+    /// descendance was counit-ed off. Each is a scalar in the cospan image, so
+    /// this is the scalar count both claim tests assert against.
+    closed_components: usize,
+    /// The label of the recipe's single component when `components == 1`, `None`
+    /// otherwise. At `m == n == 0` the boundary carries no label, so this is
+    /// where the connected arm reads the one it compares against.
+    sole_component_label: Option<char>,
     /// Recipe layers appended; an upper bound on the simplified term's depth.
     depth: usize,
     braidings: usize,
@@ -771,12 +838,15 @@ impl Built {
     }
 }
 
-/// The scripted connected family: for every `(m, n)` in `0..=4 × 0..=4` except
-/// `(0, 0)`, on each of the two labels, four decoration variants.
+/// The scripted connected family: for every `(m, n)` in `0..=4 × 0..=4`, on each
+/// of the two labels, four decoration variants.
 ///
 /// Shape: fold the `m` inputs to one wire with a left comb of μ (or seed one
 /// with η when `m == 0`), decorate, then split to `n` with a comb of δ (or
-/// close with ε when `n == 0`). Every variant stays connected by construction —
+/// close with ε when `n == 0`). At `(0, 0)` both ends apply, so the eight terms
+/// there are an η the decoration works on and an ε that closes it off: one
+/// component, touching neither boundary, which the cospan image carries as a
+/// scalar. Every variant stays connected by construction —
 /// which the disjoint-set then *verifies* rather than assumes, since a scripting
 /// mistake would show up as `components > 1` and land the term in the other arm.
 ///
@@ -795,9 +865,6 @@ fn connected_family() -> Vec<Built> {
     for &z in &LABELS {
         for m in 0..=4usize {
             for n in 0..=4usize {
-                if m == 0 && n == 0 {
-                    continue;
-                }
                 for variant in 0..4usize {
                     out.push(scripted_connected(z, m, n, variant));
                 }
@@ -1256,10 +1323,10 @@ fn random_term(rng: &mut StdRng, index: usize, steps: usize) -> Built {
     r.finish(format!("random_{index}"))
 }
 
-/// The whole corpus: 192 scripted connected terms ([`connected_family`]), 16
+/// The whole corpus: 200 scripted connected terms ([`connected_family`]), 16
 /// scripted wide-waist ones ([`wide_waist_family`]), the 1488 of
-/// [`wide_waist_permutation_family`] — 71% of the corpus, and the reason
-/// [`CORPUS_SIZE`] is 2105 rather than 617 — 9 scripted disconnected terms
+/// [`wide_waist_permutation_family`] — 70% of the corpus, and the reason
+/// [`CORPUS_SIZE`] is 2113 rather than 625 — 9 scripted disconnected terms
 /// ([`disconnected_family`]), and [`RANDOM_TERMS`] pseudo-random ones seeded at
 /// `0x6055_0001`.
 ///
@@ -1304,15 +1371,19 @@ fn image(term: &FM, name: &str) -> CospanCanon<char> {
 /// **Claim.** For a connected `m → n` Frobenius diagram on a single wire type
 /// `z`, `frobenius_to_cospan(·).canonical_form()` has exactly one apex vertex,
 /// labelled `z`, whose domain preimage is all of `0..m` and whose codomain
-/// preimage is all of `0..n`, and no scalar classes — and that canonical form is
-/// the one `special_frobenius_morphism(m, n, z)` lands on.
+/// preimage is all of `0..n`, and as many scalar classes as the recipe has
+/// components touching neither boundary — and that canonical form is the one
+/// `special_frobenius_morphism(m, n, z)` lands on. On this arm that scalar count
+/// is 0 or 1, and 1 exactly at `m == n == 0`: one component touching neither
+/// boundary leaves no wire for a boundary index to sit on.
 ///
-/// **Space the assertions actually touch.** The connected, non-closed terms of
-/// [`corpus`]: the 192 scripted terms of [`connected_family`] (both labels ×
-/// `(m, n)` in `0..=4 × 0..=4` minus `(0, 0)` × four decoration variants), the
+/// **Space the assertions actually touch.** The connected terms of [`corpus`]:
+/// the 200 scripted terms of [`connected_family`] (both labels × `(m, n)` in
+/// `0..=4 × 0..=4` × four decoration variants), the
 /// 16 of [`wide_waist_family`], the 992 connected members of
 /// [`wide_waist_permutation_family`], plus whichever of the [`RANDOM_TERMS`]
-/// random walks came out connected — 1280 terms measured. All at
+/// random walks came out connected — 1307 terms measured, 27 of them closing
+/// their one component ([`MIN_CONNECTED_CLOSING`]). All at
 /// `Lambda = char`, `BlackBoxLabel = String` — **one instantiation**. Every term
 /// is built from η, ε, μ, δ, σ, `id` only; none contains a `Spider` block.
 /// Arities beyond 4, three or more distinct labels, and black boxes are outside
@@ -1325,9 +1396,9 @@ fn image(term: &FM, name: &str) -> CospanCanon<char> {
 /// follows by induction. ⚠ The metric is evidence and not proof in either
 /// direction — [`Built::is_wide_waist`] states both gaps, and 15 of the wide
 /// terms below sit at the `1 → 1` arity where it over-reports. Over
-/// the 1280 connected terms the interior-waist histogram is
-/// `{None: 45, 1: 205, 2: 23, 3: 619, 4: 388}` — **1030** with a cut of two or
-/// more, 205 with a one-wire cut, and 45 with no internal cut at all (fewer than
+/// the 1307 connected terms the interior-waist histogram is
+/// `{None: 45, 1: 232, 2: 23, 3: 619, 4: 388}` — **1030** with a cut of two or
+/// more, 232 with a one-wire cut, and 45 with no internal cut at all (fewer than
 /// two blocks). All three buckets are pinned by
 /// [`the_corpus_is_the_space_these_pins_claim`], so no part of the split is left
 /// to be inferred. [`connected_family`] contributes the narrow bucket by
@@ -1341,8 +1412,10 @@ fn image(term: &FM, name: &str) -> CospanCanon<char> {
 /// regression in the builder reddens this test rather than being compared
 /// against itself.
 ///
-/// **Falsification (production at `d6c7bd5`, corpus at this file's current
-/// shape; every perturbation reverted after).**
+/// **Falsification, rows 1–4 (production at `d6c7bd5`, corpus at `88800f6`'s
+/// shape — before #353 admitted the component-closing terms — and rows 5–8 at
+/// `88800f6` production over the corpus this file now builds; every
+/// perturbation reverted after).**
 ///
 /// | perturbation | result |
 /// |---|---|
@@ -1350,13 +1423,17 @@ fn image(term: &FM, name: &str) -> CospanCanon<char> {
 /// | `SymmetricBraiding` arm made a same-label merge | **green** — see below |
 /// | `special_frobenius_morphism`'s odd-`m` branch mirrored to `id ⊗ sfm(m-1, 1)` | **green** — see below |
 /// | [`wide_waist_permutation_family`] dropped from [`corpus`] (with `CORPUS_SIZE` followed down, so the size assert still passes) | red on [`MIN_CONNECTED`]: **288 connected terms over 617**, floor 900. The wide bucket falls to 38 of 288 in the same run — so the sweep, not the seed, is what carries the structural spread |
+/// | `CospanCanon::scalar_count` made to under-count by one (`.saturating_sub(1)`) | red, **27 of 1307** — `connected_a_0_0_v0`: `apex=1 scalars=0` where its one closed component wants `scalars=1`. The `88800f6` version of this file, run against the same perturbed production, is **green** on both claim arms, the census and [`spider_0_0_via_eta_epsilon`] — its two arms skipped every recipe with a closed component, which is the set this perturbation moves |
+/// | `special_frobenius_morphism` given a `(0, 0) => FrobeniusMorphism::new()` arm | red, **27 of 1307** — `connected_a_0_0_v0` denotes `apex=1 scalars=1` while the builder denotes `apex=0 scalars=0`. [`spider_0_0_via_eta_epsilon`] reddens with it |
+/// | `two_layer_simplify`'s deleted rule 3 reinstated (`η;ε` cancelled again) | red, **27 of 1307** on the same witness: the corpus term keeps its bubble (its η and ε are not adjacent layers) while the builder's `η;ε` collapses. Also reddens [`spider_0_0_via_eta_epsilon`] on its empty-term check, [`the_corpus_is_the_space_these_pins_claim`], and the disconnected arm |
+/// | the component-closing skip re-inserted at this arm's filter | red on [`MIN_CONNECTED_ARITIES`]: **24 arities**, floor 25 — `(0, 0)` leaves the grid. With that floor relaxed to 24 the run reaches [`MIN_CONNECTED_CLOSING`], red at **0 of 1280**, floor 8 |
 ///
-/// The middle two are the honest statement of what this test *cannot* see, and
+/// The two rows marked green are the honest statement of what this test *cannot* see, and
 /// each is covered elsewhere in this file. A merging σ cannot change a
 /// connected term's image: it is already one apex vertex, so unioning two of
 /// its own wires moves nothing —
 /// [`disconnected_recipes_denote_more_than_one_apex_vertex`] is what reddens
-/// (**397 of 716**). A mirrored spider builder is *SCFM-equal* to the real one, so both
+/// (**397 of 716**, on `88800f6`'s corpus). A mirrored spider builder is *SCFM-equal* to the real one, so both
 /// sides of the `canon != spider_canon` comparison move together and this test
 /// stays green by rights; the term-level [`spider_3_1_via_double_mu`] and
 /// [`spider_1_3_via_double_delta`] are what go red. That division of labour is
@@ -1372,16 +1449,20 @@ fn connected_diagrams_denote_the_spider_in_cospan() {
 
     let mut failures: Vec<String> = Vec::new();
     let mut connected = 0usize;
+    let mut closing = 0usize;
     let mut with_braiding = 0usize;
     let mut wide_waist = 0usize;
     let mut max_depth = 0usize;
     let mut arities: HashSet<(usize, usize)> = HashSet::new();
 
     for built in &terms {
-        if !built.connected || built.closed {
+        if !built.connected {
             continue;
         }
         connected += 1;
+        if built.closed_components > 0 {
+            closing += 1;
+        }
         if built.braidings > 0 {
             with_braiding += 1;
         }
@@ -1393,12 +1474,14 @@ fn connected_diagrams_denote_the_spider_in_cospan() {
         let (m, n) = (built.domain.len(), built.codomain.len());
         arities.insert((m, n));
 
-        // A connected term's boundary carries one label: μ is the only merging
-        // block and it is typed, so a component never spans two labels.
-        let mut boundary = built.domain.iter().chain(built.codomain.iter());
-        let z = *boundary
-            .next()
-            .expect("invariant: m == n == 0 terms are excluded, so the boundary is non-empty");
+        // A connected term carries one label: μ is the only merging block and it
+        // is typed, so a component never spans two labels. Read off the recipe's
+        // component rather than off the boundary, because a `0 → 0` term has no
+        // boundary to read — and every boundary wire is then checked against it,
+        // which is the stronger of the two directions.
+        let z = built.sole_component_label.expect(
+            "invariant: this arm ranges over one-component recipes, whose label `finish` records",
+        );
         if built
             .domain
             .iter()
@@ -1420,11 +1503,18 @@ fn connected_diagrams_denote_the_spider_in_cospan() {
             "special_frobenius_morphism",
         );
 
-        if canon.apex_len() != 1 || canon.scalar_count() != 0 {
+        // The recipe's own bookkeeping says how many of its components close, and
+        // a closed component is a scalar in the image. On this arm there is one
+        // component, so the count is 0 or 1 and `1` forces `m == n == 0`: a
+        // single component that touches neither boundary leaves no wire for a
+        // boundary index to sit on.
+        let expected_scalars = built.closed_components;
+        if canon.apex_len() != 1 || canon.scalar_count() != expected_scalars {
             failures.push(format!(
-                "  {}: connected {m}→{n} on '{z}' but its image is {} (want apex=1 scalars=0); \
-                 classes {:?}",
+                "  {}: connected {m}→{n} on '{z}' with {} closed component(s) but its image is {} \
+                 (want apex=1 scalars={expected_scalars}); classes {:?}",
                 built.name,
+                built.closed_components,
                 digest(&canon),
                 canon.classes(),
             ));
@@ -1508,6 +1598,15 @@ fn connected_diagrams_denote_the_spider_in_cospan() {
         MIN_CONNECTED_ARITIES,
         MEASURED_CONNECTED_ARITIES,
     );
+    assert!(
+        closing >= MIN_CONNECTED_CLOSING,
+        "the connected arm lost its component-closing terms: {closing} of {connected} close their \
+         one component, floor {} (measured {} when this pin was written) — without them the \
+         `scalars == closed components` assertion above degenerates to the `scalars == 0` it \
+         replaced",
+        MIN_CONNECTED_CLOSING,
+        MEASURED_CONNECTED_CLOSING,
+    );
 }
 
 /// The rejected half of the same verdict: a recipe the disjoint-set calls
@@ -1527,25 +1626,32 @@ fn connected_diagrams_denote_the_spider_in_cospan() {
 /// counted separately in the census; see the module header's *Excluded by
 /// design*.
 ///
-/// **Space the assertions actually touch.** The non-closed terms of [`corpus`]
-/// with **two or more** recipe components — the nine scripted ones, the 496
-/// disconnected members of [`wide_waist_permutation_family`], plus whichever
-/// random walks came out that way; 716 measured — at `Lambda = char`,
-/// `BlackBoxLabel = String`. Closed-component terms are excluded here for the
-/// same reason as in the connected arm (the special vs extra-special line; see
-/// the module header), which is why `scalar_count() == 0` is asserted rather
-/// than assumed.
+/// **Space the assertions actually touch.** The terms of [`corpus`] with **two
+/// or more** recipe components — the nine scripted ones, the 496 disconnected
+/// members of [`wide_waist_permutation_family`], plus whichever random walks
+/// came out that way; 759 measured, 43 of them carrying at least one closed
+/// component ([`MIN_DISCONNECTED_CLOSING`]) — at `Lambda = char`,
+/// `BlackBoxLabel = String`. Those 43 are why `scalar_count()` is asserted
+/// against the recipe's closed-component count rather than against zero: a
+/// closed component is an apex vertex no leg reaches, so it lands in
+/// `apex_len()` and in `scalar_count()` both, and the open components are the
+/// difference.
 ///
-/// **Falsification (production at `d6c7bd5`, corpus at this file's current
-/// shape; every perturbation reverted after).**
+/// **Falsification, rows 1–3 (production at `d6c7bd5`, corpus at `88800f6`'s
+/// shape — before #353 admitted the component-closing terms — and rows 4–6 at
+/// `88800f6` production over the corpus this file now builds; every
+/// perturbation reverted after).**
 ///
 /// | perturbation | result |
 /// |---|---|
 /// | `generator_to_cospan`'s `SymmetricBraiding` arm → the merge `Cospan::new_unchecked(vec![0, 0], vec![0, 0], vec![z])` for **every** `σ` | red, but on a *type* error: `disc_mixed_label_sigma_between_components` is rejected by the layer fold with `'b' vs 'a'` at a common interface, because a merged apex cannot retype `[z, w] → [w, z]`. Worth recording — on distinct labels the permutation is the only well-typed reading, so this arm is not free to be wrong there |
 /// | the same merge **restricted to `z == w`**, so every term stays type-correct | red, **397 of 716** disconnected recipes disagree — `disc_same_label_sigma_between_components`: recipe 2 components, image `apex=1` (one class, dom `[0,1,2,3]`, cod `[0,1]`) |
 /// | `generator_to_cospan`'s `Comultiplication(z)` arm → the disconnected `Cospan::new_unchecked(vec![0], vec![0, 1], vec![z, z])` | red, **380 of 716** disagree — first witness `wide_perm_a_2_3_p0`: recipe 2 components, image `apex=3` |
+/// | `CospanCanon::scalar_count` made to under-count by one (`.saturating_sub(1)`) | red, **43 of 759** — first witness `random_4`: recipe 3 components, 1 of them closed, image `apex=3 scalars=0` where the assertion wants `scalars=1`. The `88800f6` version of this file is green under it, having excluded every closing recipe |
+/// | `two_layer_simplify`'s deleted rule 3 reinstated (`η;ε` cancelled again) | red, **20 of 759** — `random_4`: image `apex=2 scalars=0`, wanted `apex=3 scalars=1`; the cancelled bubble takes its apex vertex with it |
+/// | the component-closing skip re-inserted at this arm's filter | red on [`MIN_DISCONNECTED_CLOSING`]: **0 of 716** carry a closed component, floor 20 |
 ///
-/// The middle row's numerator was 29 of 220 before
+/// The `z == w` merge row's numerator was 29 of 220 before
 /// [`wide_waist_permutation_family`] existed. The sweep is what moved it: every
 /// one of its permutations lays σ's across a δ-fan whose two halves may or may
 /// not end up in the same component, which is exactly the shape a merging
@@ -1568,6 +1674,7 @@ fn disconnected_recipes_denote_more_than_one_apex_vertex() {
 
     let mut failures: Vec<String> = Vec::new();
     let mut disconnected = 0usize;
+    let mut closing = 0usize;
     let mut cross_component_braidings = 0usize;
     let mut distinct: HashSet<CospanCanon<char>> = HashSet::new();
 
@@ -1575,24 +1682,34 @@ fn disconnected_recipes_denote_more_than_one_apex_vertex() {
         // `components < 2` covers both the connected arm and the component-free
         // empty recipes, on which `apex_len() == components` is `0 == 0` and
         // pins nothing.
-        if built.components < 2 || built.closed {
+        if built.components < 2 {
             continue;
         }
         disconnected += 1;
+        if built.closed_components > 0 {
+            closing += 1;
+        }
         cross_component_braidings += built.cross_component_braidings;
 
         let canon = image(&built.term, &built.name);
         distinct.insert(canon.clone());
 
-        if canon.apex_len() != built.components || canon.scalar_count() != 0 {
+        // Both numbers come from the recipe's own component bookkeeping: one
+        // apex vertex per component, and a component that touches neither
+        // boundary is the one whose vertex no leg reaches — a scalar. The open
+        // components are therefore `apex_len() - scalar_count()`, which these
+        // two together fix.
+        let expected_scalars = built.closed_components;
+        if canon.apex_len() != built.components || canon.scalar_count() != expected_scalars {
             failures.push(format!(
-                "  {}: the recipe has {} components and no closed one, but its image is {} \
-                 ({}→{} wires); classes {:?}",
+                "  {}: the recipe has {} components, {expected_scalars} of them closed, but its \
+                 image is {} ({}→{} wires; want apex={} scalars={expected_scalars}); classes {:?}",
                 built.name,
                 built.components,
                 digest(&canon),
                 built.domain.len(),
                 built.codomain.len(),
+                built.components,
                 canon.classes(),
             ));
         }
@@ -1627,33 +1744,46 @@ fn disconnected_recipes_denote_more_than_one_apex_vertex() {
         MIN_CROSS_COMPONENT_BRAIDINGS,
         MEASURED_CROSS_COMPONENT_BRAIDINGS,
     );
+    assert!(
+        closing >= MIN_DISCONNECTED_CLOSING,
+        "the disconnected arm lost its component-closing terms: {closing} of {disconnected} carry \
+         a closed component, floor {} (measured {} when this pin was written) — without them the \
+         `scalars == closed components` assertion above degenerates to the `scalars == 0` it \
+         replaced",
+        MIN_DISCONNECTED_CLOSING,
+        MEASURED_DISCONNECTED_CLOSING,
+    );
 }
 
-// The values measured on `d6c7bd5` (production) with the corpus at this file's
-// current shape. All twelve are asserted exactly in
+// The values measured on `88800f6` (production) with the corpus at this file's
+// current shape. All fourteen are asserted exactly in
 // `the_corpus_is_the_space_these_pins_claim`.
 //
-// Eight of them additionally appear in a failure message above or below, so a
+// Ten of them additionally appear in a failure message above or below, so a
 // reader can tell a real regression from fixture drift without rerunning
 // anything. Four do not, and here is exactly where each is reported, since a
 // wrong answer to that is the same over-quantification this file exists to
-// remove: `MEASURED_CLOSED_EXCLUDED` is reported by the census tuple and by the
-// floor-vs-census loop (as `MIN_CLOSED_EXCLUDED`'s partner); `MEASURED_EMPTY_RECIPES`,
-// `MEASURED_CONNECTED_NO_INTERNAL_CUT` and
-// `MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS` are reported by the census tuple
-// **alone** — no floor guards any of them, because none bounds a claim test's
-// space. They are census bookkeeping, and each does a different job. The
-// connected arm's partition is `MEASURED_CONNECTED` (1280) = wide 1030 + narrow
-// 205 + `MEASURED_CONNECTED_NO_INTERNAL_CUT` 45; `MEASURED_EMPTY_RECIPES` (47)
-// is **not** part of it — those terms have `components == 0` and are skipped
-// before the connected branch is reached, so adding them into that sum is a
-// misread, not a drift. `MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS` bounds how much
-// of the wide bucket rests on `Built::is_wide_waist`'s over-reporting arity, and
-// `MEASURED_EMPTY_RECIPES` is the non-emptiness pin of an excluded arm. Between
-// them the corpus's structural bias is stated in full rather than for the
-// favourable part.
-const MEASURED_CONNECTED: usize = 1280;
-const MEASURED_CONNECTED_WITH_BRAIDING: usize = 1105;
+// remove: `MEASURED_EMPTY_RECIPES`, `MEASURED_CONNECTED_NO_INTERNAL_CUT`,
+// `MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS` and
+// `MEASURED_DISCONNECTED_CLOSED_COMPONENTS` are reported by the census struct
+// **alone** — no floor guards any of them. They are census bookkeeping, and
+// each does a different job. `MEASURED_DISCONNECTED_CLOSED_COMPONENTS` is the
+// disconnected arm's total of closed components across its 43 closing terms,
+// so a seed change that keeps 43 closers but loses every term carrying two
+// moves it while `MEASURED_DISCONNECTED_CLOSING` and its floor stay put. The
+// connected arm's partition is `MEASURED_CONNECTED` = wide
+// `MEASURED_CONNECTED_WIDE_WAIST` + narrow + `MEASURED_CONNECTED_NO_INTERNAL_CUT`;
+// `MEASURED_EMPTY_RECIPES` is **not** part of it — those terms have
+// `components == 0` and are skipped before the connected branch is reached, so
+// adding them into that sum is a misread, not a drift.
+// `MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS` bounds how much of the wide bucket
+// rests on `Built::is_wide_waist`'s over-reporting arity, and
+// `MEASURED_EMPTY_RECIPES` is the non-emptiness pin of the one excluded arm.
+// Between them the corpus's structural bias is stated in full rather than for
+// the favourable part.
+const MEASURED_CONNECTED: usize = 1307;
+const MEASURED_CONNECTED_CLOSING: usize = 27;
+const MEASURED_CONNECTED_WITH_BRAIDING: usize = 1109;
 const MEASURED_CONNECTED_WIDE_WAIST: usize = 1030;
 const MEASURED_CONNECTED_NO_INTERNAL_CUT: usize = 45;
 /// Connected wide-waist terms at `m == n == 1` — the arity where
@@ -1664,34 +1794,51 @@ const MEASURED_CONNECTED_NO_INTERNAL_CUT: usize = 45;
 /// whose terms all have `m, n >= 2`.
 const MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS: usize = 15;
 const MEASURED_CONNECTED_MAX_DEPTH: usize = 21;
-const MEASURED_CONNECTED_ARITIES: usize = 24;
-const MEASURED_DISCONNECTED: usize = 716;
-const MEASURED_DISCONNECTED_DISTINCT: usize = 203;
-const MEASURED_CROSS_COMPONENT_BRAIDINGS: usize = 2169;
-const MEASURED_CLOSED_EXCLUDED: usize = 62;
+const MEASURED_CONNECTED_ARITIES: usize = 25;
+const MEASURED_DISCONNECTED: usize = 759;
+const MEASURED_DISCONNECTED_CLOSING: usize = 43;
+const MEASURED_DISCONNECTED_CLOSED_COMPONENTS: usize = 50;
+const MEASURED_DISCONNECTED_DISTINCT: usize = 243;
+const MEASURED_CROSS_COMPONENT_BRAIDINGS: usize = 2199;
 const MEASURED_EMPTY_RECIPES: usize = 47;
+
+/// The fourteen census buckets, so the exact assertion in
+/// [`the_corpus_is_the_space_these_pins_claim`] names the one that moved.
+#[derive(Debug, PartialEq, Eq)]
+struct Census {
+    connected: usize,
+    connected_closing: usize,
+    disconnected: usize,
+    disconnected_closing: usize,
+    disconnected_closed_components: usize,
+    empty: usize,
+    connected_with_braiding: usize,
+    connected_wide_waist: usize,
+    connected_no_internal_cut: usize,
+    connected_wide_at_1_to_1: usize,
+    cross_component_braidings: usize,
+    connected_max_depth: usize,
+    connected_arities: usize,
+    disconnected_canonical_forms: usize,
+}
 
 /// The corpus census, asserted exactly rather than by floor — so a change to the
 /// generator has to restate what it produced instead of drifting inside the
 /// floors the two claim tests use.
 ///
-/// It also pins that the **excluded** arms are non-empty: terms whose recipe
-/// closes a component do exist in the corpus, and so do component-free empty
-/// recipes, so the exclusions documented in the module header are clauses about
-/// something. Almost nothing is asserted *about* the closed terms — the
-/// special vs extra-special question was answered elsewhere (#350: the closed
-/// bubble survives), and widening this file's claims onto those terms is the
-/// #353 follow-up rather than something this census does. The empty ones are
-/// pinned to be
-/// exactly the empty term (`[] → []`, depth 0), which is the whole of what
-/// "no component at all" can mean.
+/// It also pins that the component-closing terms and the one **excluded** arm
+/// are non-empty: terms whose recipe closes a component reach both claim arms,
+/// and component-free empty recipes exist and reach neither, so the exclusion
+/// documented in the module header is a clause about something. The empty ones
+/// are pinned to be exactly the empty term (`[] → []`, depth 0), which is the
+/// whole of what "no component at all" can mean.
 ///
 /// **Space:** the corpus of [`corpus`] at `char`/`String` on the pinned seed
 /// `0x6055_0001`.
 ///
-/// **Eleven of the twelve numbers are properties of the generator**, not of the
-/// production code under test, and for those this test goes red when the
-/// *generator* drifts — which is exactly its job. The twelfth is not, and the
+/// **Thirteen of the fourteen numbers are properties of the generator**, not of
+/// the production code under test, and for those this test goes red when the
+/// *generator* drifts — which is exactly its job. The remaining one is not, and the
 /// docstring says so rather than pointing a future maintainer at the wrong
 /// cause: `MEASURED_DISCONNECTED_DISTINCT` counts distinct **canonical forms**,
 /// so it is computed by [`image`] — `frobenius_to_cospan` + `canonical_form`,
@@ -1709,8 +1856,10 @@ fn the_corpus_is_the_space_these_pins_claim() {
     assert_eq!(terms.len(), CORPUS_SIZE, "corpus size");
 
     let mut connected = 0usize;
+    let mut connected_closing = 0usize;
     let mut disconnected = 0usize;
-    let mut closed = 0usize;
+    let mut disconnected_closing = 0usize;
+    let mut disconnected_closed_components = 0usize;
     let mut empty = 0usize;
     let mut with_braiding = 0usize;
     let mut wide_waist = 0usize;
@@ -1739,12 +1888,26 @@ fn the_corpus_is_the_space_these_pins_claim() {
             );
             continue;
         }
-        if built.closed {
-            closed += 1;
-            continue;
-        }
         if built.connected {
             connected += 1;
+            if built.closed_components > 0 {
+                connected_closing += 1;
+                // A single component that touches neither boundary leaves no
+                // wire for a boundary index to sit on, so the connected arm's
+                // closing terms are exactly its `0 → 0` ones. Pinned, because
+                // the arm reads its label off the recipe precisely there.
+                assert!(
+                    built.domain.is_empty()
+                        && built.codomain.is_empty()
+                        && built.sole_component_label.is_some(),
+                    "{}: a connected recipe closes its one component but is not a labelled `0 → 0` \
+                     term ({:?} → {:?}, label {:?})",
+                    built.name,
+                    built.domain,
+                    built.codomain,
+                    built.sole_component_label,
+                );
+            }
             if built.braidings > 0 {
                 with_braiding += 1;
             }
@@ -1785,56 +1948,62 @@ fn the_corpus_is_the_space_these_pins_claim() {
             arities.insert((built.domain.len(), built.codomain.len()));
         } else {
             disconnected += 1;
+            if built.closed_components > 0 {
+                disconnected_closing += 1;
+            }
+            disconnected_closed_components += built.closed_components;
             cross += built.cross_component_braidings;
             disconnected_images.insert(image(&built.term, &built.name));
         }
     }
 
-    // ⚠ Twelve elements is the ceiling for std's tuple `PartialEq`/`Debug`
-    // impls. A thirteenth census bucket does not fail here with an arity
-    // message — it fails with an unsatisfied trait bound. Split into a named
-    // struct at that point rather than puzzling over the error.
+    // A named struct rather than a tuple: twelve elements is the ceiling for
+    // std's tuple `PartialEq`/`Debug` impls, and this census has fourteen
+    // buckets. `Debug` prints the field names either way, so a red here says
+    // which bucket moved.
     assert_eq!(
-        (
+        Census {
             connected,
+            connected_closing,
             disconnected,
-            closed,
+            disconnected_closing,
+            disconnected_closed_components,
             empty,
-            with_braiding,
-            wide_waist,
-            no_internal_cut,
-            wide_with_trivial_ends,
-            cross,
-            max_depth,
-            arities.len(),
-            disconnected_images.len(),
-        ),
-        (
-            MEASURED_CONNECTED,
-            MEASURED_DISCONNECTED,
-            MEASURED_CLOSED_EXCLUDED,
-            MEASURED_EMPTY_RECIPES,
-            MEASURED_CONNECTED_WITH_BRAIDING,
-            MEASURED_CONNECTED_WIDE_WAIST,
-            MEASURED_CONNECTED_NO_INTERNAL_CUT,
-            MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS,
-            MEASURED_CROSS_COMPONENT_BRAIDINGS,
-            MEASURED_CONNECTED_MAX_DEPTH,
-            MEASURED_CONNECTED_ARITIES,
-            MEASURED_DISCONNECTED_DISTINCT,
-        ),
-        "(connected, disconnected, closed, empty, connected-with-σ, \
-         connected-with-interior-waist-≥-2, connected-with-no-internal-cut, \
-         connected-wide-at-1→1, cross-component σ, deepest connected recipe, distinct connected \
-         arities, distinct disconnected canonical forms)"
+            connected_with_braiding: with_braiding,
+            connected_wide_waist: wide_waist,
+            connected_no_internal_cut: no_internal_cut,
+            connected_wide_at_1_to_1: wide_with_trivial_ends,
+            cross_component_braidings: cross,
+            connected_max_depth: max_depth,
+            connected_arities: arities.len(),
+            disconnected_canonical_forms: disconnected_images.len(),
+        },
+        Census {
+            connected: MEASURED_CONNECTED,
+            connected_closing: MEASURED_CONNECTED_CLOSING,
+            disconnected: MEASURED_DISCONNECTED,
+            disconnected_closing: MEASURED_DISCONNECTED_CLOSING,
+            disconnected_closed_components: MEASURED_DISCONNECTED_CLOSED_COMPONENTS,
+            empty: MEASURED_EMPTY_RECIPES,
+            connected_with_braiding: MEASURED_CONNECTED_WITH_BRAIDING,
+            connected_wide_waist: MEASURED_CONNECTED_WIDE_WAIST,
+            connected_no_internal_cut: MEASURED_CONNECTED_NO_INTERNAL_CUT,
+            connected_wide_at_1_to_1: MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS,
+            cross_component_braidings: MEASURED_CROSS_COMPONENT_BRAIDINGS,
+            connected_max_depth: MEASURED_CONNECTED_MAX_DEPTH,
+            connected_arities: MEASURED_CONNECTED_ARITIES,
+            disconnected_canonical_forms: MEASURED_DISCONNECTED_DISTINCT,
+        },
+        "the corpus census"
     );
 
     // `wide_waist_family`'s three named witnesses, guarded by NAME rather than
-    // by a count. Measured: deleting all 16 of that family leaves every floor in
-    // this file green — the permutation sweep alone keeps `MIN_CONNECTED` (1264
-    // ≥ 900), `MIN_CONNECTED_WITH_BRAIDING` (1099) and
+    // by a count. Measured on `88800f6`'s corpus, before #353 admitted the
+    // component-closing terms: deleting all 16 of that family leaves every floor
+    // in this file green — the permutation sweep alone keeps `MIN_CONNECTED`
+    // (1264 ≥ 900), `MIN_CONNECTED_WITH_BRAIDING` (1099) and
     // `MIN_CONNECTED_WIDE_WAIST` (1014) satisfied — so before this check the
-    // exact census tuple was the only thing that noticed, and it would read as
+    // exact census was the only thing that noticed, and it would read as
     // fixture drift. A count floor would not fix that, since the sweep
     // out-supplies any number worth setting. What actually earns these 16 their
     // place is that three of them *are* the composites §1 measures as
@@ -1849,11 +2018,11 @@ fn the_corpus_is_the_space_these_pins_claim() {
             .find(|b| b.name == name)
             .unwrap_or_else(|| panic!("{name} left the corpus — see wide_waist_family"));
         assert!(
-            found.connected && !found.closed && found.is_wide_waist(),
-            "{name} is no longer a connected, non-closed, wide-waist term ({} components, closed \
-             {}, interior waist {:?})",
+            found.connected && found.closed_components == 0 && found.is_wide_waist(),
+            "{name} is no longer a connected, non-closing, wide-waist term ({} components, {} \
+             closed, interior waist {:?})",
             found.components,
-            found.closed,
+            found.closed_components,
             found.interior_waist,
         );
         // …and the property that is the stated reason these three are here: each
@@ -1899,10 +2068,8 @@ fn the_corpus_is_the_space_these_pins_claim() {
 
     // Every floor constant in this file must sit at or below the census value it
     // guards, or the claim test asserting it is already red on the very corpus
-    // the census above pins. All nine are checked, not just the ones that happen
-    // to be convenient: eight are asserted by the two claim tests, and
-    // `MIN_CLOSED_EXCLUDED` is asserted only here, as the non-emptiness pin of
-    // the excluded arm — which is why it is listed last rather than first.
+    // the census above pins. All ten are checked, not just the ones that happen
+    // to be convenient; each is asserted by one of the two claim tests.
     //
     // What this can and cannot catch, stated so nobody reads more into it: the
     // exact census above has already pinned every `measured` value to its
@@ -1943,7 +2110,16 @@ fn the_corpus_is_the_space_these_pins_claim() {
             MIN_CROSS_COMPONENT_BRAIDINGS,
             cross,
         ),
-        ("MIN_CLOSED_EXCLUDED", MIN_CLOSED_EXCLUDED, closed),
+        (
+            "MIN_CONNECTED_CLOSING",
+            MIN_CONNECTED_CLOSING,
+            connected_closing,
+        ),
+        (
+            "MIN_DISCONNECTED_CLOSING",
+            MIN_DISCONNECTED_CLOSING,
+            disconnected_closing,
+        ),
     ] {
         assert!(
             floor <= measured,
@@ -1952,10 +2128,12 @@ fn the_corpus_is_the_space_these_pins_claim() {
         );
     }
 
-    // Nothing in the corpus escapes the four-way split.
+    // Nothing in the corpus escapes the three-way split. The two closing counts
+    // are not part of it: they cut across `connected` and `disconnected` rather
+    // than beside them, which is what lifting the closing exclusion means.
     assert_eq!(
-        connected + disconnected + closed + empty,
+        connected + disconnected + empty,
         CORPUS_SIZE,
-        "connected + disconnected + closed + empty must exhaust the corpus"
+        "connected + disconnected + empty must exhaust the corpus"
     );
 }
