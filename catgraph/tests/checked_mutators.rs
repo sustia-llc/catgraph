@@ -750,26 +750,20 @@ fn cospan_connect_pair_merges_when_node_1s_vertex_is_the_last_apex_index() {
     );
 }
 
-/// `Span`'s identity flags are weaker than `Cospan`'s answer, and the `Span`
-/// docs now say so — pinned here so the docstring cannot drift from the code.
+/// `Span::is_left_identity` requires the apex to have one pair per domain
+/// element, so appending a domain label makes it `false`.
 ///
-/// `Span::new_unchecked` computes them as `represents_id` over the middle-pair
-/// components with no conjunct against the boundary lengths, so appending a
-/// boundary label leaves `is_left_identity()` reporting `true` for a span whose
-/// middle no longer covers its domain. Nothing mis-composes on it —
-/// `Span::compose` does not fast-path on the flags — so this pins the current
-/// contract, not a defect being fixed here. Tracked as
-/// [#345](https://github.com/sustia-llc/catgraph/issues/345): when that issue
-/// tightens the flag this pin must go **red** and be inverted — that is what it
-/// is for; do not "fix" it by deleting it.
-///
-/// `Span` still *caches* both flags; #289 deleted `Cospan`'s cache but left
-/// `Span`'s alone, so the two types now differ in two ways rather than one —
-/// the missing conjunct #345 names, and whether the answer is recomputed. That
-/// widens #345's scope; it does not settle it.
+/// `represents_id` over the middle-pair domain components answers only
+/// `pair[i].0 == i` for the pairs present, so without the
+/// `middle.len() == left.len()` conjunct an apex strictly smaller than the
+/// domain passes. The append leaves the pairs `[(0, 0), (1, 1)]` in order and
+/// grows the domain to three: in order, so `represents_id` is not what decides
+/// the answer, and short, so the length conjunct is.
 ///
 /// **What this ranges over.** One domain-side append on one fixture, with one
-/// `Cospan` contrast beside it so the two claims cannot be read as one.
+/// `Cospan` contrast beside it so the two claims cannot be read as one. It does
+/// not range over the codomain side, over apex sizes, or over out-of-order
+/// pairs.
 ///
 /// ⚠ **The contrast is `Cospan`'s mirror, not its twin, and it has to be.** The
 /// two halves grow in opposite directions: the `Span` gains a *boundary* entry
@@ -786,27 +780,66 @@ fn cospan_connect_pair_merges_when_node_1s_vertex_is_the_last_apex_index() {
 /// into the same shape would therefore turn the contrast into a vacuous
 /// assertion; keep them opposite.
 #[test]
-fn span_identity_flag_ignores_the_boundary_length() {
+fn span_identity_predicate_takes_the_boundary_length() {
     let mut s = Span::<char>::identity(&vec!['a', 'b']);
     assert!(s.is_left_identity());
     s.add_boundary_node(Left('c'));
     assert_eq!(s.left().len(), 3);
     assert_eq!(s.middle_pairs().len(), 2);
     assert!(
-        s.is_left_identity(),
-        "unlike `Cospan`, `Span` reads only the middle pairs — see the \
-         `Span::add_boundary_node` docs"
+        !s.is_left_identity(),
+        "two apex pairs over a three-element domain: is_left_identity() = {}, \
+         expected false; without the `middle.len() == left.len()` conjunct \
+         `represents_id([0, 1])` carries it to true",
+        s.is_left_identity()
     );
 
-    // The `Cospan` shape #345 would bring `Span` into line with: a domain leg
-    // that no longer covers the apex is not an identity.
+    // The `Cospan` shape, in the opposite direction: a domain leg that no
+    // longer covers the apex is not an identity.
     let mut c = Cospan::<char>::identity(&vec!['a', 'b']);
     c.add_boundary_node_unknown_target(Right('c'));
     assert_eq!(c.left_to_middle().len(), 2);
     assert_eq!(c.middle().len(), 3);
     assert!(
         !c.is_left_identity(),
-        "`Cospan` carries the boundary-length conjunct `Span` lacks"
+        "`Cospan` carries the same conjunct against the apex it grew"
+    );
+}
+
+/// `Span`'s identity accessors describe the value in hand, not how it was
+/// built: a mutation that restores the identity restores the `true`.
+///
+/// `identity(['a', 'b'])` grown by one label on each boundary and then given
+/// the middle pair that reaches both is the identity on `['a', 'b', 'c']`, so
+/// both accessors answer `true`. Neither `add_boundary_node` nor `add_middle`
+/// leaves anything behind for them to read — the answer is recomputed from
+/// `(middle, left, right)` on every call.
+///
+/// **What this ranges over.** One fixture, both accessors, one grow-then-repair
+/// sequence through `add_boundary_node` and `add_middle`. It says nothing about
+/// the length conjunct — every state it asserts on has apex and boundary the
+/// same size — which is
+/// `span_identity_predicate_takes_the_boundary_length`'s claim, nor about
+/// `permute_side`, `monoidal` or `compose`.
+#[test]
+fn span_identity_predicate_is_recomputed_not_cached() {
+    let mut s = Span::<char>::identity(&vec!['a', 'b']);
+    s.add_boundary_node(Left('c'));
+    s.add_boundary_node(Right('c'));
+    s.add_middle((2, 2))
+        .expect("(2, 2) is in bounds on both sides and both labels are 'c'");
+
+    assert_eq!(s.middle_pairs(), &[(0, 0), (1, 1), (2, 2)]);
+    assert_eq!(s.left(), &['a', 'b', 'c']);
+    assert_eq!(s.right(), &['a', 'b', 'c']);
+    assert!(
+        s.is_left_identity() && s.is_right_identity(),
+        "three in-order pairs over three-element boundaries: \
+         (is_left_identity(), is_right_identity()) = ({}, {}), expected \
+         (true, true); a cache cleared by `add_middle` and never rebuilt reads \
+         (false, false)",
+        s.is_left_identity(),
+        s.is_right_identity()
     );
 }
 

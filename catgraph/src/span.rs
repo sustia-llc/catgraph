@@ -31,26 +31,22 @@ where
     left: Vec<Lambda>,
     /// Lambda-typed codomain set.
     right: Vec<Lambda>,
-    is_left_id: bool,
-    is_right_id: bool,
 }
 
 impl<Lambda> Span<Lambda>
 where
     Lambda: Sized + Eq + Copy + Debug,
 {
-    /// Debug-asserts structural invariants: leg indices in bounds, type consistency, identity flags.
+    /// Debug-asserts the two structural invariants a `Span` has: both
+    /// components of every middle pair index inside their boundary, and the two
+    /// labels a pair names agree.
     ///
     /// Every check is written **inside** its `debug_assert!`, so the whole
     /// method compiles away in release. The bounds assertions precede the label
     /// assertion, so a debug build reports the specific invariant rather than
-    /// an index panic.
-    ///
-    /// The two `bool` parameters select the arms that compare `Span`'s cached
-    /// identity flags against the predicate they cache: `check_id_strong`
-    /// checks both legs unconditionally, `check_id_weak` only a leg whose flag
-    /// is already `true`.
-    pub fn assert_valid(&self, check_id_strong: bool, check_id_weak: bool) {
+    /// an index panic. There is no cached identity flag to check — the
+    /// accessors *are* the predicate — so it takes no parameters.
+    pub fn assert_valid(&self) {
         debug_assert!(
             self.middle.iter().all(|(z, _)| *z < self.left.len()),
             "A target for one of the left arrows was out of bounds"
@@ -65,23 +61,9 @@ where
                 .all(|(z1, z2)| self.left[*z1] == self.right[*z2]),
             "There was a left and right linked by something in the span, but their lambda types didn't match"
         );
-        if check_id_strong || (check_id_weak && self.is_left_id) {
-            debug_assert_eq!(
-                represents_id(self.middle_to_left().into_iter()),
-                self.is_left_id,
-                "The identity nature of the left arrow was wrong"
-            );
-        }
-        if check_id_strong || (check_id_weak && self.is_right_id) {
-            debug_assert_eq!(
-                represents_id(self.middle_to_right().into_iter()),
-                self.is_right_id,
-                "The identity nature of the right arrow was wrong"
-            );
-        }
     }
 
-    /// Construct a span from domain labels, codomain labels, and middle pairs, computing identity flags.
+    /// Construct a span from domain labels, codomain labels, and middle pairs.
     ///
     /// Every middle pair is checked against both boundaries **in every build
     /// profile**: each component must be in bounds, and the two labels it names
@@ -154,16 +136,12 @@ where
         right: Vec<Lambda>,
         middle: Vec<(LeftIndex, RightIndex)>,
     ) -> Self {
-        let is_left_id = represents_id(middle.iter().map(|tup| tup.0));
-        let is_right_id = represents_id(middle.iter().map(|tup| tup.1));
         let answer = Self {
             middle,
             left,
             right,
-            is_left_id,
-            is_right_id,
         };
-        answer.assert_valid(false, false);
+        answer.assert_valid();
         answer
     }
 
@@ -182,14 +160,25 @@ where
         &self.middle
     }
 
+    /// True when the domain leg is the identity on the domain: the apex has one
+    /// pair per domain element, and pair `i`'s domain component is element `i`.
+    ///
+    /// A span's legs run apex → boundary, so the length conjunct compares the
+    /// **apex** size against the **domain** size — the transpose of
+    /// [`Cospan::is_left_identity`](crate::cospan::Cospan::is_left_identity),
+    /// whose legs run the other way. Derived from `(middle, left.len())` on
+    /// every call — `O(middle.len())`, and exact in both directions.
     #[must_use]
     pub fn is_left_identity(&self) -> bool {
-        self.is_left_id
+        self.middle.len() == self.left.len() && represents_id(self.middle.iter().map(|tup| tup.0))
     }
 
+    /// True when the codomain leg is the identity on the codomain.
+    ///
+    /// The mirror of [`is_left_identity`](Self::is_left_identity); see there.
     #[must_use]
     pub fn is_right_identity(&self) -> bool {
-        self.is_right_id
+        self.middle.len() == self.right.len() && represents_id(self.middle.iter().map(|tup| tup.1))
     }
 
     #[must_use]
@@ -209,20 +198,15 @@ where
     ///
     /// Infallible: a span's legs point *out* of the apex, so a boundary node
     /// here is a **label rather than an index**. There is no argument to
-    /// bounds-check, appending one leaves every existing middle pair in bounds
-    /// and label-agreeing, and the identity flags are computed from the middle
-    /// pairs alone, which this call does not touch.
+    /// bounds-check, and appending one leaves every existing middle pair in
+    /// bounds and label-agreeing.
     ///
-    /// ⚠ **The flags this leaves alone mean less than a `Cospan`'s answer.**
-    /// [`new_unchecked`](Self::new_unchecked) computes `is_left_id` /
-    /// `is_right_id` as `represents_id` over the middle-pair components with
-    /// **no** conjunct against `left.len()` / `right.len()` — the conjunct
-    /// [`Cospan`](crate::cospan::Cospan) carries. So after
-    /// `Span::identity(&['a', 'b']).add_boundary_node(Left('c'))` the span is no
-    /// longer an identity (the middle no longer covers the domain) while
-    /// `is_left_identity()` still reports `true`. `Span::compose` reads the
-    /// middle pairs, never the flags, so the divergence is confined to the
-    /// accessor.
+    /// It does move the identity predicate on the side it grows.
+    /// [`is_left_identity`](Self::is_left_identity) /
+    /// [`is_right_identity`](Self::is_right_identity) require the apex to have
+    /// one pair per boundary element, so appending to a boundary the apex
+    /// covered exactly leaves the apex one pair short and the predicate `false`
+    /// on that side.
     pub fn add_boundary_node(
         &mut self,
         new_boundary: Either<Lambda, Lambda>,
@@ -259,8 +243,7 @@ where
     /// - [`CatgraphError::Composition`] if the pair is in bounds on both sides
     ///   but the two labels it names disagree.
     ///
-    /// On `Err` the span is left exactly as it was — no pair is pushed and the
-    /// identity flags are not touched.
+    /// On `Err` the span is left exactly as it was — no pair is pushed.
     pub fn add_middle(
         &mut self,
         new_middle: (LeftIndex, RightIndex),
@@ -286,8 +269,6 @@ where
             });
         }
         self.middle.push(new_middle);
-        self.is_left_id = false;
-        self.is_right_id = false;
         Ok(self.middle.len() - 1)
     }
 
@@ -336,8 +317,6 @@ where
             middle: (0..on_this.len()).map(|idx| (idx, idx)).collect(),
             left: on_this.clone(),
             right: on_this.clone(),
-            is_left_id: true,
-            is_right_id: true,
         }
     }
 }
@@ -353,7 +332,6 @@ where
 
     fn compose(&self, other: &Self) -> Result<Self, CatgraphError> {
         self.composable(other)?;
-        // could shortuct if self.is_right_id or other.is_left_id, but unnecessary
         let max_middle = self.middle.len().max(other.middle.len());
         // Correct by construction: the middle starts empty (only pre-sized), and
         // every subsequent pair goes through `add_middle`, which re-checks labels.
@@ -396,8 +374,6 @@ where
     Lambda: Sized + Eq + Copy + Debug,
 {
     fn monoidal(&mut self, mut other: Self) {
-        self.is_left_id &= other.is_left_id;
-        self.is_right_id &= other.is_right_id;
         let left_shift = self.left.len();
         let right_shift = self.right.len();
         other.middle.iter_mut().for_each(|(v1, v2)| {
@@ -432,13 +408,11 @@ where
     fn permute_side(&mut self, p: &permutations::Permutation, of_codomain: bool) {
         let p_inv = p.inv();
         if of_codomain {
-            self.is_right_id = false;
             in_place_permute(&mut self.right, &p_inv);
             self.middle.iter_mut().for_each(|(_, v2)| {
                 *v2 = p.apply(*v2);
             });
         } else {
-            self.is_left_id = false;
             in_place_permute(&mut self.left, &p_inv);
             self.middle.iter_mut().for_each(|(v1, _)| {
                 *v1 = p.apply(*v1);
@@ -464,16 +438,13 @@ where
             left: types.to_vec(),
             middle: (0..types.len()).map(|idx| (idx, p.apply(idx))).collect(),
             right: p.inv().permute(types),
-            is_left_id: true,
-            is_right_id: false,
         })
     }
 
     /// `codomain() == types`, `domain()[i] == types[p.apply(i)]`.
     ///
     /// The apex pairs are `(idx, p.apply(idx))`, so the left leg is the
-    /// identity map and the right leg is `p`. The identity flags describe those
-    /// two apex leg maps, not the label vectors.
+    /// identity map and the right leg is `p`.
     fn from_permutation_on_codomain(
         p: permutations::Permutation,
         types: &[Lambda],
@@ -488,8 +459,6 @@ where
             left: p.permute(types),
             middle: (0..types.len()).map(|idx| (idx, p.apply(idx))).collect(),
             right: types.to_vec(),
-            is_left_id: true,
-            is_right_id: false,
         })
     }
 }
