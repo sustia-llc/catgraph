@@ -21,8 +21,15 @@ fn mobius_invertible_at_t_above_threshold() {
 fn graded_chain_sum_partitions_total() {
     let space = LawvereMetricSpace::from_distance_fn(4, |a, b| if a == b { 0.0 } else { 2.0 });
     let graded: Vec<(f64, F64Rig)> = chain_count_signed_graded(&space, 3).unwrap();
-    // At ell=0: 4 (k=0 chains), at ell=2: -12 (k=1), at ell=4: 36 (k=2),
-    // at ell=6: -108 (k=3). Sum: 4 - 12 + 36 - 108 = -80.
+    // On the 4-state scattered space at max chain length 3: one
+    // (ell, signed count) pair per grade, ascending in ell.
+    let observed: Vec<(f64, f64)> = graded.iter().map(|(ell, q)| (*ell, q.0)).collect();
+    let expected: Vec<(f64, f64)> = vec![(0.0, 4.0), (2.0, -12.0), (4.0, 36.0), (6.0, -108.0)];
+    assert_eq!(
+        observed, expected,
+        "graded = {observed:?}, expected {expected:?}"
+    );
+    // Sum: 4 - 12 + 36 - 108 = -80.
     let sum: f64 = graded.iter().map(|(_, q)| q.0).sum();
-    assert!((sum - (-80.0)).abs() < 1e-9);
+    assert!((sum - (-80.0)).abs() < 1e-9, "sum = {sum}, expected -80");
 }
