@@ -1,12 +1,13 @@
 //! Integration tests for `MatR<R>` over concrete rigs (`F64Rig`, `BoolRig`,
 //! `Tropical`). Exercises identity / matmul / block-diag / permutation
-//! correctness, `permute_side` and its length guard, and the categorical
-//! interchange law.
+//! correctness, `permute_side` and its length guard, the categorical
+//! interchange law, and `MatR::trace` with its `MatKron::trace` delegate.
 
 use catgraph::{category::Composable, errors::CatgraphError, monoidal::SymmetricMonoidalMorphism};
 use catgraph_applied::{
     mat::MatR,
-    rig::{BoolRig, F64Rig, Tropical},
+    mat_kron::MatKron,
+    rig::{BoolRig, F64Rig, Rig, Tropical},
 };
 
 // ---- Identity composition is a no-op ----
@@ -227,6 +228,174 @@ fn tropical_matmul_is_shortest_path_like() {
     // (mm)[0][1] = min(0+3, 3+0) = 3
     assert!((mm.entries()[0][0].0 - 0.0).abs() < 1e-9);
     assert!((mm.entries()[0][1].0 - 3.0).abs() < 1e-9);
+}
+
+// ---- trace: the rig diagonal sum ----
+
+/// Check `MatR::trace` against each `(label, matrix, expected)` case,
+/// reporting every mismatch with the value it measured.
+fn check_traces<R: Rig + std::fmt::Debug>(cases: &[(&str, MatR<R>, Option<R>)]) {
+    let mut mismatches = Vec::new();
+    for (label, m, expected) in cases {
+        let measured = m.trace();
+        if measured != *expected {
+            mismatches.push(format!(
+                "{label}: expected {expected:?}, measured {measured:?}"
+            ));
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "trace mismatches: {}",
+        mismatches.join("; ")
+    );
+}
+
+/// A wrong `expected` (`[[7]]` → 8) makes `check_traces` panic with the
+/// measured value.
+#[test]
+#[should_panic(expected = "[[7]]: expected Some(F64Rig(8.0)), measured Some(F64Rig(7.0))")]
+fn check_traces_reports_a_mismatch() {
+    check_traces(&[(
+        "[[7]]",
+        MatR::<F64Rig>::new(1, 1, vec![vec![F64Rig(7.0)]]).unwrap(),
+        Some(F64Rig(8.0)),
+    )]);
+}
+
+/// `[[1,2],[3,4]]` → 1 + 4 = 5, separating the diagonal sum from the
+/// all-entries sum (10) and from the constant `zero` (0); the 2×3 and the 3×2
+/// → `None`; the 0×0 → `Some(0)`, the empty rig sum.
+#[test]
+fn trace_f64_diagonal_sum_shape_guard_and_empty() {
+    check_traces(&[
+        (
+            "[[1,2],[3,4]]",
+            MatR::<F64Rig>::new(
+                2,
+                2,
+                vec![
+                    vec![F64Rig(1.0), F64Rig(2.0)],
+                    vec![F64Rig(3.0), F64Rig(4.0)],
+                ],
+            )
+            .unwrap(),
+            Some(F64Rig(5.0)),
+        ),
+        (
+            "2x3 zeros",
+            MatR::<F64Rig>::new(2, 3, vec![vec![F64Rig(0.0); 3], vec![F64Rig(0.0); 3]]).unwrap(),
+            None,
+        ),
+        (
+            "3x2 zeros",
+            MatR::<F64Rig>::new(3, 2, vec![vec![F64Rig(0.0); 2]; 3]).unwrap(),
+            None,
+        ),
+        (
+            "0x0",
+            MatR::<F64Rig>::new(0, 0, vec![]).unwrap(),
+            Some(F64Rig(0.0)),
+        ),
+    ]);
+}
+
+/// Tropical `(min, +)`: `[[3,1],[2,5]]` → `min(3, 5) = 3`, which the
+/// all-entries minimum (1) does not equal. The 2×3 → `None`. The 0×0 trace is
+/// `Tropical::zero()` = `+∞`, not the real 0.
+#[test]
+fn trace_tropical_is_the_diagonal_min_and_empty_is_infinity() {
+    check_traces(&[
+        (
+            "[[3,1],[2,5]]",
+            MatR::<Tropical>::new(
+                2,
+                2,
+                vec![
+                    vec![Tropical(3.0), Tropical(1.0)],
+                    vec![Tropical(2.0), Tropical(5.0)],
+                ],
+            )
+            .unwrap(),
+            Some(Tropical(3.0)),
+        ),
+        (
+            "2x3 zeros",
+            MatR::<Tropical>::new(2, 3, vec![vec![Tropical(0.0); 3]; 2]).unwrap(),
+            None,
+        ),
+        (
+            "0x0",
+            MatR::<Tropical>::new(0, 0, vec![]).unwrap(),
+            Some(Tropical(f64::INFINITY)),
+        ),
+    ]);
+}
+
+/// Boolean `(∨, ∧)`: an all-false diagonal under a true off-diagonal traces to
+/// `false`; a diagonal carrying one `true` traces to `true`; the 2×3 → `None`.
+#[test]
+fn trace_bool_is_the_diagonal_disjunction() {
+    check_traces(&[
+        (
+            "[[F,T],[T,F]]",
+            MatR::<BoolRig>::new(
+                2,
+                2,
+                vec![
+                    vec![BoolRig(false), BoolRig(true)],
+                    vec![BoolRig(true), BoolRig(false)],
+                ],
+            )
+            .unwrap(),
+            Some(BoolRig(false)),
+        ),
+        (
+            "[[T,T],[F,F]]",
+            MatR::<BoolRig>::new(
+                2,
+                2,
+                vec![
+                    vec![BoolRig(true), BoolRig(true)],
+                    vec![BoolRig(false), BoolRig(false)],
+                ],
+            )
+            .unwrap(),
+            Some(BoolRig(true)),
+        ),
+        (
+            "2x3 true",
+            MatR::<BoolRig>::new(2, 3, vec![vec![BoolRig(true); 3]; 2]).unwrap(),
+            None,
+        ),
+    ]);
+}
+
+/// `MatKron::trace` reports its inner `MatR`'s diagonal sum: 1 + 4 = 5; a 2×3
+/// → `None`.
+#[test]
+fn mat_kron_trace_delegates_to_the_inner_mat() {
+    let inner = MatR::<F64Rig>::new(
+        2,
+        2,
+        vec![
+            vec![F64Rig(1.0), F64Rig(2.0)],
+            vec![F64Rig(3.0), F64Rig(4.0)],
+        ],
+    )
+    .unwrap();
+    let measured = MatKron::from_mat(inner).trace();
+    assert_eq!(
+        measured,
+        Some(F64Rig(5.0)),
+        "MatKron::trace of [[1,2],[3,4]]: expected Some(F64Rig(5.0)), measured {measured:?}"
+    );
+
+    let wide = MatKron::<F64Rig>::zero_matrix(2, 3).trace();
+    assert_eq!(
+        wide, None,
+        "MatKron::trace of 2x3 zeros: expected None, measured {wide:?}"
+    );
 }
 
 // ---- Domain / codomain conventions ----

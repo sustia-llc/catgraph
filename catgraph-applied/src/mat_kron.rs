@@ -87,6 +87,15 @@ impl<R: Rig> MatKron<R> {
         Self(MatR::zero_matrix(rows, cols))
     }
 
+    /// [`MatR::trace`] of the underlying matrix: the rig sum of the diagonal
+    /// entries, or `None` if `rows != cols`.
+    ///
+    /// The compact-closed partial trace is [`crate::trace::trace`].
+    #[must_use]
+    pub fn trace(&self) -> Option<R> {
+        self.0.trace()
+    }
+
     /// Kronecker product. For `self` of shape `a × b` and `other` of shape
     /// `c × d`, the result is `(a·c) × (b·d)` with
     /// `result[i*c + k][j*d + l] = self[i][j] * other[k][l]`.
