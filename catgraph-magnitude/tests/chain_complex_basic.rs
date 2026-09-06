@@ -116,8 +116,9 @@ fn boundary_partial_squared_is_zero_on_4state_scattered() {
         b2.rows(),
         b2.cols()
     );
-    // Per entry rather than over the sum: a balanced +1/-1 injection leaves
-    // the sum at 0.
+    // Per entry rather than over the sum. Both row spaces are empty at these
+    // grades, so the two loops range over no entries on this fixture; the
+    // shape assertions above carry the claim here.
     for (r, row) in b1.entries().iter().enumerate() {
         for (c, cell) in row.iter().enumerate() {
             assert!(
