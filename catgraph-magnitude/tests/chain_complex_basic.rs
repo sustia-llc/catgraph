@@ -99,12 +99,44 @@ fn boundary_partial_squared_is_zero_on_4state_scattered() {
     // ∂² = 0 trivially. But the matrix shapes must still be consistent.
     let b1 = boundary_matrix::<Q>(&idx, &space, 1, 2.0).unwrap();
     let b2 = boundary_matrix::<Q>(&idx, &space, 2, 4.0).unwrap();
-    // For k=1 with i ranging 1..k-1, the loop is empty: ∂_1 is the zero map.
-    let sum1: f64 = b1.entries().iter().flatten().map(|q| q.0).sum();
-    assert!(sum1.abs() < 1e-12);
-    // For k=2 the geodesic condition fails everywhere so ∂_2 = 0.
-    let sum2: f64 = b2.entries().iter().flatten().map(|q| q.0).sum();
-    assert!(sum2.abs() < 1e-12);
+    // Row space of ∂_k at grade ℓ is chains_at(k-1, ℓ). On this fixture the
+    // 0-chains all sit at ℓ=0 and the 1-chains at ℓ=2, so both row spaces are
+    // empty at the grades queried here.
+    assert_eq!(
+        (b1.rows(), b1.cols()),
+        (0, 12),
+        "∂_1 shape = {}x{}, expected 0x12",
+        b1.rows(),
+        b1.cols()
+    );
+    assert_eq!(
+        (b2.rows(), b2.cols()),
+        (0, 36),
+        "∂_2 shape = {}x{}, expected 0x36",
+        b2.rows(),
+        b2.cols()
+    );
+    // Per entry rather than over the sum. Both row spaces are empty at these
+    // grades, so the two loops range over no entries on this fixture; the
+    // shape assertions above carry the claim here.
+    for (r, row) in b1.entries().iter().enumerate() {
+        for (c, cell) in row.iter().enumerate() {
+            assert!(
+                cell.0.abs() < 1e-12,
+                "∂_1 entry at ({r},{c}) = {}, expected 0",
+                cell.0
+            );
+        }
+    }
+    for (r, row) in b2.entries().iter().enumerate() {
+        for (c, cell) in row.iter().enumerate() {
+            assert!(
+                cell.0.abs() < 1e-12,
+                "∂_2 entry at ({r},{c}) = {}, expected 0",
+                cell.0
+            );
+        }
+    }
 }
 
 #[test]
@@ -115,20 +147,69 @@ fn boundary_geodesic_condition_admits_term_when_distances_add() {
         table[a][b]
     });
     let idx = catgraph_magnitude::chain_complex::ChainIndex::new(&space, 2);
-    // At k=2, ℓ=2: chain (0,1,2) — interior point 1 admits omission since
-    // d(0,2) = 2 = 1 + 1. So ∂_2(0,1,2) = -1 * (0,2) (sign (-1)^1).
+    // At k=2, ℓ=2 the interior point of (0,1,2) admits omission since
+    // d(0,2) = 2 = 1 + 1, and so does the interior point of the reversed
+    // chain (2,1,0). Sign (-1)^1, so ∂_2(0,1,2) = -(0,2) and
+    // ∂_2(2,1,0) = -(2,0). The other four columns at this grade contribute
+    // nothing.
     let b2 = catgraph_magnitude::chain_complex::boundary_matrix::<Q>(&idx, &space, 2, 2.0).unwrap();
-    // Expect at least one non-zero entry.
-    let nonzero = b2
-        .entries()
-        .iter()
-        .flatten()
-        .filter(|q| q.0.abs() > 1e-12)
-        .count();
-    assert!(
-        nonzero >= 1,
-        "boundary should have a non-zero geodesic term"
+    let rows = idx.chains_at(1, 2.0);
+    let cols = idx.chains_at(2, 2.0);
+    assert_eq!(
+        (b2.rows(), b2.cols()),
+        (rows.len(), cols.len()),
+        "∂_2 shape = {}x{}, expected {}x{} from the index",
+        b2.rows(),
+        b2.cols(),
+        rows.len(),
+        cols.len()
     );
+    assert_eq!(
+        (b2.rows(), b2.cols()),
+        (2, 6),
+        "∂_2 shape = {}x{}, expected 2x6",
+        b2.rows(),
+        b2.cols()
+    );
+    let row_02 = rows
+        .iter()
+        .position(|c| *c == Chain::new(vec![0, 2]))
+        .expect("(0,2) is a 1-chain at grade 2");
+    let col_012 = cols
+        .iter()
+        .position(|c| *c == Chain::new(vec![0, 1, 2]))
+        .expect("(0,1,2) is a 2-chain at grade 2");
+    let row_20 = rows
+        .iter()
+        .position(|c| *c == Chain::new(vec![2, 0]))
+        .expect("(2,0) is a 1-chain at grade 2");
+    let col_210 = cols
+        .iter()
+        .position(|c| *c == Chain::new(vec![2, 1, 0]))
+        .expect("(2,1,0) is a 2-chain at grade 2");
+    let entries = b2.entries();
+    assert_eq!(
+        entries[row_02][col_012].0, -1.0,
+        "∂_2 entry at ({row_02},{col_012}) = {}, expected -1",
+        entries[row_02][col_012].0
+    );
+    assert_eq!(
+        entries[row_20][col_210].0, -1.0,
+        "∂_2 entry at ({row_20},{col_210}) = {}, expected -1",
+        entries[row_20][col_210].0
+    );
+    for (r, row) in entries.iter().enumerate() {
+        for (c, cell) in row.iter().enumerate() {
+            if (r, c) == (row_02, col_012) || (r, c) == (row_20, col_210) {
+                continue;
+            }
+            assert_eq!(
+                cell.0, 0.0,
+                "∂_2 entry at ({r},{c}) = {}, expected 0",
+                cell.0
+            );
+        }
+    }
 }
 
 #[test]
