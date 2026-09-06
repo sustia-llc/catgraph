@@ -318,8 +318,7 @@ fn spider_1_3_via_double_delta() {
 /// rule 3 deleted both sides are two-layer terms and the equality is a real
 /// shape comparison. That is asserted here rather than left as prose: the
 /// composite is checked against the empty term on the empty object, which is
-/// what it collapsed to under rule 3 and the only shape at this arity on which
-/// the equality below could pass while comparing nothing.
+/// what it collapsed to under rule 3.
 ///
 /// `(0, 0)` is also in [`connected_diagrams_denote_the_spider_in_cospan`]'s
 /// range since #353, where the same builder is compared at the semantics
@@ -1425,16 +1424,16 @@ fn image(term: &FM, name: &str) -> CospanCanon<char> {
 /// | `special_frobenius_morphism`'s odd-`m` branch mirrored to `id ⊗ sfm(m-1, 1)` | **green** — see below |
 /// | [`wide_waist_permutation_family`] dropped from [`corpus`] (with `CORPUS_SIZE` followed down, so the size assert still passes) | red on [`MIN_CONNECTED`]: **288 connected terms over 617**, floor 900. The wide bucket falls to 38 of 288 in the same run — so the sweep, not the seed, is what carries the structural spread |
 /// | `CospanCanon::scalar_count` made to under-count by one (`.saturating_sub(1)`) | red, **27 of 1307** — `connected_a_0_0_v0`: `apex=1 scalars=0` where its one closed component wants `scalars=1`. The `88800f6` version of this file, run against the same perturbed production, is **green** on both claim arms, the census and [`spider_0_0_via_eta_epsilon`] — its two arms skipped every recipe with a closed component, which is the set this perturbation moves |
-/// | `special_frobenius_morphism` given a `(0, 0) => FrobeniusMorphism::new()` arm — the smallest production change only an empty-boundary term can reach | red, **27 of 1307** — `connected_a_0_0_v0` denotes `apex=1 scalars=1` while the builder denotes `apex=0 scalars=0`. [`spider_0_0_via_eta_epsilon`] reddens with it |
+/// | `special_frobenius_morphism` given a `(0, 0) => FrobeniusMorphism::new()` arm | red, **27 of 1307** — `connected_a_0_0_v0` denotes `apex=1 scalars=1` while the builder denotes `apex=0 scalars=0`. [`spider_0_0_via_eta_epsilon`] reddens with it |
 /// | `two_layer_simplify`'s deleted rule 3 reinstated (`η;ε` cancelled again) | red, **27 of 1307** on the same witness: the corpus term keeps its bubble (its η and ε are not adjacent layers) while the builder's `η;ε` collapses. Also reddens [`spider_0_0_via_eta_epsilon`] on its empty-term check, [`the_corpus_is_the_space_these_pins_claim`], and the disconnected arm |
 /// | the component-closing skip re-inserted at this arm's filter | red on [`MIN_CONNECTED_ARITIES`]: **24 arities**, floor 25 — `(0, 0)` leaves the grid. With that floor relaxed to 24 the run reaches [`MIN_CONNECTED_CLOSING`], red at **0 of 1280**, floor 8 |
 ///
-/// The middle two are the honest statement of what this test *cannot* see, and
+/// The two rows marked green are the honest statement of what this test *cannot* see, and
 /// each is covered elsewhere in this file. A merging σ cannot change a
 /// connected term's image: it is already one apex vertex, so unioning two of
 /// its own wires moves nothing —
 /// [`disconnected_recipes_denote_more_than_one_apex_vertex`] is what reddens
-/// (**397 of 716**). A mirrored spider builder is *SCFM-equal* to the real one, so both
+/// (**397 of 716**, on `88800f6`'s corpus). A mirrored spider builder is *SCFM-equal* to the real one, so both
 /// sides of the `canon != spider_canon` comparison move together and this test
 /// stays green by rights; the term-level [`spider_3_1_via_double_mu`] and
 /// [`spider_1_3_via_double_delta`] are what go red. That division of labour is
@@ -1652,7 +1651,7 @@ fn connected_diagrams_denote_the_spider_in_cospan() {
 /// | `two_layer_simplify`'s deleted rule 3 reinstated (`η;ε` cancelled again) | red, **20 of 759** — `random_4`: image `apex=2 scalars=0`, wanted `apex=3 scalars=1`; the cancelled bubble takes its apex vertex with it |
 /// | the component-closing skip re-inserted at this arm's filter | red on [`MIN_DISCONNECTED_CLOSING`]: **0 of 716** carry a closed component, floor 20 |
 ///
-/// The middle row's numerator was 29 of 220 before
+/// The `z == w` merge row's numerator was 29 of 220 before
 /// [`wide_waist_permutation_family`] existed. The sweep is what moved it: every
 /// one of its permutations lays σ's across a δ-fan whose two halves may or may
 /// not end up in the same component, which is exactly the shape a merging
@@ -1757,17 +1756,21 @@ fn disconnected_recipes_denote_more_than_one_apex_vertex() {
 }
 
 // The values measured on `88800f6` (production) with the corpus at this file's
-// current shape. All thirteen are asserted exactly in
+// current shape. All fourteen are asserted exactly in
 // `the_corpus_is_the_space_these_pins_claim`.
 //
 // Ten of them additionally appear in a failure message above or below, so a
 // reader can tell a real regression from fixture drift without rerunning
-// anything. Three do not, and here is exactly where each is reported, since a
+// anything. Four do not, and here is exactly where each is reported, since a
 // wrong answer to that is the same over-quantification this file exists to
-// remove: `MEASURED_EMPTY_RECIPES`, `MEASURED_CONNECTED_NO_INTERNAL_CUT` and
-// `MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS` are reported by the census struct
-// **alone** — no floor guards any of them, because none bounds a claim test's
-// space. They are census bookkeeping, and each does a different job. The
+// remove: `MEASURED_EMPTY_RECIPES`, `MEASURED_CONNECTED_NO_INTERNAL_CUT`,
+// `MEASURED_CONNECTED_WIDE_TRIVIAL_ENDS` and
+// `MEASURED_DISCONNECTED_CLOSED_COMPONENTS` are reported by the census struct
+// **alone** — no floor guards any of them. They are census bookkeeping, and
+// each does a different job. `MEASURED_DISCONNECTED_CLOSED_COMPONENTS` is the
+// disconnected arm's total of closed components across its 43 closing terms,
+// so a seed change that keeps 43 closers but loses every term carrying two
+// moves it while `MEASURED_DISCONNECTED_CLOSING` and its floor stay put. The
 // connected arm's partition is `MEASURED_CONNECTED` = wide
 // `MEASURED_CONNECTED_WIDE_WAIST` + narrow + `MEASURED_CONNECTED_NO_INTERNAL_CUT`;
 // `MEASURED_EMPTY_RECIPES` is **not** part of it — those terms have
@@ -1794,11 +1797,12 @@ const MEASURED_CONNECTED_MAX_DEPTH: usize = 21;
 const MEASURED_CONNECTED_ARITIES: usize = 25;
 const MEASURED_DISCONNECTED: usize = 759;
 const MEASURED_DISCONNECTED_CLOSING: usize = 43;
+const MEASURED_DISCONNECTED_CLOSED_COMPONENTS: usize = 50;
 const MEASURED_DISCONNECTED_DISTINCT: usize = 243;
 const MEASURED_CROSS_COMPONENT_BRAIDINGS: usize = 2199;
 const MEASURED_EMPTY_RECIPES: usize = 47;
 
-/// The thirteen census buckets, so the exact assertion in
+/// The fourteen census buckets, so the exact assertion in
 /// [`the_corpus_is_the_space_these_pins_claim`] names the one that moved.
 #[derive(Debug, PartialEq, Eq)]
 struct Census {
@@ -1806,6 +1810,7 @@ struct Census {
     connected_closing: usize,
     disconnected: usize,
     disconnected_closing: usize,
+    disconnected_closed_components: usize,
     empty: usize,
     connected_with_braiding: usize,
     connected_wide_waist: usize,
@@ -1831,9 +1836,9 @@ struct Census {
 /// **Space:** the corpus of [`corpus`] at `char`/`String` on the pinned seed
 /// `0x6055_0001`.
 ///
-/// **Twelve of the thirteen numbers are properties of the generator**, not of
+/// **Thirteen of the fourteen numbers are properties of the generator**, not of
 /// the production code under test, and for those this test goes red when the
-/// *generator* drifts — which is exactly its job. The thirteenth is not, and the
+/// *generator* drifts — which is exactly its job. The remaining one is not, and the
 /// docstring says so rather than pointing a future maintainer at the wrong
 /// cause: `MEASURED_DISCONNECTED_DISTINCT` counts distinct **canonical forms**,
 /// so it is computed by [`image`] — `frobenius_to_cospan` + `canonical_form`,
@@ -1854,6 +1859,7 @@ fn the_corpus_is_the_space_these_pins_claim() {
     let mut connected_closing = 0usize;
     let mut disconnected = 0usize;
     let mut disconnected_closing = 0usize;
+    let mut disconnected_closed_components = 0usize;
     let mut empty = 0usize;
     let mut with_braiding = 0usize;
     let mut wide_waist = 0usize;
@@ -1945,13 +1951,14 @@ fn the_corpus_is_the_space_these_pins_claim() {
             if built.closed_components > 0 {
                 disconnected_closing += 1;
             }
+            disconnected_closed_components += built.closed_components;
             cross += built.cross_component_braidings;
             disconnected_images.insert(image(&built.term, &built.name));
         }
     }
 
     // A named struct rather than a tuple: twelve elements is the ceiling for
-    // std's tuple `PartialEq`/`Debug` impls, and this census has thirteen
+    // std's tuple `PartialEq`/`Debug` impls, and this census has fourteen
     // buckets. `Debug` prints the field names either way, so a red here says
     // which bucket moved.
     assert_eq!(
@@ -1960,6 +1967,7 @@ fn the_corpus_is_the_space_these_pins_claim() {
             connected_closing,
             disconnected,
             disconnected_closing,
+            disconnected_closed_components,
             empty,
             connected_with_braiding: with_braiding,
             connected_wide_waist: wide_waist,
@@ -1975,6 +1983,7 @@ fn the_corpus_is_the_space_these_pins_claim() {
             connected_closing: MEASURED_CONNECTED_CLOSING,
             disconnected: MEASURED_DISCONNECTED,
             disconnected_closing: MEASURED_DISCONNECTED_CLOSING,
+            disconnected_closed_components: MEASURED_DISCONNECTED_CLOSED_COMPONENTS,
             empty: MEASURED_EMPTY_RECIPES,
             connected_with_braiding: MEASURED_CONNECTED_WITH_BRAIDING,
             connected_wide_waist: MEASURED_CONNECTED_WIDE_WAIST,
