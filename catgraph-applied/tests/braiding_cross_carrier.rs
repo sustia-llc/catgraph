@@ -851,14 +851,14 @@ fn permute_side_on_an_identity_matches_the_constructors() {
             // ---- Span --------------------------------------------------
             let mut s = Span::<char>::identity(&types);
             s.permute_side(&p, true);
-            s.assert_valid(false, false);
+            s.assert_valid();
             assert_eq!(span_wiring(&s), want_cod, "Span cod n={n} p={p:?}");
             assert_eq!(s.domain(), types, "Span cod dom n={n} p={p:?}");
             assert_eq!(s.codomain(), permuted, "Span cod cod n={n} p={p:?}");
 
             let mut s = Span::<char>::identity(&types);
             s.permute_side(&p, false);
-            s.assert_valid(false, false);
+            s.assert_valid();
             assert_eq!(span_wiring(&s), want_dom, "Span dom n={n} p={p:?}");
             assert_eq!(s.domain(), permuted, "Span dom dom n={n} p={p:?}");
             assert_eq!(s.codomain(), types, "Span dom cod n={n} p={p:?}");
@@ -1058,11 +1058,11 @@ fn permute_side_composes_the_braidings() {
 
                 let mut s = Span::<char>::from_permutation_on_domain(q.clone(), &types).unwrap();
                 s.permute_side(p, true);
-                s.assert_valid(false, false);
+                s.assert_valid();
                 assert_eq!(span_wiring(&s), want_cod, "Span cod n={n} q={q:?} p={p:?}");
                 let mut s = Span::<char>::from_permutation_on_codomain(q.clone(), &types).unwrap();
                 s.permute_side(p, false);
-                s.assert_valid(false, false);
+                s.assert_valid();
                 assert_eq!(span_wiring(&s), want_dom, "Span dom n={n} q={q:?} p={p:?}");
 
                 let mut a =

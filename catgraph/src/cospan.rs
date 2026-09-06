@@ -77,8 +77,7 @@ where
     ///
     /// Every check is written **inside** its `debug_assert!`, so the whole
     /// method compiles away in release. There is no cached identity flag to
-    /// check — the accessors *are* the predicate — so it takes no parameters,
-    /// unlike [`Span::assert_valid`](crate::span::Span::assert_valid).
+    /// check — the accessors *are* the predicate — so it takes no parameters.
     pub fn assert_valid(&self) {
         debug_assert!(
             self.left.iter().all(|z| *z < self.middle.len()),
