@@ -140,13 +140,24 @@ fn round_trip_preserves_decisions_on_a_derived_consequence() {
 
     // A consequence that is NOT an axiom and NOT an SMC tautology: `copy ; add`
     // twice in a row. It reduces to `id(1)` ONLY via the `copy ; add = id(1)`
-    // axiom — verified out-of-band that an axiom-free presentation decides it
-    // `Some(false)`, so a `Some(true)` here proves the axiom survived the
-    // round-trip functionally, not just syntactically.
+    // axiom, so a `Some(true)` here proves the axiom survived the round-trip
+    // functionally, not just syntactically.
     let copy_add = || Free::compose(g(Sig::Copy), g(Sig::Add)).expect("copy:1→2 ; add:2→1");
     let consequence =
         Free::compose(copy_add(), copy_add()).expect("(copy;add):1→1 ; (copy;add):1→1");
     let id1 = Free::<Sig>::identity(1);
+
+    // That "only via the axiom" premise, decided in-test on the same query: an
+    // equation-free presentation on the same default engine does not prove it.
+    let empty = Presentation::<Sig>::new()
+        .eq_mod(&consequence, &id1)
+        .expect("eq_mod is infallible here");
+    assert_ne!(
+        empty,
+        Some(true),
+        "an axiom-free presentation must not prove the derived consequence: \
+         observed {empty:?}, expected Some(false)"
+    );
 
     let before = original
         .eq_mod(&consequence, &id1)

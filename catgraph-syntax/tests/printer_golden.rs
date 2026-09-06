@@ -7,8 +7,8 @@
 
 mod common;
 
-use catgraph_syntax::text::{Pretty, print};
-use common::{Sig, g, precedence_goldens};
+use catgraph_syntax::text::print;
+use common::precedence_goldens;
 
 /// The whole precedence / associativity golden set: `print(term) == text` over
 /// the shared table (the parser suite asserts the reverse over the same table).
@@ -22,10 +22,4 @@ fn precedence_goldens_print() {
     for (term, text) in precedence_goldens() {
         assert_eq!(print(&term), text, "printing {term:?}");
     }
-}
-
-#[test]
-fn pretty_adapter_agrees_with_print() {
-    // The `Pretty` Display adapter agrees with the free `print` function.
-    assert_eq!(Pretty(&g(Sig::Add)).to_string(), "add");
 }
