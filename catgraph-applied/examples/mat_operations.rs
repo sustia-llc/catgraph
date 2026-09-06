@@ -442,22 +442,10 @@ fn print_mat(m: &MatR<F64Rig>) {
     }
 }
 
-/// `mat_f64` bridge demonstration — split into a separate function so the
-/// `#[cfg(feature = "f64-rig")]` and `#[cfg(not(...))]` arms stay tight.
-///
-/// **Math:nalgebra-applied review surface.** This subsection is the primary
-/// nalgebra-bridge consumer in the example file. Decisions made:
-///
-/// - Round-trip via `mat_to_nalgebra` → `determinant` → `try_inverse` →
-///   `mat_from_nalgebra`.
-/// - Non-singular fixture: `[[1,2,0], [0,3,4], [5,0,6]]` has determinant
-///   `1·(3·6 − 0·4) − 2·(0·6 − 4·5) + 0 = 18 + 40 = 58`. The hand-computed
-///   value gives the reader a non-trivial determinant target to verify.
-/// - Singular contrast: a matrix with two identical rows has determinant 0
-///   and `try_inverse` MUST return `None`. The `Option` return type is the
-///   nalgebra-bridge correctness gate — `None` on singular, `Some` on
-///   invertible.
-/// - Round-trip: `inv · m_original = I_3`, verified to tolerance `1e-12`.
+/// `mat_f64` bridge demonstration over the fixture `[[1,2,0], [0,3,4], [5,0,6]]`
+/// and a rank-deficient 3×3: `mat_to_nalgebra`, `determinant`, `MatR::trace`,
+/// `solve`, `one_norm`, `frobenius_norm`, `try_inverse`, `mat_from_nalgebra`
+/// and `rank`.
 #[cfg(feature = "f64-rig")]
 fn run_mat_f64_demo() {
     use catgraph_applied::mat_f64::{

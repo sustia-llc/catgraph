@@ -5,7 +5,7 @@
 //! [`MatR<F64Rig>`] and `nalgebra::DMatrix<f64>`; [`determinant`] and
 //! [`try_inverse`] are the square-matrix determinant and inverse; [`solve`]
 //! solves `a ; x = b` by LU; [`rank`] is the SVD numerical rank; [`one_norm`]
-//! and [`frobenius_norm`] are the induced 1-norm and the Frobenius norm. Each
+//! and [`frobenius_norm`] are the 1-norm and the Frobenius norm. Each
 //! exists for `F64Rig` alone and not for rigs such as `BoolRig` or `Tropical`.
 //! The rig-generic diagonal sum is [`MatR::trace`](crate::mat::MatR::trace).
 
@@ -64,11 +64,12 @@ pub fn try_inverse(m: &MatR<F64Rig>) -> Option<MatR<F64Rig>> {
         .map(|inv| mat_from_nalgebra(&inv))
 }
 
-/// The `x` with `a.matmul(&x) == b`, computed by LU with partial pivoting.
+/// The solution of `a ; x = b` by LU with partial pivoting; entries carry
+/// floating-point rounding.
 ///
 /// Returns `None` if `a` is non-square, if `a.rows() != b.rows()`, or if the
-/// decomposition meets a zero pivot. A 0×0 `a` yields the `0 × b.cols()`
-/// solution without running the decomposition.
+/// decomposition meets a zero pivot and `b` has at least one column. A 0×0 `a`
+/// yields the `0 × b.cols()` solution without running the decomposition.
 #[must_use]
 pub fn solve(a: &MatR<F64Rig>, b: &MatR<F64Rig>) -> Option<MatR<F64Rig>> {
     if a.rows() != a.cols() || a.rows() != b.rows() {
@@ -99,7 +100,7 @@ pub fn rank(m: &MatR<F64Rig>, eps: f64) -> usize {
     mat_to_nalgebra(m).rank(eps)
 }
 
-/// The induced 1-norm: the largest absolute column sum. 0.0 on an empty shape.
+/// The 1-norm: the largest absolute column sum. 0.0 on an empty shape.
 #[must_use]
 pub fn one_norm(m: &MatR<F64Rig>) -> f64 {
     mat_to_nalgebra(m).one_norm()

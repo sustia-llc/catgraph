@@ -264,8 +264,8 @@ fn check_traces_reports_a_mismatch() {
 }
 
 /// `[[1,2],[3,4]]` → 1 + 4 = 5, separating the diagonal sum from the
-/// all-entries sum (10) and from the constant `zero` (0); the 2×3 → `None`;
-/// the 0×0 → `Some(0)`, the empty rig sum.
+/// all-entries sum (10) and from the constant `zero` (0); the 2×3 and the 3×2
+/// → `None`; the 0×0 → `Some(0)`, the empty rig sum.
 #[test]
 fn trace_f64_diagonal_sum_shape_guard_and_empty() {
     check_traces(&[
@@ -288,6 +288,11 @@ fn trace_f64_diagonal_sum_shape_guard_and_empty() {
             None,
         ),
         (
+            "3x2 zeros",
+            MatR::<F64Rig>::new(3, 2, vec![vec![F64Rig(0.0); 2]; 3]).unwrap(),
+            None,
+        ),
+        (
             "0x0",
             MatR::<F64Rig>::new(0, 0, vec![]).unwrap(),
             Some(F64Rig(0.0)),
@@ -296,8 +301,8 @@ fn trace_f64_diagonal_sum_shape_guard_and_empty() {
 }
 
 /// Tropical `(min, +)`: `[[3,1],[2,5]]` → `min(3, 5) = 3`, which the
-/// all-entries minimum (1) does not equal. The 0×0 trace is `Tropical::zero()`
-/// = `+∞`, not the real 0.
+/// all-entries minimum (1) does not equal. The 2×3 → `None`. The 0×0 trace is
+/// `Tropical::zero()` = `+∞`, not the real 0.
 #[test]
 fn trace_tropical_is_the_diagonal_min_and_empty_is_infinity() {
     check_traces(&[
@@ -315,6 +320,11 @@ fn trace_tropical_is_the_diagonal_min_and_empty_is_infinity() {
             Some(Tropical(3.0)),
         ),
         (
+            "2x3 zeros",
+            MatR::<Tropical>::new(2, 3, vec![vec![Tropical(0.0); 3]; 2]).unwrap(),
+            None,
+        ),
+        (
             "0x0",
             MatR::<Tropical>::new(0, 0, vec![]).unwrap(),
             Some(Tropical(f64::INFINITY)),
@@ -323,7 +333,7 @@ fn trace_tropical_is_the_diagonal_min_and_empty_is_infinity() {
 }
 
 /// Boolean `(∨, ∧)`: an all-false diagonal under a true off-diagonal traces to
-/// `false`; a diagonal carrying one `true` traces to `true`.
+/// `false`; a diagonal carrying one `true` traces to `true`; the 2×3 → `None`.
 #[test]
 fn trace_bool_is_the_diagonal_disjunction() {
     check_traces(&[
@@ -353,10 +363,16 @@ fn trace_bool_is_the_diagonal_disjunction() {
             .unwrap(),
             Some(BoolRig(true)),
         ),
+        (
+            "2x3 true",
+            MatR::<BoolRig>::new(2, 3, vec![vec![BoolRig(true); 3]; 2]).unwrap(),
+            None,
+        ),
     ]);
 }
 
-/// `MatKron::trace` reports its inner `MatR`'s diagonal sum: 1 + 4 = 5.
+/// `MatKron::trace` reports its inner `MatR`'s diagonal sum: 1 + 4 = 5; a 2×3
+/// → `None`.
 #[test]
 fn mat_kron_trace_delegates_to_the_inner_mat() {
     let inner = MatR::<F64Rig>::new(
@@ -373,6 +389,12 @@ fn mat_kron_trace_delegates_to_the_inner_mat() {
         measured,
         Some(F64Rig(5.0)),
         "MatKron::trace of [[1,2],[3,4]]: expected Some(F64Rig(5.0)), measured {measured:?}"
+    );
+
+    let wide = MatKron::<F64Rig>::zero_matrix(2, 3).trace();
+    assert_eq!(
+        wide, None,
+        "MatKron::trace of 2x3 zeros: expected None, measured {wide:?}"
     );
 }
 

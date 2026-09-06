@@ -304,6 +304,28 @@ fn solve_0x0_returns_the_empty_solution() {
     }
 }
 
+/// A `b` with no columns yields the `2 × 0` solution on a singular
+/// `a = [[1,2],[2,4]]` and on a non-singular `a = [[2,1],[1,1]]`.
+#[test]
+fn solve_zero_column_rhs_returns_the_empty_solution() {
+    let b = MatR::<F64Rig>::new(2, 0, vec![vec![], vec![]]).expect("2x0 fixture");
+    for (label, a) in [
+        ("singular a=[[1,2],[2,4]]", mat(&[&[1.0, 2.0], &[2.0, 4.0]])),
+        (
+            "non-singular a=[[2,1],[1,1]]",
+            mat(&[&[2.0, 1.0], &[1.0, 1.0]]),
+        ),
+    ] {
+        let x = solve(&a, &b);
+        let shape = x.as_ref().map(|m| (m.rows(), m.cols()));
+        assert_eq!(
+            shape,
+            Some((2, 0)),
+            "solve({label}, 2x0): expected Some((2, 0)), measured {shape:?}"
+        );
+    }
+}
+
 // ---- rank: the SVD singular-value count ----
 
 /// Check `rank(m, 1e-10)` against each `(label, matrix, expected)` case,
@@ -326,7 +348,8 @@ fn check_ranks(cases: &[(&str, MatR<F64Rig>, usize)]) {
 /// Rank-deficient and full-rank squares: `[[1,2],[2,4]]` (row 1 = 2·row 0) → 1;
 /// `[[1,2,3],[4,5,6],[7,8,9]]` (row 2 = 2·row 1 − row 0) → 2; I₃ → 3; the
 /// 2×2 zero matrix → 0. The three deficient cases fall below `min(rows, cols)`;
-/// I₃ meets it.
+/// I₃ meets it. `diag(1, 1e-10)`, whose smaller singular value equals the
+/// threshold, → 1 at `eps = 1e-10` and → 2 at `eps = 5e-11`.
 #[test]
 fn rank_square_values() {
     check_ranks(&[
@@ -338,10 +361,19 @@ fn rank_square_values() {
         ),
         ("I3", MatR::<F64Rig>::identity(3), 3),
         ("zero 2x2", MatR::<F64Rig>::zero_matrix(2, 2), 0),
+        ("diag(1,1e-10)", mat(&[&[1.0, 0.0], &[0.0, 1e-10]]), 1),
     ]);
+
+    let below = rank(&mat(&[&[1.0, 0.0], &[0.0, 1e-10]]), 5e-11);
+    assert_eq!(
+        below, 2,
+        "rank(diag(1,1e-10), 5e-11): expected 2, measured {below}"
+    );
 }
 
-/// A 2×3 of full row rank → 2; the empty shapes 0×0, 0×3 and 3×0 → 0.
+/// A 2×3 of full row rank → 2; the rank-deficient 2×3 `[[1,2,3],[2,4,6]]`
+/// (row 1 = 2·row 0) → 1, below `min(rows, cols)`; the empty shapes 0×0, 0×3
+/// and 3×0 → 0 at `eps = 1e-10` and again at `eps = -1.0`.
 #[test]
 fn rank_non_square_and_empty_shapes() {
     check_ranks(&[
@@ -349,6 +381,11 @@ fn rank_non_square_and_empty_shapes() {
             "2x3 [[1,0,0],[0,1,0]]",
             mat(&[&[1.0, 0.0, 0.0], &[0.0, 1.0, 0.0]]),
             2,
+        ),
+        (
+            "2x3 [[1,2,3],[2,4,6]]",
+            mat(&[&[1.0, 2.0, 3.0], &[2.0, 4.0, 6.0]]),
+            1,
         ),
         ("0x0", MatR::<F64Rig>::new(0, 0, vec![]).expect("0x0"), 0),
         ("0x3", MatR::<F64Rig>::new(0, 3, vec![]).expect("0x3"), 0),
@@ -358,6 +395,21 @@ fn rank_non_square_and_empty_shapes() {
             0,
         ),
     ]);
+
+    for (label, m) in [
+        ("0x0", MatR::<F64Rig>::new(0, 0, vec![]).expect("0x0")),
+        ("0x3", MatR::<F64Rig>::new(0, 3, vec![]).expect("0x3")),
+        (
+            "3x0",
+            MatR::<F64Rig>::new(3, 0, vec![vec![], vec![], vec![]]).expect("3x0"),
+        ),
+    ] {
+        let measured = rank(&m, -1.0);
+        assert_eq!(
+            measured, 0,
+            "rank({label}, -1.0): expected 0, measured {measured}"
+        );
+    }
 }
 
 /// A negative `eps` on a non-empty shape reaches nalgebra's assertion.
