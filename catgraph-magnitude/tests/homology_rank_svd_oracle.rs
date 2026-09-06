@@ -39,11 +39,6 @@ const MAX_DEGREE: usize = 3;
 
 /// The three rank-recovery primes of `chain_complex::homology`, as literals:
 /// the Mersenne `2^31 − 1`, the secondary cross-check, the tertiary fallback.
-///
-/// Drift of the private `RANK_RECOVERY_PRIMES` these copy reds the
-/// `#[cfg(test)]` tests `cross_check_takes_the_max_over_the_three_prime_ranks`
-/// and `cross_check_takes_the_max_when_the_tertiary_matches_the_secondary` in
-/// `catgraph-magnitude/src/chain_complex/homology.rs`.
 const PRIMES: [i64; 3] = [2_147_483_647, 2_147_483_629, 2_147_483_587];
 
 /// Seeds driving the random connected graph metrics.
