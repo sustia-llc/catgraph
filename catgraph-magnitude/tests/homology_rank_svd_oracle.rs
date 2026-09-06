@@ -49,6 +49,10 @@ const PRIMES: [i64; 3] = [2_147_483_647, 2_147_483_629, 2_147_483_587];
 /// Seeds driving the random connected graph metrics.
 const SEEDS: [u64; 1] = [20_260_905];
 
+/// Cap on the endpoint-pair draws `random_connected_space` spends placing its
+/// `n / 2` extra edges.
+const REDRAW_BUDGET: usize = 10_000;
+
 /// Lower bound on the singular values `rank_svd` keeps.
 const KEEP_FLOOR: f64 = 1e-6;
 
@@ -137,7 +141,8 @@ fn line5() -> LawvereMetricSpace<usize> {
 /// uniform earlier node), then `n / 2` extra edges: endpoint pairs are drawn
 /// uniformly and a pair that repeats an endpoint or an already-present edge is
 /// discarded and redrawn, so each of the `n / 2` edges is distinct from the
-/// tree and from the others. Every edge weight is drawn from `{1, 2, 3}`.
+/// tree and from the others. Redrawing is capped at [`REDRAW_BUDGET`] draws;
+/// exhausting the budget panics. Every edge weight is drawn from `{1, 2, 3}`.
 /// Distances are the Floyd–Warshall closure of that weighting.
 fn random_connected_space(seed: u64, n: usize) -> LawvereMetricSpace<usize> {
     let mut rng = Lcg::new(seed);
@@ -160,7 +165,16 @@ fn random_connected_space(seed: u64, n: usize) -> LawvereMetricSpace<usize> {
         set_edge(&mut w, i, parent, x);
     }
     let mut extra = 0_usize;
+    let mut draws = 0_usize;
     while extra < n / 2 {
+        if draws >= REDRAW_BUDGET {
+            panic!(
+                "random_connected_space(seed={seed}, n={n}): redraw budget {REDRAW_BUDGET} \
+                 exhausted with {extra} extra edges added of {} wanted",
+                n / 2
+            );
+        }
+        draws += 1;
         let u = rng.next_usize(0, n - 1);
         let v = rng.next_usize(0, n - 1);
         if u == v || w[u][v].is_finite() {

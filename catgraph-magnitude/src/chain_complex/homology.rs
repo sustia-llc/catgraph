@@ -437,4 +437,136 @@ mod tests {
             "snf_rank_with_cross_check on [[p1·p2]]: observed {observed}, expected 1"
         );
     }
+
+    /// `RANK_RECOVERY_PRIMES[1] = 2^31 − 19` as the sole entry.
+    const SECONDARY_ALONE: i64 = 2_147_483_629;
+
+    /// Per-prime ranks of `[[SECONDARY_ALONE]]`: the secondary divides it, the
+    /// primary and tertiary do not.
+    const EXPECTED_PER_PRIME_RANKS_SECONDARY_ALONE: [usize; 3] = [1, 0, 1];
+
+    /// `SECONDARY_ALONE mod RANK_RECOVERY_PRIMES[0]`: the entry is below the
+    /// primary, so the residue is the entry.
+    const SECONDARY_ALONE_RESIDUE_AT_PRIMARY: i64 = 2_147_483_629;
+
+    /// `SECONDARY_ALONE mod RANK_RECOVERY_PRIMES[2]`:
+    /// `(2^31 − 19) − (2^31 − 61) = 42`.
+    const SECONDARY_ALONE_RESIDUE_AT_TERTIARY: i64 = 42;
+
+    #[test]
+    fn cross_check_takes_the_max_when_the_tertiary_matches_the_larger_primary() {
+        assert_eq!(
+            SECONDARY_ALONE, RANK_RECOVERY_PRIMES[1],
+            "SECONDARY_ALONE: observed {SECONDARY_ALONE}, expected prime 1"
+        );
+        assert_eq!(
+            SECONDARY_ALONE % RANK_RECOVERY_PRIMES[0],
+            SECONDARY_ALONE_RESIDUE_AT_PRIMARY,
+            "residue at the primary prime: observed {}, expected {SECONDARY_ALONE_RESIDUE_AT_PRIMARY}",
+            SECONDARY_ALONE % RANK_RECOVERY_PRIMES[0]
+        );
+        assert_eq!(
+            SECONDARY_ALONE % RANK_RECOVERY_PRIMES[2],
+            SECONDARY_ALONE_RESIDUE_AT_TERTIARY,
+            "residue at the tertiary prime: observed {}, expected {SECONDARY_ALONE_RESIDUE_AT_TERTIARY}",
+            SECONDARY_ALONE % RANK_RECOVERY_PRIMES[2]
+        );
+        assert_eq!(
+            gcd_raw(RANK_RECOVERY_PRIMES[0], SECONDARY_ALONE),
+            1,
+            "gcd(primary prime, SECONDARY_ALONE): observed {}, expected 1",
+            gcd_raw(RANK_RECOVERY_PRIMES[0], SECONDARY_ALONE)
+        );
+        assert_eq!(
+            gcd_raw(RANK_RECOVERY_PRIMES[2], SECONDARY_ALONE),
+            1,
+            "gcd(tertiary prime, SECONDARY_ALONE): observed {}, expected 1",
+            gcd_raw(RANK_RECOVERY_PRIMES[2], SECONDARY_ALONE)
+        );
+
+        let m = MatR::<Z>::new(1, 1, vec![vec![Z::from(SECONDARY_ALONE)]])
+            .expect("invariant: one entry matches the declared 1x1 shape");
+
+        for (i, &p) in RANK_RECOVERY_PRIMES.iter().enumerate() {
+            let observed = snf_rank_over_zp(&m, p).expect("invariant: p > 0 and m is rectangular");
+            assert_eq!(
+                observed, EXPECTED_PER_PRIME_RANKS_SECONDARY_ALONE[i],
+                "snf_rank_over_zp at prime {p}: observed {observed}, expected {}",
+                EXPECTED_PER_PRIME_RANKS_SECONDARY_ALONE[i]
+            );
+        }
+
+        let observed = snf_rank_with_cross_check(&m)
+            .expect("invariant: the primary and tertiary ranks agree, so no error branch");
+        assert_eq!(
+            observed, 1,
+            "snf_rank_with_cross_check on [[p1]]: observed {observed}, expected 1"
+        );
+    }
+
+    /// `RANK_RECOVERY_PRIMES[0] = 2^31 − 1` as the sole entry.
+    const PRIMARY_ALONE: i64 = 2_147_483_647;
+
+    /// Per-prime ranks of `[[PRIMARY_ALONE]]`: the primary divides it, the
+    /// secondary and tertiary do not.
+    const EXPECTED_PER_PRIME_RANKS_PRIMARY_ALONE: [usize; 3] = [0, 1, 1];
+
+    /// `PRIMARY_ALONE mod RANK_RECOVERY_PRIMES[1]`:
+    /// `(2^31 − 1) − (2^31 − 19) = 18`.
+    const PRIMARY_ALONE_RESIDUE_AT_SECONDARY: i64 = 18;
+
+    /// `PRIMARY_ALONE mod RANK_RECOVERY_PRIMES[2]`:
+    /// `(2^31 − 1) − (2^31 − 61) = 60`.
+    const PRIMARY_ALONE_RESIDUE_AT_TERTIARY: i64 = 60;
+
+    #[test]
+    fn cross_check_takes_the_max_when_the_tertiary_matches_the_larger_secondary() {
+        assert_eq!(
+            PRIMARY_ALONE, RANK_RECOVERY_PRIMES[0],
+            "PRIMARY_ALONE: observed {PRIMARY_ALONE}, expected prime 0"
+        );
+        assert_eq!(
+            PRIMARY_ALONE % RANK_RECOVERY_PRIMES[1],
+            PRIMARY_ALONE_RESIDUE_AT_SECONDARY,
+            "residue at the secondary prime: observed {}, expected {PRIMARY_ALONE_RESIDUE_AT_SECONDARY}",
+            PRIMARY_ALONE % RANK_RECOVERY_PRIMES[1]
+        );
+        assert_eq!(
+            PRIMARY_ALONE % RANK_RECOVERY_PRIMES[2],
+            PRIMARY_ALONE_RESIDUE_AT_TERTIARY,
+            "residue at the tertiary prime: observed {}, expected {PRIMARY_ALONE_RESIDUE_AT_TERTIARY}",
+            PRIMARY_ALONE % RANK_RECOVERY_PRIMES[2]
+        );
+        assert_eq!(
+            gcd_raw(RANK_RECOVERY_PRIMES[1], PRIMARY_ALONE),
+            1,
+            "gcd(secondary prime, PRIMARY_ALONE): observed {}, expected 1",
+            gcd_raw(RANK_RECOVERY_PRIMES[1], PRIMARY_ALONE)
+        );
+        assert_eq!(
+            gcd_raw(RANK_RECOVERY_PRIMES[2], PRIMARY_ALONE),
+            1,
+            "gcd(tertiary prime, PRIMARY_ALONE): observed {}, expected 1",
+            gcd_raw(RANK_RECOVERY_PRIMES[2], PRIMARY_ALONE)
+        );
+
+        let m = MatR::<Z>::new(1, 1, vec![vec![Z::from(PRIMARY_ALONE)]])
+            .expect("invariant: one entry matches the declared 1x1 shape");
+
+        for (i, &p) in RANK_RECOVERY_PRIMES.iter().enumerate() {
+            let observed = snf_rank_over_zp(&m, p).expect("invariant: p > 0 and m is rectangular");
+            assert_eq!(
+                observed, EXPECTED_PER_PRIME_RANKS_PRIMARY_ALONE[i],
+                "snf_rank_over_zp at prime {p}: observed {observed}, expected {}",
+                EXPECTED_PER_PRIME_RANKS_PRIMARY_ALONE[i]
+            );
+        }
+
+        let observed = snf_rank_with_cross_check(&m)
+            .expect("invariant: the secondary and tertiary ranks agree, so no error branch");
+        assert_eq!(
+            observed, 1,
+            "snf_rank_with_cross_check on [[p0]]: observed {observed}, expected 1"
+        );
+    }
 }
