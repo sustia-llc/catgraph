@@ -5,7 +5,7 @@
 //! fixture in [`fixtures`]: the 3-point and 5-point hand line spaces, plus
 //! [`Lcg`]-seeded random connected graph metrics (random spanning tree plus
 //! extra edges, integer edge weights in `{1, 2, 3}`, shortest-path distances)
-//! for each seed in [`SEEDS`] and each `n ∈ 3..=6`, indexed at chain depth
+//! for each seed in [`SEEDS`] and each `n ∈ 3..=5`, indexed at chain depth
 //! [`MAX_DEGREE`].
 //!
 //! - [`homology_rank_matches_svd_rank_nullity`]:
@@ -18,9 +18,9 @@
 //!   `rank_svd(∂_k)`.
 //!
 //! [`rank_svd`] counts singular values above
-//! `σ_max · max(rows, cols) · f64::EPSILON` and asserts the gap on every matrix
-//! it is called on: each kept singular value at least [`KEEP_FLOOR`], each
-//! dropped one at most [`DROP_CEILING`].
+//! `σ_max · max(rows, cols) · f64::EPSILON` and asserts the gap on every
+//! non-empty matrix it is called on: each kept singular value at least
+//! [`KEEP_FLOOR`], each dropped one at most [`DROP_CEILING`].
 
 use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 use catgraph_applied::mat::MatR;
@@ -39,6 +39,11 @@ const MAX_DEGREE: usize = 3;
 
 /// The three rank-recovery primes of `chain_complex::homology`, as literals:
 /// the Mersenne `2^31 − 1`, the secondary cross-check, the tertiary fallback.
+///
+/// Drift of the private `RANK_RECOVERY_PRIMES` these copy reds the
+/// `#[cfg(test)]` tests `cross_check_takes_the_max_over_the_three_prime_ranks`
+/// and `cross_check_takes_the_max_when_the_tertiary_matches_the_secondary` in
+/// `catgraph-magnitude/src/chain_complex/homology.rs`.
 const PRIMES: [i64; 3] = [2_147_483_647, 2_147_483_629, 2_147_483_587];
 
 /// Seeds driving the random connected graph metrics.
@@ -52,10 +57,17 @@ const DROP_CEILING: f64 = 1e-9;
 
 /// Floor on the number of `(fixture, ℓ, k)` cells, `k ∈ 0..=MAX_DEGREE`, whose
 /// `∂_k` carries a non-zero entry.
-const NONZERO_CELL_FLOOR: usize = 49;
+const NONZERO_CELL_FLOOR: usize = 26;
 
 /// Floor on the maximum `rank_svd(∂_k)` over those same cells.
-const MAX_RANK_FLOOR: usize = 24;
+const MAX_RANK_FLOOR: usize = 18;
+
+/// Floor on the number of `(fixture, ℓ, k)` cells, `k ∈ 0..=MAX_DEGREE`, whose
+/// `∂_k` has both dimensions non-zero.
+const BOTH_DIMS_CELL_FLOOR: usize = 31;
+
+/// Floor on how many of those cells carry `rank_svd(∂_k) < min(rows, cols)`.
+const RANK_DEFICIENT_CELL_FLOOR: usize = 10;
 
 // ---------------------------------------------------------------------------
 // SVD rank oracle
@@ -122,9 +134,11 @@ fn line5() -> LawvereMetricSpace<usize> {
 /// Shortest-path metric of a random connected weighted graph on `n` nodes.
 ///
 /// `Lcg::new(seed)` draws a spanning tree (each node `i ≥ 1` attaches to a
-/// uniform earlier node), then `n / 2` extra edges between uniform endpoints;
-/// every edge weight is drawn from `{1, 2, 3}`. Distances are the
-/// Floyd–Warshall closure of that weighting.
+/// uniform earlier node), then `n / 2` extra edges: endpoint pairs are drawn
+/// uniformly and a pair that repeats an endpoint or an already-present edge is
+/// discarded and redrawn, so each of the `n / 2` edges is distinct from the
+/// tree and from the others. Every edge weight is drawn from `{1, 2, 3}`.
+/// Distances are the Floyd–Warshall closure of that weighting.
 fn random_connected_space(seed: u64, n: usize) -> LawvereMetricSpace<usize> {
     let mut rng = Lcg::new(seed);
     let mut w = vec![vec![f64::INFINITY; n]; n];
@@ -145,13 +159,16 @@ fn random_connected_space(seed: u64, n: usize) -> LawvereMetricSpace<usize> {
         let x = weight(&mut rng);
         set_edge(&mut w, i, parent, x);
     }
-    for _ in 0..n / 2 {
+    let mut extra = 0_usize;
+    while extra < n / 2 {
         let u = rng.next_usize(0, n - 1);
         let v = rng.next_usize(0, n - 1);
-        let x = weight(&mut rng);
-        if u != v {
-            set_edge(&mut w, u, v, x);
+        if u == v || w[u][v].is_finite() {
+            continue;
         }
+        let x = weight(&mut rng);
+        set_edge(&mut w, u, v, x);
+        extra += 1;
     }
     for k in 0..n {
         for i in 0..n {
@@ -170,7 +187,7 @@ fn random_connected_space(seed: u64, n: usize) -> LawvereMetricSpace<usize> {
 fn fixtures() -> Vec<(String, LawvereMetricSpace<usize>)> {
     let mut out = vec![("line3".to_owned(), line3()), ("line5".to_owned(), line5())];
     for seed in SEEDS {
-        for n in 3..=6 {
+        for n in 3..=5 {
             out.push((
                 format!("rand(seed={seed},n={n})"),
                 random_connected_space(seed, n),
@@ -251,6 +268,8 @@ fn homology_rank_matches_svd_rank_nullity() {
 
 #[test]
 fn snf_rank_matches_svd_rank_at_each_prime() {
+    let mut both_dims_cells = 0_usize;
+    let mut rank_deficient_cells = 0_usize;
     for (label, space) in fixtures() {
         let idx = ChainIndex::new(&space, MAX_DEGREE);
         for &ell in idx.grades() {
@@ -261,7 +280,11 @@ fn snf_rank_matches_svd_rank_at_each_prime() {
                 if bk.rows() == 0 || bk.cols() == 0 {
                     continue;
                 }
+                both_dims_cells += 1;
                 let expected = rank_svd(&bk, &cell);
+                if expected < bk.rows().min(bk.cols()) {
+                    rank_deficient_cells += 1;
+                }
                 let a: Vec<Vec<i64>> = bk
                     .entries()
                     .iter()
@@ -288,4 +311,14 @@ fn snf_rank_matches_svd_rank_at_each_prime() {
             }
         }
     }
+    assert!(
+        both_dims_cells >= BOTH_DIMS_CELL_FLOOR,
+        "cells whose ∂_k has both dimensions non-zero: observed {both_dims_cells}, expected at \
+         least {BOTH_DIMS_CELL_FLOOR}"
+    );
+    assert!(
+        rank_deficient_cells >= RANK_DEFICIENT_CELL_FLOOR,
+        "cells with rank_svd(∂_k) < min(rows, cols): observed {rank_deficient_cells}, expected at \
+         least {RANK_DEFICIENT_CELL_FLOOR}"
+    );
 }

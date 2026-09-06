@@ -117,8 +117,8 @@ pub fn magnitude_homology_rank<Q: IntegerLikeRig>(
 
 /// Single-prime + cross-check rank recovery over `RANK_RECOVERY_PRIMES`.
 /// Returns the rank if the primary and secondary primes agree; on
-/// disagreement returns the maximum of the three prime ranks when the
-/// tertiary matches either of the first two; errors if all three disagree.
+/// disagreement returns the larger of the primary and secondary ranks when
+/// the tertiary matches either of them; errors if all three disagree.
 fn snf_rank_with_cross_check<Q: IntegerLikeRig>(m: &MatR<Q>) -> Result<usize, CatgraphError> {
     let r0 = snf_rank_over_zp(m, RANK_RECOVERY_PRIMES[0])?;
     let r1 = snf_rank_over_zp(m, RANK_RECOVERY_PRIMES[1])?;
@@ -128,7 +128,7 @@ fn snf_rank_with_cross_check<Q: IntegerLikeRig>(m: &MatR<Q>) -> Result<usize, Ca
     // Disagreement: probe the tertiary prime; the largest rank wins.
     let r2 = snf_rank_over_zp(m, RANK_RECOVERY_PRIMES[2])?;
     if r0 == r2 || r1 == r2 {
-        return Ok(r0.max(r1).max(r2));
+        return Ok(r0.max(r1));
     }
     Err(CatgraphError::Composition {
         message: format!(
@@ -383,6 +383,58 @@ mod tests {
         assert_eq!(
             observed, 1,
             "snf_rank_with_cross_check on [[p0·p2]]: observed {observed}, expected 1"
+        );
+    }
+
+    /// `RANK_RECOVERY_PRIMES[1] · RANK_RECOVERY_PRIMES[2]`
+    /// `= (2^31 − 19)(2^31 − 61) = 2^62 − 80·2^31 + 1159`.
+    const P1_TIMES_P2: i64 = 4_611_685_846_628_697_223;
+
+    /// Per-prime ranks of `[[P1_TIMES_P2]]`: the secondary and tertiary divide
+    /// it, the primary does not.
+    const EXPECTED_PER_PRIME_RANKS_P1_P2: [usize; 3] = [1, 0, 0];
+
+    /// `P1_TIMES_P2 mod RANK_RECOVERY_PRIMES[0]`, from `2^31 ≡ 1 (mod 2^31 − 1)`:
+    /// `1 − 80 + 1159 = 1080`.
+    const RESIDUE_AT_PRIMARY: i64 = 1_080;
+
+    #[test]
+    fn cross_check_takes_the_max_when_the_tertiary_matches_the_secondary() {
+        assert_eq!(
+            P1_TIMES_P2,
+            RANK_RECOVERY_PRIMES[1] * RANK_RECOVERY_PRIMES[2],
+            "P1_TIMES_P2: observed {P1_TIMES_P2}, expected the product of primes 1 and 2"
+        );
+        assert_eq!(
+            P1_TIMES_P2 % RANK_RECOVERY_PRIMES[0],
+            RESIDUE_AT_PRIMARY,
+            "residue at the primary prime: observed {}, expected {RESIDUE_AT_PRIMARY}",
+            P1_TIMES_P2 % RANK_RECOVERY_PRIMES[0]
+        );
+        assert_eq!(
+            gcd_raw(RANK_RECOVERY_PRIMES[0], P1_TIMES_P2),
+            1,
+            "gcd(primary prime, P1_TIMES_P2): observed {}, expected 1",
+            gcd_raw(RANK_RECOVERY_PRIMES[0], P1_TIMES_P2)
+        );
+
+        let m = MatR::<Z>::new(1, 1, vec![vec![Z::from(P1_TIMES_P2)]])
+            .expect("invariant: one entry matches the declared 1x1 shape");
+
+        for (i, &p) in RANK_RECOVERY_PRIMES.iter().enumerate() {
+            let observed = snf_rank_over_zp(&m, p).expect("invariant: p > 0 and m is rectangular");
+            assert_eq!(
+                observed, EXPECTED_PER_PRIME_RANKS_P1_P2[i],
+                "snf_rank_over_zp at prime {p}: observed {observed}, expected {}",
+                EXPECTED_PER_PRIME_RANKS_P1_P2[i]
+            );
+        }
+
+        let observed = snf_rank_with_cross_check(&m)
+            .expect("invariant: the secondary and tertiary ranks agree, so no error branch");
+        assert_eq!(
+            observed, 1,
+            "snf_rank_with_cross_check on [[p1·p2]]: observed {observed}, expected 1"
         );
     }
 }
