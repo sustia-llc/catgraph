@@ -460,7 +460,10 @@ fn print_mat(m: &MatR<F64Rig>) {
 /// - Round-trip: `inv · m_original = I_3`, verified to tolerance `1e-12`.
 #[cfg(feature = "f64-rig")]
 fn run_mat_f64_demo() {
-    use catgraph_applied::mat_f64::{determinant, mat_from_nalgebra, mat_to_nalgebra, try_inverse};
+    use catgraph_applied::mat_f64::{
+        determinant, frobenius_norm, mat_from_nalgebra, mat_to_nalgebra, one_norm, rank, solve,
+        try_inverse,
+    };
 
     // Non-singular 3×3 with a hand-verifiable determinant.
     let m = MatR::<F64Rig>::new(
@@ -486,6 +489,53 @@ fn run_mat_f64_demo() {
     let det = determinant(&m).expect("3×3 is square");
     println!("  determinant(m)       = {det}");
     assert!((det - 58.0).abs() < 1e-9, "expected det = 58.0");
+
+    // MatR::trace: rig-generic diagonal sum 1 + 3 + 6 = 10.
+    let tr = m.trace().expect("3×3 is square");
+    println!("  m.trace()            = {}", tr.0);
+    assert!(
+        (tr.0 - 10.0).abs() < 1e-9,
+        "expected trace = 10.0, got {}",
+        tr.0
+    );
+
+    // solve: m ; x = b with b the row sums of m (3, 7, 11) has x = [[1], [1], [1]].
+    let b = MatR::<F64Rig>::new(
+        3,
+        1,
+        vec![vec![F64Rig(3.0)], vec![F64Rig(7.0)], vec![F64Rig(11.0)]],
+    )
+    .expect("3×1");
+    let x = solve(&m, &b).expect("m is non-singular");
+    println!(
+        "  solve(m, b)          = [{}, {}, {}]ᵀ",
+        x.entries()[0][0].0,
+        x.entries()[1][0].0,
+        x.entries()[2][0].0
+    );
+    for (i, row) in x.entries().iter().enumerate() {
+        assert!(
+            (row[0].0 - 1.0).abs() < 1e-9,
+            "solve at row {i} = {} ≠ 1.0",
+            row[0].0
+        );
+    }
+
+    // one_norm: absolute column sums 6, 5, 10 → 10 (the largest row sum is 11).
+    let one = one_norm(&m);
+    println!("  one_norm(m)          = {one}");
+    assert!(
+        (one - 10.0).abs() < 1e-9,
+        "expected one_norm = 10.0, got {one}"
+    );
+
+    // frobenius_norm: 1 + 4 + 9 + 16 + 25 + 36 = 91 → √91.
+    let frob = frobenius_norm(&m);
+    println!("  frobenius_norm(m)    = {frob}  (√91)");
+    assert!(
+        (frob - 91f64.sqrt()).abs() < 1e-9,
+        "expected frobenius_norm = √91, got {frob}"
+    );
 
     // try_inverse: Some(inv) for non-singular m; every entry of inv · m − I_3 is < 1e-12.
     let inv = try_inverse(&m).expect("m is non-singular");
@@ -552,6 +602,12 @@ fn run_mat_f64_demo() {
     );
     assert!(det_sing.abs() < 1e-9);
     assert!(inv_sing.is_none());
+
+    // rank: the SVD counts 2 singular values above 1e-10 — row 1 = 2·row 0
+    // leaves 2 independent rows out of 3.
+    let rank_sing = rank(&singular, 1e-10);
+    println!("  rank(singular, 1e-10) = {rank_sing}  (2 — one row dependency)");
+    assert_eq!(rank_sing, 2, "expected rank 2, got {rank_sing}");
 }
 
 #[cfg(not(feature = "f64-rig"))]

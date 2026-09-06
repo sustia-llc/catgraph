@@ -185,6 +185,23 @@ impl<R: Rig> MatR<R> {
         &self.entries
     }
 
+    /// The rig sum of the diagonal entries `entries[i][i]`, or `None` if
+    /// `rows != cols`.
+    ///
+    /// The `0 × 0` matrix has trace `R::zero()`.
+    #[must_use]
+    pub fn trace(&self) -> Option<R> {
+        if self.rows != self.cols {
+            return None;
+        }
+        Some(
+            self.entries
+                .iter()
+                .enumerate()
+                .fold(R::zero(), |acc, (i, row)| acc + row[i].clone()),
+        )
+    }
+
     /// Mutable access to a single entry. Returns `None` if `(row, col)` is out of bounds.
     ///
     /// Substrate for in-place row/column operations (Storjohann 2000 SNF).

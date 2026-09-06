@@ -16,7 +16,8 @@
 //! - [`lawvere_metric`] — `LawvereMetricSpace<T>` over `Tropical` (Lawvere 1973)
 //! - [`linear_combination`] — formal linear combinations over a coefficient ring
 //! - [`mat`] — `MatR<R>`, the matrix prop over any `Rig` (F&S Def 5.50)
-//! - `mat_f64` — nalgebra bridge for `MatR<F64Rig>` (feature `f64-rig`)
+//! - `mat_f64` — nalgebra bridge for `MatR<F64Rig>`: determinant, inverse,
+//!   `solve`, rank, one-norm, Frobenius norm (feature `f64-rig`)
 //! - [`mat_kron`] — `MatKron(R)`, FdVect with the Kronecker tensor (F&S 2019 Ex 2.16)
 //! - [`mat_to_sfg`] — the realization `mat_to_sfg` (F&S Prop 5.56)
 //! - [`operad_algebra`] — operad algebras `F : O → Set` with `CircAlgebra` (F&S Def 6.99, Ex 6.100)
@@ -36,7 +37,8 @@
 //! ## Features
 //!
 //! - `parallel` (default) — rayon arms in [`linear_combination`] and [`temperley_lieb`]; forwards `catgraph/parallel`
-//! - `f64-rig` — exposes the `mat_f64` nalgebra bridge
+//! - `f64-rig` — exposes the `mat_f64` nalgebra bridge and adds the `nalgebra`
+//!   dependency
 //! - `serde` — `Serialize`/`Deserialize` on the term, rewrite-trace, and content-key types
 //! - `internal-bench`, `internal-probes` — hooks for benches and tests; not public API
 //!

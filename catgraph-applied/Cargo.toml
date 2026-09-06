@@ -18,9 +18,10 @@ default = ["parallel"]
 # those sites fall back to plain `.into_iter()`. Phase W.1.
 parallel = ["dep:rayon", "dep:rayon-cond", "catgraph/parallel"]
 # `f64-rig` exposes the mat_f64 module: nalgebra bridge for MatR<F64Rig>
-# (determinant, try_inverse, DMatrix roundtrip). Opt-in; off by default to
-# keep the nalgebra compile cost out of the way for Tropical / Bool / user
-# rigs that can't use field-specific operations anyway.
+# (determinant, try_inverse, solve, rank, one_norm, frobenius_norm, DMatrix
+# roundtrip). Opt-in; off by default to keep the nalgebra compile cost out of
+# the way for Tropical / Bool / user rigs that can't use field-specific
+# operations anyway. MatR::trace is rig-generic and needs no feature.
 f64-rig = ["dep:nalgebra"]
 # `internal-bench` — Benchmark-only: exposes internal APIs
 # (`CongruenceClosure::atom_canonical_for_bench`) for bench fixtures
