@@ -4,7 +4,7 @@
 //! symmetric braiding involutivity, span tensor product, and `permute_side`.
 
 mod common;
-use common::{assert_cospan_eq_msg as assert_cospan_eq, assert_cospan_shape, cospan_wiring};
+use common::{assert_cospan_shape, cospan_wiring};
 
 use catgraph::{
     category::{Composable, HasIdentity},
@@ -60,7 +60,7 @@ fn tensor_associativity_cospan() {
     assert_cospan_shape(&fg_h, &f_gh, "tensor associativity");
 
     // Stronger: exact structural equality.
-    assert_cospan_eq(&fg_h, &f_gh, "tensor associativity (exact)");
+    assert_eq!(fg_h, f_gh, "tensor associativity (exact)");
 }
 
 // ---------------------------------------------------------------------------
@@ -75,12 +75,12 @@ fn tensor_unit_cospan() {
     // f ⊗ empty == f
     let mut f_unit = f.clone();
     f_unit.monoidal(unit.clone());
-    assert_cospan_eq(&f_unit, &f, "f tensor empty");
+    assert_eq!(f_unit, f, "f tensor empty");
 
     // empty ⊗ f == f
     let mut unit_f = unit;
     unit_f.monoidal(f.clone());
-    assert_cospan_eq(&unit_f, &f, "empty tensor f");
+    assert_eq!(unit_f, f, "empty tensor f");
 }
 
 /// The tensor of two identities is an identity on both legs, and a tensor with

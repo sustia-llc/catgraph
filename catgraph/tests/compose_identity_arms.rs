@@ -44,9 +44,6 @@
 //! cannot tell "arm 1 gone" from "arms swapped". Swapping them is its own
 //! perturbation, and the one its docstring names.
 
-mod common;
-use common::assert_cospan_eq_msg;
-
 use catgraph::{
     category::{Composable, HasIdentity},
     cospan::Cospan,
@@ -123,7 +120,7 @@ fn strict_left_unitality_at_three_vertices_with_a_cyclic_left_leg() {
 
     let result = id.compose(&g).expect("id ; g must compose");
 
-    assert_cospan_eq_msg(&result, &g, "id ; g must be g on the nose");
+    assert_eq!(result, g, "id ; g must be g on the nose");
 }
 
 /// The `left_leg_id` arm on an operand that is **not** an identity.
@@ -165,7 +162,7 @@ fn the_left_leg_id_arm_renumbers_by_the_right_operands_apex() {
 ///
 /// `Cospan`'s CHANGELOG carried this fixture (review R3-03) as evidence that a
 /// merge is observable downstream — that composing after one could return a
-/// different, isomorphic apex order, `structurally_equal` false and
+/// different, isomorphic apex order, `==` false and
 /// `canonical_form` equal, so byte-level consumers had to compare canonical
 /// forms. That held while a cached flag chose `perform_pushout`'s fast path.
 /// The cache is gone, and this test is why both CHANGELOGs now say the claim

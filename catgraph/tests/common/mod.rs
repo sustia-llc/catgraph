@@ -4,13 +4,7 @@
 //! `PartialEq` (or neither), so `assert_eq!` is unavailable on them and these
 //! helpers compare via public accessors instead.
 //!
-//! `Cospan` is the exception since
-//! [#289](https://github.com/sustia-llc/catgraph/issues/289): with the cached
-//! identity flags gone it derives `PartialEq`, so `assert_eq!(a, b)` now works
-//! directly and `cospan_eq` / `assert_cospan_eq` / `assert_cospan_eq_msg` are
-//! `==` plus a per-field failure message. They are kept — test files call
-//! them, and their messages name which of the three fields moved — but new
-//! `Cospan` comparisons need no helper.
+//! `Cospan` derives `PartialEq`, so `assert_eq!(a, b)` works on it directly.
 
 use catgraph::{
     category::{Composable, ComposableMutating},
@@ -24,46 +18,6 @@ use catgraph::{
 // ---------------------------------------------------------------------------
 // Cospan helpers
 // ---------------------------------------------------------------------------
-
-#[allow(dead_code)]
-pub fn cospan_eq<L: Eq + Copy + std::fmt::Debug>(a: &Cospan<L>, b: &Cospan<L>) -> bool {
-    a.left_to_middle() == b.left_to_middle()
-        && a.right_to_middle() == b.right_to_middle()
-        && a.middle() == b.middle()
-}
-
-#[allow(dead_code)]
-pub fn assert_cospan_eq<L: Eq + Copy + std::fmt::Debug>(a: &Cospan<L>, b: &Cospan<L>) {
-    assert!(
-        cospan_eq(a, b),
-        "Cospans differ:\n  left:   {:?} vs {:?}\n  right:  {:?} vs {:?}\n  middle: {:?} vs {:?}",
-        a.left_to_middle(),
-        b.left_to_middle(),
-        a.right_to_middle(),
-        b.right_to_middle(),
-        a.middle(),
-        b.middle(),
-    );
-}
-
-#[allow(dead_code)]
-pub fn assert_cospan_eq_msg<L: Eq + Copy + std::fmt::Debug>(
-    a: &Cospan<L>,
-    b: &Cospan<L>,
-    msg: &str,
-) {
-    assert_eq!(
-        a.left_to_middle(),
-        b.left_to_middle(),
-        "{msg}: left_to_middle mismatch"
-    );
-    assert_eq!(
-        a.right_to_middle(),
-        b.right_to_middle(),
-        "{msg}: right_to_middle mismatch"
-    );
-    assert_eq!(a.middle(), b.middle(), "{msg}: middle mismatch");
-}
 
 /// The braiding **wiring** a cospan realizes: domain wire `i` and codomain wire
 /// `k` meet when they land on the same apex vertex, i.e. `left[i] == right[k]`.
@@ -219,7 +173,7 @@ where
     RN: Eq + std::fmt::Debug,
 {
     assert!(
-        cospan_eq(a.cospan(), b.cospan())
+        a.cospan() == b.cospan()
             && a.left_names() == b.left_names()
             && a.right_names() == b.right_names(),
         "NamedCospans differ:\n  left_names:  {:?} vs {:?}\n  right_names: {:?} vs {:?}\n  \
@@ -245,7 +199,7 @@ use catgraph::corel::Corel;
 
 #[allow(dead_code)]
 pub fn corel_eq<L: Eq + Copy + std::fmt::Debug>(a: &Corel<L>, b: &Corel<L>) -> bool {
-    cospan_eq(a.as_cospan(), b.as_cospan())
+    a.as_cospan() == b.as_cospan()
 }
 
 #[allow(dead_code)]

@@ -115,8 +115,7 @@ pub trait Decoration: Sized {
 /// `PartialEq` compares both fields — the underlying cospan and the decoration.
 /// There is no `Eq`: [`Decoration::Apex`] is bounded by `PartialEq`, not `Eq`,
 /// so nothing here can promise reflexivity. Comparing the `cospan` field alone
-/// still works through [`Cospan::structurally_equal`] (equivalently `==`) or
-/// the public leg/middle accessors.
+/// still works through `==` or the public leg/middle accessors.
 pub struct DecoratedCospan<Lambda, D>
 where
     Lambda: Eq + Copy + Debug,

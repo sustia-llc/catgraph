@@ -1050,6 +1050,24 @@ mod test {
         out
     }
 
+    /// Run `f`, replacing a panic raised inside it with one naming `what` and
+    /// carrying the original payload text.
+    fn labelled<R>(what: &str, f: impl FnOnce() -> R) -> R {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+            Ok(value) => value,
+            Err(payload) => {
+                let text = if let Some(s) = payload.downcast_ref::<&str>() {
+                    (*s).to_string()
+                } else if let Some(s) = payload.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "non-string panic payload".to_string()
+                };
+                panic!("{what}: {text}");
+            }
+        }
+    }
+
     /// Both parallel arms of `non_crossing`, in both polarities, over diagrams
     /// built with nothing but the public API.
     ///
@@ -1250,7 +1268,9 @@ mod test {
         // is (0,2) (1,3); side by side in Hom(5, 5) that is (0,1) (2,7) (5,6)
         // from e_0 and (3,8) (4,9) from id_2.
         let mut tensored = BrauerMorphism::<i64>::temperley_lieb_gens(3)[0].clone();
-        tensored.monoidal(BrauerMorphism::<i64>::identity(&2));
+        labelled("e_0 (3) ⊗ id_2", || {
+            tensored.monoidal(BrauerMorphism::<i64>::identity(&2));
+        });
         assert_eq!(tensored.domain(), 5);
         assert_eq!(tensored.codomain(), 5);
         assert_eq!(
@@ -1287,9 +1307,9 @@ mod test {
         ];
         for (a_name, a) in &factors {
             for (b_name, b) in &factors {
-                let mut got = a.clone();
-                got.monoidal(b.clone());
                 let what = format!("{a_name} ⊗ {b_name}");
+                let mut got = a.clone();
+                labelled(&what, || got.monoidal(b.clone()));
                 assert_eq!(got.domain(), a.domain() + b.domain(), "{what}: domain");
                 assert_eq!(
                     got.codomain(),
@@ -1318,6 +1338,64 @@ mod test {
                 assert_eq!(have, want, "{what}: basis");
             }
         }
+    }
+
+    /// `monoidal` on a factor whose domain and codomain differ, in both orders:
+    /// `Hom(3, 1) ⊗ id_1` and `id_1 ⊗ Hom(3, 1)`.
+    ///
+    /// The fixture carries `(0,3) (1,2)`: domain point 0 runs to the single
+    /// codomain point 3, and domain points 1 and 2 are cupped. Left of `id_1`
+    /// in Hom(4, 2) that is `(0,4) (1,2) (3,5)`; right of `id_1` it is
+    /// `(0,4) (1,5) (2,3)`.
+    ///
+    /// **What this ranges over.** One non-square factor tensored with one
+    /// identity, in both orders.
+    #[test]
+    fn monoidal_on_a_non_square_factor() {
+        use crate::linear_combination::LinearCombination;
+        use catgraph::{
+            category::{Composable, HasIdentity},
+            monoidal::Monoidal,
+        };
+
+        let hom_3_1 = BrauerMorphism::<i64> {
+            diagram: LinearCombination::singleton((
+                0,
+                PerfectMatching::from(vec![Pair(0, 3), Pair(1, 2)]),
+            )),
+            source: 3,
+            target: 1,
+            is_def_tl: false,
+        };
+        assert_eq!(
+            terms(&hom_3_1),
+            vec![(0, vec![Pair(0, 3), Pair(1, 2)])],
+            "the Hom(3, 1) fixture"
+        );
+
+        let mut on_the_left = hom_3_1.clone();
+        labelled("Hom(3, 1) ⊗ id_1", || {
+            on_the_left.monoidal(BrauerMorphism::<i64>::identity(&1));
+        });
+        assert_eq!(on_the_left.domain(), 4, "Hom(3, 1) ⊗ id_1: domain");
+        assert_eq!(on_the_left.codomain(), 2, "Hom(3, 1) ⊗ id_1: codomain");
+        assert_eq!(
+            terms(&on_the_left),
+            vec![(0, vec![Pair(0, 4), Pair(1, 2), Pair(3, 5)])],
+            "Hom(3, 1) ⊗ id_1: pair set"
+        );
+
+        let mut on_the_right = BrauerMorphism::<i64>::identity(&1);
+        labelled("id_1 ⊗ Hom(3, 1)", || {
+            on_the_right.monoidal(hom_3_1);
+        });
+        assert_eq!(on_the_right.domain(), 4, "id_1 ⊗ Hom(3, 1): domain");
+        assert_eq!(on_the_right.codomain(), 2, "id_1 ⊗ Hom(3, 1): codomain");
+        assert_eq!(
+            terms(&on_the_right),
+            vec![(0, vec![Pair(0, 4), Pair(1, 5), Pair(2, 3)])],
+            "id_1 ⊗ Hom(3, 1): pair set"
+        );
     }
 }
 

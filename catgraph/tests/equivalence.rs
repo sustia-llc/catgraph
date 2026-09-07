@@ -5,10 +5,6 @@
 
 use std::sync::Arc;
 
-mod common;
-
-use common::assert_cospan_eq_msg;
-
 use catgraph::{
     category::{Composable, ComposableMutating, HasIdentity},
     cospan::Cospan,
@@ -351,16 +347,16 @@ fn lemma_4_9_functor_composition_of_morphisms() {
 
     assert_eq!(combined.domain(), two_step.domain());
     assert_eq!(combined.codomain(), two_step.codomain());
-    assert_cospan_eq_msg(
+    assert_eq!(
         combined.element(),
         two_step.element(),
-        "F_{α;β}(μ;δ) vs F_α(F_β(μ;δ))",
+        "F_{{α;β}}(μ;δ) vs F_α(F_β(μ;δ))"
     );
     // …and the round trip really is the input element, not just self-consistent.
-    assert_cospan_eq_msg(
+    assert_eq!(
         combined.element(),
         f.element(),
-        "F_{id;id}(μ;δ) reproduces μ;δ",
+        "F_{{id;id}}(μ;δ) reproduces μ;δ"
     );
 }
 
