@@ -71,7 +71,12 @@
 //! hand-built graphs is `Isomorphic` or `NotIsomorphic`.
 //! The two `to_petgraph` arms need the `rustworkx` feature that gates
 //! `src/multiway/branchial_analysis.rs` and carry a per-arm
-//! `#[cfg(feature = "rustworkx")]`; every other arm runs on
+//! `#[cfg(feature = "rustworkx")]`. The gauge arm needs the `gauge` feature
+//! that gates `src/hypergraph/gauge.rs` and carries a per-arm
+//! `#[cfg(feature = "gauge")]`, as do its imports; it runs at `link_dim` 1,
+//! and the matrix link surface — `loop_holonomy`, `is_flat`,
+//! `gauge_transform`, `link`, `link_dim` past its accessor — is exercised by
+//! `tests/gauge_theory.rs`, not this file. Every other arm runs on
 //! `--no-default-features` too.
 //! `tests/branchial_analysis.rs` (coloring, k-core, spectra),
 //! `tests/catgraph_bridge.rs` (the cospan/span bridge),
@@ -103,9 +108,12 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use catgraph_physics::hypergraph::{
-    CausalComparison, CausalEvent, CausalGraph, EdgeId, EventId, GaugeGroup, Hypergraph,
-    HypergraphEvolution, HypergraphLattice, HypergraphRewriteGroup, RewriteRule, plaquette_action,
-    total_action,
+    CausalComparison, CausalEvent, CausalGraph, EdgeId, EventId, Hypergraph, HypergraphEvolution,
+    RewriteRule,
+};
+#[cfg(feature = "gauge")]
+use catgraph_physics::hypergraph::{
+    GaugeGroup, HypergraphLattice, HypergraphRewriteGroup, plaquette_action, total_action,
 };
 use catgraph_physics::multiway::{
     BranchId, BranchialGraph, DiscreteCurvature, MultiwayEdgeKind, MultiwayEvolutionGraph,
@@ -805,7 +813,8 @@ fn hand_built_causal_graph_pairs() {
 // ===========================================================================
 
 /// The rewrite gauge group's structure constants, the plaquette and total
-/// action, and lattice construction.
+/// action, and lattice construction at `link_dim` 1.
+#[cfg(feature = "gauge")]
 #[test]
 fn gauge_group_action_and_lattice() {
     let group = HypergraphRewriteGroup::new(3);
@@ -856,7 +865,8 @@ fn gauge_group_action_and_lattice() {
     );
 
     let mut line: HypergraphLattice<1> =
-        HypergraphLattice::new([5], HypergraphRewriteGroup::new(2), vec![]);
+        HypergraphLattice::new([5], HypergraphRewriteGroup::new(2), vec![], 1);
+    assert_eq!(line.link_dim(), 1);
     assert_eq!(line.rules().len(), 0);
     assert_eq!(line.step_count(), 0);
     assert!(
@@ -877,6 +887,7 @@ fn gauge_group_action_and_lattice() {
         [4, 4],
         HypergraphRewriteGroup::new(3),
         vec![RewriteRule::wolfram_a_to_bb()],
+        1,
     );
     assert_eq!(plane.rules().len(), 1);
     assert_eq!(plane.get_state(&[0, 0]).map(Hypergraph::edge_count), None);

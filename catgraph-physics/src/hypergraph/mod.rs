@@ -9,6 +9,7 @@
 pub mod causal_graph;
 pub mod evolution;
 pub mod evolution_cospan;
+#[cfg(feature = "gauge")]
 pub mod gauge;
 pub mod hyperedge;
 #[allow(clippy::module_inception)]
@@ -21,6 +22,7 @@ pub use causal_graph::{CausalComparison, CausalEvent, CausalGraph, EdgeId, Event
 pub use evolution::{
     CausalInvarianceResult, HypergraphEvolution, HypergraphNode, HypergraphStep, WilsonLoop,
 };
+#[cfg(feature = "gauge")]
 pub use gauge::{
     GaugeGroup, HypergraphLattice, HypergraphRewriteGroup, plaquette_action, total_action,
 };

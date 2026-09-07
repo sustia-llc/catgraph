@@ -1,10 +1,16 @@
 //! Lattice-gauge reading of hypergraph rewriting: rewrite rules as gauge
-//! transformations, closed rewrite paths as Wilson loops, holonomy 1 as flat.
+//! transformations, closed rewrite paths as Wilson loops, an identity
+//! holonomy as flat.
 //!
-//! Provenance (`docs/ANCHORS.md`): inspired by \[Gor20a\]; the
-//! Wilson-loop / plaquette / holonomy vocabulary is standard lattice gauge
-//! theory; "causal invariance ⟺ holonomy 1" is a catgraph gloss, not a cited
-//! theorem.
+//! A link carries a `DMatrix<f64>` of side `link_dim`; the holonomy of a
+//! closed path is the ordered product `U_k · … · U_1`, and its Wilson value is
+//! `tr(H) / link_dim`.
+//!
+//! Provenance (`docs/ANCHORS.md`): inspired by \[Gor20a\]; the matrix link
+//! variable, the path-ordered holonomy, the Wilson loop as a normalized trace
+//! and the gauge transformation by vertex conjugation are standard lattice
+//! gauge theory \[Wil74\]; "causal invariance ⟺ flat holonomy" is a catgraph
+//! gloss, not a cited theorem.
 
 /// A gauge group: Lie-algebra dimension, abelianness, spacetime dimension,
 /// name, and structure constants.
@@ -193,30 +199,13 @@ pub fn total_action(holonomies: &[f64]) -> f64 {
 
 use std::collections::HashMap;
 
+use nalgebra::DMatrix;
+
 use super::hypergraph::Hypergraph;
 use super::rewrite_rule::RewriteRule;
 
-/// `D`-dimensional lattice of hypergraph states; links carry rewrite
-/// transitions and their holonomies.
-///
-/// # Example
-///
-/// ```rust
-/// use catgraph_physics::hypergraph::{
-///     HypergraphLattice, HypergraphRewriteGroup, Hypergraph, RewriteRule,
-/// };
-///
-/// let rule = RewriteRule::wolfram_a_to_bb();
-/// let mut lattice: HypergraphLattice<1> = HypergraphLattice::new(
-///     [5],
-///     HypergraphRewriteGroup::new(3),
-///     vec![rule],
-/// );
-///
-/// let initial = Hypergraph::from_edges(vec![vec![0, 1, 2]]);
-/// lattice.set_state(&[2], initial);
-/// lattice.apply_rewrite(&[2], 0);
-/// ```
+/// `D`-dimensional lattice of hypergraph states; links carry `link_dim` ×
+/// `link_dim` matrix gauge variables.
 #[derive(Debug, Clone)]
 pub struct HypergraphLattice<const D: usize> {
     /// Dimensions of the lattice (e.g., [5, 5, 5] for 5x5x5).
@@ -234,43 +223,31 @@ pub struct HypergraphLattice<const D: usize> {
     /// States at each lattice site.
     states: HashMap<Vec<usize>, Hypergraph>,
 
-    /// Transitions and rule applications at each link.
+    /// Link variable of each directed link.
     /// Key: (site, `neighbor_site`) pair
-    /// Value: (`rule_index`, holonomy)
-    transitions: HashMap<(Vec<usize>, Vec<usize>), (usize, f64)>,
+    /// Value: the `link_dim` × `link_dim` matrix carried by that link
+    transitions: HashMap<(Vec<usize>, Vec<usize>), DMatrix<f64>>,
+
+    /// Side length of every link variable.
+    link_dim: usize,
 
     /// Total number of rewrite steps applied.
     step_count: usize,
 
-    /// Wilson loop detections during evolution.
+    /// Recorded Wilson loops: the site cycle and its Wilson value.
     wilson_loops: Vec<(Vec<Vec<usize>>, f64)>,
 }
 
 impl<const D: usize> HypergraphLattice<D> {
-    /// Creates a new D-dimensional hypergraph lattice.
-    ///
-    /// # Arguments
-    ///
-    /// * `dimensions` - Array of dimension sizes (e.g., [5, 5] for 5x5)
-    /// * `group` - Gauge group (defines number of rewrite rules)
-    /// * `rules` - Rewrite rules (gauge generators)
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use catgraph_physics::hypergraph::{HypergraphLattice, HypergraphRewriteGroup};
-    ///
-    /// let lattice: HypergraphLattice<2> = HypergraphLattice::new(
-    ///     [10, 10],
-    ///     HypergraphRewriteGroup::new(4),
-    ///     vec![],
-    /// );
-    /// ```
+    /// Creates a `D`-dimensional hypergraph lattice of the given site
+    /// `dimensions`, gauge `group` and rewrite `rules`, whose links carry
+    /// `link_dim` × `link_dim` matrices.
     #[must_use]
     pub fn new(
         dimensions: [usize; D],
         group: HypergraphRewriteGroup,
         rules: Vec<RewriteRule>,
+        link_dim: usize,
     ) -> Self {
         Self {
             dimensions,
@@ -279,9 +256,24 @@ impl<const D: usize> HypergraphLattice<D> {
             next_vertex_id: 0,
             states: HashMap::new(),
             transitions: HashMap::new(),
+            link_dim,
             step_count: 0,
             wilson_loops: Vec::new(),
         }
+    }
+
+    /// Returns the side length of the lattice's link variables.
+    #[inline]
+    #[must_use]
+    pub const fn link_dim(&self) -> usize {
+        self.link_dim
+    }
+
+    /// Returns the link variable recorded on the directed link `from` → `to`,
+    /// or `None` when that link carries none.
+    #[must_use]
+    pub fn link(&self, from: &[usize; D], to: &[usize; D]) -> Option<&DMatrix<f64>> {
+        self.transitions.get(&(from.to_vec(), to.to_vec()))
     }
 
     /// Stores `state` at `site` and returns `true`.
@@ -370,70 +362,169 @@ impl<const D: usize> HypergraphLattice<D> {
         true
     }
 
-    /// Records `holonomy` on the directed link `from` → `to` and returns
-    /// `true`.
+    /// Reports whether `link` is admissible as a link variable of this
+    /// lattice: `link_dim` × `link_dim`, every entry finite, and invertible.
+    fn is_admissible(&self, link: &DMatrix<f64>) -> bool {
+        if link.nrows() != self.link_dim || link.ncols() != self.link_dim {
+            return false;
+        }
+        if !link.iter().all(|entry| entry.is_finite()) {
+            return false;
+        }
+        link.clone().try_inverse().is_some()
+    }
+
+    /// Records `link` on the directed link `from` → `to` and returns `true`.
     ///
     /// Returns `false` and records nothing when either endpoint has a
-    /// coordinate at or beyond the corresponding lattice dimension, or when
-    /// `holonomy` is not both finite and strictly positive.
+    /// coordinate at or beyond the corresponding lattice dimension, when
+    /// `link` is not `link_dim` × `link_dim`, when an entry of `link` is not
+    /// finite, or when `link` is not invertible.
     ///
-    /// Links recorded here are the ones [`wilson_loop`](Self::wilson_loop)
-    /// traverses.
-    pub fn record_transition(&mut self, from: &[usize; D], to: &[usize; D], holonomy: f64) -> bool {
+    /// Links recorded here are the ones
+    /// [`loop_holonomy`](Self::loop_holonomy) traverses.
+    pub fn record_transition(
+        &mut self,
+        from: &[usize; D],
+        to: &[usize; D],
+        link: DMatrix<f64>,
+    ) -> bool {
         if !Self::is_valid_site(from, &self.dimensions)
             || !Self::is_valid_site(to, &self.dimensions)
         {
             return false;
         }
-        if !holonomy.is_finite() || holonomy <= 0.0 {
+        if !self.is_admissible(&link) {
             return false;
         }
-        self.transitions
-            .insert((from.to_vec(), to.to_vec()), (usize::MAX, holonomy));
+        self.transitions.insert((from.to_vec(), to.to_vec()), link);
         true
     }
 
-    /// Product of the recorded link holonomies around the closed cycle
-    /// `sites`, or `None` when `sites` is non-empty and some link of the cycle
-    /// carries no recorded transition.
+    /// Ordered product `U_k · … · U_1` of the recorded link variables around
+    /// the closed cycle `sites`, or `None` when some link of the cycle carries
+    /// no recorded transition.
     ///
-    /// An empty cycle yields `Some(1.0)`.
-    fn cycle_holonomy(&self, sites: &[Vec<usize>]) -> Option<f64> {
-        let mut holonomy = 1.0;
+    /// An empty cycle yields the `link_dim` identity.
+    fn cycle_holonomy(&self, sites: &[Vec<usize>]) -> Option<DMatrix<f64>> {
+        let mut holonomy = DMatrix::<f64>::identity(self.link_dim, self.link_dim);
         for i in 0..sites.len() {
             let key = (sites[i].clone(), sites[(i + 1) % sites.len()].clone());
-            let (_, h) = self.transitions.get(&key)?;
-            holonomy *= h;
+            let link = self.transitions.get(&key)?;
+            holonomy = link * holonomy;
         }
         Some(holonomy)
     }
 
-    /// Product of the recorded link holonomies around the closed loop `path`,
-    /// which wraps from its last site back to its first.
+    /// Reports whether every entry of `holonomy` − `I` is below `eps` in
+    /// absolute value.
+    fn matrix_is_flat(holonomy: &DMatrix<f64>, eps: f64) -> bool {
+        let identity = DMatrix::<f64>::identity(holonomy.nrows(), holonomy.ncols());
+        (holonomy - identity).iter().all(|d| d.abs() < eps)
+    }
+
+    /// Normalized trace `tr(holonomy) / link_dim`.
+    #[allow(clippy::cast_precision_loss)]
+    fn matrix_wilson(&self, holonomy: &DMatrix<f64>) -> f64 {
+        holonomy.trace() / self.link_dim as f64
+    }
+
+    /// Ordered product `U_k · … · U_1` of the link variables around the closed
+    /// loop `path`, which wraps from its last site back to its first.
     ///
-    /// Returns `None` when `path` is non-empty and any of its links carries no
-    /// recorded transition; an empty `path` yields `Some(1.0)`.
+    /// Returns `None` when any link of the loop carries no recorded
+    /// transition; an empty `path` yields the `link_dim` identity.
     #[must_use]
-    pub fn wilson_loop(&self, path: &[&[usize; D]]) -> Option<f64> {
+    pub fn loop_holonomy(&self, path: &[&[usize; D]]) -> Option<DMatrix<f64>> {
         let sites: Vec<Vec<usize>> = path.iter().map(|s| s.to_vec()).collect();
         self.cycle_holonomy(&sites)
     }
 
-    /// Reports whether `path`'s Wilson loop holonomy is within `1e-6` of
-    /// `1.0`.
+    /// Wilson value `tr(H) / link_dim` of `path`'s holonomy `H`.
     ///
-    /// Returns `None` exactly when [`wilson_loop`](Self::wilson_loop) does.
+    /// Returns `None` exactly when
+    /// [`loop_holonomy`](Self::loop_holonomy) does.
     #[must_use]
-    pub fn is_causally_invariant(&self, path: &[&[usize; D]]) -> Option<bool> {
-        self.wilson_loop(path).map(|h| (h - 1.0).abs() < 1e-6)
+    pub fn wilson_loop(&self, path: &[&[usize; D]]) -> Option<f64> {
+        self.loop_holonomy(path)
+            .map(|holonomy| self.matrix_wilson(&holonomy))
     }
 
-    /// Plaquette action [`plaquette_action`] of `path`'s Wilson loop holonomy.
+    /// Reports whether every entry of `path`'s holonomy minus the identity is
+    /// below `eps` in absolute value.
+    ///
+    /// Returns `None` exactly when
+    /// [`loop_holonomy`](Self::loop_holonomy) does.
+    #[must_use]
+    pub fn is_flat(&self, path: &[&[usize; D]], eps: f64) -> Option<bool> {
+        self.loop_holonomy(path)
+            .map(|holonomy| Self::matrix_is_flat(&holonomy, eps))
+    }
+
+    /// Reports whether `path`'s holonomy is flat at `1e-6`.
+    ///
+    /// Returns `None` exactly when
+    /// [`loop_holonomy`](Self::loop_holonomy) does.
+    #[must_use]
+    pub fn is_causally_invariant(&self, path: &[&[usize; D]]) -> Option<bool> {
+        self.is_flat(path, 1e-6)
+    }
+
+    /// Plaquette action [`plaquette_action`] of `path`'s Wilson value.
     ///
     /// Returns `None` exactly when [`wilson_loop`](Self::wilson_loop) does.
     #[must_use]
     pub fn plaquette_action(&self, path: &[&[usize; D]]) -> Option<f64> {
         self.wilson_loop(path).map(super::gauge::plaquette_action)
+    }
+
+    /// Replaces every link variable `U` on `x` → `y` with `g_y · U · g_x⁻¹`,
+    /// recomputes the recorded Wilson values from their site cycles, and
+    /// returns `true`. A site absent from `g` transforms by the identity.
+    ///
+    /// Returns `false` and changes nothing when a value of `g` is not
+    /// `link_dim` × `link_dim`, has a non-finite entry, or is not invertible.
+    pub fn gauge_transform(&mut self, g: &HashMap<Vec<usize>, DMatrix<f64>>) -> bool {
+        if !g.values().all(|matrix| self.is_admissible(matrix)) {
+            return false;
+        }
+
+        let identity = DMatrix::<f64>::identity(self.link_dim, self.link_dim);
+        let inverses: HashMap<Vec<usize>, DMatrix<f64>> = g
+            .iter()
+            .map(|(site, matrix)| {
+                (
+                    site.clone(),
+                    matrix.clone().try_inverse().expect(
+                        "invariant: is_admissible accepted every value of g, so each inverts",
+                    ),
+                )
+            })
+            .collect();
+
+        self.transitions = self
+            .transitions
+            .iter()
+            .map(|((from, to), link)| {
+                let left = g.get(to).unwrap_or(&identity);
+                let right = inverses.get(from).unwrap_or(&identity);
+                ((from.clone(), to.clone()), left * link * right)
+            })
+            .collect();
+
+        self.wilson_loops = self
+            .wilson_loops
+            .iter()
+            .map(|(sites, _)| {
+                let holonomy = self.cycle_holonomy(sites).expect(
+                    "invariant: gauge_transform keeps the link key set, so a recorded cycle \
+                     still resolves",
+                );
+                (sites.clone(), self.matrix_wilson(&holonomy))
+            })
+            .collect();
+
+        true
     }
 
     /// Replaces the recorded Wilson loops with the elementary plaquettes of
@@ -478,8 +569,9 @@ impl<const D: usize> HypergraphLattice<D> {
                         corner_j.to_vec(),
                     ];
 
-                    if let Some(h) = self.cycle_holonomy(&sites) {
-                        self.wilson_loops.push((sites, h));
+                    if let Some(holonomy) = self.cycle_holonomy(&sites) {
+                        let wilson = self.matrix_wilson(&holonomy);
+                        self.wilson_loops.push((sites, wilson));
                     }
                 }
             }
@@ -500,7 +592,8 @@ impl<const D: usize> HypergraphLattice<D> {
         }
     }
 
-    /// Returns recorded Wilson loops.
+    /// Returns the recorded Wilson loops: each one's site cycle and its
+    /// Wilson value.
     #[must_use]
     pub fn recorded_loops(&self) -> &[(Vec<Vec<usize>>, f64)] {
         &self.wilson_loops
@@ -537,7 +630,7 @@ impl<const D: usize> HypergraphLattice<D> {
         &self.group
     }
 
-    /// Mean of the holonomies of the recorded Wilson loops.
+    /// Mean of the Wilson values of the recorded Wilson loops.
     ///
     /// Returns `None` when no Wilson loops are recorded.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
@@ -547,12 +640,12 @@ impl<const D: usize> HypergraphLattice<D> {
             return None;
         }
 
-        let sum: f64 = self.wilson_loops.iter().map(|(_, h)| h).sum();
+        let sum: f64 = self.wilson_loops.iter().map(|(_, w)| w).sum();
         Some(sum / self.wilson_loops.len() as f64)
     }
 
-    /// Reports whether every recorded Wilson loop's holonomy is within `1e-6`
-    /// of `1.0`.
+    /// Reports whether every recorded Wilson loop's holonomy is flat at
+    /// `1e-6`.
     ///
     /// Returns `None` when no Wilson loops are recorded.
     #[must_use]
@@ -560,21 +653,21 @@ impl<const D: usize> HypergraphLattice<D> {
         if self.wilson_loops.is_empty() {
             return None;
         }
-        Some(
-            self.wilson_loops
-                .iter()
-                .all(|(_, h)| (h - 1.0).abs() < 1e-6),
-        )
+        Some(self.wilson_loops.iter().all(|(sites, _)| {
+            self.cycle_holonomy(sites)
+                .is_some_and(|holonomy| Self::matrix_is_flat(&holonomy, 1e-6))
+        }))
     }
 
-    /// Sum of the plaquette actions of the recorded Wilson loops.
+    /// Sum of the plaquette actions of the recorded Wilson loops' Wilson
+    /// values.
     ///
     /// Returns `0.0` when no Wilson loops are recorded.
     #[must_use]
     pub fn total_plaquette_action(&self) -> f64 {
         self.wilson_loops
             .iter()
-            .map(|(_, h)| plaquette_action(*h))
+            .map(|(_, w)| plaquette_action(*w))
             .sum()
     }
 }
@@ -582,7 +675,7 @@ impl<const D: usize> HypergraphLattice<D> {
 impl<const D: usize> Default for HypergraphLattice<D> {
     fn default() -> Self {
         let dims = [1; D];
-        Self::new(dims, HypergraphRewriteGroup::new(3), vec![])
+        Self::new(dims, HypergraphRewriteGroup::new(3), vec![], 1)
     }
 }
 
@@ -597,6 +690,11 @@ impl<const D: usize> Default for HypergraphLattice<D> {
 )]
 mod tests {
     use super::*;
+
+    /// The 1 × 1 link variable carrying `value`.
+    fn link1(value: f64) -> DMatrix<f64> {
+        DMatrix::from_element(1, 1, value)
+    }
 
     #[test]
     fn test_rewrite_group_new() {
@@ -659,7 +757,7 @@ mod tests {
     #[test]
     fn test_lattice_1d_creation() {
         let lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![], 1);
 
         assert_eq!(lattice.dimensions(), &[5]);
         assert_eq!(lattice.step_count(), 0);
@@ -669,7 +767,7 @@ mod tests {
     #[test]
     fn test_lattice_2d_creation() {
         let lattice: HypergraphLattice<2> =
-            HypergraphLattice::new([10, 10], HypergraphRewriteGroup::new(4), vec![]);
+            HypergraphLattice::new([10, 10], HypergraphRewriteGroup::new(4), vec![], 1);
 
         assert_eq!(lattice.dimensions(), &[10, 10]);
         assert_eq!(lattice.group().num_rules(), 4);
@@ -678,7 +776,7 @@ mod tests {
     #[test]
     fn test_lattice_set_get_state() {
         let mut lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![], 1);
 
         let state = Hypergraph::from_edges(vec![vec![0, 1, 2]]);
         let site = [2];
@@ -696,7 +794,7 @@ mod tests {
 
         let rule = RewriteRule::wolfram_a_to_bb();
         let mut lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![rule]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![rule], 1);
 
         // Set an initial state with a ternary edge that matches A→BB
         let initial = Hypergraph::from_edges(vec![vec![0, 1, 2]]);
@@ -720,7 +818,7 @@ mod tests {
         // Rule expects a ternary edge, but we'll have a binary edge
         let rule = RewriteRule::wolfram_a_to_bb();
         let mut lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![rule]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![rule], 1);
 
         let initial = Hypergraph::from_edges(vec![vec![0, 1]]);
         let site = [1];
@@ -736,7 +834,7 @@ mod tests {
     #[test]
     fn test_lattice_apply_rewrite_invalid_rule() {
         let mut lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(2), vec![]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(2), vec![], 1);
 
         let site = [1];
         let success = lattice.apply_rewrite(&site, 0); // No rules at all
@@ -748,7 +846,7 @@ mod tests {
     #[test]
     fn test_lattice_wilson_loop_empty() {
         let lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![], 1);
 
         let path: Vec<&[usize; 1]> = vec![];
         let h = lattice.wilson_loop(&path);
@@ -759,7 +857,7 @@ mod tests {
     #[test]
     fn test_lattice_causal_invariance() {
         let mut lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![], 1);
 
         let sites = vec![
             &[0usize] as &[usize; 1],
@@ -770,21 +868,21 @@ mod tests {
         // With no transitions recorded, the loop has no holonomy at all.
         assert_eq!(lattice.is_causally_invariant(&sites), None);
 
-        assert!(lattice.record_transition(&[0], &[1], 2.0));
-        assert!(lattice.record_transition(&[1], &[0], 0.5));
+        assert!(lattice.record_transition(&[0], &[1], link1(2.0)));
+        assert!(lattice.record_transition(&[1], &[0], link1(0.5)));
         assert_eq!(lattice.is_causally_invariant(&[&[0], &[1]]), Some(true));
     }
 
     #[test]
     fn test_lattice_plaquette_action() {
         let mut lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![], 1);
 
         let sites = vec![&[0usize] as &[usize; 1], &[1usize]];
         assert_eq!(lattice.plaquette_action(&sites), None);
 
-        assert!(lattice.record_transition(&[0], &[1], 1.0));
-        assert!(lattice.record_transition(&[1], &[0], 1.0));
+        assert!(lattice.record_transition(&[0], &[1], link1(1.0)));
+        assert!(lattice.record_transition(&[1], &[0], link1(1.0)));
 
         // Perfect holonomy (1.0) gives zero action
         let action = lattice.plaquette_action(&sites).expect(
@@ -797,7 +895,7 @@ mod tests {
     #[test]
     fn test_lattice_2d_valid_site() {
         let lattice: HypergraphLattice<2> =
-            HypergraphLattice::new([5, 5], HypergraphRewriteGroup::new(3), vec![]);
+            HypergraphLattice::new([5, 5], HypergraphRewriteGroup::new(3), vec![], 1);
 
         assert!(HypergraphLattice::<2>::is_valid_site(
             &[2, 3],
@@ -821,7 +919,7 @@ mod tests {
     #[test]
     fn test_lattice_average_holonomy() {
         let lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![], 1);
 
         let avg = lattice.average_holonomy();
         assert_eq!(avg, None); // No loops recorded yet
@@ -830,7 +928,7 @@ mod tests {
     #[test]
     fn test_lattice_global_causal_invariance() {
         let lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![], 1);
 
         // No loops recorded = no verdict
         assert_eq!(lattice.is_globally_causally_invariant(), None);
@@ -839,7 +937,7 @@ mod tests {
     #[test]
     fn test_lattice_total_plaquette_action() {
         let lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![]);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), vec![], 1);
 
         let action = lattice.total_plaquette_action();
         assert_eq!(action, 0.0); // No loops = zero action
@@ -851,7 +949,7 @@ mod tests {
 
         let rules = vec![RewriteRule::wolfram_a_to_bb(), RewriteRule::edge_split()];
         let lattice: HypergraphLattice<1> =
-            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), rules);
+            HypergraphLattice::new([5], HypergraphRewriteGroup::new(3), rules, 1);
 
         assert_eq!(lattice.rules().len(), 2);
     }

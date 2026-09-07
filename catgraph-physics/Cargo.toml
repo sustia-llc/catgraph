@@ -10,7 +10,14 @@ authors.workspace = true
 repository.workspace = true
 
 [features]
-default = ["parallel", "rustworkx", "spectral"]
+default = ["gauge", "parallel", "rustworkx", "spectral"]
+# `gauge` gates `hypergraph::gauge` — the lattice-gauge layer whose link
+# variables are `DMatrix<f64>`: path-ordered loop holonomies, Wilson loops as
+# normalized traces, plaquette actions, and gauge transformation by vertex
+# conjugation (#160). Default-on for source-compatibility; opt out via
+# `default-features = false` to drop the nalgebra stack for slim / WASM builds,
+# alongside the `spectral` gate that shares the dependency.
+gauge = ["dep:nalgebra"]
 # Pass-through of `catgraph/parallel`. This crate has no direct rayon sites yet,
 # but `--no-default-features` consumers expect the transitive catgraph build to
 # be single-threaded too.
@@ -51,6 +58,10 @@ catgraph-testutil.workspace = true
 # builder can produce. Topology only — numeric fixtures stay on the
 # `catgraph-testutil` LCG, whose stream is byte-identity-pinned (#33).
 rustworkx-core = { workspace = true }
+
+[[example]]
+name = "gauge"
+required-features = ["gauge"]
 
 [[bench]]
 name = "wasserstein_bench"
