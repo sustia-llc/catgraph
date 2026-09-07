@@ -644,10 +644,12 @@ fn wilson_value_one_is_not_flatness() {
     );
 }
 
-/// `is_flat` reads its `eps`: a holonomy whose largest entrywise deviation
-/// from the identity is `1e-3` is flat at `1e-2` and not flat at `1e-4`, and
-/// `is_causally_invariant` reads the same holonomy as not flat at its own
-/// `1e-6`.
+/// `is_flat` reads its `eps` at the value the caller passes, and compares
+/// strictly: a holonomy whose largest entrywise deviation from the identity is
+/// `1e-3` is flat at `1e-2`, not flat at `1e-4`, not flat at `5e-4` — the last
+/// straddling `1e-3` under a tenfold scaling of `eps` — and not flat at `1e-3`
+/// itself, where the deviation equals `eps`. `is_causally_invariant` reads the
+/// same holonomy as not flat at its own `1e-6`.
 #[test]
 fn is_flat_reads_its_eps() {
     let mut lattice: HypergraphLattice<1> =
@@ -655,10 +657,24 @@ fn is_flat_reads_its_eps() {
 
     // Holonomy of [0, 1] = I · [[1, 1e-3], [0, 1]], so the largest entrywise
     // deviation from the identity is 1e-3.
-    assert!(lattice.record_transition(&[0], &[1], m2(1.0, 1e-3, 0.0, 1.0)));
-    assert!(lattice.record_transition(&[1], &[0], m2(1.0, 0.0, 0.0, 1.0)));
+    assert!(
+        lattice.record_transition(&[0], &[1], m2(1.0, 1e-3, 0.0, 1.0)),
+        "record_transition([0] -> [1], [[1, 1e-3], [0, 1]]): got false, expected true"
+    );
+    assert!(
+        lattice.record_transition(&[1], &[0], m2(1.0, 0.0, 0.0, 1.0)),
+        "record_transition([1] -> [0], I2): got false, expected true"
+    );
 
     let path: [&[usize; 1]; 2] = [&[0], &[1]];
+
+    let straddling = lattice.is_flat(&path, 5e-4);
+    assert_eq!(
+        straddling,
+        Some(false),
+        "deviation 1e-3: is_flat([0, 1], 5e-4) = {straddling:?}, expected Some(false); \
+         an is_flat comparing against 10·eps = 5e-3 gives Some(true)"
+    );
 
     let loose = lattice.is_flat(&path, 1e-2);
     assert_eq!(
@@ -673,6 +689,16 @@ fn is_flat_reads_its_eps() {
         tight,
         Some(false),
         "deviation 1e-3: is_flat([0, 1], 1e-4) = {tight:?}, expected Some(false)"
+    );
+
+    // The deviation is the f64 nearest 1e-3 and so is this eps, so the two are
+    // the same bit pattern and the comparison is decided by its strictness.
+    let boundary = lattice.is_flat(&path, 1e-3);
+    assert_eq!(
+        boundary,
+        Some(false),
+        "deviation 1e-3: is_flat([0, 1], 1e-3) = {boundary:?}, expected Some(false); \
+         an is_flat comparing d.abs() <= eps gives Some(true)"
     );
 
     let verdict = lattice.is_causally_invariant(&path);
@@ -1472,4 +1498,300 @@ fn gauge_transform_fixes_every_recorded_wilson_value() {
             moves.len()
         );
     }
+}
+
+/// `gauge_transform` uses the keys of `g` that are endpoints of a recorded
+/// link and ignores the rest. On a `[3, 3]` lattice carrying the four links of
+/// the plaquette at the origin, a `g` holding the usable key `[1, 0]` next to
+/// four unusable ones — `[9, 9]` off the lattice, `[0]` of arity 1,
+/// `[0, 0, 0]` of arity 3, and the in-bounds arity-2 `[2, 2]` that no recorded
+/// link touches — returns `true`, moves the two links incident to `[1, 0]` to
+/// `g_[1,0] · U` and `U · g_[1,0]⁻¹`, leaves the other two links where they
+/// were, and leaves the plaquette's Wilson value at its gauge-invariant `8.5`.
+///
+/// A value on an unusable key is admissibility-checked all the same: a `g`
+/// whose only key is the non-endpoint `[2, 2]`, carrying a singular matrix,
+/// returns `false` and moves nothing.
+#[test]
+fn gauge_transform_uses_endpoint_keys_and_ignores_the_rest() {
+    let links = [
+        ([0usize, 0], [1usize, 0]),
+        ([1, 0], [1, 1]),
+        ([1, 1], [0, 1]),
+        ([0, 1], [0, 0]),
+    ];
+
+    // [3, 3] rather than [2, 2] so that [2, 2] is an in-bounds site of arity 2
+    // that no recorded link touches.
+    let mut lattice: HypergraphLattice<2> =
+        HypergraphLattice::new([3, 3], HypergraphRewriteGroup::new(1), vec![], 2);
+    for (from, to) in &links {
+        assert!(
+            lattice.record_transition(from, to, m2(2.0, 0.0, 0.0, 1.0)),
+            "seeding link {from:?} -> {to:?}: got false, expected true"
+        );
+    }
+    lattice.find_wilson_loops(4);
+
+    let links_before: Vec<DMatrix<f64>> = links
+        .iter()
+        .map(|(from, to)| {
+            lattice
+                .link(from, to)
+                .expect("invariant: the four links were just recorded")
+                .clone()
+        })
+        .collect();
+    let loops_before: Vec<(Vec<Vec<usize>>, f64)> = lattice.recorded_loops().to_vec();
+    assert_eq!(
+        loops_before.len(),
+        1,
+        "[3, 3] lattice with only the origin plaquette linked: recorded {} \
+         plaquettes, expected 1",
+        loops_before.len()
+    );
+    assert_eq!(
+        loops_before[0].1, 8.5,
+        "four links of [[2, 0], [0, 1]]: the plaquette's Wilson value is {}, \
+         expected 8.5 = trace([[16, 0], [0, 1]]) / link_dim 2",
+        loops_before[0].1
+    );
+
+    // [2, 2] is in bounds and no link's endpoint; its value is singular
+    // (determinant 0), and the whole gauge field is rejected for it.
+    let mut singular_on_a_non_endpoint: HashMap<Vec<usize>, DMatrix<f64>> = HashMap::new();
+    singular_on_a_non_endpoint.insert(vec![2, 2], m2(1.0, 2.0, 2.0, 4.0));
+    assert!(
+        !lattice.gauge_transform(&singular_on_a_non_endpoint),
+        "gauge_transform whose only key is the non-endpoint [2, 2] carrying the \
+         singular [[1, 2], [2, 4]]: got true, expected false"
+    );
+    for ((from, to), before) in links.iter().zip(&links_before) {
+        let after = lattice
+            .link(from, to)
+            .expect("invariant: a rejected gauge_transform keeps the link key set");
+        assert_eq!(
+            after,
+            before,
+            "link({from:?}, {to:?}) after the rejected gauge_transform = {:?}, \
+             expected the unchanged {:?}",
+            rows(after),
+            rows(before)
+        );
+    }
+    assert_eq!(
+        lattice.recorded_loops(),
+        loops_before.as_slice(),
+        "recorded loops after the rejected gauge_transform = {:?}, expected the \
+         unchanged {loops_before:?}",
+        lattice.recorded_loops()
+    );
+
+    // Every value is 2 × 2 and invertible. `[1, 0]` is an endpoint of two
+    // recorded links; the other four keys are no link's endpoint — `[9, 9]` is
+    // off a [3, 3] lattice, `[0]` has arity 1, `[0, 0, 0]` arity 3, and
+    // `[2, 2]` is in bounds and unlinked.
+    let mut g: HashMap<Vec<usize>, DMatrix<f64>> = HashMap::new();
+    g.insert(vec![1, 0], m2(2.0, 0.0, 0.0, 4.0));
+    g.insert(vec![9, 9], m2(5.0, 0.0, 0.0, 7.0));
+    g.insert(vec![0], m2(3.0, 0.0, 0.0, 3.0));
+    g.insert(vec![0, 0, 0], m2(1.0, 4.0, 0.0, 1.0));
+    g.insert(vec![2, 2], m2(6.0, 0.0, 0.0, 9.0));
+
+    assert!(
+        lattice.gauge_transform(&g),
+        "gauge_transform with one endpoint key, an off-lattice key, two \
+         wrong-arity keys and an unlinked in-bounds key: got false, expected true"
+    );
+
+    // g_[1,0] = [[2, 0], [0, 4]], so [0,0] -> [1,0] becomes g · U = [[4, 0],
+    // [0, 4]] and [1,0] -> [1,1] becomes U · g⁻¹ = [[1, 0], [0, 0.25]]. The
+    // other two links touch no key of g and keep U = [[2, 0], [0, 1]].
+    let expected_after = [
+        (m2(4.0, 0.0, 0.0, 4.0), true),
+        (m2(1.0, 0.0, 0.0, 0.25), true),
+        (m2(2.0, 0.0, 0.0, 1.0), false),
+        (m2(2.0, 0.0, 0.0, 1.0), false),
+    ];
+
+    for (((from, to), before), (expected, moves)) in
+        links.iter().zip(&links_before).zip(&expected_after)
+    {
+        let after = lattice
+            .link(from, to)
+            .expect("invariant: gauge_transform keeps the link key set");
+        assert!(
+            max_diff(after, expected) < 1e-12,
+            "link({from:?}, {to:?}) after the transformation = {:?}, expected {:?}; \
+             max entry difference {}",
+            rows(after),
+            rows(expected),
+            max_diff(after, expected)
+        );
+        let travel = max_diff(after, before);
+        assert_eq!(
+            travel > 0.0,
+            *moves,
+            "link({from:?}, {to:?}) moved by {travel} (from {:?} to {:?}); \
+             expected it to move: {moves}",
+            rows(before),
+            rows(after)
+        );
+    }
+
+    let loops_after = lattice.recorded_loops();
+    assert_eq!(
+        loops_after,
+        loops_before.as_slice(),
+        "recorded loops after the transformation = {loops_after:?}, expected the \
+         unchanged {loops_before:?}; conjugation fixes the Wilson value"
+    );
+}
+
+/// Two `1e200 · I` links are each admissible, and their product overflows: the
+/// loop holonomy is infinite on the diagonal, `wilson_loop` reads
+/// `Some(f64::INFINITY)`, and `is_flat` is `Some(false)` at every finite `eps`
+/// tried, `1e300` included.
+#[test]
+fn overflowing_link_product_reads_as_an_infinite_wilson_value() {
+    let mut lattice: HypergraphLattice<1> =
+        HypergraphLattice::new([2], HypergraphRewriteGroup::new(1), vec![], 2);
+
+    let big = DMatrix::<f64>::identity(2, 2) * 1e200;
+    assert!(
+        lattice.record_transition(&[0], &[1], big.clone()),
+        "record_transition([0] -> [1], 1e200·I): got false, expected true — \
+         every entry is finite and the matrix inverts"
+    );
+    assert!(
+        lattice.record_transition(&[1], &[0], big),
+        "record_transition([1] -> [0], 1e200·I): got false, expected true"
+    );
+
+    let path: [&[usize; 1]; 2] = [&[0], &[1]];
+    let holonomy = lattice
+        .loop_holonomy(&path)
+        .expect("invariant: both links of the [0, 1] cycle were just recorded");
+    for (i, j) in [(0usize, 0usize), (1, 1)] {
+        assert_eq!(
+            holonomy[(i, j)],
+            f64::INFINITY,
+            "entry ({i}, {j}) of the 1e200·I product = {}, expected inf (1e400 overflows)",
+            holonomy[(i, j)]
+        );
+    }
+    for (i, j) in [(0usize, 1usize), (1, 0)] {
+        assert_eq!(
+            holonomy[(i, j)],
+            0.0,
+            "entry ({i}, {j}) of the 1e200·I product = {}, expected 0",
+            holonomy[(i, j)]
+        );
+    }
+
+    let wilson = lattice.wilson_loop(&path);
+    assert_eq!(
+        wilson,
+        Some(f64::INFINITY),
+        "wilson_loop over the overflowing product = {wilson:?}, expected \
+         Some(inf) = trace(inf·I) / link_dim 2"
+    );
+
+    for eps in [1e-6, 1.0, 1e300] {
+        let verdict = lattice.is_flat(&path, eps);
+        assert_eq!(
+            verdict,
+            Some(false),
+            "is_flat over the overflowing product at eps {eps:e} = {verdict:?}, \
+             expected Some(false); the deviation inf is below no finite eps"
+        );
+    }
+}
+
+/// A path may repeat a site. A path visiting one site 1, 2 or 3 times
+/// traverses that site's self-link that many times, and the cycle
+/// `[0, 1, 0, 2]` multiplies site 0's two outgoing links in traversal order.
+/// A one-site path at a site whose self-link is unrecorded reads `None`.
+#[test]
+fn holonomy_traverses_a_repeated_site_once_per_visit() {
+    let mut lattice: HypergraphLattice<1> =
+        HypergraphLattice::new([3], HypergraphRewriteGroup::new(1), vec![], 2);
+
+    let u = m2(1.0, 1.0, 0.0, 1.0);
+    assert!(
+        lattice.record_transition(&[0], &[0], u.clone()),
+        "record_transition([0] -> [0], [[1, 1], [0, 1]]): got false, expected true"
+    );
+
+    for (visits, expected) in [
+        (1usize, m2(1.0, 1.0, 0.0, 1.0)),
+        (2, m2(1.0, 2.0, 0.0, 1.0)),
+        (3, m2(1.0, 3.0, 0.0, 1.0)),
+    ] {
+        let site: [usize; 1] = [0];
+        let path: Vec<&[usize; 1]> = (0..visits).map(|_| &site).collect();
+        let Some(holonomy) = lattice.loop_holonomy(&path) else {
+            panic!(
+                "loop_holonomy over {visits} visits to site 0 = None, expected \
+                 Some(U^{visits}); site 0 carries a recorded self-link"
+            )
+        };
+        assert!(
+            max_diff(&holonomy, &expected) < 1e-12,
+            "loop_holonomy over {visits} visits to site 0 = {:?}, expected U^{visits} \
+             = {:?}; max entry difference {}",
+            rows(&holonomy),
+            rows(&expected),
+            max_diff(&holonomy, &expected)
+        );
+        let wilson = lattice.wilson_loop(&path);
+        assert_eq!(
+            wilson,
+            Some(1.0),
+            "wilson_loop over {visits} visits to site 0 = {wilson:?}, expected \
+             Some(1.0); U^{visits} is unipotent, so its trace is 2"
+        );
+    }
+
+    let unrecorded: [&[usize; 1]; 1] = [&[1]];
+    assert_eq!(
+        lattice.loop_holonomy(&unrecorded),
+        None,
+        "site 1 carries no self-link, so its one-site path has no holonomy"
+    );
+
+    // A cycle that leaves site 0, returns, and leaves again.
+    for (from, to, link, name) in [
+        (0usize, 1usize, m2(1.0, 1.0, 0.0, 1.0), "A"),
+        (1, 0, m2(1.0, 0.0, 1.0, 1.0), "B"),
+        (0, 2, m2(2.0, 0.0, 0.0, 1.0), "C"),
+        (2, 0, m2(1.0, 0.0, 0.0, 3.0), "D"),
+    ] {
+        assert!(
+            lattice.record_transition(&[from], &[to], link),
+            "record_transition([{from}] -> [{to}], {name}): got false, expected true"
+        );
+    }
+
+    let revisit: [&[usize; 1]; 4] = [&[0], &[1], &[0], &[2]];
+    let Some(holonomy) = lattice.loop_holonomy(&revisit) else {
+        panic!(
+            "loop_holonomy([0, 1, 0, 2]) = None, expected Some(D·C·B·A); all four \
+             links of the cycle are recorded"
+        )
+    };
+    let expected = m2(2.0, 2.0, 3.0, 6.0);
+    assert!(
+        max_diff(&holonomy, &expected) < 1e-12,
+        "loop_holonomy([0, 1, 0, 2]) = {:?}, expected D·C·B·A = [[2, 2], [3, 6]]; \
+         max entry difference {}",
+        rows(&holonomy),
+        max_diff(&holonomy, &expected)
+    );
+    let wilson = lattice.wilson_loop(&revisit);
+    assert_eq!(
+        wilson,
+        Some(4.0),
+        "wilson_loop([0, 1, 0, 2]) = {wilson:?}, expected Some(4.0) = trace 8 / link_dim 2"
+    );
 }

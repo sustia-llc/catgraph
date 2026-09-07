@@ -473,7 +473,10 @@ impl<const D: usize> HypergraphLattice<D> {
     /// loop `path`, which wraps from its last site back to its first.
     ///
     /// Returns `None` when any link of the loop carries no recorded
-    /// transition; an empty `path` yields the `link_dim` identity.
+    /// transition; an empty `path` yields the `link_dim` identity. A site may
+    /// occur more than once in `path` and contributes one factor per visit; a
+    /// one-site `path` traverses that site's self-link. The product of finite
+    /// link variables can overflow to a non-finite matrix.
     #[must_use]
     pub fn loop_holonomy(&self, path: &[&[usize; D]]) -> Option<DMatrix<f64>> {
         let sites: Vec<Vec<usize>> = path.iter().map(|s| s.to_vec()).collect();
@@ -520,7 +523,10 @@ impl<const D: usize> HypergraphLattice<D> {
 
     /// Replaces every link variable `U` on `x` → `y` with `g_y · U · g_x⁻¹`,
     /// recomputes the recorded Wilson values from their site cycles, and
-    /// returns `true`. A site absent from `g` transforms by the identity.
+    /// returns `true`. A site absent from `g` transforms by the identity, and
+    /// a key of `g` that is no recorded link's endpoint is unused, whether it
+    /// is off the lattice, of a length other than `D`, or an in-bounds site
+    /// of length `D` that no recorded link touches.
     ///
     /// Returns `false` and changes nothing when a value of `g` is not
     /// `link_dim` × `link_dim`, has a non-finite entry, or has a
