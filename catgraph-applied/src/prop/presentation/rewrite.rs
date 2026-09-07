@@ -923,6 +923,7 @@ impl RewriteStep {
 
 /// What [`optimize`] found: the cheapest representative it reached, its cost
 /// against the start's, and the trace that gets there.
+/// Among equal-cost states the first reached is kept.
 ///
 /// # Serde (feature `serde`)
 ///
