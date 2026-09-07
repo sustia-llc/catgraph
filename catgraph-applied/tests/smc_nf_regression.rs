@@ -12,8 +12,8 @@ use catgraph_applied::prop::{PropExpr, PropSignature, mono_word};
 use std::borrow::Cow;
 
 /// Shared test signature covering all four papers' tested arities:
-/// `F, G : 1 → 1`, `H : 2 → 1`, `Eps : 1 → 0`, `Eta : 0 → 1`. `H` exercises
-/// multi-wire generators in interchange/braiding patterns.
+/// `F, G : 1 → 1`, `H : 2 → 1`, `Eps : 1 → 0`, `Eta : 0 → 1`, `S : 0 → 0`. `H`
+/// exercises multi-wire generators in interchange/braiding patterns.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum TestSig {
     F,
@@ -21,6 +21,7 @@ enum TestSig {
     H,
     Eps,
     Eta,
+    S,
 }
 
 impl PropSignature for TestSig {
@@ -36,13 +37,13 @@ impl PropSignature for TestSig {
         match self {
             TestSig::F | TestSig::G | TestSig::Eps => 1,
             TestSig::H => 2,
-            TestSig::Eta => 0,
+            TestSig::Eta | TestSig::S => 0,
         }
     }
     fn target(&self) -> usize {
         match self {
             TestSig::F | TestSig::G | TestSig::H | TestSig::Eta => 1,
-            TestSig::Eps => 0,
+            TestSig::Eps | TestSig::S => 0,
         }
     }
 }
@@ -415,6 +416,212 @@ mod joyal_street_braided_regression {
         assert_eq!(nf(&with_id), nf(&id_3));
     }
 
+    /// JS-Braided Prop 2.1 / axiom (B2) p. 33–34: `nf(σ_{1,2} ⊗ σ_{2,1})` — two
+    /// wide braids written in one layer — carries no wide braid, equals
+    /// `nf((σ_{1,2} ⊗ id₃) ; (id₃ ⊗ σ_{2,1}))`, and is the four `Braid(1,1)`
+    /// brick layers stated below.
+    #[test]
+    fn two_wide_braids_in_one_layer_both_expand() {
+        let one_layer: PropExpr<TestSig> = Tensor(Box::new(Braid(1, 2)), Box::new(Braid(2, 1)));
+        let out = nf(&one_layer);
+        assert!(
+            !has_wide_braid(&out),
+            "expected no wide braid, observed {out:?}"
+        );
+
+        let padded: PropExpr<TestSig> = Compose(
+            Box::new(Tensor(Box::new(Braid(1, 2)), Box::new(Identity(3)))),
+            Box::new(Tensor(Box::new(Identity(3)), Box::new(Braid(2, 1)))),
+        );
+        assert_eq!(
+            out,
+            nf(&padded),
+            "the one-layer writing and the identity-padded writing share a normal form"
+        );
+
+        assert_eq!(
+            out,
+            StringDiagram {
+                layers: vec![
+                    Layer {
+                        atoms: vec![Atom::Braid(1, 1), Atom::Identity(4)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(4), Atom::Braid(1, 1)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(3), Atom::Braid(1, 1), Atom::Identity(1)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(1), Atom::Braid(1, 1), Atom::Identity(3)],
+                    },
+                ],
+            },
+            "both wide braids expand to Braid(1,1) bricks"
+        );
+    }
+
+    /// JS-Braided axiom (B2) p. 33 with JS-I Ch 2 axiom (S) p. 73:
+    /// `nf(σ_{1,1} ⊗ σ_{2,1})` — a wide braid after an irreducible swap —
+    /// carries no wide braid and equals `nf((σ_{1,1} ⊗ id₃) ; (id₂ ⊗ σ_{2,1}))`;
+    /// `nf(σ_{1,2} ⊗ σ_{1,1})` — the wide braid before the swap — carries no
+    /// wide braid, equals `nf((σ_{1,2} ⊗ id₂) ; (id₃ ⊗ σ_{1,1}))`, and is the
+    /// `Braid(1,1)` brick layers asserted below.
+    #[test]
+    fn a_wide_braid_beside_a_swap_expands() {
+        let one_layer: PropExpr<TestSig> = Tensor(Box::new(Braid(1, 1)), Box::new(Braid(2, 1)));
+        let out = nf(&one_layer);
+        assert!(
+            !has_wide_braid(&out),
+            "expected no wide braid, observed {out:?}"
+        );
+
+        let padded: PropExpr<TestSig> = Compose(
+            Box::new(Tensor(Box::new(Braid(1, 1)), Box::new(Identity(3)))),
+            Box::new(Tensor(Box::new(Identity(2)), Box::new(Braid(2, 1)))),
+        );
+        assert_eq!(
+            out,
+            nf(&padded),
+            "the one-layer writing and the identity-padded writing share a normal form"
+        );
+
+        let mirror: PropExpr<TestSig> = Tensor(Box::new(Braid(1, 2)), Box::new(Braid(1, 1)));
+        let mirror_out = nf(&mirror);
+        assert!(
+            !has_wide_braid(&mirror_out),
+            "expected no wide braid, observed {mirror_out:?}"
+        );
+
+        let mirror_padded: PropExpr<TestSig> = Compose(
+            Box::new(Tensor(Box::new(Braid(1, 2)), Box::new(Identity(2)))),
+            Box::new(Tensor(Box::new(Identity(3)), Box::new(Braid(1, 1)))),
+        );
+        assert_eq!(
+            mirror_out,
+            nf(&mirror_padded),
+            "the leading-wide-braid writing and its identity-padded writing share a normal form"
+        );
+
+        assert_eq!(
+            mirror_out,
+            StringDiagram {
+                layers: vec![
+                    Layer {
+                        atoms: vec![Atom::Braid(1, 1), Atom::Identity(3)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(3), Atom::Braid(1, 1)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(1), Atom::Braid(1, 1), Atom::Identity(2)],
+                    },
+                ],
+            },
+            "the leading wide braid expands to Braid(1,1) bricks"
+        );
+    }
+
+    /// JS-Braided Prop 2.1 / axiom (B2) p. 33–34:
+    /// `nf(σ_{1,2} ⊗ σ_{2,1} ⊗ σ_{1,2})` carries no wide braid and equals `nf`
+    /// of the three-layer identity-padded writing of the same morphism.
+    #[test]
+    fn three_wide_braids_in_one_layer_all_expand() {
+        let one_layer: PropExpr<TestSig> = Tensor(
+            Box::new(Braid(1, 2)),
+            Box::new(Tensor(Box::new(Braid(2, 1)), Box::new(Braid(1, 2)))),
+        );
+        let out = nf(&one_layer);
+        assert!(
+            !has_wide_braid(&out),
+            "expected no wide braid, observed {out:?}"
+        );
+
+        let padded: PropExpr<TestSig> = Compose(
+            Box::new(Compose(
+                Box::new(Tensor(Box::new(Braid(1, 2)), Box::new(Identity(6)))),
+                Box::new(Tensor(
+                    Box::new(Identity(3)),
+                    Box::new(Tensor(Box::new(Braid(2, 1)), Box::new(Identity(3)))),
+                )),
+            )),
+            Box::new(Tensor(Box::new(Identity(6)), Box::new(Braid(1, 2)))),
+        );
+        assert_eq!(
+            out,
+            nf(&padded),
+            "the one-layer writing and the identity-padded writing share a normal form"
+        );
+    }
+
+    /// JS-Braided Prop 2.1 p. 33–34 with JS-I Ch 1 §4 Thm 1.2 p. 71
+    /// (bifunctoriality): `nf(F ⊗ σ_{1,2} ⊗ σ_{2,1})`, whose lowered layer
+    /// mixes a generator with two wide braids, carries no wide braid and no
+    /// mixed layer, keeps its one `Generator(F)` atom, equals
+    /// `nf(F ⊗ ((σ_{1,2} ⊗ id₃) ; (id₃ ⊗ σ_{2,1})))`, and is the layer list
+    /// asserted below.
+    #[test]
+    fn a_generator_beside_two_wide_braids_expands_on_the_next_pass() {
+        let expr: PropExpr<TestSig> = Tensor(
+            Box::new(Generator(TestSig::F)),
+            Box::new(Tensor(Box::new(Braid(1, 2)), Box::new(Braid(2, 1)))),
+        );
+        let out = nf(&expr);
+        assert!(
+            !has_wide_braid(&out),
+            "expected no wide braid, observed {out:?}"
+        );
+        assert!(
+            !has_mixed_layer(&out),
+            "expected no mixed braid+generator layer, observed {out:?}"
+        );
+
+        let generators = out
+            .layers
+            .iter()
+            .flat_map(|l| &l.atoms)
+            .filter(|a| matches!(a, Atom::Generator(_)))
+            .count();
+        assert_eq!(generators, 1, "the F atom survives the expansion: {out:?}");
+
+        let padded: PropExpr<TestSig> = Tensor(
+            Box::new(Generator(TestSig::F)),
+            Box::new(Compose(
+                Box::new(Tensor(Box::new(Braid(1, 2)), Box::new(Identity(3)))),
+                Box::new(Tensor(Box::new(Identity(3)), Box::new(Braid(2, 1)))),
+            )),
+        );
+        assert_eq!(
+            out,
+            nf(&padded),
+            "the one-layer writing and the identity-padded writing share a normal form"
+        );
+
+        assert_eq!(
+            out,
+            StringDiagram {
+                layers: vec![
+                    Layer {
+                        atoms: vec![Atom::Identity(1), Atom::Braid(1, 1), Atom::Identity(4)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(5), Atom::Braid(1, 1)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(4), Atom::Braid(1, 1), Atom::Identity(1)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(2), Atom::Braid(1, 1), Atom::Identity(3)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Generator(TestSig::F), Atom::Identity(6)],
+                    },
+                ],
+            },
+            "both wide braids contribute their bricks before the generator layer"
+        );
+    }
+
     /// JS-Braided p. 36 picture — mirror of `ch2_thm_2_2_braid_naturality`:
     /// `(f ⊗ g) ; σ_{1,1} = σ_{1,1} ; (g ⊗ f)`. Confirms naturality in the
     /// other direction (generators on the left of the braid).
@@ -774,6 +981,25 @@ mod review_soundness_fixes {
             expected,
             "the free pair straddles the braid block's atoms in the two middle \
              layers, so Step 7 leaves it where it is"
+        );
+    }
+
+    /// JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) specialized to a 0-arity
+    /// edge: `nf(S ⊗ S)` on the `0 → 0` generator `S` is the single layer
+    /// `[S, S]`.
+    #[test]
+    fn equal_adjacent_scalars_reach_a_fixpoint() {
+        use super::{Atom, Layer, StringDiagram};
+
+        let s = || Generator(TestSig::S);
+        assert_eq!(
+            nf(&Tensor(b(s()), b(s()))),
+            StringDiagram {
+                layers: vec![Layer {
+                    atoms: vec![Atom::Generator(TestSig::S), Atom::Generator(TestSig::S)],
+                }],
+            },
+            "the equal scalar pair reaches a fixpoint in its written order"
         );
     }
 }

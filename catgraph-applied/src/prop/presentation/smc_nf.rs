@@ -485,8 +485,8 @@ fn normalize_empty_braids<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagr
     StringDiagram { layers }
 }
 
-/// **Step 1**: hexagon-expand every `Atom::Braid(m, n)` with `m+n > 2` into
-/// a layered sequence of `Atom::Braid(1, 1)` bricks.
+/// **Step 1**: hexagon-expand the wide `Atom::Braid(m, n)` (`m+n > 2`) of a
+/// braid-only layer into a layered sequence of `Atom::Braid(1, 1)` bricks.
 ///
 /// Algorithm: `σ_{m,n}` is the permutation
 ///   `π = [m, m+1, ..., m+n-1, 0, 1, ..., m-1]`
@@ -498,10 +498,13 @@ fn normalize_empty_braids<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagr
 /// Each emitted layer has the form `[Identity(i), Braid(1,1), Identity(m+n-i-2)]`
 /// (with the leading/trailing identities suppressed when their width is 0).
 ///
-/// A layer qualifies when its only non-`Identity` atom is a single wide
-/// `Braid(m,n)` (`m+n > 2`) — including identity-padded layers such as
-/// `[Identity(p), Braid(2,1), Identity(s)]`. The surrounding prefix/suffix
-/// identity widths are re-applied to each emitted brick layer.
+/// A layer qualifies when every atom is `Identity` or `Braid` and at least one
+/// of its braids is wide (`m+n > 2`) — including identity-padded layers such as
+/// `[Identity(p), Braid(2,1), Identity(s)]` and layers carrying several braids.
+/// Each wide braid's bricks are emitted in source order, padded with the wire
+/// widths standing before and after that braid in the layer; the atoms left
+/// over — every wide braid read as `Identity(m+n)` — follow as one layer when
+/// they still carry a `Braid`. A layer holding a `Generator` is left as it is.
 ///
 /// Paper anchor: JS-Braided Prop 2.1 / axiom (B2) p.33–34
 /// (`c_{U⊗V, W} = (c_{U,W} ⊗ 1_V) ∘ (1_U ⊗ c_{V,W})`); JS-I Ch 2 Thm 2.3 p.81
@@ -510,41 +513,65 @@ fn normalize_empty_braids<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagr
 fn hexagon_expand<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagram<G> {
     let mut new_layers: Vec<Layer<G>> = Vec::with_capacity(sd.layers.len());
     for layer in sd.layers {
-        if let Some((prefix, (m, n), suffix)) = wide_braid_in_identity_padding(&layer.atoms) {
+        let Some(sites) = wide_braids_in_braid_only_layer(&layer.atoms) else {
+            new_layers.push(layer);
+            continue;
+        };
+        for (prefix, (m, n), suffix) in sites {
             for brick in decompose_braid::<G>(m, n) {
                 new_layers.push(pad_braid_layer(prefix, brick.atoms, suffix));
             }
-        } else {
-            new_layers.push(layer);
+        }
+        let residual = residual_braid_layer(&layer.atoms);
+        if layer_has_braid(&residual) {
+            new_layers.push(Layer { atoms: residual });
         }
     }
     StringDiagram { layers: new_layers }
 }
 
-/// If `atoms` is entirely `Identity` except for exactly one wide `Braid(m,n)`
-/// (`m+n > 2`), return `(prefix_width, (m, n), suffix_width)` where the widths
-/// are the total wire widths before/after the braid. Any generator, any second
-/// braid, or a non-wide braid disqualifies (returns `None`).
-fn wide_braid_in_identity_padding<G: PropSignature>(
+/// One wide braid's expansion site within a layer: the wire width before it,
+/// its `(m, n)`, and the wire width after it.
+type WideBraidSite = (usize, (usize, usize), usize);
+
+/// If every atom of `atoms` is an `Identity` or a `Braid` and at least one of
+/// them is a wide `Braid(m,n)` (`m+n > 2`), return one [`WideBraidSite`] per
+/// wide braid in source order. A `Generator` anywhere, or no wide braid,
+/// returns `None`.
+fn wide_braids_in_braid_only_layer<G: PropSignature>(
     atoms: &[Atom<G>],
-) -> Option<(usize, (usize, usize), usize)> {
-    let mut braid: Option<(usize, usize)> = None;
-    let mut braid_idx = 0;
-    for (i, a) in atoms.iter().enumerate() {
-        match a {
-            Atom::Identity(_) => {}
-            Atom::Braid(m, n) if m + n > 2 && braid.is_none() => {
-                braid = Some((*m, *n));
-                braid_idx = i;
-            }
-            // Second braid, non-wide braid, or generator disqualifies.
-            _ => return None,
-        }
+) -> Option<Vec<WideBraidSite>> {
+    if !atoms
+        .iter()
+        .all(|a| matches!(a, Atom::Identity(_) | Atom::Braid(_, _)))
+    {
+        return None;
     }
-    let (m, n) = braid?;
-    let prefix: usize = atoms[..braid_idx].iter().map(atom_source).sum();
-    let suffix: usize = atoms[braid_idx + 1..].iter().map(atom_source).sum();
-    Some((prefix, (m, n), suffix))
+    let mut sites: Vec<WideBraidSite> = Vec::new();
+    let mut prefix = 0usize;
+    for (i, a) in atoms.iter().enumerate() {
+        if let Atom::Braid(m, n) = a
+            && m + n > 2
+        {
+            let suffix: usize = atoms[i + 1..].iter().map(atom_source).sum();
+            sites.push((prefix, (*m, *n), suffix));
+        }
+        prefix += atom_source(a);
+    }
+    (!sites.is_empty()).then_some(sites)
+}
+
+/// `atoms` with every wide `Braid(m,n)` (`m+n > 2`) read as `Identity(m+n)`
+/// and adjacent identities fused.
+fn residual_braid_layer<G: PropSignature>(atoms: &[Atom<G>]) -> Vec<Atom<G>> {
+    let residual: Vec<Atom<G>> = atoms
+        .iter()
+        .map(|a| match a {
+            Atom::Braid(m, n) if m + n > 2 => Atom::Identity(m + n),
+            other => other.clone(),
+        })
+        .collect();
+    merge_adjacent_identities(residual)
 }
 
 /// Re-apply surrounding identity padding to a brick layer emitted by

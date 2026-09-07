@@ -156,9 +156,10 @@ wide-braid decomposition uses the forward-`;` `(B2)` splitting, i.e.
 A `Braid(m,n)` with `m+n > 2` ("wide braid") is always **expanded** into a
 layered sequence of `Braid(1,1)` bricks by `hexagon_expand`; the normal form
 never runs the reverse (bricks → wide braid). `hexagon_expand` fires on any
-layer whose only non-`Identity` atom is a single wide braid — including
-identity-padded layers such as `[Identity(p), Braid(2,1), Identity(s)]` — so
-wide braids that appear *mid-normalization* (emitted by the naturality sweep's
+layer whose atoms are all `Identity` or `Braid` and at least one of whose
+braids is wide — including identity-padded layers such as
+`[Identity(p), Braid(2,1), Identity(s)]` and layers carrying several braids —
+so wide braids that appear *mid-normalization* (emitted by the naturality sweep's
 `σ_{s_a,s_b}`, or exposed by `isolate_mixed_braid_layers`) are decomposed on the
 next fixpoint pass. The decomposition is the bubble-sort of the braid's
 underlying permutation `π = [m..m+n, 0..m]`, giving a canonical reduced word of
