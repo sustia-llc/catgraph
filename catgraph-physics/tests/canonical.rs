@@ -15,6 +15,10 @@
 //! `CausalGraph::from_events` pairs, `CausalGraph::compare` returns
 //! `Isomorphic` exactly when a brute-force permutation search over
 //! `catgraph_testutil::all_perm_indices` finds an edge-preserving bijection.
+//! On a hand-built and seeded corpus of ordered hypergraphs,
+//! `Hypergraph::compare` returns `Isomorphic` exactly when the same
+//! permutation search finds a vertex bijection carrying one hyperedge
+//! multiset onto the other with positions preserved.
 //!
 //! **Branchial pipeline.** `run_multiway_bfs` → `BranchialGraph` →
 //! `OllivierRicciCurvature` via `wasserstein_1` reproduces hand-computed
@@ -41,6 +45,16 @@
 //! `HypergraphEvolution::causal_graph`, plus nine hand-built graphs, over every
 //! ordered pair; the arm asserts each graph it holds has at most 8 events, the
 //! width of the permutation search.
+//! The hypergraph isomorphism corpus is the hand-built graphs of
+//! `hypergraph_corpus` — the empty graph, the 6-cycle against two triangles,
+//! three orderings of a two-edge binary path, a repeated-vertex ternary pair,
+//! a ternary edge against its reversal, a two-edge ternary fixture against its
+//! `+10` relabelling, an empty hyperedge against a doubled unary edge, a
+//! unary edge with and without an isolated vertex, and the directed 8-cycle
+//! against its reversal and against two 4-cycles — plus 24 seeded graphs of 1
+//! to 5 vertices, 0 to 4 edges and arity 1 to 3 with repeated vertices
+//! allowed, over every ordered pair; the arm asserts each graph it holds has
+//! at most 8 vertices, the width of the permutation search.
 //! `wasserstein_1` runs on 300 seeded 3x4 instances with margins in twelfths,
 //! 400 seeded uniform k x k instances for each `k` in `2..=6`, 300 seeded
 //! instances of the 3x4 family embedded in a 6x8 support with zero-mass rows
@@ -52,8 +66,10 @@
 //!
 //! # References
 //!
-//! `compare` is checked against a permutation search written in this file over
-//! the graphs' own edge lists. `wasserstein_1` is checked against the minimum
+//! `CausalGraph::compare` is checked against a permutation search written in
+//! this file over the graphs' own edge lists, and `Hypergraph::compare`
+//! against a permutation search over the graphs' own vertex and hyperedge
+//! lists. `wasserstein_1` is checked against the minimum
 //! over every non-negative integer contingency table at the margins'
 //! denominator, against the minimum over the `k!` permutation couplings, and
 //! against a branch-and-bound integer transport minimum — three enumerations
@@ -68,7 +84,9 @@
 //! `CausalGraph::MAX_SEARCH_STEPS` (200 000 candidate assignments) and is out
 //! of reach on this file's corpus: the brute-force arm asserts every
 //! comparison it makes over the two fixtures' causal-graph shapes and the
-//! hand-built graphs is `Isomorphic` or `NotIsomorphic`.
+//! hand-built graphs is `Isomorphic` or `NotIsomorphic`, and the hypergraph
+//! arm asserts the same over its own corpus, so `Hypergraph::compare`'s
+//! `Undecided` is out of reach here too.
 //! The two `to_petgraph` arms need the `rustworkx` feature that gates
 //! `src/multiway/branchial_analysis.rs` and carry a per-arm
 //! `#[cfg(feature = "rustworkx")]`. The gauge arm needs the `gauge` feature
@@ -175,12 +193,130 @@ fn isomorphic_state_pairs(evolution: &HypergraphEvolution) -> Vec<(usize, usize)
             let b = evolution
                 .get_node(right)
                 .expect("invariant: right < node_count");
-            if a.fingerprint == b.fingerprint && a.state.is_isomorphic_to(&b.state) {
+            if a.fingerprint == b.fingerprint
+                && a.state.compare(&b.state) == CausalComparison::Isomorphic
+            {
                 pairs.push((left, right));
             }
         }
     }
     pairs
+}
+
+/// True when some bijection of `left`'s vertices onto `right`'s carries
+/// `left`'s hyperedge multiset onto `right`'s with positions preserved,
+/// searched over `perms[n]`.
+fn brute_force_hypergraph_isomorphic(
+    left: &Hypergraph,
+    right: &Hypergraph,
+    perms: &[Vec<usize>],
+) -> bool {
+    let left_vertices: Vec<usize> = left.vertices().collect();
+    let right_vertices: Vec<usize> = right.vertices().collect();
+    if left_vertices.len() != right_vertices.len() || left.edge_count() != right.edge_count() {
+        return false;
+    }
+    let position: HashMap<usize, usize> = left_vertices
+        .iter()
+        .enumerate()
+        .map(|(index, &v)| (v, index))
+        .collect();
+    let mut right_edges: Vec<Vec<usize>> =
+        right.edges().map(|edge| edge.vertices().to_vec()).collect();
+    right_edges.sort();
+
+    perms.iter().any(|p| {
+        let mut mapped: Vec<Vec<usize>> = left
+            .edges()
+            .map(|edge| {
+                edge.vertices()
+                    .iter()
+                    .map(|v| right_vertices[p[position[v]]])
+                    .collect()
+            })
+            .collect();
+        mapped.sort();
+        mapped == right_edges
+    })
+}
+
+/// Ordered hypergraphs of at most 8 vertices: the hand-built pairs the
+/// counts / degree / arity prefilter leaves open, and a seeded family.
+fn hypergraph_corpus() -> Vec<Hypergraph> {
+    let mut corpus = vec![
+        Hypergraph::new(),
+        Hypergraph::from_edges(vec![
+            vec![0, 1],
+            vec![1, 2],
+            vec![2, 3],
+            vec![3, 4],
+            vec![4, 5],
+            vec![5, 0],
+        ]),
+        Hypergraph::from_edges(vec![
+            vec![0, 1],
+            vec![1, 2],
+            vec![2, 0],
+            vec![3, 4],
+            vec![4, 5],
+            vec![5, 3],
+        ]),
+        Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2]]),
+        Hypergraph::from_edges(vec![vec![0, 1], vec![2, 1]]),
+        Hypergraph::from_edges(vec![vec![1, 2], vec![0, 1]]),
+        Hypergraph::from_edges(vec![vec![0, 0, 1]]),
+        Hypergraph::from_edges(vec![vec![0, 1, 1]]),
+        Hypergraph::from_edges(vec![vec![0, 1, 2]]),
+        Hypergraph::from_edges(vec![vec![2, 1, 0]]),
+        Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]),
+        Hypergraph::from_edges(vec![vec![10, 11, 12], vec![11, 12, 13]]),
+        Hypergraph::from_edges(vec![vec![0], Vec::new()]),
+        Hypergraph::from_edges(vec![vec![0], vec![0]]),
+        Hypergraph::from_edges(vec![vec![0]]),
+    ];
+
+    let mut isolated = Hypergraph::from_edges(vec![vec![0]]);
+    isolated.add_vertex(Some(7));
+    corpus.push(isolated);
+
+    // Vertex-transitive at 8 vertices: the directed 8-cycle, its reversal
+    // (isomorphic to it) and two 4-cycles (not).
+    corpus.push(Hypergraph::from_edges(
+        (0..8usize)
+            .map(|i| vec![i, (i + 1) % 8])
+            .collect::<Vec<_>>(),
+    ));
+    corpus.push(Hypergraph::from_edges(
+        (0..8usize)
+            .map(|i| vec![(i + 1) % 8, i])
+            .collect::<Vec<_>>(),
+    ));
+    corpus.push(Hypergraph::from_edges(
+        (0..8usize)
+            .map(|i| vec![4 * (i / 4) + i % 4, 4 * (i / 4) + (i + 1) % 4])
+            .collect::<Vec<_>>(),
+    ));
+
+    let mut rng = Lcg::new(0x0164_C0FF_EE00_0001);
+    for _ in 0..24 {
+        let vertex_count = rng.next_usize(1, 5);
+        let mut graph = Hypergraph::new();
+        for v in 0..vertex_count {
+            graph.add_vertex(Some(v));
+        }
+        let edge_count = rng.next_usize(0, 4);
+        for _ in 0..edge_count {
+            let arity = rng.next_usize(1, 3);
+            graph.add_hyperedge(
+                (0..arity)
+                    .map(|_| rng.next_usize(0, vertex_count - 1))
+                    .collect(),
+            );
+        }
+        corpus.push(graph);
+    }
+
+    corpus
 }
 
 /// `(event count, causal edges)` — everything `compare` reads off a graph.
@@ -530,7 +666,7 @@ fn confluent_fixture_branch_pairs_are_causally_isomorphic() {
 }
 
 /// The `collapse` fixture has a branch pair whose causal graphs separate, and
-/// 6 of its 18 Wilson loops open.
+/// 12 of its 33 Wilson loops open.
 #[test]
 fn collapse_fixture_separates_a_branch_pair() {
     let evolution = non_confluent_fixture();
@@ -561,8 +697,8 @@ fn collapse_fixture_separates_a_branch_pair() {
     let loops = evolution.find_wilson_loops();
     assert_eq!(
         loops.len(),
-        18,
-        "expected 18 Wilson loops, got {}",
+        33,
+        "expected 33 Wilson loops, got {}",
         loops.len()
     );
     let closed = loops
@@ -575,8 +711,8 @@ fn collapse_fixture_separates_a_branch_pair() {
         .count();
     assert_eq!(
         (closed, open),
-        (12, 6),
-        "expected 12 closing and 6 separating; holonomies {:?}",
+        (21, 12),
+        "expected 21 closing and 12 separating; holonomies {:?}",
         loops
             .iter()
             .map(|wilson| wilson.holonomy)
@@ -597,17 +733,17 @@ fn collapse_fixture_separates_a_branch_pair() {
     }
 
     let result = evolution.analyze_causal_invariance();
-    assert!(!result.is_invariant, "six loops open");
-    assert_eq!(result.loops_analyzed, 18);
-    assert_eq!(result.non_trivial_loops.len(), 6);
+    assert!(!result.is_invariant, "twelve loops open");
+    assert_eq!(result.loops_analyzed, 33);
+    assert_eq!(result.non_trivial_loops.len(), 12);
     assert!(
         (result.max_deviation - 1.0).abs() < 1e-12,
         "expected max deviation 1.0, got {}",
         result.max_deviation
     );
     assert!(
-        (result.average_deviation - 6.0 / 18.0).abs() < 1e-12,
-        "expected average deviation 1/3, got {}",
+        (result.average_deviation - 12.0 / 33.0).abs() < 1e-12,
+        "expected average deviation 12/33, got {}",
         result.average_deviation
     );
     assert!(!evolution.is_causally_invariant());
@@ -708,6 +844,62 @@ fn compare_agrees_with_brute_force_permutation_isomorphism() {
                  {expected}; edges {:?} against {:?}",
                 left.causal_edges().collect::<Vec<_>>(),
                 right.causal_edges().collect::<Vec<_>>()
+            );
+            if expected {
+                isomorphic += 1;
+            } else {
+                not_isomorphic += 1;
+            }
+        }
+    }
+    assert!(
+        isomorphic > 0 && not_isomorphic > 0,
+        "the corpus must separate both ways, got {isomorphic} isomorphic and \
+         {not_isomorphic} not"
+    );
+}
+
+/// `Hypergraph::compare` returns `Isomorphic` exactly when a permutation of
+/// the vertices carries one hyperedge multiset onto the other with positions
+/// preserved.
+#[test]
+fn hypergraph_compare_agrees_with_brute_force_permutation_isomorphism() {
+    let perms: Vec<Vec<Vec<usize>>> = (0..=8).map(all_perm_indices).collect();
+    let corpus = hypergraph_corpus();
+
+    for graph in &corpus {
+        assert!(
+            graph.vertex_count() <= 8,
+            "the permutation search runs at n <= 8, got {} vertices",
+            graph.vertex_count()
+        );
+    }
+
+    let mut isomorphic = 0usize;
+    let mut not_isomorphic = 0usize;
+    for (i, left) in corpus.iter().enumerate() {
+        for (j, right) in corpus.iter().enumerate() {
+            let verdict = left.compare(right);
+            assert_ne!(
+                verdict,
+                CausalComparison::Undecided,
+                "pair ({i}, {j}): the step budget was reached at {} vertices",
+                left.vertex_count()
+            );
+            let expected =
+                brute_force_hypergraph_isomorphic(left, right, &perms[left.vertex_count()]);
+            assert_eq!(
+                verdict == CausalComparison::Isomorphic,
+                expected,
+                "pair ({i}, {j}): compare said {verdict:?}, the permutation search said \
+                 {expected}; edges {:?} against {:?}",
+                left.edges()
+                    .map(|edge| edge.vertices().to_vec())
+                    .collect::<Vec<_>>(),
+                right
+                    .edges()
+                    .map(|edge| edge.vertices().to_vec())
+                    .collect::<Vec<_>>()
             );
             if expected {
                 isomorphic += 1;

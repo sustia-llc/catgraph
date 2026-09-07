@@ -26,13 +26,14 @@ pub struct MultiwayCospan {
 /// The full multiway evolution as a graph of cospans.
 ///
 /// Each edge represents one rewrite step (parent → child) as a cospan.
-/// Merge points are pairs of node IDs with matching fingerprints (structurally
-/// equivalent hypergraphs reached via different rewrite orderings).
+/// Merge points are groups of node IDs carrying pairwise isomorphic
+/// hypergraphs.
 #[derive(Debug, Clone)]
 pub struct MultiwayCospanGraph {
     /// All parent→child cospans in the evolution.
     pub edges: Vec<MultiwayCospan>,
-    /// Merge points: groups of node IDs with matching fingerprints.
+    /// Merge points: groups of node IDs carrying pairwise isomorphic
+    /// hypergraphs.
     pub merge_points: Vec<Vec<usize>>,
 }
 
@@ -66,17 +67,18 @@ pub trait MultiwayCospanExt {
     ///
     /// Unlike `to_cospan_chain()` which follows only the deterministic path,
     /// this captures ALL branches — every parent→child edge becomes a cospan.
-    /// Merge points (structurally equivalent states via different paths) are
-    /// detected via fingerprint matching.
+    /// Merge points are the
+    /// [`HypergraphEvolution::find_merges`] groups: nodes carrying pairwise
+    /// isomorphic states.
     #[must_use]
     fn to_multiway_cospan_graph(&self) -> MultiwayCospanGraph;
 
     /// Verifies causal invariance by comparing composite cospans along
     /// different paths to the same merge point.
     ///
-    /// For each merge point (nodes with matching fingerprints), composes
-    /// cospans along the path from root to each node and checks whether
-    /// the resulting composites have the same domain and codomain.
+    /// For each merge point (nodes carrying pairwise isomorphic states),
+    /// composes cospans along the path from root to each node and checks
+    /// whether the resulting composites have the same domain and codomain.
     #[must_use]
     fn verify_causal_invariance_via_cospans(&self) -> CospanInvarianceResult;
 }

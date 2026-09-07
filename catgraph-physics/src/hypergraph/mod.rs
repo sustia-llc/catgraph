@@ -14,6 +14,7 @@ pub mod gauge;
 pub mod hyperedge;
 #[allow(clippy::module_inception)]
 pub mod hypergraph;
+mod isomorphism;
 pub mod multiway_cospan;
 pub mod rewrite_rule;
 pub mod rewrite_span;
