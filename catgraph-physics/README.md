@@ -22,6 +22,11 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
   Laplacian), gated behind the default-on `spectral` feature (gates
   `multiway::branchial_spectrum`; opt out with `--no-default-features` to drop
   the nalgebra stack for slim / WASM builds).
+- `nalgebra` — `DMatrix<f64>` link variables on the gauge lattice, gated
+  behind the default-on `gauge` feature (gates `hypergraph::gauge`, hence
+  `GaugeGroup`, `HypergraphRewriteGroup`, `HypergraphLattice`,
+  `plaquette_action` and `total_action`; opt out with `--no-default-features`
+  to drop the same nalgebra stack that `spectral` uses).
 - `petgraph` + `rustworkx-core` — graph algorithms, gated behind the default-on
   `rustworkx` feature (gates `multiway::branchial_analysis`; opt out with
   `--no-default-features` to drop the `rustworkx-core` → `petgraph` chain).
@@ -92,10 +97,11 @@ large enough to cross the threshold. Build without `parallel` if you need
 pinnable betweenness scores; the distances are pinnable either way.
 
 `--no-default-features` also
-drops the `rustworkx` feature (the `rustworkx-core` → `petgraph` chain) and
-the `spectral` feature (the nalgebra stack behind `BranchialSpectrum`),
-which is what makes the plain `wasm32-wasip1` build slim. Both WASI
-sub-targets build clean:
+drops the `rustworkx` feature (the `rustworkx-core` → `petgraph` chain), the
+`spectral` feature (the nalgebra stack behind `BranchialSpectrum`) and the
+`gauge` feature (the same nalgebra stack, behind `hypergraph::gauge` and its
+re-exports), which is what makes the plain `wasm32-wasip1` build slim. Both
+WASI sub-targets build clean:
 
 ```sh
 cargo build --lib -p catgraph-physics --target wasm32-wasip1-threads
