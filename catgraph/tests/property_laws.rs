@@ -1438,7 +1438,7 @@ proptest! {
 /// Slack is worse than useless here: measured (#343 round-4 review), a floor of
 /// 10 let a plausible generator tweak — weighting the rewire draw to
 /// `prop::option::weighted(0.20, …)` — halve this subcorpus from 26 to 13 with
-/// all 20 tests in the file still green and three docstrings still advertising
+/// the file's 20 tests (on `90a8824`) still green and three docstrings still advertising
 /// 26. An exact count costs nothing and makes a generator change restate what
 /// it produced, which is the same discipline the corpus census in
 /// `tests/spider_theorem.rs` uses. A proptest version bump may legitimately

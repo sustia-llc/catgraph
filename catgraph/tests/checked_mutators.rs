@@ -165,7 +165,7 @@ fn cospan_add_boundary_node_error_renders_the_leg_position_target_and_size() {
 /// Three measured falsifications:
 ///
 /// 1. Deleting `leg.len() == apex_len` from the private `leg_is_identity`
-///    reddens **9 of this file's 27 tests** — `perform_pushout` reads the same
+///    reddens **9 of this file's 27 tests on `d6c7bd5`** — `perform_pushout` reads the same
 ///    predicate — this one first, at its opening assertion. The count is 9 with
 ///    either mirror fixture; the mirror is not what makes the file sensitive.
 /// 2. That is because the *first* assertion masks the mirror. Under the same

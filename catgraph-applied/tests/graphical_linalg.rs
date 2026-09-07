@@ -2,7 +2,7 @@
 //!
 //! # What these tests actually measure
 //!
-//! The 12 `cc_completeness_tracking_*` tests below are **NOT** Thm 5.60
+//! The `cc_completeness_tracking_*` tests below are **NOT** Thm 5.60
 //! faithfulness tests — that theorem is already proved abstractly by F&S
 //! Thm 5.60 (`Free(Σ_SFG)/⟨E_{18}⟩ ≅ Mat(R)`, with `sfg_to_mat` realising the
 //! isomorphism; proof via Baez-Erbele 2015 for fields, Wadsley–Woods

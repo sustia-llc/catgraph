@@ -397,8 +397,8 @@ fn mul_terms(n: usize, coeff_shift: i64) -> Vec<(i64, i64)> {
 /// not coverage of one that exists.
 ///
 /// The cells do **not** pin the gate, and nothing else does either. Two
-/// measurements, both null: rewriting the `&&` to `||` left all 660 tests in
-/// `catgraph-applied` green, and so did widening the threshold by 2 so that
+/// measurements, both null: rewriting the `&&` to `||` left `catgraph-applied`'s
+/// 660 tests green on `d1f7cff`, and so did widening the threshold by 2 so that
 /// 33-term operands fall to the serial arm. Both arms compute the same value
 /// when neither is broken, and no test in the crate observes which arm ran, so
 /// a value oracle cannot see a dispatch decision at all; only an arm-confined

@@ -109,7 +109,7 @@ fn tensor_unit_cospan() {
 /// which half of the test is doing work:
 ///
 /// 1. Deleting `other.left.iter_mut().for_each(|v| *v += middle_shift);` from
-///    `Cospan::monoidal` reddens **1 of this file's 7 tests — only this one**,
+///    `Cospan::monoidal` reddens **1 of this file's 7 tests on `d6c7bd5` — only this one**,
 ///    on the first tensor: `left == [0, 0, 1]` where `[0, 1, 2]` is expected
 ///    (`is_left_identity()` is `false` for that value too). Notably
 ///    `tensor_associativity_cospan` and `tensor_unit_cospan` stay **green**:
