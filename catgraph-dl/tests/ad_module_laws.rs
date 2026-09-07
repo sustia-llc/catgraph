@@ -177,3 +177,52 @@ fn gradient_vanishes_at_the_minimum_of_a_quadratic() {
         "∂g/∂v0 = 2(v0 - 2) = 4 two units off the minimum"
     );
 }
+
+/// **Second derivatives.** `Dual<Dual<f64>>` seeded at both levels carries
+/// `f` in `re.re`, `f'` in `re.du` and in `du.re`, and `f''` in `du.du`.
+/// Checked over `Mul` (`f(x) = x³` at `x = 3`, giving 27, 27, 27, 18), `Mul`
+/// with `Add` (`f(x) = x⁴ + 2x` at `x = 2`, giving 20, 34, 34, 48), `Sub`
+/// (`f(x) = x − x²` at `x = 2`, giving −2, −3, −3, −2) and `Div`
+/// (`f(x) = 1/x` at `x = 2`, giving 0.5, −0.25, −0.25, 0.25); every value is
+/// exact in floating point, so the assertions are exact equalities.
+#[test]
+fn nested_duals_carry_the_second_derivative() {
+    let at_three = Dual::variable(Dual::variable(3.0_f64));
+    let at_two = Dual::variable(Dual::variable(2.0_f64));
+    let one = Dual::constant(Dual::constant(1.0_f64));
+
+    for (name, y, value, first, second) in [
+        ("x³ at 3", at_three * at_three * at_three, 27.0, 27.0, 18.0),
+        (
+            "x⁴ + 2x at 2",
+            at_two * at_two * at_two * at_two + at_two + at_two,
+            20.0,
+            34.0,
+            48.0,
+        ),
+        ("x − x·x at 2", at_two - at_two * at_two, -2.0, -3.0, -2.0),
+        ("1/x at 2", one / at_two, 0.5, -0.25, 0.25),
+    ] {
+        assert_eq!(
+            y.re.re, value,
+            "{name}: re.re = {}, expected f = {value}",
+            y.re.re
+        );
+        assert_eq!(
+            y.re.du, first,
+            "{name}: re.du = {}, expected f' = {first}",
+            y.re.du
+        );
+        assert_eq!(
+            y.du.re, first,
+            "{name}: du.re = {}, expected f' = {first}",
+            y.du.re
+        );
+        assert_eq!(
+            y.du.du, second,
+            "{name}: du.du = {}, expected f'' = {second}; the first-derivative \
+             slots read {first} here",
+            y.du.du
+        );
+    }
+}

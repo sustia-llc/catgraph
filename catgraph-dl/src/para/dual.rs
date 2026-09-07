@@ -23,6 +23,10 @@ use catgraph_applied::rig::{One, Zero};
 /// assert_eq!(y.derivative(), 29.0); // 3·3² + 2
 /// ```
 ///
+/// `Dual<Dual<T>>` nests: for an `f` composed of the `Add`, `Sub`, `Mul` and
+/// `Div` impls, seeding both levels at `x₀` puts `f(x₀)` in `re.re`, `f'(x₀)`
+/// in both `re.du` and `du.re`, and `f''(x₀)` in `du.du`.
+///
 /// # Serde (features `serde` and `ad`)
 ///
 /// Round-trips as its two public components; a loaded `du` is whatever the
