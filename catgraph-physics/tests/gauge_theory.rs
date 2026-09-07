@@ -199,6 +199,14 @@ fn lattice_2d_construction() {
     );
 }
 
+/// `new` rejects `link_dim` 0 by panicking.
+#[test]
+#[should_panic(expected = "link_dim must be positive")]
+fn lattice_new_rejects_link_dim_zero() {
+    let _: HypergraphLattice<1> =
+        HypergraphLattice::new([2], HypergraphRewriteGroup::new(1), vec![], 0);
+}
+
 // ---------------------------------------------------------------------------
 // State management
 // ---------------------------------------------------------------------------
@@ -633,6 +641,46 @@ fn wilson_value_one_is_not_flatness() {
         Some(false),
         "shear [[1, 1], [0, 1]] then I: is_causally_invariant([0, 1]) = {verdict:?}, \
          expected Some(false); the |wilson - 1| reading gives Some(true)"
+    );
+}
+
+/// `is_flat` reads its `eps`: a holonomy whose largest entrywise deviation
+/// from the identity is `1e-3` is flat at `1e-2` and not flat at `1e-4`, and
+/// `is_causally_invariant` reads the same holonomy as not flat at its own
+/// `1e-6`.
+#[test]
+fn is_flat_reads_its_eps() {
+    let mut lattice: HypergraphLattice<1> =
+        HypergraphLattice::new([2], HypergraphRewriteGroup::new(1), vec![], 2);
+
+    // Holonomy of [0, 1] = I · [[1, 1e-3], [0, 1]], so the largest entrywise
+    // deviation from the identity is 1e-3.
+    assert!(lattice.record_transition(&[0], &[1], m2(1.0, 1e-3, 0.0, 1.0)));
+    assert!(lattice.record_transition(&[1], &[0], m2(1.0, 0.0, 0.0, 1.0)));
+
+    let path: [&[usize; 1]; 2] = [&[0], &[1]];
+
+    let loose = lattice.is_flat(&path, 1e-2);
+    assert_eq!(
+        loose,
+        Some(true),
+        "deviation 1e-3: is_flat([0, 1], 1e-2) = {loose:?}, expected Some(true); \
+         an is_flat that ignores eps and reads 1e-6 gives Some(false)"
+    );
+
+    let tight = lattice.is_flat(&path, 1e-4);
+    assert_eq!(
+        tight,
+        Some(false),
+        "deviation 1e-3: is_flat([0, 1], 1e-4) = {tight:?}, expected Some(false)"
+    );
+
+    let verdict = lattice.is_causally_invariant(&path);
+    assert_eq!(
+        verdict,
+        Some(false),
+        "deviation 1e-3: is_causally_invariant([0, 1]) = {verdict:?}, expected Some(false) \
+         at its fixed 1e-6"
     );
 }
 
@@ -1315,8 +1363,8 @@ fn gauge_transform_recomputes_the_recorded_wilson_values() {
 }
 
 /// Pin (d): over a seeded GL(2) and GL(3) link field on a `[4, 4]` lattice,
-/// `gauge_transform` fixes every recorded Wilson value while moving the
-/// holonomy matrices.
+/// `gauge_transform` fixes every recorded Wilson value while moving every
+/// recorded plaquette's holonomy matrix.
 #[test]
 fn gauge_transform_fixes_every_recorded_wilson_value() {
     for (dim, seed) in [(2usize, 160_u64), (3, 1_600_003)] {
@@ -1355,11 +1403,20 @@ fn gauge_transform_fixes_every_recorded_wilson_value() {
         );
 
         let before: Vec<f64> = lattice.recorded_loops().iter().map(|(_, w)| *w).collect();
-        let first = corners_2d(&lattice.recorded_loops()[0].0);
-        let path: Vec<&[usize; 2]> = first.iter().collect();
-        let holonomy_before = lattice
-            .loop_holonomy(&path)
-            .expect("invariant: a recorded plaquette's four links are all recorded");
+        let corners: Vec<Vec<[usize; 2]>> = lattice
+            .recorded_loops()
+            .iter()
+            .map(|(sites, _)| corners_2d(sites))
+            .collect();
+        let holonomies_before: Vec<DMatrix<f64>> = corners
+            .iter()
+            .map(|corner| {
+                let path: Vec<&[usize; 2]> = corner.iter().collect();
+                lattice
+                    .loop_holonomy(&path)
+                    .expect("invariant: a recorded plaquette's four links are all recorded")
+            })
+            .collect();
 
         let mut g: HashMap<Vec<usize>, DMatrix<f64>> = HashMap::new();
         for x in 0..4usize {
@@ -1385,16 +1442,34 @@ fn gauge_transform_fixes_every_recorded_wilson_value() {
              expected below 1e-9; before = {before:?}, after = {after:?}"
         );
 
-        let holonomy_after = lattice
-            .loop_holonomy(&path)
-            .expect("invariant: gauge_transform keeps the link key set");
-        let moved = max_diff(&holonomy_before, &holonomy_after);
+        let moves: Vec<f64> = corners
+            .iter()
+            .zip(&holonomies_before)
+            .map(|(corner, holonomy_before)| {
+                let path: Vec<&[usize; 2]> = corner.iter().collect();
+                let holonomy_after = lattice
+                    .loop_holonomy(&path)
+                    .expect("invariant: gauge_transform keeps the link key set");
+                max_diff(holonomy_before, &holonomy_after)
+            })
+            .collect();
+        let (least, least_move) = moves.iter().enumerate().fold(
+            (0usize, f64::INFINITY),
+            |(index, smallest), (i, &moved)| {
+                if moved < smallest {
+                    (i, moved)
+                } else {
+                    (index, smallest)
+                }
+            },
+        );
         assert!(
-            moved > 1e-6,
-            "link_dim {dim}: the first plaquette's holonomy moved by {moved} under \
-             gauge_transform, expected more than 1e-6; before = {:?}, after = {:?}",
-            rows(&holonomy_before),
-            rows(&holonomy_after)
+            least_move > 1e-6,
+            "link_dim {dim}: the smallest holonomy move under gauge_transform is {least_move}, \
+             on the plaquette at {:?}, expected more than 1e-6 on each of the {} recorded \
+             plaquettes; moves = {moves:?}",
+            corners[least],
+            moves.len()
         );
     }
 }

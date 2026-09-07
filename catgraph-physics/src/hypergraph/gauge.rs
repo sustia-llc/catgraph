@@ -206,6 +206,26 @@ use super::rewrite_rule::RewriteRule;
 
 /// `D`-dimensional lattice of hypergraph states; links carry `link_dim` ×
 /// `link_dim` matrix gauge variables.
+///
+/// # Example
+///
+/// ```rust
+/// use catgraph_physics::hypergraph::{
+///     HypergraphLattice, HypergraphRewriteGroup, Hypergraph, RewriteRule,
+/// };
+///
+/// let rule = RewriteRule::wolfram_a_to_bb();
+/// let mut lattice: HypergraphLattice<1> = HypergraphLattice::new(
+///     [5],
+///     HypergraphRewriteGroup::new(3),
+///     vec![rule],
+///     1,
+/// );
+///
+/// let initial = Hypergraph::from_edges(vec![vec![0, 1, 2]]);
+/// lattice.set_state(&[2], initial);
+/// lattice.apply_rewrite(&[2], 0);
+/// ```
 #[derive(Debug, Clone)]
 pub struct HypergraphLattice<const D: usize> {
     /// Dimensions of the lattice (e.g., [5, 5, 5] for 5x5x5).
@@ -242,6 +262,24 @@ impl<const D: usize> HypergraphLattice<D> {
     /// Creates a `D`-dimensional hypergraph lattice of the given site
     /// `dimensions`, gauge `group` and rewrite `rules`, whose links carry
     /// `link_dim` × `link_dim` matrices.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `link_dim` is `0`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use catgraph_physics::hypergraph::{HypergraphLattice, HypergraphRewriteGroup};
+    ///
+    /// let lattice: HypergraphLattice<2> = HypergraphLattice::new(
+    ///     [10, 10],
+    ///     HypergraphRewriteGroup::new(4),
+    ///     vec![],
+    ///     1,
+    /// );
+    /// assert_eq!(lattice.link_dim(), 1);
+    /// ```
     #[must_use]
     pub fn new(
         dimensions: [usize; D],
@@ -249,6 +287,7 @@ impl<const D: usize> HypergraphLattice<D> {
         rules: Vec<RewriteRule>,
         link_dim: usize,
     ) -> Self {
+        assert!(link_dim > 0, "link_dim must be positive, got 0");
         Self {
             dimensions,
             group,
@@ -363,7 +402,8 @@ impl<const D: usize> HypergraphLattice<D> {
     }
 
     /// Reports whether `link` is admissible as a link variable of this
-    /// lattice: `link_dim` × `link_dim`, every entry finite, and invertible.
+    /// lattice: `link_dim` × `link_dim`, every entry finite, and
+    /// `link.clone().try_inverse()` returning `Some`.
     fn is_admissible(&self, link: &DMatrix<f64>) -> bool {
         if link.nrows() != self.link_dim || link.ncols() != self.link_dim {
             return false;
@@ -379,7 +419,7 @@ impl<const D: usize> HypergraphLattice<D> {
     /// Returns `false` and records nothing when either endpoint has a
     /// coordinate at or beyond the corresponding lattice dimension, when
     /// `link` is not `link_dim` × `link_dim`, when an entry of `link` is not
-    /// finite, or when `link` is not invertible.
+    /// finite, or when `link.clone().try_inverse()` returns `None`.
     ///
     /// Links recorded here are the ones
     /// [`loop_holonomy`](Self::loop_holonomy) traverses.
@@ -483,7 +523,8 @@ impl<const D: usize> HypergraphLattice<D> {
     /// returns `true`. A site absent from `g` transforms by the identity.
     ///
     /// Returns `false` and changes nothing when a value of `g` is not
-    /// `link_dim` × `link_dim`, has a non-finite entry, or is not invertible.
+    /// `link_dim` × `link_dim`, has a non-finite entry, or has a
+    /// `clone().try_inverse()` of `None`.
     pub fn gauge_transform(&mut self, g: &HashMap<Vec<usize>, DMatrix<f64>>) -> bool {
         if !g.values().all(|matrix| self.is_admissible(matrix)) {
             return false;
@@ -592,8 +633,10 @@ impl<const D: usize> HypergraphLattice<D> {
         }
     }
 
-    /// Returns the recorded Wilson loops: each one's site cycle and its
-    /// Wilson value.
+    /// Returns the recorded Wilson loops: each one's site cycle, and the
+    /// Wilson value stored for that cycle by the last
+    /// [`find_wilson_loops`](Self::find_wilson_loops) or
+    /// [`gauge_transform`](Self::gauge_transform).
     #[must_use]
     pub fn recorded_loops(&self) -> &[(Vec<Vec<usize>>, f64)] {
         &self.wilson_loops
@@ -630,7 +673,9 @@ impl<const D: usize> HypergraphLattice<D> {
         &self.group
     }
 
-    /// Mean of the Wilson values of the recorded Wilson loops.
+    /// Mean of the Wilson values stored for the recorded Wilson loops by the
+    /// last [`find_wilson_loops`](Self::find_wilson_loops) or
+    /// [`gauge_transform`](Self::gauge_transform).
     ///
     /// Returns `None` when no Wilson loops are recorded.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
@@ -644,7 +689,8 @@ impl<const D: usize> HypergraphLattice<D> {
         Some(sum / self.wilson_loops.len() as f64)
     }
 
-    /// Reports whether every recorded Wilson loop's holonomy is flat at
+    /// Reports whether every recorded Wilson loop's holonomy, recomputed from
+    /// the current link variables of that loop's site cycle, is flat at
     /// `1e-6`.
     ///
     /// Returns `None` when no Wilson loops are recorded.
@@ -659,8 +705,10 @@ impl<const D: usize> HypergraphLattice<D> {
         }))
     }
 
-    /// Sum of the plaquette actions of the recorded Wilson loops' Wilson
-    /// values.
+    /// Sum of the plaquette actions of the Wilson values stored for the
+    /// recorded Wilson loops by the last
+    /// [`find_wilson_loops`](Self::find_wilson_loops) or
+    /// [`gauge_transform`](Self::gauge_transform).
     ///
     /// Returns `0.0` when no Wilson loops are recorded.
     #[must_use]
