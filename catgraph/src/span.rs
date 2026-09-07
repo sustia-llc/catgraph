@@ -587,8 +587,9 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
         let mut ret_val = self.0.clone();
         for (x, y) in &other.0.middle {
             if !self_pairs.contains(&(*x, *y)) {
-                // Labels guaranteed to match since `other` was validated at creation.
-                ret_val.add_middle((*x, *y)).unwrap();
+                ret_val
+                    .add_middle((*x, *y))
+                    .expect("invariant: both relations share a domain and a codomain (checked above), and other's pairs were bounds- and label-validated at its construction");
             }
         }
         Ok(Self(ret_val))
@@ -629,7 +630,9 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
 
         let in_common = self_pairs.intersection(&other_pairs);
         for (x, y) in in_common {
-            ret_val.add_middle((*x, *y)).unwrap();
+            ret_val
+                .add_middle((*x, *y))
+                .expect("invariant: every common pair is one of self's, bounds- and label-validated at self's construction against the boundaries ret_val was built from");
         }
         Ok(Self(ret_val))
     }
@@ -638,7 +641,9 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
     ///
     /// # Errors
     ///
-    /// Returns [`CatgraphError`] if the relation is not homogeneous (domain labels != codomain labels).
+    /// Returns [`CatgraphError::Composition`] if any cell `(x, y)` of the
+    /// `domain x codomain` grid that is not already a pair of the relation names
+    /// a domain label and a codomain label that disagree.
     pub fn complement(&self) -> Result<Self, CatgraphError> {
         let source_size = self.domain().len();
         let target_size = self.codomain().len();
@@ -674,7 +679,8 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
     #[must_use]
     pub fn is_reflexive(&self) -> bool {
         let identity_rel = Self::new_unchecked(Span::<Lambda>::identity(&self.0.domain()));
-        self.subsumes(&identity_rel).unwrap()
+        self.subsumes(&identity_rel)
+            .expect("invariant: homogeneous relation — domain == codomain, so the identity on the domain shares both boundaries")
     }
 
     /// True if no diagonal pair `(x,x)` is present. Returns false on label mismatch.
@@ -688,7 +694,8 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
     #[must_use]
     pub fn is_symmetric(&self) -> bool {
         let dagger = Self::new_unchecked(self.0.dagger());
-        self.subsumes(&dagger).unwrap()
+        self.subsumes(&dagger)
+            .expect("invariant: homogeneous relation — domain == codomain, so the dagger's swapped boundaries are the same pair")
     }
 
     /// # Panics
@@ -696,18 +703,26 @@ impl<Lambda: Eq + Sized + Debug + Copy> Rel<Lambda> {
     #[must_use]
     pub fn is_antisymmetric(&self) -> bool {
         let dagger = Self::new_unchecked(self.0.dagger());
-        let intersect = self.intersection(&dagger).unwrap();
+        let intersect = self
+            .intersection(&dagger)
+            .expect("invariant: homogeneous relation — domain == codomain, so the dagger's swapped boundaries are the same pair");
         let identity_rel = Self::new_unchecked(Span::<Lambda>::identity(&self.0.domain()));
-        identity_rel.subsumes(&intersect).unwrap()
+        identity_rel
+            .subsumes(&intersect)
+            .expect("invariant: homogeneous relation — domain == codomain, so the identity on the domain shares both boundaries with the intersection")
     }
 
     /// # Panics
     /// Panics if the relation is not homogeneous (domain != codomain).
     #[must_use]
     pub fn is_transitive(&self) -> bool {
-        // compose can't fail: homogeneous relation has matching domain/codomain
-        let twice = Self::new_unchecked(self.0.compose(&self.0).unwrap());
-        self.subsumes(&twice).unwrap()
+        let twice = Self::new_unchecked(
+            self.0
+                .compose(&self.0)
+                .expect("invariant: homogeneous relation — domain == codomain, so self is composable with itself"),
+        );
+        self.subsumes(&twice)
+            .expect("invariant: homogeneous relation — domain == codomain, so self ; self keeps both boundaries")
     }
 
     /// True if the relation is an equivalence relation (reflexive, symmetric, transitive).
@@ -1177,6 +1192,158 @@ mod test {
         assert_eq!(
             original_pairs, roundtrip_pairs,
             "complement(complement(r)) should equal r"
+        );
+    }
+
+    /// The apex pairs of a `Rel`, sorted — `intersection` drains a `HashSet`,
+    /// so its pair order is not fixed.
+    fn sorted_pairs<L: Eq + Copy + Debug>(r: &Rel<L>) -> Vec<(usize, usize)> {
+        let mut pairs = r.as_span().middle_pairs().to_vec();
+        pairs.sort_unstable();
+        pairs
+    }
+
+    /// `union` and `intersection` on a 3x2 relation, against hand-written pair
+    /// lists: `r ∪ ∅ = r`, `r ∪ rᶜ = full`, `r ∩ rᶜ = ∅`, `r ∩ full = r`.
+    ///
+    /// `full` and `∅` come from explicit pair lists through `Span::new`, not
+    /// from the operations under test; `rᶜ` comes from `complement`, whose pair
+    /// list and involution on this same fixture are asserted by
+    /// `rel_complement_non_square`.
+    ///
+    /// **What this ranges over.** One relation on one 3x2 boundary pair, every
+    /// label `'a'`. It sweeps neither boundary sizes nor label alphabets, and it
+    /// asserts nothing about the identity predicates.
+    #[test]
+    fn rel_set_ops_three_by_two() {
+        let dom = vec!['a', 'a', 'a'];
+        let cod = vec!['a', 'a'];
+        let rel = |pairs: Vec<(usize, usize)>| {
+            Rel::new(Span::new(dom.clone(), cod.clone(), pairs).unwrap()).unwrap()
+        };
+
+        let r = rel(vec![(0, 0), (2, 1)]);
+        let empty = rel(vec![]);
+        let full = rel(vec![(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]);
+        let no_pairs: Vec<(usize, usize)> = Vec::new();
+
+        let comp = r.complement().unwrap();
+        assert_eq!(
+            sorted_pairs(&r.union(&empty).unwrap()),
+            [(0, 0), (2, 1)],
+            "r ∪ ∅, r = [(0,0), (2,1)]"
+        );
+        assert_eq!(
+            sorted_pairs(&r.union(&comp).unwrap()),
+            [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)],
+            "r ∪ rᶜ, r = [(0,0), (2,1)], rᶜ = [(0,1), (1,0), (1,1), (2,0)]"
+        );
+        assert_eq!(
+            sorted_pairs(&r.intersection(&comp).unwrap()),
+            no_pairs,
+            "r ∩ rᶜ, r = [(0,0), (2,1)], rᶜ = [(0,1), (1,0), (1,1), (2,0)]"
+        );
+        assert_eq!(
+            sorted_pairs(&r.intersection(&full).unwrap()),
+            [(0, 0), (2, 1)],
+            "r ∩ full, r = [(0,0), (2,1)], full = the six 3x2 pairs"
+        );
+    }
+
+    /// `union` on operands that share a pair, and the boundary guards of `union`
+    /// and `intersection`. `r = [(0,0), (2,1)]` and `s = [(2,1), (1,0)]` on a
+    /// 3x2 boundary, every label `'a'`.
+    ///
+    /// **What this ranges over.** Six rows — `r ∪ r` and `r ∪ s` as exact pair
+    /// lists, then `union` and `intersection` each against a 2x2 operand (the
+    /// domains differ) and a 3x3 operand (the codomains differ). It asserts
+    /// nothing about `intersection`'s pair sets, about `complement`, or about
+    /// the `is_*` classifiers.
+    #[test]
+    fn rel_union_dedups_and_both_ops_reject_mismatched_boundaries() {
+        let dom_3 = vec!['a', 'a', 'a'];
+        let cod_2 = vec!['a', 'a'];
+        let rel = |domain: &[char], codomain: &[char], pairs: Vec<(usize, usize)>| {
+            Rel::new(Span::new(domain.to_vec(), codomain.to_vec(), pairs).unwrap()).unwrap()
+        };
+
+        let r = rel(&dom_3, &cod_2, vec![(0, 0), (2, 1)]);
+        let s = rel(&dom_3, &cod_2, vec![(2, 1), (1, 0)]);
+        let other_domain = rel(&cod_2, &cod_2, vec![(0, 0)]);
+        let other_codomain = rel(&dom_3, &dom_3, vec![(0, 0)]);
+
+        assert_eq!(
+            sorted_pairs(&r.union(&r).unwrap()),
+            [(0, 0), (2, 1)],
+            "r ∪ r, r = [(0,0), (2,1)] — every pair of the right operand is already present"
+        );
+        assert_eq!(
+            sorted_pairs(&r.union(&s).unwrap()),
+            [(0, 0), (1, 0), (2, 1)],
+            "r ∪ s, r = [(0,0), (2,1)], s = [(2,1), (1,0)] — (2,1) is in both"
+        );
+
+        for (what, got) in [
+            ("union, domains differ", r.union(&other_domain)),
+            ("union, codomains differ", r.union(&other_codomain)),
+            (
+                "intersection, domains differ",
+                r.intersection(&other_domain),
+            ),
+            (
+                "intersection, codomains differ",
+                r.intersection(&other_codomain),
+            ),
+        ] {
+            let observed = match &got {
+                Ok(ok) => format!("Ok({:?})", sorted_pairs(ok)),
+                Err(e) => format!("Err({e:?})"),
+            };
+            assert!(
+                matches!(got, Err(CatgraphError::Relation { .. })),
+                "{what}: observed {observed}, expected Err(CatgraphError::Relation {{ .. }})"
+            );
+        }
+    }
+
+    /// The condition `complement` fails on: a cell of the `domain x codomain`
+    /// grid, outside the relation, whose two labels disagree. Homogeneity is not
+    /// that condition in either direction — the failing fixture here has
+    /// `domain == codomain` and the succeeding one does not.
+    ///
+    /// **What this ranges over.** Two fixtures: `[(0,0)]` on
+    /// `['a','b'] x ['a','b']`, where the cell `(0,1)` names `'a'` against
+    /// `'b'`, and `[(0,1)]` on `['a','a'] x ['a','a','a']`, where every cell
+    /// names `'a'` against `'a'`. It sweeps no other label alphabet.
+    #[test]
+    fn rel_complement_errs_on_a_disagreeing_grid_cell() {
+        let mixed_labels =
+            Rel::new(Span::new(vec!['a', 'b'], vec!['a', 'b'], vec![(0, 0)]).unwrap()).unwrap();
+        match mixed_labels.complement() {
+            Err(CatgraphError::Composition { message }) => assert_eq!(
+                message, "Mismatched lambda values 'a' and 'b'",
+                "complement of [(0,0)] on ['a','b'] x ['a','b']: the cell reported"
+            ),
+            Err(other) => panic!(
+                "complement of [(0,0)] on ['a','b'] x ['a','b'] — a homogeneous \
+                 relation: observed Err({other:?}), expected \
+                 Err(CatgraphError::Composition {{ .. }})"
+            ),
+            Ok(ok) => panic!(
+                "complement of [(0,0)] on ['a','b'] x ['a','b'] — a homogeneous \
+                 relation: observed Ok({:?}), expected \
+                 Err(CatgraphError::Composition {{ .. }})",
+                sorted_pairs(&ok)
+            ),
+        }
+
+        let uniform_labels =
+            Rel::new(Span::new(vec!['a', 'a'], vec!['a', 'a', 'a'], vec![(0, 1)]).unwrap())
+                .unwrap();
+        assert_eq!(
+            sorted_pairs(&uniform_labels.complement().unwrap()),
+            [(0, 0), (0, 2), (1, 0), (1, 1), (1, 2)],
+            "complement of [(0,1)] on ['a','a'] x ['a','a','a'] — domain != codomain"
         );
     }
 

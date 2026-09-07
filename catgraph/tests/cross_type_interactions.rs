@@ -125,17 +125,9 @@ fn named_cospan_operations_match_inner_cospan() {
 
     // The underlying cospan of the named composition must match the bare composition.
     let inner = named_composed.cospan();
-    assert!(
-        cospan_eq(inner, &bare_composed),
-        "NamedCospan composition inner cospan differs from bare Cospan composition:\n  \
-         inner.left={:?}, bare.left={:?}\n  inner.right={:?}, bare.right={:?}\n  \
-         inner.middle={:?}, bare.middle={:?}",
-        inner.left_to_middle(),
-        bare_composed.left_to_middle(),
-        inner.right_to_middle(),
-        bare_composed.right_to_middle(),
-        inner.middle(),
-        bare_composed.middle(),
+    assert_eq!(
+        *inner, bare_composed,
+        "NamedCospan composition inner cospan differs from bare Cospan composition"
     );
 
     // Domain/codomain consistency.

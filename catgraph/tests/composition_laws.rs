@@ -165,7 +165,7 @@ fn cospan_identity_compose_identity() {
     let id = Cospan::<char>::identity(&types);
     let id2 = id.compose(&id).expect("id;id");
 
-    assert_cospan_eq(&id, &id2);
+    assert_eq!(id, id2);
 }
 
 // ===========================================================================

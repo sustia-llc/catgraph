@@ -14,7 +14,7 @@ use catgraph::{
     hypergraph_functor::{CospanToFrobeniusFunctor, HypergraphFunctor, RelabelingFunctor},
     monoidal::Monoidal,
 };
-use common::{assert_cospan_eq_msg, assert_frobenius_eq_msg, frobenius_shape};
+use common::{assert_frobenius_eq_msg, frobenius_shape};
 
 fn char_to_u32(c: char) -> u32 {
     c as u32
@@ -33,7 +33,7 @@ fn frobenius_unit_preservation() {
     let src_unit = Cospan::<char>::unit(z);
     let mapped = f.map_mor(&src_unit).unwrap();
     let tgt_unit = Cospan::<u32>::unit(f.map_ob(z));
-    assert_cospan_eq_msg(&mapped, &tgt_unit, "F(η_x) = η_{F(x)}");
+    assert_eq!(mapped, tgt_unit, "F(η_x) = η_{{F(x)}}");
 }
 
 #[test]
@@ -43,7 +43,7 @@ fn frobenius_counit_preservation() {
     let src_counit = Cospan::<char>::counit(z);
     let mapped = f.map_mor(&src_counit).unwrap();
     let tgt_counit = Cospan::<u32>::counit(f.map_ob(z));
-    assert_cospan_eq_msg(&mapped, &tgt_counit, "F(ε_x) = ε_{F(x)}");
+    assert_eq!(mapped, tgt_counit, "F(ε_x) = ε_{{F(x)}}");
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn frobenius_multiplication_preservation() {
     let src_mul = Cospan::<char>::multiplication(z);
     let mapped = f.map_mor(&src_mul).unwrap();
     let tgt_mul = Cospan::<u32>::multiplication(f.map_ob(z));
-    assert_cospan_eq_msg(&mapped, &tgt_mul, "F(μ_x) = μ_{F(x)}");
+    assert_eq!(mapped, tgt_mul, "F(μ_x) = μ_{{F(x)}}");
 }
 
 #[test]
@@ -63,7 +63,7 @@ fn frobenius_comultiplication_preservation() {
     let src_comul = Cospan::<char>::comultiplication(z);
     let mapped = f.map_mor(&src_comul).unwrap();
     let tgt_comul = Cospan::<u32>::comultiplication(f.map_ob(z));
-    assert_cospan_eq_msg(&mapped, &tgt_comul, "F(δ_x) = δ_{F(x)}");
+    assert_eq!(mapped, tgt_comul, "F(δ_x) = δ_{{F(x)}}");
 }
 
 // ---------------------------------------------------------------------------
@@ -83,10 +83,9 @@ fn functoriality_composition() {
     let mapped_h = f.map_mor(&h).unwrap();
     let mapped_then_composed = mapped_g.compose(&mapped_h).unwrap();
 
-    assert_cospan_eq_msg(
-        &composed_then_mapped,
-        &mapped_then_composed,
-        "F(g;h) = F(g);F(h)",
+    assert_eq!(
+        composed_then_mapped, mapped_then_composed,
+        "F(g;h) = F(g);F(h)"
     );
 }
 
@@ -98,7 +97,7 @@ fn functoriality_identity() {
     let mapped = f.map_mor(&src_id).unwrap();
     let tgt_types: Vec<u32> = types.iter().map(|c| f.map_ob(*c)).collect();
     let tgt_id = Cospan::<u32>::identity(&tgt_types);
-    assert_cospan_eq_msg(&mapped, &tgt_id, "F(id_x) = id_{F(x)}");
+    assert_eq!(mapped, tgt_id, "F(id_x) = id_{{F(x)}}");
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +118,7 @@ fn monoidal_preservation() {
     let mut mapped_parts = f.map_mor(&g).unwrap();
     mapped_parts.monoidal(f.map_mor(&h).unwrap());
 
-    assert_cospan_eq_msg(&mapped_tensor, &mapped_parts, "F(g⊗h) = F(g)⊗F(h)");
+    assert_eq!(mapped_tensor, mapped_parts, "F(g⊗h) = F(g)⊗F(h)");
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +132,7 @@ fn relabeling_cup_preservation() {
     let src_cup = Cospan::<char>::cup(z).unwrap();
     let mapped = f.map_mor(&src_cup).unwrap();
     let tgt_cup = Cospan::<u32>::cup(f.map_ob(z)).unwrap();
-    assert_cospan_eq_msg(&mapped, &tgt_cup, "F(cup_x) = cup_{F(x)}");
+    assert_eq!(mapped, tgt_cup, "F(cup_x) = cup_{{F(x)}}");
 }
 
 #[test]
@@ -143,7 +142,7 @@ fn relabeling_cap_preservation() {
     let src_cap = Cospan::<char>::cap(z).unwrap();
     let mapped = f.map_mor(&src_cap).unwrap();
     let tgt_cap = Cospan::<u32>::cap(f.map_ob(z)).unwrap();
-    assert_cospan_eq_msg(&mapped, &tgt_cap, "F(cap_x) = cap_{F(x)}");
+    assert_eq!(mapped, tgt_cap, "F(cap_x) = cap_{{F(x)}}");
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +169,7 @@ fn relabeling_roundtrip_invertible() {
     let there = forward.map_mor(&original).unwrap();
     let back = backward.map_mor(&there).unwrap();
 
-    assert_cospan_eq_msg(&original, &back, "roundtrip preserves structure");
+    assert_eq!(original, back, "roundtrip preserves structure");
 }
 
 // ---------------------------------------------------------------------------

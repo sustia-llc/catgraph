@@ -619,7 +619,7 @@ fn cospan_delete_boundary_node_keeps_composition_correct() {
 /// `left = [0, 0], right = [0, 1], middle = ['a', 'a']` — the `left_leg_id`
 /// fast path took `g`'s apex unmerged — against the reference's
 /// `left = [0, 0], right = [0, 0], middle = ['a']`. No panic, the types line
-/// up, `structurally_equal` is false.
+/// up, `==` is false.
 ///
 /// ⚠ That composite could only go wrong because the flag chose the arm, so
 /// what remains here is a claim about `connect_pair`'s remap and about the
@@ -954,8 +954,9 @@ fn span_identity_predicate_over_the_permutation_constructors() {
 /// `monoidal` and `permute_side` — over a three-element short-apex span and the
 /// identities on `['a']`, `['b']`, `['a', 'b']` and `['a', 'b', 'c']`, with
 /// `monoidal` and `permute_side` taking two rows each. `Rel::union`,
-/// `Rel::intersection` and `Rel::complement` also change the middle and are
-/// **not** covered here.
+/// `Rel::intersection` and `Rel::complement` also change the middle; this row
+/// set does not run them, and their result pairs are pinned in `span.rs`'s
+/// `rel_set_ops_three_by_two` and `rel_set_ops_three_by_three`.
 #[test]
 fn span_identity_predicate_over_the_mutators() {
     // Short apex: two pairs, in order, over three-element boundaries — so the

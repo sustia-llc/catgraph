@@ -452,14 +452,7 @@ proptest! {
 
         prop_assert_eq!(fg_h.domain(), f_gh.domain(), "monoidal assoc: domain");
         prop_assert_eq!(fg_h.codomain(), f_gh.codomain(), "monoidal assoc: codomain");
-        prop_assert!(
-            cospan_eq(&fg_h, &f_gh),
-            "monoidal product is not associative:\n  \
-             left:   {:?} vs {:?}\n  right:  {:?} vs {:?}\n  middle: {:?} vs {:?}",
-            fg_h.left_to_middle(), f_gh.left_to_middle(),
-            fg_h.right_to_middle(), f_gh.right_to_middle(),
-            fg_h.middle(), f_gh.middle(),
-        );
+        prop_assert_eq!(&fg_h, &f_gh, "monoidal product is not associative");
     }
 
     /// Monoidal right unit: f tensor empty == f.
@@ -467,7 +460,7 @@ proptest! {
     fn cospan_monoidal_right_unit(f in arb_cospan()) {
         let mut result = f.clone();
         result.monoidal(Cospan::empty());
-        prop_assert!(cospan_eq(&f, &result), "f tensor empty should equal f");
+        prop_assert_eq!(&f, &result, "f tensor empty should equal f");
     }
 
     /// Monoidal left unit: empty tensor f == f.
@@ -475,7 +468,7 @@ proptest! {
     fn cospan_monoidal_left_unit(f in arb_cospan()) {
         let mut result = Cospan::<char>::empty();
         result.monoidal(f.clone());
-        prop_assert!(cospan_eq(&f, &result), "empty tensor f should equal f");
+        prop_assert_eq!(&f, &result, "empty tensor f should equal f");
     }
 }
 
@@ -1661,5 +1654,5 @@ fn a_single_rewire_changes_the_form_unless_it_is_a_relabelling() {
     let on_second = Cospan::<char>::new(vec![1], vec![], vec!['a', 'a']).unwrap();
     assert!(exists_apex_iso(&on_first, &on_second));
     assert_eq!(on_first.canonical_form(), on_second.canonical_form());
-    assert!(!on_first.structurally_equal(&on_second));
+    assert_ne!(on_first, on_second);
 }

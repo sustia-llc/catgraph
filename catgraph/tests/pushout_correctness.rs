@@ -3,9 +3,6 @@
 //! Tests verify that `compose` (which internally uses union-find pushout)
 //! produces correct middle sets, boundary maps, and label preservation.
 
-mod common;
-use common::assert_cospan_eq;
-
 use catgraph::{
     category::{Composable, HasIdentity},
     cospan::Cospan,
@@ -181,7 +178,7 @@ fn pushout_is_deterministic() {
     let reference = f.compose(&g).expect("should compose");
     for _ in 0..10 {
         let trial = f.compose(&g).expect("should compose");
-        assert_cospan_eq(&trial, &reference);
+        assert_eq!(trial, reference);
     }
 }
 
@@ -236,7 +233,7 @@ fn composition_is_associative() {
         f_gh.middle().len(),
         "middle sizes must match"
     );
-    assert_cospan_eq(&fg_h, &f_gh);
+    assert_eq!(fg_h, f_gh);
 }
 
 // ---------------------------------------------------------------------------
@@ -269,5 +266,5 @@ fn monoidal_then_compose_equals_compose_then_monoidal() {
     composed_f.monoidal(composed_g);
     let path2 = composed_f;
 
-    assert_cospan_eq(&path1, &path2);
+    assert_eq!(path1, path2);
 }

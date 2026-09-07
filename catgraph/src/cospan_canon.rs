@@ -5,8 +5,7 @@
 //! of the cospan category* iff there is a bijection of apexes `a ≅ a'`
 //! commuting with both legs (F&S 2019, §3; the boundary objects `X`, `Y` are
 //! fixed, only the apex is quotiented). Raw structural equality on a
-//! [`Cospan`] — the derived `==`, and its named alias
-//! [`Cospan::structurally_equal`] — is apex-order sensitive and answers a
+//! [`Cospan`] — the derived `==` — is apex-order sensitive and answers a
 //! strictly finer question.
 //!
 //! # Completeness for special Frobenius monoids
@@ -398,8 +397,7 @@ where
     ///
     /// **A witness, not *the* witness.** The apex comes back in canonical
     /// (sorted) order, which need not be the order the originating cospan used,
-    /// so the result is generally not
-    /// [`structurally_equal`](Cospan::structurally_equal) to it.
+    /// so the result is generally not `==` to it.
     ///
     /// **Scalars are placed.** A bubble class contributes an apex vertex that no
     /// leg reaches, so `k` bubbles round-trip as `k` bubbles.
@@ -1140,7 +1138,7 @@ mod tests {
         // difference is precisely the apex labelling the form forgets.
         let witness = hand_built.to_cospan();
         assert_eq!(witness.canonical_form(), cospan.canonical_form());
-        assert!(!witness.structurally_equal(&cospan));
+        assert_ne!(witness, cospan);
         assert_eq!(witness.middle(), ['m', 'n', 'q', 'z'].as_slice());
         assert_eq!(witness.left_to_middle(), [3_usize, 0].as_slice());
         assert_eq!(witness.right_to_middle(), [0_usize, 3, 1].as_slice());

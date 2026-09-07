@@ -46,7 +46,6 @@ fn leg_is_identity(leg: &[MiddleIndex], apex_len: usize) -> bool {
 /// # `PartialEq` is the triple, and is only as fine as `Lambda`'s
 ///
 /// `==` compares `(left, right, middle)` field for field.
-/// [`structurally_equal`](Self::structurally_equal) is its named alias.
 ///
 /// Two cautions, in opposite directions:
 ///
@@ -202,18 +201,6 @@ where
     #[must_use]
     pub fn is_right_identity(&self) -> bool {
         leg_is_identity(&self.right, self.middle.len())
-    }
-
-    /// Structural equality on the underlying `(left, right, middle)` triple —
-    /// a named alias for `==`.
-    ///
-    /// The triple is the whole of a `Cospan` and `Cospan` derives `PartialEq`,
-    /// so `a.structurally_equal(b)` and `a == b` are the same expression. Both
-    /// are as coarse as `Lambda`'s `Eq` and finer than equality of cospans as
-    /// morphisms; the type's own docs carry both cautions.
-    #[must_use]
-    pub fn structurally_equal(&self, other: &Self) -> bool {
-        self.left == other.left && self.right == other.right && self.middle == other.middle
     }
 
     /// True if every middle (apex) vertex is in the image of the left or right leg.

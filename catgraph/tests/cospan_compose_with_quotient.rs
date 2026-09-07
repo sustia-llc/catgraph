@@ -6,9 +6,6 @@ use std::collections::HashSet;
 use catgraph::category::{Composable, HasIdentity};
 use catgraph::cospan::Cospan;
 
-mod common;
-use common::cospan_eq;
-
 #[test]
 fn t1_1_identity_compose_quotient_concatenates_ranges() {
     // id(3) ∘ id(3): left cospan has middle [a,b,c] with both legs = [0,1,2];
@@ -79,7 +76,7 @@ fn t1_3_roundtrip_with_plain_compose() {
     for (a, b) in &cases {
         let via_compose = a.compose(b).unwrap();
         let (via_quotient, _) = a.compose_with_quotient(b).unwrap();
-        assert!(cospan_eq(&via_compose, &via_quotient));
+        assert_eq!(via_compose, via_quotient);
     }
 }
 

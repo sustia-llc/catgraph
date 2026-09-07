@@ -32,20 +32,12 @@ fn small_cospan_strategy() -> impl Strategy<Value = Cospan<char>> {
     })
 }
 
-/// Structural equality on `Cospan<Lambda>` via public accessors.
-/// `Cospan` does not implement `PartialEq`, so we compare leg + middle slices.
-fn cospan_eq<L: Eq + std::fmt::Debug + Copy>(a: &Cospan<L>, b: &Cospan<L>) -> bool {
-    a.left_to_middle() == b.left_to_middle()
-        && a.right_to_middle() == b.right_to_middle()
-        && a.middle() == b.middle()
-}
-
 proptest! {
     #[test]
     fn from_cospan_uniform_roundtrip(c in small_cospan_strategy()) {
         let original = c.clone();
         let wc = WeightedCospan::from_cospan_uniform(c, F64Rig::one());
-        prop_assert!(cospan_eq(wc.as_cospan(), &original));
+        prop_assert_eq!(wc.as_cospan(), &original);
     }
 
     #[test]
