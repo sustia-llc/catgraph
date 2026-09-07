@@ -462,8 +462,11 @@ mod joyal_street_braided_regression {
     }
 
     /// JS-Braided axiom (B2) p. 33 with JS-I Ch 2 axiom (S) p. 73:
-    /// `nf(σ_{1,1} ⊗ σ_{2,1})` — a wide braid beside an irreducible swap —
-    /// carries no wide braid and equals `nf((σ_{1,1} ⊗ id₃) ; (id₂ ⊗ σ_{2,1}))`.
+    /// `nf(σ_{1,1} ⊗ σ_{2,1})` — a wide braid after an irreducible swap —
+    /// carries no wide braid and equals `nf((σ_{1,1} ⊗ id₃) ; (id₂ ⊗ σ_{2,1}))`;
+    /// `nf(σ_{1,2} ⊗ σ_{1,1})` — the wide braid before the swap — carries no
+    /// wide braid, equals `nf((σ_{1,2} ⊗ id₂) ; (id₃ ⊗ σ_{1,1}))`, and is the
+    /// `Braid(1,1)` brick layers asserted below.
     #[test]
     fn a_wide_braid_beside_a_swap_expands() {
         let one_layer: PropExpr<TestSig> = Tensor(Box::new(Braid(1, 1)), Box::new(Braid(2, 1)));
@@ -481,6 +484,41 @@ mod joyal_street_braided_regression {
             out,
             nf(&padded),
             "the one-layer writing and the identity-padded writing share a normal form"
+        );
+
+        let mirror: PropExpr<TestSig> = Tensor(Box::new(Braid(1, 2)), Box::new(Braid(1, 1)));
+        let mirror_out = nf(&mirror);
+        assert!(
+            !has_wide_braid(&mirror_out),
+            "expected no wide braid, observed {mirror_out:?}"
+        );
+
+        let mirror_padded: PropExpr<TestSig> = Compose(
+            Box::new(Tensor(Box::new(Braid(1, 2)), Box::new(Identity(2)))),
+            Box::new(Tensor(Box::new(Identity(3)), Box::new(Braid(1, 1)))),
+        );
+        assert_eq!(
+            mirror_out,
+            nf(&mirror_padded),
+            "the leading-wide-braid writing and its identity-padded writing share a normal form"
+        );
+
+        assert_eq!(
+            mirror_out,
+            StringDiagram {
+                layers: vec![
+                    Layer {
+                        atoms: vec![Atom::Braid(1, 1), Atom::Identity(3)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(3), Atom::Braid(1, 1)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(1), Atom::Braid(1, 1), Atom::Identity(2)],
+                    },
+                ],
+            },
+            "the leading wide braid expands to Braid(1,1) bricks"
         );
     }
 
@@ -519,7 +557,9 @@ mod joyal_street_braided_regression {
     /// JS-Braided Prop 2.1 p. 33–34 with JS-I Ch 1 §4 Thm 1.2 p. 71
     /// (bifunctoriality): `nf(F ⊗ σ_{1,2} ⊗ σ_{2,1})`, whose lowered layer
     /// mixes a generator with two wide braids, carries no wide braid and no
-    /// mixed layer, and keeps its one `Generator(F)` atom.
+    /// mixed layer, keeps its one `Generator(F)` atom, equals
+    /// `nf(F ⊗ ((σ_{1,2} ⊗ id₃) ; (id₃ ⊗ σ_{2,1})))`, and is the layer list
+    /// asserted below.
     #[test]
     fn a_generator_beside_two_wide_braids_expands_on_the_next_pass() {
         let expr: PropExpr<TestSig> = Tensor(
@@ -543,6 +583,43 @@ mod joyal_street_braided_regression {
             .filter(|a| matches!(a, Atom::Generator(_)))
             .count();
         assert_eq!(generators, 1, "the F atom survives the expansion: {out:?}");
+
+        let padded: PropExpr<TestSig> = Tensor(
+            Box::new(Generator(TestSig::F)),
+            Box::new(Compose(
+                Box::new(Tensor(Box::new(Braid(1, 2)), Box::new(Identity(3)))),
+                Box::new(Tensor(Box::new(Identity(3)), Box::new(Braid(2, 1)))),
+            )),
+        );
+        assert_eq!(
+            out,
+            nf(&padded),
+            "the one-layer writing and the identity-padded writing share a normal form"
+        );
+
+        assert_eq!(
+            out,
+            StringDiagram {
+                layers: vec![
+                    Layer {
+                        atoms: vec![Atom::Identity(1), Atom::Braid(1, 1), Atom::Identity(4)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(5), Atom::Braid(1, 1)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(4), Atom::Braid(1, 1), Atom::Identity(1)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(2), Atom::Braid(1, 1), Atom::Identity(3)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Generator(TestSig::F), Atom::Identity(6)],
+                    },
+                ],
+            },
+            "both wide braids contribute their bricks before the generator layer"
+        );
     }
 
     /// JS-Braided p. 36 picture — mirror of `ch2_thm_2_2_braid_naturality`:

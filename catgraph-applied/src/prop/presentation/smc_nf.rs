@@ -485,8 +485,8 @@ fn normalize_empty_braids<G: PropSignature>(sd: StringDiagram<G>) -> StringDiagr
     StringDiagram { layers }
 }
 
-/// **Step 1**: hexagon-expand every `Atom::Braid(m, n)` with `m+n > 2` into
-/// a layered sequence of `Atom::Braid(1, 1)` bricks.
+/// **Step 1**: hexagon-expand the wide `Atom::Braid(m, n)` (`m+n > 2`) of a
+/// braid-only layer into a layered sequence of `Atom::Braid(1, 1)` bricks.
 ///
 /// Algorithm: `σ_{m,n}` is the permutation
 ///   `π = [m, m+1, ..., m+n-1, 0, 1, ..., m-1]`
