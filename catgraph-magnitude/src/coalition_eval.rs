@@ -8,7 +8,7 @@
 //! query is then an `O(m² + k²)` bordered-matrix update instead of a fresh
 //! `O(m³)` closure plus `O(k³)` inversion.
 //!
-//! # The two paths (BV 2025 §3.5 Eq 7 Möbius sum)
+//! # The three routes (BV 2025 §3.5 Eq 7 Möbius sum)
 //!
 //! Adding `x` borders the coalition's Lawvere metric space with one new point,
 //! `ζ′ = [[ζ_S, u], [vᵀ, 1]]`, where `u`/`v` are the `exp(−t·d)` similarities
@@ -18,6 +18,9 @@
 //!   closure nor merges into an existing skeletal class, `ζ_S` is unchanged and
 //!   the blockwise (Schur) inverse gives a closed form in `O(m² + k²)` with no
 //!   fresh inversion. See [`CoalitionEvaluator::value_with`].
+//! - **Merge-only** — when `x` merges into an existing skeletal class and
+//!   improves no interior closure, the cached `Mag(S)` is returned after the
+//!   `O(m²)` border and branch tests, with no bordered `ζ′` and no inversion.
 //! - **Slow path** — otherwise `ζ_S` is stale: the closed table is bordered in
 //!   `O(m²)` and the crate's shared skeletalize and [`magnitude`] helpers re-run
 //!   on the `(m+1)`-point space.
@@ -81,20 +84,31 @@ pub const SCHUR_SLOW_FALLBACK_TOL: f64 = 1e-12;
 /// `Fast` is the closed-form bordered-Schur update against the cached skeletal
 /// `μ`, taken when `x` neither improves an interior member-to-member closure
 /// nor merges into an existing skeletal class **and** the Schur complement `s`
-/// is well-conditioned. `Slow` and `SlowNearSingular` are the same
-/// border-then-re-skeletalize-and-re-invert route, reached from the branch
-/// tests and from the [`SCHUR_SLOW_FALLBACK_TOL`] guard on `s` respectively.
+/// is well-conditioned. `MergeOnly` is the cached base value returned with no
+/// bordered `ζ′`, taken when `x` merges into a class and improves no interior
+/// closure. `Slow` and `SlowNearSingular` are the same
+/// border-then-re-skeletalize-and-re-invert route, reached from the interior
+/// branch test and from the [`SCHUR_SLOW_FALLBACK_TOL`] guard on `s`
+/// respectively.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum EvalPath {
     /// Bordered Schur update against the cached `μ` (no fresh inversion).
     Fast,
     /// Re-skeletalize + re-invert the bordered `(m+1)`-point table, entered on
-    /// an interior improvement or a skeletal merge.
+    /// an interior improvement.
     Slow,
     /// The same re-skeletalize + re-invert route, entered from the fast branch
     /// because `|s| ≤ SCHUR_SLOW_FALLBACK_TOL · (1 + |vᵀμu|)`.
     SlowNearSingular,
+    /// [`CoalitionEvaluator::base_value`] returned as-is, entered when `x` is a
+    /// mutual-`1.0` clone of a member (`∃i: c[i] == 1.0 && r[i] == 1.0`) and
+    /// opens no interior shortcut.
+    ///
+    /// [`JoinReport::value`] is `base_value()` bitwise on this route, and the
+    /// route returns `Err` only from the candidate-index and
+    /// already-a-member checks.
+    MergeOnly,
 }
 
 /// A structural certificate that a candidate's real diversity increment is
@@ -114,8 +128,8 @@ pub enum EvalPath {
 ///
 /// # Precedence
 ///
-/// At most one proof is reported. [`SkeletalMerge`](Self::SkeletalMerge) routes
-/// through [`EvalPath::Slow`] while the two duplicate proofs are
+/// At most one proof is reported. [`SkeletalMerge`](Self::SkeletalMerge) is
+/// [`EvalPath::MergeOnly`]-only while the two duplicate proofs are
 /// [`EvalPath::Fast`]-only, so those are mutually exclusive; when an incoming
 /// and an outgoing duplicate both hold, the incoming one is reported.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -240,8 +254,9 @@ impl JoinReport {
 
     /// The Schur complement `s = 1 − vᵀμu`, `Some(s)` **iff** the closed-form
     /// fast branch produced the value (so it is `Some` exactly when
-    /// [`path`](Self::path) is [`EvalPath::Fast`], and `None` on both
-    /// [`EvalPath::Slow`] and [`EvalPath::SlowNearSingular`]).
+    /// [`path`](Self::path) is [`EvalPath::Fast`], and `None` on
+    /// [`EvalPath::Slow`], [`EvalPath::SlowNearSingular`] and
+    /// [`EvalPath::MergeOnly`]).
     ///
     /// Exposed as conditioning telemetry: `det ζ′ = det(ζ_S)·s`, so a small `|s|`
     /// is a near-singular bordered `ζ′`.
@@ -503,12 +518,16 @@ impl CoalitionEvaluator {
     ///   covers the direct edge),
     /// - `r[j] = closed(x → j) = maxₖ g_out[k]·closed[k][j]`.
     ///
-    /// Two `O(m²)` tests then select the path:
+    /// Two `O(m²)` tests then select the route:
     /// - **interior improvement** — `∃ i≠j: c[i]·r[j] > closed[i][j]`, so the
     ///   cached `ζ_S` is stale;
     /// - **skeletal merge** — `∃ i: c[i] == 1 && r[i] == 1`, so the skeleton
     ///   shrinks (this also fires when `x` bridges two classes, which needs
     ///   mutual-`1.0` with `x`).
+    ///
+    /// **Merge-only** (merge without improvement). The cached
+    /// [`base_value`](Self::base_value) is returned bitwise, with no bordered
+    /// `ζ′` and no inversion, and reported as [`EvalPath::MergeOnly`].
     ///
     /// **Fast path** (neither test fires). The bordered
     /// `ζ′ = [[ζ_S, u], [vᵀ, 1]]` has a blockwise (Schur) inverse, with
@@ -520,7 +539,7 @@ impl CoalitionEvaluator {
     /// - `p = 1ᵀμu = coweighting·u`, `q = vᵀμ1 = v·weighting`,
     /// - `Mag′ = Mag(S) + (1 − p)(1 − q)/s`.
     ///
-    /// **Slow path** (improvement or merge). The closed table is bordered —
+    /// **Slow path** (interior improvement). The closed table is bordered —
     /// `closed′[i][j] = max(closed[i][j], c[i]·r[j])`, last row/col from `c`/`r`,
     /// corner `1.0` — then re-skeletalized and re-inverted with the crate's
     /// shared [`crate::magnitude::magnitude`] helpers on the `(m+1)`-point
@@ -719,17 +738,24 @@ impl CoalitionEvaluator {
             .any(|i| (0..m).any(|j| i != j && scratch.c[i] * scratch.r[j] > self.closed[i][j]));
         let merge_member = skeletal_merge_member(scratch, m);
 
-        if interior_improvement || merge_member.is_some() {
-            let mut outcome = self.value_with_slow(scratch, m)?;
-            // Merge-only (`merge ∧ ¬interior`) is the exact zero-diversity
-            // predicate; merge ∧ interior is not, so it carries no proof.
-            if REPORT
-                && !interior_improvement
-                && let Some(member) = merge_member
-            {
-                outcome.zero_proof = Some(ZeroDiversityProof::SkeletalMerge { member });
-            }
-            return Ok(outcome);
+        // Merge-only (`merge ∧ ¬interior`) is the exact zero-diversity
+        // predicate, and the bordered table it would build re-derives the
+        // cached `base_mag`: the `m × m` block is `closed` bitwise, `x` joins
+        // one existing class as the last index, so the class representatives
+        // and the skeletal space are the base's. Merge ∧ interior is neither,
+        // so it goes to the slow route without a proof.
+        if let Some(member) = merge_member
+            && !interior_improvement
+        {
+            return Ok(EvalOutcome {
+                value: self.base_mag,
+                path: EvalPath::MergeOnly,
+                zero_proof: REPORT.then_some(ZeroDiversityProof::SkeletalMerge { member }),
+                schur_complement: None,
+            });
+        }
+        if interior_improvement {
+            return self.value_with_slow(scratch, m);
         }
         self.value_with_fast::<REPORT>(scratch, m)
     }
@@ -878,10 +904,9 @@ impl CoalitionEvaluator {
         Ok(EvalOutcome {
             value: mag.0,
             path: EvalPath::Slow,
-            // The caller attaches the merge-only proof (`value_with_core`) and
-            // re-labels the near-singular diversion (`value_with_fast`); the
-            // slow route itself certifies nothing, and `s` was never formed (or,
-            // on the diversion, was not trusted).
+            // The caller re-labels the near-singular diversion
+            // (`value_with_fast`); the slow route itself certifies nothing, and
+            // `s` was never formed (or, on the diversion, was not trusted).
             zero_proof: None,
             schur_complement: None,
         })
@@ -973,12 +998,13 @@ mod tests {
         (a - b).abs() <= INCREMENTAL_REL_TOL * a.abs().max(b.abs()).max(1.0)
     }
 
-    /// Bump `hits`, indexed `[Fast, Slow, SlowNearSingular]`.
-    fn tally(path: EvalPath, hits: &mut [usize; 3]) {
+    /// Bump `hits`, indexed `[Fast, Slow, SlowNearSingular, MergeOnly]`.
+    fn tally(path: EvalPath, hits: &mut [usize; 4]) {
         match path {
             EvalPath::Fast => hits[0] += 1,
             EvalPath::Slow => hits[1] += 1,
             EvalPath::SlowNearSingular => hits[2] += 1,
+            EvalPath::MergeOnly => hits[3] += 1,
         }
     }
 
@@ -1075,10 +1101,11 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Slow path via skeletal merge: x is a mutual-1.0 clone of a member.
+    // Merge-only route: x is a mutual-1.0 clone of a member and opens no
+    // interior shortcut, so the cached base value is returned as-is.
     // -----------------------------------------------------------------------
     #[test]
-    fn slow_path_skeletal_merge() {
+    fn merge_only_returns_base() {
         let agents = ["a", "b", "x"];
         // a→b 0.5; x ⇄ b at 1.0 (perfect clone of b) — skeleton must shrink.
         let couplings = [(0usize, 1usize, 0.5f64), (1, 2, 1.0), (2, 1, 1.0)];
@@ -1086,17 +1113,42 @@ mod tests {
         let t = 1.0;
         let ev = CoalitionEvaluator::new(&agents, &couplings, &members, t).unwrap();
         let (inc, path) = ev.value_with_impl(2, &mut EvalScratch::new()).unwrap();
-        assert_eq!(path, EvalPath::Slow, "mutual-1.0 clone must take slow path");
+        assert_eq!(
+            path,
+            EvalPath::MergeOnly,
+            "mutual-1.0 clone opening no shortcut must take the merge-only route, got {path:?}"
+        );
         let fresh = fresh_with(&agents, &couplings, &members, 2, t).unwrap();
         assert!(
             rel_close(inc, fresh),
-            "slow-merge: inc {inc} vs fresh {fresh}"
+            "merge-only: inc {inc} vs fresh {fresh}"
         );
         // The clone collapses: {a,b,x} has the same effective size as {a,b}.
         let base = ev.base_value();
-        assert!(
-            rel_close(inc, base),
-            "clone of b adds no diversity: {inc} vs base {base}"
+        assert_eq!(
+            inc.to_bits(),
+            base.to_bits(),
+            "clone of b adds no diversity: inc {inc} ({:#x}) vs base {base} ({:#x})",
+            inc.to_bits(),
+            base.to_bits()
+        );
+
+        // (d) The scalar entry points agree bitwise with the reporting one on
+        // this fixture.
+        let rep = ev.value_with_report(2).unwrap();
+        let plain = ev.value_with(2).unwrap();
+        let scratched = ev.value_with_scratch(2, &mut EvalScratch::new()).unwrap();
+        assert_eq!(
+            plain.to_bits(),
+            rep.value().to_bits(),
+            "value_with {plain} vs report {} bitwise",
+            rep.value()
+        );
+        assert_eq!(
+            scratched.to_bits(),
+            rep.value().to_bits(),
+            "value_with_scratch {scratched} vs report {} bitwise",
+            rep.value()
         );
     }
 
@@ -1186,32 +1238,14 @@ mod tests {
         // `| 1` (seed prep) stays at the call site — see catgraph-testutil (#33).
         let mut lcg = Lcg::new(0xC0FFEE | 1);
         let n = NAMES.len();
-        let mut hits = [0usize; 3];
+        let mut hits = [0usize; 4];
         let mut tight_pairs = 0usize;
 
         for m in 2..=10usize {
             // Random dense coupling table over all 12 agents (some structure so
-            // both branches arise): each ordered pair gets a coupling with 60%
-            // probability, value in (0, 1]; occasionally 1.0 to force merges.
-            let mut couplings: Vec<(usize, usize, f64)> = Vec::new();
-            for i in 0..n {
-                for j in 0..n {
-                    if i == j {
-                        continue;
-                    }
-                    if lcg.next_f64() < 0.6 {
-                        let mut p = lcg.next_f64();
-                        if p == 0.0 {
-                            p = 0.01;
-                        }
-                        // ~8% of edges snap to 1.0 to provoke skeletal merges.
-                        if lcg.next_f64() < 0.08 {
-                            p = 1.0;
-                        }
-                        couplings.push((i, j, p));
-                    }
-                }
-            }
+            // the fast and slow routes both arise); ~8% of edges snap to 1.0 to
+            // provoke skeletal merges.
+            let couplings = seeded_couplings(&mut lcg, n, 0.08);
 
             let members: Vec<usize> = (0..m).collect();
             for t in [1.0_f64, 2.0] {
@@ -1275,14 +1309,131 @@ mod tests {
 
         assert_eq!(
             hits,
-            [44usize, 64, 0],
-            "EvalPath hits [Fast, Slow, SlowNearSingular] over the seeded grid"
+            [44usize, 64, 0, 0],
+            "EvalPath hits [Fast, Slow, SlowNearSingular, MergeOnly] over the seeded grid"
         );
         assert_eq!(
             tight_pairs, 0,
             "candidate pairs within 2·INCREMENTAL_REL_TOL on the fresh route — the \
              population over which the ranking assertion is not already implied by \
              the per-candidate value assertion"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // The same grid shape at a snap rate that populates the merge-only route:
+    // seed 0x153_D00D, 45% of edges snapped to 1.0. Carries the first grid's
+    // contract assertions (error parity, value-vs-fresh, and the rank order of
+    // every pair the value assertion separates) plus the merge-only route's own
+    // claims — path ⟺ proof, value bitwise base, no Schur complement.
+    // -----------------------------------------------------------------------
+    #[test]
+    fn seeded_grid_snap45_merge_only() {
+        let mut lcg = Lcg::new(0x0153_D00D | 1);
+        let n = REPORT_NAMES.len();
+        let mut hits = [0usize; 4];
+        let mut tight_pairs = 0usize;
+
+        for m in 2..=10usize {
+            let couplings = seeded_couplings(&mut lcg, n, 0.45);
+            let members: Vec<usize> = (0..m).collect();
+            for t in [1.0_f64, 2.0] {
+                let ev = match CoalitionEvaluator::new(&REPORT_NAMES, &couplings, &members, t) {
+                    Ok(ev) => ev,
+                    Err(_) => continue, // singular base — skip this (S, t)
+                };
+                let base = ev.base_value();
+                let mut ranked: Vec<(f64, f64)> = Vec::new();
+                for candidate in m..n {
+                    let inc = ev.value_with(candidate);
+                    let fresh = fresh_with(&REPORT_NAMES, &couplings, &members, candidate, t);
+                    assert_eq!(
+                        inc.is_ok(),
+                        fresh.is_ok(),
+                        "m={m} t={t} cand={candidate}: error-parity fresh/incremental"
+                    );
+                    if let (Ok(inc), Ok(fresh)) = (inc, fresh) {
+                        assert!(
+                            rel_close(inc, fresh),
+                            "m={m} t={t} cand={candidate}: inc {inc} vs fresh {fresh}"
+                        );
+                        let rep = ev
+                            .value_with_report(candidate)
+                            .expect("invariant: value_with just succeeded on this candidate");
+                        tally(rep.path(), &mut hits);
+
+                        let is_merge_only = rep.path() == EvalPath::MergeOnly;
+                        let has_merge_proof = matches!(
+                            rep.zero_proof(),
+                            Some(ZeroDiversityProof::SkeletalMerge { .. })
+                        );
+                        assert_eq!(
+                            is_merge_only,
+                            has_merge_proof,
+                            "m={m} t={t} cand={candidate}: path {:?} vs proof {:?} — \
+                             MergeOnly ⟺ SkeletalMerge",
+                            rep.path(),
+                            rep.zero_proof()
+                        );
+                        if is_merge_only {
+                            assert_eq!(
+                                rep.value().to_bits(),
+                                base.to_bits(),
+                                "m={m} t={t} cand={candidate}: merge-only value {} ({:#x}) \
+                                 vs base {base} ({:#x}), bitwise",
+                                rep.value(),
+                                rep.value().to_bits(),
+                                base.to_bits()
+                            );
+                            assert_eq!(
+                                rep.schur_complement(),
+                                None,
+                                "m={m} t={t} cand={candidate}: merge-only reports no Schur \
+                                 complement"
+                            );
+                        }
+                        ranked.push((inc, fresh));
+                    }
+                }
+
+                // Rank-order identity (contract point 3) over the pairs the
+                // per-candidate value assertion separates; on every such pair
+                // that assertion already forces the order, so this block is a
+                // consistency check. Pairs whose fresh values agree to within
+                // `2·INCREMENTAL_REL_TOL` go to `tight_pairs` and are left
+                // unordered.
+                for a in 0..ranked.len() {
+                    for b in (a + 1)..ranked.len() {
+                        let (inc_a, fresh_a) = ranked[a];
+                        let (inc_b, fresh_b) = ranked[b];
+                        let sep =
+                            2.0 * INCREMENTAL_REL_TOL * fresh_a.abs().max(fresh_b.abs()).max(1.0);
+                        if (fresh_a - fresh_b).abs() <= sep {
+                            tight_pairs += 1;
+                            continue;
+                        }
+                        assert_eq!(
+                            inc_a < inc_b,
+                            fresh_a < fresh_b,
+                            "m={m} t={t}: separated pair inc ({inc_a}, {inc_b}) vs \
+                             fresh ({fresh_a}, {fresh_b}) must rank the same on both routes"
+                        );
+                    }
+                }
+            }
+        }
+
+        assert_eq!(
+            hits,
+            [36usize, 58, 0, 14],
+            "EvalPath hits [Fast, Slow, SlowNearSingular, MergeOnly] over the snap-0.45 grid, \
+             got {hits:?}"
+        );
+        assert_eq!(
+            tight_pairs, 188,
+            "candidate pairs within 2·INCREMENTAL_REL_TOL on the fresh route — the clone-heavy \
+             population over which the ranking assertion is not already implied by the \
+             per-candidate value assertion, got {tight_pairs}"
         );
     }
 
@@ -1339,15 +1490,15 @@ mod tests {
             "incremental ranking must equal fresh ranking"
         );
 
-        let mut hits = [0usize; 3];
+        let mut hits = [0usize; 4];
         for &c in &candidates {
             let (_, path) = ev.value_with_impl(c, &mut EvalScratch::new()).unwrap();
             tally(path, &mut hits);
         }
         assert_eq!(
             hits,
-            [6usize, 0, 0],
-            "EvalPath hits [Fast, Slow, SlowNearSingular] over this fixture's candidates"
+            [6usize, 0, 0, 0],
+            "EvalPath hits [Fast, Slow, SlowNearSingular, MergeOnly] over this fixture's candidates"
         );
     }
 
@@ -1487,7 +1638,7 @@ mod tests {
         // `| 1` (seed prep) stays at the call site — see catgraph-testutil (#33).
         let mut lcg = Lcg::new(0xC0FFEE | 1);
         let n = NAMES.len();
-        let mut hits = [0usize; 3];
+        let mut hits = [0usize; 4];
 
         for m in 2..=10usize {
             let mut couplings: Vec<(usize, usize, f64)> = Vec::new();
@@ -1541,8 +1692,9 @@ mod tests {
 
         assert_eq!(
             hits,
-            [44usize, 64, 0],
-            "EvalPath hits [Fast, Slow, SlowNearSingular] tallied on a fresh scratch per candidate"
+            [44usize, 64, 0, 0],
+            "EvalPath hits [Fast, Slow, SlowNearSingular, MergeOnly] tallied on a fresh scratch \
+             per candidate"
         );
     }
 
@@ -1763,7 +1915,7 @@ mod tests {
     }
 
     /// Merge-only (`skeletal_merge ∧ ¬interior_improvement`) — the exact
-    /// zero-diversity predicate. Same fixture as `slow_path_skeletal_merge`:
+    /// zero-diversity predicate. Same fixture as `merge_only_returns_base`:
     /// `a→b` at `0.5`, `x ⇄ b` at `1.0`.
     #[test]
     fn report_merge_only_proof() {
@@ -1776,13 +1928,14 @@ mod tests {
 
         assert_eq!(
             rep.path(),
-            EvalPath::Slow,
-            "mutual-1.0 clone takes the slow path"
+            EvalPath::MergeOnly,
+            "mutual-1.0 clone opening no shortcut takes the merge-only route, got {:?}",
+            rep.path()
         );
         assert_eq!(
             rep.schur_complement(),
             None,
-            "no Schur complement on the slow route"
+            "no Schur complement on the merge-only route"
         );
         assert_eq!(
             rep.zero_proof(),
@@ -1790,12 +1943,25 @@ mod tests {
             "x is a perfect clone of member 1 and opens no shortcut"
         );
         assert!(rep.is_provably_zero());
-        // Memo §4: all 268 merge-only candidates are exactly zero on the
-        // incremental route AND bit-identical to fresh (max rel. deviation 0.0).
         assert_eq!(rep.increment(), 0.0, "merge-only increment is exactly 0.0");
-        assert_eq!(rep.value(), rep.base(), "merge-only value == base, bitwise");
+        assert_eq!(
+            rep.value().to_bits(),
+            rep.base().to_bits(),
+            "merge-only value {} ({:#x}) vs base {} ({:#x}), bitwise",
+            rep.value(),
+            rep.value().to_bits(),
+            rep.base(),
+            rep.base().to_bits()
+        );
         let fresh = fresh_with(&agents, &couplings, &members, 2, t).unwrap();
-        assert_eq!(rep.value(), fresh, "merge-only is fresh-bitwise-equal");
+        assert_eq!(
+            rep.value().to_bits(),
+            fresh.to_bits(),
+            "merge-only value {} ({:#x}) vs fresh {fresh} ({:#x}), bitwise",
+            rep.value(),
+            rep.value().to_bits(),
+            fresh.to_bits()
+        );
     }
 
     /// Merge **∧** interior improvement: `x` is a mutual-`1.0` clone of member
@@ -1935,7 +2101,7 @@ mod tests {
     /// proof-carrying candidate really is a zero — a genuinely fresh
     /// `Mag(S ∪ {x})` sits within `1e-12` relative of `Mag(S)` — and no proof is
     /// ever attached to a route that cannot carry it (duplicates are fast-path
-    /// only; the slow path carries at most a merge proof).
+    /// only; the merge proof is merge-only-route only).
     #[test]
     fn report_proof_soundness_sweep() {
         let n = REPORT_NAMES.len();
@@ -1975,18 +2141,19 @@ mod tests {
                                 assert!(member < m, "merge witness must be a member index");
                                 assert_eq!(
                                     rep.path(),
-                                    EvalPath::Slow,
+                                    EvalPath::MergeOnly,
                                     "seed={seed:#x} m={m} t={t} cand={candidate}: \
-                                     merge proof is slow-route only"
+                                     merge proof is merge-only-route only, got {:?}",
+                                    rep.path()
                                 );
-                                // Memo §4: merge-only candidates are exactly
-                                // zero on the incremental route (268/268 there;
-                                // 14/14 across these corpora).
                                 assert_eq!(
-                                    rep.value(),
-                                    base,
+                                    rep.value().to_bits(),
+                                    base.to_bits(),
                                     "seed={seed:#x} m={m} t={t} cand={candidate}: \
-                                     merge-only must be value == base, bitwise"
+                                     merge-only value {} ({:#x}) vs base {base} ({:#x}), bitwise",
+                                    rep.value(),
+                                    rep.value().to_bits(),
+                                    base.to_bits()
                                 );
                             }
                             ZeroDiversityProof::IncomingProfileDuplicate { member }
@@ -2099,6 +2266,56 @@ mod tests {
                 EvalPath::Fast,
                 "m={m}: bench fixture must be fast-path"
             );
+        }
+    }
+
+    /// Mirror of the bench's `build_merge_only_fixture`
+    /// (`benches/magnitude_bench.rs`): the `merge_only_sweep` bench measures the
+    /// merge-only route only if every candidate of this construction takes it.
+    #[test]
+    fn bench_merge_only_fixture_is_merge_only() {
+        const SWEEP_CANDIDATES: usize = 8;
+        for m in [4usize, 8, 16] {
+            let n = m + SWEEP_CANDIDATES;
+            let agents: Vec<usize> = (0..n).collect();
+            let mut rng = Lcg::new(0xA11CE | 1);
+            let mut couplings: Vec<(usize, usize, f64)> = Vec::new();
+            for i in 0..m {
+                for j in 0..m {
+                    if i != j {
+                        couplings.push((i, j, 0.91 + 0.04 * rng.next_f64()));
+                    }
+                }
+            }
+            for c in m..n {
+                couplings.push((c, c % m, 1.0));
+                couplings.push((c % m, c, 1.0));
+            }
+            let members: Vec<usize> = (0..m).collect();
+            let ev = CoalitionEvaluator::new(&agents, &couplings, &members, 1.0).unwrap();
+            assert_eq!(
+                ev.mu.len(),
+                m,
+                "m={m}: no member coupling is 1.0, so the skeleton must stay full"
+            );
+            for cand in m..n {
+                let (value, path) = ev
+                    .value_with_impl(cand, &mut EvalScratch::new())
+                    .expect("candidate must evaluate");
+                assert_eq!(
+                    path,
+                    EvalPath::MergeOnly,
+                    "m={m} cand={cand}: bench fixture must be merge-only, got {path:?}"
+                );
+                assert_eq!(
+                    value.to_bits(),
+                    ev.base_value().to_bits(),
+                    "m={m} cand={cand}: merge-only value {value} ({:#x}) vs base {} ({:#x})",
+                    value.to_bits(),
+                    ev.base_value(),
+                    ev.base_value().to_bits()
+                );
+            }
         }
     }
 }
