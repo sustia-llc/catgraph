@@ -7,6 +7,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [workspace-v0.19.1] - 2026-09-07
+
+### Changed
+
+- `Hypergraph::compare -> CausalComparison` (new) and `is_isomorphic_to` are
+  exact up to `CausalGraph::MAX_SEARCH_STEPS`: a typed incidence digraph goes
+  through the colour refinement and backtracking search now shared with
+  `CausalGraph::compare` in a private `hypergraph/isomorphism.rs`, nodes
+  placed in an arc-connected order. `Hypergraph::fingerprint` is invariant
+  under vertex relabelling and edge reordering; `find_merges` partitions each
+  fingerprint bucket into isomorphism classes and `find_wilson_loops` closes
+  loops within a class, so relabelled isomorphic states merge: the `collapse`
+  fixture reports 3 groups and 33 loops, and `{{0,1,2}}` under
+  `wolfram_a_to_bb` + `edge_split` to depth 3 reports 16 loops and is not
+  causally invariant ([#437](https://github.com/sustia-llc/catgraph/pull/437)).
+- `CausalComparison` covers both comparisons; README names the
+  `Hypergraph::compare` arm
+  ([#437](https://github.com/sustia-llc/catgraph/pull/437)).
+
+### Added — tests
+
+- `compare_settles_the_pairs_the_prefilter_leaves_open`,
+  `equal_fingerprints_do_not_imply_isomorphism`,
+  `fingerprint_is_invariant_and_separating`,
+  `compare_decides_vertex_transitive_inputs`,
+  `merges_and_loops_range_over_isomorphism_classes_not_buckets`,
+  `eight_cycle_siblings_open_one_group_and_one_loop`,
+  `multiway_fixtures_merge_their_isomorphic_states`; the canonical
+  `hypergraph_compare_agrees_with_brute_force_permutation_isomorphism` arm
+  over a corpus of at most 8 vertices
+  ([#437](https://github.com/sustia-llc/catgraph/pull/437)).
+
 ## [workspace-v0.19.0] - 2026-09-07
 
 ### Changed — BREAKING
@@ -263,7 +295,8 @@ First monorepo release.
   `ConfluenceDiamond`, `confluence_diamonds`, `parallel_independent_events`,
   `events_commute`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...HEAD
+[workspace-v0.19.1]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...v0.19.1
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0

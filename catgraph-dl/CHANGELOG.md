@@ -342,7 +342,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
   `F64Rig`, `BoolRig`, `EnrichedCategory`, `HomMap`, `LawvereMetricSpace`;
   private `hopf_fibration` stub.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...HEAD
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0

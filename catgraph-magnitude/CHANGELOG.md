@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.19.1] - 2026-09-07
+
+### Changed
+
+- `CoalitionEvaluator::value_with` returns the cached `base_value()` as
+  `EvalPath::MergeOnly` (a new variant) with the `SkeletalMerge` proof and no
+  Schur complement when the candidate is a mutual-`1.0` clone of a member and
+  opens no interior shortcut; a merge with an interior improvement stays
+  `Slow` ([#436](https://github.com/sustia-llc/catgraph/pull/436)).
+
+### Added — tests
+
+- `seeded_grid_snap45_merge_only` (seed `0x153_D00D`, snap 0.45) and
+  `bench_merge_only_fixture_is_merge_only`; `benches/magnitude_bench.rs` gains
+  `coalition_incremental/merge_only_sweep`
+  ([#436](https://github.com/sustia-llc/catgraph/pull/436)).
+
 ## [workspace-v0.19.0] - 2026-09-07
 
 ### Changed
@@ -572,7 +589,8 @@ arXiv:2501.06662v2).
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...HEAD
+[workspace-v0.19.1]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...v0.19.1
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
