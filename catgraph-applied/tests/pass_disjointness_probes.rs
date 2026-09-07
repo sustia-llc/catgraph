@@ -921,6 +921,168 @@ fn split_presence_both_readings_pair_is_newly_seeded() {
     );
 }
 
+/// JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) with JS-I Ch 2 §1 axiom (S)
+/// p. 73 in its `σ_{0,n} = id` form: `(Ea ; Ff) ⊗ (Ff ; Ka)` and the
+/// key-ordered writing `(Ff ; Ka) ⊗ (Ea ; Ff)` reach the same
+/// `nf_without_column_pass` — the layers `[Ff, Ea]` then `[Ka, Ff]` — and `nf`
+/// reaches it too.
+#[test]
+fn step7_transposes_the_boundary_free_block_pair() {
+    let written = par(
+        seq(prim(Hunt::Ea), prim(Hunt::Ff)),
+        seq(prim(Hunt::Ff), prim(Hunt::Ka)),
+    );
+    let key_ordered = par(
+        seq(prim(Hunt::Ff), prim(Hunt::Ka)),
+        seq(prim(Hunt::Ea), prim(Hunt::Ff)),
+    );
+    let expected = StringDiagram {
+        layers: vec![
+            Layer {
+                atoms: vec![Atom::Generator(Hunt::Ff), Atom::Generator(Hunt::Ea)],
+            },
+            Layer {
+                atoms: vec![Atom::Generator(Hunt::Ka), Atom::Generator(Hunt::Ff)],
+            },
+        ],
+    };
+    assert_eq!(
+        nf_without_column_pass(&written),
+        expected,
+        "the written order must reach the key-ordered layout without the column pass"
+    );
+    assert_eq!(
+        nf_without_column_pass(&key_ordered),
+        expected,
+        "the key-ordered writing must be a fixpoint without the column pass"
+    );
+    assert_eq!(
+        nf(&written),
+        expected,
+        "the column pass must reach the same layout"
+    );
+}
+
+/// JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) with JS-I Ch 2 §1 axiom (S)
+/// p. 73 in its `σ_{0,n} = id` form: on `Zero ; (Zero ⊗ Discard ⊗ Zero) ; Add`
+/// over `BoolRig`, `nf` returns the two layers `[Zero, Zero, Zero]` and
+/// `[Discard, Add]`, while `nf_without_column_pass` returns the three layers
+/// `[Zero, Zero, Zero]`, `[Identity(1), Discard, Identity(1)]` and `[Add]`.
+#[test]
+fn shipped_column_move_merges_discard_into_the_add_layer() {
+    let expr = seq(
+        seq(
+            prim::<Sfg>(SfgGenerator::Zero),
+            par(
+                par(
+                    prim::<Sfg>(SfgGenerator::Zero),
+                    prim::<Sfg>(SfgGenerator::Discard),
+                ),
+                prim::<Sfg>(SfgGenerator::Zero),
+            ),
+        ),
+        prim::<Sfg>(SfgGenerator::Add),
+    );
+    let zeros = Layer {
+        atoms: vec![
+            Atom::Generator(SfgGenerator::Zero),
+            Atom::Generator(SfgGenerator::Zero),
+            Atom::Generator(SfgGenerator::Zero),
+        ],
+    };
+    assert_eq!(
+        nf(&expr),
+        StringDiagram {
+            layers: vec![
+                zeros.clone(),
+                Layer {
+                    atoms: vec![
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Generator(SfgGenerator::Add),
+                    ],
+                },
+            ],
+        },
+        "the column pass must land Discard and Add in one layer"
+    );
+    assert_eq!(
+        nf_without_column_pass(&expr),
+        StringDiagram {
+            layers: vec![
+                zeros,
+                Layer {
+                    atoms: vec![
+                        Atom::Identity(1),
+                        Atom::Generator(SfgGenerator::Discard),
+                        Atom::Identity(1),
+                    ],
+                },
+                Layer {
+                    atoms: vec![Atom::Generator(SfgGenerator::Add)],
+                },
+            ],
+        },
+        "without the column pass Discard stays in a layer of its own"
+    );
+}
+
+/// JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) with JS-I Ch 2 §1 axiom (S)
+/// p. 73 in its `σ_{0,n} = id` form: on the four-layer `2 → 1` diagram
+/// `(s ⊗ Zero ⊗ Discard) ; (s ⊗ Copy) ; (Discard ⊗ s ⊗ Discard ⊗ Zero) ;
+/// (Discard ⊗ Discard ⊗ Zero)` over `BoolRig` with `s = Scalar(false)`, `nf`
+/// returns inside `nf_timed`'s budget, and returns the layers
+/// `[Zero, Zero, s, Discard]`, `[Copy, Discard, s]`,
+/// `[s, Zero, Discard, Discard]`, `[Discard, Identity(1)]`.
+#[test]
+fn shipped_four_layer_scalar_copy_diagram_terminates() {
+    let s = || prim::<Sfg>(SfgGenerator::Scalar(BoolRig(false)));
+    let d = || prim::<Sfg>(SfgGenerator::Discard);
+    let z = || prim::<Sfg>(SfgGenerator::Zero);
+    let c = || prim::<Sfg>(SfgGenerator::Copy);
+    let expr = seq(
+        seq(
+            seq(par(par(s(), z()), d()), par(s(), c())),
+            par(par(par(d(), s()), d()), z()),
+        ),
+        par(par(d(), d()), z()),
+    );
+    let expected = StringDiagram {
+        layers: vec![
+            Layer {
+                atoms: vec![
+                    Atom::Generator(SfgGenerator::Zero),
+                    Atom::Generator(SfgGenerator::Zero),
+                    Atom::Generator(SfgGenerator::Scalar(BoolRig(false))),
+                    Atom::Generator(SfgGenerator::Discard),
+                ],
+            },
+            Layer {
+                atoms: vec![
+                    Atom::Generator(SfgGenerator::Copy),
+                    Atom::Generator(SfgGenerator::Discard),
+                    Atom::Generator(SfgGenerator::Scalar(BoolRig(false))),
+                ],
+            },
+            Layer {
+                atoms: vec![
+                    Atom::Generator(SfgGenerator::Scalar(BoolRig(false))),
+                    Atom::Generator(SfgGenerator::Zero),
+                    Atom::Generator(SfgGenerator::Discard),
+                    Atom::Generator(SfgGenerator::Discard),
+                ],
+            },
+            Layer {
+                atoms: vec![Atom::Generator(SfgGenerator::Discard), Atom::Identity(1)],
+            },
+        ],
+    };
+    assert_eq!(
+        nf_timed(&expr, "four-layer-scalar-copy"),
+        expected,
+        "unexpected four-layer fixpoint layout"
+    );
+}
+
 // ============================================================================
 // Enumerated divergence / livelock hunt over scalar-and-block families
 // ============================================================================

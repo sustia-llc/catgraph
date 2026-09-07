@@ -12,8 +12,8 @@ use catgraph_applied::prop::{PropExpr, PropSignature, mono_word};
 use std::borrow::Cow;
 
 /// Shared test signature covering all four papers' tested arities:
-/// `F, G : 1 → 1`, `H : 2 → 1`, `Eps : 1 → 0`, `Eta : 0 → 1`. `H` exercises
-/// multi-wire generators in interchange/braiding patterns.
+/// `F, G : 1 → 1`, `H : 2 → 1`, `Eps : 1 → 0`, `Eta : 0 → 1`, `S : 0 → 0`. `H`
+/// exercises multi-wire generators in interchange/braiding patterns.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum TestSig {
     F,
@@ -21,6 +21,7 @@ enum TestSig {
     H,
     Eps,
     Eta,
+    S,
 }
 
 impl PropSignature for TestSig {
@@ -36,13 +37,13 @@ impl PropSignature for TestSig {
         match self {
             TestSig::F | TestSig::G | TestSig::Eps => 1,
             TestSig::H => 2,
-            TestSig::Eta => 0,
+            TestSig::Eta | TestSig::S => 0,
         }
     }
     fn target(&self) -> usize {
         match self {
             TestSig::F | TestSig::G | TestSig::H | TestSig::Eta => 1,
-            TestSig::Eps => 0,
+            TestSig::Eps | TestSig::S => 0,
         }
     }
 }
@@ -415,6 +416,48 @@ mod joyal_street_braided_regression {
         assert_eq!(nf(&with_id), nf(&id_3));
     }
 
+    /// JS-Braided Prop 2.1 / axiom (B2) p. 33–34: `nf(σ_{1,2} ⊗ σ_{2,1})` — the
+    /// two wide braids written in one layer — is that layer unchanged, while
+    /// `nf((σ_{1,2} ⊗ id₃) ; (id₃ ⊗ σ_{2,1}))` is four `Braid(1,1)` brick layers.
+    #[test]
+    fn two_wide_braids_in_one_layer_are_not_expanded() {
+        let one_layer: PropExpr<TestSig> = Tensor(Box::new(Braid(1, 2)), Box::new(Braid(2, 1)));
+        assert_eq!(
+            nf(&one_layer),
+            StringDiagram {
+                layers: vec![Layer {
+                    atoms: vec![Atom::Braid(1, 2), Atom::Braid(2, 1)],
+                }],
+            },
+            "the two-wide-braid layer reaches the normal form unexpanded"
+        );
+
+        let padded: PropExpr<TestSig> = Compose(
+            Box::new(Tensor(Box::new(Braid(1, 2)), Box::new(Identity(3)))),
+            Box::new(Tensor(Box::new(Identity(3)), Box::new(Braid(2, 1)))),
+        );
+        assert_eq!(
+            nf(&padded),
+            StringDiagram {
+                layers: vec![
+                    Layer {
+                        atoms: vec![Atom::Braid(1, 1), Atom::Identity(4)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(4), Atom::Braid(1, 1)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(3), Atom::Braid(1, 1), Atom::Identity(1)],
+                    },
+                    Layer {
+                        atoms: vec![Atom::Identity(1), Atom::Braid(1, 1), Atom::Identity(3)],
+                    },
+                ],
+            },
+            "each identity-padded wide braid expands to Braid(1,1) bricks"
+        );
+    }
+
     /// JS-Braided p. 36 picture — mirror of `ch2_thm_2_2_braid_naturality`:
     /// `(f ⊗ g) ; σ_{1,1} = σ_{1,1} ; (g ⊗ f)`. Confirms naturality in the
     /// other direction (generators on the left of the braid).
@@ -774,6 +817,25 @@ mod review_soundness_fixes {
             expected,
             "the free pair straddles the braid block's atoms in the two middle \
              layers, so Step 7 leaves it where it is"
+        );
+    }
+
+    /// JS-I Ch 1 §4 Thm 1.2 p. 71 (bifunctoriality) specialized to a 0-arity
+    /// edge: `nf(S ⊗ S)` on the `0 → 0` generator `S` is the single layer
+    /// `[S, S]`.
+    #[test]
+    fn equal_adjacent_scalars_reach_a_fixpoint() {
+        use super::{Atom, Layer, StringDiagram};
+
+        let s = || Generator(TestSig::S);
+        assert_eq!(
+            nf(&Tensor(b(s()), b(s()))),
+            StringDiagram {
+                layers: vec![Layer {
+                    atoms: vec![Atom::Generator(TestSig::S), Atom::Generator(TestSig::S)],
+                }],
+            },
+            "the equal scalar pair reaches a fixpoint in its written order"
         );
     }
 }
