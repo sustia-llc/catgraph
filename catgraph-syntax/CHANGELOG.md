@@ -7,6 +7,15 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+## [workspace-v0.19.0] - 2026-09-07
+
+### Changed — tests
+
+- `tests/persistence.rs` decides its premise in-test with `eq_mod` on the
+  axiom-free presentation; `tests/printer_golden.rs` drops the definitional
+  `pretty_adapter_agrees_with_print`
+  ([#422](https://github.com/sustia-llc/catgraph/pull/422)).
+
 ## [workspace-v0.18.0] - 2026-09-05
 
 ### Added
@@ -259,7 +268,8 @@ surface for hypergraph-category morphisms over catgraph-applied's
   coherence law `eval(t.term(), &m, in.flatten()) == Ok(t.run(in).flatten())`
   ([#90](https://github.com/sustia-llc/catgraph/pull/90)).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...HEAD
+[workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0

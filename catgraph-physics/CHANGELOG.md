@@ -7,6 +7,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [workspace-v0.19.0] - 2026-09-07
+
+### Changed — BREAKING
+
+- `HypergraphLattice<D>` links are `DMatrix<f64>` of side `link_dim`, behind a
+  default-on `gauge` feature (`dep:nalgebra`): `new(dimensions, group, rules,
+  link_dim)` (panics at `link_dim` 0), `record_transition(from, to,
+  DMatrix<f64>) -> bool`; `link`, `link_dim`, `loop_holonomy` (`U_k · … ·
+  U_1`), `is_flat(path, eps)` and `gauge_transform` are new; `wilson_loop` is
+  `tr(H) / link_dim`; `hypergraph::gauge`, `tests/gauge_theory.rs`, the
+  canonical gauge arm and `examples/gauge.rs` are feature-gated
+  ([#426](https://github.com/sustia-llc/catgraph/pull/426)).
+
+### Changed
+
+- `docs/ANCHORS.md` gains `[Wil74]` and the `gauge.rs` provenance row; README
+  gains the `gauge` feature row
+  ([#426](https://github.com/sustia-llc/catgraph/pull/426)).
+
+### Added — tests
+
+- `tests/gauge_theory.rs`: `is_flat` at a second `eps` and at the boundary,
+  `gauge_transform` endpoint keys and an inadmissible value, an overflowing
+  link product, a repeated-site holonomy
+  ([#429](https://github.com/sustia-llc/catgraph/pull/429)).
+
+### Added — tooling
+
+- `ci.yml`: a physics `--no-default-features --features gauge` clippy lane
+  ([#429](https://github.com/sustia-llc/catgraph/pull/429)).
+
 ## [workspace-v0.18.0] - 2026-09-05
 
 ### Added
@@ -232,7 +263,8 @@ First monorepo release.
   `ConfluenceDiamond`, `confluence_diamonds`, `parallel_independent_events`,
   `events_commute`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...HEAD
+[workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.14.0]: https://github.com/sustia-llc/catgraph/compare/v0.13.0...v0.14.0

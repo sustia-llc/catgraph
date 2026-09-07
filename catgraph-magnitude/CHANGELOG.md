@@ -13,6 +13,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.19.0] - 2026-09-07
+
+### Changed
+
+- `snf_rank_with_cross_check` returns the larger of the two agreeing ranks on
+  the tertiary-prime branch
+  ([#420](https://github.com/sustia-llc/catgraph/pull/420)).
+- `phase_1_to_bidiagonal` carries a `debug_assert!` that each `band_reduction`
+  step lowers the bandwidth; its `# Panics` names it
+  ([#419](https://github.com/sustia-llc/catgraph/pull/419)).
+
+### Added — tests
+
+- SNF layer: `assert_unimodular` in `tests/common/snf_invariants.rs`, echelon
+  rank and `T` assertions with a rank-deficient 2×2, phase-1 unimodularity
+  ([#419](https://github.com/sustia-llc/catgraph/pull/419)).
+- `tests/homology_rank_svd_oracle.rs` (`f64-fast`): homology rank and
+  per-prime SNF rank against an SVD rank oracle, plus the `snf_rank_with_cross_check`
+  branch pins in `src/chain_complex/homology.rs`
+  ([#420](https://github.com/sustia-llc/catgraph/pull/420)).
+- `tests/chain_complex_basic.rs` boundary shape and entry pins;
+  `tests/mobius_invertibility.rs` asserts the full graded count vector
+  ([#421](https://github.com/sustia-llc/catgraph/pull/421)).
+- `tests/snf_band.rs`: `band_reduction_needs_every_shift_step` at `t_param = 4`
+  ([#429](https://github.com/sustia-llc/catgraph/pull/429)).
+- `tests/weighted_cospan.rs`: the file-local `cospan_eq` is `prop_assert_eq!`
+  ([#430](https://github.com/sustia-llc/catgraph/pull/430)).
+
 ## [workspace-v0.18.0] - 2026-09-05
 
 ### Added
@@ -544,7 +572,8 @@ arXiv:2501.06662v2).
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...HEAD
+[workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0

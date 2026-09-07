@@ -6,6 +6,41 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+## [workspace-v0.19.0] - 2026-09-07
+
+### Changed — BREAKING
+
+- `Span::is_left_identity()` / `is_right_identity()` are computed on each call
+  as the boundary-length conjunct with `represents_id` on the leg; the cached
+  `is_left_id` / `is_right_id` flags are gone and `Span::assert_valid()` takes
+  no parameters ([#424](https://github.com/sustia-llc/catgraph/pull/424)).
+- `Cospan::structurally_equal` deleted; `==` is the same predicate
+  ([#430](https://github.com/sustia-llc/catgraph/pull/430)).
+
+### Changed
+
+- The eight `.unwrap()`s in `Rel` (`union`, `intersection`, the four
+  predicates) are `.expect` naming the precondition each `# Panics` states;
+  `Rel::complement`'s `# Errors` names the grid-cell condition `add_middle`
+  checks ([#430](https://github.com/sustia-llc/catgraph/pull/430)).
+- `tests/common/mod.rs` loses `cospan_eq` / `assert_cospan_eq` /
+  `assert_cospan_eq_msg`; callers use `==` / `assert_eq!`
+  ([#430](https://github.com/sustia-llc/catgraph/pull/430)).
+- `tests/spider_theorem.rs` lifts the `m == n == 0` and component-closing
+  exclusions; both claim tests assert `scalar_count()` and `apex_len()` on
+  every corpus term ([#423](https://github.com/sustia-llc/catgraph/pull/423)).
+- Hand-maintained test counts in `src/hypergraph_category.rs` and five test
+  files are cut or dated by the commit that measured them
+  ([#431](https://github.com/sustia-llc/catgraph/pull/431)).
+
+### Added — tests
+
+- `tests/checked_mutators.rs`: `Span` identity pins over the boundary length,
+  recomputation, the permutation constructors and six mutators
+  ([#424](https://github.com/sustia-llc/catgraph/pull/424)).
+- `Rel` set-law, dedup, boundary-guard and `complement`-`Err` pins
+  ([#430](https://github.com/sustia-llc/catgraph/pull/430)).
+
 ## [workspace-v0.18.0] - 2026-09-05
 
 ### Added
@@ -1109,7 +1144,8 @@ downstream koalisi.
   §3.3 io/ff factorization, the global Grothendieck form, LinRel examples) are
   catalogued in [`docs/FS19-AUDIT.md`](docs/FS19-AUDIT.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...HEAD
+[workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0

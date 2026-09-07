@@ -13,6 +13,69 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.19.0] - 2026-09-07
+
+### Added
+
+- `MatR::trace` and `MatKron::trace` (`Option<R>`, `None` off the square);
+  `mat_f64::{solve, rank, one_norm, frobenius_norm}` under `f64-rig`;
+  `examples/mat_operations.rs` §4 calls each
+  ([#425](https://github.com/sustia-llc/catgraph/pull/425)).
+
+### Fixed
+
+- `smc_nf::nf` expands every wide braid of a braid-only layer: `hexagon_expand`
+  fires on any layer whose atoms are all `Identity` or `Braid` with at least
+  one wide braid, emitting each braid's bricks in source order and the
+  residual atoms as one layer; a layer holding several braids no longer
+  reaches the fixpoint unexpanded, so the normal form of every expression
+  whose lowering holds such a layer changes; `docs/SMC-NF-RECONCILIATION.md`
+  §2.2 states the rule ([#435](https://github.com/sustia-llc/catgraph/pull/435)).
+
+### Changed
+
+- `RewriteOutcome` rustdoc states the equal-cost tie rule: the first reached
+  is kept ([#432](https://github.com/sustia-llc/catgraph/pull/432)).
+- `decorated_cospan.rs` and `temperley_lieb.rs` rustdoc read `==` for `Cospan`
+  equality; `tests/common/mod.rs` loses `cospan_eq`
+  ([#430](https://github.com/sustia-llc/catgraph/pull/430)).
+- `mat_f64` module doc, README and `docs/FS18-AUDIT.md` name the new `mat_f64`
+  operations ([#425](https://github.com/sustia-llc/catgraph/pull/425));
+  `docs/FS18-AUDIT.md`'s Thm 6.55 row reads the lifted spider-theorem
+  exclusions ([#423](https://github.com/sustia-llc/catgraph/pull/423)).
+- `tests/braiding_cross_carrier.rs` calls `Span::assert_valid()` without
+  parameters ([#424](https://github.com/sustia-llc/catgraph/pull/424)).
+- Hand-maintained test counts in `tests/graphical_linalg.rs` and
+  `tests/rayon_equivalence.rs` are cut or dated
+  ([#431](https://github.com/sustia-llc/catgraph/pull/431)).
+
+### Added — tests
+
+- `temperley_lieb.rs`: `monoidal` on a non-square Brauer factor in both orders
+  ([#430](https://github.com/sustia-llc/catgraph/pull/430)).
+- `tests/mat.rs` and `tests/mat_f64.rs`: the `trace`, `solve`, `rank` and norm
+  pins ([#425](https://github.com/sustia-llc/catgraph/pull/425)).
+- `tests/rewrite.rs`: a two-hop return path is not convex, `RewriteStep::rule`,
+  one unit of fuel per application, the equal-cost tie, `replay` rejecting an
+  out-of-range, repeated or mislabeled assignment
+  ([#432](https://github.com/sustia-llc/catgraph/pull/432)).
+- `tests/presentation.rs`: rewritten-term pins for SMC rules 1, 4, 6 and 7,
+  `eq_mod` undecided when one side alone hits the depth bound,
+  `eq_mod_functorial_colored` on a one-word mismatch,
+  `PresentedProp::presentation`
+  ([#433](https://github.com/sustia-llc/catgraph/pull/433)).
+- `tests/congruence_closure.rs`: atom-canonical preference, congruence through
+  an atom-free class on either child, re-filing under the second child's root,
+  the propagate/refine loop past a merging refinement
+  ([#434](https://github.com/sustia-llc/catgraph/pull/434)).
+- `tests/smc_nf_regression.rs`: `TestSig::S` (`0 → 0`); two, three and
+  mixed wide-braid layers expand, the wide braid on either side of a swap,
+  equal adjacent scalars reach a fixpoint. `tests/pass_disjointness_probes.rs`:
+  Step 7 transposes a boundary-free block pair through
+  `nf_without_column_pass`, a column move spanning two layers, a four-layer
+  scalar/copy diagram terminates
+  ([#435](https://github.com/sustia-llc/catgraph/pull/435)).
+
 ## [workspace-v0.18.0] - 2026-09-05
 
 ### Added
@@ -912,7 +975,8 @@ Co-released with catgraph v0.12.2 and catgraph-magnitude v0.1.1.
   `temperley_lieb`, `e1_operad`, `e2_operad` extracted from `catgraph` core;
   Criterion bench `rayon_thresholds`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...HEAD
+[workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
 [workspace-v0.16.0]: https://github.com/sustia-llc/catgraph/compare/v0.15.0...v0.16.0
