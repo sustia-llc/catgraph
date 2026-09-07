@@ -3,7 +3,7 @@
 //! This module tracks the history of hypergraph rewrites and provides
 //! tools for analyzing causal invariance via Wilson loops.
 
-use super::causal_graph::{CausalEvent, CausalGraph, EdgeId};
+use super::causal_graph::{CausalComparison, CausalEvent, CausalGraph, EdgeId};
 use super::hypergraph::Hypergraph;
 use super::rewrite_rule::{RewriteMatch, RewriteRule};
 use std::collections::{HashMap, HashSet};
@@ -11,8 +11,8 @@ use std::collections::{HashMap, HashSet};
 /// A single step in the multiway evolution of a hypergraph.
 ///
 /// Records which rule was applied, the match site, the resulting
-/// hypergraph state (with fingerprint), and the parent step for
-/// tree traversal.
+/// hypergraph state (with its relabelling-invariant fingerprint), and the
+/// parent step for tree traversal.
 #[derive(Debug, Clone)]
 pub struct HypergraphStep {
     /// The rule that was applied.
@@ -24,7 +24,7 @@ pub struct HypergraphStep {
     /// State of the hypergraph after this step.
     pub state: Hypergraph,
 
-    /// Fingerprint of the state (for fast comparison).
+    /// [`Hypergraph::fingerprint`] of the state.
     pub fingerprint: u64,
 
     /// Step number (0-indexed).
@@ -39,8 +39,9 @@ pub struct HypergraphStep {
 
 /// A node in the hypergraph evolution graph (multiway systems).
 ///
-/// Stores the full hypergraph state at a given depth, with a fingerprint
-/// for fast equality checks and optional parent/transition provenance.
+/// Stores the full hypergraph state at a given depth, with its
+/// relabelling-invariant fingerprint and optional parent/transition
+/// provenance.
 #[derive(Debug, Clone)]
 pub struct HypergraphNode {
     /// Unique ID for this node.
@@ -49,7 +50,7 @@ pub struct HypergraphNode {
     /// The hypergraph state at this node.
     pub state: Hypergraph,
 
-    /// Fingerprint for fast comparison.
+    /// [`Hypergraph::fingerprint`] of the state.
     pub fingerprint: u64,
 
     /// Step (depth) in the evolution.
@@ -117,7 +118,8 @@ pub struct HypergraphEvolution {
     /// Rules used in this evolution.
     rules: Vec<RewriteRule>,
 
-    /// Map from fingerprint to node IDs (for detecting merges).
+    /// Map from [`Hypergraph::fingerprint`] to node IDs: the buckets
+    /// [`Self::find_merges`] partitions into isomorphism classes.
     fingerprint_to_nodes: HashMap<u64, Vec<usize>>,
 
     /// Maximum step reached.
@@ -424,14 +426,42 @@ impl HypergraphEvolution {
         self.causal_graph_between(0, node_id)
     }
 
-    /// Finds merge points (nodes with same fingerprint from different parents).
+    /// Groups of at least two nodes whose states are pairwise isomorphic.
+    ///
+    /// The fingerprint is the bucket key; within a bucket a node joins the
+    /// first group whose first member it [`Hypergraph::compare`]s
+    /// [`CausalComparison::Isomorphic`] with, and otherwise opens a group.
+    /// A comparison reaching
+    /// [`CausalGraph::MAX_SEARCH_STEPS`](super::causal_graph::CausalGraph::MAX_SEARCH_STEPS)
+    /// opens a group.
     #[must_use]
     pub fn find_merges(&self) -> Vec<Vec<usize>> {
-        self.fingerprint_to_nodes
-            .values()
-            .filter(|ids| ids.len() > 1)
-            .cloned()
-            .collect()
+        self.isomorphism_classes()
+    }
+
+    /// Greedy partition of each fingerprint bucket by
+    /// [`Hypergraph::compare`], keeping the groups of at least two.
+    fn isomorphism_classes(&self) -> Vec<Vec<usize>> {
+        let mut classes = Vec::new();
+
+        for ids in self.fingerprint_to_nodes.values() {
+            let mut bucket: Vec<Vec<usize>> = Vec::new();
+
+            for &id in ids {
+                let joined = bucket.iter_mut().find(|class| {
+                    self.nodes[class[0]].state.compare(&self.nodes[id].state)
+                        == CausalComparison::Isomorphic
+                });
+                match joined {
+                    Some(class) => class.push(id),
+                    None => bucket.push(vec![id]),
+                }
+            }
+
+            classes.extend(bucket.into_iter().filter(|class| class.len() > 1));
+        }
+
+        classes
     }
 
     // ========================================================================
@@ -440,70 +470,57 @@ impl HypergraphEvolution {
 
     /// Finds all Wilson loops (closed paths) in the evolution graph.
     ///
-    /// A Wilson loop exists when two different paths from the root
-    /// lead to isomorphic hypergraph states.
+    /// One loop per unordered pair of distinct nodes in the same
+    /// [`Self::find_merges`] group.
     #[must_use]
     pub fn find_wilson_loops(&self) -> Vec<WilsonLoop> {
         let mut loops = Vec::new();
 
-        // Find merge points (same fingerprint from different paths)
-        for ids in self.fingerprint_to_nodes.values() {
-            if ids.len() < 2 {
-                continue;
-            }
-
-            // For each pair of nodes with same fingerprint
+        for ids in self.isomorphism_classes() {
             for i in 0..ids.len() {
                 for j in (i + 1)..ids.len() {
                     let id1 = ids[i];
                     let id2 = ids[j];
 
-                    // Check if they're actually isomorphic (not just same fingerprint)
-                    let n1 = &self.nodes[id1];
-                    let n2 = &self.nodes[id2];
+                    let path1 = self.path_to_root(id1);
+                    let path2 = self.path_to_root(id2);
 
-                    if n1.state.is_isomorphic_to(&n2.state) {
-                        // Found a Wilson loop
-                        let path1 = self.path_to_root(id1);
-                        let path2 = self.path_to_root(id2);
+                    // Find common ancestor
+                    let path1_set: HashSet<_> = path1.iter().copied().collect();
+                    let ancestor = path2
+                        .iter()
+                        .find(|id| path1_set.contains(id))
+                        .copied()
+                        .unwrap_or(0);
 
-                        // Find common ancestor
-                        let path1_set: HashSet<_> = path1.iter().copied().collect();
-                        let ancestor = path2
-                            .iter()
-                            .find(|id| path1_set.contains(id))
-                            .copied()
-                            .unwrap_or(0);
-
-                        // Build the loop path: ancestor → id1, across to id2,
-                        // then id2 → ancestor.
-                        let mut loop_path = Vec::new();
-                        for &id in &path1 {
-                            loop_path.push(id);
-                            if id == ancestor {
-                                break;
-                            }
+                    // Build the loop path: ancestor → id1, across to id2,
+                    // then id2 → ancestor.
+                    let mut loop_path = Vec::new();
+                    for &id in &path1 {
+                        loop_path.push(id);
+                        if id == ancestor {
+                            break;
                         }
-                        loop_path.reverse();
-
-                        for &id in &path2 {
-                            if id == ancestor {
-                                break;
-                            }
-                            loop_path.push(id);
-                        }
-                        loop_path.push(ancestor);
-
-                        // Compute holonomy
-                        let holonomy = self.compute_holonomy(ancestor, id1, id2);
-
-                        loops.push(WilsonLoop {
-                            path: loop_path.clone(),
-                            base: ancestor,
-                            holonomy,
-                            length: loop_path.len(),
-                        });
                     }
+                    loop_path.reverse();
+
+                    for &id in &path2 {
+                        if id == ancestor {
+                            break;
+                        }
+                        loop_path.push(id);
+                    }
+                    loop_path.push(ancestor);
+
+                    // Compute holonomy
+                    let holonomy = self.compute_holonomy(ancestor, id1, id2);
+
+                    loops.push(WilsonLoop {
+                        path: loop_path.clone(),
+                        base: ancestor,
+                        holonomy,
+                        length: loop_path.len(),
+                    });
                 }
             }
         }
@@ -942,7 +959,7 @@ mod tests {
         assert!(evolution.is_causally_invariant());
     }
 
-    /// `{{0,1},{1,2},{2,3},{3,4}}` under `collapse` to depth 4: 6 of its 18
+    /// `{{0,1},{1,2},{2,3},{3,4}}` under `collapse` to depth 4: 12 of its 33
     /// loops reach a shared state through non-isomorphic causal graphs.
     #[test]
     fn non_confluent_fixture_separates_branch_causal_graphs() {
@@ -954,12 +971,12 @@ mod tests {
         assert_eq!(stats.total_nodes, 16);
         assert_eq!(stats.max_step, 3);
         assert_eq!(stats.branch_count, 6);
-        assert_eq!(stats.merge_count, 4);
+        assert_eq!(stats.merge_count, 3);
         assert_eq!(stats.rule_applications, vec![15]);
-        assert_eq!(evolution.find_merges().len(), 4);
+        assert_eq!(evolution.find_merges().len(), 3);
 
         let loops = evolution.find_wilson_loops();
-        assert_eq!(loops.len(), 18, "18 isomorphic-state pairs");
+        assert_eq!(loops.len(), 33, "33 isomorphic-state pairs");
 
         let separating = loops.iter().filter(|l| l.holonomy < 1.0).count();
         let closing = loops
@@ -969,8 +986,8 @@ mod tests {
         let zero = loops.iter().filter(|l| l.holonomy.abs() < 1e-12).count();
         assert_eq!(
             (separating, closing, zero),
-            (6, 12, 6),
-            "expected (6 separating, 12 closing, 6 exactly zero); holonomies {:?}",
+            (12, 21, 12),
+            "expected (12 separating, 21 closing, 12 exactly zero); holonomies {:?}",
             loops.iter().map(|l| l.holonomy).collect::<Vec<_>>()
         );
 
@@ -990,19 +1007,19 @@ mod tests {
         let result = evolution.analyze_causal_invariance();
         assert!(
             !result.is_invariant,
-            "6 separating loops must sink the witness"
+            "12 separating loops must sink the witness"
         );
         assert!(!evolution.is_causally_invariant());
-        assert_eq!(result.loops_analyzed, 18);
-        assert_eq!(result.non_trivial_loops.len(), 6);
+        assert_eq!(result.loops_analyzed, 33);
+        assert_eq!(result.non_trivial_loops.len(), 12);
         assert!(
             (result.max_deviation - 1.0).abs() < 1e-12,
             "expected 1.0, got {}",
             result.max_deviation
         );
         assert!(
-            (result.average_deviation - 6.0 / 18.0).abs() < 1e-12,
-            "expected 6/18, got {}",
+            (result.average_deviation - 12.0 / 33.0).abs() < 1e-12,
+            "expected 12/33, got {}",
             result.average_deviation
         );
     }
@@ -1033,8 +1050,9 @@ mod tests {
         );
     }
 
-    /// `find_merges` on four fixtures: a deterministic trace with no repeated
-    /// fingerprint, and three multiway runs whose merged node IDs are named.
+    /// `find_merges` on four fixtures: a deterministic trace with no two
+    /// isomorphic states, and three multiway runs whose merged node IDs are
+    /// named.
     #[test]
     fn find_merges_returns_the_grouped_node_ids() {
         let deterministic = HypergraphEvolution::run(
@@ -1046,7 +1064,7 @@ mod tests {
         assert_eq!(
             sorted_merges(&deterministic),
             Vec::<Vec<usize>>::new(),
-            "no two states of this trace share a fingerprint"
+            "no two states of this trace are isomorphic"
         );
 
         // {{0,1,2},{1,2,3}} under A→BB to depth 3.
@@ -1070,9 +1088,8 @@ mod tests {
         assert_eq!(
             sorted_merges(&non_confluent),
             vec![
-                vec![4, 8],
-                vec![5, 6],
-                vec![7, 9],
+                vec![1, 2, 3],
+                vec![4, 5, 6, 7, 8, 9],
                 vec![10, 11, 12, 13, 14, 15]
             ]
         );
@@ -1091,8 +1108,245 @@ mod tests {
     /// [`HypergraphEvolution::find_merges`] with the groups in ascending order.
     fn sorted_merges(evolution: &HypergraphEvolution) -> Vec<Vec<usize>> {
         let mut groups = evolution.find_merges();
+        for group in &mut groups {
+            group.sort_unstable();
+        }
         groups.sort();
         groups
+    }
+
+    /// An evolution whose root is the empty hypergraph and whose two children
+    /// carry `left` and `right`.
+    fn siblings(left: Hypergraph, right: Hypergraph) -> HypergraphEvolution {
+        let mut evolution = HypergraphEvolution::new(Hypergraph::new(), Vec::new());
+        for state in [left, right] {
+            let fingerprint = state.fingerprint();
+            let id = evolution.nodes.len();
+            evolution.nodes.push(HypergraphNode {
+                id,
+                state,
+                fingerprint,
+                step: 1,
+                parent: Some(0),
+                transition: None,
+            });
+            evolution.edge_ids.push(Vec::new());
+            evolution.events.push(Some(CausalEvent {
+                rule_index: 0,
+                consumed: Vec::new(),
+                produced: Vec::new(),
+            }));
+            evolution
+                .fingerprint_to_nodes
+                .entry(fingerprint)
+                .or_default()
+                .push(id);
+            evolution.max_step = 1;
+        }
+        evolution
+    }
+
+    /// Two siblings sharing a fingerprint without being isomorphic open no
+    /// merge group and close no loop; two isomorphic siblings over disjoint
+    /// vertex IDs open one of each.
+    #[test]
+    fn merges_and_loops_range_over_isomorphism_classes_not_buckets() {
+        let colliding = siblings(
+            Hypergraph::from_edges(vec![
+                vec![0, 1],
+                vec![1, 2],
+                vec![2, 3],
+                vec![3, 4],
+                vec![4, 5],
+                vec![5, 0],
+            ]),
+            Hypergraph::from_edges(vec![
+                vec![0, 1],
+                vec![1, 2],
+                vec![2, 0],
+                vec![3, 4],
+                vec![4, 5],
+                vec![5, 3],
+            ]),
+        );
+        assert_eq!(
+            colliding.nodes[1].fingerprint, colliding.nodes[2].fingerprint,
+            "the 6-cycle and two triangles must share a bucket, got {} and {}",
+            colliding.nodes[1].fingerprint, colliding.nodes[2].fingerprint
+        );
+        let merges = colliding.find_merges();
+        assert!(
+            !merges
+                .iter()
+                .any(|group| group.contains(&1) && group.contains(&2)),
+            "expected no group holding both siblings, got {merges:?}"
+        );
+        assert_eq!(
+            merges.len(),
+            0,
+            "expected 0 merge groups, got {}: {merges:?}",
+            merges.len()
+        );
+        let loops = colliding.find_wilson_loops();
+        assert_eq!(
+            loops.len(),
+            0,
+            "expected 0 Wilson loops, got {}: {:?}",
+            loops.len(),
+            loops.iter().map(|w| w.path.clone()).collect::<Vec<_>>()
+        );
+
+        let relabelled = siblings(
+            Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]),
+            Hypergraph::from_edges(vec![vec![10, 11, 12], vec![11, 12, 13]]),
+        );
+        assert_eq!(
+            sorted_merges(&relabelled),
+            vec![vec![1, 2]],
+            "expected one group holding both siblings, got {:?}",
+            sorted_merges(&relabelled)
+        );
+        let loops = relabelled.find_wilson_loops();
+        assert_eq!(
+            loops.len(),
+            1,
+            "expected 1 Wilson loop, got {}: {:?}",
+            loops.len(),
+            loops.iter().map(|w| w.path.clone()).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            loops[0].path,
+            vec![0, 1, 2, 0],
+            "expected the loop to run root, first sibling, second sibling, root"
+        );
+        assert_eq!((loops[0].base, loops[0].length), (0, 4));
+    }
+
+    /// The directed 8-cycle and its reversal as siblings: one merge group and
+    /// one loop.
+    #[test]
+    fn eight_cycle_siblings_open_one_group_and_one_loop() {
+        let forward: Vec<Vec<usize>> = (0..8).map(|i| vec![i, (i + 1) % 8]).collect();
+        let backward: Vec<Vec<usize>> = (0..8).map(|i| vec![(i + 1) % 8, i]).collect();
+        let evolution = siblings(
+            Hypergraph::from_edges(forward),
+            Hypergraph::from_edges(backward),
+        );
+
+        assert_eq!(
+            evolution.nodes[1].fingerprint, evolution.nodes[2].fingerprint,
+            "the 8-cycle and its reversal must share a bucket, got {} and {}",
+            evolution.nodes[1].fingerprint, evolution.nodes[2].fingerprint
+        );
+        assert_eq!(
+            sorted_merges(&evolution),
+            vec![vec![1, 2]],
+            "expected one group holding both siblings, got {:?}",
+            sorted_merges(&evolution)
+        );
+        let loops = evolution.find_wilson_loops();
+        assert_eq!(
+            loops.len(),
+            1,
+            "expected 1 Wilson loop, got {}: {:?}",
+            loops.len(),
+            loops.iter().map(|w| w.path.clone()).collect::<Vec<_>>()
+        );
+    }
+
+    /// `{{0,1,2}}` under `A→BB` and `edge_split` to depth 3: the merge groups,
+    /// the Wilson loop count with its closing / separating split, and the
+    /// causal-invariance reading. `{{0,1,2},{3,4,5}}` under `A→BB` to depth 2:
+    /// the merge groups, the Wilson loop count and the causal-invariance
+    /// reading.
+    #[test]
+    fn multiway_fixtures_merge_their_isomorphic_states() {
+        let branching = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1, 2]]),
+            &[RewriteRule::wolfram_a_to_bb(), RewriteRule::edge_split()],
+            3,
+            50,
+        );
+        assert_eq!(
+            sorted_merges(&branching),
+            vec![vec![2, 3], vec![4, 5, 6, 7, 8, 9]],
+            "expected two groups, got {:?}",
+            sorted_merges(&branching)
+        );
+
+        let loops = branching.find_wilson_loops();
+        assert_eq!(
+            loops.len(),
+            16,
+            "expected 16 Wilson loops, got {}",
+            loops.len()
+        );
+        let closing = loops
+            .iter()
+            .filter(|wilson| (wilson.holonomy - 1.0).abs() < 1e-12)
+            .count();
+        let separating = loops.iter().filter(|wilson| wilson.holonomy < 1.0).count();
+        assert_eq!(
+            (closing, separating),
+            (12, 4),
+            "expected 12 closing and 4 separating; holonomies {:?}",
+            loops
+                .iter()
+                .map(|wilson| wilson.holonomy)
+                .collect::<Vec<_>>()
+        );
+
+        let result = branching.analyze_causal_invariance();
+        assert!(
+            !result.is_invariant,
+            "expected is_invariant false with 4 non-trivial loops, got {} with {}",
+            result.is_invariant,
+            result.non_trivial_loops.len()
+        );
+        assert_eq!(
+            result.loops_analyzed, 16,
+            "expected 16 loops analyzed, got {}",
+            result.loops_analyzed
+        );
+        assert_eq!(
+            result.non_trivial_loops.len(),
+            4,
+            "expected 4 non-trivial loops, got {}",
+            result.non_trivial_loops.len()
+        );
+
+        let two_sites = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1, 2], vec![3, 4, 5]]),
+            &[RewriteRule::wolfram_a_to_bb()],
+            2,
+            100,
+        );
+        assert_eq!(
+            sorted_merges(&two_sites),
+            vec![vec![1, 2], vec![3, 4]],
+            "expected two groups, got {:?}",
+            sorted_merges(&two_sites)
+        );
+
+        let loops = two_sites.find_wilson_loops();
+        assert_eq!(
+            loops.len(),
+            2,
+            "expected 2 Wilson loops, got {}",
+            loops.len()
+        );
+        let result = two_sites.analyze_causal_invariance();
+        assert!(
+            result.is_invariant,
+            "expected is_invariant true with 0 non-trivial loops, got {} with {}",
+            result.is_invariant,
+            result.non_trivial_loops.len()
+        );
+        assert_eq!(
+            result.loops_analyzed, 2,
+            "expected 2 loops analyzed, got {}",
+            result.loops_analyzed
+        );
     }
 
     /// The rendering of [`EvolutionStatistics`] on a two-rule evolution, one
@@ -1108,7 +1362,7 @@ mod tests {
         assert_eq!(
             two_rules.statistics().to_string(),
             "Evolution Statistics:\n  Total nodes: 4\n  Max step: 2\n  Branches: 2\n  \
-             Merges: 0\n  Rule 0: 1 applications\n  Rule 1: 2 applications\n"
+             Merges: 1\n  Rule 0: 1 applications\n  Rule 1: 2 applications\n"
         );
     }
 
@@ -1142,12 +1396,12 @@ mod tests {
         assert_eq!(
             non_confluent.statistics().to_string(),
             "Evolution Statistics:\n  Total nodes: 16\n  Max step: 3\n  Branches: 6\n  \
-             Merges: 4\n  Rule 0: 15 applications\n"
+             Merges: 3\n  Rule 0: 15 applications\n"
         );
         assert_eq!(
             non_confluent.analyze_causal_invariance().to_string(),
-            "Causal Invariance Analysis:\n  Causally invariant: NO\n  Loops analyzed: 18\n  \
-             Average deviation: 0.333333\n  Max deviation: 1.000000\n  Non-trivial loops: 6\n"
+            "Causal Invariance Analysis:\n  Causally invariant: NO\n  Loops analyzed: 33\n  \
+             Average deviation: 0.363636\n  Max deviation: 1.000000\n  Non-trivial loops: 12\n"
         );
     }
 

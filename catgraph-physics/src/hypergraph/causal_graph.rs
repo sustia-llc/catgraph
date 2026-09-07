@@ -13,7 +13,8 @@
 //! graphs induced by different updating orders; [`CausalGraph::compare`] is the
 //! comparison it ranges over.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use super::isomorphism::{Digraph, compare_digraphs};
+use std::collections::{BTreeSet, HashMap};
 
 /// Identity of one hyperedge instance, stable across rewrites.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -37,11 +38,11 @@ pub struct CausalEvent {
     pub produced: Vec<EdgeId>,
 }
 
-/// Outcome of comparing two causal graphs up to isomorphism.
+/// Outcome of an isomorphism comparison: [`CausalGraph::compare`] and
+/// [`Hypergraph::compare`](super::hypergraph::Hypergraph::compare).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CausalComparison {
-    /// A bijection of event sets preserving the causal edges in both
-    /// directions exists.
+    /// A structure-preserving bijection of the two carriers exists.
     Isomorphic,
 
     /// No such bijection exists.
@@ -139,53 +140,14 @@ impl CausalGraph {
             return CausalComparison::Isomorphic;
         }
 
-        // Refine on the disjoint union so the two colourings are comparable.
-        let mut predecessors = vec![Vec::new(); 2 * n];
-        let mut successors = vec![Vec::new(); 2 * n];
-        for &(source, target) in &self.edges {
-            successors[source].push(target);
-            predecessors[target].push(source);
-        }
-        for &(source, target) in &other.edges {
-            successors[n + source].push(n + target);
-            predecessors[n + target].push(n + source);
-        }
-        let colours = refine(2 * n, &predecessors, &successors);
+        compare_digraphs(&self.digraph(), &other.digraph())
+    }
 
-        let mut left: Vec<u64> = colours[..n].to_vec();
-        let mut right: Vec<u64> = colours[n..].to_vec();
-        left.sort_unstable();
-        right.sort_unstable();
-        if left != right {
-            return CausalComparison::NotIsomorphic;
-        }
-
-        let candidates: Vec<Vec<usize>> = (0..n)
-            .map(|v| (0..n).filter(|&w| colours[v] == colours[n + w]).collect())
-            .collect();
-        let mut order: Vec<usize> = (0..n).collect();
-        order.sort_by_key(|&v| candidates[v].len());
-
-        let left_edges: HashSet<(usize, usize)> = self.edges.iter().copied().collect();
-        let right_edges: HashSet<(usize, usize)> = other.edges.iter().copied().collect();
-
-        let mut mapping = vec![usize::MAX; n];
-        let mut used = vec![false; n];
-        let mut steps = 0usize;
-
-        match backtrack(
-            0,
-            &order,
-            &candidates,
-            &left_edges,
-            &right_edges,
-            &mut mapping,
-            &mut used,
-            &mut steps,
-        ) {
-            Some(true) => CausalComparison::Isomorphic,
-            Some(false) => CausalComparison::NotIsomorphic,
-            None => CausalComparison::Undecided,
+    /// One node per event, all of one colour, with the causal edges as arcs.
+    fn digraph(&self) -> Digraph {
+        Digraph {
+            colours: vec![0; self.events.len()],
+            edges: self.edges.iter().copied().collect(),
         }
     }
 
@@ -197,109 +159,6 @@ impl CausalGraph {
     pub fn is_isomorphic_to(&self, other: &Self) -> bool {
         matches!(self.compare(other), CausalComparison::Isomorphic)
     }
-}
-
-/// Colour refinement on a directed graph: each round replaces a vertex's colour
-/// by its old colour together with the sorted colour multisets of its
-/// predecessors and successors, stopping when the partition stops getting
-/// finer.
-fn refine(n: usize, predecessors: &[Vec<usize>], successors: &[Vec<usize>]) -> Vec<u64> {
-    let mut colours = vec![0u64; n];
-    let mut classes = 1usize;
-
-    for _ in 0..n {
-        let mut signatures: Vec<(u64, Vec<u64>, Vec<u64>)> = Vec::with_capacity(n);
-        for v in 0..n {
-            let mut before: Vec<u64> = predecessors[v].iter().map(|&u| colours[u]).collect();
-            let mut after: Vec<u64> = successors[v].iter().map(|&u| colours[u]).collect();
-            before.sort_unstable();
-            after.sort_unstable();
-            signatures.push((colours[v], before, after));
-        }
-
-        let mut distinct = signatures.clone();
-        distinct.sort();
-        distinct.dedup();
-        if distinct.len() == classes {
-            break;
-        }
-
-        classes = distinct.len();
-        colours = signatures
-            .iter()
-            .map(|signature| {
-                let index = distinct
-                    .binary_search(signature)
-                    .expect("invariant: every signature is in the deduplicated signature list");
-                index as u64
-            })
-            .collect();
-    }
-
-    colours
-}
-
-/// Extends a partial event bijection.
-///
-/// `Some(true)` = a full bijection was found, `Some(false)` = the candidate
-/// space was exhausted, `None` = the step budget was reached.
-#[allow(clippy::too_many_arguments)]
-fn backtrack(
-    depth: usize,
-    order: &[usize],
-    candidates: &[Vec<usize>],
-    left_edges: &HashSet<(usize, usize)>,
-    right_edges: &HashSet<(usize, usize)>,
-    mapping: &mut [usize],
-    used: &mut [bool],
-    steps: &mut usize,
-) -> Option<bool> {
-    if depth == order.len() {
-        return Some(true);
-    }
-
-    let v = order[depth];
-    for &w in &candidates[v] {
-        *steps += 1;
-        if *steps > CausalGraph::MAX_SEARCH_STEPS {
-            return None;
-        }
-        if used[w] {
-            continue;
-        }
-
-        let consistent = order[..depth].iter().all(|&u| {
-            let image = mapping[u];
-            left_edges.contains(&(u, v)) == right_edges.contains(&(image, w))
-                && left_edges.contains(&(v, u)) == right_edges.contains(&(w, image))
-        });
-        if !consistent {
-            continue;
-        }
-
-        mapping[v] = w;
-        used[w] = true;
-        let deeper = backtrack(
-            depth + 1,
-            order,
-            candidates,
-            left_edges,
-            right_edges,
-            mapping,
-            used,
-            steps,
-        );
-        mapping[v] = usize::MAX;
-        used[w] = false;
-
-        match deeper {
-            Some(true) => return Some(true),
-            None => return None,
-            Some(false) => {}
-        }
-    }
-
-    Some(false)
 }
 
 // ============================================================================

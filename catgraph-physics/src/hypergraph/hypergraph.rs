@@ -4,9 +4,11 @@
 //! collection of [`Hyperedge`]s. Vertices are tracked in a `BTreeSet` and
 //! auto-registered when hyperedges are added. Supports pattern matching
 //! via [`Hypergraph::find_matches`] for DPO rewrite rule application,
-//! isomorphism heuristics, and compaction (vertex ID renumbering).
+//! isomorphism comparison, and compaction (vertex ID renumbering).
 
+use super::causal_graph::CausalComparison;
 use super::hyperedge::Hyperedge;
+use super::isomorphism::{Digraph, compare_digraphs, refine_digraph};
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 
@@ -342,61 +344,117 @@ impl Hypergraph {
         (compact, old_to_new)
     }
 
-    /// Computes a fingerprint for fast comparison.
+    /// Computes a fingerprint invariant under vertex relabelling and edge
+    /// reordering.
     ///
-    /// Two hypergraphs with the same fingerprint are likely equal
-    /// (but not guaranteed due to hash collisions).
+    /// Hashes the vertex count, the edge count, the sorted arity multiset and
+    /// the sorted multiset of the stable colour-refinement colours of the
+    /// incidence digraph, so a relabelled or edge-reordered copy carries the
+    /// same fingerprint. Equal fingerprints do not imply isomorphism.
     #[must_use]
     pub fn fingerprint(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         let mut hasher = DefaultHasher::new();
 
-        // Hash vertex count and edge count
         self.vertices.len().hash(&mut hasher);
         self.edges.len().hash(&mut hasher);
 
-        // Hash canonical form of edges (sorted)
-        let mut edge_fingerprints: Vec<_> = self.edges.iter().map(Hyperedge::fingerprint).collect();
-        edge_fingerprints.sort_unstable();
-        edge_fingerprints.hash(&mut hasher);
+        let mut arities: Vec<_> = self.edges.iter().map(Hyperedge::arity).collect();
+        arities.sort_unstable();
+        arities.hash(&mut hasher);
+
+        let mut colours = refine_digraph(&self.incidence_digraph());
+        colours.sort_unstable();
+        colours.hash(&mut hasher);
 
         hasher.finish()
     }
 
-    /// Checks structural equality (ignoring vertex IDs).
+    /// Compares this hypergraph with `other` up to isomorphism.
     ///
-    /// Two hypergraphs are structurally equal if there exists a bijection
-    /// between their vertices that preserves hyperedge structure.
+    /// An isomorphism is a bijection of the vertices carrying this
+    /// hypergraph's hyperedge multiset onto `other`'s with positions
+    /// preserved. Vertex count, edge count, the sorted degree sequence and the
+    /// sorted arity multiset screen out some negatives; a colour refinement
+    /// and backtracking search over the incidence digraphs settles the rest,
+    /// and reports [`CausalComparison::Undecided`] after
+    /// [`CausalGraph::MAX_SEARCH_STEPS`](super::causal_graph::CausalGraph::MAX_SEARCH_STEPS)
+    /// candidate assignments.
     #[must_use]
-    pub fn is_isomorphic_to(&self, other: &Hypergraph) -> bool {
-        // Quick checks
-        if self.vertex_count() != other.vertex_count() {
-            return false;
-        }
-        if self.edge_count() != other.edge_count() {
-            return false;
+    pub fn compare(&self, other: &Hypergraph) -> CausalComparison {
+        if self.vertex_count() != other.vertex_count() || self.edge_count() != other.edge_count() {
+            return CausalComparison::NotIsomorphic;
         }
 
-        // Check degree sequences
         let mut self_degrees: Vec<_> = self.vertices.iter().map(|&v| self.degree(v)).collect();
         let mut other_degrees: Vec<_> = other.vertices.iter().map(|&v| other.degree(v)).collect();
         self_degrees.sort_unstable();
         other_degrees.sort_unstable();
-
         if self_degrees != other_degrees {
-            return false;
+            return CausalComparison::NotIsomorphic;
         }
 
-        // Check edge arity multiset
         let mut self_arities: Vec<_> = self.edges.iter().map(Hyperedge::arity).collect();
         let mut other_arities: Vec<_> = other.edges.iter().map(Hyperedge::arity).collect();
         self_arities.sort_unstable();
         other_arities.sort_unstable();
+        if self_arities != other_arities {
+            return CausalComparison::NotIsomorphic;
+        }
 
-        self_arities == other_arities
+        compare_digraphs(&self.incidence_digraph(), &other.incidence_digraph())
+    }
 
-        // Note: Full isomorphism checking is NP-complete for general hypergraphs.
-        // This is a heuristic check that catches most non-isomorphic cases.
+    /// Returns true when [`Self::compare`] reports
+    /// [`CausalComparison::Isomorphic`].
+    ///
+    /// [`CausalComparison::Undecided`] returns false.
+    #[must_use]
+    pub fn is_isomorphic_to(&self, other: &Hypergraph) -> bool {
+        matches!(self.compare(other), CausalComparison::Isomorphic)
+    }
+
+    /// The typed incidence digraph: one node per vertex, per hyperedge and per
+    /// hyperedge slot, coloured `0`, `1` and `2`.
+    ///
+    /// A hyperedge node of arity at least one points at its first slot, slot
+    /// `i` at slot `i + 1` up to the last, and slot `i` at the vertex node the
+    /// hyperedge holds at position `i`.
+    fn incidence_digraph(&self) -> Digraph {
+        let vertex_index: HashMap<usize, usize> = self
+            .vertices
+            .iter()
+            .enumerate()
+            .map(|(index, &v)| (v, index))
+            .collect();
+
+        let mut colours = vec![0u64; self.vertices.len()];
+        let mut edges = Vec::new();
+        let mut next = self.vertices.len();
+
+        for edge in &self.edges {
+            let edge_node = next;
+            next += 1;
+            colours.push(1);
+
+            let mut previous = edge_node;
+            for &v in edge.vertices() {
+                let slot = next;
+                next += 1;
+                colours.push(2);
+
+                edges.push((previous, slot));
+                edges.push((
+                    slot,
+                    *vertex_index
+                        .get(&v)
+                        .expect("invariant: every hyperedge vertex is a registered vertex"),
+                ));
+                previous = slot;
+            }
+        }
+
+        Digraph { colours, edges }
     }
 }
 
@@ -436,6 +494,7 @@ impl std::fmt::Display for Hypergraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use catgraph_testutil::Lcg;
 
     #[test]
     fn test_hypergraph_new() {
@@ -521,8 +580,6 @@ mod tests {
         let g3 = Hypergraph::from_edges(vec![vec![0, 1], vec![2, 3]]);
 
         assert_eq!(g1.fingerprint(), g2.fingerprint());
-        // Different structures should (usually) have different fingerprints
-        // Note: This could occasionally fail due to hash collisions
         assert_ne!(g1.fingerprint(), g3.fingerprint());
     }
 
@@ -545,5 +602,352 @@ mod tests {
 
         let g3 = Hypergraph::from_edges(vec![vec![0, 1, 2], vec![3, 4, 5]]); // Different structure
         assert!(!g1.is_isomorphic_to(&g3));
+    }
+
+    /// The 6-cycle against two triangles.
+    fn six_cycle_and_two_triangles() -> (Hypergraph, Hypergraph) {
+        (
+            Hypergraph::from_edges(vec![
+                vec![0, 1],
+                vec![1, 2],
+                vec![2, 3],
+                vec![3, 4],
+                vec![4, 5],
+                vec![5, 0],
+            ]),
+            Hypergraph::from_edges(vec![
+                vec![0, 1],
+                vec![1, 2],
+                vec![2, 0],
+                vec![3, 4],
+                vec![4, 5],
+                vec![5, 3],
+            ]),
+        )
+    }
+
+    /// `compare` on pairs the count / degree / arity prefilter leaves open:
+    /// three non-isomorphic pairs, four isomorphic ones, and two the prefilter
+    /// itself rejects.
+    #[test]
+    fn compare_settles_the_pairs_the_prefilter_leaves_open() {
+        let (six_cycle, two_triangles) = six_cycle_and_two_triangles();
+        let separated: Vec<(&str, Hypergraph, Hypergraph)> = vec![
+            ("6-cycle against two triangles", six_cycle, two_triangles),
+            (
+                "{{0,1},{1,2}} against {{0,1},{2,1}}",
+                Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2]]),
+                Hypergraph::from_edges(vec![vec![0, 1], vec![2, 1]]),
+            ),
+            (
+                "{{0,0,1}} against {{0,1,1}}",
+                Hypergraph::from_edges(vec![vec![0, 0, 1]]),
+                Hypergraph::from_edges(vec![vec![0, 1, 1]]),
+            ),
+        ];
+        for (name, left, right) in &separated {
+            assert_eq!(
+                left.compare(right),
+                CausalComparison::NotIsomorphic,
+                "{name}: expected NotIsomorphic, got {:?}",
+                left.compare(right)
+            );
+            assert!(
+                !left.is_isomorphic_to(right),
+                "{name}: expected is_isomorphic_to false, got true"
+            );
+        }
+
+        let mut isolated = Hypergraph::from_edges(vec![vec![0]]);
+        isolated.add_vertex(Some(7));
+        let matched: Vec<(&str, Hypergraph, Hypergraph)> = vec![
+            (
+                "{{0,1,2},{1,2,3}} against its +10 relabelling",
+                Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]),
+                Hypergraph::from_edges(vec![vec![10, 11, 12], vec![11, 12, 13]]),
+            ),
+            (
+                "{{0,1,2}} against {{2,1,0}}",
+                Hypergraph::from_edges(vec![vec![0, 1, 2]]),
+                Hypergraph::from_edges(vec![vec![2, 1, 0]]),
+            ),
+            (
+                "{{0,1},{1,2}} against its edge-order swap",
+                Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2]]),
+                Hypergraph::from_edges(vec![vec![1, 2], vec![0, 1]]),
+            ),
+            (
+                "two empty hypergraphs",
+                Hypergraph::new(),
+                Hypergraph::new(),
+            ),
+        ];
+        for (name, left, right) in &matched {
+            assert_eq!(
+                left.compare(right),
+                CausalComparison::Isomorphic,
+                "{name}: expected Isomorphic, got {:?}",
+                left.compare(right)
+            );
+            assert!(
+                left.is_isomorphic_to(right),
+                "{name}: expected is_isomorphic_to true, got false"
+            );
+        }
+
+        let one_edge = Hypergraph::from_edges(vec![vec![0]]);
+        assert_eq!(
+            isolated.compare(&one_edge),
+            CausalComparison::NotIsomorphic,
+            "an extra isolated vertex separates: vertex counts {} against {}",
+            isolated.vertex_count(),
+            one_edge.vertex_count()
+        );
+        let with_empty_edge = Hypergraph::from_edges(vec![vec![0], Vec::new()]);
+        let doubled = Hypergraph::from_edges(vec![vec![0], vec![0]]);
+        assert_eq!(
+            with_empty_edge.compare(&doubled),
+            CausalComparison::NotIsomorphic,
+            "an empty hyperedge separates: arities {:?} against {:?}",
+            with_empty_edge
+                .edges()
+                .map(Hyperedge::arity)
+                .collect::<Vec<_>>(),
+            doubled.edges().map(Hyperedge::arity).collect::<Vec<_>>()
+        );
+    }
+
+    /// The directed `n`-cycle `base → base+1 → … → base+n-1 → base`.
+    fn directed_cycle(n: usize, base: usize) -> Vec<Vec<usize>> {
+        (0..n).map(|i| vec![base + i, base + (i + 1) % n]).collect()
+    }
+
+    /// The directed `n`-cycle on `0..n` with every edge reversed.
+    fn reversed_cycle(n: usize) -> Vec<Vec<usize>> {
+        (0..n).map(|i| vec![(i + 1) % n, i]).collect()
+    }
+
+    /// `compare` on vertex-transitive inputs, where the refinement leaves every
+    /// vertex in one colour class: the directed `n`-cycle against its reversal,
+    /// the `2n`-cycle against two `n`-cycles, and three 3-cycles against an
+    /// interleaved relabelling of them. Each pair's fingerprints are equal.
+    #[test]
+    fn compare_decides_vertex_transitive_inputs() {
+        for n in [6usize, 7, 8, 9, 10, 12] {
+            let forward = Hypergraph::from_edges(directed_cycle(n, 0));
+            let backward = Hypergraph::from_edges(reversed_cycle(n));
+            assert_eq!(
+                forward.compare(&backward),
+                CausalComparison::Isomorphic,
+                "the {n}-cycle against its reversal: expected Isomorphic, got {:?}",
+                forward.compare(&backward)
+            );
+            assert_eq!(
+                forward.fingerprint(),
+                backward.fingerprint(),
+                "the {n}-cycle against its reversal: expected equal fingerprints, got {} \
+                 and {}",
+                forward.fingerprint(),
+                backward.fingerprint()
+            );
+        }
+
+        for n in [4usize, 5, 6] {
+            let big = Hypergraph::from_edges(directed_cycle(2 * n, 0));
+            let mut split = directed_cycle(n, 0);
+            split.extend(directed_cycle(n, n));
+            let split = Hypergraph::from_edges(split);
+            assert_eq!(
+                big.compare(&split),
+                CausalComparison::NotIsomorphic,
+                "the {}-cycle against two {n}-cycles: expected NotIsomorphic, got {:?}",
+                2 * n,
+                big.compare(&split)
+            );
+            assert_eq!(
+                big.fingerprint(),
+                split.fingerprint(),
+                "the {}-cycle against two {n}-cycles: expected equal fingerprints, got {} \
+                 and {}",
+                2 * n,
+                big.fingerprint(),
+                split.fingerprint()
+            );
+        }
+
+        let mut disjoint = directed_cycle(3, 0);
+        disjoint.extend(directed_cycle(3, 3));
+        disjoint.extend(directed_cycle(3, 6));
+        let disjoint = Hypergraph::from_edges(disjoint);
+        let interleaved = Hypergraph::from_edges(vec![
+            vec![0, 3],
+            vec![3, 6],
+            vec![6, 0],
+            vec![1, 4],
+            vec![4, 7],
+            vec![7, 1],
+            vec![2, 5],
+            vec![5, 8],
+            vec![8, 2],
+        ]);
+        assert_eq!(
+            disjoint.compare(&interleaved),
+            CausalComparison::Isomorphic,
+            "three 3-cycles against their interleaved relabelling: expected Isomorphic, \
+             got {:?}",
+            disjoint.compare(&interleaved)
+        );
+        assert_eq!(
+            disjoint.fingerprint(),
+            interleaved.fingerprint(),
+            "three 3-cycles against their interleaved relabelling: expected equal \
+             fingerprints, got {} and {}",
+            disjoint.fingerprint(),
+            interleaved.fingerprint()
+        );
+    }
+
+    /// The 6-cycle and two triangles share a fingerprint and compare
+    /// `NotIsomorphic`.
+    #[test]
+    fn equal_fingerprints_do_not_imply_isomorphism() {
+        let (six_cycle, two_triangles) = six_cycle_and_two_triangles();
+        assert_eq!(
+            six_cycle.fingerprint(),
+            two_triangles.fingerprint(),
+            "expected equal fingerprints, got {} and {}",
+            six_cycle.fingerprint(),
+            two_triangles.fingerprint()
+        );
+        assert_eq!(
+            six_cycle.compare(&two_triangles),
+            CausalComparison::NotIsomorphic,
+            "expected NotIsomorphic, got {:?}",
+            six_cycle.compare(&two_triangles)
+        );
+    }
+
+    /// A hypergraph over `vertices` and `edges`.
+    fn build(vertices: &[usize], edges: &[Vec<usize>]) -> Hypergraph {
+        let mut graph = Hypergraph::new();
+        for &v in vertices {
+            graph.add_vertex(Some(v));
+        }
+        for edge in edges {
+            graph.add_hyperedge(edge.clone());
+        }
+        graph
+    }
+
+    /// A seeded corpus of small ordered hypergraphs, each with the vertex list
+    /// and the edge list that built it.
+    fn seeded_corpus(count: usize) -> Vec<(Vec<usize>, Vec<Vec<usize>>)> {
+        let mut rng = Lcg::new(0x164_0000_0000_0001);
+        let mut corpus = Vec::with_capacity(count);
+        for index in 0..count {
+            let vertex_count = rng.next_usize(1, 6);
+            let mut vertices: Vec<usize> = (0..vertex_count).collect();
+            let edge_count = rng.next_usize(0, 5);
+            let mut edges = Vec::with_capacity(edge_count);
+            for _ in 0..edge_count {
+                let arity = rng.next_usize(0, 3);
+                edges.push(
+                    (0..arity)
+                        .map(|_| rng.next_usize(0, vertex_count - 1))
+                        .collect::<Vec<usize>>(),
+                );
+            }
+            if index % 3 == 0 {
+                vertices.push(vertex_count);
+            }
+            corpus.push((vertices, edges));
+        }
+        corpus
+    }
+
+    /// A uniform permutation of `0..n`, drawn from `rng`.
+    fn permutation(rng: &mut Lcg, n: usize) -> Vec<usize> {
+        let mut p: Vec<usize> = (0..n).collect();
+        for i in (1..n).rev() {
+            p.swap(i, rng.next_usize(0, i));
+        }
+        p
+    }
+
+    /// `fingerprint` is constant on 200 seeded `v ↦ 10·π(v) + 3` relabellings
+    /// and edge reorderings, and separates a measured floor of the corpus's
+    /// non-isomorphic pairs.
+    #[test]
+    fn fingerprint_is_invariant_and_separating() {
+        let corpus = seeded_corpus(200);
+        let mut rng = Lcg::new(0x164_0000_0000_0002);
+
+        let mut graphs = Vec::with_capacity(corpus.len());
+        for (index, (vertices, edges)) in corpus.iter().enumerate() {
+            let graph = build(vertices, edges);
+
+            let width = vertices.iter().copied().max().unwrap_or(0) + 1;
+            let pi = permutation(&mut rng, width);
+            let relabel = |v: usize| 10 * pi[v] + 3;
+            let mut shuffled: Vec<Vec<usize>> = edges
+                .iter()
+                .map(|edge| edge.iter().map(|&v| relabel(v)).collect())
+                .collect();
+            for i in (1..shuffled.len()).rev() {
+                shuffled.swap(i, rng.next_usize(0, i));
+            }
+            let relabelled_vertices: Vec<usize> = vertices.iter().map(|&v| relabel(v)).collect();
+            let relabelled = build(&relabelled_vertices, &shuffled);
+
+            assert_eq!(
+                graph.fingerprint(),
+                relabelled.fingerprint(),
+                "corpus {index}: expected equal fingerprints, got {} and {}; edges {edges:?} \
+                 against {shuffled:?}",
+                graph.fingerprint(),
+                relabelled.fingerprint()
+            );
+            assert_eq!(
+                graph.compare(&relabelled),
+                CausalComparison::Isomorphic,
+                "corpus {index}: expected Isomorphic, got {:?}; edges {edges:?} against \
+                 {shuffled:?}",
+                graph.compare(&relabelled)
+            );
+
+            graphs.push(graph);
+        }
+
+        let mut not_isomorphic = 0usize;
+        let mut distinguished = 0usize;
+        for left in 0..graphs.len() {
+            for right in (left + 1)..graphs.len() {
+                match graphs[left].compare(&graphs[right]) {
+                    CausalComparison::NotIsomorphic => {
+                        not_isomorphic += 1;
+                        if graphs[left].fingerprint() != graphs[right].fingerprint() {
+                            distinguished += 1;
+                        }
+                    }
+                    CausalComparison::Isomorphic => {}
+                    CausalComparison::Undecided => panic!(
+                        "pair ({left}, {right}): the step budget was reached at {} vertices",
+                        graphs[left].vertex_count()
+                    ),
+                }
+            }
+        }
+        assert_eq!(
+            not_isomorphic,
+            19718,
+            "expected 19718 non-isomorphic pairs over the corpus, got {not_isomorphic} of \
+             {} unordered pairs",
+            graphs.len() * (graphs.len() - 1) / 2
+        );
+        assert!(
+            distinguished >= 19712,
+            "expected the fingerprint to separate at least 19712 of the {not_isomorphic} \
+             non-isomorphic pairs, got {distinguished}"
+        );
     }
 }
