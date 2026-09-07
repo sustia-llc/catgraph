@@ -224,6 +224,46 @@ fn build_coalition_fixture(m: usize, seed: u64) -> CoalitionFixture {
     (agents, couplings, members)
 }
 
+/// A merge-only coalition fixture (#208): a dense `m × m` member block drawn in
+/// `[0.91, 0.95)`, plus [`SWEEP_CANDIDATES`] candidates
+/// `m..(m + SWEEP_CANDIDATES)`, each coupled `c ⇄ (c % m)` at `1.0` and to
+/// nothing else.
+///
+/// Candidate `c` is a mutual-`1.0` clone of member `i = c % m`, so its border is
+/// `c[j] = closed[j][i]` and `r[j] = closed[i][j]` and the skeletal-merge test
+/// fires at `i`. The member range keeps every multi-hop product below every
+/// direct edge (`0.95² = 0.9025 < 0.91`), so the closure is the generator table
+/// entry-for-entry; for `j, l ≠ i`, `c[j]·r[l] ≤ 0.9025 < 0.91 ≤ closed[j][l]`,
+/// and for `j = i` or `l = i`, `c[j]·r[l] = closed[j][l]` exactly, so the strict
+/// `>` of the interior test cannot fire either way, in floats as well as in
+/// reals, and `value_with` takes the merge-only route. No member coupling is
+/// `1.0`, so the member skeleton stays
+/// full (`k = m`). The path is asserted in the `coalition_eval` unit test
+/// `bench_merge_only_fixture_is_merge_only` on the same construction.
+fn build_merge_only_fixture(m: usize, seed: u64) -> CoalitionFixture {
+    let n = m + SWEEP_CANDIDATES;
+    // `| 1` seed prep stays at the call site (#33).
+    let mut rng = Lcg::new(seed | 1);
+
+    let agents: Vec<usize> = (0..n).collect();
+    let mut couplings: Vec<(usize, usize, f64)> = Vec::new();
+    for i in 0..m {
+        for j in 0..m {
+            if i != j {
+                // Same call-site arithmetic on `next_f64()` as
+                // `build_coalition_fixture` (#33), over the narrower range.
+                couplings.push((i, j, 0.91 + 0.04 * rng.next_f64()));
+            }
+        }
+    }
+    for c in m..n {
+        couplings.push((c, c % m, 1.0));
+        couplings.push((c % m, c, 1.0));
+    }
+    let members: Vec<usize> = (0..m).collect();
+    (agents, couplings, members)
+}
+
 /// #31 incremental-magnitude benchmark: a fixed coalition `S`, sweep
 /// [`SWEEP_CANDIDATES`] candidates, comparing
 /// - **fresh**: two full [`coalition_value`] evaluations per candidate
@@ -258,6 +298,21 @@ fn bench_incremental(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("evaluator_sweep", m), &m, |b, _| {
             b.iter(|| {
                 let ev = CoalitionEvaluator::new(&agents, &couplings, &members, 1.0)
+                    .expect("base coalition must evaluate");
+                let mut acc = ev.base_value();
+                for &cand in &candidates {
+                    acc += ev.value_with(cand).expect("candidate must evaluate");
+                }
+                black_box(acc)
+            });
+        });
+
+        // (c) Merge-only: same shape as (b) on a fixture whose candidates are
+        // all mutual-1.0 clones opening no interior shortcut (#208).
+        let (mo_agents, mo_couplings, mo_members) = build_merge_only_fixture(m, 0xA11CE);
+        group.bench_with_input(BenchmarkId::new("merge_only_sweep", m), &m, |b, _| {
+            b.iter(|| {
+                let ev = CoalitionEvaluator::new(&mo_agents, &mo_couplings, &mo_members, 1.0)
                     .expect("base coalition must evaluate");
                 let mut acc = ev.base_value();
                 for &cand in &candidates {
