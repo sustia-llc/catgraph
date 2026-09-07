@@ -2,8 +2,12 @@
 
 use catgraph::errors::CatgraphError;
 use catgraph_applied::prop::{
-    Free, PropExpr, PropSignature, mono_word,
-    presentation::{NormalizeEngine, Presentation},
+    Free, PropExpr, PropSignature,
+    colored::ColoredExpr,
+    mono_word,
+    presentation::{
+        NormalizeEngine, Presentation, PresentedProp, functorial::ColoredCompleteFunctor,
+    },
 };
 use std::borrow::Cow;
 
@@ -39,6 +43,50 @@ impl PropSignature for TestGen {
 
 fn g(x: TestGen) -> PropExpr<TestGen> {
     Free::<TestGen>::generator(x)
+}
+
+// ---- Signature with a 0 → 1 generator ----
+//
+// `TestGen`'s generators are all 1 → 1, so no term over it changes its source
+// arity. `UnitGen::Eta` is 0 → 1, which gives terms whose source words differ from
+// their target words and from each other's.
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+enum UnitGen {
+    A,
+    Eta,
+}
+
+impl PropSignature for UnitGen {
+    type Color = ();
+
+    fn source_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.source())
+    }
+    fn target_word(&self) -> Cow<'_, [()]> {
+        mono_word(self.target())
+    }
+    fn source(&self) -> usize {
+        match self {
+            Self::A => 1,
+            Self::Eta => 0,
+        }
+    }
+    fn target(&self) -> usize {
+        1
+    }
+}
+
+/// A colored functor whose image is `()` for every input, so image equality
+/// alone identifies any two colored terms over [`UnitGen`].
+struct CollapseFunctor;
+
+impl ColoredCompleteFunctor<UnitGen> for CollapseFunctor {
+    type Target = ();
+
+    fn apply_colored(&self, _expr: &ColoredExpr<UnitGen>) -> Result<(), CatgraphError> {
+        Ok(())
+    }
 }
 
 // ---- Tests ----
@@ -413,5 +461,206 @@ fn presentation_cc_engine_returns_none_when_the_smc_pre_pass_hits_the_bound() {
             .eq_mod(&g(TestGen::A), &g(TestGen::B))
             .unwrap(),
         Some(false)
+    );
+}
+
+#[test]
+fn smc_compose_identity_right_reduces_to_the_left_factor() {
+    // A ; Identity(1) normalizes to A.
+    let pres = Presentation::<TestGen>::new();
+    let expr = Free::<TestGen>::compose(g(TestGen::A), Free::<TestGen>::identity(1)).unwrap();
+    assert_eq!(pres.normalize(&expr).unwrap().expr, g(TestGen::A));
+}
+
+#[test]
+fn smc_interchange_splits_a_compose_of_tensors() {
+    // (A ⊗ B) ; (C ⊗ A) normalizes to (A ; C) ⊗ (B ; A).
+    let pres = Presentation::<TestGen>::new();
+    let expr = Free::<TestGen>::compose(
+        Free::<TestGen>::tensor(g(TestGen::A), g(TestGen::B)),
+        Free::<TestGen>::tensor(g(TestGen::C), g(TestGen::A)),
+    )
+    .unwrap();
+    let expected = Free::<TestGen>::tensor(
+        Free::<TestGen>::compose(g(TestGen::A), g(TestGen::C)).unwrap(),
+        Free::<TestGen>::compose(g(TestGen::B), g(TestGen::A)).unwrap(),
+    );
+    assert_eq!(pres.normalize(&expr).unwrap().expr, expected);
+}
+
+#[test]
+fn smc_compose_associator_rebalances_to_the_right() {
+    let pres = Presentation::<TestGen>::new();
+    let sigma = Free::<TestGen>::braid(1, 1);
+    let a_tensor_b = Free::<TestGen>::tensor(g(TestGen::A), g(TestGen::B));
+
+    // (A ; B) ; C normalizes to A ; (B ; C).
+    let nested = Free::<TestGen>::compose(
+        Free::<TestGen>::compose(g(TestGen::A), g(TestGen::B)).unwrap(),
+        g(TestGen::C),
+    )
+    .unwrap();
+    let expected_nested = Free::<TestGen>::compose(
+        g(TestGen::A),
+        Free::<TestGen>::compose(g(TestGen::B), g(TestGen::C)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(pres.normalize(&nested).unwrap().expr, expected_nested);
+
+    // ((A ⊗ B) ; σ) ; σ with σ = Braid(1,1) normalizes to A ⊗ B.
+    let braided = Free::<TestGen>::compose(
+        Free::<TestGen>::compose(a_tensor_b.clone(), sigma.clone()).unwrap(),
+        sigma.clone(),
+    )
+    .unwrap();
+    assert_eq!(pres.normalize(&braided).unwrap().expr, a_tensor_b);
+
+    // ((A ⊗ B) ; σ) ; (C ⊗ A) normalizes to (A ⊗ B) ; (σ ; (C ⊗ A)).
+    let c_tensor_a = Free::<TestGen>::tensor(g(TestGen::C), g(TestGen::A));
+    let mixed = Free::<TestGen>::compose(
+        Free::<TestGen>::compose(a_tensor_b.clone(), sigma.clone()).unwrap(),
+        c_tensor_a.clone(),
+    )
+    .unwrap();
+    let expected_mixed = Free::<TestGen>::compose(
+        a_tensor_b,
+        Free::<TestGen>::compose(sigma, c_tensor_a).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(pres.normalize(&mixed).unwrap().expr, expected_mixed);
+}
+
+#[test]
+fn smc_tensor_associator_rebalances_to_the_right() {
+    let pres = Presentation::<TestGen>::new();
+
+    // (A ⊗ B) ⊗ C normalizes to A ⊗ (B ⊗ C).
+    let nested = Free::<TestGen>::tensor(
+        Free::<TestGen>::tensor(g(TestGen::A), g(TestGen::B)),
+        g(TestGen::C),
+    );
+    let expected_nested = Free::<TestGen>::tensor(
+        g(TestGen::A),
+        Free::<TestGen>::tensor(g(TestGen::B), g(TestGen::C)),
+    );
+    assert_eq!(pres.normalize(&nested).unwrap().expr, expected_nested);
+
+    // (A ⊗ B) ⊗ Identity(1) normalizes to A ⊗ (B ⊗ Identity(1)).
+    let with_identity = Free::<TestGen>::tensor(
+        Free::<TestGen>::tensor(g(TestGen::A), g(TestGen::B)),
+        Free::<TestGen>::identity(1),
+    );
+    let expected_with_identity = Free::<TestGen>::tensor(
+        g(TestGen::A),
+        Free::<TestGen>::tensor(g(TestGen::B), Free::<TestGen>::identity(1)),
+    );
+    assert_eq!(
+        pres.normalize(&with_identity).unwrap().expr,
+        expected_with_identity
+    );
+}
+
+#[test]
+fn eq_mod_is_undecided_when_one_query_side_alone_hits_the_depth_bound() {
+    // Depth 1, default CC engine: `A` converges under the SMC pre-pass and
+    // `Identity(1) ; B` does not. The pair is undecided in both argument
+    // orders, while a pair of converging sides is decided at the same depth.
+    let pres = Presentation::<TestGen>::with_depth(1);
+    let id_then_b = Free::<TestGen>::compose(Free::<TestGen>::identity(1), g(TestGen::B)).unwrap();
+
+    assert_eq!(pres.eq_mod(&g(TestGen::A), &id_then_b).unwrap(), None);
+    assert_eq!(pres.eq_mod(&id_then_b, &g(TestGen::A)).unwrap(), None);
+    assert_eq!(
+        pres.eq_mod(&g(TestGen::A), &g(TestGen::C)).unwrap(),
+        Some(false)
+    );
+}
+
+#[test]
+fn eq_mod_is_undecided_when_one_equation_side_alone_hits_the_depth_bound() {
+    // Depth 1, default CC engine, query `A` vs `C` — both converge under the
+    // SMC pre-pass. An equation with `Identity(1) ; B` on one side leaves the
+    // query undecided, in both equation orders; with no equation it is decided.
+    let id_then_b = Free::<TestGen>::compose(Free::<TestGen>::identity(1), g(TestGen::B)).unwrap();
+
+    let mut lhs_bounded = Presentation::<TestGen>::with_depth(1);
+    lhs_bounded
+        .add_equation(id_then_b.clone(), g(TestGen::A))
+        .unwrap();
+    assert_eq!(
+        lhs_bounded.eq_mod(&g(TestGen::A), &g(TestGen::C)).unwrap(),
+        None
+    );
+
+    let mut rhs_bounded = Presentation::<TestGen>::with_depth(1);
+    rhs_bounded.add_equation(g(TestGen::A), id_then_b).unwrap();
+    assert_eq!(
+        rhs_bounded.eq_mod(&g(TestGen::A), &g(TestGen::C)).unwrap(),
+        None
+    );
+
+    assert_eq!(
+        Presentation::<TestGen>::with_depth(1)
+            .eq_mod(&g(TestGen::A), &g(TestGen::C))
+            .unwrap(),
+        Some(false)
+    );
+}
+
+#[test]
+fn eq_mod_functorial_colored_separates_a_word_mismatch_on_either_side() {
+    // `CollapseFunctor` gives every term the same image, so only the
+    // boundary-word test can separate a pair. `A` is [()] → [()], `A ⊗ η` is
+    // [()] → [(), ()] (target words differ, source words agree), `η` is [] →
+    // [()] (source words differ, target words agree); a term against itself is
+    // parallel and takes the functor's verdict.
+    let pres = Presentation::<UnitGen>::new();
+    let a = ColoredExpr::new(vec![()], Free::<UnitGen>::generator(UnitGen::A)).unwrap();
+    let a_tensor_eta = ColoredExpr::new(
+        vec![()],
+        Free::<UnitGen>::tensor(
+            Free::<UnitGen>::generator(UnitGen::A),
+            Free::<UnitGen>::generator(UnitGen::Eta),
+        ),
+    )
+    .unwrap();
+    let eta = ColoredExpr::new(vec![], Free::<UnitGen>::generator(UnitGen::Eta)).unwrap();
+
+    assert_eq!(a.source_word(), a_tensor_eta.source_word());
+    assert_ne!(a.target_word(), a_tensor_eta.target_word());
+    assert_eq!(
+        pres.eq_mod_functorial_colored(&a, &a_tensor_eta, &CollapseFunctor)
+            .unwrap(),
+        Some(false)
+    );
+
+    assert_ne!(a.source_word(), eta.source_word());
+    assert_eq!(a.target_word(), eta.target_word());
+    assert_eq!(
+        pres.eq_mod_functorial_colored(&a, &eta, &CollapseFunctor)
+            .unwrap(),
+        Some(false)
+    );
+
+    assert_eq!(
+        pres.eq_mod_functorial_colored(&a, &a, &CollapseFunctor)
+            .unwrap(),
+        Some(true)
+    );
+}
+
+#[test]
+fn presented_prop_borrows_the_presentation_it_was_built_from() {
+    // `PresentedProp::new(p).presentation()` reads back `p`'s equation list and
+    // depth bound, not a default-constructed presentation's.
+    let mut pres = Presentation::<TestGen>::with_depth(7);
+    pres.add_equation(g(TestGen::A), g(TestGen::B)).unwrap();
+    let prop = PresentedProp::new(pres);
+
+    assert_eq!(prop.presentation().equations().len(), 1);
+    assert_eq!(prop.presentation().rewrite_depth(), 7);
+    assert_eq!(
+        prop.presentation().equations()[0],
+        (g(TestGen::A), g(TestGen::B))
     );
 }
