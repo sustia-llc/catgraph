@@ -225,7 +225,7 @@ mod tests {
     //
     // ⚠ Every test below asserts a domain and a codomain and stops there. They
     // are named for the axioms they *shape-check*, and they stayed 19/19 green
-    // under a non-merging μ together with a non-splitting δ (#283) — a
+    // on `0b40b44` under a non-merging μ together with a non-splitting δ (#283) — a
     // type-correct mutation that makes every one of these composites the wrong
     // morphism. `frobenius_law_lhs_arities` does not even build the second side
     // of its equation.

@@ -2,7 +2,7 @@
 //! different strengths — and this header says which is which, because the two
 //! claims are not interchangeable.
 //!
-//! # 1. Five term-level tests: hand-built composite == the builder's own term
+//! # 1. Term-level tests: hand-built composite == the builder's own term
 //!
 //! [`spider_2_2_via_mu_delta`], [`spider_3_1_via_double_mu`],
 //! [`spider_1_3_via_double_delta`], [`spider_0_0_via_eta_epsilon`] and
@@ -1437,7 +1437,7 @@ fn image(term: &FM, name: &str) -> CospanCanon<char> {
 /// sides of the `canon != spider_canon` comparison move together and this test
 /// stays green by rights; the term-level [`spider_3_1_via_double_mu`] and
 /// [`spider_1_3_via_double_delta`] are what go red. That division of labour is
-/// the reason the five §1 tests are kept rather than replaced.
+/// the reason the §1 tests are kept rather than replaced.
 #[test]
 fn connected_diagrams_denote_the_spider_in_cospan() {
     let terms = corpus();
