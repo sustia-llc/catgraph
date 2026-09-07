@@ -39,6 +39,8 @@ use catgraph_applied::prop::presentation::content::is_arity_well_formed;
 use catgraph_applied::prop::presentation::content::{
     Content, canonical_key, content_eq, content_of, content_of_colored,
 };
+#[cfg(feature = "serde")]
+use catgraph_applied::prop::presentation::rewrite::RewriteStep;
 use catgraph_applied::prop::presentation::rewrite::{
     RewriteRule, apply_at, cost_of, match_sites, match_sites_of, optimize, replay, rewrite_at,
 };
@@ -437,6 +439,33 @@ fn matching_is_convex_and_injective() {
     assert_eq!(outcome.best_cost(), 2);
 }
 
+/// The convexity sweep relaxes past the first hop out of the image: in
+/// `A ; C ; D ; B` the directed path `A → C → D → B` leaves the image two
+/// hyperedges before it returns, so `A ⊗ B ⇒ B ⊗ A` has no convex match there
+/// and the search stands still.
+#[test]
+fn a_return_path_two_hops_outside_the_image_is_not_convex() {
+    let parallel = RewriteRule::new(
+        wired(2, Free::tensor(tool(Tool::A), tool(Tool::B))),
+        wired(2, Free::tensor(tool(Tool::B), tool(Tool::A))),
+    )
+    .expect("parallel, mono-interfaced, two hyperedges");
+    let acdb = wired(
+        1,
+        Free::compose(chain([Tool::A, Tool::C]), chain([Tool::D, Tool::B])).expect("1 → 1"),
+    );
+
+    let outcome =
+        optimize(&acdb, std::slice::from_ref(&parallel), 64, |_| 1).expect("well-formed start");
+    assert_eq!(outcome.states_explored(), 1);
+    assert_eq!(outcome.best_cost(), outcome.initial_cost());
+    assert!(
+        outcome.steps().is_empty(),
+        "no convex match, so the trace must be empty, got {:?}",
+        outcome.steps()
+    );
+}
+
 // ---- W3: soundness against the decider --------------------------------------
 
 #[test]
@@ -575,6 +604,88 @@ fn fuel_bounds_the_search_and_the_visited_set_closes_rule_cycles() {
     assert_eq!(cyclic.states_explored(), 2);
     assert_eq!(cyclic.best_cost(), 1);
     assert!(!cyclic.fuel_exhausted());
+}
+
+/// A recorded step names the rule that fired at it, not the first rule of the
+/// slice: under `[A ⇒ D, C ⇒ D]` the start `C` is only reachable by the second.
+#[test]
+fn a_step_records_the_index_of_the_rule_that_fired() {
+    let rules = [
+        RewriteRule::new(wired(1, tool(Tool::A)), wired(1, tool(Tool::D))).expect("A ⇒ D"),
+        RewriteRule::new(wired(1, tool(Tool::C)), wired(1, tool(Tool::D))).expect("C ⇒ D"),
+    ];
+    let start = wired(1, tool(Tool::C));
+    // `D` is free, so the rewrite is the descent the search takes.
+    let cheap_d = |g: &Tool| u64::from(*g != Tool::D);
+
+    let outcome = optimize(&start, &rules, 64, cheap_d).expect("well-formed start");
+    assert_eq!(outcome.initial_cost(), 1);
+    assert_eq!(outcome.best_cost(), 0);
+    assert_eq!(outcome.steps().len(), 1);
+    assert_eq!(outcome.steps()[0].rule(), 1);
+
+    let replayed = replay(&start, &rules, outcome.steps()).expect("the trace is legal");
+    assert!(
+        replayed.eq_colored(&wired(1, tool(Tool::D))),
+        "the trace must replay to D, reached {replayed:?}"
+    );
+}
+
+/// `A ⊗ A` under `A ⇒ D` has two sites; a budget of 1 affords the first
+/// application and reads exhausted at the second.
+#[test]
+fn each_application_spends_one_unit_of_fuel() {
+    let rules =
+        [RewriteRule::new(wired(1, tool(Tool::A)), wired(1, tool(Tool::D))).expect("A ⇒ D")];
+    let start = wired(2, Free::tensor(tool(Tool::A), tool(Tool::A)));
+    let cheap_d = |g: &Tool| u64::from(*g != Tool::D);
+
+    let outcome = optimize(&start, &rules, 1, cheap_d).expect("well-formed start");
+    assert_eq!(outcome.initial_cost(), 2);
+    assert_eq!(outcome.best_cost(), 1);
+    assert_eq!(outcome.steps().len(), 1);
+    assert_eq!(outcome.states_explored(), 2);
+    assert!(
+        outcome.fuel_exhausted(),
+        "the second site was matched and unaffordable, so the budget must read \
+         exhausted, got false"
+    );
+}
+
+/// Among states of equal cost the first reached is kept. Both rules rewrite
+/// `A ⊗ B` to a state costing 3, and the earlier rule's is the one returned.
+#[test]
+fn an_equal_cost_successor_does_not_displace_the_first_reached() {
+    let a_par_b = || wired(2, Free::tensor(tool(Tool::A), tool(Tool::B)));
+    let rules = [
+        RewriteRule::new(
+            a_par_b(),
+            wired(2, Free::tensor(tool(Tool::C), tool(Tool::B))),
+        )
+        .expect("A ⊗ B ⇒ C ⊗ B"),
+        RewriteRule::new(
+            a_par_b(),
+            wired(2, Free::tensor(tool(Tool::A), tool(Tool::D))),
+        )
+        .expect("A ⊗ B ⇒ A ⊗ D"),
+    ];
+    // Two-wide left-hand sides, so neither result matches either rule again.
+    let cost = |g: &Tool| match g {
+        Tool::A | Tool::B => 2,
+        _ => 1,
+    };
+
+    let outcome = optimize(&a_par_b(), &rules, 64, cost).expect("well-formed start");
+    assert_eq!(outcome.initial_cost(), 4);
+    assert_eq!(outcome.best_cost(), 3);
+    assert_eq!(outcome.steps().len(), 1);
+    assert_eq!(outcome.steps()[0].rule(), 0);
+    let expected = wired(2, Free::tensor(tool(Tool::C), tool(Tool::B)));
+    assert!(
+        outcome.best().eq_colored(&expected),
+        "the tie must keep C ⊗ B, got {:?}",
+        outcome.best()
+    );
 }
 
 #[test]
@@ -888,4 +999,58 @@ fn a_stale_site_is_rejected_rather_than_applied_at_the_wrong_place() {
         &content,
         &content_of_colored(&wired(1, seq3([Tool::B, Tool::B, Tool::B])))
     ));
+}
+
+/// `replay` re-derives each recorded assignment rather than trusting it, so a
+/// forged trace against `A ; B ⇒ D` is rejected on all three of: a hyperedge
+/// index past the running state, one index used for both left-hand sides, and an
+/// index carrying a label the left-hand side does not have there.
+///
+/// The steps are built through serde because the fields are private — this is
+/// the untrusted-document path `RewriteStep`'s serde section describes.
+#[cfg(feature = "serde")]
+#[test]
+fn replay_rejects_an_out_of_range_repeated_or_mislabeled_assignment() {
+    let rules = [
+        RewriteRule::new(wired(1, chain([Tool::A, Tool::B])), wired(1, tool(Tool::D)))
+            .expect("A ; B ⇒ D"),
+    ];
+    let rejected = |what: &str, start: &ColoredExpr<Tool>, doc: &str| {
+        let steps: Vec<RewriteStep> = serde_json::from_str(doc)
+            .unwrap_or_else(|e| panic!("{what}: the forged document must deserialize: {e}"));
+        match replay(start, &rules, &steps) {
+            Err(CatgraphError::Presentation { message }) => message,
+            other => panic!("{what}: a forged assignment must not replay, got {other:?}"),
+        }
+    };
+
+    // `A ; B` has two hyperedges, `A` at index 0 and `B` at index 1.
+    let ab = wired(1, chain([Tool::A, Tool::B]));
+    let message = rejected("out of range", &ab, r#"[{"rule":0,"matched_edges":[0,7]}]"#);
+    assert!(
+        message.contains("does not describe a convex match"),
+        "got: {message}"
+    );
+    let message = rejected(
+        "repeated index",
+        &ab,
+        r#"[{"rule":0,"matched_edges":[0,0]}]"#,
+    );
+    assert!(
+        message.contains("does not describe a convex match"),
+        "got: {message}"
+    );
+
+    // `C ; B` has the arity the assignment claims and `B` where the rule wants
+    // it, but `C` at index 0 where the rule's left-hand side reads `A`.
+    let cb = wired(1, chain([Tool::C, Tool::B]));
+    let message = rejected(
+        "mislabeled edge",
+        &cb,
+        r#"[{"rule":0,"matched_edges":[0,1]}]"#,
+    );
+    assert!(
+        message.contains("does not describe a convex match"),
+        "got: {message}"
+    );
 }
