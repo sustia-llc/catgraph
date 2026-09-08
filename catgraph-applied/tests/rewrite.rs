@@ -26,12 +26,12 @@
 //!   `MatchSite::into_step` records a chosen site as a replayable `RewriteStep`;
 //! - **a site does not outlive its content** — an apply renumbers everything, so
 //!   a site from an earlier enumeration can still form a convex match at a place
-//!   nobody chose. The content fingerprint rejects it, with a message that is
-//!   the *stale-site* diagnosis and not the not-a-convex-match one.
+//!   nobody chose. The content fingerprint rejects it, with the *stale-site*
+//!   variant and not the not-a-convex-match one.
 
 use std::borrow::Cow;
 
-use catgraph::errors::CatgraphError;
+use catgraph::errors::{CatgraphError, RewriteBoundary, RewriteRejection, RewriteSide};
 use catgraph_applied::prop::colored::ColoredExpr;
 use catgraph_applied::prop::presentation::Presentation;
 #[cfg(feature = "serde")]
@@ -210,29 +210,34 @@ fn cost_is_a_function_of_the_morphism_not_of_the_writing() {
 
 #[test]
 fn rule_construction_rejects_what_the_dpo_step_cannot_use() {
-    let presentation_error =
-        |result: Result<RewriteRule<Task>, CatgraphError>, needle: &str| match result {
-            Err(CatgraphError::Presentation { message }) => {
-                assert!(message.contains(needle), "got: {message}");
-            }
-            other => panic!("expected a Presentation error mentioning {needle:?}, got {other:?}"),
-        };
+    // Each condition is its own `RewriteRejection` variant, so a caller reads the
+    // violated clause off the value rather than off the message.
+    let not_parallel = |result: Result<RewriteRule<Task>, CatgraphError>,
+                        expected: RewriteBoundary| match result {
+        Err(CatgraphError::Rewrite(RewriteRejection::SidesNotParallel { boundary })) => {
+            assert_eq!(
+                boundary, expected,
+                "observed {boundary}, expected {expected}"
+            );
+        }
+        other => panic!("expected SidesNotParallel on the {expected} words, got {other:?}"),
+    };
 
     // Non-parallel: the source words disagree…
-    presentation_error(
+    not_parallel(
         RewriteRule::new(
             at(Role::Author, task(Task::Write)),
             at(Role::Reviewer, task(Task::Check)),
         ),
-        "source words",
+        RewriteBoundary::Source,
     );
     // …and the target words disagree.
-    presentation_error(
+    not_parallel(
         RewriteRule::new(
             at(Role::Author, task(Task::Write)),
             at(Role::Author, task(Task::Assign)),
         ),
-        "target words",
+        RewriteBoundary::Target,
     );
 
     // An edge-free lhs matches everywhere.
@@ -240,25 +245,25 @@ fn rule_construction_rejects_what_the_dpo_step_cannot_use() {
         wired(0, PropExpr::<Tool>::Identity(0)),
         wired(0, PropExpr::<Tool>::Identity(0)),
     ) {
-        Err(CatgraphError::Presentation { message }) => {
-            assert!(
-                message.contains("no generator occurrence"),
-                "got: {message}"
-            );
-        }
-        other => panic!("expected the edge-free rejection, got {other:?}"),
+        Err(CatgraphError::Rewrite(RewriteRejection::EmptyLhs)) => {}
+        other => panic!("expected EmptyLhs, got {other:?}"),
     }
 
     // A non-mono lhs interface: the identity wire of `id₁ ⊗ A` occupies an input
-    // *and* an output coordinate, so the pushout complement is not unique.
+    // *and* an output coordinate, so the pushout complement is not unique. The
+    // rejection names *which* node, so the field is asserted rather than the
+    // variant alone.
     match RewriteRule::new(
         wired(2, Free::tensor(PropExpr::Identity(1), tool(Tool::A))),
         wired(2, Free::tensor(PropExpr::Identity(1), tool(Tool::B))),
     ) {
-        Err(CatgraphError::Presentation { message }) => {
-            assert!(message.contains("not mono"), "got: {message}");
+        Err(CatgraphError::Rewrite(RewriteRejection::LhsInterfaceNotMono { node })) => {
+            assert_eq!(
+                node, 0,
+                "observed node {node}, expected the identity wire 0"
+            );
         }
-        other => panic!("expected the mono-interface rejection, got {other:?}"),
+        other => panic!("expected LhsInterfaceNotMono, got {other:?}"),
     }
 
     // The shape the engine is for is accepted.
@@ -286,14 +291,49 @@ fn rule_construction_screens_the_serde_trust_boundary() {
     )
     .expect("the serde path does not re-run `check`");
 
+    // A well-formed lhs against the mismatched rhs names the right-hand side.
+    let well_formed: ColoredExpr<Tool> = serde_json::from_str(
+        r#"{"source_word":[null],"target_word":[null],"expr":{"Identity":1}}"#,
+    )
+    .expect("the serde path does not re-run `check`");
+    match RewriteRule::new(well_formed, mismatched.clone()) {
+        Err(CatgraphError::Rewrite(RewriteRejection::IllFormed { side, message })) => {
+            assert_eq!(side, RewriteSide::Rhs, "observed {side}, expected the rhs");
+            assert!(message.contains("arity-well-formed"), "got: {message}");
+        }
+        other => panic!("expected IllFormed on the rhs, got {other:?}"),
+    }
+
     for forged in [mismatched, overflowing] {
         match RewriteRule::new(forged.clone(), forged) {
-            Err(CatgraphError::Presentation { message }) => {
+            Err(CatgraphError::Rewrite(RewriteRejection::IllFormed { side, message })) => {
+                assert_eq!(side, RewriteSide::Lhs, "observed {side}, expected the lhs");
                 assert!(message.contains("arity-well-formed"), "got: {message}");
             }
-            other => panic!("expected the arity screen, got {other:?}"),
+            other => panic!("expected IllFormed on the lhs, got {other:?}"),
         }
     }
+}
+
+/// The rendered text of a rejection carries the wrapper prefix, the boundary
+/// name and the side name.
+#[test]
+fn rejections_render_the_boundary_and_side_names() {
+    let not_parallel = CatgraphError::Rewrite(RewriteRejection::SidesNotParallel {
+        boundary: RewriteBoundary::Source,
+    });
+    assert_eq!(
+        not_parallel.to_string(),
+        "rewrite rejected: the two sides declare different source words"
+    );
+    let ill_formed = CatgraphError::Rewrite(RewriteRejection::IllFormed {
+        side: RewriteSide::Input,
+        message: "x".to_string(),
+    });
+    assert_eq!(
+        ill_formed.to_string(),
+        "rewrite rejected: the input morphism is ill-formed: x"
+    );
 }
 
 /// The **word** screen is the other half of that boundary, and the half an
@@ -323,15 +363,22 @@ fn every_entry_point_screens_a_color_forged_document() {
     assert!(is_arity_well_formed(ill_typed.expr()));
     assert!(is_arity_well_formed(mislabelled.expr()));
 
-    let screened = |where_: &str, result: Result<(), CatgraphError>| match result {
-        Err(CatgraphError::Presentation { message }) => {
-            assert!(
-                message.contains("word-well-formed") || message.contains("target word"),
-                "{where_}: got {message}"
-            );
-        }
-        other => panic!("{where_}: expected the word screen, got {other:?}"),
-    };
+    // The typed side is the other half of what the rejection now carries: a rule
+    // constructor names the side it screened, an entry point names its input.
+    let screened =
+        |where_: &str, expected: RewriteSide, result: Result<(), CatgraphError>| match result {
+            Err(CatgraphError::Rewrite(RewriteRejection::IllFormed { side, message })) => {
+                assert_eq!(
+                    side, expected,
+                    "{where_}: observed {side}, expected {expected}"
+                );
+                assert!(
+                    message.contains("word-well-formed") || message.contains("target word"),
+                    "{where_}: got {message}"
+                );
+            }
+            other => panic!("{where_}: expected the word screen, got {other:?}"),
+        };
 
     // The site surface is an entry point too, and both halves of it screen: since
     // #250's review, `match_sites_of` returns a `Result` rather than panicking
@@ -349,16 +396,27 @@ fn every_entry_point_screens_a_color_forged_document() {
     for forged in [ill_typed, mislabelled] {
         screened(
             "RewriteRule::new",
+            RewriteSide::Lhs,
             RewriteRule::new(forged.clone(), forged.clone()).map(|_| ()),
         );
-        screened("optimize", optimize(&forged, &[], 8, |_| 1).map(|_| ()));
-        screened("replay", replay(&forged, &[], &[]).map(|_| ()));
+        screened(
+            "optimize",
+            RewriteSide::Input,
+            optimize(&forged, &[], 8, |_| 1).map(|_| ()),
+        );
+        screened(
+            "replay",
+            RewriteSide::Input,
+            replay(&forged, &[], &[]).map(|_| ()),
+        );
         screened(
             "match_sites_of",
+            RewriteSide::Input,
             match_sites_of(&forged, &rule, 8).map(|_| ()),
         );
         screened(
             "rewrite_at",
+            RewriteSide::Input,
             rewrite_at(&forged, &rule, &sites[0]).map(|_| ()),
         );
     }
@@ -503,12 +561,21 @@ fn an_optimized_representative_is_equal_modulo_the_presentation() {
         canonical_key(&content_of_colored(outcome.best()))
     );
 
-    // A forged trace is rejected rather than trusted.
+    // A forged trace is rejected rather than trusted, and the rejection carries
+    // the three numbers a caller needs to place the fault: which step, which
+    // rule index it named, and how many rules it was replayed against.
     assert!(replay(&start, &rules, &[]).is_ok());
-    assert!(matches!(
-        replay(&start, &[], outcome.steps()),
-        Err(CatgraphError::Presentation { .. })
-    ));
+    let named = outcome.steps()[0].rule();
+    match replay(&start, &[], outcome.steps()) {
+        Err(CatgraphError::Rewrite(RewriteRejection::UnknownRule { step, rule, rules })) => {
+            assert_eq!(
+                (step, rule, rules),
+                (0, named, 0),
+                "observed (step, rule, rules) = ({step}, {rule}, {rules}), expected (0, {named}, 0)"
+            );
+        }
+        other => panic!("expected UnknownRule against an empty rules slice, got {other:?}"),
+    }
 }
 
 #[test]
@@ -856,27 +923,33 @@ fn a_site_is_re_validated_against_the_content_it_is_handed_to() {
     // content is right but whose assignment is not convex for the rule is a bad
     // pairing. Collapsing them would hide the location bug the fingerprint
     // exists to catch.
-    let rejected = |what: &str, needle: &str, result: Result<(), CatgraphError>| match result {
-        Err(CatgraphError::Presentation { message }) => {
-            assert!(message.contains(needle), "{what}: got {message}");
-        }
-        other => panic!("{what}: expected the site screen, got {other:?}"),
-    };
-    let foreign = "enumerated from a different content";
-    let not_a_match = "convex match";
+    let rejected =
+        |what: &str, expected: &RewriteRejection, result: Result<(), CatgraphError>| match result {
+            Err(CatgraphError::Rewrite(rejection)) => {
+                assert_eq!(
+                    &rejection, expected,
+                    "{what}: observed {rejection:?}, expected {expected:?}"
+                );
+            }
+            other => panic!("{what}: expected the site screen, got {other:?}"),
+        };
+    let foreign = RewriteRejection::StaleSite;
+    // An apply entry point carries no trace position, so `step` is `None` — the
+    // field that separates this rejection from `replay`'s.
+    let not_a_match = RewriteRejection::NotAMatch { step: None };
 
     // A different content, whose hyperedges carry other labels…
     let elsewhere = content_of_colored(&wired(1, chain([Tool::C, Tool::C])));
     rejected(
         "other labels",
-        foreign,
+        &foreign,
         apply_at(&elsewhere, &sequential, &site).map(|_| ()),
     );
     // …one too small to hold the assignment at all…
     let smaller = content_of_colored(&wired(1, tool(Tool::A)));
     rejected(
         "out of range",
-        foreign,
+        &foreign,
         apply_at(&smaller, &sequential, &site).map(|_| ()),
     );
     // …and the right content under the wrong rule, which is the *other*
@@ -884,14 +957,14 @@ fn a_site_is_re_validated_against_the_content_it_is_handed_to() {
     // rule.
     rejected(
         "wrong rule",
-        not_a_match,
+        &not_a_match,
         apply_at(&content_here, &gluing, &site).map(|_| ()),
     );
 
     // The expression-level wrapper carries the same screen.
     rejected(
         "expression level",
-        foreign,
+        &foreign,
         rewrite_at(&wired(1, chain([Tool::C, Tool::C])), &sequential, &site).map(|_| ()),
     );
 
@@ -974,12 +1047,13 @@ fn a_stale_site_is_rejected_rather_than_applied_at_the_wrong_place() {
 
     // Every site of the now-stale enumeration is refused against `c1` — including
     // the two that were never fired, which are the dangerous ones — and the
-    // message names the stale-content case rather than convexity.
+    // rejection is the stale-content variant rather than the convexity one.
     for (which, site) in stale.iter().enumerate() {
         match apply_at(&c1, &rule, site) {
-            Err(CatgraphError::Presentation { message }) => assert!(
-                message.contains("enumerated from a different content"),
-                "site {which}: got {message}"
+            Err(CatgraphError::Rewrite(rejection)) => assert_eq!(
+                rejection,
+                RewriteRejection::StaleSite,
+                "site {which}: observed {rejection:?}, expected StaleSite"
             ),
             other => panic!("site {which}: a stale site must not apply, got {other:?}"),
         }
@@ -1015,42 +1089,36 @@ fn replay_rejects_an_out_of_range_repeated_or_mislabeled_assignment() {
         RewriteRule::new(wired(1, chain([Tool::A, Tool::B])), wired(1, tool(Tool::D)))
             .expect("A ; B ⇒ D"),
     ];
+    // A replay rejection carries the trace position the assignment sits at, which
+    // is what separates it from the same rejection raised by `apply_at`.
     let rejected = |what: &str, start: &ColoredExpr<Tool>, doc: &str| {
         let steps: Vec<RewriteStep> = serde_json::from_str(doc)
             .unwrap_or_else(|e| panic!("{what}: the forged document must deserialize: {e}"));
         match replay(start, &rules, &steps) {
-            Err(CatgraphError::Presentation { message }) => message,
+            Err(CatgraphError::Rewrite(rejection)) => assert_eq!(
+                rejection,
+                RewriteRejection::NotAMatch { step: Some(0) },
+                "{what}: observed {rejection:?}, expected NotAMatch {{ step: Some(0) }}"
+            ),
             other => panic!("{what}: a forged assignment must not replay, got {other:?}"),
         }
     };
 
     // `A ; B` has two hyperedges, `A` at index 0 and `B` at index 1.
     let ab = wired(1, chain([Tool::A, Tool::B]));
-    let message = rejected("out of range", &ab, r#"[{"rule":0,"matched_edges":[0,7]}]"#);
-    assert!(
-        message.contains("does not describe a convex match"),
-        "got: {message}"
-    );
-    let message = rejected(
+    rejected("out of range", &ab, r#"[{"rule":0,"matched_edges":[0,7]}]"#);
+    rejected(
         "repeated index",
         &ab,
         r#"[{"rule":0,"matched_edges":[0,0]}]"#,
-    );
-    assert!(
-        message.contains("does not describe a convex match"),
-        "got: {message}"
     );
 
     // `C ; B` has the arity the assignment claims and `B` where the rule wants
     // it, but `C` at index 0 where the rule's left-hand side reads `A`.
     let cb = wired(1, chain([Tool::C, Tool::B]));
-    let message = rejected(
+    rejected(
         "mislabeled edge",
         &cb,
         r#"[{"rule":0,"matched_edges":[0,1]}]"#,
-    );
-    assert!(
-        message.contains("does not describe a convex match"),
-        "got: {message}"
     );
 }

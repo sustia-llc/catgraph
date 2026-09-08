@@ -25,7 +25,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
 
-use catgraph::errors::CatgraphError;
+use catgraph::errors::{CatgraphError, RewriteRejection};
 use catgraph_applied::prop::colored::ColoredExpr;
 use catgraph_applied::prop::presentation::content::{
     ContentKey, canonical_key, content_eq, content_of, content_of_colored,
@@ -331,39 +331,47 @@ fn a_tampered_trace_is_rejected_rather_than_replayed() {
         .find(|e| !honest.contains(e))
         .expect("three hyperedges, two matched");
 
-    let rejected = |what: &str, doc: String| {
+    let rejected = |what: &str, doc: String, expected: RewriteRejection| {
         let steps: Vec<RewriteStep> = serde_json::from_str(&doc)
             .unwrap_or_else(|e| panic!("{what}: the forged document must still deserialize: {e}"));
         match replay(&start, &rules, &steps) {
-            Err(CatgraphError::Presentation { message }) => message,
+            Err(CatgraphError::Rewrite(rejection)) => assert_eq!(
+                rejection, expected,
+                "{what}: observed {rejection:?}, expected {expected:?}"
+            ),
             other => panic!("{what}: a tampered trace must not replay, got {other:?}"),
         }
     };
 
-    // (a) a rule index outside the slice.
-    let message = rejected(
+    // (a) a rule index outside the slice — the rejection carries the index the
+    //     document named and the length it was replayed against.
+    rejected(
         "out-of-range rule",
         format!(r#"[{{"rule":7,"matched_edges":{honest:?}}}]"#),
+        RewriteRejection::UnknownRule {
+            step: 0,
+            rule: 7,
+            rules: 1,
+        },
     );
-    assert!(message.contains("names rule 7 of 1"), "got: {message}");
 
     // (b) the match permuted: `lhs` edge 0 is `scalar(3)`, so pointing it at the
     //     `scalar(2)` image is a label mismatch.
     let swapped = [honest[1], honest[0]];
-    let message = rejected(
+    rejected(
         "permuted match",
         format!(r#"[{{"rule":0,"matched_edges":{swapped:?}}}]"#),
+        RewriteRejection::NotAMatch { step: Some(0) },
     );
-    assert!(message.contains("convex match"), "got: {message}");
 
     // (c) the match slid onto the *other* `scalar(2)`: right labels, but the
     //     two hyperedges are not adjacent, so the assignment is no match at all.
     let slid = [honest[0], elsewhere];
-    let message = rejected(
+    rejected(
         "match slid to a same-labelled edge",
         format!(r#"[{{"rule":0,"matched_edges":{slid:?}}}]"#),
+        RewriteRejection::NotAMatch { step: Some(0) },
     );
-    assert!(message.contains("convex match"), "got: {message}");
 
     // The honest document, by contrast, replays.
     let honest_doc = format!(r#"[{{"rule":0,"matched_edges":{honest:?}}}]"#);

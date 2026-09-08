@@ -45,6 +45,143 @@ impl fmt::Display for BoundaryLeg {
     }
 }
 
+/// Which of a rewrite rule's two declared boundary words its sides disagree on.
+///
+/// Rendered as `source` / `target` in error messages. Not
+/// `#[non_exhaustive]`: matching it exhaustively is safe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RewriteBoundary {
+    /// The declared source word.
+    Source,
+    /// The declared target word.
+    Target,
+}
+
+impl RewriteBoundary {
+    /// The word's name as it appears in error messages.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Source => "source",
+            Self::Target => "target",
+        }
+    }
+}
+
+impl fmt::Display for RewriteBoundary {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Which morphism of a rewrite call an ill-formedness was found on. Not
+/// `#[non_exhaustive]`: matching it exhaustively is safe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RewriteSide {
+    /// A rule's left-hand side.
+    Lhs,
+    /// A rule's right-hand side.
+    Rhs,
+    /// The morphism an entry point was called on, rather than a side of a rule.
+    Input,
+}
+
+impl RewriteSide {
+    /// The side's name as it appears in error messages.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Lhs => "the rule's left-hand side",
+            Self::Rhs => "the rule's right-hand side",
+            Self::Input => "the input morphism",
+        }
+    }
+}
+
+impl fmt::Display for RewriteSide {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Why a term-rewriting entry point refused its input.
+///
+/// Each variant is a condition the caller can fix: a rule whose two sides do not
+/// pair up or whose left-hand side has the wrong shape, a morphism that is not
+/// well-formed, a match location that does not describe a match, or a trace
+/// step that names no rule. Failures of the engine's own output validation are
+/// not here — those stay [`CatgraphError::Presentation`].
+///
+/// `#[non_exhaustive]`: downstream `match`es must carry a wildcard arm.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
+pub enum RewriteRejection {
+    /// A rule's two sides declare different words on `boundary`, so no step can
+    /// replace one by the other in place.
+    #[error("the two sides declare different {boundary} words")]
+    SidesNotParallel {
+        /// The boundary the two declarations differ on.
+        boundary: RewriteBoundary,
+    },
+
+    /// A morphism handed to a rewrite call is not well-formed — its arities do
+    /// not compose, or the words its expression realizes are not the ones it
+    /// declares.
+    #[error("{side} is ill-formed: {message}")]
+    IllFormed {
+        /// Which morphism of the call the failure was found on.
+        side: RewriteSide,
+        /// The failed clause, with the operands that failed it.
+        message: String,
+    },
+
+    /// A rule's left-hand side holds no generator occurrence, so it matches
+    /// everywhere.
+    #[error("the lhs has no generator occurrence, so it matches everywhere")]
+    EmptyLhs,
+
+    /// A rule's left-hand side names `node` at two boundary coordinates, so its
+    /// interface is not mono and the pushout complement is not unique.
+    #[error(
+        "the lhs interface is not mono — node {node} occupies two boundary coordinates, so the pushout complement is not unique"
+    )]
+    LhsInterfaceNotMono {
+        /// The node occupying two coordinates of `lhs.input ++ lhs.output`.
+        node: usize,
+    },
+
+    /// A match site was enumerated from a different content than the one it was
+    /// handed to, so its hyperedge indices do not name the same hyperedges here.
+    #[error(
+        "the site was enumerated from a different content, so its hyperedge indices do not name the same hyperedges here"
+    )]
+    StaleSite,
+
+    /// A hyperedge assignment is not a convex match of the rule in the content
+    /// it was handed to.
+    #[error(
+        "the assignment does not describe a convex match of this rule here{}",
+        step.map_or_else(String::new, |position| format!(" (replay step {position})"))
+    )]
+    NotAMatch {
+        /// The position in a replayed trace the assignment came from, or `None`
+        /// when it came from a site handed to an apply entry point.
+        step: Option<usize>,
+    },
+
+    /// A replayed step names a rule index outside the rules slice it is replayed
+    /// against.
+    #[error("step {step} names rule {rule} of {rules}")]
+    UnknownRule {
+        /// The step's position in the trace.
+        step: usize,
+        /// The rule index the step names.
+        rule: usize,
+        /// The length of the rules slice.
+        rules: usize,
+    },
+}
+
 /// Unified error type for catgraph operations.
 ///
 /// Each variant captures enough context (sizes, indices, labels) for the caller
@@ -310,6 +447,11 @@ pub enum CatgraphError {
     /// Prop presentation / term-rewriting failed.
     #[error("presentation error: {message}")]
     Presentation { message: String },
+
+    /// A term-rewriting entry point refused a caller-supplied rule, morphism or
+    /// match site.
+    #[error("rewrite rejected: {0}")]
+    Rewrite(RewriteRejection),
 
     /// Signal flow graph → matrix functor (`S: SFG_R → Mat(R)`) failed.
     #[error("sfg functor error: {message}")]
