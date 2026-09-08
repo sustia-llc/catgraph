@@ -728,7 +728,7 @@ fn unroll_list_via_free_mnd(
 }
 
 /// Walk `Free<TreeEndo<A>, Infallible>` directly, applying the recursive cell —
-/// the unique algebra hom for the tree direction. CDL Remark 2.13 / Prop B.18.
+/// the unique algebra hom for the tree direction. CDL Ex 2.14 / Prop B.18.
 ///
 /// Deliberately **recursive**, unlike the crate's own walks since #200: an
 /// oracle written the same way as the code under test proves less. Its fixtures
@@ -906,8 +906,8 @@ fn folding_rnn_unroll_equals_the_free_walker() {
     }
 }
 
-/// **`RecursiveNn::unroll` is the algebra hom, tree direction** (CDL Remark
-/// 2.13 / Prop B.18, Example J.3): it equals the recursive
+/// **`RecursiveNn::unroll` is the algebra hom, tree direction** (CDL Ex 2.14 /
+/// Prop B.18, Example J.3): it equals the recursive
 /// `Free<TreeEndo<u8>, Infallible>` walk on four hand-built trees under two
 /// cells, carries the hand-computed node counts and the asymmetric-cell value
 /// that reads the leftmost-leaf payload, and walks the `common::DEEP`

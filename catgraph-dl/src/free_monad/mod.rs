@@ -3,7 +3,8 @@
 //! witness `F`.
 //!
 //! - [`Free<F, A>`] — `Pure(A) | Suspend(F::Type<Box<Free>>)`, read through
-//!   [`FreeView`]; [`Free::fold`] is the catamorphism (CDL Remark 2.13).
+//!   [`FreeView`]; [`Free::fold`] is the catamorphism (CDL Def A.2 initiality;
+//!   Remark 2.13 for lists, Ex 2.14 for trees).
 //! - [`Cofree<F, A>`] — `head :< F::Type<Box<Cofree>>`; [`Cofree::unfold`] is
 //!   the anamorphism (CDL Remark H.6 / App I).
 //!

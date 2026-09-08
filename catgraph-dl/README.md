@@ -169,8 +169,9 @@ Objects of an `M`-actegory `C`; 1-morphisms `(P ∈ M, f : P ▶ X → Y)`;
 
 Five typed wrappers. The two algebra-direction wrappers (`FoldingRnn`,
 `RecursiveNn`) ship `FreeMnd`-equivalence tests — deterministic + proptest —
-reifying CDL Remark 2.13; the three coalgebra-direction wrappers have
-behavioural tests only, with final-coalgebra equivalence tracked in
+reifying CDL Def A.2 initiality (Remark 2.13 for lists, Ex 2.14 for trees);
+the three coalgebra-direction wrappers have behavioural tests only, with
+final-coalgebra equivalence tracked in
 [#64](https://github.com/sustia-llc/catgraph/issues/64):
 
 | Type | Construction |

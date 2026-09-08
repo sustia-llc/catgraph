@@ -44,7 +44,7 @@ where
     Cell0: Fn(P) -> S,
     Cell1: Fn((P, A, S, S)) -> S,
 {
-    /// Post-order walk (CDL Remark 2.13 / Ex J.3): `Leaf(_)` → `cell_0(p)`;
+    /// Post-order walk (CDL Ex 2.14 / Ex J.3): `Leaf(_)` → `cell_0(p)`;
     /// `Node(l, r)` → `cell_1((p, a, l, r))` with `a` the payload of the
     /// leftmost leaf of the left subtree. Left subtree first, then right, then
     /// combine; iterative at every depth.
