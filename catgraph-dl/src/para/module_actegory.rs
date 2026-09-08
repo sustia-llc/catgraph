@@ -58,6 +58,8 @@ impl<S> DirectSum<RModule<S>, RModule<S>> {
 /// (`[0.5, 1.5]` reads back as an `RModule<f64>` of dim 2, a
 /// [`DirectSum<f64, f64>`](DirectSum), or a `Dual<f64>`); `serde_json`
 /// writes non-finite scalars as `null`, which does not read back into `f64`.
+/// For `S = f64`, [`is_finite`](Self::is_finite) reports whether a value will
+/// survive that round-trip.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RModule<S>(Vec<S>);
@@ -174,6 +176,16 @@ impl<S: Clone + Mul<Output = S>> RModule<S> {
     #[must_use]
     pub fn scale(&self, r: S) -> Self {
         Self(self.0.iter().map(|x| r.clone() * x.clone()).collect())
+    }
+}
+
+impl RModule<f64> {
+    /// Whether every coordinate satisfies [`f64::is_finite`] — `false` for a
+    /// module carrying any NaN or infinity, `true` for every other `Rⁿ`,
+    /// including `R⁰`, whose empty coordinate tuple satisfies it vacuously.
+    #[must_use]
+    pub fn is_finite(&self) -> bool {
+        self.0.iter().all(|x| x.is_finite())
     }
 }
 

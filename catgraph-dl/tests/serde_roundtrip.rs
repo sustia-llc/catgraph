@@ -89,6 +89,45 @@ fn non_finite_floats_serialize_to_null_and_do_not_load_back() {
 }
 
 #[test]
+fn is_finite_agrees_with_the_null_asymmetry() {
+    // `is_finite` is the write-time side of the asymmetry above: on these
+    // modules it is `false` exactly on the ones whose JSON carries a `null`,
+    // and `true` exactly on the ones that load back.
+    let cases: [(F64Module, bool); 4] = [
+        (RModule::new(vec![1.0, f64::NAN, f64::INFINITY]), false),
+        (RModule::new(vec![1.0, 2.0]), true),
+        (RModule::zero_dim(), true),
+        (
+            RModule::new(vec![f64::MAX, f64::MIN, -0.0, f64::MIN_POSITIVE / 2.0]),
+            true,
+        ),
+    ];
+
+    for (module, expected) in cases {
+        let observed = module.is_finite();
+        assert_eq!(
+            observed, expected,
+            "is_finite on {module:?}: observed {observed}, expected {expected}",
+        );
+
+        let json = serde_json::to_string(&module).expect("serialize succeeds");
+        let has_null = json.contains("null");
+        assert_eq!(
+            observed, !has_null,
+            "is_finite on {module:?} is {observed} while its JSON {json} has_null={has_null}; \
+             the two must disagree",
+        );
+
+        let loads_back = serde_json::from_str::<F64Module>(&json).is_ok();
+        assert_eq!(
+            observed, loads_back,
+            "is_finite on {module:?} is {observed} while its JSON {json} loads_back={loads_back}; \
+             the two must agree",
+        );
+    }
+}
+
+#[test]
 fn direct_sum_round_trips_and_still_flattens() {
     let left = RModule::new(vec![1.0, 2.0]);
     let right = RModule::new(vec![3.0]);
