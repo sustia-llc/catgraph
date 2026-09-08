@@ -268,9 +268,10 @@ impl CoalitionEvaluator {
 // T2 — role-modulated couplings
 // ---------------------------------------------------------------------------
 
-/// A validated square table of interaction strengths in `[0, 1]`, serving both
-/// as the role-interaction table `ρ : R × R → [0,1]` of [`modulate`] and as
-/// either factor of a [`role_grid`].
+/// A validated square table of interaction strengths in
+/// `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]`, serving both as the role-interaction table
+/// `ρ : R × R → [0,1]` of [`modulate`] and as either factor of a
+/// [`role_grid`].
 ///
 /// Asymmetry is allowed: `ρ(r, r′)` need not equal `ρ(r′, r)`, and the
 /// coalition engine consumes asymmetric couplings. A consumer that feeds a
@@ -278,7 +279,7 @@ impl CoalitionEvaluator {
 /// `f64-fast` factorization engages only on exactly-symmetric ζ.
 ///
 /// Every entry is validated through [`UnitInterval::new`]: non-NaN and in
-/// `[0, 1]`.
+/// `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RoleModulation {
     rho: Vec<Vec<f64>>,
@@ -304,7 +305,8 @@ impl RoleModulation {
     /// - [`CatgraphError::Composition`] if the table is empty or not square
     ///   (some row's length differs from the number of rows).
     /// - [`CatgraphError::RigAxiomViolation`] if an entry is NaN or outside
-    ///   `[0, 1]` (propagated from [`UnitInterval::new`]).
+    ///   `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]` (propagated from
+    ///   [`UnitInterval::new`]).
     pub fn new(rho: Vec<Vec<f64>>) -> Result<Self, CatgraphError> {
         let n = rho.len();
         if n == 0 {
@@ -387,10 +389,10 @@ pub struct ModulatedCouplings {
 }
 
 impl ModulatedCouplings {
-    /// The modulated `(from, to, π′)` triples, ready for any existing entry
-    /// point — [`CoalitionEvaluator::new`],
-    /// [`coalition_value`](crate::coalition_value),
-    /// [`coalition_magnitude_from_couplings`], …
+    /// The modulated `(from, to, π′)` triples, for the existing entry points —
+    /// [`CoalitionEvaluator::new`], [`coalition_value`](crate::coalition_value),
+    /// [`coalition_magnitude_from_couplings`], … — which reject a triple whose
+    /// `π′` fell into `(0, UNIT_INTERVAL_FLOOR)`.
     ///
     /// One output triple per input triple, in input order. A `ρ` entry of `0`
     /// yields an explicit `0.0` coupling, which the engine treats exactly as an
@@ -404,7 +406,8 @@ impl ModulatedCouplings {
 /// Apply a role-interaction table to a coupling list:
 /// `π′ = ρ(r_from, r_to) · π`.
 ///
-/// The result feeds every coalition entry point unchanged. Under the BTV lift
+/// The result feeds every coalition entry point, which rejects a modulated
+/// product that fell into `(0, UNIT_INTERVAL_FLOOR)`. Under the BTV lift
 /// `d = −ln π` the modulation is additive in the metric, `d′ = d_ρ + d`, so it
 /// only lengthens distances (`ρ ≤ 1`).
 ///
@@ -434,8 +437,12 @@ impl ModulatedCouplings {
 /// - [`CatgraphError::Composition`] if some `roles` entry is `≥ rho.n_roles()`,
 ///   or if a coupling names an agent index `≥ roles.len()`.
 /// - [`CatgraphError::RigAxiomViolation`] if an input probability is NaN or
-///   outside `[0, 1]` (propagated from [`UnitInterval::new`], the same validator
-///   the coalition entry points use).
+///   outside `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]` (propagated from
+///   [`UnitInterval::new`], the same validator the coalition entry points use).
+///
+/// The modulated output `ρ(r_i, r_j)·π` is a product of two accepted values, so
+/// it may land in `(0, UNIT_INTERVAL_FLOOR)`, which the coalition entry points
+/// then reject.
 pub fn modulate(
     couplings: &[(usize, usize, f64)],
     roles: &[RoleId],
@@ -725,7 +732,8 @@ impl ChannelCouplings {
     ///   fixes the diagonal), or if `v.len()` differs from
     ///   [`n_channels`](Self::n_channels).
     /// - [`CatgraphError::RigAxiomViolation`] if a component is NaN or outside
-    ///   `[0, 1]` (propagated from [`UnitInterval::new`]).
+    ///   `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]` (propagated from
+    ///   [`UnitInterval::new`]).
     pub fn set(&mut self, from: usize, to: usize, v: Vec<f64>) -> Result<(), CatgraphError> {
         if from == to {
             return Err(CatgraphError::Composition {
@@ -751,8 +759,9 @@ impl ChannelCouplings {
     }
 
     /// Contract every channel vector to a scalar coupling through the declared
-    /// homomorphism `|v|_θ = Π_c v_c^{θ_c}`, yielding triples the ordinary
-    /// coalition entry points consume.
+    /// homomorphism `|v|_θ = Π_c v_c^{θ_c}`, yielding triples for the ordinary
+    /// coalition entry points, which reject a triple whose collapsed value fell
+    /// into `(0, UNIT_INTERVAL_FLOOR)`.
     ///
     /// # The θ contract
     ///
@@ -768,7 +777,9 @@ impl ChannelCouplings {
     ///
     /// Because every `v_c ∈ [0,1]` and every `θ_c ≥ 0`, the result is never
     /// NaN, and it is in `[0, 1]` on any libm whose `pow` error stays under one
-    /// ulp (Rust documents `powf` precision as platform-dependent).
+    /// ulp (Rust documents `powf` precision as platform-dependent). A collapsed
+    /// coupling may land in `(0, UNIT_INTERVAL_FLOOR)`, which the coalition
+    /// entry points then reject.
     ///
     /// Anchor: each `θ` is a monoid homomorphism
     /// `([0,1]^C, ·, 1) → ([0,1], ·, 1)`, the "size" datum Leinster 2013 §1.3

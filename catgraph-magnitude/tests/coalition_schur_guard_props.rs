@@ -19,8 +19,8 @@
 //! `coalition_value_delta` pin.
 
 use catgraph_magnitude::{
-    CoalitionEvaluator, EvalPath, EvalScratch, INCREMENTAL_REL_TOL, coalition_value,
-    coalition_value_delta,
+    CoalitionEvaluator, EvalPath, EvalScratch, INCREMENTAL_REL_TOL, UNIT_INTERVAL_FLOOR,
+    coalition_value, coalition_value_delta,
 };
 use catgraph_testutil::approx_rel;
 use catgraph_testutil::strategy::{near_cancellation_pair, wide_range_f64};
@@ -32,11 +32,12 @@ use proptest::test_runner::TestRunner;
 const DRAWS: usize = 1024;
 
 /// Smallest non-zero coupling a drawn weight carries; either arm's magnitude
-/// snaps to `0.0` below it, so a weight lies in `{0} ∪ [1e-9, 1]`.
+/// snaps to `0.0` below it, so a weight lies in `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]`,
+/// the domain `UnitInterval::new` accepts.
 ///
 /// A closure entry is a product of at most six drawn couplings, so every
 /// non-zero entry of a generated closure stays normal.
-const WEIGHT_FLOOR: f64 = 1e-9;
+const WEIGHT_FLOOR: f64 = UNIT_INTERVAL_FLOOR;
 
 /// The `[Fast, Slow, SlowNearSingular, MergeOnly, other]` path census a
 /// [`DRAWS`]-draw run takes, over the 2292 candidates it compares.

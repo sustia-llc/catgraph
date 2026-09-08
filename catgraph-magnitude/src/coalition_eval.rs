@@ -403,11 +403,18 @@ impl CoalitionEvaluator {
     /// - a `members` index is out of range for `agents`,
     /// - a coupling index is out of range, or a coupling is a self-loop
     ///   `(i, i, _)` (the identity axiom fixes the diagonal to `1.0`),
-    /// - some probability is outside `[0, 1]` (via [`UnitInterval::new`](crate::UnitInterval::new)),
+    /// - some probability is outside `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]` (via
+    ///   [`UnitInterval::new`](crate::UnitInterval::new)),
     /// - `members` is empty / has a duplicate / names a non-agent (from
     ///   [`Coalition::from_enriched`]), or
     /// - the `t`-scaled skeletal `ζ` of `S` is singular (from
     ///   [`mobius_function`]).
+    ///
+    /// # Panics
+    ///
+    /// Inherited from [`Coalition::from_enriched`]: in a debug build, a chain
+    /// of 36 couplings at `UNIT_INTERVAL_FLOOR` closes to a product that
+    /// underflows to `0.0` and trips the closure's triangle-inequality assert.
     pub fn new<O>(
         agents: &[O],
         couplings: &[(usize, usize, f64)],

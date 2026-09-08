@@ -122,7 +122,9 @@ pub use catgraph::errors::CatgraphError;
 pub use catgraph_applied::enriched::{EnrichedCategory, HomMap};
 pub use catgraph_applied::lawvere_metric::LawvereMetricSpace;
 pub use catgraph_applied::mat::MatR;
-pub use catgraph_applied::rig::{BoolRig, F64Rig, One, Rig, Tropical, UnitInterval, Zero};
+pub use catgraph_applied::rig::{
+    BoolRig, F64Rig, One, Rig, Tropical, UNIT_INTERVAL_FLOOR, UnitInterval, Zero,
+};
 
 // `ZAlgebra` names a Z-algebra — a unital-ring extension carrying a canonical
 // `ℤ → R` homomorphism — not an integer-valued type.

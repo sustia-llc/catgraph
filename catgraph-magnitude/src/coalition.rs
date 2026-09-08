@@ -109,6 +109,13 @@ where
     /// cospan (diagonal `1.0`) is retained; the stored metric space is the
     /// skeleton.
     ///
+    /// Keeping the hom weights of `cat` in
+    /// `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]` is the caller's responsibility: `cat`
+    /// carries `UnitInterval` values, which
+    /// [`UnitInterval::from_rig_value`](catgraph_applied::rig::UnitInterval::from_rig_value)
+    /// also mints below the floor, and a sub-floor weight reaches the closure
+    /// assert below.
+    ///
     /// # Errors
     ///
     /// Returns [`CatgraphError::Composition`] if:
@@ -116,6 +123,13 @@ where
     /// - `members` contains a duplicate (each `NodeId` must be a distinct agent),
     ///   or
     /// - some member is not an object of `cat`.
+    ///
+    /// # Panics
+    ///
+    /// In a debug build, a closure product that underflows to `0.0` has `−ln`
+    /// lift `+∞` and trips the closure's triangle-inequality assert.
+    /// `UNIT_INTERVAL_FLOOR.powi(36)` is `0.0`, so a 36-coupling chain at the
+    /// floor reaches it.
     pub fn from_enriched<C>(cat: &C, members: &[O]) -> Result<Self, CatgraphError>
     where
         C: EnrichedCategory<UnitInterval, Object = O>,
@@ -183,9 +197,10 @@ where
         for (i, row) in closed.iter().enumerate() {
             for (j, &p) in row.iter().enumerate() {
                 if i != j && p > 0.0 {
-                    // A product of couplings each in [0, 1] stays in [0, 1].
-                    let ui = UnitInterval::new(p)
-                        .expect("invariant: product of [0,1] couplings stays in [0,1]");
+                    // A max-product closure entry over couplings in [0, 1] stays
+                    // in [0, 1], but may fall below the `UnitInterval::new` floor.
+                    let ui = UnitInterval::from_rig_value(p)
+                        .expect("invariant: closure of [0,1] couplings stays in [0,1]");
                     wc.set_weight(i, j, ui);
                 }
             }
@@ -432,8 +447,9 @@ where
 /// Builds an internal [`HomMap`](crate::HomMap)`<O, UnitInterval>` over `agents`, forms the
 /// [`Coalition`] via [`Coalition::from_enriched`] (restrict-then-close +
 /// skeletalize), and returns [`coalition_magnitude`] at scale `t`. Couplings are
-/// `(from_idx, to_idx, prob)` triples with `prob` validated into `[0, 1]` via
-/// [`UnitInterval::new`]; `members` are indices into `agents`.
+/// `(from_idx, to_idx, prob)` triples with `prob` validated into
+/// `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]` via [`UnitInterval::new`]; `members` are
+/// indices into `agents`.
 ///
 /// # Errors
 ///
@@ -443,9 +459,16 @@ where
 /// - a coupling is a self-loop `(i, i, _)` (the identity axiom fixes the
 ///   diagonal to `1.0`; a self-coupling would be silently ignored — rejected
 ///   instead),
-/// - some `prob` is outside `[0, 1]` (via [`UnitInterval::new`]), or
+/// - some `prob` is outside `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]` (via
+///   [`UnitInterval::new`]), or
 /// - the coalition is empty / has a duplicate / a member is not an agent
 ///   (from [`Coalition::from_enriched`]).
+///
+/// # Panics
+///
+/// Inherited from [`Coalition::from_enriched`]: in a debug build, a chain of 36
+/// couplings at `UNIT_INTERVAL_FLOOR` closes to a product that underflows to
+/// `0.0` and trips the closure's triangle-inequality assert.
 pub fn coalition_magnitude_from_couplings<O>(
     agents: &[O],
     couplings: &[(usize, usize, f64)],
@@ -470,8 +493,9 @@ where
 ///
 /// Validates in the order [`coalition_magnitude_from_couplings`] fixed — member
 /// indices first, then per coupling: index range, self-loop rejection, and
-/// `prob ∈ [0, 1]` via [`UnitInterval::new`] — using `ctx` as the error-message
-/// prefix so each caller keeps its own message text. Returns the built
+/// `prob ∈ {0} ∪ [UNIT_INTERVAL_FLOOR, 1]` via [`UnitInterval::new`] — using
+/// `ctx` as the error-message prefix so each caller keeps its own message text.
+/// Returns the built
 /// `HomMap`, the resolved member objects, and a `(from, to) → prob` map of the
 /// validated couplings **incident to a member** (either endpoint in `members`),
 /// last-write-wins on duplicates (matching [`HomMap::set_hom`](crate::HomMap)'s
@@ -482,7 +506,7 @@ where
 ///
 /// [`CatgraphError::Composition`] for an out-of-range member index, an
 /// out-of-range coupling index, a self-coupling, or (propagated) a probability
-/// outside `[0, 1]`.
+/// outside `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]`.
 #[allow(clippy::type_complexity)]
 pub(crate) fn build_coupling_category<O>(
     agents: &[O],
@@ -560,8 +584,15 @@ where
 /// # Errors
 ///
 /// Inherited verbatim from [`coalition_magnitude_from_couplings`]: out-of-range
-/// member/coupling indices, self-couplings, probabilities outside `[0, 1]`,
-/// empty/duplicate/unknown members, or a singular `t`-scaled zeta.
+/// member/coupling indices, self-couplings, probabilities outside
+/// `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]`, empty/duplicate/unknown members, or a
+/// singular `t`-scaled zeta.
+///
+/// # Panics
+///
+/// Inherited from [`Coalition::from_enriched`]: in a debug build, a chain of 36
+/// couplings at `UNIT_INTERVAL_FLOOR` closes to a product that underflows to
+/// `0.0` and trips the closure's triangle-inequality assert.
 pub fn coalition_value<O>(
     agents: &[O],
     couplings: &[(usize, usize, f64)],
