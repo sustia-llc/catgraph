@@ -7,6 +7,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [workspace-v0.22.0] - 2026-09-08
+
+### Added
+
+- `LinkVariable` trait with impls for `DMatrix<f64>`, `Rotation3<f64>`,
+  `UnitQuaternion<f64>` and `Isometry3<f64>`;
+  `HypergraphLattice<const D: usize, L: LinkVariable = DMatrix<f64>>`; the
+  Wilson value is the defining-representation trace over its dimension, and
+  typed admissibility gates on the carrier invariant within
+  `TYPED_LINK_TOL = 1e-9`
+  ([#453](https://github.com/sustia-llc/catgraph/pull/453)).
+
 ## [workspace-v0.21.0] - 2026-09-08
 
 ### Changed
@@ -312,7 +324,8 @@ First monorepo release.
   `ConfluenceDiamond`, `confluence_diamonds`, `parallel_independent_events`,
   `events_commute`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.22.0...HEAD
+[workspace-v0.22.0]: https://github.com/sustia-llc/catgraph/compare/v0.21.0...v0.22.0
 [workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0
 [workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.1]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...v0.19.1
