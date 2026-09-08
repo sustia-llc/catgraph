@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.21.0] - 2026-09-08
+
+### Changed
+
+- `SCHUR_SLOW_FALLBACK_TOL` is `1e-7` (was `1e-12`): every border whose
+  incremental value differed from fresh evaluation above
+  `INCREMENTAL_REL_TOL` on the property corpus is diverted to
+  `EvalPath::SlowNearSingular`
+  ([#450](https://github.com/sustia-llc/catgraph/pull/450)).
+- The coalition closure builds its max-product entries through
+  `UnitInterval::from_rig_value`; couplings below `UNIT_INTERVAL_FLOOR`
+  (re-exported) are rejected at every entry point instead of tripping the
+  closure's triangle-inequality assert
+  ([#451](https://github.com/sustia-llc/catgraph/pull/451)).
+
 ## [workspace-v0.20.0] - 2026-09-08
 
 ### Added — tests
@@ -599,7 +614,8 @@ arXiv:2501.06662v2).
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.21.0...HEAD
+[workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0
 [workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.1]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...v0.19.1
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0

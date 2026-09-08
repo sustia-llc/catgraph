@@ -7,6 +7,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [workspace-v0.21.0] - 2026-09-08
+
+### Changed
+
+- `wasserstein_1` measures mass against relative thresholds — `REL_MASS_TOL`,
+  `REL_CAP_FLOOR`, `REL_SHORTFALL` as fractions of `max(Σμ, Σν)` — returns
+  `0.0` only on exactly-zero totals, and rejects a non-finite total
+  ([#449](https://github.com/sustia-llc/catgraph/pull/449)).
+
 ## [workspace-v0.20.0] - 2026-09-08
 
 ### Added — tests
@@ -303,7 +312,8 @@ First monorepo release.
   `ConfluenceDiamond`, `confluence_diamonds`, `parallel_independent_events`,
   `events_commute`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.21.0...HEAD
+[workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0
 [workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.1]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...v0.19.1
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0

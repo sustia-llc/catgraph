@@ -13,6 +13,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.21.0] - 2026-09-08
+
+### Changed — BREAKING
+
+- `UnitInterval::new` accepts `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]` with
+  `UNIT_INTERVAL_FLOOR = 1e-9`, rejecting `0 < value < 1e-9` as
+  `RigAxiomViolation`; `UnitInterval::from_rig_value` validates `[0, 1]`
+  without the floor, for values produced by rig arithmetic
+  ([#451](https://github.com/sustia-llc/catgraph/pull/451)).
+
 ## [workspace-v0.20.0] - 2026-09-08
 
 ### Changed — BREAKING
@@ -1005,7 +1015,8 @@ Co-released with catgraph v0.12.2 and catgraph-magnitude v0.1.1.
   `temperley_lieb`, `e1_operad`, `e2_operad` extracted from `catgraph` core;
   Criterion bench `rayon_thresholds`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.21.0...HEAD
+[workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0
 [workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0

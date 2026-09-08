@@ -268,7 +268,7 @@ surface for hypergraph-category morphisms over catgraph-applied's
   coherence law `eval(t.term(), &m, in.flatten()) == Ok(t.run(in).flatten())`
   ([#90](https://github.com/sustia-llc/catgraph/pull/90)).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.21.0...HEAD
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0
