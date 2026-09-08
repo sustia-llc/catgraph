@@ -22,9 +22,10 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
   Laplacian), gated behind the default-on `spectral` feature (gates
   `multiway::branchial_spectrum`; opt out with `--no-default-features` to drop
   the nalgebra stack for slim / WASM builds).
-- `nalgebra` — `DMatrix<f64>` link variables on the gauge lattice, gated
-  behind the default-on `gauge` feature (gates `hypergraph::gauge`, hence
-  `GaugeGroup`, `HypergraphRewriteGroup`, `HypergraphLattice`,
+- `nalgebra` — `DMatrix<f64>`, `Rotation3<f64>`, `UnitQuaternion<f64>` and
+  `Isometry3<f64>` link variables on the gauge lattice, gated behind the
+  default-on `gauge` feature (gates `hypergraph::gauge`, hence `GaugeGroup`,
+  `HypergraphRewriteGroup`, `HypergraphLattice`, `LinkVariable`,
   `plaquette_action` and `total_action`; opt out with `--no-default-features`
   to drop the same nalgebra stack that `spectral` uses).
 - `petgraph` + `rustworkx-core` — graph algorithms, gated behind the default-on

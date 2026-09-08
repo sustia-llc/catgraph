@@ -25,7 +25,8 @@ pub use evolution::{
 };
 #[cfg(feature = "gauge")]
 pub use gauge::{
-    GaugeGroup, HypergraphLattice, HypergraphRewriteGroup, plaquette_action, total_action,
+    GaugeGroup, HypergraphLattice, HypergraphRewriteGroup, LinkVariable, TYPED_LINK_TOL,
+    plaquette_action, total_action,
 };
 pub use hyperedge::Hyperedge;
 pub use hypergraph::Hypergraph;

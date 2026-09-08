@@ -2,9 +2,12 @@
 //! transformations, closed rewrite paths as Wilson loops, an identity
 //! holonomy as flat.
 //!
-//! A link carries a `DMatrix<f64>` of side `link_dim`; the holonomy of a
-//! closed path is the ordered product `U_k · … · U_1`, and its Wilson value is
-//! `tr(H) / link_dim`.
+//! A link carries a [`LinkVariable`]: `DMatrix<f64>` at side `link_dim`,
+//! `Rotation3<f64>` and `UnitQuaternion<f64>` at `link_dim` 3, `Isometry3<f64>`
+//! at `link_dim` 4. The holonomy of a closed path is the ordered product
+//! `U_k · … · U_1`; its Wilson value is the trace of the carrier's defining
+//! representation over that representation's dimension, and flatness compares
+//! that representation entrywise against the identity.
 //!
 //! Provenance (`docs/ANCHORS.md`): inspired by \[Gor20a\]; the matrix link
 //! variable, the path-ordered holonomy, the Wilson loop as a normalized trace
@@ -198,14 +201,229 @@ pub fn total_action(holonomies: &[f64]) -> f64 {
 // ============================================================================
 
 use std::collections::HashMap;
+use std::fmt;
 
-use nalgebra::DMatrix;
+use nalgebra::{DMatrix, Isometry3, Matrix3, Matrix4, Rotation3, UnitQuaternion};
 
 use super::hypergraph::Hypergraph;
 use super::rewrite_rule::RewriteRule;
 
-/// `D`-dimensional lattice of hypergraph states; links carry `link_dim` ×
-/// `link_dim` matrix gauge variables.
+// ============================================================================
+// LinkVariable
+// ============================================================================
+
+/// Tolerance on a typed link variable's departure from its carrier's own
+/// invariant: entries of `R · Rᵀ − I` for `Rotation3<f64>`, and `|‖q‖ − 1|`
+/// for `UnitQuaternion<f64>` and for the rotation of `Isometry3<f64>`.
+pub const TYPED_LINK_TOL: f64 = 1e-9;
+
+/// A value carried by a directed lattice link: composable, and read through a
+/// defining representation whose dimension is the one
+/// [`identity`](LinkVariable::identity) was given.
+pub trait LinkVariable: Clone + fmt::Debug + PartialEq {
+    /// The identity of defining-representation dimension `dim`, or `None`
+    /// when the carrier holds no element of that dimension.
+    fn identity(dim: usize) -> Option<Self>;
+
+    /// The composite `self · inner`.
+    fn compose(&self, inner: &Self) -> Self;
+
+    /// The carrier's inverse construction applied to `self`, or `None`.
+    fn inverse(&self) -> Option<Self>;
+
+    /// Reports whether `self` is admissible at defining-representation
+    /// dimension `dim`.
+    fn is_admissible(&self, dim: usize) -> bool;
+
+    /// Trace of the defining representation of `self` over that
+    /// representation's dimension.
+    fn wilson(&self) -> f64;
+
+    /// Reports whether every entry of the defining representation of `self`
+    /// minus the identity is below `eps` in absolute value.
+    fn is_flat(&self, eps: f64) -> bool;
+}
+
+/// Square real matrices of any side, composing by matrix product.
+impl LinkVariable for DMatrix<f64> {
+    /// The `dim` × `dim` identity, or `None` when `dim` is `0`.
+    fn identity(dim: usize) -> Option<Self> {
+        (dim > 0).then(|| Self::identity(dim, dim))
+    }
+
+    /// The matrix product `self * inner`, whose shape needs `self`'s column
+    /// count to equal `inner`'s row count.
+    fn compose(&self, inner: &Self) -> Self {
+        self * inner
+    }
+
+    /// `self.clone().try_inverse()`.
+    fn inverse(&self) -> Option<Self> {
+        self.clone().try_inverse()
+    }
+
+    /// Reports whether `self` is `dim` × `dim`, every entry is finite, and
+    /// `self.clone().try_inverse()` is `Some`.
+    fn is_admissible(&self, dim: usize) -> bool {
+        if self.nrows() != dim || self.ncols() != dim {
+            return false;
+        }
+        if !self.iter().all(|entry| entry.is_finite()) {
+            return false;
+        }
+        self.clone().try_inverse().is_some()
+    }
+
+    /// `tr(self) / self.nrows()`, over square `self`.
+    #[allow(clippy::cast_precision_loss)]
+    fn wilson(&self) -> f64 {
+        self.trace() / self.nrows() as f64
+    }
+
+    /// Reports whether every entry of `self` minus the identity of `self`'s
+    /// shape is below `eps` in absolute value.
+    fn is_flat(&self, eps: f64) -> bool {
+        let identity = Self::identity(self.nrows(), self.ncols());
+        (self - identity).iter().all(|d| d.abs() < eps)
+    }
+}
+
+/// SO(3) rotations in their 3 × 3 defining representation.
+impl LinkVariable for Rotation3<f64> {
+    /// The identity rotation when `dim` is `3`, `None` otherwise.
+    fn identity(dim: usize) -> Option<Self> {
+        (dim == 3).then(Self::identity)
+    }
+
+    /// The rotation `self * inner`.
+    fn compose(&self, inner: &Self) -> Self {
+        self * inner
+    }
+
+    /// `Some` of the transposed rotation.
+    fn inverse(&self) -> Option<Self> {
+        Some(Self::inverse(self))
+    }
+
+    /// Reports whether `dim` is `3`, every entry of `self`'s 3 × 3 matrix `R`
+    /// is finite, every entry of `R · Rᵀ − I` is below [`TYPED_LINK_TOL`] in
+    /// absolute value, and `det(R)` is positive.
+    fn is_admissible(&self, dim: usize) -> bool {
+        if dim != 3 {
+            return false;
+        }
+        let matrix = self.matrix();
+        if !matrix.iter().all(|entry| entry.is_finite()) {
+            return false;
+        }
+        let gram = matrix * matrix.transpose();
+        (gram - Matrix3::<f64>::identity())
+            .iter()
+            .all(|d| d.abs() < TYPED_LINK_TOL)
+            && matrix.determinant() > 0.0
+    }
+
+    /// `tr(R) / 3` for `self`'s 3 × 3 matrix `R`.
+    fn wilson(&self) -> f64 {
+        self.matrix().trace() / 3.0
+    }
+
+    /// Reports whether every entry of `self`'s 3 × 3 matrix minus the
+    /// identity is below `eps` in absolute value.
+    fn is_flat(&self, eps: f64) -> bool {
+        (self.matrix() - Matrix3::<f64>::identity())
+            .iter()
+            .all(|d| d.abs() < eps)
+    }
+}
+
+/// Unit quaternions read through the 3 × 3 rotation they represent.
+impl LinkVariable for UnitQuaternion<f64> {
+    /// The identity quaternion when `dim` is `3`, `None` otherwise.
+    fn identity(dim: usize) -> Option<Self> {
+        (dim == 3).then(Self::identity)
+    }
+
+    /// The unit quaternion `self * inner`.
+    fn compose(&self, inner: &Self) -> Self {
+        self * inner
+    }
+
+    /// `Some` of the conjugate quaternion.
+    fn inverse(&self) -> Option<Self> {
+        Some(Self::inverse(self))
+    }
+
+    /// Reports whether `dim` is `3`, every coordinate of `self` is finite,
+    /// and `‖self‖` differs from `1` by less than [`TYPED_LINK_TOL`].
+    fn is_admissible(&self, dim: usize) -> bool {
+        dim == 3
+            && self.coords.iter().all(|entry| entry.is_finite())
+            && (self.coords.norm() - 1.0).abs() < TYPED_LINK_TOL
+    }
+
+    /// `tr(R) / 3` for `self`'s 3 × 3 rotation matrix `R`.
+    fn wilson(&self) -> f64 {
+        self.to_rotation_matrix().matrix().trace() / 3.0
+    }
+
+    /// Reports whether every entry of `self`'s 3 × 3 rotation matrix minus
+    /// the identity is below `eps` in absolute value.
+    fn is_flat(&self, eps: f64) -> bool {
+        (self.to_rotation_matrix().matrix() - Matrix3::<f64>::identity())
+            .iter()
+            .all(|d| d.abs() < eps)
+    }
+}
+
+/// SE(3) rigid motions read through their 4 × 4 homogeneous representation.
+impl LinkVariable for Isometry3<f64> {
+    /// The identity isometry when `dim` is `4`, `None` otherwise.
+    fn identity(dim: usize) -> Option<Self> {
+        (dim == 4).then(Self::identity)
+    }
+
+    /// The isometry `self * inner`.
+    fn compose(&self, inner: &Self) -> Self {
+        self * inner
+    }
+
+    /// `Some` of `Isometry3::inverse`: the transposed rotation and the negated,
+    /// back-rotated translation.
+    fn inverse(&self) -> Option<Self> {
+        Some(Self::inverse(self))
+    }
+
+    /// Reports whether `dim` is `4`, every translation component of `self` is
+    /// finite, and `self`'s rotation is admissible as a
+    /// [`UnitQuaternion<f64>`](UnitQuaternion) at `3`.
+    fn is_admissible(&self, dim: usize) -> bool {
+        dim == 4
+            && self
+                .translation
+                .vector
+                .iter()
+                .all(|entry| entry.is_finite())
+            && self.rotation.is_admissible(3)
+    }
+
+    /// `tr(H) / 4` for `self`'s 4 × 4 homogeneous matrix `H`, equal to
+    /// `(tr(R) + 1) / 4` for `self`'s rotation `R`.
+    fn wilson(&self) -> f64 {
+        self.to_homogeneous().trace() / 4.0
+    }
+
+    /// Reports whether every entry of `self`'s 4 × 4 homogeneous matrix minus
+    /// the identity is below `eps` in absolute value.
+    fn is_flat(&self, eps: f64) -> bool {
+        (self.to_homogeneous() - Matrix4::<f64>::identity())
+            .iter()
+            .all(|d| d.abs() < eps)
+    }
+}
+
+/// `D`-dimensional lattice of hypergraph states; links carry [`LinkVariable`]
+/// values of defining-representation dimension `link_dim`.
 ///
 /// # Example
 ///
@@ -227,7 +445,7 @@ use super::rewrite_rule::RewriteRule;
 /// lattice.apply_rewrite(&[2], 0);
 /// ```
 #[derive(Debug, Clone)]
-pub struct HypergraphLattice<const D: usize> {
+pub struct HypergraphLattice<const D: usize, L: LinkVariable = DMatrix<f64>> {
     /// Dimensions of the lattice (e.g., [5, 5, 5] for 5x5x5).
     dimensions: [usize; D],
 
@@ -245,11 +463,14 @@ pub struct HypergraphLattice<const D: usize> {
 
     /// Link variable of each directed link.
     /// Key: (site, `neighbor_site`) pair
-    /// Value: the `link_dim` × `link_dim` matrix carried by that link
-    transitions: HashMap<(Vec<usize>, Vec<usize>), DMatrix<f64>>,
+    /// Value: the link variable carried by that link
+    transitions: HashMap<(Vec<usize>, Vec<usize>), L>,
 
-    /// Side length of every link variable.
+    /// Defining-representation dimension of every link variable.
     link_dim: usize,
+
+    /// The carrier's identity at `link_dim`, from which every holonomy folds.
+    identity: L,
 
     /// Total number of rewrite steps applied.
     step_count: usize,
@@ -258,14 +479,14 @@ pub struct HypergraphLattice<const D: usize> {
     wilson_loops: Vec<(Vec<Vec<usize>>, f64)>,
 }
 
-impl<const D: usize> HypergraphLattice<D> {
+impl<const D: usize, L: LinkVariable> HypergraphLattice<D, L> {
     /// Creates a `D`-dimensional hypergraph lattice of the given site
     /// `dimensions`, gauge `group` and rewrite `rules`, whose links carry
-    /// `link_dim` × `link_dim` matrices.
+    /// `L` values of defining-representation dimension `link_dim`.
     ///
     /// # Panics
     ///
-    /// Panics when `link_dim` is `0`.
+    /// Panics when `L::identity(link_dim)` is `None`.
     ///
     /// # Example
     ///
@@ -287,7 +508,9 @@ impl<const D: usize> HypergraphLattice<D> {
         rules: Vec<RewriteRule>,
         link_dim: usize,
     ) -> Self {
-        assert!(link_dim > 0, "link_dim must be positive, got 0");
+        let identity = L::identity(link_dim).unwrap_or_else(|| {
+            panic!("link_dim {link_dim} has no identity in this link-variable carrier")
+        });
         Self {
             dimensions,
             group,
@@ -296,12 +519,14 @@ impl<const D: usize> HypergraphLattice<D> {
             states: HashMap::new(),
             transitions: HashMap::new(),
             link_dim,
+            identity,
             step_count: 0,
             wilson_loops: Vec::new(),
         }
     }
 
-    /// Returns the side length of the lattice's link variables.
+    /// Returns the defining-representation dimension of the lattice's link
+    /// variables.
     #[inline]
     #[must_use]
     pub const fn link_dim(&self) -> usize {
@@ -311,7 +536,7 @@ impl<const D: usize> HypergraphLattice<D> {
     /// Returns the link variable recorded on the directed link `from` → `to`,
     /// or `None` when that link carries none.
     #[must_use]
-    pub fn link(&self, from: &[usize; D], to: &[usize; D]) -> Option<&DMatrix<f64>> {
+    pub fn link(&self, from: &[usize; D], to: &[usize; D]) -> Option<&L> {
         self.transitions.get(&(from.to_vec(), to.to_vec()))
     }
 
@@ -402,33 +627,21 @@ impl<const D: usize> HypergraphLattice<D> {
     }
 
     /// Reports whether `link` is admissible as a link variable of this
-    /// lattice: `link_dim` × `link_dim`, every entry finite, and
-    /// `link.clone().try_inverse()` returning `Some`.
-    fn is_admissible(&self, link: &DMatrix<f64>) -> bool {
-        if link.nrows() != self.link_dim || link.ncols() != self.link_dim {
-            return false;
-        }
-        if !link.iter().all(|entry| entry.is_finite()) {
-            return false;
-        }
-        link.clone().try_inverse().is_some()
+    /// lattice: [`LinkVariable::is_admissible`] at this lattice's `link_dim`.
+    fn is_admissible(&self, link: &L) -> bool {
+        link.is_admissible(self.link_dim)
     }
 
     /// Records `link` on the directed link `from` → `to` and returns `true`.
     ///
     /// Returns `false` and records nothing when either endpoint has a
-    /// coordinate at or beyond the corresponding lattice dimension, when
-    /// `link` is not `link_dim` × `link_dim`, when an entry of `link` is not
-    /// finite, or when `link.clone().try_inverse()` returns `None`.
+    /// coordinate at or beyond the corresponding lattice dimension, or when
+    /// `link` is not [`LinkVariable::is_admissible`] at this lattice's
+    /// `link_dim`.
     ///
     /// Links recorded here are the ones
     /// [`loop_holonomy`](Self::loop_holonomy) traverses.
-    pub fn record_transition(
-        &mut self,
-        from: &[usize; D],
-        to: &[usize; D],
-        link: DMatrix<f64>,
-    ) -> bool {
+    pub fn record_transition(&mut self, from: &[usize; D], to: &[usize; D], link: L) -> bool {
         if !Self::is_valid_site(from, &self.dimensions)
             || !Self::is_valid_site(to, &self.dimensions)
         {
@@ -445,63 +658,50 @@ impl<const D: usize> HypergraphLattice<D> {
     /// the closed cycle `sites`, or `None` when some link of the cycle carries
     /// no recorded transition.
     ///
-    /// An empty cycle yields the `link_dim` identity.
-    fn cycle_holonomy(&self, sites: &[Vec<usize>]) -> Option<DMatrix<f64>> {
-        let mut holonomy = DMatrix::<f64>::identity(self.link_dim, self.link_dim);
+    /// An empty cycle yields the carrier's identity at `link_dim`.
+    fn cycle_holonomy(&self, sites: &[Vec<usize>]) -> Option<L> {
+        let mut holonomy = self.identity.clone();
         for i in 0..sites.len() {
             let key = (sites[i].clone(), sites[(i + 1) % sites.len()].clone());
             let link = self.transitions.get(&key)?;
-            holonomy = link * holonomy;
+            holonomy = link.compose(&holonomy);
         }
         Some(holonomy)
-    }
-
-    /// Reports whether every entry of `holonomy` − `I` is below `eps` in
-    /// absolute value.
-    fn matrix_is_flat(holonomy: &DMatrix<f64>, eps: f64) -> bool {
-        let identity = DMatrix::<f64>::identity(holonomy.nrows(), holonomy.ncols());
-        (holonomy - identity).iter().all(|d| d.abs() < eps)
-    }
-
-    /// Normalized trace `tr(holonomy) / link_dim`.
-    #[allow(clippy::cast_precision_loss)]
-    fn matrix_wilson(&self, holonomy: &DMatrix<f64>) -> f64 {
-        holonomy.trace() / self.link_dim as f64
     }
 
     /// Ordered product `U_k · … · U_1` of the link variables around the closed
     /// loop `path`, which wraps from its last site back to its first.
     ///
     /// Returns `None` when any link of the loop carries no recorded
-    /// transition; an empty `path` yields the `link_dim` identity. A site may
-    /// occur more than once in `path` and contributes one factor per visit; a
-    /// one-site `path` traverses that site's self-link. The product of finite
-    /// link variables can overflow to a non-finite matrix.
+    /// transition; an empty `path` yields the carrier's identity at
+    /// `link_dim`. A site may occur more than once in `path` and contributes
+    /// one factor per visit; a one-site `path` traverses that site's
+    /// self-link. The product of finite link variables can overflow to a
+    /// non-finite value.
     #[must_use]
-    pub fn loop_holonomy(&self, path: &[&[usize; D]]) -> Option<DMatrix<f64>> {
+    pub fn loop_holonomy(&self, path: &[&[usize; D]]) -> Option<L> {
         let sites: Vec<Vec<usize>> = path.iter().map(|s| s.to_vec()).collect();
         self.cycle_holonomy(&sites)
     }
 
-    /// Wilson value `tr(H) / link_dim` of `path`'s holonomy `H`.
+    /// Wilson value [`LinkVariable::wilson`] of `path`'s holonomy.
     ///
     /// Returns `None` exactly when
     /// [`loop_holonomy`](Self::loop_holonomy) does.
     #[must_use]
     pub fn wilson_loop(&self, path: &[&[usize; D]]) -> Option<f64> {
-        self.loop_holonomy(path)
-            .map(|holonomy| self.matrix_wilson(&holonomy))
+        self.loop_holonomy(path).map(|holonomy| holonomy.wilson())
     }
 
-    /// Reports whether every entry of `path`'s holonomy minus the identity is
-    /// below `eps` in absolute value.
+    /// Reports whether `path`'s holonomy is [`LinkVariable::is_flat`] at
+    /// `eps`.
     ///
     /// Returns `None` exactly when
     /// [`loop_holonomy`](Self::loop_holonomy) does.
     #[must_use]
     pub fn is_flat(&self, path: &[&[usize; D]], eps: f64) -> Option<bool> {
         self.loop_holonomy(path)
-            .map(|holonomy| Self::matrix_is_flat(&holonomy, eps))
+            .map(|holonomy| holonomy.is_flat(eps))
     }
 
     /// Reports whether `path`'s holonomy is flat at `1e-6`.
@@ -529,21 +729,21 @@ impl<const D: usize> HypergraphLattice<D> {
     /// of length `D` that no recorded link touches.
     ///
     /// Returns `false` and changes nothing when a value of `g` is not
-    /// `link_dim` × `link_dim`, has a non-finite entry, or has a
-    /// `clone().try_inverse()` of `None`.
-    pub fn gauge_transform(&mut self, g: &HashMap<Vec<usize>, DMatrix<f64>>) -> bool {
-        if !g.values().all(|matrix| self.is_admissible(matrix)) {
+    /// [`LinkVariable::is_admissible`] at this lattice's `link_dim`.
+    pub fn gauge_transform(&mut self, g: &HashMap<Vec<usize>, L>) -> bool {
+        if !g.values().all(|value| self.is_admissible(value)) {
             return false;
         }
 
-        let identity = DMatrix::<f64>::identity(self.link_dim, self.link_dim);
-        let inverses: HashMap<Vec<usize>, DMatrix<f64>> = g
+        let identity = self.identity.clone();
+        let inverses: HashMap<Vec<usize>, L> = g
             .iter()
-            .map(|(site, matrix)| {
+            .map(|(site, value)| {
                 (
                     site.clone(),
-                    matrix.clone().try_inverse().expect(
-                        "invariant: is_admissible accepted every value of g, so each inverts",
+                    value.inverse().expect(
+                        "invariant: is_admissible accepted every value of g, so each has an \
+                         inverse",
                     ),
                 )
             })
@@ -555,7 +755,10 @@ impl<const D: usize> HypergraphLattice<D> {
             .map(|((from, to), link)| {
                 let left = g.get(to).unwrap_or(&identity);
                 let right = inverses.get(from).unwrap_or(&identity);
-                ((from.clone(), to.clone()), left * link * right)
+                (
+                    (from.clone(), to.clone()),
+                    left.compose(&link.compose(right)),
+                )
             })
             .collect();
 
@@ -567,7 +770,7 @@ impl<const D: usize> HypergraphLattice<D> {
                     "invariant: gauge_transform keeps the link key set, so a recorded cycle \
                      still resolves",
                 );
-                (sites.clone(), self.matrix_wilson(&holonomy))
+                (sites.clone(), holonomy.wilson())
             })
             .collect();
 
@@ -617,7 +820,7 @@ impl<const D: usize> HypergraphLattice<D> {
                     ];
 
                     if let Some(holonomy) = self.cycle_holonomy(&sites) {
-                        let wilson = self.matrix_wilson(&holonomy);
+                        let wilson = holonomy.wilson();
                         self.wilson_loops.push((sites, wilson));
                     }
                 }
@@ -707,7 +910,7 @@ impl<const D: usize> HypergraphLattice<D> {
         }
         Some(self.wilson_loops.iter().all(|(sites, _)| {
             self.cycle_holonomy(sites)
-                .is_some_and(|holonomy| Self::matrix_is_flat(&holonomy, 1e-6))
+                .is_some_and(|holonomy| holonomy.is_flat(1e-6))
         }))
     }
 
@@ -726,7 +929,7 @@ impl<const D: usize> HypergraphLattice<D> {
     }
 }
 
-impl<const D: usize> Default for HypergraphLattice<D> {
+impl<const D: usize> Default for HypergraphLattice<D, DMatrix<f64>> {
     fn default() -> Self {
         let dims = [1; D];
         Self::new(dims, HypergraphRewriteGroup::new(3), vec![], 1)

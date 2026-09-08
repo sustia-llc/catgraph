@@ -2,16 +2,17 @@
 //!
 //! Demonstrates gauge groups, structure constants, lattice construction
 //! with DPO rewrite rules, Wilson loops for causal invariance analysis,
-//! plaquette action computation, and a GL(2) link field under a gauge
-//! transformation.
+//! plaquette action computation, a GL(2) link field under a gauge
+//! transformation, and an SO(3) link field of quarter-turns.
 
 use std::collections::HashMap;
+use std::f64::consts::FRAC_PI_2;
 
 use catgraph_physics::hypergraph::{
     GaugeGroup, Hypergraph, HypergraphLattice, HypergraphRewriteGroup, RewriteRule,
     plaquette_action, total_action,
 };
-use nalgebra::DMatrix;
+use nalgebra::{DMatrix, Rotation3, Vector3};
 
 /// The 1 × 1 link variable carrying `value`.
 fn link1(value: f64) -> DMatrix<f64> {
@@ -249,6 +250,45 @@ fn gl2_holonomy() {
     println!();
 }
 
+// ============================================================================
+// SO(3) Link Variables
+// ============================================================================
+
+fn so3_holonomy() {
+    println!("=== SO(3) Link Variables ===\n");
+
+    let group = HypergraphRewriteGroup::new(1);
+    let mut lattice: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([3], group, vec![], 3);
+
+    let a = Rotation3::from_axis_angle(&Vector3::z_axis(), FRAC_PI_2);
+    let b = Rotation3::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2);
+    let c = Rotation3::from_axis_angle(&Vector3::y_axis(), FRAC_PI_2);
+    println!("A = z quarter-turn:{a}");
+    println!("B = x quarter-turn:{b}");
+    println!("C = y quarter-turn:{c}");
+
+    lattice.record_transition(&[0], &[1], a);
+    lattice.record_transition(&[1], &[2], b);
+    lattice.record_transition(&[2], &[0], c);
+
+    let path: Vec<&[usize; 1]> = vec![&[0], &[1], &[2]];
+    match lattice.loop_holonomy(&path) {
+        Some(h) => println!("holonomy C*B*A over [0]->[1]->[2]->[0]:{h}"),
+        None => println!("holonomy over [0]->[1]->[2]->[0]: none"),
+    }
+    println!("wilson value:  {:?}", lattice.wilson_loop(&path));
+    println!("flat at 1e-6:  {:?}", lattice.is_flat(&path, 1e-6));
+
+    // Rotating the base point conjugates the holonomy and keeps the trace.
+    let rotated: Vec<&[usize; 1]> = vec![&[1], &[2], &[0]];
+    println!(
+        "wilson value from base point [1]: {:?}",
+        lattice.wilson_loop(&rotated)
+    );
+    println!();
+}
+
 fn main() {
     gauge_group();
     structure_constants();
@@ -257,4 +297,5 @@ fn main() {
     wilson_loops();
     actions();
     gl2_holonomy();
+    so3_holonomy();
 }
