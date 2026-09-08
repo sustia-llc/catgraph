@@ -312,6 +312,24 @@ where
     }
 }
 
+impl<T> BrauerMorphism<T>
+where
+    T: Add<Output = T> + Zero + One + Copy,
+{
+    /// Iterate over the diagram's terms as `(coefficient, δ power, arcs)`.
+    ///
+    /// `arcs` is the term's perfect matching on the point set
+    /// `0 .. domain() + codomain()`: the domain points are `0 .. domain()` and
+    /// the codomain points `domain() ..`. Terms whose coefficient is zero are
+    /// present until [`simplify`](Self::simplify) removes them, and the order
+    /// the terms come out in is not fixed.
+    pub fn terms(&self) -> impl Iterator<Item = (T, usize, &[Pair])> {
+        self.diagram
+            .iter()
+            .map(|((delta_pow, matching), coeff)| (*coeff, *delta_pow, matching.pairs.as_slice()))
+    }
+}
+
 impl<T> HasIdentity<usize> for BrauerMorphism<T>
 where
     T: Add<Output = T> + Zero + One + Copy,

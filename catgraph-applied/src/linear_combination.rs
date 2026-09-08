@@ -271,6 +271,13 @@ impl<Coeffs, Target: Eq + Hash> LinearCombination<Coeffs, Target> {
         }
     }
 
+    /// Iterate over the `(basis element, coefficient)` terms, in an order this
+    /// method does not fix. Zero-coefficient terms are included until
+    /// [`simplify`](Self::simplify) removes them.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&Target, &Coeffs)> {
+        self.0.iter()
+    }
+
     /// True if every basis element satisfies the predicate (ignoring coefficients).
     pub fn all_terms_satisfy<F>(&self, term_predicate: F) -> bool
     where
