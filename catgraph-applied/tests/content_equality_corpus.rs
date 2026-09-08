@@ -50,8 +50,33 @@ use catgraph_applied::sfg::SfgGenerator;
 type Sfg = SfgGenerator<BoolRig>;
 type E = PropExpr<Sfg>;
 
-/// The design round's seed. Every pin below is relative to it.
+/// The design round's seed. The default- and braid-tier pins are relative to it.
 const SEED: u64 = 0x9E37_79B9_7F4A_7C15;
+
+/// The interleave tier's seed (#183). A distinct odd constant — the second
+/// splitmix64 finalizer multiplier — so this corpus is independent of the two
+/// above rather than a re-reading of the same stream.
+const INTERLEAVE_SEED: u64 = 0x94D0_49BB_1331_11EB;
+
+/// Which corpus a case is drawn from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Mode {
+    /// The design round's corpus, exactly.
+    Default,
+    /// The design round's corpus with `Braid(1, 1)` atoms injected.
+    Braid,
+    /// The #183 corpus: the `A…B…A` owner-word gadget.
+    Interleave,
+}
+
+impl Mode {
+    fn seed(self) -> u64 {
+        match self {
+            Mode::Default | Mode::Braid => SEED,
+            Mode::Interleave => INTERLEAVE_SEED,
+        }
+    }
+}
 
 /// The published corpus size.
 const FULL_PAIRS: usize = 100_000;
@@ -80,8 +105,8 @@ fn splitmix64(x: &mut u64) -> u64 {
 }
 
 impl Rng {
-    fn new(index: usize) -> Self {
-        let mut s = SEED ^ (index as u64).wrapping_mul(0xD6E8_FEB8_6659_FD93);
+    fn new(seed: u64, index: usize) -> Self {
+        let mut s = seed ^ (index as u64).wrapping_mul(0xD6E8_FEB8_6659_FD93);
         splitmix64(&mut s);
         Rng(s)
     }
@@ -136,11 +161,21 @@ fn gen_layer(rng: &mut Rng, w: usize, braid: bool) -> (E, usize) {
         atoms.push(g(SfgGenerator::Zero));
     }
     let out = atoms.iter().map(PropExpr::target).sum();
-    let layer = atoms
+    (tensor_atoms(atoms), out)
+}
+
+fn stack_layers(layers: Vec<E>) -> E {
+    layers
+        .into_iter()
+        .reduce(|x, y| PropExpr::Compose(Box::new(x), Box::new(y)))
+        .expect("nonempty")
+}
+
+fn tensor_atoms(atoms: Vec<E>) -> E {
+    atoms
         .into_iter()
         .reduce(|x, y| PropExpr::Tensor(Box::new(x), Box::new(y)))
-        .expect("nonempty");
-    (layer, out)
+        .expect("nonempty")
 }
 
 fn gen_expr(rng: &mut Rng, braid: bool) -> E {
@@ -152,10 +187,66 @@ fn gen_expr(rng: &mut Rng, braid: bool) -> E {
         w = out;
         layers.push(l);
     }
-    layers
-        .into_iter()
-        .reduce(|x, y| PropExpr::Compose(Box::new(x), Box::new(y)))
-        .expect("nonempty")
+    stack_layers(layers)
+}
+
+// ------------------------------------------------- the interleave gadget (#183)
+
+/// Wires flanking the gadget on either side, exclusive bound.
+const MAX_FLANK: u64 = 3;
+/// Splitter (`Discard`) wires between the shared component's two arms, so
+/// `mid ∈ {1, 2}`.
+const MAX_SPLITTERS: u64 = 2;
+/// Random layers appended below the gadget, exclusive bound — so a case is 2–4
+/// layers deep, the same budget as [`MAX_LAYERS`] rather than a tuned one.
+const MAX_TAIL: u64 = 3;
+
+fn push_ids(atoms: &mut Vec<E>, n: usize) {
+    for _ in 0..n {
+        atoms.push(PropExpr::Identity(1));
+    }
+}
+
+/// One arm of the shared component: a `1 → 1` atom, so the joining `μ` below
+/// still spans exactly two wires.
+fn arm(rng: &mut Rng) -> E {
+    match rng.below(4) {
+        0 => g(SfgGenerator::Scalar(BoolRig(true))),
+        1 => g(SfgGenerator::Scalar(BoolRig(false))),
+        _ => PropExpr::Identity(1),
+    }
+}
+
+/// An expression whose input owner word is `A…B…A` **by construction** — the
+/// gadget and why no tail undoes it are described in
+/// `tests/smc_nf_differential_sweep.rs`'s module docs.
+fn gen_interleaved_expr(rng: &mut Rng) -> E {
+    let pre = rng.below(MAX_FLANK) as usize;
+    let post = rng.below(MAX_FLANK) as usize;
+    let mid = 1 + rng.below(MAX_SPLITTERS) as usize;
+
+    let mut top: Vec<E> = Vec::new();
+    push_ids(&mut top, pre);
+    top.push(arm(rng));
+    for _ in 0..mid {
+        top.push(g(SfgGenerator::Discard));
+    }
+    top.push(arm(rng));
+    push_ids(&mut top, post);
+
+    let mut join: Vec<E> = Vec::new();
+    push_ids(&mut join, pre);
+    join.push(g(SfgGenerator::Add));
+    push_ids(&mut join, post);
+
+    let mut layers = vec![tensor_atoms(top), tensor_atoms(join)];
+    let mut w = pre + 1 + post;
+    for _ in 0..rng.below(MAX_TAIL) {
+        let (l, out) = gen_layer(rng, w, false);
+        w = out;
+        layers.push(l);
+    }
+    stack_layers(layers)
 }
 
 fn count_nodes(e: &E, tensor: bool) -> usize {
@@ -223,9 +314,13 @@ fn rewrite_nth(e: &E, n: &mut isize, kind: u8) -> E {
 }
 
 /// Case `i`: the pair `(A, B)` with `B` one sound rewriting of `A`.
-fn case(i: usize, braid: bool) -> (E, E) {
-    let mut rng = Rng::new(i);
-    let a = gen_expr(&mut rng, braid);
+fn case(i: usize, mode: Mode) -> (E, E) {
+    let mut rng = Rng::new(mode.seed(), i);
+    let a = match mode {
+        Mode::Default => gen_expr(&mut rng, false),
+        Mode::Braid => gen_expr(&mut rng, true),
+        Mode::Interleave => gen_interleaved_expr(&mut rng),
+    };
     let kind = match rng.below(10) {
         0 | 1 => 2u8,
         x if x % 2 == 0 => 0,
@@ -259,10 +354,10 @@ fn key_agrees(a: &Content<Sfg>, b: &Content<Sfg>) -> bool {
     canonical_key(a) == canonical_key(b)
 }
 
-fn sweep(pairs: usize, braid: bool) -> Score {
+fn sweep(pairs: usize, mode: Mode) -> Score {
     let mut score = Score::default();
     for i in 0..pairs {
-        let (a, b) = case(i, braid);
+        let (a, b) = case(i, mode);
         let (na, nb) = (nf(&a), nf(&b));
         if na == nb {
             continue;
@@ -306,7 +401,7 @@ fn on_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T 
 /// and the claim is unweakened.
 #[test]
 fn smoke_prefix_is_closed_by_content() {
-    let score = on_big_stack(|| sweep(SMOKE_PAIRS, false));
+    let score = on_big_stack(|| sweep(SMOKE_PAIRS, Mode::Default));
     assert_eq!(
         score,
         Score {
@@ -331,7 +426,7 @@ fn smoke_prefix_is_closed_by_content() {
 #[test]
 #[ignore = "100k-pair sweep. Run with --ignored alongside the NF sweep."]
 fn published_corpus_is_closed_by_content() {
-    let score = on_big_stack(|| sweep(FULL_PAIRS, false));
+    let score = on_big_stack(|| sweep(FULL_PAIRS, Mode::Default));
     assert_eq!(
         score,
         Score {
@@ -356,7 +451,7 @@ fn published_corpus_is_closed_by_content() {
 #[test]
 #[ignore = "100k-pair braid-mode sweep. Run with --ignored alongside the NF sweep."]
 fn braid_mode_corpus_is_closed_by_content() {
-    let score = on_big_stack(|| sweep(FULL_PAIRS, true));
+    let score = on_big_stack(|| sweep(FULL_PAIRS, Mode::Braid));
     assert_eq!(
         score,
         Score {
@@ -366,6 +461,34 @@ fn braid_mode_corpus_is_closed_by_content() {
             key_equal: 1_153,
         },
         "content no longer closes every braid-mode divergence"
+    );
+}
+
+/// The #183 interleave corpus: the braid-free `A…B…A` owner-word gadget, whose
+/// marked-case coverage is pinned by
+/// `smc_nf_differential_sweep::published_interleave_mode_figures_reproduce`.
+/// 745 divergences, none in `𝔉`, all closed by content and by `canonical_key`.
+///
+/// Lineage: **745 / 0 / 745 / 745**, at introduction (2026-09-08). The
+/// `divergent` and `in_fragment` columns are
+/// `smc_nf_differential_sweep::published_interleave_mode_figures_reproduce`'s;
+/// the two content columns are measured here.
+#[test]
+#[ignore = "100k-pair interleave-mode sweep. Run with --ignored alongside the NF sweep."]
+fn interleave_mode_corpus_is_closed_by_content() {
+    let score = on_big_stack(|| sweep(FULL_PAIRS, Mode::Interleave));
+    assert_eq!(
+        score,
+        Score {
+            divergent: 745,
+            in_fragment: 0,
+            content_equal: 745,
+            key_equal: 745,
+        },
+        "content no longer closes every interleave-mode divergence. If \
+         `divergent` or `in_fragment` is what moved, compare against \
+         `smc_nf_differential_sweep::published_interleave_mode_figures_reproduce` \
+         — the corpus copy here is meant to be bit-identical to that file's."
     );
 }
 
@@ -380,8 +503,8 @@ fn cross_corpus_pairs_are_separated() {
     let hits = on_big_stack(|| {
         let mut hits = Vec::new();
         for i in 0..CROSS_PAIRS {
-            let (a, _) = case(i, false);
-            let (c, _) = case(i + CROSS_OFFSET, false);
+            let (a, _) = case(i, Mode::Default);
+            let (c, _) = case(i + CROSS_OFFSET, Mode::Default);
             let (ca, cc) = (content_of(&a), content_of(&c));
             let equal = content_eq(&ca, &cc);
             assert_eq!(
@@ -434,7 +557,7 @@ fn nf_preserves_content_across_the_corpus() {
     let checked = on_big_stack(|| {
         let mut checked = 0usize;
         for i in (0..SMOKE_PAIRS).step_by(25) {
-            let (a, _) = case(i, false);
+            let (a, _) = case(i, Mode::Default);
             let readback = from_string_diagram(&nf(&a));
             assert!(
                 content_eq(&content_of(&a), &content_of(&readback)),
