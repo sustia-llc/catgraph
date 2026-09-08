@@ -94,7 +94,10 @@
 //! `#[cfg(feature = "gauge")]`, as do its imports; it runs at `link_dim` 1,
 //! and the matrix link surface — `loop_holonomy`, `is_flat`,
 //! `gauge_transform`, `link`, `link_dim` past its accessor — is exercised by
-//! `tests/gauge_theory.rs`, not this file. Every other arm runs on
+//! `tests/gauge_theory.rs`, not this file. The `Rotation3<f64>`,
+//! `UnitQuaternion<f64>` and `Isometry3<f64>` link variables are exercised by
+//! `tests/gauge_theory.rs` too; the arm here runs on `DMatrix<f64>` only.
+//! Every other arm runs on
 //! `--no-default-features` too.
 //! `tests/branchial_analysis.rs` (coloring, k-core, spectra),
 //! `tests/catgraph_bridge.rs` (the cospan/span bridge),
@@ -117,11 +120,11 @@
 //!
 //! `BranchialSpectrum` `BranchialStepStats` `BranchialSummary`
 //! `ConfluenceDiamond` `ConservationResult` `CospanInvarianceResult`
-//! `CospanMergeDetail` `DiscreteInterval` `HypergraphStep` `MergePoint`
-//! `MultiwayCospan` `MultiwayCospanExt` `MultiwayCospanGraph` `MultiwayCycle`
-//! `MultiwayStatistics` `ParallelIntervals` `RepeatDetection` `RewriteEffect`
-//! `RewriteSpan` `RewriteSpanError` `SpanSide` `StepTrace` `TemporalComplex`
-//! `TemporalComplexError` `TraceAnalysis`
+//! `CospanMergeDetail` `DiscreteInterval` `HypergraphStep` `LinkVariable`
+//! `MergePoint` `MultiwayCospan` `MultiwayCospanExt` `MultiwayCospanGraph`
+//! `MultiwayCycle` `MultiwayStatistics` `ParallelIntervals` `RepeatDetection`
+//! `RewriteEffect` `RewriteSpan` `RewriteSpanError` `SpanSide` `StepTrace`
+//! `TemporalComplex` `TemporalComplexError` `TraceAnalysis`
 
 use std::collections::{HashMap, HashSet, VecDeque};
 

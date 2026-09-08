@@ -2,20 +2,25 @@
 //!
 //! Tests structure constants, plaquette/total action functions, and
 //! `HypergraphLattice` construction, state management, DPO rewriting, matrix
-//! link variables, path-ordered loop holonomies, Wilson loops, flatness, and
-//! gauge transformation by vertex conjugation.
+//! link variables, the `Rotation3<f64>` / `UnitQuaternion<f64>` /
+//! `Isometry3<f64>` link variables, path-ordered loop holonomies, Wilson
+//! loops, flatness, and gauge transformation by vertex conjugation.
 
 #![cfg(feature = "gauge")]
 #![allow(clippy::float_cmp)]
 
 use std::collections::HashMap;
+use std::f64::consts::{FRAC_PI_2, PI};
 
 use catgraph_physics::hypergraph::{
-    GaugeGroup, Hypergraph, HypergraphLattice, HypergraphRewriteGroup, RewriteRule,
+    GaugeGroup, Hypergraph, HypergraphLattice, HypergraphRewriteGroup, LinkVariable, RewriteRule,
     plaquette_action, total_action,
 };
 use catgraph_testutil::Lcg;
-use nalgebra::DMatrix;
+use nalgebra::{
+    DMatrix, Isometry3, Matrix3, Matrix4, Quaternion, Rotation3, Translation3, UnitQuaternion,
+    Vector3,
+};
 
 // ---------------------------------------------------------------------------
 // Link-variable helpers
@@ -201,7 +206,7 @@ fn lattice_2d_construction() {
 
 /// `new` rejects `link_dim` 0 by panicking.
 #[test]
-#[should_panic(expected = "link_dim must be positive")]
+#[should_panic(expected = "link_dim 0 has no identity")]
 fn lattice_new_rejects_link_dim_zero() {
     let _: HypergraphLattice<1> =
         HypergraphLattice::new([2], HypergraphRewriteGroup::new(1), vec![], 0);
@@ -1793,5 +1798,1191 @@ fn holonomy_traverses_a_repeated_site_once_per_visit() {
         wilson,
         Some(4.0),
         "wilson_loop([0, 1, 0, 2]) = {wilson:?}, expected Some(4.0) = trace 8 / link_dim 2"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Typed SO(3) / SE(3) link variables
+// ---------------------------------------------------------------------------
+
+/// The quarter-turn about the z axis.
+fn rz() -> Rotation3<f64> {
+    Rotation3::from_axis_angle(&Vector3::z_axis(), FRAC_PI_2)
+}
+
+/// The quarter-turn about the x axis.
+fn rx() -> Rotation3<f64> {
+    Rotation3::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2)
+}
+
+/// The quarter-turn about the y axis.
+fn ry() -> Rotation3<f64> {
+    Rotation3::from_axis_angle(&Vector3::y_axis(), FRAC_PI_2)
+}
+
+/// `[[0, -1, 0], [1, 0, 0], [0, 0, 1]]`, the matrix of [`rz`].
+fn rz_matrix() -> Matrix3<f64> {
+    Matrix3::new(0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
+}
+
+/// `[[1, 0, 0], [0, 0, -1], [0, 1, 0]]`, the matrix of [`rx`].
+fn rx_matrix() -> Matrix3<f64> {
+    Matrix3::new(1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0)
+}
+
+/// `[[0, 0, 1], [0, 1, 0], [-1, 0, 0]]`, the matrix of [`ry`].
+fn ry_matrix() -> Matrix3<f64> {
+    Matrix3::new(0.0, 0.0, 1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0)
+}
+
+/// The quarter-turn about the z axis as a unit quaternion.
+fn qz() -> UnitQuaternion<f64> {
+    UnitQuaternion::from_axis_angle(&Vector3::z_axis(), FRAC_PI_2)
+}
+
+/// The rotation of `angle` about the z axis as a translation-free isometry.
+fn iso_z(angle: f64) -> Isometry3<f64> {
+    Isometry3::new(Vector3::zeros(), Vector3::z() * angle)
+}
+
+/// Largest absolute entrywise difference between two 3 × 3 matrices.
+fn diff3(left: &Matrix3<f64>, right: &Matrix3<f64>) -> f64 {
+    (left - right)
+        .iter()
+        .fold(0.0_f64, |acc, d| acc.max(d.abs()))
+}
+
+/// Largest absolute entrywise difference between two 4 × 4 matrices.
+fn diff4(left: &Matrix4<f64>, right: &Matrix4<f64>) -> f64 {
+    (left - right)
+        .iter()
+        .fold(0.0_f64, |acc, d| acc.max(d.abs()))
+}
+
+/// Records `link` on every hop of the four-site cycle `[0] → [1] → [2] → [3] →
+/// [0]` of a `[4]` line lattice at `link_dim`, and returns that cycle's
+/// flatness verdict at `1e-6`.
+fn closure_is_flat<L: LinkVariable>(link: &L, link_dim: usize) -> Option<bool> {
+    let mut lattice: HypergraphLattice<1, L> =
+        HypergraphLattice::new([4], HypergraphRewriteGroup::new(1), vec![], link_dim);
+    let hops: [([usize; 1], [usize; 1]); 4] = [([0], [1]), ([1], [2]), ([2], [3]), ([3], [0])];
+    for (from, to) in hops {
+        assert!(
+            lattice.record_transition(&from, &to, link.clone()),
+            "record_transition({from:?} -> {to:?}) = false, expected true"
+        );
+    }
+    let path: Vec<&[usize; 1]> = vec![&[0], &[1], &[2], &[3]];
+    lattice.is_flat(&path, 1e-6)
+}
+
+// --- (a) construction ------------------------------------------------------
+
+#[test]
+fn typed_lattices_carry_their_defining_representation_dimension() {
+    let group = HypergraphRewriteGroup::new(1);
+
+    let rotation: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([3], group, vec![], 3);
+    let quaternion: HypergraphLattice<1, UnitQuaternion<f64>> =
+        HypergraphLattice::new([3], group, vec![], 3);
+    let isometry: HypergraphLattice<1, Isometry3<f64>> =
+        HypergraphLattice::new([3], group, vec![], 4);
+
+    assert_eq!(
+        rotation.link_dim(),
+        3,
+        "Rotation3 lattice link_dim = {}, expected 3",
+        rotation.link_dim()
+    );
+    assert_eq!(
+        quaternion.link_dim(),
+        3,
+        "UnitQuaternion lattice link_dim = {}, expected 3",
+        quaternion.link_dim()
+    );
+    assert_eq!(
+        isometry.link_dim(),
+        4,
+        "Isometry3 lattice link_dim = {}, expected 4",
+        isometry.link_dim()
+    );
+}
+
+#[test]
+#[should_panic(expected = "link_dim 2 has no identity")]
+fn rotation3_lattice_rejects_link_dim_2() {
+    let _lattice: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([3], HypergraphRewriteGroup::new(1), vec![], 2);
+}
+
+#[test]
+#[should_panic(expected = "link_dim 4 has no identity")]
+fn unit_quaternion_lattice_rejects_link_dim_4() {
+    let _lattice: HypergraphLattice<1, UnitQuaternion<f64>> =
+        HypergraphLattice::new([3], HypergraphRewriteGroup::new(1), vec![], 4);
+}
+
+#[test]
+#[should_panic(expected = "link_dim 3 has no identity")]
+fn isometry3_lattice_rejects_link_dim_3() {
+    let _lattice: HypergraphLattice<1, Isometry3<f64>> =
+        HypergraphLattice::new([3], HypergraphRewriteGroup::new(1), vec![], 3);
+}
+
+// --- (b) SO(3) path ordering ----------------------------------------------
+
+#[test]
+fn so3_loop_holonomy_is_path_ordered() {
+    let group = HypergraphRewriteGroup::new(1);
+    let mut lattice: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([3], group, vec![], 3);
+
+    assert!(lattice.record_transition(&[0], &[1], rz()), "A on [0]->[1]");
+    assert!(lattice.record_transition(&[1], &[2], rx()), "B on [1]->[2]");
+    assert!(lattice.record_transition(&[2], &[0], ry()), "C on [2]->[0]");
+
+    let path: Vec<&[usize; 1]> = vec![&[0], &[1], &[2]];
+    let holonomy = lattice
+        .loop_holonomy(&path)
+        .expect("invariant: all three links of the cycle were just recorded");
+    let d = diff3(holonomy.matrix(), &rx_matrix());
+    assert!(
+        d < 1e-14,
+        "loop_holonomy([0, 1, 2]) = {:?}, expected C·B·A = Rx = [[1,0,0],[0,0,-1],[0,1,0]]; \
+         max entry difference {d}, expected < 1e-14",
+        holonomy.matrix()
+    );
+    let wilson = lattice
+        .wilson_loop(&path)
+        .expect("invariant: the holonomy of this cycle exists");
+    assert!(
+        (wilson - 1.0 / 3.0).abs() < 1e-14,
+        "wilson_loop([0, 1, 2]) = {wilson}, expected {} = trace(Rx) 1 / 3",
+        1.0 / 3.0
+    );
+    let flat = lattice.is_flat(&path, 1e-6);
+    assert_eq!(
+        flat,
+        Some(false),
+        "is_flat([0, 1, 2], 1e-6) = {flat:?}, expected Some(false) — C·B·A is Rx, not I"
+    );
+
+    // Rotating the base point conjugates the holonomy and keeps the trace.
+    let rotated: Vec<&[usize; 1]> = vec![&[1], &[2], &[0]];
+    let conjugate = lattice
+        .loop_holonomy(&rotated)
+        .expect("invariant: the same three links carry this cycle");
+    let dr = diff3(conjugate.matrix(), &ry_matrix());
+    assert!(
+        dr < 1e-14,
+        "loop_holonomy([1, 2, 0]) = {:?}, expected A·C·B = Ry = [[0,0,1],[0,1,0],[-1,0,0]]; \
+         max entry difference {dr}, expected < 1e-14",
+        conjugate.matrix()
+    );
+    let rotated_wilson = lattice
+        .wilson_loop(&rotated)
+        .expect("invariant: the holonomy of this cycle exists");
+    assert!(
+        (rotated_wilson - 1.0 / 3.0).abs() < 1e-14,
+        "wilson_loop([1, 2, 0]) = {rotated_wilson}, expected {} = trace(Ry) 1 / 3",
+        1.0 / 3.0
+    );
+
+    // Assigning the same three rotations in the opposite direction around the
+    // cycle gives the reversed product, which the trace separates.
+    let mut reversed: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([3], group, vec![], 3);
+    assert!(
+        reversed.record_transition(&[0], &[1], ry()),
+        "C on [0]->[1]"
+    );
+    assert!(
+        reversed.record_transition(&[1], &[2], rx()),
+        "B on [1]->[2]"
+    );
+    assert!(
+        reversed.record_transition(&[2], &[0], rz()),
+        "A on [2]->[0]"
+    );
+    let backwards = reversed
+        .loop_holonomy(&path)
+        .expect("invariant: all three links of the cycle were just recorded");
+    let expected_backwards = Matrix3::new(-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0);
+    let db = diff3(backwards.matrix(), &expected_backwards);
+    assert!(
+        db < 1e-14,
+        "reversed loop_holonomy([0, 1, 2]) = {:?}, expected A·B·C = \
+         [[-1,0,0],[0,0,1],[0,1,0]]; max entry difference {db}, expected < 1e-14",
+        backwards.matrix()
+    );
+    let backwards_wilson = reversed
+        .wilson_loop(&path)
+        .expect("invariant: the holonomy of this cycle exists");
+    assert!(
+        (backwards_wilson + 1.0 / 3.0).abs() < 1e-14,
+        "reversed wilson_loop([0, 1, 2]) = {backwards_wilson}, expected {} = trace -1 / 3",
+        -1.0 / 3.0
+    );
+}
+
+// --- (c) SO(3) closure -----------------------------------------------------
+
+#[test]
+fn so3_four_quarter_turns_close_the_loop() {
+    let group = HypergraphRewriteGroup::new(1);
+    let mut lattice: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([4], group, vec![], 3);
+    let hops: [([usize; 1], [usize; 1]); 4] = [([0], [1]), ([1], [2]), ([2], [3]), ([3], [0])];
+    for (from, to) in hops {
+        assert!(
+            lattice.record_transition(&from, &to, rz()),
+            "record_transition({from:?} -> {to:?}) = false, expected true"
+        );
+    }
+
+    let path: Vec<&[usize; 1]> = vec![&[0], &[1], &[2], &[3]];
+    let holonomy = lattice
+        .loop_holonomy(&path)
+        .expect("invariant: all four links of the cycle were just recorded");
+    let d = diff3(holonomy.matrix(), &Matrix3::identity());
+    assert!(
+        d < 1e-12,
+        "loop_holonomy of four z quarter-turns = {:?}, expected I3; \
+         max entry difference {d}, expected < 1e-12",
+        holonomy.matrix()
+    );
+    let wilson = lattice
+        .wilson_loop(&path)
+        .expect("invariant: the holonomy of this cycle exists");
+    assert!(
+        (wilson - 1.0).abs() < 1e-12,
+        "wilson_loop of Rz^4 = {wilson}, expected 1.0 = trace(I3) 3 / 3"
+    );
+    let flat = lattice.is_flat(&path, 1e-6);
+    assert_eq!(
+        flat,
+        Some(true),
+        "is_flat of Rz^4 at 1e-6 = {flat:?}, expected Some(true)"
+    );
+
+    // Closing the cycle with the inverse quarter-turn leaves the z half-turn.
+    let closing = LinkVariable::inverse(&rz()).expect("invariant: every rotation inverts");
+    assert!(
+        lattice.record_transition(&[3], &[0], closing),
+        "record_transition([3] -> [0], Rz^-1) = false, expected true"
+    );
+    let curved = lattice
+        .loop_holonomy(&path)
+        .expect("invariant: all four links of the cycle carry a transition");
+    let expected = Matrix3::new(-1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0);
+    let dc = diff3(curved.matrix(), &expected);
+    assert!(
+        dc < 1e-12,
+        "loop_holonomy with Rz^-1 closing = {:?}, expected Rz^2 = \
+         [[-1,0,0],[0,-1,0],[0,0,1]]; max entry difference {dc}, expected < 1e-12",
+        curved.matrix()
+    );
+    let curved_wilson = lattice
+        .wilson_loop(&path)
+        .expect("invariant: the holonomy of this cycle exists");
+    assert!(
+        (curved_wilson + 1.0 / 3.0).abs() < 1e-12,
+        "wilson_loop of Rz^2 = {curved_wilson}, expected {} = trace -1 / 3",
+        -1.0 / 3.0
+    );
+    let action = lattice.plaquette_action(&path);
+    assert_eq!(
+        action,
+        Some(f64::INFINITY),
+        "plaquette_action of Rz^2 = {action:?}, expected Some(inf) — its Wilson value is negative"
+    );
+}
+
+// --- (d) SE(3) -------------------------------------------------------------
+
+#[test]
+fn se3_holonomy_reads_the_homogeneous_matrix() {
+    let group = HypergraphRewriteGroup::new(1);
+    let path: Vec<&[usize; 1]> = vec![&[0], &[1]];
+
+    // A translation and its inverse close the loop.
+    let mut closed: HypergraphLattice<1, Isometry3<f64>> =
+        HypergraphLattice::new([2], group, vec![], 4);
+    let shift = Isometry3::translation(1.0, 2.0, 3.0);
+    assert!(
+        closed.record_transition(&[0], &[1], shift),
+        "record_transition([0] -> [1], T(1,2,3)) = false, expected true"
+    );
+    assert!(
+        closed.record_transition(&[1], &[0], shift.inverse()),
+        "record_transition([1] -> [0], T(1,2,3)^-1) = false, expected true"
+    );
+    let holonomy = closed
+        .loop_holonomy(&path)
+        .expect("invariant: both links of the two-site loop were just recorded");
+    let d = diff4(&holonomy.to_homogeneous(), &Matrix4::identity());
+    assert!(
+        d < 1e-12,
+        "loop_holonomy of T and T^-1 = {:?}, expected I4; \
+         max entry difference {d}, expected < 1e-12",
+        holonomy.to_homogeneous()
+    );
+    let wilson = closed
+        .wilson_loop(&path)
+        .expect("invariant: the holonomy of this loop exists");
+    assert!(
+        (wilson - 1.0).abs() < 1e-12,
+        "wilson_loop of T·T^-1 = {wilson}, expected 1.0 = trace(I4) 4 / 4"
+    );
+    let flat = closed.is_flat(&path, 1e-6);
+    assert_eq!(
+        flat,
+        Some(true),
+        "is_flat of T·T^-1 at 1e-6 = {flat:?}, expected Some(true)"
+    );
+
+    // A surviving pure translation is Wilson-blind but not flat.
+    let mut shifted: HypergraphLattice<1, Isometry3<f64>> =
+        HypergraphLattice::new([2], group, vec![], 4);
+    assert!(
+        shifted.record_transition(&[0], &[1], Isometry3::translation(1.0, 0.0, 0.0)),
+        "record_transition([0] -> [1], T(1,0,0)) = false, expected true"
+    );
+    assert!(
+        shifted.record_transition(&[1], &[0], Isometry3::identity()),
+        "record_transition([1] -> [0], identity) = false, expected true"
+    );
+    let shifted_wilson = shifted
+        .wilson_loop(&path)
+        .expect("invariant: the holonomy of this loop exists");
+    assert!(
+        (shifted_wilson - 1.0).abs() < 1e-12,
+        "wilson_loop of T(1,0,0) = {shifted_wilson}, expected 1.0 = (trace(I3) 3 + 1) / 4"
+    );
+    let shifted_flat = shifted.is_flat(&path, 1e-6);
+    assert_eq!(
+        shifted_flat,
+        Some(false),
+        "is_flat of T(1,0,0) at 1e-6 = {shifted_flat:?}, expected Some(false) — \
+         entry (0, 3) of the homogeneous matrix is 1"
+    );
+
+    // The rotation part alone sets the Wilson value.
+    let mut quarter: HypergraphLattice<1, Isometry3<f64>> =
+        HypergraphLattice::new([2], group, vec![], 4);
+    assert!(
+        quarter.record_transition(&[0], &[1], iso_z(FRAC_PI_2)),
+        "record_transition([0] -> [1], Rz(pi/2)) = false, expected true"
+    );
+    assert!(
+        quarter.record_transition(&[1], &[0], Isometry3::identity()),
+        "record_transition([1] -> [0], identity) = false, expected true"
+    );
+    let quarter_wilson = quarter
+        .wilson_loop(&path)
+        .expect("invariant: the holonomy of this loop exists");
+    assert!(
+        (quarter_wilson - 0.5).abs() < 1e-12,
+        "wilson_loop of the SE(3) z quarter-turn = {quarter_wilson}, \
+         expected 0.5 = (trace(Rz) 1 + 1) / 4"
+    );
+
+    let mut half: HypergraphLattice<1, Isometry3<f64>> =
+        HypergraphLattice::new([2], group, vec![], 4);
+    assert!(
+        half.record_transition(&[0], &[1], iso_z(PI)),
+        "record_transition([0] -> [1], Rz(pi)) = false, expected true"
+    );
+    assert!(
+        half.record_transition(&[1], &[0], Isometry3::identity()),
+        "record_transition([1] -> [0], identity) = false, expected true"
+    );
+    let half_wilson = half
+        .wilson_loop(&path)
+        .expect("invariant: the holonomy of this loop exists");
+    assert!(
+        half_wilson.abs() < 1e-12,
+        "wilson_loop of the SE(3) z half-turn = {half_wilson}, \
+         expected 0.0 = (trace(Rz(pi)) -1 + 1) / 4"
+    );
+    let half_action = half.plaquette_action(&path);
+    assert_eq!(
+        half_action,
+        Some(f64::INFINITY),
+        "plaquette_action of the SE(3) z half-turn = {half_action:?}, \
+         expected Some(inf) — its Wilson value is 0.0"
+    );
+}
+
+// --- (e) SE(3) gauge transformation ---------------------------------------
+
+#[test]
+fn se3_gauge_transform_conjugates_the_holonomy_and_fixes_its_wilson_value() {
+    let group = HypergraphRewriteGroup::new(1);
+    let mut lattice: HypergraphLattice<1, Isometry3<f64>> =
+        HypergraphLattice::new([2], group, vec![], 4);
+    let turn = iso_z(FRAC_PI_2);
+    assert!(
+        lattice.record_transition(&[0], &[1], turn),
+        "record_transition([0] -> [1], Rz(pi/2)) = false, expected true"
+    );
+    assert!(
+        lattice.record_transition(&[1], &[0], Isometry3::identity()),
+        "record_transition([1] -> [0], identity) = false, expected true"
+    );
+
+    let path: Vec<&[usize; 1]> = vec![&[0], &[1]];
+    let before = lattice
+        .wilson_loop(&path)
+        .expect("invariant: both links of the two-site loop were just recorded");
+    assert!(
+        (before - 0.5).abs() < 1e-12,
+        "wilson_loop before gauge_transform = {before}, expected 0.5 = (1 + 1) / 4"
+    );
+    let flat_before = lattice.is_flat(&path, 1e-6);
+    assert_eq!(
+        flat_before,
+        Some(false),
+        "is_flat before gauge_transform = {flat_before:?}, expected Some(false)"
+    );
+
+    // A gauge value with a non-finite translation is rejected outright.
+    let mut bad: HashMap<Vec<usize>, Isometry3<f64>> = HashMap::new();
+    bad.insert(vec![0], Isometry3::translation(f64::NAN, 0.0, 0.0));
+    let rejected = lattice.gauge_transform(&bad);
+    assert!(
+        !rejected,
+        "gauge_transform with a NaN translation = {rejected}, expected false"
+    );
+    let unchanged = lattice.link(&[0], &[1]);
+    assert_eq!(
+        unchanged,
+        Some(&turn),
+        "link([0] -> [1]) after the rejected gauge_transform = {unchanged:?}, \
+         expected the recorded Rz(pi/2)"
+    );
+
+    let mut g: HashMap<Vec<usize>, Isometry3<f64>> = HashMap::new();
+    g.insert(vec![0], Isometry3::translation(5.0, 0.0, 0.0));
+    let accepted = lattice.gauge_transform(&g);
+    assert!(
+        accepted,
+        "gauge_transform with g_0 = T(5,0,0) = {accepted}, expected true"
+    );
+
+    let holonomy = lattice
+        .loop_holonomy(&path)
+        .expect("invariant: gauge_transform keeps the link key set");
+    let rotation_diff = diff3(
+        holonomy.rotation.to_rotation_matrix().matrix(),
+        &rz_matrix(),
+    );
+    assert!(
+        rotation_diff < 1e-12,
+        "rotation of g_0·U·g_0^-1 = {:?}, expected Rz(pi/2) = [[0,-1,0],[1,0,0],[0,0,1]]; \
+         max entry difference {rotation_diff}, expected < 1e-12",
+        holonomy.rotation.to_rotation_matrix().matrix()
+    );
+    let translation = holonomy.translation.vector;
+    let expected_translation = Vector3::new(5.0, -5.0, 0.0);
+    let translation_diff = (translation - expected_translation)
+        .iter()
+        .fold(0.0_f64, |acc, d| acc.max(d.abs()));
+    assert!(
+        translation_diff < 1e-12,
+        "translation of g_0·U·g_0^-1 = {translation:?}, expected s - R s = \
+         (5, 0, 0) - (0, 5, 0) = (5, -5, 0); max component difference \
+         {translation_diff}, expected < 1e-12"
+    );
+    let after = lattice
+        .wilson_loop(&path)
+        .expect("invariant: gauge_transform keeps the link key set");
+    assert!(
+        (after - 0.5).abs() < 1e-12,
+        "wilson_loop after gauge_transform = {after}, expected 0.5, unchanged from {before}"
+    );
+    let flat_after = lattice.is_flat(&path, 1e-6);
+    assert_eq!(
+        flat_after,
+        Some(false),
+        "is_flat after gauge_transform = {flat_after:?}, expected Some(false)"
+    );
+}
+
+// --- (f) cross-carrier agreement -------------------------------------------
+
+#[test]
+fn the_three_typed_carriers_agree_on_the_same_rotations() {
+    let group = HypergraphRewriteGroup::new(1);
+    let path: Vec<&[usize; 1]> = vec![&[0], &[1], &[2]];
+
+    let mut rotation: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([3], group, vec![], 3);
+    assert!(
+        rotation.record_transition(&[0], &[1], rz()),
+        "A on [0]->[1]"
+    );
+    assert!(
+        rotation.record_transition(&[1], &[2], rx()),
+        "B on [1]->[2]"
+    );
+    assert!(
+        rotation.record_transition(&[2], &[0], ry()),
+        "C on [2]->[0]"
+    );
+    let rotation_wilson = rotation
+        .wilson_loop(&path)
+        .expect("invariant: all three links of the cycle were just recorded");
+    assert!(
+        (rotation_wilson - 1.0 / 3.0).abs() < 1e-12,
+        "Rotation3 wilson_loop([0, 1, 2]) = {rotation_wilson}, expected {} = trace 1 / 3",
+        1.0 / 3.0
+    );
+    let rotation_flat = rotation.is_flat(&path, 1e-6);
+    assert_eq!(
+        rotation_flat,
+        Some(false),
+        "Rotation3 is_flat([0, 1, 2], 1e-6) = {rotation_flat:?}, expected Some(false)"
+    );
+
+    let mut quaternion: HypergraphLattice<1, UnitQuaternion<f64>> =
+        HypergraphLattice::new([3], group, vec![], 3);
+    assert!(
+        quaternion.record_transition(
+            &[0],
+            &[1],
+            UnitQuaternion::from_axis_angle(&Vector3::z_axis(), FRAC_PI_2)
+        ),
+        "A on [0]->[1]"
+    );
+    assert!(
+        quaternion.record_transition(
+            &[1],
+            &[2],
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2)
+        ),
+        "B on [1]->[2]"
+    );
+    assert!(
+        quaternion.record_transition(
+            &[2],
+            &[0],
+            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), FRAC_PI_2)
+        ),
+        "C on [2]->[0]"
+    );
+    let quaternion_wilson = quaternion
+        .wilson_loop(&path)
+        .expect("invariant: all three links of the cycle were just recorded");
+    assert!(
+        (quaternion_wilson - 1.0 / 3.0).abs() < 1e-12,
+        "UnitQuaternion wilson_loop([0, 1, 2]) = {quaternion_wilson}, expected {} = trace 1 / 3",
+        1.0 / 3.0
+    );
+    let quaternion_flat = quaternion.is_flat(&path, 1e-6);
+    assert_eq!(
+        quaternion_flat,
+        Some(false),
+        "UnitQuaternion is_flat([0, 1, 2], 1e-6) = {quaternion_flat:?}, expected Some(false)"
+    );
+    let quaternion_round_trip = LinkVariable::inverse(&qz())
+        .expect("invariant: every unit quaternion has a conjugate")
+        .compose(&qz());
+    assert_eq!(
+        quaternion_round_trip,
+        UnitQuaternion::identity(),
+        "UnitQuaternion inverse(qz)·qz = {quaternion_round_trip:?}, \
+         expected the identity quaternion"
+    );
+
+    let mut isometry: HypergraphLattice<1, Isometry3<f64>> =
+        HypergraphLattice::new([3], group, vec![], 4);
+    assert!(
+        isometry.record_transition(&[0], &[1], iso_z(FRAC_PI_2)),
+        "A on [0]->[1]"
+    );
+    assert!(
+        isometry.record_transition(
+            &[1],
+            &[2],
+            Isometry3::new(Vector3::zeros(), Vector3::x() * FRAC_PI_2)
+        ),
+        "B on [1]->[2]"
+    );
+    assert!(
+        isometry.record_transition(
+            &[2],
+            &[0],
+            Isometry3::new(Vector3::zeros(), Vector3::y() * FRAC_PI_2)
+        ),
+        "C on [2]->[0]"
+    );
+    let isometry_wilson = isometry
+        .wilson_loop(&path)
+        .expect("invariant: all three links of the cycle were just recorded");
+    assert!(
+        (isometry_wilson - 0.5).abs() < 1e-12,
+        "Isometry3 wilson_loop([0, 1, 2]) = {isometry_wilson}, expected 0.5 = (trace 1 + 1) / 4"
+    );
+    let isometry_flat = isometry.is_flat(&path, 1e-6);
+    assert_eq!(
+        isometry_flat,
+        Some(false),
+        "Isometry3 is_flat([0, 1, 2], 1e-6) = {isometry_flat:?}, expected Some(false)"
+    );
+
+    // The four-quarter-turn closure is flat on every carrier.
+    let rotation_closure = closure_is_flat(&rz(), 3);
+    assert_eq!(
+        rotation_closure,
+        Some(true),
+        "Rotation3 closure flatness = {rotation_closure:?}, expected Some(true)"
+    );
+    let quaternion_closure = closure_is_flat(&qz(), 3);
+    assert_eq!(
+        quaternion_closure,
+        Some(true),
+        "UnitQuaternion closure flatness = {quaternion_closure:?}, expected Some(true)"
+    );
+    let isometry_closure = closure_is_flat(&iso_z(FRAC_PI_2), 4);
+    assert_eq!(
+        isometry_closure,
+        Some(true),
+        "Isometry3 closure flatness = {isometry_closure:?}, expected Some(true)"
+    );
+}
+
+// --- (g) typed admissibility ----------------------------------------------
+
+#[test]
+fn typed_links_with_non_finite_entries_are_rejected() {
+    let group = HypergraphRewriteGroup::new(1);
+
+    // The trait method rejects a dimension other than the carrier's own, and
+    // rejects a non-finite rotation coordinate at the carrier's own.
+    let rotation_at_4 = rz().is_admissible(4);
+    assert!(
+        !rotation_at_4,
+        "Rotation3::is_admissible(4) = {rotation_at_4}, expected false — its \
+         defining representation is 3 x 3"
+    );
+    let quaternion_at_4 = qz().is_admissible(4);
+    assert!(
+        !quaternion_at_4,
+        "UnitQuaternion::is_admissible(4) = {quaternion_at_4}, expected false — its \
+         defining representation is 3 x 3"
+    );
+    let isometry_at_3 = Isometry3::<f64>::identity().is_admissible(3);
+    assert!(
+        !isometry_at_3,
+        "Isometry3::is_admissible(3) = {isometry_at_3}, expected false — its \
+         defining representation is 4 x 4"
+    );
+    let nan_axis = Isometry3::new(Vector3::zeros(), Vector3::new(f64::NAN, 0.0, 0.0));
+    let nan_axis_at_4 = nan_axis.is_admissible(4);
+    assert!(
+        !nan_axis_at_4,
+        "Isometry3::is_admissible(4) on a NaN rotation coordinate = {nan_axis_at_4}, \
+         expected false"
+    );
+
+    let mut rotation: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([2], group, vec![], 3);
+    let nan_rotation = Rotation3::from_matrix_unchecked(Matrix3::new(
+        f64::NAN,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ));
+    let rotation_rejected = rotation.record_transition(&[0], &[1], nan_rotation);
+    assert!(
+        !rotation_rejected,
+        "record_transition of a NaN Rotation3 = {rotation_rejected}, expected false"
+    );
+    assert_eq!(
+        rotation.link(&[0], &[1]),
+        None,
+        "link([0] -> [1]) after the rejected NaN Rotation3 = {:?}, expected None",
+        rotation.link(&[0], &[1])
+    );
+    let rotation_accepted = rotation.record_transition(&[0], &[1], rz());
+    assert!(
+        rotation_accepted,
+        "record_transition of Rz = {rotation_accepted}, expected true"
+    );
+    assert_eq!(
+        rotation.link(&[0], &[1]),
+        Some(&rz()),
+        "link([0] -> [1]) after recording Rz = {:?}, expected Some(Rz)",
+        rotation.link(&[0], &[1])
+    );
+
+    let mut quaternion: HypergraphLattice<1, UnitQuaternion<f64>> =
+        HypergraphLattice::new([2], group, vec![], 3);
+    let nan_quaternion = UnitQuaternion::new_unchecked(Quaternion::new(f64::NAN, 0.0, 0.0, 0.0));
+    let quaternion_rejected = quaternion.record_transition(&[0], &[1], nan_quaternion);
+    assert!(
+        !quaternion_rejected,
+        "record_transition of a NaN UnitQuaternion = {quaternion_rejected}, expected false"
+    );
+    assert_eq!(
+        quaternion.link(&[0], &[1]),
+        None,
+        "link([0] -> [1]) after the rejected NaN UnitQuaternion = {:?}, expected None",
+        quaternion.link(&[0], &[1])
+    );
+    let quaternion_accepted = quaternion.record_transition(&[0], &[1], qz());
+    assert!(
+        quaternion_accepted,
+        "record_transition of the z quarter-turn quaternion = {quaternion_accepted}, \
+         expected true"
+    );
+    assert_eq!(
+        quaternion.link(&[0], &[1]),
+        Some(&qz()),
+        "link([0] -> [1]) after recording the quaternion = {:?}, expected Some(qz)",
+        quaternion.link(&[0], &[1])
+    );
+
+    let mut isometry: HypergraphLattice<1, Isometry3<f64>> =
+        HypergraphLattice::new([2], group, vec![], 4);
+    let nan_isometry = Isometry3::translation(f64::NAN, 0.0, 0.0);
+    let isometry_rejected = isometry.record_transition(&[0], &[1], nan_isometry);
+    assert!(
+        !isometry_rejected,
+        "record_transition of a NaN-translation Isometry3 = {isometry_rejected}, expected false"
+    );
+    assert_eq!(
+        isometry.link(&[0], &[1]),
+        None,
+        "link([0] -> [1]) after the rejected NaN Isometry3 = {:?}, expected None",
+        isometry.link(&[0], &[1])
+    );
+    let good_isometry = Isometry3::translation(1.0, 2.0, 3.0);
+    let isometry_accepted = isometry.record_transition(&[0], &[1], good_isometry);
+    assert!(
+        isometry_accepted,
+        "record_transition of T(1,2,3) = {isometry_accepted}, expected true"
+    );
+    assert_eq!(
+        isometry.link(&[0], &[1]),
+        Some(&good_isometry),
+        "link([0] -> [1]) after recording T(1,2,3) = {:?}, expected Some(T(1,2,3))",
+        isometry.link(&[0], &[1])
+    );
+}
+
+// --- (h) SO(3) plaquettes over a 2 x 2 lattice -----------------------------
+
+#[test]
+fn so3_plaquette_verdicts_over_a_2x2_lattice() {
+    let group = HypergraphRewriteGroup::new(1);
+    let mut lattice: HypergraphLattice<2, Rotation3<f64>> =
+        HypergraphLattice::new([2, 2], group, vec![], 3);
+    let hops: [([usize; 2], [usize; 2]); 4] = [
+        ([0, 0], [1, 0]),
+        ([1, 0], [1, 1]),
+        ([1, 1], [0, 1]),
+        ([0, 1], [0, 0]),
+    ];
+    for (from, to) in hops {
+        assert!(
+            lattice.record_transition(&from, &to, Rotation3::identity()),
+            "record_transition({from:?} -> {to:?}, I3) = false, expected true"
+        );
+    }
+
+    lattice.find_wilson_loops(4);
+    assert_eq!(
+        lattice.recorded_loops().len(),
+        1,
+        "recorded_loops().len() = {}, expected 1 — a 2 x 2 lattice has one plaquette",
+        lattice.recorded_loops().len()
+    );
+    let invariant = lattice.is_globally_causally_invariant();
+    assert_eq!(
+        invariant,
+        Some(true),
+        "is_globally_causally_invariant with identity links = {invariant:?}, expected Some(true)"
+    );
+    let average = lattice.average_holonomy();
+    assert_eq!(
+        average,
+        Some(1.0),
+        "average_holonomy with identity links = {average:?}, \
+         expected Some(1.0) = trace(I3) 3 / 3"
+    );
+    let action = lattice.total_plaquette_action();
+    assert_eq!(
+        action, 0.0,
+        "total_plaquette_action with identity links = {action}, expected 0.0"
+    );
+
+    assert!(
+        lattice.record_transition(&[0, 0], &[1, 0], rz()),
+        "record_transition([0,0] -> [1,0], Rz) = false, expected true"
+    );
+    lattice.find_wilson_loops(4);
+    let curved_invariant = lattice.is_globally_causally_invariant();
+    assert_eq!(
+        curved_invariant,
+        Some(false),
+        "is_globally_causally_invariant with one Rz link = {curved_invariant:?}, \
+         expected Some(false)"
+    );
+    let curved_average = lattice
+        .average_holonomy()
+        .expect("invariant: one plaquette is recorded");
+    assert!(
+        (curved_average - 1.0 / 3.0).abs() < 1e-12,
+        "average_holonomy with one Rz link = {curved_average}, expected {} = trace(Rz) 1 / 3",
+        1.0 / 3.0
+    );
+    let curved_action = lattice.total_plaquette_action();
+    assert!(
+        (curved_action - 3.0_f64.ln()).abs() < 1e-12,
+        "total_plaquette_action with one Rz link = {curved_action}, expected {} = -ln(1/3)",
+        3.0_f64.ln()
+    );
+}
+
+// --- carrier-invariant admissibility ---------------------------------------
+
+/// The `[2]` line lattice whose two links both carry the `Rotation3` identity.
+fn flat_rotation_line() -> HypergraphLattice<1, Rotation3<f64>> {
+    let mut lattice: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([2], HypergraphRewriteGroup::new(1), vec![], 3);
+    let hops: [([usize; 1], [usize; 1]); 2] = [([0], [1]), ([1], [0])];
+    for (from, to) in hops {
+        assert!(
+            lattice.record_transition(&from, &to, Rotation3::identity()),
+            "record_transition({from:?} -> {to:?}, I3) = false, expected true"
+        );
+    }
+    lattice
+}
+
+#[test]
+fn typed_links_off_their_carrier_invariant_are_rejected() {
+    let group = HypergraphRewriteGroup::new(1);
+
+    // A quaternion of norm 2 is not a rotation.
+    let mut quaternion: HypergraphLattice<1, UnitQuaternion<f64>> =
+        HypergraphLattice::new([2], group, vec![], 3);
+    let scaled = UnitQuaternion::new_unchecked(Quaternion::new(2.0, 0.0, 0.0, 0.0));
+    let scaled_recorded = quaternion.record_transition(&[0], &[1], scaled);
+    assert!(
+        !scaled_recorded,
+        "record_transition of a norm-2 UnitQuaternion = {scaled_recorded}, expected false — \
+         its norm is 2, off 1 by 1, past TYPED_LINK_TOL"
+    );
+    let scaled_link = quaternion.link(&[0], &[1]);
+    assert_eq!(
+        scaled_link, None,
+        "link([0] -> [1]) after the rejected norm-2 quaternion = {scaled_link:?}, expected None"
+    );
+
+    // A reflection is orthogonal but has determinant −1.
+    let mut rotation: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([2], group, vec![], 3);
+    let reflection = Rotation3::from_matrix_unchecked(Matrix3::new(
+        -1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+    ));
+    let reflection_recorded = rotation.record_transition(&[0], &[1], reflection);
+    assert!(
+        !reflection_recorded,
+        "record_transition of diag(-1, 1, 1) = {reflection_recorded}, expected false — \
+         its determinant is -1, not positive"
+    );
+
+    // A non-orthogonal matrix is not a rotation either.
+    let stretched =
+        Rotation3::from_matrix_unchecked(Matrix3::new(2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0));
+    let stretched_recorded = rotation.record_transition(&[0], &[1], stretched);
+    assert!(
+        !stretched_recorded,
+        "record_transition of diag(2, 1, 1) = {stretched_recorded}, expected false — \
+         entry (0, 0) of R·Rᵀ - I is 3, past TYPED_LINK_TOL"
+    );
+
+    // The checked constructors stay accepted.
+    let rz_recorded = rotation.record_transition(&[0], &[1], rz());
+    assert!(
+        rz_recorded,
+        "record_transition of Rz = {rz_recorded}, expected true"
+    );
+    let qz_recorded = quaternion.record_transition(&[0], &[1], qz());
+    assert!(
+        qz_recorded,
+        "record_transition of the z quarter-turn quaternion = {qz_recorded}, expected true"
+    );
+
+    // The tolerance boundary: diag(1 + e, 1, 1) has R·Rᵀ - I entry (0, 0) of
+    // 2e + e², and the quaternion (1 + e, 0, 0, 0) has norm 1 + e.
+    let near = Rotation3::from_matrix_unchecked(Matrix3::new(
+        1.0 + 1e-10,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ));
+    let near_admissible = LinkVariable::is_admissible(&near, 3);
+    assert!(
+        near_admissible,
+        "is_admissible(diag(1 + 1e-10, 1, 1)) = {near_admissible}, expected true — \
+         entry (0, 0) of R·Rᵀ - I is 2e-10, under TYPED_LINK_TOL 1e-9"
+    );
+    let far = Rotation3::from_matrix_unchecked(Matrix3::new(
+        1.0 + 1e-9,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ));
+    let far_admissible = LinkVariable::is_admissible(&far, 3);
+    assert!(
+        !far_admissible,
+        "is_admissible(diag(1 + 1e-9, 1, 1)) = {far_admissible}, expected false — \
+         entry (0, 0) of R·Rᵀ - I is 2e-9, past TYPED_LINK_TOL 1e-9"
+    );
+    let near_q = UnitQuaternion::new_unchecked(Quaternion::new(1.0 + 1e-10, 0.0, 0.0, 0.0));
+    let near_q_admissible = LinkVariable::is_admissible(&near_q, 3);
+    assert!(
+        near_q_admissible,
+        "is_admissible of the quaternion of norm 1 + 1e-10 = {near_q_admissible}, expected \
+         true — off 1 by 1e-10, under TYPED_LINK_TOL 1e-9"
+    );
+    let far_q = UnitQuaternion::new_unchecked(Quaternion::new(1.0 + 1e-9, 0.0, 0.0, 0.0));
+    let far_q_admissible = LinkVariable::is_admissible(&far_q, 3);
+    assert!(
+        !far_q_admissible,
+        "is_admissible of the quaternion of norm 1 + 1e-9 = {far_q_admissible}, expected \
+         false — off 1 by 1e-9, not under TYPED_LINK_TOL 1e-9"
+    );
+}
+
+#[test]
+fn isometry3_links_over_a_non_unit_quaternion_are_rejected() {
+    let mut isometry: HypergraphLattice<1, Isometry3<f64>> =
+        HypergraphLattice::new([2], HypergraphRewriteGroup::new(1), vec![], 4);
+
+    // An isometry inherits its rotation's verdict.
+    let scaled_isometry = Isometry3::from_parts(
+        Translation3::new(1.0, 2.0, 3.0),
+        UnitQuaternion::new_unchecked(Quaternion::new(2.0, 0.0, 0.0, 0.0)),
+    );
+    let scaled_isometry_recorded = isometry.record_transition(&[0], &[1], scaled_isometry);
+    assert!(
+        !scaled_isometry_recorded,
+        "record_transition of an Isometry3 over a norm-2 quaternion = \
+         {scaled_isometry_recorded}, expected false"
+    );
+    let scaled_link = isometry.link(&[0], &[1]);
+    assert_eq!(
+        scaled_link, None,
+        "link([0] -> [1]) after the rejected Isometry3 = {scaled_link:?}, expected None"
+    );
+
+    // The checked constructors stay accepted.
+    let iso_recorded = isometry.record_transition(&[0], &[1], iso_z(FRAC_PI_2));
+    assert!(
+        iso_recorded,
+        "record_transition of the SE(3) z quarter-turn = {iso_recorded}, expected true"
+    );
+    let translation_recorded =
+        isometry.record_transition(&[1], &[0], Isometry3::translation(1.0, 2.0, 3.0));
+    assert!(
+        translation_recorded,
+        "record_transition of T(1,2,3) = {translation_recorded}, expected true"
+    );
+}
+
+#[test]
+fn gauge_transform_rejects_a_non_orthogonal_rotation_value() {
+    let mut lattice = flat_rotation_line();
+    let path: Vec<&[usize; 1]> = vec![&[0], &[1]];
+
+    let before = lattice.wilson_loop(&path);
+    assert_eq!(
+        before,
+        Some(1.0),
+        "wilson_loop before gauge_transform = {before:?}, expected Some(1.0) = trace(I3) 3 / 3"
+    );
+
+    let mut g: HashMap<Vec<usize>, Rotation3<f64>> = HashMap::new();
+    g.insert(
+        vec![0],
+        Rotation3::from_matrix_unchecked(Matrix3::new(2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)),
+    );
+    let accepted = lattice.gauge_transform(&g);
+    assert!(
+        !accepted,
+        "gauge_transform with g_0 = diag(2, 1, 1) = {accepted}, expected false — \
+         diag(2, 1, 1) is not orthogonal"
+    );
+
+    let link = lattice.link(&[0], &[1]);
+    assert_eq!(
+        link,
+        Some(&Rotation3::identity()),
+        "link([0] -> [1]) after the rejected gauge_transform = {link:?}, expected Some(I3)"
+    );
+    let after = lattice.wilson_loop(&path);
+    assert_eq!(
+        after,
+        Some(1.0),
+        "wilson_loop after the rejected gauge_transform = {after:?}, expected Some(1.0)"
+    );
+}
+
+// --- gauge invariance on the SO(3) carriers --------------------------------
+
+#[test]
+fn so3_gauge_transform_conjugates_the_holonomy_and_fixes_its_wilson_value() {
+    let group = HypergraphRewriteGroup::new(1);
+    let mut lattice: HypergraphLattice<1, Rotation3<f64>> =
+        HypergraphLattice::new([3], group, vec![], 3);
+    assert!(lattice.record_transition(&[0], &[1], rz()), "A on [0]->[1]");
+    assert!(lattice.record_transition(&[1], &[2], rx()), "B on [1]->[2]");
+    assert!(lattice.record_transition(&[2], &[0], ry()), "C on [2]->[0]");
+
+    let path: Vec<&[usize; 1]> = vec![&[0], &[1], &[2]];
+    let before = lattice
+        .wilson_loop(&path)
+        .expect("invariant: all three links of the cycle were just recorded");
+    assert!(
+        (before - 1.0 / 3.0).abs() < 1e-12,
+        "wilson_loop before gauge_transform = {before}, expected {} = trace(Rx) 1 / 3",
+        1.0 / 3.0
+    );
+
+    let mut g: HashMap<Vec<usize>, Rotation3<f64>> = HashMap::new();
+    g.insert(vec![0], rz());
+    let accepted = lattice.gauge_transform(&g);
+    assert!(
+        accepted,
+        "gauge_transform with g_0 = Rz = {accepted}, expected true"
+    );
+
+    let holonomy = lattice
+        .loop_holonomy(&path)
+        .expect("invariant: gauge_transform keeps the link key set");
+    let moved = diff3(holonomy.matrix(), &rx_matrix());
+    assert!(
+        moved > 1e-6,
+        "max entry difference between the conjugated holonomy {:?} and the \
+         pre-transform Rx = {moved}, expected > 1e-6 (hand value 1, at entry \
+         (0, 0): 0 against 1)",
+        holonomy.matrix()
+    );
+    let conjugate_diff = diff3(holonomy.matrix(), &ry_matrix());
+    assert!(
+        conjugate_diff < 1e-12,
+        "loop_holonomy([0, 1, 2]) after gauge_transform = {:?}, expected \
+         Rz·Rx·Rz⁻¹ = Ry = [[0,0,1],[0,1,0],[-1,0,0]]; max entry difference \
+         {conjugate_diff}, expected < 1e-12",
+        holonomy.matrix()
+    );
+    let after = lattice
+        .wilson_loop(&path)
+        .expect("invariant: gauge_transform keeps the link key set");
+    assert!(
+        (after - 1.0 / 3.0).abs() < 1e-12,
+        "wilson_loop after gauge_transform = {after}, expected {} = trace(Ry) 1 / 3, \
+         unchanged from {before}",
+        1.0 / 3.0
+    );
+}
+
+#[test]
+fn quaternion_gauge_transform_conjugates_the_holonomy_and_fixes_its_wilson_value() {
+    let group = HypergraphRewriteGroup::new(1);
+    let mut lattice: HypergraphLattice<1, UnitQuaternion<f64>> =
+        HypergraphLattice::new([3], group, vec![], 3);
+    assert!(
+        lattice.record_transition(
+            &[0],
+            &[1],
+            UnitQuaternion::from_axis_angle(&Vector3::z_axis(), FRAC_PI_2)
+        ),
+        "A on [0]->[1]"
+    );
+    assert!(
+        lattice.record_transition(
+            &[1],
+            &[2],
+            UnitQuaternion::from_axis_angle(&Vector3::x_axis(), FRAC_PI_2)
+        ),
+        "B on [1]->[2]"
+    );
+    assert!(
+        lattice.record_transition(
+            &[2],
+            &[0],
+            UnitQuaternion::from_axis_angle(&Vector3::y_axis(), FRAC_PI_2)
+        ),
+        "C on [2]->[0]"
+    );
+
+    let path: Vec<&[usize; 1]> = vec![&[0], &[1], &[2]];
+    let before = lattice
+        .wilson_loop(&path)
+        .expect("invariant: all three links of the cycle were just recorded");
+    assert!(
+        (before - 1.0 / 3.0).abs() < 1e-12,
+        "wilson_loop before gauge_transform = {before}, expected {} = trace 1 / 3",
+        1.0 / 3.0
+    );
+
+    let mut g: HashMap<Vec<usize>, UnitQuaternion<f64>> = HashMap::new();
+    g.insert(vec![0], qz());
+    let accepted = lattice.gauge_transform(&g);
+    assert!(
+        accepted,
+        "gauge_transform with g_0 = qz = {accepted}, expected true"
+    );
+
+    let holonomy = lattice
+        .loop_holonomy(&path)
+        .expect("invariant: gauge_transform keeps the link key set");
+    let rotation = holonomy.to_rotation_matrix();
+    let moved = diff3(rotation.matrix(), &rx_matrix());
+    assert!(
+        moved > 1e-6,
+        "max entry difference between the conjugated rotation {:?} and the \
+         pre-transform Rx = {moved}, expected > 1e-6 (hand value 1, at entry \
+         (0, 0): 0 against 1)",
+        rotation.matrix()
+    );
+    let conjugate_diff = diff3(rotation.matrix(), &ry_matrix());
+    assert!(
+        conjugate_diff < 1e-12,
+        "the rotation of loop_holonomy([0, 1, 2]) after gauge_transform = {:?}, expected \
+         Rz·Rx·Rz⁻¹ = Ry = [[0,0,1],[0,1,0],[-1,0,0]]; max entry difference \
+         {conjugate_diff}, expected < 1e-12",
+        rotation.matrix()
+    );
+    let after = lattice
+        .wilson_loop(&path)
+        .expect("invariant: gauge_transform keeps the link key set");
+    assert!(
+        (after - 1.0 / 3.0).abs() < 1e-12,
+        "wilson_loop after gauge_transform = {after}, expected {} = trace(Ry) 1 / 3, \
+         unchanged from {before}",
+        1.0 / 3.0
     );
 }
