@@ -13,6 +13,36 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.20.0] - 2026-09-08
+
+### Changed — BREAKING
+
+- `RewriteRule::new`, `apply_at`, `replay` and the entry points' well-formedness
+  screens return `CatgraphError::Rewrite(RewriteRejection)` instead of
+  `Presentation`, with new message text; the readback check keeps
+  `Presentation` ([#447](https://github.com/sustia-llc/catgraph/pull/447)).
+
+### Added
+
+- `BrauerMorphism::terms` — coefficient, δ power and pairs per term
+  ([#446](https://github.com/sustia-llc/catgraph/pull/446)).
+
+### Added — tests
+
+- `content_equality_corpus::interleave_mode_corpus_is_closed_by_content`, the
+  `#[ignore]`d #183 interleave tier (745 / 0 / 745 / 745)
+  ([#438](https://github.com/sustia-llc/catgraph/pull/438)).
+- `non_crossing_parallel_arms_two_through_lines` at Hom(18, 18)
+  ([#439](https://github.com/sustia-llc/catgraph/pull/439)).
+- `monoidal_tensor` asserts the tensored terms in both operand orders
+  ([#446](https://github.com/sustia-llc/catgraph/pull/446)).
+
+### Docs
+
+- `docs/SMC-NF-RECONCILIATION.md` routes the termination proof to #186 and the
+  residual-(a) trackers to #57
+  ([#438](https://github.com/sustia-llc/catgraph/pull/438)).
+
 ## [workspace-v0.19.0] - 2026-09-07
 
 ### Added
@@ -975,7 +1005,8 @@ Co-released with catgraph v0.12.2 and catgraph-magnitude v0.1.1.
   `temperley_lieb`, `e1_operad`, `e2_operad` extracted from `catgraph` core;
   Criterion bench `rayon_thresholds`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...HEAD
+[workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0

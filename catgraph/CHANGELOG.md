@@ -6,6 +6,24 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+## [workspace-v0.20.0] - 2026-09-08
+
+### Changed — BREAKING
+
+- `CatgraphError::Rewrite(RewriteRejection)` carries the rewrite module's
+  user-attributable rejections; `RewriteRejection` (`#[non_exhaustive]`:
+  `SidesNotParallel`, `IllFormed`, `EmptyLhs`, `LhsInterfaceNotMono`,
+  `StaleSite`, `NotAMatch`, `UnknownRule`) with `RewriteBoundary` and
+  `RewriteSide`. Rejections that surfaced as `Presentation` from
+  `catgraph-applied`'s rewrite entry points surface as `Rewrite`, with new
+  message text ([#447](https://github.com/sustia-llc/catgraph/pull/447)).
+
+### Added — tests
+
+- `frobenius::to_cospan_pin`'s oracle derives its braiding arm through
+  `from_permutation_on_domain`; the space gains `σ_{a,a}` and `σ_{a,a} ; σ_{a,a}`
+  ([#440](https://github.com/sustia-llc/catgraph/pull/440)).
+
 ## [workspace-v0.19.0] - 2026-09-07
 
 ### Changed — BREAKING
@@ -1144,7 +1162,8 @@ downstream koalisi.
   §3.3 io/ff factorization, the global Grothendieck form, LinRel examples) are
   catalogued in [`docs/FS19-AUDIT.md`](docs/FS19-AUDIT.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...HEAD
+[workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0

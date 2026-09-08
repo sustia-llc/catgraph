@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.20.0] - 2026-09-08
+
+### Added — tests
+
+- `tests/coalition_schur_guard_props.rs`: parity of `value_with` with fresh
+  evaluation, the `EvalPath` census and the delta base over a generated family
+  ([#441](https://github.com/sustia-llc/catgraph/pull/441)).
+- `tests/magnitude.rs`: the Tsallis switch over `|t − 1| ∈ [1e-9, 1e-2)` and
+  across its branch cut ([#442](https://github.com/sustia-llc/catgraph/pull/442)).
+
 ## [workspace-v0.19.1] - 2026-09-07
 
 ### Changed
@@ -589,7 +599,8 @@ arXiv:2501.06662v2).
 - `proptest`, `criterion` (dev only)
 - No tokio, no serde, no rayon
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...HEAD
+[workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.1]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...v0.19.1
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0

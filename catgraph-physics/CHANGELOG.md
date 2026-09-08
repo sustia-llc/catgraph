@@ -7,6 +7,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [workspace-v0.20.0] - 2026-09-08
+
+### Added — tests
+
+- `tests/wasserstein_props.rs`: metric axioms, one-homogeneity and the
+  sorted-CDF oracle on line instances; the absolute-constant bands pinned
+  ([#445](https://github.com/sustia-llc/catgraph/pull/445)).
+
 ## [workspace-v0.19.1] - 2026-09-07
 
 ### Changed
@@ -295,7 +303,8 @@ First monorepo release.
   `ConfluenceDiamond`, `confluence_diamonds`, `parallel_independent_events`,
   `events_commute`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...HEAD
+[workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.1]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...v0.19.1
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
