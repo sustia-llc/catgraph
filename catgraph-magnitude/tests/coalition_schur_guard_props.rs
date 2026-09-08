@@ -8,10 +8,10 @@
 //!
 //! An instance is `3..=6` agents, a member set `S` with both `S` and its
 //! complement non-empty, and a coupling per ordered pair `(i, j)`, `i ≠ j`,
-//! present with probability one half. A weight comes from two arms: a
-//! `wide_range_f64` magnitude clamped into `[0, 1]` and snapped to `0.0` below
-//! [`WEIGHT_FLOOR`], and the moderate `0.0..=1.0` band. A third arm replaces
-//! one candidate's couplings by `(member, candidate, 1 − δ)` and
+//! present with probability one half. A weight comes from two arms — a
+//! `wide_range_f64` magnitude clamped into `[0, 1]`, and the moderate
+//! `0.0..=1.0` band — either snapped to `0.0` below [`WEIGHT_FLOOR`]. A third
+//! arm replaces one candidate's couplings by `(member, candidate, 1 − δ)` and
 //! `(candidate, member, 1.0)`, with `δ` the relative separation of a
 //! `near_cancellation_pair` draw.
 //!
@@ -31,25 +31,20 @@ use proptest::test_runner::TestRunner;
 /// Instances drawn by [`value_with_parity_and_path_census`].
 const DRAWS: usize = 1024;
 
-/// Smallest non-zero coupling the `wide_range_f64` arm emits; smaller
-/// magnitudes are snapped to `0.0`.
+/// Smallest non-zero coupling a drawn weight carries; either arm's magnitude
+/// snaps to `0.0` below it, so a weight lies in `{0} ∪ [1e-9, 1]`.
 ///
 /// A closure entry is a product of at most six drawn couplings, so every
 /// non-zero entry of a generated closure stays normal.
-const WEIGHT_FLOOR: f64 = 1e-12;
+const WEIGHT_FLOOR: f64 = 1e-9;
 
-/// Ceiling on `|s|` for a candidate whose incremental and fresh values differ
-/// by more than [`INCREMENTAL_REL_TOL`], over a [`DRAWS`]-draw run.
-const DISAGREEMENT_S_CEILING: f64 = 1e-8;
-
-/// Ceiling on the number of compared candidates whose incremental and fresh
-/// values differ by more than [`INCREMENTAL_REL_TOL`], over a [`DRAWS`]-draw
-/// run.
-const DISAGREEMENT_BOUND: usize = 160;
+/// The `[Fast, Slow, SlowNearSingular, MergeOnly, other]` path census a
+/// [`DRAWS`]-draw run takes, over the 2292 candidates it compares.
+const PATH_CENSUS: [usize; 5] = [1373, 374, 536, 9, 0];
 
 /// Ceiling on the largest incremental-vs-fresh relative gap over a
-/// [`DRAWS`]-draw run.
-const GAP_BOUND: f64 = 1e-4;
+/// [`DRAWS`]-draw run; the run's largest is `2.42e-15`.
+const GAP_BOUND: f64 = 1e-14;
 
 /// One generated coalition problem: the agent domain, the coupling table, and
 /// the base coalition `S`.
@@ -76,17 +71,16 @@ impl Instance {
     }
 }
 
-/// A coupling probability in `[0, 1]`: a `wide_range_f64` magnitude clamped
-/// into the domain [`CoalitionEvaluator::new`] accepts and floored at
-/// [`WEIGHT_FLOOR`], or the moderate band.
+/// A coupling probability in `{0} ∪ [`[`WEIGHT_FLOOR`]`, 1]`: a
+/// `wide_range_f64` magnitude clamped into the domain
+/// [`CoalitionEvaluator::new`] accepts, or the moderate band, with either arm
+/// snapped to `0.0` below the floor.
 fn coupling_weight() -> impl Strategy<Value = f64> {
     prop_oneof![
-        1 => wide_range_f64().prop_map(|w| {
-            let clamped = w.abs().clamp(0.0, 1.0);
-            if clamped < WEIGHT_FLOOR { 0.0 } else { clamped }
-        }),
+        1 => wide_range_f64().prop_map(|w| w.abs().clamp(0.0, 1.0)),
         3 => 0.0f64..=1.0,
     ]
+    .prop_map(|w| if w < WEIGHT_FLOOR { 0.0 } else { w })
 }
 
 /// Assemble an [`Instance`] from the drawn parts.
@@ -193,16 +187,17 @@ fn tally(path: EvalPath, census: &mut [usize; 5]) {
 /// Per candidate: the two routes are `Ok` together and `Err` together, and
 /// where both are `Ok` both values are finite.
 ///
-/// Over the run: [`CoalitionEvaluator::new`] accepts every drawn instance;
-/// `Fast`, `Slow` and `SlowNearSingular` are each taken at least once and no
-/// path outside the four named variants is taken; every candidate whose two
-/// values differ by more than [`INCREMENTAL_REL_TOL`] took the `Fast` path
-/// with `|s|` at most [`DISAGREEMENT_S_CEILING`]; there are at most
-/// [`DISAGREEMENT_BOUND`] such candidates; and the largest relative gap is at
-/// most [`GAP_BOUND`].
+/// Over the run: [`CoalitionEvaluator::new`] accepts every drawn instance; the
+/// path census is [`PATH_CENSUS`]; no candidate's two values differ by more
+/// than [`INCREMENTAL_REL_TOL`]; and the largest relative gap is at most
+/// [`GAP_BOUND`].
 ///
 /// The run-level figures are accumulated across cases, which is why the sample
-/// is driven directly rather than through `proptest!`.
+/// is driven directly rather than through `proptest!`. The census assertion
+/// carries the disagreement count and runs before the disagreement assertion,
+/// so one run at any value of
+/// [`SCHUR_SLOW_FALLBACK_TOL`](catgraph_magnitude::coalition_eval::SCHUR_SLOW_FALLBACK_TOL)
+/// reports both figures.
 #[test]
 fn value_with_parity_and_path_census() {
     let strategy = instance();
@@ -271,16 +266,6 @@ fn value_with_parity_and_path_census() {
                 disagreements += 1;
                 let s = report.schur_complement().map_or(f64::INFINITY, f64::abs);
                 worst_s = worst_s.max(s);
-                assert!(
-                    report.path() == EvalPath::Fast && s <= DISAGREEMENT_S_CEILING,
-                    "candidate {x} on {:?}: incremental {incremental} vs fresh {fresh}, \
-                     gap {gap:e} > INCREMENTAL_REL_TOL {INCREMENTAL_REL_TOL:e} at |s| = {s:e}, \
-                     expected the Fast path with |s| <= {DISAGREEMENT_S_CEILING:e} \
-                     (members {:?}, couplings {:?})",
-                    report.path(),
-                    instance.members,
-                    instance.couplings
-                );
             }
         }
     }
@@ -289,17 +274,18 @@ fn value_with_parity_and_path_census() {
         rejected, 0,
         "CoalitionEvaluator::new rejected {rejected} of {DRAWS} drawn instances"
     );
-    assert!(
-        census[0] > 0 && census[1] > 0 && census[2] > 0 && census[4] == 0,
+    assert_eq!(
+        census, PATH_CENSUS,
         "EvalPath census [Fast, Slow, SlowNearSingular, MergeOnly, other] = {census:?} over \
-         {compared} compared of {candidates} candidates from {DRAWS} draws; expected each of \
-         the first three positive and the last zero"
+         {compared} compared of {candidates} candidates from {DRAWS} draws, expected \
+         {PATH_CENSUS:?}; {disagreements} of the compared candidates fell outside \
+         INCREMENTAL_REL_TOL {INCREMENTAL_REL_TOL:e}, largest relative gap {worst_gap:e}"
     );
-    assert!(
-        disagreements <= DISAGREEMENT_BOUND,
+    assert_eq!(
+        disagreements, 0,
         "{disagreements} of {compared} compared candidates fell outside INCREMENTAL_REL_TOL \
-         {INCREMENTAL_REL_TOL:e} (largest |s| among them {worst_s:e}), bound \
-         {DISAGREEMENT_BOUND}"
+         {INCREMENTAL_REL_TOL:e} (largest |s| among them {worst_s:e}, largest relative gap \
+         {worst_gap:e}), expected 0"
     );
     assert!(
         worst_gap <= GAP_BOUND,

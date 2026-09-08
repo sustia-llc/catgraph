@@ -76,7 +76,36 @@ pub const INCREMENTAL_REL_TOL: f64 = 1e-9;
 /// by a tiny `s` amplifies that residue past tolerance. Such borders instead go
 /// through the helpers fresh evaluation uses: a finite value when well-defined,
 /// an `Err` exactly when the re-inversion is singular.
-pub const SCHUR_SLOW_FALLBACK_TOL: f64 = 1e-12;
+///
+/// # Measured basis
+///
+/// Over the 1024-instance corpus of
+/// `tests/coalition_schur_guard_props.rs` (2292 candidates, 2292 compared, its
+/// generator floored at `WEIGHT_FLOOR = 1e-9`), sweeping this constant gives,
+/// per value, the compared candidates whose incremental and fresh values differ
+/// by more than [`INCREMENTAL_REL_TOL`], the largest relative gap over all
+/// compared candidates, and the
+/// `[Fast, Slow, SlowNearSingular, MergeOnly, other]` path census:
+///
+/// | value | disagreements | largest gap | census |
+/// |-------|---------------|-------------|--------|
+/// | `1e-12` | 128 | `2.64e-5` | `[1606, 374, 303, 9, 0]` |
+/// | `1e-11` | 94 | `3.12e-6` | `[1546, 374, 363, 9, 0]` |
+/// | `1e-10` | 64 | `3.47e-7` | `[1498, 374, 411, 9, 0]` |
+/// | `1e-9` | 20 | `3.83e-8` | `[1420, 374, 489, 9, 0]` |
+/// | `1e-8` | 0 | `2.42e-15` | `[1373, 374, 536, 9, 0]` |
+/// | `1e-7` | 0 | `2.42e-15` | `[1373, 374, 536, 9, 0]` |
+/// | `1e-6` | 0 | `2.42e-15` | `[1373, 374, 536, 9, 0]` |
+/// | `1e-5` | 0 | `2.42e-15` | `[1373, 374, 536, 9, 0]` |
+/// | `1e-4` | 0 | `2.42e-15` | `[1373, 374, 536, 9, 0]` |
+/// | `1e-3` | 0 | `2.42e-15` | `[1373, 374, 536, 9, 0]` |
+/// | `1e-2` | 0 | `2.42e-15` | `[1372, 374, 537, 9, 0]` |
+///
+/// Disagreements vanish at `1e-8`; the value below is the decade above that,
+/// and diverts the same number of candidates. Among the swept values the census
+/// moves again at `1e-2`, so the census `value_with_parity_and_path_census`
+/// pins holds over `[1e-8, 1e-3]`.
+pub const SCHUR_SLOW_FALLBACK_TOL: f64 = 1e-7;
 
 /// Which update path [`CoalitionEvaluator::value_with`] took for a candidate,
 /// surfaced by [`JoinReport::path`].
@@ -1162,8 +1191,8 @@ mod tests {
     /// `c₀ = 1 − 5e-13` and `r₀ = 1.0` the branch tests are both false
     /// (`c₀ ≠ 1.0` for the merge test, no `i ≠ j` shortcut for the interior
     /// test), so the fast branch is entered, and `s ≈ 5e-13` is inside
-    /// `SCHUR_SLOW_FALLBACK_TOL · (1 + |vᵀμu|) ≈ 2e-12`. The control fixture is
-    /// the same shape at `c₀ = 0.5`.
+    /// `SCHUR_SLOW_FALLBACK_TOL · (1 + |vᵀμu|) ≈ 2e-7`. The control fixture is
+    /// the same shape at `c₀ = 0.5`, whose `s ≈ 0.5` is outside it.
     #[test]
     fn near_singular_border_diverts_to_slow() {
         let agents = ["m0", "m1", "x"];
@@ -1216,6 +1245,61 @@ mod tests {
             "control fixture: s = 1 − 0.5·1.0, got {s_far} (|Δ| = {} > 4 ε = {})",
             (s_far - 0.5).abs(),
             4.0 * f64::EPSILON
+        );
+    }
+
+    /// The guard's right-hand side is `SCHUR_SLOW_FALLBACK_TOL · (1 + |vᵀμu|)`,
+    /// not the bare tolerance. On the two-uncoupled-member shape of
+    /// [`near_singular_border_diverts_to_slow`], `ζ_S = I` and `μ = I`, so
+    /// `vᵀμu = c₀·r₀` and `s = 1 − c₀` at `r₀ = 1.0`.
+    ///
+    /// At `c₀ = 1 − 1.5e-7` the border's `s` is above
+    /// [`SCHUR_SLOW_FALLBACK_TOL`] and below the right-hand side, and diverts;
+    /// at `c₀ = 1 − 3e-7` it is above both and stays on the fast branch. The
+    /// pair brackets the threshold in `(1.5e-7, 3e-7]`, which holds
+    /// `2 · SCHUR_SLOW_FALLBACK_TOL` and not `SCHUR_SLOW_FALLBACK_TOL`.
+    #[test]
+    fn near_singular_threshold_carries_the_vmu_factor() {
+        let agents = ["m0", "m1", "x"];
+        let members = [0usize, 1];
+        let t = 1.0;
+
+        let inside_s = 1.5e-7;
+        assert!(
+            inside_s > SCHUR_SLOW_FALLBACK_TOL,
+            "the diverting border's s = {inside_s:e} must exceed SCHUR_SLOW_FALLBACK_TOL \
+             {SCHUR_SLOW_FALLBACK_TOL:e}, or the bare tolerance would divert it"
+        );
+        let inside = [(0usize, 2usize, 1.0 - inside_s), (2, 0, 1.0)];
+        let ev = CoalitionEvaluator::new(&agents, &inside, &members, t).unwrap();
+        let rep = ev.value_with_report(2).unwrap();
+        assert_eq!(
+            rep.path(),
+            EvalPath::SlowNearSingular,
+            "s ≈ {inside_s:e} is under SCHUR_SLOW_FALLBACK_TOL · (1 + |vᵀμu|) ≈ {:e} and must \
+             divert",
+            SCHUR_SLOW_FALLBACK_TOL * (2.0 - inside_s)
+        );
+
+        let outside_s = 3e-7;
+        let outside = [(0usize, 2usize, 1.0 - outside_s), (2, 0, 1.0)];
+        let ev_outside = CoalitionEvaluator::new(&agents, &outside, &members, t).unwrap();
+        let rep_outside = ev_outside.value_with_report(2).unwrap();
+        assert_eq!(
+            rep_outside.path(),
+            EvalPath::Fast,
+            "s ≈ {outside_s:e} is over SCHUR_SLOW_FALLBACK_TOL · (1 + |vᵀμu|) ≈ {:e} and must \
+             stay on the fast branch",
+            SCHUR_SLOW_FALLBACK_TOL * (2.0 - outside_s)
+        );
+        let s_outside = rep_outside
+            .schur_complement()
+            .expect("invariant: the fast branch reports a Schur complement");
+        assert!(
+            (s_outside - outside_s).abs() <= 8.0 * f64::EPSILON,
+            "s = 1 − (1 − {outside_s:e}), got {s_outside:e} (|Δ| = {:e} > 8 ε = {:e})",
+            (s_outside - outside_s).abs(),
+            8.0 * f64::EPSILON
         );
     }
 
