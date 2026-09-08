@@ -5,7 +5,7 @@
 //! Example G.3 (the cartesian `⊕` structure of real vector spaces used by
 //! gradient-based-learning `Para(…)` constructions).
 //!
-//! Four surfaces:
+//! Five surfaces:
 //!
 //! 1. **Monoidal coherence** — pentagon / triangle / unitor sanity on the
 //!    `DirectSum` tensor, via the generic `common::assert_monoidal_coherence`
@@ -17,6 +17,8 @@
 //!    associativity, via `common::assert_direct_sum_monoid`.
 //! 4. **Actegory action + multiplicator `µ`** — `act` / `compose_action` shape
 //!    and its agreement with [`F64Monoidal`]'s tensor.
+//! 5. **`is_finite` over the float edge cases** — signed zero, the finite
+//!    magnitude extremes, a subnormal, the infinities, and NaN.
 
 #![allow(clippy::float_cmp)]
 
@@ -60,6 +62,42 @@ fn f64_module_axioms_deterministic() {
     assert_f64_module_axioms(vec![0.0], -2.0);
     assert_f64_module_axioms(vec![1.0, -1.0, 2.5], 4.0);
     assert_f64_module_axioms(vec![-1e6, 1e6, 0.0, 7.25], 0.0);
+}
+
+/// **`is_finite` over the float edge cases — deterministic.** Signed zero, the
+/// finite magnitude extremes, and a subnormal are finite coordinates; the two
+/// infinities and NaN are not, each on its own and in a mixed module. `R⁰` is
+/// finite vacuously.
+#[test]
+fn is_finite_over_float_edge_cases() {
+    let subnormal = f64::MIN_POSITIVE / 2.0;
+    assert!(
+        subnormal.is_subnormal(),
+        "the subnormal case must actually be subnormal: {subnormal:e}",
+    );
+
+    let cases: [(Vec<f64>, bool); 11] = [
+        (vec![], true),
+        (vec![-0.0], true),
+        (vec![f64::MAX, f64::MIN], true),
+        (vec![subnormal, -subnormal], true),
+        (vec![-0.0, f64::MAX, subnormal], true),
+        (vec![f64::NEG_INFINITY], false),
+        (vec![f64::INFINITY], false),
+        (vec![f64::NAN], false),
+        (vec![-0.0, f64::MAX, subnormal, f64::NAN], false),
+        (vec![-0.0, f64::MAX, subnormal, f64::NEG_INFINITY], false),
+        (vec![-0.0, f64::MAX, subnormal, f64::INFINITY], false),
+    ];
+
+    for (coords, expected) in cases {
+        let module = F64Module::new(coords);
+        let observed = module.is_finite();
+        assert_eq!(
+            observed, expected,
+            "is_finite on {module:?}: observed {observed}, expected {expected}",
+        );
+    }
 }
 
 /// **`⊕`-monoid laws — deterministic.** Dimensions add, coordinates
