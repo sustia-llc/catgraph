@@ -12,8 +12,9 @@
 //! | Full RNN (Mealy)   | `I → O × −`          | Coalgebra    |
 //! | Moore Machine NN   | `O × (I → −)`        | Coalgebra    |
 //!
-//! Unrollers (CDL Ex J.1–J.5; Remark 2.13 for algebras, Remark H.6 for
-//! coalgebras): [`FoldingRnn::unroll`] (right fold over `Vec<A>`),
+//! Unrollers (CDL Ex J.1–J.5; Def A.2 initiality for algebras — Remark 2.13
+//! for lists, Ex 2.14 for trees — and Remark H.6 for coalgebras):
+//! [`FoldingRnn::unroll`] (right fold over `Vec<A>`),
 //! [`RecursiveNn::unroll`] (post-order over
 //! [`crate::free_monad::tree_endo::BinaryTree`]),
 //! [`UnfoldingRnn::unroll_to_vec`] / `unroll_iter`, [`MealyCell::run`],

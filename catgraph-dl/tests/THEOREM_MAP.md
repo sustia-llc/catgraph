@@ -77,7 +77,7 @@ it has no paper anchor to link. Registering them would fake traceability.
 | Witness | Anchor | Law |
 |---|---|---|
 | `canonical::folding_rnn_unroll_equals_the_free_walker` (+ proptest) | CDL Remark 2.13 / Prop B.18 | RNN unroll = unique algebra hom from initial `FreeMnd(1 + A × −)` |
-| `canonical::recursive_nn_unroll_equals_the_free_walker` (+ proptest) | CDL Remark 2.13 / Prop B.18 | tree unroll = unique algebra hom (tree direction) |
+| `canonical::recursive_nn_unroll_equals_the_free_walker` (+ proptest) | CDL Example 2.14 / Prop B.18 | tree unroll = unique algebra hom (tree direction) |
 | `canonical::unfolding_rnn_unroll_equals_the_cofree_walker` (+ proptest) | **CDL Remark H.6** / App I.3 | UnfoldingRnn unroll = finite prefix of unique coalgebra hom into `Stream(O)` |
 | `canonical::mealy_cell_run_equals_the_cofree_walker` (+ proptest) | **CDL Remark H.6** / App I.4 | Mealy run = input-driven `Cofree<OptionWitness, O>` prefix walk |
 | `canonical::moore_cell_run_equals_the_cofree_walker` (+ proptest) | **CDL Remark H.6** / App I.5 | Moore run = output-then-step `Cofree<OptionWitness, O>` prefix walk |
@@ -96,7 +96,7 @@ it has no paper anchor to link. Registering them would fake traceability.
 > non-interfering — the carrier walks became explicit heap worklists at #200,
 > computing exactly what the recursive ones computed (the deep-spine tests pin
 > closed-form values, and the shallow oracle comparisons above are unchanged),
-> so the Example B.19/B.20 and Remark 2.13 witnesses are untouched.
+> so the Example B.19/B.20, Remark 2.13 and Ex 2.14 witnesses are untouched.
 > `MAX_TREE_DEPTH` and its guard survive as an **opt-in** service for callers
 > who recurse themselves; nothing in the crate calls them, which is what
 > `opt_in_depth_guard_boundary` asserts alongside the boundary itself.

@@ -115,7 +115,7 @@
 //! | group | operation |
 //! |---|---|
 //! | `carrier::construct` | the bijection helpers — [`vec_to_free_mnd`], [`tree_to_free_mnd`] |
-//! | `carrier::fold` | `Free::fold` — the CDL Remark 2.13 catamorphism |
+//! | `carrier::fold` | `Free::fold` — the catamorphism (CDL Def A.2 initiality on the Prop B.18 carrier) |
 //! | `carrier::unfold` | `Cofree::unfold` — the #64 anamorphism |
 //! | `lazy::iter` | the #36 / PR #151 lazy surfaces + their eager sibling |
 //!

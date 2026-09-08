@@ -177,7 +177,8 @@ impl<F, A> Free<F, A>
 where
     F: EndoWitness,
 {
-    /// Catamorphism (CDL Remark 2.13): `pure_case` on leaves,
+    /// Catamorphism (CDL Def A.2 initiality; Remark 2.13 for lists, Ex 2.14 for
+    /// trees): `pure_case` on leaves,
     /// `algebra : F::Type<X> → X` on nodes; iterative over a heap worklist,
     /// children's results reaching the algebra in position order.
     pub fn fold<X, P, Alg>(self, pure_case: &P, algebra: &Alg) -> X
