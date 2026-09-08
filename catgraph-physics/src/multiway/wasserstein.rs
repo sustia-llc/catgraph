@@ -4,23 +4,41 @@
 //! constraints, where T is a coupling with marginals μ and ν. This is the
 //! optimal transport cost under a given ground metric.
 //!
-//! Input space: finite non-negative μ and ν of equal total mass over a
-//! non-negative cost matrix; either marginal may carry zero-mass entries.
+//! Input space: finite non-negative μ and ν over a non-negative cost matrix,
+//! with totals agreeing to `1e-12` of the larger of the two; either marginal
+//! may carry zero-mass entries. The mass-balance tolerance, the per-arc
+//! capacity floor and the max-flow shortfall are fractions of that larger
+//! total.
 //!
 //! Used internally by the Ollivier-Ricci curvature backend to compute
 //! transport distances between neighbor distributions on branchial graphs.
 
-/// Numerical tolerance for floating-point comparisons.
-const EPS: f64 = 1e-12;
+/// Tolerance on `|Σμ − Σν|`, as a fraction of `max(Σμ, Σν)`.
+///
+/// Above the summation error of the two totals: the error in a sum of `n`
+/// non-negative `f64` entries is bounded by `n · f64::EPSILON` of the sum, so
+/// this admits any `n ≤ 1024`.
+const REL_MASS_TOL: f64 = 1e-12;
+
+/// Capacity floor for residual arcs, as a fraction of `max(Σμ, Σν)`: an arc at
+/// or below it carries no flow, so mass at or below it is not transported.
+const REL_CAP_FLOOR: f64 = 1e-15;
+
+/// Amount the routed flow may fall short of `min(Σμ, Σν)` by, as a fraction of
+/// `max(Σμ, Σν)`, before the transport cost is reported infinite.
+///
+/// The mass [`REL_CAP_FLOOR`] can strand is at most `n · REL_CAP_FLOOR` of the
+/// total over marginals of `n` entries each; `1000 · REL_CAP_FLOOR` equals this
+/// constant.
+const REL_SHORTFALL: f64 = 1e-12;
 
 /// Compute the Wasserstein-1 distance between two discrete distributions.
 ///
 /// # Arguments
 ///
-/// * `mu` - Source distribution (non-negative, sums to total mass); entries
-///   may be zero.
-/// * `nu` - Target distribution (non-negative, sums to same total mass as
-///   `mu`); entries may be zero.
+/// * `mu` - Source distribution (non-negative); entries may be zero.
+/// * `nu` - Target distribution (non-negative, summing to within `1e-12` of
+///   `mu`'s total, relative to the larger of the two); entries may be zero.
 /// * `distance` - Pairwise distance matrix; `distance[i][j]` is the ground
 ///   metric cost of transporting one unit from support point `i` to `j`.
 ///   Must be `mu.len()` x `nu.len()`.
@@ -28,14 +46,16 @@ const EPS: f64 = 1e-12;
 /// # Returns
 ///
 /// The optimal transport cost W₁(μ, ν), or `f64::INFINITY` when no coupling
-/// of finite cost exists.
+/// of finite cost exists. Marginals whose totals are both exactly `0.0` give
+/// `0.0`.
 ///
 /// # Panics
 ///
 /// Panics if:
 /// - `mu` or `nu` is empty
 /// - `distance` dimensions don't match `mu.len()` x `nu.len()`
-/// - Total masses of `mu` and `nu` differ by more than `1e-9`
+/// - Total masses of `mu` and `nu` differ by more than `1e-12` times the larger
+///   of the two, or either total is not finite
 /// - Any entry in `mu`, `nu`, or `distance` is negative
 #[must_use]
 #[allow(clippy::similar_names)]
@@ -67,22 +87,32 @@ pub fn wasserstein_1(mu: &[f64], nu: &[f64], distance: &[Vec<f64>]) -> f64 {
 
     let sum_mu: f64 = mu.iter().sum();
     let sum_nu: f64 = nu.iter().sum();
+
+    // Every mass threshold below is a fraction of this.
+    let scale = sum_mu.max(sum_nu);
     assert!(
-        (sum_mu - sum_nu).abs() < 1e-9,
-        "Total masses must be equal: sum(mu)={sum_mu}, sum(nu)={sum_nu}"
+        scale.is_finite(),
+        "marginal totals must be finite: sum(mu)={sum_mu}, sum(nu)={sum_nu}"
     );
 
-    // Trivial case: zero total mass
-    if sum_mu < EPS {
+    // Trivial case: both totals exactly zero, so the zero coupling is optimal.
+    if scale == 0.0 {
         return 0.0;
     }
+
+    let imbalance = (sum_mu - sum_nu).abs();
+    assert!(
+        imbalance <= REL_MASS_TOL * scale,
+        "Total masses must be equal: sum(mu)={sum_mu}, sum(nu)={sum_nu}, \
+         imbalance {imbalance} exceeds {REL_MASS_TOL} * {scale}"
+    );
 
     // Transportation problem as a min-cost flow: a source feeding one node per
     // `mu` entry, complete bipartite arcs carrying the ground metric, one node
     // per `nu` entry draining to a sink.
     let source = m + n;
     let sink = m + n + 1;
-    let mut network = Network::new(m + n + 2);
+    let mut network = Network::new(m + n + 2, REL_CAP_FLOOR * scale);
     for (row, &supply) in mu.iter().enumerate() {
         network.add_arc(source, row, supply, 0.0);
     }
@@ -96,7 +126,7 @@ pub fn wasserstein_1(mu: &[f64], nu: &[f64], distance: &[Vec<f64>]) -> f64 {
     }
 
     let (moved, cost) = network.min_cost_flow(source, sink);
-    if moved < sum_mu.min(sum_nu) - 1e-9 {
+    if moved < sum_mu.min(sum_nu) - REL_SHORTFALL * scale {
         return f64::INFINITY;
     }
     cost
@@ -118,14 +148,18 @@ struct Network {
     arcs: Vec<Arc>,
     /// Arc indices leaving each node.
     adj: Vec<Vec<usize>>,
+    /// Residual capacity at or below which an arc carries no flow.
+    cap_floor: f64,
 }
 
 impl Network {
-    /// An empty network on `nodes` nodes.
-    fn new(nodes: usize) -> Self {
+    /// An empty network on `nodes` nodes whose residual arcs carry flow only
+    /// above `cap_floor`.
+    fn new(nodes: usize, cap_floor: f64) -> Self {
         Self {
             arcs: Vec::new(),
             adj: vec![Vec::new(); nodes],
+            cap_floor,
         }
     }
 
@@ -171,9 +205,10 @@ impl Network {
                 push = push.min(self.arcs[arc].cap);
                 node = self.arcs[arc ^ 1].to;
             }
+            let floor = self.cap_floor;
             assert!(
-                push > EPS,
-                "augmenting path bottleneck {push} <= {EPS}, expected > {EPS}"
+                push > floor,
+                "augmenting path bottleneck {push} <= {floor}, expected > {floor}"
             );
 
             let mut node = sink;
@@ -188,7 +223,7 @@ impl Network {
         }
     }
 
-    /// Dijkstra over residual arcs with positive capacity, on reduced costs
+    /// Dijkstra over residual arcs above [`Network::cap_floor`], on reduced costs
     /// `cost + potential[tail] - potential[head]`.
     ///
     /// Returns the reduced-cost distance from `source` to each node and, for
@@ -216,7 +251,7 @@ impl Network {
 
             for &arc_idx in &self.adj[next] {
                 let arc = &self.arcs[arc_idx];
-                if arc.cap <= EPS || settled[arc.to] {
+                if arc.cap <= self.cap_floor || settled[arc.to] {
                     continue;
                 }
                 let reduced = arc.cost + potential[next] - potential[arc.to];

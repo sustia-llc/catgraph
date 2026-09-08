@@ -1,5 +1,5 @@
 //! `wasserstein_1` metric axioms and mass behaviour on adversarial marginals
-//! ([#225](https://github.com/sustia-llc/catgraph/issues/225), item 3).
+//! ([#225](https://github.com/sustia-llc/catgraph/issues/225), items 3 and 4).
 //!
 //! # What this is
 //!
@@ -17,38 +17,41 @@
 //! `Σₖ |Σ_{i≤k}(μᵢ − νᵢ)| · (x_{k+1} − xₖ)` — an oracle independent of the
 //! min-cost-flow solver.
 //!
-//! # The three absolute constants that bound the input space
+//! # The three relative thresholds that bound the input space
 //!
-//! `wasserstein.rs` measures mass against absolute thresholds, so its behaviour
-//! is not scale-free:
+//! `wasserstein.rs` measures mass against thresholds that are fractions of
+//! `scale = max(Σμ, Σν)`:
 //!
-//! - `EPS = 1e-12` as a **total**-mass floor: a total below it returns `0.0`.
-//! - `EPS = 1e-12` as a **per-arc capacity** floor: Dijkstra skips any residual
-//!   arc of capacity `<= EPS`, so a marginal entry at or below `1e-12` is never
-//!   routed.
-//! - the mass-balance assertion `|Σμ − Σν| < 1e-9`: absolute, so at total mass
-//!   `T` it is satisfiable only while the floating-point summation error of
-//!   `Σν`, of order `n · ulp(T)`, stays below `1e-9`.
+//! - `REL_CAP_FLOOR = 1e-15` as a **per-arc capacity** floor: a residual arc of
+//!   capacity `<= REL_CAP_FLOOR · scale` carries no flow, so mass at or below
+//!   that fraction of the total is not transported.
+//! - `REL_MASS_TOL = 1e-12` as the **mass-balance** tolerance:
+//!   `|Σμ − Σν| <= REL_MASS_TOL · scale`.
+//! - `REL_SHORTFALL = 1e-12` as the **max-flow shortfall** the routed mass may
+//!   fall short of `min(Σμ, Σν)` by before the cost is reported infinite.
 //!
-//! The capacity floor has a consequence the inline tests do not reach:
-//! `capacity_floor_breaks_the_triangle_inequality_by_the_mass_it_drops` builds
-//! a two-point instance whose dropped `1e-13` entry makes `W(μ, ν)` come back
-//! `0.0` against a non-zero closed form, and the triangle inequality fail by
-//! exactly that entry's transport cost.
-//! `one_homogeneity_low_edge_is_the_capacity_floor` and the two
-//! `a_one_ulp_mass_imbalance_*` pins scan the decades of total mass on two
-//! fixed instances and pin which of them are homogeneous, which the floor
-//! zeroes out, and where the balance assertion starts rejecting.
+//! Totals that are both exactly `0.0` short-circuit to `0.0`.
+//!
+//! `one_homogeneity_holds_on_every_decade_of_total_mass` scans the decades
+//! `10^-300 ..= 10^300` on a dyadic fixture and pins each as homogeneous;
+//! `a_one_ulp_mass_imbalance_is_accepted_at_every_decade` scans the same band on
+//! a fixture whose totals differ by one ulp, and
+//! `an_imbalance_above_the_relative_tolerance_is_rejected` pins the other side
+//! of the balance assertion.
+//! `a_1e_minus_13_entry_is_routed_and_the_triangle_inequality_holds` builds the
+//! two-point instance of item 3 — an entry of order `1e-13` against a unit
+//! total — and pins that the solver transports it.
 //!
 //! # The generated corpus
 //!
 //! Instances are narrowed to the regime the axioms survive, and the narrowing
 //! is the finding:
 //!
-//! - every marginal entry is exactly zero or above `MIN_ENTRY = 1e-9` — entries
-//!   under the capacity floor are snapped to zero before balancing;
+//! - marginal entries are not snapped: `MIN_ENTRY = 0.0`, so the corpus reaches
+//!   whatever fraction of the total the weight strategy emits, and
+//!   `census_of_the_generated_corpus` pins the smallest fraction it reached;
 //! - the two marginals of a pair sum to **bitwise** equal totals, not merely to
-//!   within the assertion's `1e-9`;
+//!   within the assertion's `REL_MASS_TOL · scale`;
 //! - every non-zero partial CDF difference `Σ_{i≤k}(μᵢ − νᵢ)` — the mass the
 //!   optimal coupling moves across gap `k` — exceeds `CUM_FRACTION = 1e-6` of
 //!   the total, since below that it is comparable to `n · ulp(total)`, the
@@ -75,17 +78,27 @@ use proptest::strategy::ValueTree;
 use proptest::test_runner::TestRunner;
 
 /// Lower decade exponent of the generated total mass, inclusive.
-const MASS_EXP_LO: i32 = -6;
+const MASS_EXP_LO: i32 = -150;
 /// Upper decade exponent of the generated total mass, inclusive.
-const MASS_EXP_HI: i32 = 5;
+const MASS_EXP_HI: i32 = 150;
+
+/// Lower decade exponent of the fixed-fixture decade scans, inclusive.
+const SCAN_EXP_LO: i32 = -300;
+/// Upper decade exponent of the fixed-fixture decade scans, inclusive.
+const SCAN_EXP_HI: i32 = 300;
 
 /// Smallest non-zero marginal entry the generator emits; entries at or below it
-/// are snapped to zero.
-const MIN_ENTRY: f64 = 1e-9;
+/// are snapped to zero. `0.0` leaves the generated entries unsnapped, so the
+/// corpus reaches whatever fraction of the total the weight strategy emits.
+const MIN_ENTRY: f64 = 0.0;
 
 /// Smallest non-zero partial CDF difference the generator emits, as a fraction
 /// of the total mass.
 const CUM_FRACTION: f64 = 1e-6;
+
+/// The solver's mass-balance tolerance as a fraction of `max(Σμ, Σν)`, mirrored
+/// here to build inputs on either side of it.
+const REL_MASS_TOL: f64 = 1e-12;
 
 /// Relative tolerance every property below is asserted at.
 const REL: f64 = 1e-9;
@@ -99,6 +112,9 @@ const CENSUS_DRAWS: usize = 4_000;
 /// Largest-to-smallest marginal-entry ratio the census requires the corpus to
 /// reach.
 const MIN_WIDEST_RATIO: f64 = 1e12;
+
+/// Smallest entry-to-total fraction the census requires the corpus to reach.
+const MAX_SMALLEST_FRACTION: f64 = 1e-15;
 
 // ---------------------------------------------------------------------------
 // instance construction
@@ -189,10 +205,10 @@ fn snapped(w: &[f64], scale: f64) -> Option<Vec<f64>> {
 /// `v` rescaled so its entries sum to **exactly** `target`, the residual being
 /// folded into the largest entry and the fold repeated until the sum lands.
 ///
-/// Bitwise equality rather than the solver's `1e-9` slack: an imbalance of `δ`
-/// caps the max flow at `min(Σμ, Σν)`, and the closed form assumes it does not,
-/// so `δ` would enter the oracle comparison as a relative error of
-/// `δ / (transported mass)` with no bound of its own.
+/// Bitwise equality rather than the solver's `REL_MASS_TOL · scale` slack: an
+/// imbalance of `δ` caps the max flow at `min(Σμ, Σν)`, and the closed form
+/// assumes it does not, so `δ` would enter the oracle comparison as a relative
+/// error of `δ / (transported mass)` with no bound of its own.
 ///
 /// `None` when the correction drives the fold entry to [`MIN_ENTRY`] or below,
 /// or when the sum does not land on `target` within eight folds.
@@ -221,17 +237,14 @@ fn rebalanced(v: &[f64], target: f64) -> Option<Vec<f64>> {
 }
 
 /// Whether every partial sum `Σ_{i≤k}(aᵢ − bᵢ)` — the mass the optimal coupling
-/// moves across gap `k` — is either zero or above both [`MIN_ENTRY`] and
-/// `CUM_FRACTION × total`.
+/// moves across gap `k` — is either zero or above `CUM_FRACTION × total`.
 ///
-/// At or below [`MIN_ENTRY`] the whole of it can be stranded by the per-arc
-/// capacity floor without the `1e-9` shortfall guard firing, since the guard's
-/// threshold is [`MIN_ENTRY`]. At or below `CUM_FRACTION × total` it is
-/// comparable to `n · ulp(total)`, the rounding of the two totals themselves:
-/// bitwise-equal sums still stand for exact values that far apart, and the
-/// closed form charges the difference to the transported mass.
+/// At or below `CUM_FRACTION × total` it is comparable to `n · ulp(total)`, the
+/// rounding of the two totals themselves: bitwise-equal sums still stand for
+/// exact values that far apart, and the closed form charges the difference to
+/// the transported mass.
 fn routable(a: &[f64], b: &[f64], total: f64) -> bool {
-    let floor = MIN_ENTRY.max(CUM_FRACTION * total);
+    let floor = CUM_FRACTION * total;
     let mut cum = 0.0_f64;
     for k in 0..a.len() - 1 {
         cum += a[k] - b[k];
@@ -429,8 +442,8 @@ proptest! {
     }
 
     /// `W(cμ, cν) = c · W(μ, ν)`, for `c` leaving the scaled total inside the
-    /// generated mass band and the scaled marginals inside the balance
-    /// assertion.
+    /// generated mass band, the scaled cost scale and the expected cost normal,
+    /// and the scaled marginals inside the balance assertion.
     #[test]
     fn w1_is_one_homogeneous_in_mass(inst in instance(), c in mass_scale()) {
         let [mu, nu, _] = &inst.m;
@@ -438,17 +451,17 @@ proptest! {
         let scaled_total = c * total;
         prop_assume!(scaled_total >= 10f64.powi(MASS_EXP_LO));
         prop_assume!(scaled_total <= 10f64.powi(MASS_EXP_HI));
-        prop_assume!(mu.iter().chain(nu).all(|&e| e == 0.0 || e * c > MIN_ENTRY));
+        prop_assume!((scaled_total * inst.span).is_normal());
 
         let cmu: Vec<f64> = mu.iter().map(|v| v * c).collect();
         let cnu: Vec<f64> = nu.iter().map(|v| v * c).collect();
         let sum_cmu: f64 = cmu.iter().sum();
         let sum_cnu: f64 = cnu.iter().sum();
-        prop_assume!((sum_cmu - sum_cnu).abs() < 1e-9);
+        prop_assume!((sum_cmu - sum_cnu).abs() <= REL_MASS_TOL * sum_cmu.max(sum_cnu));
 
         let base = wasserstein_1(mu, nu, &inst.d);
         let want = c * base;
-        prop_assume!(want.is_finite());
+        prop_assume!(want == 0.0 || want.is_normal());
 
         let scaled = wasserstein_1(&cmu, &cnu, &inst.d);
         let abs_tol = ABS_FRACTION * scaled_total * inst.span;
@@ -480,20 +493,22 @@ fn sample<T>(strategy: &impl Strategy<Value = T>, count: usize) -> Vec<T> {
 }
 
 /// Over `CENSUS_DRAWS` fixed-seed raw draws: how many `build` admits, how many
-/// admitted instances trip the solver's total-mass early return or come back
+/// admitted instances carry a total mass below `1e-12`, how many come back
 /// non-finite, how many are decided by the relative half of the tolerance
 /// rather than the absolute floor, the widest largest-to-smallest entry ratio
-/// reached, and the largest relative gap against the CDF oracle.
+/// and the smallest entry-to-total fraction reached, and the largest relative
+/// gap against the CDF oracle.
 #[test]
 fn census_of_the_generated_corpus() {
     let raws = sample(&raw_draw(), CENSUS_DRAWS);
 
     let mut rejected = 0_usize;
     let mut admitted = 0_usize;
-    let mut sub_eps_totals = 0_usize;
+    let mut sub_1e12_totals = 0_usize;
     let mut non_finite = 0_usize;
     let mut relative_binding = 0_usize;
     let mut widest_ratio = 0.0_f64;
+    let mut smallest_fraction = f64::INFINITY;
     let mut worst_gap = 0.0_f64;
     let mut worst_at: Option<(Vec<f64>, f64, f64)> = None;
 
@@ -505,8 +520,9 @@ fn census_of_the_generated_corpus() {
         admitted += 1;
 
         let [mu, nu, _] = &inst.m;
-        if mu.iter().sum::<f64>() < 1e-12 {
-            sub_eps_totals += 1;
+        let total: f64 = mu.iter().sum();
+        if total < 1e-12 {
+            sub_1e12_totals += 1;
         }
         for marginal in &inst.m {
             let positive: Vec<f64> = marginal.iter().copied().filter(|&e| e > 0.0).collect();
@@ -514,6 +530,8 @@ fn census_of_the_generated_corpus() {
             let largest = positive.iter().copied().fold(0.0_f64, f64::max);
             if smallest.is_finite() && smallest > 0.0 {
                 widest_ratio = widest_ratio.max(largest / smallest);
+                let marginal_total: f64 = marginal.iter().sum();
+                smallest_fraction = smallest_fraction.min(smallest / marginal_total);
             }
         }
 
@@ -538,20 +556,20 @@ fn census_of_the_generated_corpus() {
         "census lost a draw: {rejected} rejected + {admitted} admitted"
     );
     assert!(
-        admitted > CENSUS_DRAWS / 2,
+        admitted * 5 > CENSUS_DRAWS * 2,
         "only {admitted} of {CENSUS_DRAWS} draws were admissible, expected \
          more than {}",
-        CENSUS_DRAWS / 2
+        CENSUS_DRAWS * 2 / 5
     );
     assert_eq!(
         non_finite, 0,
         "{non_finite} of {admitted} admitted instances returned a non-finite \
          W1 over a finite cost matrix, expected 0"
     );
-    assert_eq!(
-        sub_eps_totals, 0,
-        "{sub_eps_totals} of {admitted} admitted instances have a total mass \
-         below the solver's EPS = 1e-12 total-mass early return, expected 0"
+    assert!(
+        sub_1e12_totals > 0,
+        "no admitted instance has a total mass below 1e-12, expected at least \
+         one over {admitted} admitted instances"
     );
     assert!(
         relative_binding * 20 > admitted * 17,
@@ -565,6 +583,12 @@ fn census_of_the_generated_corpus() {
         "the widest largest-to-smallest entry ratio in the corpus is \
          {widest_ratio:e}, expected at least {MIN_WIDEST_RATIO:e} — the \
          marginals are not reaching the near-degenerate regime"
+    );
+    assert!(
+        smallest_fraction <= MAX_SMALLEST_FRACTION,
+        "the smallest entry-to-total fraction in the corpus is \
+         {smallest_fraction:e}, expected at most {MAX_SMALLEST_FRACTION:e} — \
+         the marginals are not reaching the solver's relative capacity floor"
     );
     assert!(
         worst_gap <= REL,
@@ -611,16 +635,25 @@ fn scan_decades(mu: &[f64], nu: &[f64], d: &[Vec<f64>], lo: i32, hi: i32) -> Vec
         .collect()
 }
 
-/// The one-ulp-imbalanced marginals the mass-balance pins scan, and the ground
-/// metric they live on: `ν`'s total is one ulp above `μ`'s, the tightest
-/// non-exact balance a unit total admits.
-fn one_ulp_imbalanced_fixture() -> (Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
+/// The dyadic fixture the decade scans rescale: marginals whose totals agree
+/// to at most `1.95e-16` relative under power-of-ten rescaling across
+/// `SCAN_EXP_LO..=SCAN_EXP_HI` (bit-equal on 489 of the 601 decades).
+fn dyadic_fixture() -> (Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
     let x: Vec<f64> = vec![-1.0, 0.0, 2.5, 7.0];
     let d: Vec<Vec<f64>> = (0..x.len())
         .map(|i| (0..x.len()).map(|j| (x[i] - x[j]).abs()).collect())
         .collect();
     let mu = vec![0.5, 0.25, 0.125, 0.125];
-    let nu = vec![0.125, 0.125, 0.25, 0.5 + f64::EPSILON];
+    let nu = vec![0.125, 0.125, 0.25, 0.5];
+    (mu, nu, d)
+}
+
+/// The one-ulp-imbalanced marginals the mass-balance pins scan, and the ground
+/// metric they live on: `ν`'s total is one ulp above `μ`'s, the tightest
+/// non-exact balance a unit total admits.
+fn one_ulp_imbalanced_fixture() -> (Vec<f64>, Vec<f64>, Vec<Vec<f64>>) {
+    let (mu, mut nu, d) = dyadic_fixture();
+    nu[3] += f64::EPSILON;
     (mu, nu, d)
 }
 
@@ -632,48 +665,36 @@ fn decades_with(scan: &[(i32, Decade)], want: &Decade) -> Vec<i32> {
         .collect()
 }
 
-/// On dyadic marginals — whose totals stay bit-equal under any rescaling, so
-/// the mass-balance assertion does not fire anywhere in the scan — the low edge
-/// of one-homogeneity is the per-arc capacity floor: below `1e-11` total mass
-/// every entry falls at or below `EPS = 1e-12` and `W` comes back `0.0`.
+/// Every decade of total mass in `10^SCAN_EXP_LO ..= 10^SCAN_EXP_HI` is
+/// one-homogeneous on the dyadic fixture: the solver's capacity floor is a
+/// fraction of the total, so no decade of the band is zeroed out.
 #[test]
-fn one_homogeneity_low_edge_is_the_capacity_floor() {
-    let x: Vec<f64> = vec![-1.0, 0.0, 2.5, 7.0];
-    let d: Vec<Vec<f64>> = (0..x.len())
-        .map(|i| (0..x.len()).map(|j| (x[i] - x[j]).abs()).collect())
-        .collect();
-    let mu = vec![0.5, 0.25, 0.125, 0.125];
-    let nu = vec![0.125, 0.125, 0.25, 0.5];
+fn one_homogeneity_holds_on_every_decade_of_total_mass() {
+    let (mu, nu, d) = dyadic_fixture();
 
-    let scan = scan_decades(&mu, &nu, &d, -18, 18);
+    let scan = scan_decades(&mu, &nu, &d, SCAN_EXP_LO, SCAN_EXP_HI);
+    let holds = decades_with(&scan, &Decade::Homogeneous);
+    let zeroed = decades_with(&scan, &Decade::Zeroed);
     let mismatched: Vec<_> = scan
         .iter()
         .filter(|(_, v)| matches!(v, Decade::Mismatched(_, _)))
         .collect();
-    assert!(
-        mismatched.is_empty(),
-        "decades that are neither homogeneous nor zeroed: {mismatched:?}"
-    );
 
-    let holds = decades_with(&scan, &Decade::Homogeneous);
-    let zeroed = decades_with(&scan, &Decade::Zeroed);
-
-    assert_eq!(
-        zeroed,
-        (-18..=-12).collect::<Vec<_>>(),
-        "expected the capacity floor to zero decades -18..=-12, got {zeroed:?}"
-    );
     assert_eq!(
         holds,
-        (-11..=18).collect::<Vec<_>>(),
-        "expected homogeneity on decades -11..=18, got {holds:?}"
+        (SCAN_EXP_LO..=SCAN_EXP_HI).collect::<Vec<_>>(),
+        "expected homogeneity on every decade in \
+         {SCAN_EXP_LO}..={SCAN_EXP_HI}; zeroed {zeroed:?}, mismatched \
+         {mismatched:?}"
     );
 }
 
-/// A one-ulp mass imbalance is still accepted at a total mass of `1e6`, and
-/// one-homogeneity holds from the capacity floor up to it.
+/// A one-ulp mass imbalance is accepted at every decade of total mass in
+/// `10^SCAN_EXP_LO ..= 10^SCAN_EXP_HI`, and one-homogeneity holds across it:
+/// the balance tolerance is a fraction of the larger total, and the imbalance
+/// the rescaled fixture carries stays under it.
 #[test]
-fn a_one_ulp_mass_imbalance_is_accepted_up_to_a_total_mass_of_1e6() {
+fn a_one_ulp_mass_imbalance_is_accepted_at_every_decade() {
     let (mu, nu, d) = one_ulp_imbalanced_fixture();
     let residual = nu.iter().sum::<f64>() - mu.iter().sum::<f64>();
     assert!(
@@ -681,57 +702,94 @@ fn a_one_ulp_mass_imbalance_is_accepted_up_to_a_total_mass_of_1e6() {
         "the fixture must carry a one-ulp imbalance, got {residual:e}"
     );
 
-    let scan = scan_decades(&mu, &nu, &d, -18, 6);
+    let mut worst_relative = 0.0_f64;
+    let mut worst_at = 0_i32;
+    for e in SCAN_EXP_LO..=SCAN_EXP_HI {
+        let c = 10f64.powi(e);
+        let sum_cmu: f64 = mu.iter().map(|v| v * c).sum();
+        let sum_cnu: f64 = nu.iter().map(|v| v * c).sum();
+        let relative = (sum_cmu - sum_cnu).abs() / sum_cmu.max(sum_cnu);
+        if relative > worst_relative {
+            worst_relative = relative;
+            worst_at = e;
+        }
+    }
+    assert!(
+        worst_relative > 0.0 && worst_relative <= REL_MASS_TOL,
+        "the rescaled fixture's worst relative imbalance is \
+         {worst_relative:e} at decade {worst_at}, expected a non-zero value \
+         at most {REL_MASS_TOL:e}"
+    );
+
+    let scan = scan_decades(&mu, &nu, &d, SCAN_EXP_LO, SCAN_EXP_HI);
+    let holds = decades_with(&scan, &Decade::Homogeneous);
+    let zeroed = decades_with(&scan, &Decade::Zeroed);
     let mismatched: Vec<_> = scan
         .iter()
         .filter(|(_, v)| matches!(v, Decade::Mismatched(_, _)))
         .collect();
-    assert!(
-        mismatched.is_empty(),
-        "decades that are neither homogeneous nor zeroed: {mismatched:?}"
-    );
 
-    let holds = decades_with(&scan, &Decade::Homogeneous);
-    let zeroed = decades_with(&scan, &Decade::Zeroed);
-    assert_eq!(
-        zeroed,
-        (-18..=-12).collect::<Vec<_>>(),
-        "expected the capacity floor to zero decades -18..=-12, got {zeroed:?}"
-    );
     assert_eq!(
         holds,
-        (-11..=6).collect::<Vec<_>>(),
-        "expected homogeneity on decades -11..=6 at a residual of \
-         {residual:e}, got {holds:?}"
+        (SCAN_EXP_LO..=SCAN_EXP_HI).collect::<Vec<_>>(),
+        "expected homogeneity on every decade in \
+         {SCAN_EXP_LO}..={SCAN_EXP_HI} at a unit-total residual of \
+         {residual:e}; zeroed {zeroed:?}, mismatched {mismatched:?}"
     );
 }
 
-/// The `|Σμ − Σν| < 1e-9` assertion is absolute, so the one-ulp imbalance
-/// accepted at a total mass of `1e6` is rejected one decade higher.
+/// A `+∞` total in `μ` is rejected.
+#[test]
+#[should_panic(expected = "marginal totals must be finite")]
+fn a_non_finite_mu_total_is_rejected() {
+    let d = vec![vec![0.0, 1.0], vec![1.0, 0.0]];
+    let _ = wasserstein_1(&[f64::INFINITY, 0.0], &[1.0, 0.0], &d);
+}
+
+/// A `+∞` total in `ν` is rejected.
+#[test]
+#[should_panic(expected = "marginal totals must be finite")]
+fn a_non_finite_nu_total_is_rejected() {
+    let d = vec![vec![0.0, 1.0], vec![1.0, 0.0]];
+    let _ = wasserstein_1(&[1.0, 0.0], &[f64::INFINITY, 0.0], &d);
+}
+
+/// An imbalance of `2 · REL_MASS_TOL · scale` is rejected at a total mass of
+/// `1e-7`, where it is `2e-19` in absolute terms.
 #[test]
 #[should_panic(expected = "Total masses must be equal")]
-fn a_one_ulp_mass_imbalance_is_rejected_at_a_total_mass_of_1e7() {
-    let (mu, nu, d) = one_ulp_imbalanced_fixture();
-    let c = 1e7;
+fn an_imbalance_above_the_relative_tolerance_is_rejected() {
+    let (mu, nu, d) = dyadic_fixture();
+    let c = 1e-7;
     let cmu: Vec<f64> = mu.iter().map(|v| v * c).collect();
-    let cnu: Vec<f64> = nu.iter().map(|v| v * c).collect();
+    let mut cnu: Vec<f64> = nu.iter().map(|v| v * c).collect();
+    cnu[3] += 2.0 * REL_MASS_TOL * c;
     let _ = wasserstein_1(&cmu, &cnu, &d);
 }
 
-/// A two-point instance whose `ν` carries `1e-13` at the far support point:
-/// that entry sits at or below the solver's per-arc capacity floor, so it is
-/// never routed, `W(μ, ν)` comes back `0.0` against the closed form's `1e-13`,
-/// and `W(μ, ρ) ≤ W(μ, ν) + W(ν, ρ)` fails by that entry's transport cost.
+/// A two-point instance whose `ν` carries the complement of `1.0 - 1e-13` at
+/// the far support point — an entry of order `1e-13` against a unit total, and
+/// one that keeps `Σν` bitwise `1.0`. That entry is above the solver's per-arc
+/// capacity floor at a unit total, so it is routed, `W(μ, ν)` matches the
+/// closed form, and `W(μ, ρ) ≤ W(μ, ν) + W(ν, ρ)` holds.
 #[test]
 #[allow(clippy::similar_names)]
-fn capacity_floor_breaks_the_triangle_inequality_by_the_mass_it_drops() {
+fn a_1e_minus_13_entry_is_routed_and_the_triangle_inequality_holds() {
     let x: Vec<f64> = vec![0.0, 1.0];
     let d = vec![vec![0.0, 1.0], vec![1.0, 0.0]];
-    let dropped = 1e-13;
+    let near_one = 1.0 - 1e-13;
+    let carried = 1.0 - near_one;
 
     let mu = vec![1.0, 0.0];
-    let nu = vec![1.0 - dropped, dropped];
+    let nu = vec![near_one, carried];
     let rho = vec![0.0, 1.0];
+
+    assert!(
+        mu.iter().sum::<f64>() == nu.iter().sum::<f64>(),
+        "the fixture must be bitwise balanced: sum(mu) = {:e}, sum(nu) = {:e}",
+        mu.iter().sum::<f64>(),
+        nu.iter().sum::<f64>()
+    );
 
     let w_mu_nu = wasserstein_1(&mu, &nu, &d);
     let w_nu_rho = wasserstein_1(&nu, &rho, &d);
@@ -740,28 +798,23 @@ fn capacity_floor_breaks_the_triangle_inequality_by_the_mass_it_drops() {
 
     assert!(
         oracle_mu_nu > 0.0,
-        "the closed form must see the dropped entry: got {oracle_mu_nu:e}, \
-         expected a positive value near {dropped:e}"
+        "the closed form must see the {carried:e} entry: got \
+         {oracle_mu_nu:e}, expected a positive value near {carried:e}"
     );
     assert!(
-        w_mu_nu == 0.0,
-        "W(mu, nu) = {w_mu_nu:e}, expected exactly 0 — the {dropped:e} entry \
-         is at or below the capacity floor and is never routed, while the \
-         closed form gives {oracle_mu_nu:e}"
+        approx_rel(w_mu_nu, oracle_mu_nu, REL, 0.0),
+        "W(mu, nu) = {w_mu_nu:e}, expected the closed form {oracle_mu_nu:e} \
+         (relative gap = {:e}, allowed {REL:e}) — the {carried:e} entry is \
+         above the relative capacity floor at a unit total and must be routed",
+        rel_gap(w_mu_nu, oracle_mu_nu)
     );
 
-    let excess = w_mu_rho - (w_mu_nu + w_nu_rho);
+    let bound = w_mu_nu + w_nu_rho;
+    let excess = w_mu_rho - bound;
     assert!(
-        excess > 0.0,
-        "expected the triangle inequality to fail: W(mu,rho) = {w_mu_rho:e}, \
-         W(mu,nu) + W(nu,rho) = {:e}, excess = {excess:e}",
-        w_mu_nu + w_nu_rho
-    );
-    assert!(
-        approx_rel(excess, oracle_mu_nu, 1e-9, 0.0),
-        "the excess should be the dropped mass's transport cost: \
-         excess = {excess:e}, |mu_0 - nu_0| * d(0,1) = {oracle_mu_nu:e} \
-         (relative gap = {:e})",
-        rel_gap(excess, oracle_mu_nu)
+        excess <= REL * bound,
+        "triangle violated: W(mu,rho) = {w_mu_rho:e} > W(mu,nu) + W(nu,rho) \
+         = {bound:e} (excess = {excess:e}, allowed = {:e})",
+        REL * bound
     );
 }
