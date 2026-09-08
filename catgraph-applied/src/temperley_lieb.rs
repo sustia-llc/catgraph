@@ -1226,6 +1226,87 @@ mod test {
         }
     }
 
+    /// The points `non_crossing` forbids to through-lines: for each same-side
+    /// arc, those strictly between its endpoints.
+    fn blocked_points(pairs: &[Pair], source: usize) -> std::collections::BTreeSet<usize> {
+        pairs
+            .iter()
+            .filter(|p| p.all(|x| x < source) || p.all(|x| x >= source))
+            .flat_map(|Pair(x, y)| (1 + x.min(y))..*x.max(y))
+            .collect()
+    }
+
+    /// The monotonicity branch of `non_crossing`, on diagrams that keep both
+    /// parallel arms dispatching.
+    ///
+    /// At `source = target = 18` eight same-side arcs a side leave two domain
+    /// and two codomain points over, enough for the two through-lines the
+    /// branch needs to discriminate. None of the four lies inside a same-side
+    /// arc, so the blocking branch does not reject the crossed wiring. Two arc
+    /// shapes — adjacent pairs, whose interiors are empty, and nested pairs,
+    /// whose interiors are not — each wired monotone (`d1–c1`, `d2–c2`) and
+    /// crossed (`d1–c2`, `d2–c1`), checked against `boundary_walk_planar`.
+    #[test]
+    fn non_crossing_parallel_arms_two_through_lines() {
+        let (source, target) = (18usize, 18usize);
+        // Eight arcs a side over the first sixteen points of each side, leaving
+        // that side's last two points free.
+        let adjacent: Vec<Pair> = (0..8)
+            .map(|i| Pair(2 * i, 2 * i + 1))
+            .chain((0..8).map(|i| Pair(source + 2 * i, source + 2 * i + 1)))
+            .collect();
+        let nested: Vec<Pair> = (0..8)
+            .map(|i| Pair(i, 15 - i))
+            .chain((0..8).map(|i| Pair(source + i, source + 15 - i)))
+            .collect();
+        let (d1, d2) = (16usize, 17usize);
+        let (c1, c2) = (source + 16, source + 17);
+
+        for (shape, arcs, blocked_len) in [
+            ("adjacent arcs", &adjacent, 0usize),
+            ("nested arcs", &nested, 28usize),
+        ] {
+            for (wiring, through, expected) in [
+                ("monotone", [Pair(d1, c1), Pair(d2, c2)], true),
+                ("crossed", [Pair(d1, c2), Pair(d2, c1)], false),
+            ] {
+                let mut pairs = arcs.to_vec();
+                pairs.extend(through);
+                let matching = PerfectMatching::from(pairs);
+                let what =
+                    format!("Hom({source}, {target}), {shape}, {wiring} through-lines {through:?}");
+                assert_parallel_arms_dispatch(&matching.pairs, source, &what);
+
+                let blocked = blocked_points(&matching.pairs, source);
+                assert_eq!(
+                    blocked.len(),
+                    blocked_len,
+                    "{what}: the same-side arcs block {} points, not {blocked_len} — {blocked:?}",
+                    blocked.len()
+                );
+                for point in [d1, d2, c1, c2] {
+                    assert!(
+                        !blocked.contains(&point),
+                        "{what}: through-line endpoint {point} is blocked by a same-side arc, \
+                         so non_crossing rejects before the monotonicity branch — {blocked:?}"
+                    );
+                }
+
+                let got = matching.non_crossing(source, target);
+                assert_eq!(
+                    got, expected,
+                    "{what}: non_crossing said {got}, and the wiring is monotone = {expected}"
+                );
+                let walked = boundary_walk_planar(&matching.pairs, source, target);
+                assert_eq!(
+                    walked, expected,
+                    "{what}: the boundary walk said {walked}, and the wiring is \
+                     monotone = {expected}"
+                );
+            }
+        }
+    }
+
     /// The pair set of `a ⊗ b`, read off the side-by-side placement.
     ///
     /// Tensoring draws `a` to the left of `b`, so the result's domain is `a`'s
