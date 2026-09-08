@@ -226,3 +226,53 @@ fn nested_duals_carry_the_second_derivative() {
         );
     }
 }
+
+/// **The write-time guard on both channels.** `Dual::is_finite` on a finite
+/// dual and on a non-finite component in either channel — NaN and each
+/// infinity in `re`, NaN and an infinity in `du`, and both channels bad at
+/// once; `DualF64Module::is_finite` on `R⁰`, on a module of
+/// extreme-but-finite coordinates, on one whose last coordinate has a bad
+/// `du`, on one whose first coordinate has a bad `re`, and on a three-coordinate
+/// module whose middle coordinate has a bad `du`.
+#[test]
+fn dual_is_finite_over_the_two_channels() {
+    let scalars: [(Dual<f64>, bool); 6] = [
+        (Dual::new(1.0, 2.0), true),
+        (Dual::new(f64::NAN, 2.0), false),
+        (Dual::new(f64::INFINITY, 0.0), false),
+        (Dual::new(1.0, f64::INFINITY), false),
+        (Dual::new(1.0, f64::NAN), false),
+        (Dual::new(f64::NEG_INFINITY, f64::NAN), false),
+    ];
+
+    for (dual, expected) in scalars {
+        let observed = dual.is_finite();
+        assert_eq!(
+            observed, expected,
+            "Dual::is_finite on {dual:?}: observed {observed}, expected {expected}",
+        );
+    }
+
+    let modules: [(DualF64Module, bool); 5] = [
+        (DualF64Module::zero_dim(), true),
+        (RModule::new(vec![c(1.0), Dual::new(-0.0, f64::MAX)]), true),
+        (
+            RModule::new(vec![c(1.0), Dual::new(2.0, f64::INFINITY)]),
+            false,
+        ),
+        (RModule::new(vec![Dual::new(f64::NAN, 0.0), c(2.0)]), false),
+        (
+            RModule::new(vec![c(1.0), Dual::new(3.0, f64::INFINITY), c(5.0)]),
+            false,
+        ),
+    ];
+
+    for (module, expected) in modules {
+        let observed = module.is_finite();
+        assert_eq!(
+            observed, expected,
+            "RModule::<Dual<f64>>::is_finite on {module:?}: observed {observed}, \
+             expected {expected}",
+        );
+    }
+}
