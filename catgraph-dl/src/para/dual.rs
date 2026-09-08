@@ -32,7 +32,9 @@ use catgraph_applied::rig::{One, Zero};
 /// Round-trips as its two public components; a loaded `du` is whatever the
 /// document says, not a seeded [`variable`](Dual::variable). The wire shape
 /// carries no type tag and `serde_json` writes non-finite components as
-/// `null`, which does not read back.
+/// `null`, which does not read back. For `T = f64`,
+/// [`is_finite`](Dual::is_finite) reports whether a value will survive that
+/// round-trip.
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Dual<T> {
@@ -83,6 +85,16 @@ impl<T: Zero + One> Dual<T> {
             re,
             du: <T as One>::one(),
         }
+    }
+}
+
+impl Dual<f64> {
+    /// Whether both `re` and `du` satisfy [`f64::is_finite`] — `false` for a
+    /// dual carrying a NaN or an infinity in either channel, `true` for every
+    /// other `Dual<f64>`.
+    #[must_use]
+    pub fn is_finite(&self) -> bool {
+        self.re.is_finite() && self.du.is_finite()
     }
 }
 

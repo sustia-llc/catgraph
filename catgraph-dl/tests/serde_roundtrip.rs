@@ -165,7 +165,7 @@ fn direct_sum_with_the_empty_summand_round_trips() {
 #[cfg(feature = "ad")]
 mod ad {
     use catgraph_dl::para::RModule;
-    use catgraph_dl::para::ad::Dual;
+    use catgraph_dl::para::ad::{Dual, DualF64Module};
 
     use super::json_round_trip_stable;
 
@@ -201,5 +201,69 @@ mod ad {
         assert_eq!(coords[0].derivative(), 3.0);
         assert_eq!(coords[1].value(), 15.0);
         assert_eq!(coords[1].derivative(), 0.0);
+    }
+
+    #[test]
+    fn dual_module_is_finite_agrees_with_the_null_asymmetry() {
+        // The `Dual<f64>` counterpart of the `f64` case above: each channel
+        // serializes on its own, so a bad `re` and a bad `du` each put a `null`
+        // in the document and each block the read-back. On these four modules
+        // `is_finite` is `false` exactly on the ones whose JSON carries a
+        // `null`, and `true` exactly on the ones that load back; each
+        // coordinate agrees with its own round-trip too.
+        let cases: [(DualF64Module, bool); 4] = [
+            (
+                RModule::new(vec![Dual::variable(2.0_f64), Dual::constant(5.0_f64)]),
+                true,
+            ),
+            (
+                RModule::new(vec![Dual::new(f64::NAN, 1.0), Dual::constant(5.0_f64)]),
+                false,
+            ),
+            (
+                RModule::new(vec![Dual::constant(5.0_f64), Dual::new(1.0, f64::INFINITY)]),
+                false,
+            ),
+            (
+                RModule::new(vec![
+                    Dual::new(-0.0, f64::MAX),
+                    Dual::new(f64::MIN_POSITIVE / 2.0, f64::MIN),
+                ]),
+                true,
+            ),
+        ];
+
+        for (module, expected) in cases {
+            for dual in module.as_slice() {
+                let json = serde_json::to_string(dual).expect("serialize succeeds");
+                let loads_back = serde_json::from_str::<Dual<f64>>(&json).is_ok();
+                assert_eq!(
+                    dual.is_finite(),
+                    loads_back,
+                    "Dual::is_finite on {dual:?} is {} while its JSON {json} loads_back={loads_back}",
+                    dual.is_finite(),
+                );
+            }
+            let observed = module.is_finite();
+            assert_eq!(
+                observed, expected,
+                "is_finite on {module:?}: observed {observed}, expected {expected}",
+            );
+
+            let json = serde_json::to_string(&module).expect("serialize succeeds");
+            let has_null = json.contains("null");
+            assert_eq!(
+                observed, !has_null,
+                "is_finite on {module:?} is {observed} while its JSON {json} has_null={has_null}; \
+                 the two must disagree",
+            );
+
+            let loads_back = serde_json::from_str::<DualF64Module>(&json).is_ok();
+            assert_eq!(
+                observed, loads_back,
+                "is_finite on {module:?} is {observed} while its JSON {json} loads_back={loads_back}; \
+                 the two must agree",
+            );
+        }
     }
 }

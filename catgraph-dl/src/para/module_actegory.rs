@@ -21,6 +21,8 @@ use core::ops::{Add, Mul};
 use catgraph_applied::rig::{One, Zero};
 
 use super::actegory::Actegory;
+#[cfg(feature = "ad")]
+use super::ad::Dual;
 use super::monoidal_category::MonoidalCategory;
 
 /// Direct-sum tensor carrier `A ⊕ B`: the tensor of [`RMonoidal`] and the
@@ -59,7 +61,7 @@ impl<S> DirectSum<RModule<S>, RModule<S>> {
 /// [`DirectSum<f64, f64>`](DirectSum), or a `Dual<f64>`); `serde_json`
 /// writes non-finite scalars as `null`, which does not read back into `f64`.
 /// For `S = f64`, [`is_finite`](Self::is_finite) reports whether a value will
-/// survive that round-trip.
+/// survive that round-trip; under `ad`, `S = Dual<f64>` has its own `is_finite`.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RModule<S>(Vec<S>);
@@ -186,6 +188,18 @@ impl RModule<f64> {
     #[must_use]
     pub fn is_finite(&self) -> bool {
         self.0.iter().all(|x| x.is_finite())
+    }
+}
+
+#[cfg(feature = "ad")]
+impl RModule<Dual<f64>> {
+    /// Whether every coordinate satisfies [`Dual::is_finite`] — `false` for a
+    /// module carrying a NaN or an infinity in either channel of any
+    /// coordinate, `true` for every other module of dual scalars, including
+    /// `R⁰`, whose empty coordinate tuple satisfies it vacuously.
+    #[must_use]
+    pub fn is_finite(&self) -> bool {
+        self.0.iter().all(Dual::is_finite)
     }
 }
 
