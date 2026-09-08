@@ -2,26 +2,39 @@
 //!
 //! [`reference_to_cospan`] is a second reading of the same semantics map; the
 //! two are measured equal up to
-//! [`canonical_form`](crate::cospan_canon::CospanCanon) over 383 terms. The
+//! [`canonical_form`](crate::cospan_canon::CospanCanon) over 385 terms. The
 //! independence is partial: the spider route (one apex vertex built directly,
-//! versus a recursion into `special_frobenius_morphism`) and the layer fold
-//! differ; the six arms other than `Spider` and `UnSpecifiedBox` — the
-//! hand-built braiding literal included — are byte-identical to the survivor's,
-//! so a convention error applied to both copies alike is not visible here.
+//! versus a recursion into `special_frobenius_morphism`), the braiding route
+//! ([`from_permutation_on_domain`](crate::monoidal::SymmetricMonoidalMorphism::from_permutation_on_domain)
+//! versus a leg literal) and the layer fold differ; the five arms other than
+//! `Spider`, `SymmetricBraiding` and `UnSpecifiedBox` call the survivor's own
+//! [`HypergraphCategory`](crate::hypergraph_category::HypergraphCategory)
+//! generators, so a convention error inside one of those is not visible here.
 //!
 //! The module sits inside the crate because the reference algorithm walks
 //! `FrobeniusMorphism::layers`, which is `pub(crate)`.
 //!
 //! # Falsification
 //!
-//! Perturbing `cospan_algebra::generator_to_cospan` takes
-//! [`the_two_frobenius_to_cospan_agree_over_the_wide_space`] red two ways:
+//! What [`the_two_frobenius_to_cospan_agree_over_the_wide_space`] does under a
+//! perturbation of `cospan_algebra::generator_to_cospan` (the survivor) or of
+//! [`reference_generator`] (the oracle):
 //!
 //! | perturbation | result |
 //! |---|---|
-//! | braiding right leg `vec![1, 0]` → `vec![0, 1]` | red at `random_5`: the ill-typed braiding makes the layer fold fail outright (`'a'` vs `'b'` at a common interface) |
-//! | delete the `Spider(z, 0, 0)` carve-out, i.e. recurse | **0 of 383** — not red |
-//! | `Comultiplication(z)` → the *disconnected* `Cospan::new_unchecked(vec![0], vec![0, 1], vec![z, z])` | red, **169 of 383** terms disagree — `delta`: survivor `apex=2` vs reference `apex=1` |
+//! | survivor braiding right leg `vec![1, 0]` → `vec![0, 1]` | red at `random_5`: the ill-typed braiding makes the layer fold fail outright (`'a'` vs `'b'` at a common interface) |
+//! | survivor braiding → `Cospan::new_unchecked(vec![1, 0], vec![0, 1], vec![z, w])` | red at `braid_ab`, the same fold failure |
+//! | oracle's `Permutation::transposition(2, 0, 1)` → `Permutation::identity(2)` | red at `random_5`, the reference side failing to fold |
+//! | delete the survivor's `Spider(z, 0, 0)` carve-out, i.e. recurse | **0 of 385** — not red |
+//! | `Comultiplication(z)` → the *disconnected* `Cospan::new_unchecked(vec![0], vec![0, 1], vec![z, z])` | red, **169 of 385** terms disagree — `delta`: survivor `apex=2` vs reference `apex=1` |
+//!
+//! The first three abort on the first unfoldable term, so the mismatch tally
+//! never prints. Re-measured with the per-term panic replaced by a skip: rows
+//! one and three give **23 of 385** disagreeing and 15 skipped, `braid_ab` and
+//! `sigma_aa` among the disagreements; row two gives **0 of 385** disagreeing
+//! and 23 skipped, because swapping the apex vertices carries
+//! `([1, 0], [0, 1], [z, w])` to `([0, 1], [1, 0], [w, z])` — the unperturbed
+//! cospan whenever `z == w`.
 //!
 //! [`black_boxes_are_rejected_by_both`] goes red when the survivor's variant is
 //! switched to `CatgraphError::Composition`.
@@ -39,8 +52,9 @@ use crate::{
     cospan_canon::CospanCanon,
     errors::CatgraphError,
     frobenius::{FrobeniusMorphism, FrobeniusOperation},
-    monoidal::Monoidal,
+    monoidal::{Monoidal, SymmetricMonoidalMorphism},
 };
+use permutations::Permutation;
 use rand::{RngExt, SeedableRng, rngs::StdRng};
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -58,9 +72,9 @@ const LABELS: [char; 2] = ['a', 'b'];
 /// How many random terms [`space`] contributes.
 const RANDOM_TERMS: usize = 300;
 
-/// The exact size of [`space`]: eighty-three hand-built terms plus
+/// The exact size of [`space`]: eighty-five hand-built terms plus
 /// [`RANDOM_TERMS`]. Asserted, so the space cannot shrink silently.
-const SPACE_SIZE: usize = 83 + RANDOM_TERMS;
+const SPACE_SIZE: usize = 85 + RANDOM_TERMS;
 
 /// Floor on the number of **distinct canonical forms** among the random terms.
 ///
@@ -83,11 +97,16 @@ const MIN_TOTAL_DISTINCT: usize = 180;
 
 /// Interpret one generator as the cospan it denotes — the **G1-T1** reading.
 ///
-/// This is the retired `frobenius::operations::operation_to_cospan`, kept as an
-/// independent oracle. It differs from the surviving
-/// [`cospan_algebra::generator_to_cospan`](crate::cospan_algebra) in two places
-/// that matter, which is what makes the comparison worth running:
+/// The retired `frobenius::operations::operation_to_cospan`, kept as an
+/// independent oracle, with its braiding arm rewritten to go through the
+/// permutation braiding. Three arms differ from the surviving
+/// [`cospan_algebra::generator_to_cospan`](crate::cospan_algebra):
 ///
+/// - `SymmetricBraiding(z, w)` is
+///   [`from_permutation_on_domain`](crate::monoidal::SymmetricMonoidalMorphism::from_permutation_on_domain)
+///   applied to the transposition of `0..2` with `[z, w]` labelling the domain.
+///   The survivor writes the legs out as
+///   `Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![z, w])`.
 /// - `Spider(z, m, n)` is built **directly** as a one-vertex apex with `m`
 ///   domain wires and `n` codomain wires on it. The survivor instead recurses
 ///   into [`special_frobenius_morphism`](crate::frobenius::special_frobenius_morphism)
@@ -97,6 +116,11 @@ const MIN_TOTAL_DISTINCT: usize = 180;
 ///   survivor rejects it with [`CatgraphError::Interpret`]. No term in [`space`]
 ///   carries a black box, so the wide pin never reaches this arm; the divergence
 ///   is pinned separately in [`black_boxes_are_rejected_by_both`].
+///
+/// The other five arms — `Unit`, `Counit`, `Multiplication`,
+/// `Comultiplication`, `Identity` — call the same `Cospan::unit`,
+/// `Cospan::counit`, `Cospan::multiplication`, `Cospan::comultiplication` and
+/// `Cospan::identity` the survivor calls.
 fn reference_generator<Lambda, BlackBoxLabel>(
     op: &FrobeniusOperation<Lambda, BlackBoxLabel>,
 ) -> Result<Cospan<Lambda>, CatgraphError>
@@ -112,10 +136,13 @@ where
         FrobeniusOperation::Multiplication(z) => Cospan::multiplication(*z),
         FrobeniusOperation::Comultiplication(z) => Cospan::comultiplication(*z),
         FrobeniusOperation::Identity(z) => Cospan::identity(&vec![*z]),
-        // σ: [z, w] → [w, z]. Two apex vertices; the right leg reads them back
-        // in the other order.
+        // σ: [z, w] → [w, z], read off the permutation braiding: the
+        // transposition of `0..2` with `[z, w]` labelling the domain.
         FrobeniusOperation::SymmetricBraiding(z, w) => {
-            Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![*z, *w])
+            <Cospan<Lambda> as SymmetricMonoidalMorphism<Lambda>>::from_permutation_on_domain(
+                Permutation::transposition(2, 0, 1),
+                &[*z, *w],
+            )?
         }
         // One apex vertex, every leg entry `0` — including at `(0, 0)`, where
         // that is the bubble.
@@ -347,6 +374,18 @@ fn compact_closed_terms() -> Vec<(String, FM)> {
     out
 }
 
+/// The bare same-label braidings `σ_{a,a}` and `σ_{a,a} ; σ_{a,a}`.
+fn same_label_braidings() -> Vec<(String, FM)> {
+    let sigma = || -> FM { FrobeniusOperation::SymmetricBraiding('a', 'a').into() };
+    let mut twice = sigma();
+    ComposableMutating::compose(&mut twice, sigma())
+        .expect("invariant: σ_{a,a} is [a, a] → [a, a] and composes with itself");
+    vec![
+        ("sigma_aa".to_string(), sigma()),
+        ("sigma_aa_twice".to_string(), twice),
+    ]
+}
+
 /// One random extension step: pick a generator that fits somewhere in `cod` and
 /// return `(position, wires consumed, the generator as a morphism)`.
 ///
@@ -443,6 +482,7 @@ fn space() -> Vec<(String, FM)> {
     out.extend(spider_grid());
     out.extend(def_2_5_battery());
     out.extend(compact_closed_terms());
+    out.extend(same_label_braidings());
 
     let mut rng = StdRng::seed_from_u64(0x0336_0001);
     for k in 0..RANDOM_TERMS {
@@ -460,32 +500,29 @@ fn space() -> Vec<(String, FM)> {
 /// `frobenius::` re-export, against [`reference_to_cospan`] up to
 /// `canonical_form`.
 ///
-/// **Fixture (383 terms):** the ten `tests/compact_closed.rs::samples()` terms;
+/// **Fixture (385 terms):** the ten `tests/compact_closed.rs::samples()` terms;
 /// the thirty-six `(m, n) ≤ 5` spiders including the `(0, 0)` bubble; both
 /// sides of all eleven Def 2.5 equations (22 terms); fifteen cup / cap / name /
-/// unname terms; and 300 pseudo-random terms of up to 8 extension attempts over
-/// two labels, seeded at `0x0336_0001`. All at `Lambda = char`,
+/// unname terms; the two bare same-label braidings `σ_{a,a}` and
+/// `σ_{a,a} ; σ_{a,a}`; and 300 pseudo-random terms of up to 8 extension
+/// attempts over two labels, seeded at `0x0336_0001`. All at `Lambda = char`,
 /// `BlackBoxLabel = String` — one instantiation. No term here carries a black
 /// box; that arm is [`black_boxes_are_rejected_by_both`].
 ///
 /// **Expected:** no survivor/oracle mismatch, `terms.len() == SPACE_SIZE`, and
 /// the two distinct-form floors. Measured on the pinned seed: 212 distinct
-/// canonical forms over the 383 terms and 175 over the 300 random ones; 46 of
+/// canonical forms over the 385 terms and 175 over the 300 random ones; 46 of
 /// the random terms have `0 → 0` images, spread over 6 distinct scalar-shaped
 /// forms.
 ///
-/// **What it cannot see:** both sides fold with the same `Cospan::compose`,
-/// `Monoidal` and `HypergraphCategory` generator cospans, so this is a
-/// *differential* claim about the two interpretation functions, not an absolute
-/// one about the cospan machinery underneath them. The oracle's six arms other
-/// than `Spider` and `UnSpecifiedBox` are byte-identical to the survivor's, the
-/// braiding's hand-written
-/// `Cospan::new_unchecked(vec![0, 1], vec![1, 0], vec![z, w])` literal
-/// included, so a convention error applied to both copies is not something this
-/// pin can compare away. Measured with the right leg flipped to `[0, 1]` in
-/// **both** copies: this test goes red at `random_5` through the fold's label
-/// check, while the same pin restricted to the spider grid plus the Def 2.5
-/// battery (58 terms) has 0 mismatches.
+/// **What it cannot see:** both sides fold with the same `Cospan::compose` and
+/// `Monoidal`, and their `Unit` / `Counit` / `Multiplication` /
+/// `Comultiplication` / `Identity` arms call the same
+/// `HypergraphCategory` generator cospans, so this is a *differential* claim
+/// about the two interpretation functions, not an absolute one about the cospan
+/// machinery underneath them. A convention error inside one of those five
+/// generators, or inside `Cospan::compose`, reaches both readings alike and is
+/// not something this pin can compare away.
 #[test]
 fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
     let terms = space();
@@ -532,7 +569,7 @@ fn the_two_frobenius_to_cospan_agree_over_the_wide_space() {
         mismatches.join("\n"),
     );
 
-    // The space's *content*, not just its count. Agreement over 383 copies of
+    // The space's *content*, not just its count. Agreement over 385 copies of
     // the identity would be agreement about nothing.
     assert!(
         random_images.len() >= MIN_RANDOM_DISTINCT,
