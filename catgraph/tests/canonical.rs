@@ -55,8 +55,12 @@
 //! `BoundaryLeg` `Contains` `CospanToFrobeniusFunctor` `EitherExt` `Frobenius`
 //! `HypergraphFunctor` `InterpretableMorphism` `MonoidalMorphism`
 //! `MonoidalMutatingMorphism` `MorphismSystem` `NameAlgebra` `Operadic`
-//! `RelabelingFunctor` `ResultExt` `TestContainer` `TestMorphism` `TestSystem`
+//! `RelabelingFunctor` `ResultExt` `RewriteBoundary` `RewriteRejection`
+//! `RewriteSide` `TestContainer` `TestMorphism` `TestSystem`
 //! `TryFromFinSetError` `TryFromInjError` `TryFromSurjError`
+//!
+//! The three rewrite names are constructed only by catgraph-applied, whose
+//! tests/rewrite.rs and tests/serde_roundtrip.rs pin one arm per variant.
 
 use std::sync::Arc;
 

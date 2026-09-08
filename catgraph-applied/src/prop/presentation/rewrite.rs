@@ -81,7 +81,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 
-use catgraph::errors::CatgraphError;
+use catgraph::errors::{CatgraphError, RewriteBoundary, RewriteRejection, RewriteSide};
 
 use super::super::PropSignature;
 use super::super::colored::{ColoredExpr, check};
@@ -94,7 +94,7 @@ use super::display::expr_of_content;
 // -------------------------------------------------------- the trust boundary
 
 /// Re-validate a caller-supplied [`ColoredExpr`] from scratch — arity first,
-/// then the *words* — naming it `what` in any rejection.
+/// then the *words* — naming it `side` in any rejection.
 ///
 /// Every value [`ColoredExpr::new`] builds is word-well-formed by construction;
 /// its serde path is not, so each public entry point of this module re-derives
@@ -102,24 +102,26 @@ use super::display::expr_of_content;
 /// it to be the one stored. The arity clause runs first, since an
 /// arity-ill-formed tree is the one that would make [`content_of_colored`]
 /// *panic*. Once per input, at entry — never per search state.
-fn revalidate<G: PropSignature>(what: &str, expr: &ColoredExpr<G>) -> Result<(), CatgraphError> {
+fn revalidate<G: PropSignature>(
+    side: RewriteSide,
+    expr: &ColoredExpr<G>,
+) -> Result<(), CatgraphError> {
+    let ill_formed =
+        |message: String| CatgraphError::Rewrite(RewriteRejection::IllFormed { side, message });
+
     if !is_arity_well_formed(expr.expr()) {
-        return Err(CatgraphError::Presentation {
-            message: format!("{what} is not arity-well-formed (#196 screen included)"),
-        });
+        return Err(ill_formed(
+            "not arity-well-formed (#196 screen included)".to_string(),
+        ));
     }
-    let derived =
-        check(expr.expr(), expr.source_word()).map_err(|error| CatgraphError::Presentation {
-            message: format!("{what} is not word-well-formed: {error}"),
-        })?;
+    let derived = check(expr.expr(), expr.source_word())
+        .map_err(|error| ill_formed(format!("not word-well-formed: {error}")))?;
     if derived != expr.target_word() {
-        return Err(CatgraphError::Presentation {
-            message: format!(
-                "{what} declares a target word its expression does not produce: stored \
-                 {:?}, derived {derived:?}",
-                expr.target_word()
-            ),
-        });
+        return Err(ill_formed(format!(
+            "declares a target word its expression does not produce: stored {:?}, derived \
+             {derived:?}",
+            expr.target_word()
+        )));
     }
     Ok(())
 }
@@ -223,42 +225,41 @@ impl<G: PropSignature> RewriteRule<G> {
     ///
     /// # Errors
     ///
-    /// [`CatgraphError::Presentation`] naming the violated condition. Never
-    /// panics — an ill-formed rule is rejected here rather than at a match site.
+    /// [`CatgraphError::Rewrite`] naming the violated condition:
+    /// [`SidesNotParallel`](RewriteRejection::SidesNotParallel) for (1),
+    /// [`IllFormed`](RewriteRejection::IllFormed) for (2),
+    /// [`EmptyLhs`](RewriteRejection::EmptyLhs) for (3), and
+    /// [`LhsInterfaceNotMono`](RewriteRejection::LhsInterfaceNotMono) for (4).
+    /// Never panics — an ill-formed rule is rejected here rather than at a match
+    /// site.
     pub fn new(lhs: ColoredExpr<G>, rhs: ColoredExpr<G>) -> Result<Self, CatgraphError> {
-        let reject = |message: String| CatgraphError::Presentation { message };
+        let reject = |rejection: RewriteRejection| CatgraphError::Rewrite(rejection);
 
         if lhs.source_word() != rhs.source_word() {
-            return Err(reject(
-                "rewrite rule: the two sides declare different source words".to_string(),
-            ));
+            return Err(reject(RewriteRejection::SidesNotParallel {
+                boundary: RewriteBoundary::Source,
+            }));
         }
         if lhs.target_word() != rhs.target_word() {
-            return Err(reject(
-                "rewrite rule: the two sides declare different target words".to_string(),
-            ));
+            return Err(reject(RewriteRejection::SidesNotParallel {
+                boundary: RewriteBoundary::Target,
+            }));
         }
-        for (side, expr) in [("lhs", &lhs), ("rhs", &rhs)] {
-            revalidate(&format!("rewrite rule: the {side}"), expr)?;
+        for (side, expr) in [(RewriteSide::Lhs, &lhs), (RewriteSide::Rhs, &rhs)] {
+            revalidate(side, expr)?;
         }
 
         let lhs = content_of_colored(&lhs);
         let rhs = content_of_colored(&rhs);
 
         if lhs.edges().is_empty() {
-            return Err(reject(
-                "rewrite rule: the lhs has no generator occurrence, so it matches everywhere"
-                    .to_string(),
-            ));
+            return Err(reject(RewriteRejection::EmptyLhs));
         }
 
         let mut on_boundary = vec![false; lhs.node_count()];
         for &x in lhs.input().iter().chain(lhs.output().iter()) {
             if on_boundary[x] {
-                return Err(reject(format!(
-                    "rewrite rule: the lhs interface is not mono — node {x} occupies two boundary \
-                     coordinates, so the pushout complement is not unique"
-                )));
+                return Err(reject(RewriteRejection::LhsInterfaceNotMono { node: x }));
             }
             on_boundary[x] = true;
         }
@@ -823,14 +824,17 @@ fn apply_match<G: PropSignature>(
 ///
 /// # Errors
 ///
-/// Two **distinct** rejections, reported with different messages:
+/// Two **distinct** rejections, reported as different variants, plus one
+/// propagated engine error:
 ///
-/// - [`CatgraphError::Presentation`] if `site` was enumerated from a *different
-///   content* than `target` — a foreign site, or a stale one held across an
-///   apply. The fix is to re-enumerate against the content in hand.
-/// - [`CatgraphError::Presentation`] if `site` belongs to `target` but its
-///   hyperedges are not a convex match **of `rule`** there. The fix is a
-///   different rule, or a different site.
+/// - [`CatgraphError::Rewrite`] with
+///   [`StaleSite`](RewriteRejection::StaleSite) if `site` was enumerated from a
+///   *different content* than `target` — a foreign site, or a stale one held
+///   across an apply. The fix is to re-enumerate against the content in hand.
+/// - [`CatgraphError::Rewrite`] with
+///   [`NotAMatch`](RewriteRejection::NotAMatch), its `step` `None`, if `site`
+///   belongs to `target` but its hyperedges are not a convex match **of `rule`**
+///   there. The fix is a different rule, or a different site.
 /// - [`CatgraphError::Presentation`] from the rebuild, which re-establishes the
 ///   BGKSZ Thm 3.12 image characterization. Unreachable on a convex match.
 pub fn apply_at<G: PropSignature>(
@@ -839,18 +843,11 @@ pub fn apply_at<G: PropSignature>(
     site: &MatchSite,
 ) -> Result<Content<G>, CatgraphError> {
     if site.content != fingerprint(target) {
-        return Err(CatgraphError::Presentation {
-            message: "rewrite at a site: the site was enumerated from a different content, so \
-                      its hyperedge indices do not name the same hyperedges here — re-enumerate \
-                      against this content (a site does not survive an apply)"
-                .to_string(),
-        });
+        return Err(CatgraphError::Rewrite(RewriteRejection::StaleSite));
     }
-    let found = match_at(target, rule, &site.edges).ok_or_else(|| CatgraphError::Presentation {
-        message: "rewrite at a site: the site's hyperedges do not describe a convex match of \
-                  this rule in this content"
-            .to_string(),
-    })?;
+    let found = match_at(target, rule, &site.edges).ok_or(CatgraphError::Rewrite(
+        RewriteRejection::NotAMatch { step: None },
+    ))?;
     apply_match(target, rule, &found)
 }
 
@@ -1059,9 +1056,10 @@ struct SearchState<G: PropSignature> {
 ///
 /// # Errors
 ///
-/// - [`CatgraphError::Presentation`] if `start` is not well-formed — arity or
-///   words, the private `revalidate` — reachable only across [`ColoredExpr`]'s
-///   serde trust boundary.
+/// - [`CatgraphError::Rewrite`] with
+///   [`IllFormed`](RewriteRejection::IllFormed) if `start` is not well-formed —
+///   arity or words, the private `revalidate` — reachable only across
+///   [`ColoredExpr`]'s serde trust boundary.
 /// - [`CatgraphError::Presentation`] if the readback of the best state does not
 ///   re-check as a colored morphism, or does not carry that state's content — an
 ///   engine-invariant failure rather than a user error.
@@ -1077,7 +1075,7 @@ pub fn optimize<G: PropSignature>(
     fuel: usize,
     per_gen: impl Fn(&G) -> u64,
 ) -> Result<RewriteOutcome<G>, CatgraphError> {
-    revalidate("rewrite search: the starting morphism", start)?;
+    revalidate(RewriteSide::Input, start)?;
 
     let root = content_of_colored(start);
     let initial_cost = cost_of(&root, &per_gen);
@@ -1183,34 +1181,35 @@ pub fn optimize<G: PropSignature>(
 ///
 /// # Errors
 ///
-/// [`CatgraphError::Presentation`] if `start` is not well-formed (arity or
-/// words — the private `revalidate`), if a step names a rule outside `rules`,
-/// if its recorded hyperedges do not form a convex match of that rule, or if
-/// the readback does not re-check.
+/// [`CatgraphError::Rewrite`] with
+/// [`IllFormed`](RewriteRejection::IllFormed) if `start` is not well-formed
+/// (arity or words — the private `revalidate`), with
+/// [`UnknownRule`](RewriteRejection::UnknownRule) if a step names a rule outside
+/// `rules`, or with [`NotAMatch`](RewriteRejection::NotAMatch), its `step` the
+/// step's position, if its recorded hyperedges do not form a convex match of
+/// that rule; [`CatgraphError::Presentation`] if the readback does not
+/// re-check.
 pub fn replay<G: PropSignature>(
     start: &ColoredExpr<G>,
     rules: &[RewriteRule<G>],
     steps: &[RewriteStep],
 ) -> Result<ColoredExpr<G>, CatgraphError> {
-    revalidate("rewrite replay: the starting morphism", start)?;
+    revalidate(RewriteSide::Input, start)?;
     let mut content = content_of_colored(start);
     for (position, step) in steps.iter().enumerate() {
-        let rule = rules
-            .get(step.rule)
-            .ok_or_else(|| CatgraphError::Presentation {
-                message: format!(
-                    "rewrite replay: step {position} names rule {} of {}",
-                    step.rule,
-                    rules.len()
-                ),
-            })?;
-        let found = match_at(&content, rule, &step.matched_edges).ok_or_else(|| {
-            CatgraphError::Presentation {
-                message: format!(
-                    "rewrite replay: step {position} does not describe a convex match"
-                ),
-            }
-        })?;
+        let rule =
+            rules
+                .get(step.rule)
+                .ok_or(CatgraphError::Rewrite(RewriteRejection::UnknownRule {
+                    step: position,
+                    rule: step.rule,
+                    rules: rules.len(),
+                }))?;
+        let found = match_at(&content, rule, &step.matched_edges).ok_or(CatgraphError::Rewrite(
+            RewriteRejection::NotAMatch {
+                step: Some(position),
+            },
+        ))?;
         content = apply_match(&content, rule, &found)?;
     }
     readback(start.source_word(), &content)
@@ -1240,16 +1239,17 @@ pub fn replay<G: PropSignature>(
 ///
 /// # Errors
 ///
-/// [`CatgraphError::Presentation`] if `expr` is not well-formed — arity or words,
-/// the private `revalidate`, under the same message [`rewrite_at`] uses.
-/// Reachable only across [`ColoredExpr`]'s documented serde trust boundary. The
-/// malformed case is an `Err`, never an empty `Vec`.
+/// [`CatgraphError::Rewrite`] with
+/// [`IllFormed`](RewriteRejection::IllFormed) if `expr` is not well-formed —
+/// arity or words, the private `revalidate`, under the same variant
+/// [`rewrite_at`] uses. Reachable only across [`ColoredExpr`]'s documented serde
+/// trust boundary. The malformed case is an `Err`, never an empty `Vec`.
 pub fn match_sites_of<G: PropSignature>(
     expr: &ColoredExpr<G>,
     rule: &RewriteRule<G>,
     limit: usize,
 ) -> Result<Vec<MatchSite>, CatgraphError> {
-    revalidate("rewrite site enumeration: the morphism", expr)?;
+    revalidate(RewriteSide::Input, expr)?;
     Ok(match_sites(&content_of_colored(expr), rule, limit))
 }
 
@@ -1264,15 +1264,18 @@ pub fn match_sites_of<G: PropSignature>(
 ///
 /// # Errors
 ///
-/// - [`CatgraphError::Presentation`] if `expr` is not well-formed — arity or
-///   words, the private `revalidate` — reachable only across [`ColoredExpr`]'s
-///   serde trust boundary.
-/// - [`CatgraphError::Presentation`] if `site` was enumerated from a different
-///   content than `expr`'s — a foreign or stale site. [`apply_at`]'s first
-///   rejection, with its message.
-/// - [`CatgraphError::Presentation`] if `site` belongs to `expr`'s content but is
-///   not a convex match of `rule` there. [`apply_at`]'s second rejection, kept
-///   distinct because the two call for different fixes.
+/// - [`CatgraphError::Rewrite`] with
+///   [`IllFormed`](RewriteRejection::IllFormed) if `expr` is not well-formed —
+///   arity or words, the private `revalidate` — reachable only across
+///   [`ColoredExpr`]'s serde trust boundary.
+/// - [`CatgraphError::Rewrite`] with
+///   [`StaleSite`](RewriteRejection::StaleSite) if `site` was enumerated from a
+///   different content than `expr`'s — a foreign or stale site. [`apply_at`]'s
+///   first rejection.
+/// - [`CatgraphError::Rewrite`] with
+///   [`NotAMatch`](RewriteRejection::NotAMatch) if `site` belongs to `expr`'s
+///   content but is not a convex match of `rule` there. [`apply_at`]'s second
+///   rejection, kept distinct because the two call for different fixes.
 /// - [`CatgraphError::Presentation`] if the readback does not re-check as a
 ///   colored morphism, or does not carry the rewritten content — an
 ///   engine-invariant failure rather than a user error.
@@ -1281,7 +1284,7 @@ pub fn rewrite_at<G: PropSignature>(
     rule: &RewriteRule<G>,
     site: &MatchSite,
 ) -> Result<ColoredExpr<G>, CatgraphError> {
-    revalidate("rewrite at a site: the morphism", expr)?;
+    revalidate(RewriteSide::Input, expr)?;
     let rewritten = apply_at(&content_of_colored(expr), rule, site)?;
     readback(expr.source_word(), &rewritten)
 }
