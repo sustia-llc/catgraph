@@ -14,8 +14,10 @@
 //! `Rig` is and stays a catgraph-native semiring — it is never anyone else's
 //! `Ring`, whose lowest form requires `Sub` (which `BoolRig`/`Tropical` lack).
 
+use catgraph::errors::CatgraphError;
 use catgraph_applied::rig::{
-    BoolRig, Checked, F64Rig, One, Tropical, UnitInterval, Zero, verify_rig_axioms,
+    BoolRig, Checked, F64Rig, One, Tropical, UNIT_INTERVAL_FLOOR, UnitInterval, Zero,
+    verify_rig_axioms,
 };
 
 /// `R::zero()` / `R::one()` resolve through the native identity traits, and the
@@ -165,4 +167,81 @@ fn checked_identities_delegate_and_reject_poison() {
     assert!(poisoned.is_poisoned());
     assert!(!poisoned.is_zero());
     assert!(!poisoned.is_one());
+}
+
+/// `UnitInterval::new` accepts `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]` and rejects
+/// `(0, UNIT_INTERVAL_FLOOR)` with a `RigAxiomViolation` whose witness prints
+/// the value; `from_rig_value` accepts every value in `(0, UNIT_INTERVAL_FLOOR)`
+/// it is given here, since it validates `[0, 1]` alone.
+#[test]
+fn unit_interval_new_enforces_the_floor() {
+    for accepted in [0.0, UNIT_INTERVAL_FLOOR, 1.0] {
+        let got = UnitInterval::new(accepted);
+        assert!(
+            got.is_ok(),
+            "new({accepted:e}) is in the accepted domain, got {got:?}"
+        );
+        assert_eq!(
+            got.expect("checked Ok on the line above").value(),
+            accepted,
+            "new({accepted:e}) must round-trip its value"
+        );
+    }
+
+    for rejected in [
+        UNIT_INTERVAL_FLOOR.next_down(),
+        5e-10,
+        f64::MIN_POSITIVE,
+        5e-324,
+    ] {
+        match UnitInterval::new(rejected) {
+            Err(CatgraphError::RigAxiomViolation { axiom, witness }) => {
+                assert_eq!(axiom, "UnitInterval range {0} ∪ [1e-9, 1]");
+                // The axiom string spells the floor out, so it drifts silently
+                // if the constant moves.
+                assert_eq!(UNIT_INTERVAL_FLOOR, 1e-9);
+                assert_eq!(
+                    witness,
+                    format!("value = {rejected}"),
+                    "the witness must name the rejected value {rejected:e}"
+                );
+            }
+            other => panic!("new({rejected:e}) must be Err(RigAxiomViolation), got {other:?}"),
+        }
+        let escape = UnitInterval::from_rig_value(rejected);
+        assert!(
+            escape.is_ok(),
+            "from_rig_value({rejected:e}) validates [0, 1] alone, got {escape:?}"
+        );
+    }
+
+    // The floor bounds how long a chain of accepted couplings can be multiplied
+    // before the product leaves the normal range — the claim the constant's
+    // docstring makes.
+    let mut chain = 0usize;
+    let mut product = 1.0_f64;
+    while (product * UNIT_INTERVAL_FLOOR).is_normal() {
+        product *= UNIT_INTERVAL_FLOOR;
+        chain += 1;
+    }
+    assert_eq!(
+        chain,
+        34,
+        "products of {UNIT_INTERVAL_FLOOR:e} stay normal for {chain} factors \
+         (last normal {product:e}, next {:e}), expected 34",
+        product * UNIT_INTERVAL_FLOOR
+    );
+
+    // Two more factors and the product is exactly `0.0`, whose `−ln` lift is
+    // `+∞` — the length the coalition closure's `# Panics` note names.
+    let first = i32::try_from(chain).expect("invariant: the chain length above is 34") + 1;
+    let zero_at = (first..=64).find(|&k| UNIT_INTERVAL_FLOOR.powi(k) == 0.0);
+    assert_eq!(
+        zero_at,
+        Some(36),
+        "{UNIT_INTERVAL_FLOOR:e} first powers to 0.0 at {zero_at:?}, expected 36 \
+         (powi(35) = {:e}, powi(36) = {:e})",
+        UNIT_INTERVAL_FLOOR.powi(35),
+        UNIT_INTERVAL_FLOOR.powi(36)
+    );
 }

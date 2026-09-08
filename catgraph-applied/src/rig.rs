@@ -234,17 +234,50 @@ impl Mul for BoolRig {
 /// only where the unit interval is treated as an idempotent rig (e.g.
 /// `Mat(UnitInterval)`). BV 2025 magnitude computations go through the `-ln`
 /// embedding `UnitInterval → ℝ` rather than rig arithmetic.
+///
+/// [`new`](Self::new) accepts `{0} ∪ [UNIT_INTERVAL_FLOOR, 1]`;
+/// [`from_rig_value`](Self::from_rig_value) accepts all of `[0, 1]`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UnitInterval(f64);
 
+/// Smallest non-zero value [`UnitInterval::new`] accepts.
+///
+/// A product of `k` values at the floor is a normal `f64` for `k ≤ 34` and
+/// leaves the normal range at `k = 35`.
+pub const UNIT_INTERVAL_FLOOR: f64 = 1e-9;
+
 impl UnitInterval {
-    /// Construct, validating `value ∈ [0, 1]`.
+    /// Construct, validating `value ∈ {0} ∪ [UNIT_INTERVAL_FLOOR, 1]`.
     ///
     /// # Errors
     ///
     /// Returns [`catgraph::errors::CatgraphError::RigAxiomViolation`] if the
-    /// value is outside `[0, 1]` or is NaN.
+    /// value is NaN, is outside `[0, 1]`, or lies in
+    /// `(0, UNIT_INTERVAL_FLOOR)`.
     pub fn new(value: f64) -> Result<Self, catgraph::errors::CatgraphError> {
+        if value.is_nan()
+            || !(0.0..=1.0).contains(&value)
+            || (value > 0.0 && value < UNIT_INTERVAL_FLOOR)
+        {
+            return Err(catgraph::errors::CatgraphError::RigAxiomViolation {
+                axiom: "UnitInterval range {0} ∪ [1e-9, 1]",
+                witness: format!("value = {value}"),
+            });
+        }
+        Ok(UnitInterval(value))
+    }
+
+    /// Construct from a rig-arithmetic result, validating `value ∈ [0, 1]`.
+    ///
+    /// `max` and `·` are closed on `[0, 1]` but not on the domain
+    /// [`new`](Self::new) accepts: a product of accepted values can land in
+    /// `(0, UNIT_INTERVAL_FLOOR)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`catgraph::errors::CatgraphError::RigAxiomViolation`] if the
+    /// value is NaN or is outside `[0, 1]`.
+    pub fn from_rig_value(value: f64) -> Result<Self, catgraph::errors::CatgraphError> {
         if value.is_nan() || !(0.0..=1.0).contains(&value) {
             return Err(catgraph::errors::CatgraphError::RigAxiomViolation {
                 axiom: "UnitInterval range [0, 1]",
