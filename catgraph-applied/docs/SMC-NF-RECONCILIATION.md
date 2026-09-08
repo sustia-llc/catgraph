@@ -348,7 +348,7 @@ cancel exactly, `sd == prev`, and the loop stops on the Step-6-sorted layout —
 which the restated §1 clauses now ratify as the canonical one. No
 non-terminating or diverging instance is known; completing the proof (or
 restoring the measure by gating the rewriting passes off both-readings pairs)
-is tracked on issue #174.
+is tracked on issue #186.
 
 Four steps can raise `tied_inversion_count`, each while strictly shrinking an
 *earlier* component, so the tuple still drops lexicographically and Step 6
@@ -1016,7 +1016,7 @@ and the cut-asymmetry shapes, which #185 closed.) Witnesses:
   1,502 adversarially constructed SMC-equal writings across 19 conflict
   families, plus the 100 000-pair sweep, all terminate — but the measure
   argument is no longer a complete proof, and completing it (or gating the
-  passes so the old measure is restored) is tracked on issue #174.
+  passes so the old measure is restored) is tracked on issue #186.
 
 **Proven, within-layer (issue #55 PR1).** At single-atom tied adjacencies the
 Step-6 order is canonical — `nf(ε ⊗ η) = nf(η ⊗ ε)`, stable under context
@@ -1537,8 +1537,8 @@ prove the exactness of the cancellation that termination now visibly rests
 on, nor rule out a three-way interaction that fails to cancel; no such case
 was found (1,502 writings, 19 families, all watchdogged), and the engine-side
 alternative — gating the rewriting passes off both-readings pairs, which
-would restore the §2.4 measure outright — is filed on issue #174 as an
-owner option rather than taken silently here.
+would restore the §2.4 measure outright — is recorded on issue #186, where the
+proof route was chosen over it, rather than taken silently here.
 
 *What #185 does and does not touch here (2026-08-02; softened after the #185
 adversarial review, which refuted the first draft's "changes the shape of a
@@ -1979,7 +1979,7 @@ The lettered ledger:
   Tracked quantitatively by **two** trackers in
   `tests/smc_nf_differential_sweep.rs`, both `#[ignore]`d 100 000-pair sweeps on
   corpora that are *different from the calibration table above* and not
-  comparable to it. Tracked on issue #174.
+  comparable to it. Tracked on issue #57, where residual (a) closes by content.
 
   - `published_braid_mode_figures_reproduce` (**1 153 / 630 / 237**; 1 162 / 634
     before #185, marked unmoved) sweeps a
