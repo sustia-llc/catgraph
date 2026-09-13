@@ -28,10 +28,16 @@
 //!   a site from an earlier enumeration can still form a convex match at a place
 //!   nobody chose. The content fingerprint rejects it, with the *stale-site*
 //!   variant and not the not-a-convex-match one.
+//! - **the `sfg_to_colored_expr` bridge carries a measured exhibit into the
+//!   engine** — `mat_to_sfg(A);mat_to_sfg(A) ⇒ mat_to_sfg(A·A)` over `F64Rig`
+//!   pins 42 → 21 at ℓ = 2 and 63 → 42 at ℓ = 3, with the ℓ = 3 match sites at
+//!   the two overlapping positions.
 
 use std::borrow::Cow;
 
 use catgraph::errors::{CatgraphError, RewriteBoundary, RewriteRejection, RewriteSide};
+use catgraph_applied::mat::MatR;
+use catgraph_applied::mat_to_sfg::mat_to_sfg;
 use catgraph_applied::prop::colored::ColoredExpr;
 use catgraph_applied::prop::presentation::Presentation;
 #[cfg(feature = "serde")]
@@ -45,6 +51,8 @@ use catgraph_applied::prop::presentation::rewrite::{
     RewriteRule, apply_at, cost_of, match_sites, match_sites_of, optimize, replay, rewrite_at,
 };
 use catgraph_applied::prop::{Free, PropExpr, PropSignature, mono_word};
+use catgraph_applied::rig::F64Rig;
+use catgraph_applied::sfg_to_colored::sfg_to_colored_expr;
 
 // ---- A monochromatic tool chain (Λ = {•}, spelled `()`) ----------------------
 
@@ -1120,5 +1128,177 @@ fn replay_rejects_an_out_of_range_repeated_or_mislabeled_assignment() {
         "mislabeled edge",
         &cb,
         r#"[{"rule":0,"matched_edges":[0,1]}]"#,
+    );
+}
+
+// ---- the mat_to_sfg exhibit through the sfg_to_colored_expr bridge -------------
+
+/// The `mat_to_sfg(A);mat_to_sfg(A) ⇒ mat_to_sfg(A·A)` exhibit, bridged into
+/// the engine by [`sfg_to_colored_expr`] and pinned at its measured values:
+/// costs 42 → 21 at ℓ = 2 and 63 → 42 at ℓ = 3, one match site at ℓ = 2, and
+/// the two overlapping positions at ℓ = 3.
+///
+/// The pin ranges over one matrix (`A` = the 3×3 path-graph P3 adjacency),
+/// one rig (`F64Rig`), and two host depths (`mat_to_sfg(A)^{;ℓ}`, ℓ ∈ {2, 3}),
+/// under `optimize` with `fuel = 64` and `per_gen = |_| 1`. It is a record of
+/// this exhibit's behaviour, not a general claim about the matcher.
+#[test]
+fn the_mat_to_sfg_exhibit_pins_costs_and_sites_at_depths_two_and_three() {
+    // A = P3 adjacency [[0,1,0],[1,0,1],[0,1,0]]; the rule squares it.
+    let a = MatR::<F64Rig>::new(
+        3,
+        3,
+        vec![
+            vec![F64Rig(0.0), F64Rig(1.0), F64Rig(0.0)],
+            vec![F64Rig(1.0), F64Rig(0.0), F64Rig(1.0)],
+            vec![F64Rig(0.0), F64Rig(1.0), F64Rig(0.0)],
+        ],
+    )
+    .expect("invariant: the 3×3 P3 fixture is rectangular");
+    let a2 = a.matmul(&a).expect("invariant: 3×3 composes with 3×3");
+    let a2_expected = MatR::<F64Rig>::new(
+        3,
+        3,
+        vec![
+            vec![F64Rig(1.0), F64Rig(0.0), F64Rig(1.0)],
+            vec![F64Rig(0.0), F64Rig(2.0), F64Rig(0.0)],
+            vec![F64Rig(1.0), F64Rig(0.0), F64Rig(1.0)],
+        ],
+    )
+    .expect("invariant: the expected A·A fixture is rectangular");
+    assert_eq!(
+        a2.entries(),
+        a2_expected.entries(),
+        "A·A: observed {:?}, expected {:?}",
+        a2.entries(),
+        a2_expected.entries()
+    );
+
+    let g_a = mat_to_sfg(&a).expect(
+        "invariant: mat_to_sfg is arity-safe for a MatR built through its own constructors",
+    );
+    let g_a2 = mat_to_sfg(&a2).expect(
+        "invariant: mat_to_sfg is arity-safe for a MatR built through its own constructors",
+    );
+    let lhs = sfg_to_colored_expr(
+        &g_a.compose(&g_a)
+            .expect("invariant: 3→3 composes with 3→3"),
+    )
+    .expect("invariant: a Free-built composite with the mono word over its domain is word-well-formed");
+    let rhs = sfg_to_colored_expr(&g_a2).expect(
+        "invariant: a Free-built term with the mono word over its domain is word-well-formed",
+    );
+    let rule = RewriteRule::new(lhs, rhs)
+        .expect("invariant: the two sides are parallel with a mono left interface");
+
+    // The exhibit at depth ℓ: the outcome and the convex match sites of the
+    // rule in the host.
+    let at_depth = |ell: usize| {
+        let mut host = g_a.clone();
+        for _ in 1..ell {
+            host = host
+                .compose(&g_a)
+                .expect("invariant: 3→3 self-composition composes at every step");
+        }
+        let start = sfg_to_colored_expr(&host).expect(
+            "invariant: a Free-built composite with the mono word over its domain is word-well-formed",
+        );
+        let outcome = optimize(&start, std::slice::from_ref(&rule), 64, |_| 1)
+            .expect("invariant: the start is word-well-formed");
+        let sites =
+            match_sites_of(&start, &rule, 65).expect("invariant: the start is word-well-formed");
+        (outcome, sites)
+    };
+
+    // ℓ = 2 — the host is the rule's own lhs: one site, the identity match.
+    let (two, sites_two) = at_depth(2);
+    assert_eq!(
+        two.initial_cost(),
+        42,
+        "ℓ=2 initial_cost: observed {}, expected 42",
+        two.initial_cost()
+    );
+    assert_eq!(
+        two.best_cost(),
+        21,
+        "ℓ=2 best_cost: observed {}, expected 21",
+        two.best_cost()
+    );
+    assert_eq!(
+        two.states_explored(),
+        2,
+        "ℓ=2 states_explored: observed {}, expected 2",
+        two.states_explored()
+    );
+    assert_eq!(
+        two.steps().len(),
+        1,
+        "ℓ=2 steps: observed {}, expected 1",
+        two.steps().len()
+    );
+    assert!(
+        !two.fuel_exhausted(),
+        "ℓ=2 fuel_exhausted: observed true, expected false"
+    );
+    assert_eq!(
+        sites_two.len(),
+        1,
+        "ℓ=2 match sites: observed {}, expected 1",
+        sites_two.len()
+    );
+    assert_eq!(
+        sites_two[0].matched_edges().to_vec(),
+        (0..42).collect::<Vec<_>>(),
+        "ℓ=2 site[0] matched_edges: observed {:?}, expected every host edge 0..=41",
+        sites_two[0].matched_edges()
+    );
+
+    // ℓ = 3 — the first depth with a proper convex subterm: two sites, the
+    // overlapping positions.
+    let (three, sites_three) = at_depth(3);
+    assert_eq!(
+        three.initial_cost(),
+        63,
+        "ℓ=3 initial_cost: observed {}, expected 63",
+        three.initial_cost()
+    );
+    assert_eq!(
+        three.best_cost(),
+        42,
+        "ℓ=3 best_cost: observed {}, expected 42",
+        three.best_cost()
+    );
+    assert_eq!(
+        three.states_explored(),
+        3,
+        "ℓ=3 states_explored: observed {}, expected 3",
+        three.states_explored()
+    );
+    assert_eq!(
+        three.steps().len(),
+        1,
+        "ℓ=3 steps: observed {}, expected 1",
+        three.steps().len()
+    );
+    assert!(
+        !three.fuel_exhausted(),
+        "ℓ=3 fuel_exhausted: observed true, expected false"
+    );
+    assert_eq!(
+        sites_three.len(),
+        2,
+        "ℓ=3 match sites: observed {}, expected 2",
+        sites_three.len()
+    );
+    let mut observed_sites: Vec<Vec<usize>> = sites_three
+        .iter()
+        .map(|site| site.matched_edges().to_vec())
+        .collect();
+    observed_sites.sort();
+    let expected_sites = vec![(0..42).collect::<Vec<_>>(), (21..63).collect::<Vec<_>>()];
+    assert_eq!(
+        observed_sites, expected_sites,
+        "ℓ=3 matched_edges: observed {:?}, expected the two overlapping positions (edges 0..=41 and 21..=62)",
+        observed_sites
     );
 }

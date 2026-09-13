@@ -28,6 +28,9 @@
 //! - [`rig`] — the `Rig` semiring trait with `BoolRig`, `UnitInterval`,
 //!   `Tropical`, `F64Rig` (F&S Def 5.36)
 //! - [`sfg`] — `SignalFlowGraph<R>`, the free prop on signal-flow generators (F&S Def 5.45)
+//! - [`sfg_to_colored`] — the `sfg_to_colored_expr` bridge from
+//!   `SignalFlowGraph<R>` to the rewrite engine's `ColoredExpr` morphisms
+//!   (crate extension; no paper anchor)
 //! - [`sfg_to_mat`] — the functor `S : SFG_R → Mat(R)` (F&S Thm 5.53)
 //! - [`temperley_lieb`] — Temperley-Lieb / Brauer algebra via perfect matchings
 //! - [`trace`] — partial trace `Tr_X(f) : A → B` on [`mat_kron`] (F&S 2019 §3.1)
@@ -69,6 +72,7 @@ pub mod petri_net;
 pub mod prop;
 pub mod rig;
 pub mod sfg;
+pub mod sfg_to_colored;
 pub mod sfg_to_mat;
 pub mod temperley_lieb;
 pub mod trace;

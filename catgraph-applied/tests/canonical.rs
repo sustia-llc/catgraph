@@ -57,6 +57,9 @@
 //! the same two subterms on either side, so what they touch is the arm's
 //! operand order and its choice of `matmul` over `block_diagonal`, not the
 //! matrix arithmetic itself — that is what the evaluator row is for.
+//! The `sfg_to_colored_expr` bridge (`src/sfg_to_colored.rs`) is not reached
+//! by this file; its claims are pinned by the module's own tests and by the
+//! `mat_to_sfg` exhibit in `tests/rewrite.rs`.
 //!
 //! # covers:
 //!
