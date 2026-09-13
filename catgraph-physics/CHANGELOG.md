@@ -324,7 +324,7 @@ First monorepo release.
   `ConfluenceDiamond`, `confluence_diamonds`, `parallel_independent_events`,
   `events_commute`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...HEAD
 [workspace-v0.22.0]: https://github.com/sustia-llc/catgraph/compare/v0.21.0...v0.22.0
 [workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0
 [workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0

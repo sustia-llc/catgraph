@@ -13,6 +13,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.23.0] - 2026-09-13
+
+### Added
+
+- `sfg_to_colored_expr` — a `SignalFlowGraph<R>` as the
+  `ColoredExpr<SfgGenerator<R>>` the rewrite engine's entry points take; a
+  representation change carrying the underlying expression across unchanged
+  ([#460](https://github.com/sustia-llc/catgraph/pull/460)).
+
 ## [workspace-v0.21.0] - 2026-09-08
 
 ### Changed — BREAKING
@@ -1015,7 +1024,8 @@ Co-released with catgraph v0.12.2 and catgraph-magnitude v0.1.1.
   `temperley_lieb`, `e1_operad`, `e2_operad` extracted from `catgraph` core;
   Criterion bench `rayon_thresholds`.
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...HEAD
+[workspace-v0.23.0]: https://github.com/sustia-llc/catgraph/compare/v0.22.0...v0.23.0
 [workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0
 [workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
