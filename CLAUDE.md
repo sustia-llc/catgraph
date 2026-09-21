@@ -44,7 +44,7 @@ commit `aeff6549e` — DC `main` read 0.4.1, DC#720), so construction and match
 sites compile unchanged — but #222 is BREAKING in both crates: the constraint
 slot (`Satisfies`/`NoConstraint`) is gone, the carrier/witness method surface
 is the consumed-only set, and haft's provided `⊕` arrow methods are not
-carried (each crate's CHANGELOG enumerates its cuts). The #93 no-adopt
+carried (each crate's CHANGELOG at tag `v0.23.0` enumerates its cuts). The #93 no-adopt
 verdicts (`ArrowTerm` vs `PropExpr`, `Category`/`Kleisli` vs `eval`,
 `SymMonoidal` — cartesian, not a Frobenius substrate) are pin-independent and
 stand. No `deep_causality_*` crate remains anywhere in the graph
@@ -97,4 +97,4 @@ crate's `docs/`.
 Work is tracked as GitHub issues (`taskmap.md` §Triage in `.claude/docs/` is
 the live order). Contributing: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 History (crate migration, DC divestment #218–#222, paper audit #112–#128) is
-in git and each crate's CHANGELOG.
+in git and each crate's CHANGELOG at tag `v0.23.0`.

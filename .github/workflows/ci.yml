@@ -281,7 +281,8 @@ jobs:
       # held trivially since #239 (rand left the published lib graphs
       # entirely; the dev-only invariant itself is the rand-dev-only guard's
       # job above — this lane can't see a re-added featureless lib edge).
-      # `--lib` only, per applied's CHANGELOG pointer at #232 for the guard.
+      # `--lib` only, per applied's CHANGELOG pointer at #232 (tag v0.23.0)
+      # for the guard.
       - run: cargo check --lib -p catgraph -p catgraph-applied -p catgraph-magnitude -p catgraph-dl -p catgraph-syntax --target wasm32-unknown-unknown
       # catgraph-physics at DEFAULTS stays red on this target by design: its
       # `rustworkx` feature pulls rustworkx-core WITH default features ->
