@@ -491,8 +491,8 @@ fn extra_special_axiom_unit_then_counit_is_id_i() {
 /// the flat-index layout of [`Corel::equivalence_classes`], and every predicate
 /// read off it.
 ///
-/// The CHANGELOG entry has to enumerate the blast radius, so the enumeration is
-/// pinned here rather than asserted in prose. `equivalence_classes` lays the
+/// The #351 CHANGELOG entry (tag `v0.23.0`) has to enumerate the blast radius,
+/// so the enumeration is pinned here rather than asserted in prose. `equivalence_classes` lays the
 /// flat indices out as `0..dom_len` │ `dom_len..dom_len + mid_len` │
 /// `dom_len + mid_len..`, so **shrinking the apex shifts every codomain index**
 /// — and `merges`, `is_identity_partition` and `equivalence_classes().len()`

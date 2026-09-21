@@ -165,8 +165,8 @@ fn the_left_leg_id_arm_renumbers_by_the_right_operands_apex() {
 /// different, isomorphic apex order, `==` false and
 /// `canonical_form` equal, so byte-level consumers had to compare canonical
 /// forms. That held while a cached flag chose `perform_pushout`'s fast path.
-/// The cache is gone, and this test is why both CHANGELOGs now say the claim
-/// was retired: the merge produces `([1, 1], [0, 1], ['b', 'a'])`, and
+/// The cache is gone, and this test is why both CHANGELOGs at tag `v0.23.0` say
+/// the claim was retired: the merge produces `([1, 1], [0, 1], ['b', 'a'])`, and
 /// composing that with `g` has exactly one answer.
 ///
 /// **What this ranges over.** One fixture, one merge, one partner. It does not

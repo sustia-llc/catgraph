@@ -2190,7 +2190,8 @@ mod smc_canonicality_probes {
     /// **Which witnesses Step 6½ is actually load-bearing for.**
     ///
     /// §4.5's "What actually depends on the pass" and the CHANGELOG's
-    /// residual-(c)/(d) entry both make a *counted* claim about the column pass,
+    /// residual-(c)/(d) entry (tag `v0.23.0`) both make a *counted* claim about
+    /// the column pass,
     /// and until this probe existed the only way to check it was to comment the
     /// pass out by hand — which is how the two came to disagree (§4.5 said five
     /// witnesses, the CHANGELOG said four).
@@ -2454,8 +2455,8 @@ mod smc_canonicality_probes {
                     !needs_pass,
                     "{name}: Step 6½ attribution changed — the witness is documented as \
                      {} the column pass, but ablating the pass leaves it {}. Update \
-                     §4.5's \"What actually depends on the pass\" and the CHANGELOG \
-                     count together with this table.",
+                     §4.5's \"What actually depends on the pass\" together with this \
+                     table.",
                     if needs_pass { "needing" } else { "NOT needing" },
                     if ablated_converges {
                         "converging"
@@ -2467,7 +2468,7 @@ mod smc_canonicality_probes {
             assert_eq!(
                 decided_by_the_pass.len(),
                 7,
-                "§4.5, §3's step table and the CHANGELOG all quote a count of \
+                "§4.5 and §3's step table quote a count of \
                  witnesses the column pass decides (seven since #185, 2026-08-02); \
                  measured {decided_by_the_pass:?}"
             );
