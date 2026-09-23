@@ -101,10 +101,11 @@
 //! `--no-default-features` too.
 //! `tests/branchial_analysis.rs` (coloring, k-core, spectra),
 //! `tests/catgraph_bridge.rs` (the cospan/span bridge),
-//! `tests/gauge_theory.rs` (the lattice's own evolution and Wilson-loop search)
-//! and `tests/multiway_evolution.rs` (the evolution-graph surface and the
-//! `wasserstein_1` triangle inequality) exercise the rest of the crate, not
-//! this file.
+//! `tests/gauge_theory.rs` (the lattice's own evolution and Wilson-loop search),
+//! `tests/multiway_evolution.rs` (the evolution-graph surface and the
+//! `wasserstein_1` triangle inequality) and `tests/multiway_parts.rs`
+//! (`to_parts` / `from_parts`, their rejections, and the `serde` round trip)
+//! exercise the rest of the crate, not this file.
 //!
 //! # covers:
 //!
@@ -122,7 +123,8 @@
 //! `ConfluenceDiamond` `ConservationResult` `CospanInvarianceResult`
 //! `CospanMergeDetail` `DiscreteInterval` `HypergraphStep` `LinkVariable`
 //! `MergePoint` `MultiwayCospan` `MultiwayCospanExt` `MultiwayCospanGraph`
-//! `MultiwayCycle` `MultiwayStatistics` `ParallelIntervals` `RepeatDetection`
+//! `MultiwayCycle` `MultiwayParts` `MultiwayPartsError` `MultiwayStatistics`
+//! `ParallelIntervals` `RepeatDetection`
 //! `RewriteEffect` `RewriteSpan` `RewriteSpanError` `SpanSide` `StepTrace`
 //! `TemporalComplex` `TemporalComplexError` `TraceAnalysis`
 

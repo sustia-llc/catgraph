@@ -16,6 +16,7 @@ use catgraph::{CanonicalEncode, canonical_fingerprint};
 
 /// Unique identifier for a branch in the multiway graph.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BranchId(pub usize);
 
 impl fmt::Display for BranchId {
@@ -29,6 +30,7 @@ impl fmt::Display for BranchId {
 /// Combines `branch_id` + step for globally unique identification.
 /// This represents a specific state at a specific point in a specific branch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiwayNodeId {
     pub branch_id: BranchId,
     pub step: usize,
@@ -50,6 +52,7 @@ impl fmt::Display for MultiwayNodeId {
 
 /// Edge type in the multiway graph.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MultiwayEdgeKind {
     /// Normal sequential transition within same branch.
     Sequential,
@@ -67,7 +70,8 @@ pub enum MultiwayEdgeKind {
 /// Connects a source node to a target node with a typed kind (sequential,
 /// fork, or merge) and application-specific transition data `T` (e.g.,
 /// which rewrite rule was applied and where).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiwayEdge<T> {
     /// Source node ID.
     pub from: MultiwayNodeId,
@@ -83,7 +87,8 @@ pub struct MultiwayEdge<T> {
 ///
 /// Stores the state `S` at a specific (branch, step) position, plus a
 /// fingerprint for O(1) merge detection and cycle identification.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MultiwayNode<S> {
     /// Unique identifier for this node.
     pub id: MultiwayNodeId,
@@ -103,6 +108,139 @@ impl<S> MultiwayNode<S> {
             fingerprint,
         }
     }
+}
+
+/// The stored content of a [`MultiwayEvolutionGraph`]: what
+/// [`MultiwayEvolutionGraph::to_parts`] returns and
+/// [`MultiwayEvolutionGraph::from_parts`] consumes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MultiwayParts<S, T> {
+    /// Every node.
+    pub nodes: Vec<MultiwayNode<S>>,
+    /// Every edge.
+    pub edges: Vec<MultiwayEdge<T>>,
+    /// The root node ids, in the graph's root order.
+    pub roots: Vec<MultiwayNodeId>,
+    /// The merge-candidate table read by
+    /// [`MultiwayEvolutionGraph::find_merge_candidate`]: `(fingerprint, node)`
+    /// pairs.
+    pub active_states: Vec<(u64, MultiwayNodeId)>,
+}
+
+/// A [`MultiwayParts`] value that [`MultiwayEvolutionGraph::from_parts`]
+/// rejects, naming the offending ids.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum MultiwayPartsError {
+    /// Two nodes carry the same id.
+    #[error("two nodes carry the id {id}")]
+    DuplicateNode {
+        /// The repeated id.
+        id: MultiwayNodeId,
+    },
+    /// A node's stored fingerprint is not [`canonical_fingerprint`] of its
+    /// state.
+    #[error(
+        "node {id} stores fingerprint {stored}, its state's canonical fingerprint is {computed}"
+    )]
+    FingerprintMismatch {
+        /// The node.
+        id: MultiwayNodeId,
+        /// The fingerprint the node carries.
+        stored: u64,
+        /// [`canonical_fingerprint`] of the node's state.
+        computed: u64,
+    },
+    /// An edge endpoint is not a node.
+    #[error("edge {from} -> {to} has endpoint {missing}, which is not a node")]
+    EdgeEndpointMissing {
+        /// The edge's source.
+        from: MultiwayNodeId,
+        /// The edge's target.
+        to: MultiwayNodeId,
+        /// The endpoint that is not a node.
+        missing: MultiwayNodeId,
+    },
+    /// A [`MultiwayEdgeKind::Sequential`] or [`MultiwayEdgeKind::Fork`] edge
+    /// whose target step is not its source step plus one.
+    #[error("{kind:?} edge {from} -> {to} does not advance the step by one")]
+    StepNotAdvancedByOne {
+        /// The edge's source.
+        from: MultiwayNodeId,
+        /// The edge's target.
+        to: MultiwayNodeId,
+        /// The edge's kind.
+        kind: MultiwayEdgeKind,
+    },
+    /// A [`MultiwayEdgeKind::Sequential`] edge whose endpoints are on
+    /// different branches.
+    #[error("sequential edge {from} -> {to} changes branch")]
+    SequentialBranchChange {
+        /// The edge's source.
+        from: MultiwayNodeId,
+        /// The edge's target.
+        to: MultiwayNodeId,
+    },
+    /// A root id that is not a node.
+    #[error("root {root} is not a node")]
+    RootNotANode {
+        /// The root id.
+        root: MultiwayNodeId,
+    },
+    /// A root id whose step is not zero.
+    #[error("root {root} is not at step 0")]
+    RootNotAtStepZero {
+        /// The root id.
+        root: MultiwayNodeId,
+    },
+    /// A root id listed twice.
+    #[error("root {root} is listed twice")]
+    DuplicateRoot {
+        /// The repeated root id.
+        root: MultiwayNodeId,
+    },
+    /// An `active_states` entry naming an id that is not a node.
+    #[error("active state {fingerprint} names {id}, which is not a node")]
+    ActiveStateNotANode {
+        /// The entry's fingerprint key.
+        fingerprint: u64,
+        /// The id the entry names.
+        id: MultiwayNodeId,
+    },
+    /// An `active_states` entry whose key differs from its node's
+    /// fingerprint.
+    #[error("active state {fingerprint} names {id}, whose fingerprint is {node_fingerprint}")]
+    ActiveStateFingerprintMismatch {
+        /// The entry's fingerprint key.
+        fingerprint: u64,
+        /// The id the entry names.
+        id: MultiwayNodeId,
+        /// The fingerprint that node carries.
+        node_fingerprint: u64,
+    },
+    /// Two `active_states` entries share a fingerprint key.
+    #[error("active state fingerprint {fingerprint} is listed twice")]
+    DuplicateActiveState {
+        /// The repeated key.
+        fingerprint: u64,
+    },
+}
+
+/// The `(step, branch_id)` order key of a node id.
+fn node_order_key(id: &MultiwayNodeId) -> (usize, usize) {
+    (id.step, id.branch_id.0)
+}
+
+/// The `(from, to, kind)` order key of an edge, each id by
+/// [`node_order_key`] and the kind as `Sequential < Fork { rule_index } <
+/// Merge`, forks by `rule_index`.
+fn edge_order_key<T>(edge: &MultiwayEdge<T>) -> ((usize, usize), (usize, usize), (u8, usize)) {
+    let kind = match edge.kind {
+        MultiwayEdgeKind::Sequential => (0, 0),
+        MultiwayEdgeKind::Fork { rule_index } => (1, rule_index),
+        MultiwayEdgeKind::Merge => (2, 0),
+    };
+    (node_order_key(&edge.from), node_order_key(&edge.to), kind)
 }
 
 /// A confluence diamond: two paths from a common ancestor reconverge.
@@ -322,10 +460,15 @@ impl<S: CanonicalEncode, T: Clone> MultiwayEvolutionGraph<S, T> {
         id
     }
 
-    /// Add a sequential edge (non-branching step).
+    /// Add a step from `from` to a new node at step + 1. Returns the ID of the
+    /// new node.
     ///
-    /// Creates a new node in the same branch at step + 1.
-    /// Returns the ID of the new node.
+    /// When `(from.branch_id, from.step + 1)` is not yet a node, the new node
+    /// takes that id and the edge is [`MultiwayEdgeKind::Sequential`]. When it
+    /// already is one, the new node takes a freshly allocated [`BranchId`] and
+    /// the edge is [`MultiwayEdgeKind::Fork`] whose `rule_index` is the number
+    /// of edges leaving `from` before this one, i.e. the new edge's position
+    /// in [`Self::get_forward_edges`] of `from`.
     pub fn add_sequential_step(
         &mut self,
         from: MultiwayNodeId,
@@ -333,7 +476,16 @@ impl<S: CanonicalEncode, T: Clone> MultiwayEvolutionGraph<S, T> {
         transition_data: T,
     ) -> MultiwayNodeId {
         let new_step = from.step + 1;
-        let id = MultiwayNodeId::new(from.branch_id, new_step);
+        let same_branch = MultiwayNodeId::new(from.branch_id, new_step);
+        let (id, kind) = if self.nodes.contains_key(&same_branch) {
+            let rule_index = self.forward_edges.get(&from).map_or(0, Vec::len);
+            (
+                MultiwayNodeId::new(self.allocate_branch_id(), new_step),
+                MultiwayEdgeKind::Fork { rule_index },
+            )
+        } else {
+            (same_branch, MultiwayEdgeKind::Sequential)
+        };
         let fingerprint = Self::compute_fingerprint(&state);
 
         // Create node
@@ -345,7 +497,7 @@ impl<S: CanonicalEncode, T: Clone> MultiwayEvolutionGraph<S, T> {
         let edge = MultiwayEdge {
             from,
             to: id,
-            kind: MultiwayEdgeKind::Sequential,
+            kind,
             transition_data,
         };
 
@@ -709,6 +861,205 @@ impl<S: CanonicalEncode, T: Clone> MultiwayEvolutionGraph<S, T> {
             leaf_count: self.leaves.len(),
             root_count: self.roots.len(),
         }
+    }
+
+    /// Build a graph from its stored content.
+    ///
+    /// Nodes are inserted in `(step, branch_id)` order and edges in
+    /// `(from, to, kind)` order (ids by `(step, branch_id)`, kinds as
+    /// `Sequential < Fork { rule_index } < Merge`); edges equal on that key
+    /// keep their relative order in `parts.edges`. From that order the graph
+    /// derives its step index, its leaves (the nodes with no outgoing edge),
+    /// each node's forward and backward edge lists, its maximum step (the
+    /// largest node step, 0 when empty) and its branch count (one more than
+    /// the largest node branch id, saturating at `usize::MAX`, 0 when empty).
+    /// Roots keep their order in
+    /// `parts.roots`; `parts.active_states` becomes the
+    /// [`Self::find_merge_candidate`] table.
+    ///
+    /// # Errors
+    ///
+    /// - [`MultiwayPartsError::DuplicateNode`] — two nodes share an id.
+    /// - [`MultiwayPartsError::FingerprintMismatch`] — a node's `fingerprint`
+    ///   is not [`canonical_fingerprint`] of its `state`.
+    /// - [`MultiwayPartsError::EdgeEndpointMissing`] — an edge's `from` or
+    ///   `to` is not a node.
+    /// - [`MultiwayPartsError::StepNotAdvancedByOne`] — a `Sequential` or
+    ///   `Fork` edge whose `to.step` is not `from.step + 1`.
+    /// - [`MultiwayPartsError::SequentialBranchChange`] — a `Sequential` edge
+    ///   whose `to.branch_id` is not `from.branch_id`.
+    /// - [`MultiwayPartsError::RootNotANode`],
+    ///   [`MultiwayPartsError::RootNotAtStepZero`],
+    ///   [`MultiwayPartsError::DuplicateRoot`] — a root that is not a node,
+    ///   is not at step 0, or is listed twice.
+    /// - [`MultiwayPartsError::ActiveStateNotANode`],
+    ///   [`MultiwayPartsError::ActiveStateFingerprintMismatch`],
+    ///   [`MultiwayPartsError::DuplicateActiveState`] — an `active_states`
+    ///   entry naming an id that is not a node, keyed by a fingerprint other
+    ///   than its node's, or sharing its key with another entry.
+    pub fn from_parts(parts: MultiwayParts<S, T>) -> Result<Self, MultiwayPartsError> {
+        let MultiwayParts {
+            mut nodes,
+            mut edges,
+            roots,
+            active_states,
+        } = parts;
+        nodes.sort_by_key(|node| node_order_key(&node.id));
+        edges.sort_by_key(edge_order_key);
+
+        let mut graph = Self::new();
+        let mut order: Vec<MultiwayNodeId> = Vec::with_capacity(nodes.len());
+        for node in nodes {
+            let computed = Self::compute_fingerprint(&node.state);
+            if node.fingerprint != computed {
+                return Err(MultiwayPartsError::FingerprintMismatch {
+                    id: node.id,
+                    stored: node.fingerprint,
+                    computed,
+                });
+            }
+            let id = node.id;
+            if graph.nodes.insert(id, node).is_some() {
+                return Err(MultiwayPartsError::DuplicateNode { id });
+            }
+            graph.step_nodes.entry(id.step).or_default().push(id);
+            graph.max_step = graph.max_step.max(id.step);
+            graph.next_branch_id = graph.next_branch_id.max(id.branch_id.0.saturating_add(1));
+            order.push(id);
+        }
+
+        for edge in edges {
+            for endpoint in [edge.from, edge.to] {
+                if !graph.nodes.contains_key(&endpoint) {
+                    return Err(MultiwayPartsError::EdgeEndpointMissing {
+                        from: edge.from,
+                        to: edge.to,
+                        missing: endpoint,
+                    });
+                }
+            }
+            match edge.kind {
+                MultiwayEdgeKind::Sequential | MultiwayEdgeKind::Fork { .. } => {
+                    if edge.from.step.checked_add(1) != Some(edge.to.step) {
+                        return Err(MultiwayPartsError::StepNotAdvancedByOne {
+                            from: edge.from,
+                            to: edge.to,
+                            kind: edge.kind,
+                        });
+                    }
+                    if edge.kind == MultiwayEdgeKind::Sequential
+                        && edge.from.branch_id != edge.to.branch_id
+                    {
+                        return Err(MultiwayPartsError::SequentialBranchChange {
+                            from: edge.from,
+                            to: edge.to,
+                        });
+                    }
+                }
+                MultiwayEdgeKind::Merge => {}
+            }
+            graph
+                .forward_edges
+                .entry(edge.from)
+                .or_default()
+                .push(edge.clone());
+            graph.backward_edges.entry(edge.to).or_default().push(edge);
+        }
+
+        graph.leaves = order
+            .into_iter()
+            .filter(|id| !graph.forward_edges.contains_key(id))
+            .collect();
+
+        let mut seen_roots: HashSet<MultiwayNodeId> = HashSet::with_capacity(roots.len());
+        for &root in &roots {
+            if !graph.nodes.contains_key(&root) {
+                return Err(MultiwayPartsError::RootNotANode { root });
+            }
+            if root.step != 0 {
+                return Err(MultiwayPartsError::RootNotAtStepZero { root });
+            }
+            if !seen_roots.insert(root) {
+                return Err(MultiwayPartsError::DuplicateRoot { root });
+            }
+        }
+        graph.roots = roots;
+
+        for (fingerprint, id) in active_states {
+            let Some(node) = graph.nodes.get(&id) else {
+                return Err(MultiwayPartsError::ActiveStateNotANode { fingerprint, id });
+            };
+            if node.fingerprint != fingerprint {
+                return Err(MultiwayPartsError::ActiveStateFingerprintMismatch {
+                    fingerprint,
+                    id,
+                    node_fingerprint: node.fingerprint,
+                });
+            }
+            if graph.active_states.insert(fingerprint, id).is_some() {
+                return Err(MultiwayPartsError::DuplicateActiveState { fingerprint });
+            }
+        }
+
+        Ok(graph)
+    }
+}
+
+impl<S: Clone, T: Clone> MultiwayEvolutionGraph<S, T> {
+    /// The graph's stored content: nodes in `(step, branch_id)` order, edges
+    /// in the `(from, to, kind)` order of [`Self::from_parts`] (edges equal on
+    /// that key in their order in [`Self::get_forward_edges`] of their
+    /// source), roots in root order, and `active_states` in ascending
+    /// fingerprint order.
+    #[must_use]
+    pub fn to_parts(&self) -> MultiwayParts<S, T> {
+        let mut nodes: Vec<MultiwayNode<S>> = self.nodes.values().cloned().collect();
+        nodes.sort_by_key(|node| node_order_key(&node.id));
+
+        let mut edges: Vec<MultiwayEdge<T>> =
+            self.forward_edges.values().flatten().cloned().collect();
+        edges.sort_by_key(edge_order_key);
+
+        let mut active_states: Vec<(u64, MultiwayNodeId)> = self
+            .active_states
+            .iter()
+            .map(|(&fingerprint, &id)| (fingerprint, id))
+            .collect();
+        active_states.sort_unstable_by_key(|&(fingerprint, _)| fingerprint);
+
+        MultiwayParts {
+            nodes,
+            edges,
+            roots: self.roots.clone(),
+            active_states,
+        }
+    }
+}
+
+/// Serializes as [`MultiwayEvolutionGraph::to_parts`].
+#[cfg(feature = "serde")]
+impl<S, T> serde::Serialize for MultiwayEvolutionGraph<S, T>
+where
+    S: Clone + serde::Serialize,
+    T: Clone + serde::Serialize,
+{
+    fn serialize<Ser: serde::Serializer>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error> {
+        self.to_parts().serialize(serializer)
+    }
+}
+
+/// Deserializes a [`MultiwayParts`] and builds the graph with
+/// [`MultiwayEvolutionGraph::from_parts`]; a [`MultiwayPartsError`] becomes a
+/// deserialize error carrying its message.
+#[cfg(feature = "serde")]
+impl<'de, S, T> serde::Deserialize<'de> for MultiwayEvolutionGraph<S, T>
+where
+    S: CanonicalEncode + serde::Deserialize<'de>,
+    T: Clone + serde::Deserialize<'de>,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let parts = MultiwayParts::<S, T>::deserialize(deserializer)?;
+        Self::from_parts(parts).map_err(serde::de::Error::custom)
     }
 }
 

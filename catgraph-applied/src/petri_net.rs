@@ -134,10 +134,39 @@ impl Transition {
 /// Stored as a sparse map from place index to token count; places with zero
 /// tokens are not stored. Two markings are equal iff they assign the same
 /// token count to every place.
+///
+/// # Serde (feature `serde`)
+///
+/// Serializes as `{ "tokens": { place: count, ... } }`. Deserializing a
+/// payload whose `tokens` map holds a zero count is an error naming the
+/// smallest such place.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct Marking {
     /// Sparse map: place index → nonzero token count.
     tokens: HashMap<usize, Decimal>,
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Marking {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        struct MarkingRepr {
+            tokens: HashMap<usize, Decimal>,
+        }
+        let MarkingRepr { tokens } = MarkingRepr::deserialize(deserializer)?;
+        if let Some(place) = tokens
+            .iter()
+            .filter(|(_, count)| count.is_zero())
+            .map(|(&place, _)| place)
+            .min()
+        {
+            return Err(serde::de::Error::custom(format_args!(
+                "marking place {place} has an explicit zero token count"
+            )));
+        }
+        Ok(Self { tokens })
+    }
 }
 
 impl Marking {

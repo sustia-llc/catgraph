@@ -50,6 +50,11 @@ Paper provenance (this crate is inspiration-anchored, not theorem-anchored):
   `rustworkx-core` is *additionally* a `[dev-dependencies]` entry (#163), for
   its seeded topology generators in proptest and bench fixtures. That edge is
   dev-only and does not widen the published dependency tree.
+- `serde` — `Serialize`/`Deserialize` on the multiway evolution surface
+  (`MultiwayEvolutionGraph` via `MultiwayParts` and
+  `MultiwayEvolutionGraph::from_parts`), behind the off-by-default `serde`
+  feature.
+- `thiserror` — the `MultiwayPartsError` derive.
 
 ## Canonical test
 
