@@ -7,6 +7,20 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 
 ## [Unreleased]
 
+## [workspace-v0.24.0] - 2026-09-22
+
+### Changed — BREAKING
+
+- `CanonicalEncode` for `FrobeniusOr<G>`; `R: CanonicalEncode` on the
+  `SfgModel` `ArrowModel` impl and the `SfgGenerator` `GeneratorSyntax` impl
+  ([#469](https://github.com/sustia-llc/catgraph/pull/469)).
+
+### Changed
+
+- Sections before `workspace-v0.17.0` moved out of this file; the file before
+  the move is at tag `v0.23.0`
+  ([#462](https://github.com/sustia-llc/catgraph/pull/462)).
+
 ## [workspace-v0.19.0] - 2026-09-07
 
 ### Changed — tests
@@ -72,7 +86,8 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 > is at tag
 > [`v0.23.0`](https://github.com/sustia-llc/catgraph/blob/v0.23.0/catgraph-syntax/CHANGELOG.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.24.0...HEAD
+[workspace-v0.24.0]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...v0.24.0
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
 [workspace-v0.17.0]: https://github.com/sustia-llc/catgraph/compare/v0.16.0...v0.17.0

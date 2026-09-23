@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [workspace-v0.24.0] - 2026-09-22
+
+### Changed
+
+- Sections before `workspace-v0.17.0` moved out of this file; the file before
+  the move is at tag `v0.23.0`
+  ([#462](https://github.com/sustia-llc/catgraph/pull/462)).
+
 ## [workspace-v0.21.0] - 2026-09-08
 
 ### Changed
@@ -141,7 +149,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > is at tag
 > [`v0.23.0`](https://github.com/sustia-llc/catgraph/blob/v0.23.0/catgraph-magnitude/CHANGELOG.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.24.0...HEAD
+[workspace-v0.24.0]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...v0.24.0
 [workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0
 [workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.1]: https://github.com/sustia-llc/catgraph/compare/v0.19.0...v0.19.1

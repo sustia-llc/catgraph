@@ -4,6 +4,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [workspace-v0.24.0] - 2026-09-22
+
+### Changed — BREAKING
+
+- `MultiwayEvolutionGraph` node fingerprints, `Hypergraph::fingerprint` and
+  `Hyperedge::fingerprint` are `canonical_fingerprint` values; the multiway
+  state bound `S: Hash` is `S: CanonicalEncode` on the fingerprinting impl
+  block, `run_multiway_bfs`, and the `branchial` / `ollivier_ricci` functions
+  that take a `MultiwayEvolutionGraph`
+  ([#469](https://github.com/sustia-llc/catgraph/pull/469)).
+- `trace::is_irreducible` → `trace::is_contiguous_without_repeats`,
+  `TraceAnalysis::is_irreducible` → `TraceAnalysis::is_contiguous_without_repeats`,
+  `Display` label `Contiguous without repeats:`; no alias
+  ([#472](https://github.com/sustia-llc/catgraph/pull/472)).
+
+### Added
+
+- `serde` feature: derives on `BranchId`, `MultiwayNodeId`,
+  `MultiwayEdgeKind`, `MultiwayEdge<T>`, `MultiwayNode<S>`, and serde on
+  `MultiwayEvolutionGraph` through `MultiwayParts` (`to_parts` /
+  `from_parts`, rejecting malformed parts as `MultiwayPartsError`);
+  `MultiwayEdge` / `MultiwayNode` derive `PartialEq, Eq`; new dependency
+  `thiserror` ([#471](https://github.com/sustia-llc/catgraph/pull/471)).
+- `HypergraphEvolution::rules()`
+  ([#472](https://github.com/sustia-llc/catgraph/pull/472)).
+
+### Fixed
+
+- `add_sequential_step` from a node whose `(branch, step + 1)` id is taken
+  allocates a fresh branch with a `Fork` edge instead of overwriting the node
+  ([#471](https://github.com/sustia-llc/catgraph/pull/471)).
+- `RewriteRule::find_matches` returns every match of a multi-edge left-hand
+  side (was: at most one per first-edge candidate); `matches[0]` is unchanged
+  ([#474](https://github.com/sustia-llc/catgraph/pull/474)).
+
+### Changed
+
+- Sections before `workspace-v0.17.0` moved out of this file; the file before
+  the move is at tag `v0.23.0`
+  ([#462](https://github.com/sustia-llc/catgraph/pull/462)).
+
 ## [workspace-v0.22.0] - 2026-09-08
 
 ### Added
@@ -201,7 +242,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 > is at tag
 > [`v0.23.0`](https://github.com/sustia-llc/catgraph/blob/v0.23.0/catgraph-physics/CHANGELOG.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.24.0...HEAD
+[workspace-v0.24.0]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...v0.24.0
 [workspace-v0.22.0]: https://github.com/sustia-llc/catgraph/compare/v0.21.0...v0.22.0
 [workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0
 [workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0

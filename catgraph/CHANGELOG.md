@@ -6,6 +6,23 @@ All notable changes to `catgraph` are documented here. The format follows
 
 ## [Unreleased]
 
+## [workspace-v0.24.0] - 2026-09-22
+
+### Added
+
+- `CanonicalEncode` (canonical byte encoding; impls for the integer types,
+  `usize`/`isize` as 64-bit, `bool`, `char`, `str`, `String`, `[T]`, `Vec`,
+  `[T; N]`, `VecDeque`, `Option`, `()`, tuples of arity 1–6, `&T`, `Box<T>`,
+  `BTreeSet`, `BTreeMap`) and `canonical_fingerprint` (the first 8 bytes of
+  BLAKE3 over the encoding, little-endian); new dependency `blake3`
+  ([#469](https://github.com/sustia-llc/catgraph/pull/469)).
+
+### Changed
+
+- Sections before `workspace-v0.17.0` moved out of this file; the file before
+  the move is at tag `v0.23.0`
+  ([#462](https://github.com/sustia-llc/catgraph/pull/462)).
+
 ## [workspace-v0.20.0] - 2026-09-08
 
 ### Changed — BREAKING
@@ -132,7 +149,8 @@ All notable changes to `catgraph` are documented here. The format follows
 > is at tag
 > [`v0.23.0`](https://github.com/sustia-llc/catgraph/blob/v0.23.0/catgraph/CHANGELOG.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.24.0...HEAD
+[workspace-v0.24.0]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...v0.24.0
 [workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0

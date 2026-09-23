@@ -9,6 +9,34 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 
 ## [Unreleased]
 
+## [workspace-v0.24.0] - 2026-09-22
+
+### Changed — BREAKING
+
+- `PropSignature` has `catgraph::CanonicalEncode` as a supertrait; the
+  `MatchSite` content fingerprint in `prop::presentation::rewrite` is
+  `canonical_fingerprint`. `SfgGenerator<R>: PropSignature` needs
+  `R: CanonicalEncode`, so that bound is on `SignalFlowGraph`, `SfgSignature`,
+  `copy_n` / `discard_n` / `add_n` / `zero_n`, `sfg_to_mat`, `mat_to_sfg`,
+  `sfg_to_colored_expr`, the `graphical_linalg` functions,
+  `FaithfulnessReport` and `MatrixNFFunctor`
+  ([#469](https://github.com/sustia-llc/catgraph/pull/469)).
+
+### Added
+
+- `CanonicalEncode` for `Marking` (entries sorted by place, `Decimal`
+  normalised), `SfgGenerator<R>`, `BoolRig`, `UnitInterval`, `Tropical`,
+  `F64Rig`, `Checked<T>`, `Z`
+  ([#469](https://github.com/sustia-llc/catgraph/pull/469)).
+- `Marking` serde behind `serde`; `Deserialize` rejects an explicit zero token
+  count ([#471](https://github.com/sustia-llc/catgraph/pull/471)).
+
+### Changed
+
+- Sections before `workspace-v0.17.0` moved out of this file; the file before
+  the move is at tag `v0.23.0`
+  ([#462](https://github.com/sustia-llc/catgraph/pull/462)).
+
 ## [workspace-v0.23.0] - 2026-09-13
 
 ### Added
@@ -283,7 +311,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 > is at tag
 > [`v0.23.0`](https://github.com/sustia-llc/catgraph/blob/v0.23.0/catgraph-applied/CHANGELOG.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.24.0...HEAD
+[workspace-v0.24.0]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...v0.24.0
 [workspace-v0.23.0]: https://github.com/sustia-llc/catgraph/compare/v0.22.0...v0.23.0
 [workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0
 [workspace-v0.20.0]: https://github.com/sustia-llc/catgraph/compare/v0.19.1...v0.20.0
