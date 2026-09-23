@@ -6,12 +6,10 @@
 //! checking, repeat detection, and complexity ratio computation over any
 //! implementor.
 //!
-//! [`StepTrace`] captures the *structural* concern (fingerprints, intervals,
-//! halt status). The interpretive judgment "is this computation
-//! Wolfram-irreducible?" lives in the free function [`is_irreducible`], which
-//! ties the term to Gorard 2023 in its rustdoc; downstream coalition consumers
-//! that don't need the Wolfram framing can use the trait + `analyze_trace`
-//! without it.
+//! [`StepTrace`] exposes fingerprints, intervals, and halt status. The free
+//! function [`is_contiguous_without_repeats`] returns the conjunction of
+//! interval contiguity and the absence of repeated fingerprints for any
+//! implementor.
 
 use crate::interval::DiscreteInterval;
 use std::collections::HashMap;
@@ -88,10 +86,9 @@ pub fn detect_repeats(fingerprints: impl Iterator<Item = (usize, u64)>) -> Vec<R
 /// Result of generic trace analysis.
 #[derive(Clone, Debug)]
 pub struct TraceAnalysis {
-    /// Whether the interval sequence is contiguous *and* no repeated states
-    /// were detected — the structural prerequisite of Wolfram-irreducibility.
-    /// See [`is_irreducible`] for the interpretive wrapper.
-    pub is_irreducible: bool,
+    /// Whether the interval sequence is contiguous *and* no state fingerprint
+    /// repeats: `is_sequence_contiguous && repeats.is_empty()`.
+    pub is_contiguous_without_repeats: bool,
     /// Whether the interval sequence is contiguous (composable end-to-end).
     pub is_sequence_contiguous: bool,
     /// The total composed interval `[0, n]`, or `None` if not composable.
@@ -108,7 +105,11 @@ impl fmt::Display for TraceAnalysis {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Trace Analysis:")?;
         writeln!(f, "  Steps: {}", self.step_count)?;
-        writeln!(f, "  Is irreducible: {}", self.is_irreducible)?;
+        writeln!(
+            f,
+            "  Contiguous without repeats: {}",
+            self.is_contiguous_without_repeats
+        )?;
         writeln!(f, "  Sequence contiguous: {}", self.is_sequence_contiguous)?;
         if let Some(ref interval) = self.total_interval {
             writeln!(f, "  Total interval: {interval}")?;
@@ -169,7 +170,7 @@ pub fn analyze_trace(trace: &impl StepTrace) -> TraceAnalysis {
     };
 
     TraceAnalysis {
-        is_irreducible: is_sequence_contiguous && repeats.is_empty(),
+        is_contiguous_without_repeats: is_sequence_contiguous && repeats.is_empty(),
         is_sequence_contiguous,
         total_interval,
         repeats,
@@ -178,19 +179,13 @@ pub fn analyze_trace(trace: &impl StepTrace) -> TraceAnalysis {
     }
 }
 
-/// Wolfram-irreducibility judgment on a structural trace.
+/// Whether a [`StepTrace`]'s intervals compose end-to-end *and* no state
+/// fingerprint in [`StepTrace::state_fingerprints`] repeats.
 ///
-/// A trace is *Wolfram-irreducible* (per Gorard 2023, *A Functorial Perspective
-/// on (Multi)computational Irreducibility*) when its evolution cannot be
-/// shortcut to an equivalent shorter computation. The structural prerequisite
-/// is contiguous interval composition and no repeated states; this function
-/// returns the same boolean as [`TraceAnalysis::is_irreducible`].
-///
-/// Coalition / replay consumers that want the structural fact without buying
-/// into the Wolfram framing should use [`analyze_trace`] directly and read
-/// `analysis.is_sequence_contiguous && analysis.repeats.is_empty()`.
-pub fn is_irreducible(trace: &impl StepTrace) -> bool {
-    analyze_trace(trace).is_irreducible
+/// Returns the same boolean as
+/// [`TraceAnalysis::is_contiguous_without_repeats`].
+pub fn is_contiguous_without_repeats(trace: &impl StepTrace) -> bool {
+    analyze_trace(trace).is_contiguous_without_repeats
 }
 
 #[cfg(test)]
@@ -276,7 +271,7 @@ mod tests {
             halted: true,
         };
         let analysis = analyze_trace(&trace);
-        assert!(analysis.is_irreducible);
+        assert!(analysis.is_contiguous_without_repeats);
         assert!(analysis.is_sequence_contiguous);
         assert!(analysis.repeats.is_empty());
         assert_eq!(analysis.step_count, 3);
@@ -291,7 +286,7 @@ mod tests {
             halted: false,
         };
         let analysis = analyze_trace(&trace);
-        assert!(!analysis.is_irreducible);
+        assert!(!analysis.is_contiguous_without_repeats);
         assert!(analysis.is_sequence_contiguous);
         assert_eq!(analysis.repeats.len(), 1);
     }
@@ -304,7 +299,7 @@ mod tests {
             halted: true,
         };
         let analysis = analyze_trace(&trace);
-        assert!(!analysis.is_irreducible);
+        assert!(!analysis.is_contiguous_without_repeats);
         assert!(!analysis.is_sequence_contiguous);
     }
 
@@ -316,7 +311,7 @@ mod tests {
             halted: true,
         };
         let analysis = analyze_trace(&trace);
-        assert!(analysis.is_irreducible);
+        assert!(analysis.is_contiguous_without_repeats);
         assert!(analysis.repeats.is_empty());
         assert_eq!(analysis.step_count, 0);
         assert!(analysis.total_interval.is_none());
@@ -345,11 +340,26 @@ mod tests {
         let analysis = analyze_trace(&trace);
         let s = format!("{analysis}");
         assert!(s.contains("Steps: 2"));
-        assert!(s.contains("Is irreducible: true"));
+        assert!(s.contains("Contiguous without repeats: true"));
     }
 
     #[test]
-    fn is_irreducible_free_fn_matches_analysis_field() {
+    fn trace_analysis_display_labels_contiguous_without_repeats() {
+        let trace = StubTrace {
+            fingerprints: vec![1, 2, 3],
+            intervals: vec![DiscreteInterval::new(0, 1), DiscreteInterval::new(1, 2)],
+            halted: true,
+        };
+        let s = format!("{}", analyze_trace(&trace));
+        let expected = "  Contiguous without repeats: true";
+        assert!(
+            s.lines().any(|line| line == expected),
+            "expected a line {expected:?} in Display output, observed:\n{s}"
+        );
+    }
+
+    #[test]
+    fn contiguous_without_repeats_free_fn_matches_analysis_field() {
         let trace = StubTrace {
             fingerprints: vec![1, 2, 3, 4],
             intervals: vec![
@@ -359,17 +369,20 @@ mod tests {
             ],
             halted: true,
         };
-        assert!(is_irreducible(&trace));
-        assert_eq!(is_irreducible(&trace), analyze_trace(&trace).is_irreducible);
+        assert!(is_contiguous_without_repeats(&trace));
+        assert_eq!(
+            is_contiguous_without_repeats(&trace),
+            analyze_trace(&trace).is_contiguous_without_repeats
+        );
     }
 
     #[test]
-    fn is_irreducible_false_on_cycle() {
+    fn contiguous_without_repeats_false_on_cycle() {
         let trace = StubTrace {
             fingerprints: vec![1, 2, 1],
             intervals: vec![DiscreteInterval::new(0, 1), DiscreteInterval::new(1, 2)],
             halted: false,
         };
-        assert!(!is_irreducible(&trace));
+        assert!(!is_contiguous_without_repeats(&trace));
     }
 }

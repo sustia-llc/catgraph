@@ -342,6 +342,12 @@ impl HypergraphEvolution {
         self.max_step
     }
 
+    /// Returns the rewrite rules this evolution was constructed with, in construction order.
+    #[must_use]
+    pub fn rules(&self) -> &[RewriteRule] {
+        &self.rules
+    }
+
     /// Returns a reference to a node by ID.
     #[must_use]
     pub fn get_node(&self, id: usize) -> Option<&HypergraphNode> {
@@ -714,6 +720,38 @@ mod tests {
 
         assert!(evolution.node_count() >= 2);
         assert_eq!(evolution.root().state.edge_count(), 1);
+    }
+
+    #[test]
+    fn rules_returns_construction_rules() {
+        let initial = Hypergraph::from_edges(vec![vec![0, 1, 2], vec![1, 2, 3]]);
+        let rules = vec![RewriteRule::wolfram_a_to_bb(), RewriteRule::edge_split()];
+
+        let deterministic = HypergraphEvolution::run(&initial, &rules, 3);
+        let multiway = HypergraphEvolution::run_multiway(&initial, &rules, 2, 20);
+        let constructed = HypergraphEvolution::new(initial, rules.clone());
+
+        for (label, evolution) in [
+            ("run", &deterministic),
+            ("run_multiway", &multiway),
+            ("new", &constructed),
+        ] {
+            let got = evolution.rules();
+            assert_eq!(
+                got.len(),
+                rules.len(),
+                "{label}: rules().len() = {}, expected {}",
+                got.len(),
+                rules.len()
+            );
+            for (i, (g, e)) in got.iter().zip(&rules).enumerate() {
+                assert_eq!(
+                    (g.name(), g.left(), g.right()),
+                    (e.name(), e.left(), e.right()),
+                    "{label}: rule {i} observed (name, left, right) differs from expected"
+                );
+            }
+        }
     }
 
     #[test]
