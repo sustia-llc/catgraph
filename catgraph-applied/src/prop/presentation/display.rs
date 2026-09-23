@@ -980,6 +980,12 @@ mod tests {
             Wire,
         }
 
+        impl catgraph::CanonicalEncode for Exotic {
+            fn encode_canonical(&self, out: &mut Vec<u8>) {
+                out.push(self.clone() as u8);
+            }
+        }
+
         impl PropSignature for Exotic {
             type Color = ();
             fn source_word(&self) -> std::borrow::Cow<'_, [()]> {

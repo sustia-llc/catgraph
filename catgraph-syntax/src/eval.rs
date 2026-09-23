@@ -340,7 +340,7 @@ fn take_inputs<const N: usize, R>(inputs: Vec<R>) -> Result<[R; N], SyntaxError>
 
 impl<R> ArrowModel<SfgGenerator<R>> for SfgModel<R>
 where
-    R: Rig + core::fmt::Debug + Eq + std::hash::Hash + Ord + 'static,
+    R: Rig + core::fmt::Debug + Eq + std::hash::Hash + Ord + catgraph::CanonicalEncode + 'static,
 {
     type Value = R;
 

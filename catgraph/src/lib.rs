@@ -22,6 +22,11 @@
 //! - [`equivalence`] — cospan-algebra morphism + Thm 1.2 per-Λ roundtrip (Fong-Spivak §4)
 //! - [`operadic`] — the `Operadic` trait for substitution (concrete impls live in `catgraph-applied`)
 //!
+//! ## Fingerprints
+//!
+//! - [`canonical_encode`] — [`CanonicalEncode`], a canonical byte encoding, and
+//!   [`canonical_fingerprint`], a `u64` BLAKE3 digest of it
+//!
 //! ## Finite sets and combinatorics
 //!
 //! - [`finset`] — finite set morphisms, epi-mono factorization, permutations
@@ -33,6 +38,7 @@
 //! - Persistence → `catgraph-surreal` (sibling repo)
 //! - Computational irreducibility → `irreducible` (sibling repo)
 
+pub mod canonical_encode;
 pub mod category;
 pub mod compact_closed;
 pub mod corel;
@@ -50,3 +56,5 @@ pub mod named_cospan;
 pub mod operadic;
 pub mod span;
 pub mod utils;
+
+pub use canonical_encode::{CanonicalEncode, canonical_fingerprint};

@@ -52,6 +52,8 @@ rustworkx-core = "0.18"
 union-find     = "0.4"
 
 # --- general ---
+# `catgraph::canonical_fingerprint`'s hasher. Default features (`std`).
+blake3       = "1"
 either       = "1.6.1"
 itertools    = "0.15"
 num          = "0.4"   # narrowed to BigInt / Complex / ToPrimitive / pow (NOT Zero/One — those are catgraph's own, in catgraph-applied's `rig`)

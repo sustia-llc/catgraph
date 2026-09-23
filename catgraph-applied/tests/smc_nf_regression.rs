@@ -24,6 +24,12 @@ enum TestSig {
     S,
 }
 
+impl catgraph::CanonicalEncode for TestSig {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(self.clone() as u8);
+    }
+}
+
 impl PropSignature for TestSig {
     type Color = ();
 

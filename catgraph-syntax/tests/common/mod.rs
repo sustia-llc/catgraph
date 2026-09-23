@@ -55,6 +55,12 @@ pub enum Sig {
     Counit,
 }
 
+impl catgraph::CanonicalEncode for Sig {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(self.clone() as u8);
+    }
+}
+
 impl PropSignature for Sig {
     type Color = ();
 
@@ -114,6 +120,10 @@ impl GeneratorSyntax for Sig {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BadSig;
 
+impl catgraph::CanonicalEncode for BadSig {
+    fn encode_canonical(&self, _out: &mut Vec<u8>) {}
+}
+
 impl PropSignature for BadSig {
     type Color = ();
 
@@ -152,6 +162,10 @@ impl GeneratorSyntax for BadSig {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ColonSig;
 
+impl catgraph::CanonicalEncode for ColonSig {
+    fn encode_canonical(&self, _out: &mut Vec<u8>) {}
+}
+
 impl PropSignature for ColonSig {
     type Color = ();
 
@@ -189,6 +203,10 @@ impl GeneratorSyntax for ColonSig {
 /// (so its clause-1 round-trip breaks), the analogue of S2's [`BadSig`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ShadowSig;
+
+impl catgraph::CanonicalEncode for ShadowSig {
+    fn encode_canonical(&self, _out: &mut Vec<u8>) {}
+}
 
 impl PropSignature for ShadowSig {
     type Color = ();
@@ -464,6 +482,18 @@ impl ColorSyntax for Hue {
 pub enum ColoredSig {
     /// `swap : [A, B] → [B, A]`.
     Swap,
+}
+
+impl catgraph::CanonicalEncode for Hue {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
+
+impl catgraph::CanonicalEncode for ColoredSig {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(self.clone() as u8);
+    }
 }
 
 impl PropSignature for ColoredSig {

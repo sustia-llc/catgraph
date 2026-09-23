@@ -466,7 +466,13 @@ fn witness_debug<R>(
     report: &catgraph_applied::graphical_linalg::FaithfulnessReport<R>,
 ) -> Option<(String, String)>
 where
-    R: catgraph_applied::rig::Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static,
+    R: catgraph_applied::rig::Rig
+        + std::fmt::Debug
+        + Eq
+        + std::hash::Hash
+        + Ord
+        + catgraph::CanonicalEncode
+        + 'static,
 {
     report.witnesses.first().map(|(a, b)| {
         (
@@ -487,7 +493,13 @@ fn assert_exact_baseline<R>(
     report: &catgraph_applied::graphical_linalg::FaithfulnessReport<R>,
     baseline: usize,
 ) where
-    R: catgraph_applied::rig::Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static,
+    R: catgraph_applied::rig::Rig
+        + std::fmt::Debug
+        + Eq
+        + std::hash::Hash
+        + Ord
+        + catgraph::CanonicalEncode
+        + 'static,
 {
     assert_eq!(
         report.collisions_under_s,
@@ -656,7 +668,7 @@ fn cc_completeness_tracking_f64_depth_4() {
 /// completion demoted to the #57 feasibility spike.
 fn assert_soundness_for_rig<R>(rig_samples: &[R]) -> String
 where
-    R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static,
+    R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + catgraph::CanonicalEncode + 'static,
 {
     let presentation = matr_presentation::<R>(rig_samples).expect("matr_presentation builds");
 

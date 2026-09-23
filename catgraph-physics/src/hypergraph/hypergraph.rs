@@ -10,7 +10,8 @@ use super::causal_graph::CausalComparison;
 use super::hyperedge::Hyperedge;
 use super::isomorphism::{Digraph, compare_digraphs, refine_digraph};
 use std::collections::{BTreeSet, HashMap};
-use std::hash::{Hash, Hasher};
+
+use catgraph::canonical_fingerprint;
 
 /// Hypergraph: `usize` vertices, ordered hyperedges; self-loops and parallel
 /// hyperedges allowed.
@@ -347,27 +348,20 @@ impl Hypergraph {
     /// Computes a fingerprint invariant under vertex relabelling and edge
     /// reordering.
     ///
-    /// Hashes the vertex count, the edge count, the sorted arity multiset and
-    /// the sorted multiset of the stable colour-refinement colours of the
-    /// incidence digraph, so a relabelled or edge-reordered copy carries the
-    /// same fingerprint. Equal fingerprints do not imply isomorphism.
+    /// [`canonical_fingerprint`] of the tuple `(vertex count, edge count,
+    /// sorted arity multiset as Vec<usize>, sorted multiset of the stable
+    /// colour-refinement colours of the incidence digraph as Vec<u64>)`, so a
+    /// relabelled or edge-reordered copy carries the same fingerprint. Equal
+    /// fingerprints do not imply isomorphism.
     #[must_use]
     pub fn fingerprint(&self) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        let mut hasher = DefaultHasher::new();
-
-        self.vertices.len().hash(&mut hasher);
-        self.edges.len().hash(&mut hasher);
-
-        let mut arities: Vec<_> = self.edges.iter().map(Hyperedge::arity).collect();
+        let mut arities: Vec<usize> = self.edges.iter().map(Hyperedge::arity).collect();
         arities.sort_unstable();
-        arities.hash(&mut hasher);
 
         let mut colours = refine_digraph(&self.incidence_digraph());
         colours.sort_unstable();
-        colours.hash(&mut hasher);
 
-        hasher.finish()
+        canonical_fingerprint(&(self.vertices.len(), self.edges.len(), arities, colours))
     }
 
     /// Compares this hypergraph with `other` up to isomorphism.
@@ -581,6 +575,18 @@ mod tests {
 
         assert_eq!(g1.fingerprint(), g2.fingerprint());
         assert_ne!(g1.fingerprint(), g3.fingerprint());
+    }
+
+    /// `fingerprint` of `{{0, 1, 2}, {2, 3}}` equals a recorded `u64`.
+    #[test]
+    fn hypergraph_fingerprint_golden_value() {
+        let graph = Hypergraph::from_edges(vec![vec![0, 1, 2], vec![2, 3]]);
+        let observed = graph.fingerprint();
+        let expected = 3_898_887_687_667_903_020u64;
+        assert_eq!(
+            observed, expected,
+            "{{{{0, 1, 2}}, {{2, 3}}}}: observed {observed}, expected {expected}"
+        );
     }
 
     #[test]

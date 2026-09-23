@@ -9,6 +9,8 @@
 use crate::integer::{ZAlgebra, private::Sealed};
 // catgraph's `Zero`/`One` for `Z` itself; `num`'s, aliased, drive the inner BigInt.
 use crate::rig::{One, Zero};
+use catgraph::CanonicalEncode;
+use num::bigint::Sign;
 use num::{BigInt, One as NumOne, Zero as NumZero};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul, Neg, Sub};
@@ -95,6 +97,21 @@ impl From<i64> for Z {
 impl Hash for Z {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state);
+    }
+}
+
+/// One sign byte (`0` negative, `1` zero, `2` positive), then the magnitude's
+/// little-endian bytes from `BigInt::to_bytes_le` as a length-prefixed
+/// `Vec<u8>`.
+impl CanonicalEncode for Z {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        let (sign, magnitude) = self.0.to_bytes_le();
+        out.push(match sign {
+            Sign::Minus => 0,
+            Sign::NoSign => 1,
+            Sign::Plus => 2,
+        });
+        magnitude.encode_canonical(out);
     }
 }
 

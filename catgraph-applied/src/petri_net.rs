@@ -34,6 +34,7 @@ use std::hash::{Hash, Hasher};
 use num::ToPrimitive;
 use rust_decimal::Decimal;
 
+use catgraph::CanonicalEncode;
 use catgraph::category::{Composable, HasIdentity};
 use catgraph::cospan::Cospan;
 use catgraph::errors::{BoundaryLeg, CatgraphError};
@@ -194,6 +195,25 @@ impl Hash for Marking {
         for (k, v) in entries {
             k.hash(state);
             v.hash(state);
+        }
+    }
+}
+
+/// The entry count as `u64` little-endian, then each `(place, count)` entry in
+/// ascending place order: the place as `u64` little-endian, then the 16 bytes
+/// of [`Decimal::serialize`] of [`Decimal::normalize`] of the count.
+impl CanonicalEncode for Marking {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        let mut entries: Vec<(usize, Decimal)> = self
+            .tokens
+            .iter()
+            .map(|(&place, &count)| (place, count))
+            .collect();
+        entries.sort_unstable_by_key(|&(place, _)| place);
+        entries.len().encode_canonical(out);
+        for (place, count) in entries {
+            place.encode_canonical(out);
+            out.extend_from_slice(&count.normalize().serialize());
         }
     }
 }

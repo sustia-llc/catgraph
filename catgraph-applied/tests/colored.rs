@@ -37,6 +37,18 @@ enum Two {
     H,
 }
 
+impl catgraph::CanonicalEncode for Wire {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
+
+impl catgraph::CanonicalEncode for Two {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
+
 impl PropSignature for Two {
     type Color = Wire;
 
@@ -64,6 +76,12 @@ impl PropSignature for Two {
 enum Mono {
     Copy,
     Add,
+}
+
+impl catgraph::CanonicalEncode for Mono {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
 }
 
 impl PropSignature for Mono {

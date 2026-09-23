@@ -107,6 +107,7 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
 
+use catgraph::CanonicalEncode;
 use catgraph::category::Composable;
 use catgraph::errors::CatgraphError;
 
@@ -155,7 +156,8 @@ const KW_EPSILON: &str = "epsilon";
 ///
 /// The enum carries `G: PropSignature` so it can name `G::Color`. Every derive
 /// is satisfied by that bound alone **except** the total order:
-/// [`PropSignature::Color`] requires only `Clone + Eq + Hash + Debug`, while
+/// [`PropSignature::Color`] requires only `Clone + Eq + Hash + Debug +
+/// CanonicalEncode`, while
 /// `PropSignature` itself requires `Ord`. `Ord`/`PartialOrd` are therefore
 /// hand-written under `where G::Color: Ord` (variant order
 /// `Mu < Eta < Delta < Epsilon < User`, then payload order — the order a
@@ -227,6 +229,21 @@ where
 /// source word — the shape of one `E_frob` entry, of each [`scfm_equations`]
 /// element, and of a user equation once lifted into `FrobeniusOr<G>`.
 pub type FrobeniusEquation<G> = (PropExpr<FrobeniusOr<G>>, PropExpr<FrobeniusOr<G>>);
+
+/// One variant byte (`Mu` 0, `Eta` 1, `Delta` 2, `Epsilon` 3, `User` 4), then
+/// the encoding of the carried colour or generator.
+impl<G: PropSignature> CanonicalEncode for FrobeniusOr<G> {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(self.rank());
+        match self {
+            FrobeniusOr::Mu(c)
+            | FrobeniusOr::Eta(c)
+            | FrobeniusOr::Delta(c)
+            | FrobeniusOr::Epsilon(c) => c.encode_canonical(out),
+            FrobeniusOr::User(g) => g.encode_canonical(out),
+        }
+    }
+}
 
 impl<G: PropSignature> PropSignature for FrobeniusOr<G>
 where

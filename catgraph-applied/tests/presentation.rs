@@ -24,6 +24,12 @@ enum TestGen {
     C,
 }
 
+impl catgraph::CanonicalEncode for TestGen {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(self.clone() as u8);
+    }
+}
+
 impl PropSignature for TestGen {
     type Color = ();
 
@@ -55,6 +61,12 @@ fn g(x: TestGen) -> PropExpr<TestGen> {
 enum UnitGen {
     A,
     Eta,
+}
+
+impl catgraph::CanonicalEncode for UnitGen {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(self.clone() as u8);
+    }
 }
 
 impl PropSignature for UnitGen {

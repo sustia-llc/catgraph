@@ -9,6 +9,8 @@
 use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 
+use catgraph::{CanonicalEncode, canonical_fingerprint};
+
 /// Ordered hyperedge over `usize` vertices; equality is sequence equality.
 ///
 /// # Example
@@ -172,13 +174,18 @@ impl Hyperedge {
         Self { vertices }
     }
 
-    /// Computes a fingerprint for fast comparison.
+    /// [`canonical_fingerprint`] of this hyperedge's [`CanonicalEncode`]
+    /// encoding.
     #[must_use]
     pub fn fingerprint(&self) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        let mut hasher = DefaultHasher::new();
-        self.hash(&mut hasher);
-        hasher.finish()
+        canonical_fingerprint(self)
+    }
+}
+
+/// The ordered vertex list, encoded as a `Vec<usize>`.
+impl CanonicalEncode for Hyperedge {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        self.vertices.encode_canonical(out);
     }
 }
 

@@ -130,7 +130,13 @@ const SEED: u64 = 0xCAFE_BABE_DEAD_BEEF;
 /// construction, so the `.expect` is a maintenance-bug indicator only.
 fn build_sfg_fixture_d<R>(depth: usize) -> SignalFlowGraph<R>
 where
-    R: catgraph_applied::rig::Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static,
+    R: catgraph_applied::rig::Rig
+        + std::fmt::Debug
+        + Eq
+        + std::hash::Hash
+        + Ord
+        + catgraph::CanonicalEncode
+        + 'static,
 {
     if depth == 0 {
         // Base: Scalar(one) is 1 → 1, the smallest non-identity matrix-leaf.

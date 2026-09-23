@@ -17,6 +17,7 @@ default = ["parallel"]
 parallel = ["dep:rayon"]
 
 [dependencies]
+blake3.workspace = true
 either.workspace = true
 itertools.workspace = true
 permutations.workspace = true

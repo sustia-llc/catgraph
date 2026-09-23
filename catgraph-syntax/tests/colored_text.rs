@@ -215,6 +215,16 @@ impl ColorSyntax for Tint {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct Mix;
 
+impl catgraph::CanonicalEncode for Tint {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
+
+impl catgraph::CanonicalEncode for Mix {
+    fn encode_canonical(&self, _out: &mut Vec<u8>) {}
+}
+
 impl PropSignature for Mix {
     type Color = Tint;
 

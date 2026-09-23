@@ -9,7 +9,9 @@
 //! strict left/right unitality under `Cospan`'s derived `PartialEq`; `compose`
 //! on each equals a union-find partition reference computed from the operand
 //! wirings; and `wiring(f ⊗ g) == wiring(f) ++ shift(wiring(g))` on the 13
-//! public `Monoidal` implementors in `catgraph/src`.
+//! public `Monoidal` implementors in `catgraph/src`. `canonical_fingerprint`,
+//! through the `CanonicalEncode` impls, equals a recorded `u64` on six fixed
+//! values.
 //!
 //! # Input space
 //!
@@ -42,7 +44,7 @@
 //!
 //! # covers:
 //!
-//! `ApexClass` `CatgraphError` `Composable` `ComposableMutating` `Corel`
+//! `ApexClass` `CanonicalEncode` `CatgraphError` `Composable` `ComposableMutating` `Corel`
 //! `Cospan` `CospanAlgebra` `CospanAlgebraMorphism` `CospanCanon`
 //! `Decomposition` `FinSetMap` `FinSetMorphism` `FrobeniusMorphism`
 //! `FrobeniusOperation` `GenericMonoidalMorphism`
@@ -65,6 +67,7 @@
 use std::sync::Arc;
 
 use catgraph::{
+    canonical_fingerprint,
     category::{Composable, ComposableMutating, HasIdentity},
     corel::Corel,
     cospan::Cospan,
@@ -1709,4 +1712,56 @@ fn frobenius_to_cospan_rejects_black_boxes() {
         format!("{error}").contains("UnSpecifiedBox"),
         "the error should name what could not be interpreted, got: {error}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Canonical encoding: fixed fingerprints
+// ---------------------------------------------------------------------------
+
+/// `canonical_fingerprint` of six fixed values equals a recorded `u64`.
+///
+/// Ranges over `0u32`, `usize::MAX`, `"abc"`, `vec![1u8, 2, 3]`,
+/// `(true, 'x')` and `Some(7i64)`.
+#[test]
+fn canonical_fingerprint_golden_values() {
+    let cases: [(&str, u64, u64); 6] = [
+        (
+            "0u32",
+            canonical_fingerprint(&0u32),
+            6_886_966_969_079_180_268,
+        ),
+        (
+            "usize::MAX",
+            canonical_fingerprint(&usize::MAX),
+            11_524_182_645_665_337_715,
+        ),
+        (
+            "\"abc\"",
+            canonical_fingerprint("abc"),
+            1_045_289_509_594_022_700,
+        ),
+        (
+            "vec![1u8, 2, 3]",
+            canonical_fingerprint(&vec![1u8, 2, 3]),
+            7_226_635_278_553_673_002,
+        ),
+        (
+            "(true, 'x')",
+            canonical_fingerprint(&(true, 'x')),
+            6_413_473_972_875_759_987,
+        ),
+        (
+            "Some(7i64)",
+            canonical_fingerprint(&Some(7i64)),
+            12_079_377_208_858_258_265,
+        ),
+    ];
+    let failures: Vec<String> = cases
+        .iter()
+        .filter(|(_, observed, expected)| observed != expected)
+        .map(|(name, observed, expected)| {
+            format!("{name}: observed {observed}, expected {expected}")
+        })
+        .collect();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

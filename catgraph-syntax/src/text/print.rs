@@ -111,6 +111,9 @@ fn fmt_node<G: GeneratorSyntax>(expr: &PropExpr<G>, f: &mut fmt::Formatter<'_>) 
 ///
 /// #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 /// struct G;
+/// impl catgraph::CanonicalEncode for G {
+///     fn encode_canonical(&self, _out: &mut Vec<u8>) {}
+/// }
 /// impl PropSignature for G {
 ///     type Color = ();
 ///     fn source_word(&self) -> Cow<'_, [()]> { mono_word(self.source()) }

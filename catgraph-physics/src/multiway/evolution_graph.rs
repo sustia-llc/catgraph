@@ -9,10 +9,10 @@
 //! the per-step cross-section is [`crate::multiway::branchial`]. Enrichment
 //! lives in `catgraph-magnitude`.
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
-use std::hash::{Hash, Hasher};
+
+use catgraph::{CanonicalEncode, canonical_fingerprint};
 
 /// Unique identifier for a branch in the multiway graph.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -82,14 +82,15 @@ pub struct MultiwayEdge<T> {
 /// A node in the multiway evolution graph.
 ///
 /// Stores the state `S` at a specific (branch, step) position, plus a
-/// hash fingerprint for O(1) merge detection and cycle identification.
+/// fingerprint for O(1) merge detection and cycle identification.
 #[derive(Clone, Debug)]
 pub struct MultiwayNode<S> {
     /// Unique identifier for this node.
     pub id: MultiwayNodeId,
     /// The state at this node.
     pub state: S,
-    /// Hash fingerprint for fast equality checking and cycle detection.
+    /// Fingerprint of `state`; the [`MultiwayEvolutionGraph`] builders set it
+    /// to [`canonical_fingerprint`] of the state.
     pub fingerprint: u64,
 }
 
@@ -297,12 +298,10 @@ impl<S, T> MultiwayEvolutionGraph<S, T> {
     }
 }
 
-impl<S: Hash, T: Clone> MultiwayEvolutionGraph<S, T> {
-    /// Compute fingerprint for a state.
+impl<S: CanonicalEncode, T: Clone> MultiwayEvolutionGraph<S, T> {
+    /// A state's fingerprint: [`canonical_fingerprint`] of the state.
     fn compute_fingerprint(state: &S) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        state.hash(&mut hasher);
-        hasher.finish()
+        canonical_fingerprint(state)
     }
 
     /// Add a root node (initial state).
@@ -723,7 +722,7 @@ pub struct MultiwayCycle {
     pub first_occurrence: MultiwayNodeId,
     /// Second occurrence of the repeated state.
     pub second_occurrence: MultiwayNodeId,
-    /// Hash fingerprint of the repeated state.
+    /// Fingerprint of the repeated state.
     pub fingerprint: u64,
 }
 
@@ -810,7 +809,7 @@ pub fn run_multiway_bfs<S, T, F>(
     max_branches: usize,
 ) -> MultiwayEvolutionGraph<S, T>
 where
-    S: Clone + Hash,
+    S: Clone + CanonicalEncode,
     T: Clone,
     F: Fn(&S) -> Vec<(S, T, usize)>,
 {

@@ -18,7 +18,8 @@
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::hash::Hash;
+
+use catgraph::CanonicalEncode;
 
 use super::branchial::BranchialGraph;
 use super::curvature::{CurvatureFoliation, DiscreteCurvature};
@@ -169,7 +170,7 @@ impl OllivierRicciCurvature {
 
     /// Compute curvature from a multiway evolution graph at a specific step.
     #[must_use]
-    pub fn from_evolution_at_step<S: Clone + Hash, T: Clone>(
+    pub fn from_evolution_at_step<S: Clone + CanonicalEncode, T: Clone>(
         graph: &MultiwayEvolutionGraph<S, T>,
         step: usize,
     ) -> Self {
@@ -278,7 +279,9 @@ impl std::fmt::Display for OllivierRicciCurvature {
 impl OllivierFoliation {
     /// Compute a foliation from a full multiway evolution graph.
     #[must_use]
-    pub fn from_evolution<S: Clone + Hash, T: Clone>(graph: &MultiwayEvolutionGraph<S, T>) -> Self {
+    pub fn from_evolution<S: Clone + CanonicalEncode, T: Clone>(
+        graph: &MultiwayEvolutionGraph<S, T>,
+    ) -> Self {
         let max_step = graph.max_step();
         let curvatures: Vec<OllivierRicciCurvature> = (0..=max_step)
             .map(|step| OllivierRicciCurvature::from_evolution_at_step(graph, step))

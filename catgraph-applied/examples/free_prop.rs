@@ -15,6 +15,12 @@ enum Sig {
     Unit,
 }
 
+impl catgraph::CanonicalEncode for Sig {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
+
 impl PropSignature for Sig {
     type Color = ();
 

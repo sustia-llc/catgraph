@@ -77,11 +77,10 @@
 //! optimization signal.
 
 use std::cmp::Reverse;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
-use std::hash::{Hash, Hasher};
 
 use catgraph::errors::{CatgraphError, RewriteBoundary, RewriteRejection, RewriteSide};
+use catgraph::{CanonicalEncode, canonical_fingerprint};
 
 use super::super::PropSignature;
 use super::super::colored::{ColoredExpr, check};
@@ -326,7 +325,8 @@ fn incidence<G: PropSignature>(content: &Content<G>) -> (Vec<Option<usize>>, Vec
 /// renumbering this has to detect. A [`MatchSite`] is a tuple of *indices*, so
 /// what it has to be pinned to is the writing, not the class.
 ///
-/// Hashed, in order: the node count, the node colors, the hyperedge count, then
+/// [`canonical_fingerprint`] of the concatenated [`CanonicalEncode`] encodings,
+/// in order, of: the node count, the node colors, the hyperedge count, then
 /// each hyperedge's `(label, sources, targets)` **in index order**, then the
 /// input and output anchors.
 ///
@@ -334,18 +334,27 @@ fn incidence<G: PropSignature>(content: &Content<G>) -> (Vec<Option<usize>>, Vec
 /// with probability ~2⁻⁶⁴, and a collision degrades to the convex-match
 /// re-derivation `match_at` runs next.
 fn fingerprint<G: PropSignature>(content: &Content<G>) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    content.node_count().hash(&mut hasher);
-    content.node_colors().hash(&mut hasher);
-    content.edges().len().hash(&mut hasher);
-    for edge in content.edges() {
-        edge.label.hash(&mut hasher);
-        edge.sources.hash(&mut hasher);
-        edge.targets.hash(&mut hasher);
+    canonical_fingerprint(&Writing(content))
+}
+
+/// A [`Content`] encoded as its representation, in the field order
+/// [`fingerprint`] lists.
+struct Writing<'a, G: PropSignature>(&'a Content<G>);
+
+impl<G: PropSignature> CanonicalEncode for Writing<'_, G> {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        let content = self.0;
+        content.node_count().encode_canonical(out);
+        content.node_colors().encode_canonical(out);
+        content.edges().len().encode_canonical(out);
+        for edge in content.edges() {
+            edge.label.encode_canonical(out);
+            edge.sources.encode_canonical(out);
+            edge.targets.encode_canonical(out);
+        }
+        content.input().encode_canonical(out);
+        content.output().encode_canonical(out);
     }
-    content.input().hash(&mut hasher);
-    content.output().hash(&mut hasher);
-    hasher.finish()
 }
 
 /// One convex match: the target node and edge each `lhs` item maps to.

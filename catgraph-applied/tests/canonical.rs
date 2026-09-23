@@ -88,6 +88,7 @@ use std::hash::Hash;
 
 use catgraph::cospan::Cospan;
 use catgraph::{
+    CanonicalEncode,
     category::{Composable, HasIdentity},
     monoidal::{Monoidal, SymmetricMonoidalMorphism},
 };
@@ -117,8 +118,8 @@ const ARITY_CAP: usize = 3;
 const TERM_DEPTH: usize = 2;
 
 /// The bound every rig in this file satisfies, spelled once.
-trait TestRig: Rig + Debug + Eq + Hash + Ord + 'static {}
-impl<R> TestRig for R where R: Rig + Debug + Eq + Hash + Ord + 'static {}
+trait TestRig: Rig + Debug + Eq + Hash + Ord + CanonicalEncode + 'static {}
+impl<R> TestRig for R where R: Rig + Debug + Eq + Hash + Ord + CanonicalEncode + 'static {}
 
 /// An `SFG_R` term.
 type Term<R> = PropExpr<SfgGenerator<R>>;
@@ -875,6 +876,12 @@ proptest! {
 enum Sig {
     Mul,
     Unit,
+}
+
+impl CanonicalEncode for Sig {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
 }
 
 impl PropSignature for Sig {

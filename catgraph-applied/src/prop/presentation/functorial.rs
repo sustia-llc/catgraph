@@ -70,11 +70,11 @@ pub trait ColoredCompleteFunctor<G: PropSignature> {
 /// for fields, Wadsley–Woods arXiv:1505.00048 for commutative rigs, cf. BE15 §6).
 /// Equality of `MatR<R>` values decides equivalence of signal-flow graphs under
 /// the 18 Thm 5.60 equations.
-pub struct MatrixNFFunctor<R: Rig + Debug + Eq + Hash + Ord + 'static> {
+pub struct MatrixNFFunctor<R: Rig + Debug + Eq + Hash + Ord + catgraph::CanonicalEncode + 'static> {
     _phantom: PhantomData<R>,
 }
 
-impl<R: Rig + Debug + Eq + Hash + Ord + 'static> MatrixNFFunctor<R> {
+impl<R: Rig + Debug + Eq + Hash + Ord + catgraph::CanonicalEncode + 'static> MatrixNFFunctor<R> {
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -83,7 +83,9 @@ impl<R: Rig + Debug + Eq + Hash + Ord + 'static> MatrixNFFunctor<R> {
     }
 }
 
-impl<R: Rig + Debug + Eq + Hash + Ord + 'static> Default for MatrixNFFunctor<R> {
+impl<R: Rig + Debug + Eq + Hash + Ord + catgraph::CanonicalEncode + 'static> Default
+    for MatrixNFFunctor<R>
+{
     fn default() -> Self {
         Self::new()
     }
@@ -91,7 +93,7 @@ impl<R: Rig + Debug + Eq + Hash + Ord + 'static> Default for MatrixNFFunctor<R> 
 
 impl<R> CompleteFunctor<SfgGenerator<R>> for MatrixNFFunctor<R>
 where
-    R: Rig + Debug + Eq + Hash + Ord + 'static,
+    R: Rig + Debug + Eq + Hash + Ord + catgraph::CanonicalEncode + 'static,
 {
     type Target = MatR<R>;
 

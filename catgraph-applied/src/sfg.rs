@@ -14,11 +14,11 @@
 //! keeps the Thm 5.60 equation set defined on primitives.
 //!
 //! [`SfgGenerator<R>`] derives the whole [`PropSignature`] bound set uniformly
-//! and therefore requires `R: Rig + Eq + Hash + Ord + Debug + 'static`.
-//! [`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
-//! [`crate::rig::Tropical`], [`crate::rig::F64Rig`] and [`crate::rig::Checked<T>`]
-//! (for `T: CheckedOps + Zero + One + Clone + Eq + Hash + Ord + Debug + 'static`)
-//! satisfy it.
+//! and therefore requires `R: Rig + Eq + Hash + Ord + Debug + CanonicalEncode +
+//! 'static`. [`crate::rig::BoolRig`], [`crate::rig::UnitInterval`],
+//! [`crate::rig::Tropical`], [`crate::rig::F64Rig`], [`crate::z::Z`] and
+//! [`crate::rig::Checked<T>`] (for `T: CheckedOps + Zero + One + Clone + Eq +
+//! Hash + Ord + Debug + CanonicalEncode + 'static`) satisfy it.
 //!
 //! `SFG_R` is single-sorted: [`SfgGenerator`]'s
 //! [`Color`](PropSignature::Color) is `()` and its interface words are
@@ -26,6 +26,7 @@
 
 use std::borrow::Cow;
 
+use catgraph::CanonicalEncode;
 use catgraph::errors::CatgraphError;
 
 use crate::{
@@ -37,9 +38,9 @@ use crate::{
 ///
 /// Parameterised over the rig `R` so that `Scalar(r)` ranges over `R`-values.
 ///
-/// The `Eq + Hash + Ord` bounds on `R` come from [`PropSignature`]'s
-/// supertraits; `Scalar(r)` is the one variant whose equality and ordering
-/// consult `R`.
+/// The `Eq + Hash + Ord + CanonicalEncode` bounds on `R` come from
+/// [`PropSignature`]'s supertraits; `Scalar(r)` is the one variant whose
+/// equality, ordering and encoding consult `R`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SfgGenerator<R: Rig + Eq + std::hash::Hash> {
@@ -55,8 +56,25 @@ pub enum SfgGenerator<R: Rig + Eq + std::hash::Hash> {
     Scalar(R),
 }
 
-impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> PropSignature
-    for SfgGenerator<R>
+/// One variant byte (`Copy` 0, `Discard` 1, `Add` 2, `Zero` 3, `Scalar` 4),
+/// then for `Scalar(r)` the encoding of `r`.
+impl<R: Rig + Eq + std::hash::Hash + CanonicalEncode> CanonicalEncode for SfgGenerator<R> {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        match self {
+            SfgGenerator::Copy => out.push(0),
+            SfgGenerator::Discard => out.push(1),
+            SfgGenerator::Add => out.push(2),
+            SfgGenerator::Zero => out.push(3),
+            SfgGenerator::Scalar(r) => {
+                out.push(4);
+                r.encode_canonical(out);
+            }
+        }
+    }
+}
+
+impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + CanonicalEncode + 'static>
+    PropSignature for SfgGenerator<R>
 {
     type Color = ();
 
@@ -90,9 +108,9 @@ impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> PropSignat
 ///
 /// Primarily a documentation / type-level marker; actual prop operations go
 /// through [`SignalFlowGraph`] and [`Free::<SfgGenerator<R>>`].
-pub struct SfgSignature<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
-    std::marker::PhantomData<R>,
-);
+pub struct SfgSignature<
+    R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + CanonicalEncode + 'static,
+>(std::marker::PhantomData<R>);
 
 /// A morphism `m → n` of `SFG_R` — an arity-tracked expression tree over
 /// the 5 primitive generators plus identity / braid / composition / tensor.
@@ -101,11 +119,13 @@ pub struct SfgSignature<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 
 /// F&S Thm 5.60 quotient (matrix equivalence of signal-flow graphs) is
 /// presentation-layer work.
 #[derive(Clone, Debug)]
-pub struct SignalFlowGraph<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
-    PropExpr<SfgGenerator<R>>,
-);
+pub struct SignalFlowGraph<
+    R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + CanonicalEncode + 'static,
+>(PropExpr<SfgGenerator<R>>);
 
-impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> SignalFlowGraph<R> {
+impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + CanonicalEncode + 'static>
+    SignalFlowGraph<R>
+{
     /// `Δ : 1 → 2` — the copy generator.
     #[must_use]
     pub fn copy() -> Self {
@@ -210,7 +230,7 @@ impl<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static> SignalFlow
 ///
 /// The construction is arity-safe; the `Result` matches the composition
 /// signature it is built from.
-pub fn copy_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
+pub fn copy_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + CanonicalEncode + 'static>(
     n: usize,
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {
     match n {
@@ -227,7 +247,9 @@ pub fn copy_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
 /// Iterated discard: `discard_n(0) = id(0)`,
 /// `discard_n(n) = discard ⊗ discard_n(n-1)`.
 #[must_use]
-pub fn discard_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
+pub fn discard_n<
+    R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + CanonicalEncode + 'static,
+>(
     n: usize,
 ) -> SignalFlowGraph<R> {
     if n == 0 {
@@ -249,7 +271,7 @@ pub fn discard_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static
 ///
 /// The construction is arity-safe; the `Result` matches the composition
 /// signature it is built from.
-pub fn add_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
+pub fn add_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + CanonicalEncode + 'static>(
     m: usize,
 ) -> Result<SignalFlowGraph<R>, CatgraphError> {
     match m {
@@ -269,7 +291,7 @@ pub fn add_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
 /// A morphism `0 → n` emitting the additive identity on each of `n` output
 /// wires; `S(zero_n(n))` is the empty `0 × n` matrix.
 #[must_use]
-pub fn zero_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
+pub fn zero_n<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + CanonicalEncode + 'static>(
     n: usize,
 ) -> SignalFlowGraph<R> {
     if n == 0 {

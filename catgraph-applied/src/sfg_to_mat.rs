@@ -35,13 +35,17 @@ use crate::{
 /// [`CatgraphError::CompositionSizeMismatch`] — if the underlying [`PropExpr`]
 /// is ill-formed, or plainly if a `Braid` width overflows `usize`; neither can
 /// occur for a graph built through the [`SignalFlowGraph`] constructors.
-pub fn sfg_to_mat<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
+pub fn sfg_to_mat<
+    R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + catgraph::CanonicalEncode + 'static,
+>(
     sfg: &SignalFlowGraph<R>,
 ) -> Result<MatR<R>, CatgraphError> {
     sfg_to_mat_inner(sfg.as_prop_expr())
 }
 
-fn sfg_to_mat_inner<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
+fn sfg_to_mat_inner<
+    R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + catgraph::CanonicalEncode + 'static,
+>(
     expr: &PropExpr<SfgGenerator<R>>,
 ) -> Result<MatR<R>, CatgraphError> {
     match expr {
