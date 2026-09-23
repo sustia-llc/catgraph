@@ -42,7 +42,8 @@
 //! - `parallel` (default) — rayon arms in [`linear_combination`] and [`temperley_lieb`]; forwards `catgraph/parallel`
 //! - `f64-rig` — exposes the `mat_f64` nalgebra bridge and adds the `nalgebra`
 //!   dependency
-//! - `serde` — `Serialize`/`Deserialize` on the term, rewrite-trace, and content-key types
+//! - `serde` — `Serialize`/`Deserialize` on the term, rewrite-trace, and content-key types,
+//!   and on the Petri-net [`petri_net::Marking`]
 //! - `internal-bench`, `internal-probes` — hooks for benches and tests; not public API
 //!
 //! See [`docs/FS18-AUDIT.md`](https://github.com/sustia-llc/catgraph/blob/main/catgraph-applied/docs/FS18-AUDIT.md)

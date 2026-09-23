@@ -46,7 +46,8 @@ pub use branchial_spectrum::BranchialSpectrum;
 pub use curvature::{CurvatureFoliation, DiscreteCurvature};
 pub use evolution_graph::{
     BranchId, ConfluenceDiamond, MergePoint, MultiwayCycle, MultiwayEdge, MultiwayEdgeKind,
-    MultiwayEvolutionGraph, MultiwayNode, MultiwayNodeId, MultiwayStatistics, run_multiway_bfs,
+    MultiwayEvolutionGraph, MultiwayNode, MultiwayNodeId, MultiwayParts, MultiwayPartsError,
+    MultiwayStatistics, run_multiway_bfs,
 };
 pub use ollivier_ricci::{OllivierFoliation, OllivierRicciCurvature};
 pub use wasserstein::wasserstein_1;

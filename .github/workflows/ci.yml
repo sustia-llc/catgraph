@@ -125,6 +125,10 @@ jobs:
       # applied/syntax stay unscoped: their serde-gated tests span several
       # files (serde_roundtrip, colored, rewrite, arity_overflow).
       - run: cargo test -p catgraph-applied -p catgraph-syntax --features serde
+      # physics' serde surface: the multiway derives and the graph's
+      # `from_parts`-backed round trip (`tests/multiway_parts.rs`).
+      - run: cargo test -p catgraph-physics --features serde
+      - run: cargo clippy -p catgraph-physics --features serde --all-targets -- -D warnings
       # #230: catgraph-dl joins the clippy lane whole (compile coverage over
       # all targets is cheap) but scopes its test runs to --test
       # serde_roundtrip — dl's only serde-reachable tests — rather than
@@ -271,6 +275,7 @@ jobs:
       - run: cargo check -p catgraph-dl --features ad --target wasm32-wasip1
       - run: cargo check -p catgraph-dl --features "serde ad" --target wasm32-wasip1
       - run: cargo check -p catgraph-applied -p catgraph-syntax --features serde --target wasm32-wasip1
+      - run: cargo check -p catgraph-physics --features serde --target wasm32-wasip1
       # slim tier
       - run: cargo check -p catgraph --no-default-features --target wasm32-wasip1
       - run: cargo check -p catgraph-applied --no-default-features --target wasm32-wasip1

@@ -38,16 +38,25 @@ rustworkx = ["dep:rustworkx-core", "dep:petgraph"]
 # out via `default-features = false` to drop the nalgebra stack for slim / WASM
 # builds (issue #43; companion to the `rustworkx` gate above).
 spectral = ["dep:nalgebra"]
+# `serde` adds `Serialize`/`Deserialize` on the multiway evolution surface:
+# `BranchId`, `MultiwayNodeId`, `MultiwayEdgeKind`, `MultiwayEdge`,
+# `MultiwayNode`, `MultiwayParts`, and `MultiwayEvolutionGraph` (serialized as
+# its `MultiwayParts`; deserialized through `MultiwayEvolutionGraph::from_parts`,
+# so a payload `from_parts` rejects is a deserialize error). Off by default.
+serde = ["dep:serde"]
 
 [dependencies]
 catgraph = { workspace = true }
 rustworkx-core = { workspace = true, optional = true }
 nalgebra = { workspace = true, optional = true }
 petgraph = { version = "0.8", optional = true }
+serde = { workspace = true, optional = true }
+thiserror.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
 proptest.workspace = true
+serde_json.workspace = true
 # Shared deterministic LCG for seeded bench fixtures (#33).
 catgraph-testutil.workspace = true
 # Seeded topology generators (`gnp_random_graph`, `barabasi_albert_graph`,

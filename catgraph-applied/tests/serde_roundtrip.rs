@@ -15,7 +15,9 @@
 //!   `(lhs, rhs)` pair, because it carries no derives of its own;
 //! - a round-tripped `ContentKey` must still *work as a key*: equal to a fresh
 //!   key of a `content_eq`-equal content written differently, and separating one
-//!   that is genuinely different.
+//!   that is genuinely different;
+//! - a `Marking` round-trips with a scaled `Decimal` count and the same
+//!   canonical fingerprint, and a payload holding a zero count is an `Err`.
 //!
 //! [#249]: https://github.com/sustia-llc/catgraph/issues/249
 //! [#255]: https://github.com/sustia-llc/catgraph/issues/255
@@ -618,4 +620,48 @@ fn hash_of_two(key: &ContentKey<Two>) -> u64 {
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
     hasher.finish()
+}
+
+// ---------------------------------------------------------------------------
+// Marking
+// ---------------------------------------------------------------------------
+
+#[test]
+fn marking_round_trips_with_a_scaled_decimal() {
+    use catgraph_applied::petri_net::Marking;
+    use rust_decimal::Decimal;
+
+    let marking = Marking::from_vec(vec![(0, Decimal::new(150, 2)), (3, Decimal::from(2))]);
+    let json = serde_json::to_string(&marking).expect("serialize");
+    let back: Marking = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(back, marking, "reloaded from {json}");
+    assert_eq!(
+        catgraph::canonical_fingerprint(&back),
+        catgraph::canonical_fingerprint(&marking),
+        "canonical_fingerprint after reload from {json}"
+    );
+    assert_eq!(
+        back.get(0).scale(),
+        2,
+        "place 0 reloaded as {} from {json}, expected scale 2 (1.50)",
+        back.get(0)
+    );
+}
+
+#[test]
+fn marking_rejects_an_explicit_zero_token_count() {
+    use catgraph_applied::petri_net::Marking;
+
+    let json = r#"{"tokens":{"7":"0","4":"0.00","1":"3"}}"#;
+    let error = match serde_json::from_str::<Marking>(json) {
+        Ok(marking) => panic!(
+            "{json} deserialized with tokens {:?}, expected a zero-count error",
+            marking.tokens()
+        ),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("marking place 4 has an explicit zero token count"),
+        "error {error:?} does not name place 4, the smallest zero-count place"
+    );
 }
