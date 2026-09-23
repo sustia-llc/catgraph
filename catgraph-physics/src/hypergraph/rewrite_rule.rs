@@ -375,15 +375,14 @@ impl RewriteRule {
         left_vars.intersection(&right_vars).copied().collect()
     }
 
-    /// Finds all matches of this rule's left-hand side in the given hypergraph.
+    /// Every match of this rule's left-hand side in `graph`.
     ///
-    /// A match is a mapping from pattern variables to actual vertices such that
-    /// all left-hand side hyperedges exist in the graph.
-    ///
-    /// # Returns
-    ///
-    /// A vector of matches, where each match is a mapping from pattern variable
-    /// to actual vertex ID.
+    /// A match assigns each left-hand-side pattern edge, in pattern order, a
+    /// host edge of equal arity, no host edge assigned twice, such that the
+    /// induced map from pattern variables to host vertices is a function.
+    /// Matches are listed depth-first: ascending host edge index for pattern
+    /// edge 0, and within each choice ascending host edge index for pattern
+    /// edge 1, and so on. An empty left-hand side yields one empty match.
     #[must_use]
     pub fn find_matches(&self, graph: &Hypergraph) -> Vec<RewriteMatch> {
         if self.left.is_empty() {
@@ -430,29 +429,29 @@ impl RewriteRule {
                     matched_edges: vec![edge_idx],
                 });
             } else {
-                // Try to extend the mapping to cover all pattern edges
-                if let Some(full_match) = self.extend_match(graph, var_map, vec![edge_idx], 1) {
-                    matches.push(full_match);
-                }
+                self.extend_match(graph, var_map, vec![edge_idx], 1, &mut matches);
             }
         }
 
         matches
     }
 
-    /// Extends a partial match to cover all pattern edges.
+    /// Appends to `out` every completion of the partial match covering
+    /// pattern edges `0..pattern_idx`, in [`Self::find_matches`] order.
     fn extend_match(
         &self,
         graph: &Hypergraph,
         var_map: HashMap<usize, usize>,
         matched_edges: Vec<usize>,
         pattern_idx: usize,
-    ) -> Option<RewriteMatch> {
+        out: &mut Vec<RewriteMatch>,
+    ) {
         if pattern_idx >= self.left.len() {
-            return Some(RewriteMatch {
+            out.push(RewriteMatch {
                 variable_map: var_map,
                 matched_edges,
             });
+            return;
         }
 
         let pattern_edge = &self.left[pattern_idx];
@@ -489,12 +488,8 @@ impl RewriteRule {
             let mut new_matched = matched_edges.clone();
             new_matched.push(edge_idx);
 
-            if let Some(result) = self.extend_match(graph, new_map, new_matched, pattern_idx + 1) {
-                return Some(result);
-            }
+            self.extend_match(graph, new_map, new_matched, pattern_idx + 1, out);
         }
-
-        None
     }
 
     /// Applies this rule to a hypergraph at the given match.
@@ -1131,5 +1126,122 @@ mod tests {
         let matches = rule.find_matches(&graph);
         // Should find: (0,1)+(1,2) and (1,2)+(2,3)
         assert_eq!(matches.len(), 2);
+    }
+
+    /// The `matched_edges` of every match, in enumeration order.
+    fn matched_edge_lists(matches: &[RewriteMatch]) -> Vec<Vec<usize>> {
+        matches.iter().map(|m| m.matched_edges.clone()).collect()
+    }
+
+    /// `{x,y},{x,z}` on `{0,1},{0,2},{0,3}`: every ordered pair of distinct
+    /// host edges shares vertex 0, so 3 · 2 = 6 matches, listed depth-first by
+    /// host edge index.
+    #[test]
+    fn two_edge_pattern_matches_every_ordered_pair_of_edges() {
+        let graph = Hypergraph::from_edges(vec![vec![0, 1], vec![0, 2], vec![0, 3]]);
+        let rule = RewriteRule::from_pattern(vec![vec![0, 1], vec![0, 2]], vec![vec![1, 2]]);
+
+        let matches = rule.find_matches(&graph);
+        assert_eq!(
+            matches.len(),
+            6,
+            "observed {}, expected 6: {:?}",
+            matches.len(),
+            matched_edge_lists(&matches)
+        );
+        assert_eq!(
+            matched_edge_lists(&matches),
+            vec![
+                vec![0, 1],
+                vec![0, 2],
+                vec![1, 0],
+                vec![1, 2],
+                vec![2, 0],
+                vec![2, 1]
+            ],
+            "every ordered pair of distinct edges, depth-first by host edge index"
+        );
+        for m in &matches {
+            let [first, second] = m.matched_edges[..] else {
+                panic!("two pattern edges, got {:?}", m.matched_edges);
+            };
+            assert_eq!(
+                (m.get(0), m.get(1), m.get(2)),
+                (Some(0), Some(first + 1), Some(second + 1)),
+                "x binds 0, y and z the far ends of edges {first} and {second}"
+            );
+        }
+    }
+
+    /// `{x,y},{y,z},{z,w}` on `{0,1},{1,2},{2,3},{2,4}`. By first edge:
+    /// `{0,1}` forces `{1,2}`, then `{2,3}` or `{2,4}` — 2 completions;
+    /// `{1,2}` continues to `{2,3}` or `{2,4}`, and neither vertex 3 nor 4
+    /// starts an edge — 0; `{2,3}` and `{2,4}` have no second edge — 0.
+    /// Total 2.
+    #[test]
+    fn three_edge_pattern_branches_at_the_third_edge() {
+        let graph = Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2], vec![2, 3], vec![2, 4]]);
+        let rule =
+            RewriteRule::from_pattern(vec![vec![0, 1], vec![1, 2], vec![2, 3]], vec![vec![0, 3]]);
+
+        let matches = rule.find_matches(&graph);
+        assert_eq!(
+            matches.len(),
+            2,
+            "observed {}, expected 2: {:?}",
+            matches.len(),
+            matched_edge_lists(&matches)
+        );
+        assert_eq!(
+            matched_edge_lists(&matches),
+            vec![vec![0, 1, 2], vec![0, 1, 3]]
+        );
+        assert_eq!(
+            matches.iter().map(|m| m.get(3)).collect::<Vec<_>>(),
+            vec![Some(3), Some(4)],
+            "w binds the far end of the third edge"
+        );
+    }
+
+    /// The first match on four multi-edge fixtures: the first host-index
+    /// completion of the first first-edge candidate that has one.
+    #[test]
+    fn first_match_is_the_first_depth_first_completion() {
+        let fork = RewriteRule::from_pattern(vec![vec![0, 1], vec![0, 2]], vec![vec![1, 2]]);
+        let path3 =
+            RewriteRule::from_pattern(vec![vec![0, 1], vec![1, 2], vec![2, 3]], vec![vec![0, 3]]);
+        let cases = [
+            (
+                &fork,
+                Hypergraph::from_edges(vec![vec![0, 1], vec![0, 2], vec![0, 3]]),
+                vec![0, 1],
+            ),
+            (
+                &path3,
+                Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2], vec![2, 3], vec![2, 4]]),
+                vec![0, 1, 2],
+            ),
+            (
+                &fork,
+                Hypergraph::from_edges(vec![vec![5, 6], vec![0, 1], vec![0, 2]]),
+                vec![1, 2],
+            ),
+            (
+                &RewriteRule::collapse(),
+                Hypergraph::from_edges(vec![vec![0, 1], vec![1, 2], vec![2, 3]]),
+                vec![0, 1],
+            ),
+        ];
+        for (i, (rule, graph, expected)) in cases.iter().enumerate() {
+            let first = rule
+                .find_matches(graph)
+                .first()
+                .map(|m| m.matched_edges.clone());
+            assert_eq!(
+                first.as_ref(),
+                Some(expected),
+                "case {i}: observed first match {first:?}, expected {expected:?}"
+            );
+        }
     }
 }

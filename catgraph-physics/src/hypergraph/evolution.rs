@@ -1443,6 +1443,36 @@ mod tests {
         );
     }
 
+    /// `{{x,y},{x,z}} → {{y,z}}` on `{0,1},{0,2},{0,3}` to depth 2. Step 1:
+    /// one event per ordered pair of distinct edges — 6. Each leaves the
+    /// unmatched `{0,w}` beside the new `{y,z}` with `y, z ≠ 0`; no two
+    /// edges share a first vertex, so step 2 has none. 1 + 6 = 7 nodes.
+    #[test]
+    fn multiway_expands_every_match_of_a_two_edge_rule() {
+        let evolution = HypergraphEvolution::run_multiway(
+            &Hypergraph::from_edges(vec![vec![0, 1], vec![0, 2], vec![0, 3]]),
+            &[RewriteRule::from_pattern(
+                vec![vec![0, 1], vec![0, 2]],
+                vec![vec![1, 2]],
+            )],
+            2,
+            100,
+        );
+
+        let events = (0..evolution.node_count())
+            .filter(|&id| evolution.event(id).is_some())
+            .count();
+        assert_eq!(
+            (evolution.node_count(), events),
+            (7, 6),
+            "observed {} nodes and {events} events, expected 7 and 6",
+            evolution.node_count()
+        );
+        assert_eq!(evolution.nodes_at_step(1), vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(evolution.statistics().rule_applications, vec![6]);
+        assert_eq!(evolution.max_step(), 1);
+    }
+
     #[test]
     fn test_nodes_at_step() {
         let initial = Hypergraph::from_edges(vec![vec![0, 1, 2]]);
