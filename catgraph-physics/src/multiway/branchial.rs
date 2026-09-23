@@ -16,7 +16,8 @@
 //! - Full connectivity means all branches share a common ancestor
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::Hash;
+
+use catgraph::CanonicalEncode;
 
 use super::evolution_graph::{MergePoint, MultiwayEvolutionGraph, MultiwayNodeId};
 
@@ -42,7 +43,7 @@ impl BranchialGraph {
     /// Ancestor sets are pre-computed once per node (O(n)) rather than per pair
     /// (O(n^2)), reducing overall complexity from O(n^3) to O(n^2).
     #[must_use]
-    pub fn from_evolution_at_step<S: Clone + Hash, T: Clone>(
+    pub fn from_evolution_at_step<S: Clone + CanonicalEncode, T: Clone>(
         graph: &MultiwayEvolutionGraph<S, T>,
         step: usize,
     ) -> Self {
@@ -68,7 +69,7 @@ impl BranchialGraph {
     }
 
     /// Collect all ancestors of a node (BFS backwards).
-    fn collect_ancestors<S: Clone + Hash, T: Clone>(
+    fn collect_ancestors<S: Clone + CanonicalEncode, T: Clone>(
         graph: &MultiwayEvolutionGraph<S, T>,
         node: MultiwayNodeId,
     ) -> HashSet<MultiwayNodeId> {
@@ -192,7 +193,7 @@ impl BranchialGraph {
 ///
 /// Returns a sequence of branchial graphs, one for each step from 0 to `max_step`.
 #[must_use]
-pub fn extract_branchial_foliation<S: Clone + Hash, T: Clone>(
+pub fn extract_branchial_foliation<S: Clone + CanonicalEncode, T: Clone>(
     graph: &MultiwayEvolutionGraph<S, T>,
 ) -> Vec<BranchialGraph> {
     (0..=graph.max_step())
@@ -207,7 +208,7 @@ pub fn extract_branchial_foliation<S: Clone + Hash, T: Clone>(
 /// (e.g. `irreducible`) wrap the raw `(usize, usize)` pairs in their own
 /// interval types — this helper keeps catgraph interval-type-free.
 #[must_use]
-pub fn branchial_parallel_step_pairs<S: Clone + Hash, T: Clone>(
+pub fn branchial_parallel_step_pairs<S: Clone + CanonicalEncode, T: Clone>(
     graph: &MultiwayEvolutionGraph<S, T>,
 ) -> Vec<Vec<(usize, usize)>> {
     let foliation = extract_branchial_foliation(graph);
@@ -320,7 +321,7 @@ impl BranchialSummary {
 ///
 /// A merge point is a node with multiple incoming edges from different branches.
 #[must_use]
-pub fn find_all_merge_points<S: Clone + Hash, T: Clone>(
+pub fn find_all_merge_points<S: Clone + CanonicalEncode, T: Clone>(
     graph: &MultiwayEvolutionGraph<S, T>,
 ) -> Vec<MergePoint> {
     let merge_ids = graph.find_merge_points();

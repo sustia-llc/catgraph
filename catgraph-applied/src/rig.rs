@@ -79,6 +79,8 @@
 
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
+use catgraph::CanonicalEncode;
+
 /// The additive identity `0` of a [`Rig`].
 ///
 /// Implemented here for every primitive integer and float, and for each
@@ -775,6 +777,47 @@ impl BaseChange<UnitInterval> for Tropical {
             Tropical(f64::INFINITY)
         } else {
             Tropical(-p.0.ln())
+        }
+    }
+}
+
+/// The wrapped `bool`, one byte `0`/`1`.
+impl CanonicalEncode for BoolRig {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        self.0.encode_canonical(out);
+    }
+}
+
+/// `f64::to_bits` of the `-0.0`-normalized payload as `u64` little-endian.
+impl CanonicalEncode for UnitInterval {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        norm_zero(self.0).to_bits().encode_canonical(out);
+    }
+}
+
+/// `f64::to_bits` of the `-0.0`-normalized payload as `u64` little-endian.
+impl CanonicalEncode for Tropical {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        norm_zero(self.0).to_bits().encode_canonical(out);
+    }
+}
+
+/// `f64::to_bits` of the `-0.0`-normalized payload as `u64` little-endian.
+impl CanonicalEncode for F64Rig {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        norm_zero(self.0).to_bits().encode_canonical(out);
+    }
+}
+
+/// `Value(v)`: the byte `0` then `v`'s encoding. `Poison`: the byte `1`.
+impl<T: CanonicalEncode> CanonicalEncode for Checked<T> {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        match self {
+            Checked::Value(v) => {
+                out.push(0);
+                v.encode_canonical(out);
+            }
+            Checked::Poison => out.push(1),
         }
     }
 }

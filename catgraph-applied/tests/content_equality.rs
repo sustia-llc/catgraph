@@ -365,6 +365,18 @@ enum Two {
     G,
 }
 
+impl catgraph::CanonicalEncode for Wire {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
+
+impl catgraph::CanonicalEncode for Two {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
+
 impl PropSignature for Two {
     type Color = Wire;
 

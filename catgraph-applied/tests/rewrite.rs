@@ -69,6 +69,12 @@ enum Tool {
     Join,
 }
 
+impl catgraph::CanonicalEncode for Tool {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
+
 impl PropSignature for Tool {
     type Color = ();
 
@@ -135,6 +141,18 @@ enum Task {
     Check,
     Fast,
     Assign,
+}
+
+impl catgraph::CanonicalEncode for Role {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
+
+impl catgraph::CanonicalEncode for Task {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
 }
 
 impl PropSignature for Task {

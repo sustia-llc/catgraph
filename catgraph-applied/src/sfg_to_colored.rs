@@ -36,7 +36,9 @@ use crate::sfg::{SfgGenerator, SignalFlowGraph};
 /// at construction; both are reachable through
 /// [`from_prop_expr`](SignalFlowGraph::from_prop_expr)'s documented
 /// no-validation path, when it wraps an arity-ill-formed tree.
-pub fn sfg_to_colored_expr<R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static>(
+pub fn sfg_to_colored_expr<
+    R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + catgraph::CanonicalEncode + 'static,
+>(
     sfg: &SignalFlowGraph<R>,
 ) -> Result<ColoredExpr<SfgGenerator<R>>, CatgraphError> {
     ColoredExpr::new(
@@ -53,8 +55,14 @@ mod tests {
     use crate::rig::{BoolRig, F64Rig, Tropical, UnitInterval};
 
     /// The rig bound every fixture in this module spells once.
-    trait SweepRig: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static {}
-    impl<R> SweepRig for R where R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static {}
+    trait SweepRig:
+        Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + catgraph::CanonicalEncode + 'static
+    {
+    }
+    impl<R> SweepRig for R where
+        R: Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + catgraph::CanonicalEncode + 'static
+    {
+    }
 
     /// A 2×3 zero/one matrix — `domain 2 ≠ codomain 3`, so the two boundary
     /// sides of the bridge cannot stand in for each other.

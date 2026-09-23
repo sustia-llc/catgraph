@@ -70,6 +70,20 @@ enum TestSig {
     Sc(u8), // 0 → 0 (scalar)
 }
 
+impl catgraph::CanonicalEncode for TestSig {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        match self {
+            TestSig::F => out.push(0),
+            TestSig::G => out.push(1),
+            TestSig::Eps => out.push(2),
+            TestSig::Eta => out.push(3),
+            TestSig::Eps2 => out.push(4),
+            TestSig::Eta2 => out.push(5),
+            TestSig::Sc(s) => out.extend_from_slice(&[6, *s]),
+        }
+    }
+}
+
 impl PropSignature for TestSig {
     type Color = ();
 

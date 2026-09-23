@@ -52,6 +52,23 @@ fn graph_construction_add_root_sequential_fork() {
     assert_eq!(stats.max_depth, 2);
 }
 
+/// The root node of a graph built on the state `"ABBA"` carries a recorded
+/// fingerprint.
+#[test]
+fn root_fingerprint_golden_value() {
+    let mut graph: MultiwayEvolutionGraph<String, ()> = MultiwayEvolutionGraph::new();
+    let root = graph.add_root("ABBA".to_string());
+    let observed = graph
+        .get_node(&root)
+        .expect("add_root inserts the node it returns")
+        .fingerprint;
+    let expected = 1_222_399_075_599_096_726u64;
+    assert_eq!(
+        observed, expected,
+        "root \"ABBA\": observed {observed}, expected {expected}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // run_multiway_bfs
 // ---------------------------------------------------------------------------

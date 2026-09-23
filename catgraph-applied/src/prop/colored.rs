@@ -74,6 +74,13 @@ use super::{PropExpr, PropSignature};
 /// #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// enum Wire { A, B }
 ///
+/// impl catgraph::CanonicalEncode for Swap {
+///     fn encode_canonical(&self, _out: &mut Vec<u8>) {}
+/// }
+/// impl catgraph::CanonicalEncode for Wire {
+///     fn encode_canonical(&self, out: &mut Vec<u8>) { out.push(self.clone() as u8) }
+/// }
+///
 /// impl PropSignature for Swap {
 ///     type Color = Wire;
 ///     fn source_word(&self) -> Cow<'_, [Wire]> { Cow::Owned(vec![Wire::A, Wire::B]) }

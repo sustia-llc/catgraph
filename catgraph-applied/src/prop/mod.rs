@@ -66,9 +66,16 @@ pub fn mono_word(n: usize) -> Cow<'static, [()]> {
 /// `to_bits` payload with `-0.0` normalized to `0.0`, and `Ord` via
 /// `f64::total_cmp` on that payload, as the shipped rigs in [`crate::rig`] do;
 /// a NaN payload is non-reflexive under `==` while `Ord` still orders it.
-pub trait PropSignature: Clone + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Ord {
+///
+/// # Invariant: `Eq` and `CanonicalEncode` agree
+///
+/// Generators and colors equal under `==` have equal
+/// [`CanonicalEncode`](catgraph::CanonicalEncode) encodings.
+pub trait PropSignature:
+    Clone + PartialEq + Eq + std::hash::Hash + std::fmt::Debug + Ord + catgraph::CanonicalEncode
+{
     /// The color alphabet `Λ`. `()` recovers the single-sorted prop.
-    type Color: Clone + Eq + std::hash::Hash + std::fmt::Debug;
+    type Color: Clone + Eq + std::hash::Hash + std::fmt::Debug + catgraph::CanonicalEncode;
 
     /// Source word `s(g) ∈ List(Λ)` — the colors of the input ports, in order.
     fn source_word(&self) -> Cow<'_, [Self::Color]>;

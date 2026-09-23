@@ -1,5 +1,6 @@
 //! Integration tests for `PetriNet`: chemical reactions, reachability, composition, cospan roundtrip.
 
+use catgraph::canonical_fingerprint;
 use catgraph::category::Composable;
 use catgraph::cospan::Cospan;
 use catgraph_applied::petri_net::{Marking, PetriNet, Transition};
@@ -9,6 +10,39 @@ use std::collections::HashMap;
 /// Shorthand for `Decimal::from(n)`.
 fn d(n: i64) -> Decimal {
     Decimal::from(n)
+}
+
+// ---------------------------------------------------------------------------
+// Canonical encoding
+// ---------------------------------------------------------------------------
+
+/// `canonical_fingerprint` of the marking `{0: 3, 2: 1.5}` equals a recorded
+/// `u64`.
+#[test]
+fn marking_fingerprint_golden_value() {
+    let marking = Marking::from_vec(vec![(2, Decimal::new(15, 1)), (0, d(3))]);
+    let observed = canonical_fingerprint(&marking);
+    let expected = 10_136_109_699_362_818_750u64;
+    assert_eq!(
+        observed, expected,
+        "{{0: 3, 2: 1.5}}: observed {observed}, expected {expected}"
+    );
+}
+
+/// Markings equal under `==` whose counts differ in `Decimal` scale (`1.0`
+/// against `1.00`, `2` against `2.000`) share a fingerprint.
+#[test]
+fn eq_markings_share_a_fingerprint_across_decimal_scale() {
+    let short = Marking::from_vec(vec![(0, Decimal::new(10, 1)), (4, d(2))]);
+    let long = Marking::from_vec(vec![(4, Decimal::new(2000, 3)), (0, Decimal::new(100, 2))]);
+    assert_eq!(short, long, "the two markings are not equal under ==");
+    assert_eq!(
+        canonical_fingerprint(&short),
+        canonical_fingerprint(&long),
+        "equal markings: observed {} for {{0: 1.0, 4: 2}} and {} for {{0: 1.00, 4: 2.000}}",
+        canonical_fingerprint(&short),
+        canonical_fingerprint(&long)
+    );
 }
 
 // ---------------------------------------------------------------------------

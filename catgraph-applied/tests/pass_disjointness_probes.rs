@@ -47,6 +47,12 @@ enum EtaFirst {
     C, // 0 → 0 (scalar)
 }
 
+impl catgraph::CanonicalEncode for EtaFirst {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(self.clone() as u8);
+    }
+}
+
 impl PropSignature for EtaFirst {
     type Color = ();
     fn source_word(&self) -> Cow<'_, [()]> {
@@ -78,6 +84,12 @@ enum ScalarFirst {
     C, // 0 → 0 (scalar)
     A, // 0 → 1 (η)
     B, // 1 → 0 (ε)
+}
+
+impl catgraph::CanonicalEncode for ScalarFirst {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(self.clone() as u8);
+    }
 }
 
 impl PropSignature for ScalarFirst {
@@ -119,6 +131,12 @@ enum Hunt {
     Ff, // 1 → 1
     Ec, // 0 → 1
     Kc, // 1 → 0
+}
+
+impl catgraph::CanonicalEncode for Hunt {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(self.clone() as u8);
+    }
 }
 
 impl PropSignature for Hunt {

@@ -18,7 +18,13 @@ use catgraph_applied::sfg::SfgGenerator;
 /// `Identity(n)` over `SfgGenerator<R>`.
 fn identity_sfg<R>(n: usize) -> PropExpr<SfgGenerator<R>>
 where
-    R: catgraph_applied::rig::Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static,
+    R: catgraph_applied::rig::Rig
+        + std::fmt::Debug
+        + Eq
+        + std::hash::Hash
+        + Ord
+        + catgraph::CanonicalEncode
+        + 'static,
 {
     Free::<SfgGenerator<R>>::identity(n)
 }
@@ -26,7 +32,13 @@ where
 /// `Scalar(r)` over `SfgGenerator<R>`.
 fn scalar_sfg<R>(r: R) -> PropExpr<SfgGenerator<R>>
 where
-    R: catgraph_applied::rig::Rig + std::fmt::Debug + Eq + std::hash::Hash + Ord + 'static,
+    R: catgraph_applied::rig::Rig
+        + std::fmt::Debug
+        + Eq
+        + std::hash::Hash
+        + Ord
+        + catgraph::CanonicalEncode
+        + 'static,
 {
     Free::<SfgGenerator<R>>::generator(SfgGenerator::Scalar(r))
 }

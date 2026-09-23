@@ -44,7 +44,7 @@ use catgraph_syntax::text::{
 // ---- Λ = {Author, Reviewer, Editor}: the role palette ------------------------
 
 /// The role alphabet. A fieldless enum satisfies the whole bound stack the
-/// colored surface asks for: `Clone + Eq + Hash + Debug` for
+/// colored surface asks for: `Clone + Eq + Hash + Debug + CanonicalEncode` for
 /// [`PropSignature::Color`], `+ Ord` for the spiders, `+ Copy` for the cospan
 /// functor, and [`ColorSyntax`] for the text layer.
 ///
@@ -107,6 +107,18 @@ const AUTHOR: &[Role] = &[Role::Author];
 const REVIEWER: &[Role] = &[Role::Reviewer];
 const EDITOR: &[Role] = &[Role::Editor];
 const REVIEWER_EDITOR: &[Role] = &[Role::Reviewer, Role::Editor];
+
+impl catgraph::CanonicalEncode for Role {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
+
+impl catgraph::CanonicalEncode for Step {
+    fn encode_canonical(&self, out: &mut Vec<u8>) {
+        out.push(*self as u8);
+    }
+}
 
 impl PropSignature for Step {
     type Color = Role;
