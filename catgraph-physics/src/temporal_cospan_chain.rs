@@ -1,7 +1,7 @@
 //! Temporal cospan chain bridge.
 //!
 //! Maps interval sequences to composable cospan chains in the discrete-time
-//! category. Builds a 1D simplicial complex from contiguous interval sequences
+//! category. Builds a 1D simplicial complex from interval sequences
 //! and provides conservation verification (contiguity + monotonicity), 1-form
 //! integration, and the bridge into [`catgraph::cospan::Cospan`] composition.
 //!
@@ -16,23 +16,27 @@ use catgraph::errors::CatgraphError;
 ///
 /// The complex has dimension 1:
 /// - 0-skeleton: time step vertices
-/// - 1-skeleton: interval edges connecting consecutive times
+/// - 1-skeleton: one edge per input interval, in input order
 #[derive(Debug, Clone)]
 pub struct TemporalComplex {
-    /// Time points (vertices of the 0-skeleton).
+    /// Input intervals as `(start, end)`, in input order.
+    intervals: Vec<(usize, usize)>,
+    /// Interval endpoints in input order, consecutive equal points merged.
     time_points: Vec<usize>,
-    /// Step counts for each interval (edge weights).
+    /// `end - start` (saturating) of each input interval, in input order.
     step_counts: Vec<usize>,
 }
 
 impl TemporalComplex {
-    /// Creates a temporal complex from a sequence of intervals.
+    /// Creates a temporal complex from a sequence of intervals, kept in input
+    /// order.
     ///
     /// # Errors
     ///
     /// Returns [`TemporalComplexError::EmptyIntervals`] if the interval slice is
-    /// empty, or [`TemporalComplexError::InsufficientPoints`] if fewer than two
-    /// distinct time points are present after deduplication.
+    /// empty, or [`TemporalComplexError::InsufficientPoints`] if the endpoint
+    /// sequence, with consecutive equal points merged, has fewer than two
+    /// points.
     pub fn from_intervals(intervals: &[DiscreteInterval]) -> Result<Self, TemporalComplexError> {
         if intervals.is_empty() {
             return Err(TemporalComplexError::EmptyIntervals);
@@ -46,76 +50,86 @@ impl TemporalComplex {
             time_points.push(interval.end);
         }
 
-        time_points.sort_unstable();
         time_points.dedup();
 
         if time_points.len() < 2 {
             return Err(TemporalComplexError::InsufficientPoints(time_points.len()));
         }
 
-        let step_counts: Vec<usize> = time_points
-            .windows(2)
-            .map(|w| w[1].saturating_sub(w[0]))
+        let intervals: Vec<(usize, usize)> = intervals.iter().map(|i| (i.start, i.end)).collect();
+        let step_counts: Vec<usize> = intervals
+            .iter()
+            .map(|&(start, end)| end.saturating_sub(start))
             .collect();
 
         Ok(Self {
+            intervals,
             time_points,
             step_counts,
         })
     }
 
-    /// Returns the number of time steps (vertices).
+    /// Returns the number of time points (vertices).
     #[inline]
     #[must_use]
     pub fn num_time_steps(&self) -> usize {
         self.time_points.len()
     }
 
-    /// Returns the number of intervals (edges).
+    /// Returns the number of input intervals (edges).
     #[inline]
     #[must_use]
     pub fn num_intervals(&self) -> usize {
-        self.step_counts.len()
+        self.intervals.len()
     }
 
-    /// Returns the time points.
+    /// Returns the interval endpoints in input order, consecutive equal points
+    /// merged.
     #[inline]
     #[must_use]
     pub fn time_points(&self) -> &[usize] {
         &self.time_points
     }
 
-    /// Returns the step counts for each interval.
+    /// Returns `end - start` (saturating) of each input interval, in input
+    /// order.
     #[inline]
     #[must_use]
     pub fn step_counts(&self) -> &[usize] {
         &self.step_counts
     }
 
-    /// Converts the interval sequence to a 1-form (coefficient vector).
+    /// Converts the interval sequence to a 1-form: the step counts as `f64`, in
+    /// input order.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     #[must_use]
     pub fn intervals_to_form(&self) -> Vec<f64> {
         self.step_counts.iter().map(|&s| s as f64).collect()
     }
 
-    /// Integrates a 1-form over the full chain.
+    /// Integrates a 1-form over the full chain: the sum of its coefficients.
     #[must_use]
     pub fn integrate(&self, form: &[f64]) -> f64 {
         form.iter().sum()
     }
 
-    /// Verifies if the interval sequence satisfies conservation.
-    ///
-    /// Conservation means:
-    /// 1. **Contiguity** -- all step counts are positive (no zero-length gaps)
-    /// 2. **Monotonicity** -- time flows forward
+    /// Checks the input interval sequence for contiguity and monotonicity and
+    /// reports the span `last.end - first.start` of the chain.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     #[must_use]
     pub fn verify_conservation(&self) -> ConservationResult {
-        let is_contiguous = self.step_counts.iter().all(|&s| s > 0);
-        let total_complexity: f64 = self.step_counts.iter().map(|&s| s as f64).sum();
-        let is_monotonic = self.time_points.windows(2).all(|w| w[0] < w[1]);
+        let is_contiguous = self.intervals.windows(2).all(|w| w[0].1 == w[1].0);
+        let is_monotonic = self.intervals.iter().all(|&(start, end)| start <= end)
+            && self.intervals.windows(2).all(|w| w[0].0 <= w[1].0);
+        let &(first_start, _) = self
+            .intervals
+            .first()
+            .expect("invariant: from_intervals rejects an empty interval slice");
+        let &(_, last_end) = self
+            .intervals
+            .last()
+            .expect("invariant: from_intervals rejects an empty interval slice");
+        let total_complexity = last_end as f64 - first_start as f64;
 
         ConservationResult {
             is_conserved: is_contiguous && is_monotonic,
@@ -127,15 +141,16 @@ impl TemporalComplex {
         }
     }
 
-    /// Converts the temporal complex into a chain of composable cospans.
+    /// Converts the temporal complex into one cospan per input interval, in
+    /// input order, each with middle `[start, end]`.
     #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
     #[must_use]
     pub fn to_cospan_chain(&self) -> Vec<Cospan<u32>> {
         let mut cospans = Vec::new();
 
-        for i in 0..self.num_intervals() {
-            let t_start = self.time_points[i] as u32;
-            let t_end = self.time_points[i + 1] as u32;
+        for &(start, end) in &self.intervals {
+            let t_start = start as u32;
+            let t_end = end as u32;
             let left = vec![0];
             let right = vec![1];
             let middle = vec![t_start, t_end];
@@ -162,17 +177,19 @@ impl TemporalComplex {
 /// Result of conservation verification for a temporal complex.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConservationResult {
-    /// Whether the computation is conserved (contiguous and monotonic).
+    /// `is_contiguous && is_monotonic`.
     pub is_conserved: bool,
-    /// Whether intervals are contiguous (no gaps).
+    /// Each interval ends where the next starts.
     pub is_contiguous: bool,
-    /// Whether time is monotonically increasing.
+    /// Every interval has `start <= end` and each interval starts no earlier
+    /// than the one before it.
     pub is_monotonic: bool,
-    /// Total complexity (sum of all step counts).
+    /// `last.end - first.start` of the input sequence, as `f64`; negative when
+    /// the last interval ends before the first starts.
     pub total_complexity: f64,
-    /// Number of intervals in the trajectory.
+    /// Number of input intervals.
     pub num_intervals: usize,
-    /// Number of time steps (vertices).
+    /// Number of time points (vertices).
     pub num_time_steps: usize,
 }
 
@@ -336,5 +353,112 @@ mod tests {
         let cospans = complex.to_cospan_chain();
         assert_eq!(cospans.len(), 1);
         assert_eq!(cospans[0].middle(), &[5u32, 12]);
+    }
+
+    #[test]
+    fn test_conservation_gap_detected() {
+        let intervals = vec![DiscreteInterval::new(0, 2), DiscreteInterval::new(5, 7)];
+        let complex = TemporalComplex::from_intervals(&intervals).unwrap();
+        let r = complex.verify_conservation();
+        let integral = complex.integrate(&complex.intervals_to_form());
+        assert!(
+            !r.is_conserved,
+            "gap [0,2],[5,7]: is_conserved = {} (expected false)",
+            r.is_conserved
+        );
+        assert!(
+            !r.is_contiguous,
+            "gap [0,2],[5,7]: is_contiguous = {} (expected false)",
+            r.is_contiguous
+        );
+        assert!(
+            r.is_monotonic,
+            "gap [0,2],[5,7]: is_monotonic = {} (expected true)",
+            r.is_monotonic
+        );
+        assert!(
+            (integral - 4.0).abs() < 1e-10 && (r.total_complexity - 7.0).abs() < 1e-10,
+            "gap [0,2],[5,7]: integral = {integral}, total_complexity = {} (expected 4 vs 7)",
+            r.total_complexity
+        );
+    }
+
+    #[test]
+    fn test_conservation_overlap_detected() {
+        let intervals = vec![DiscreteInterval::new(0, 3), DiscreteInterval::new(2, 5)];
+        let complex = TemporalComplex::from_intervals(&intervals).unwrap();
+        let r = complex.verify_conservation();
+        let integral = complex.integrate(&complex.intervals_to_form());
+        assert!(
+            !r.is_conserved,
+            "overlap [0,3],[2,5]: is_conserved = {} (expected false)",
+            r.is_conserved
+        );
+        assert!(
+            !r.is_contiguous,
+            "overlap [0,3],[2,5]: is_contiguous = {} (expected false)",
+            r.is_contiguous
+        );
+        assert!(
+            r.is_monotonic,
+            "overlap [0,3],[2,5]: is_monotonic = {} (expected true)",
+            r.is_monotonic
+        );
+        assert!(
+            (integral - 6.0).abs() < 1e-10 && (r.total_complexity - 5.0).abs() < 1e-10,
+            "overlap [0,3],[2,5]: integral = {integral}, total_complexity = {} (expected 6 vs 5)",
+            r.total_complexity
+        );
+    }
+
+    #[test]
+    fn test_conservation_out_of_order_detected() {
+        let intervals = vec![DiscreteInterval::new(2, 4), DiscreteInterval::new(0, 2)];
+        let complex = TemporalComplex::from_intervals(&intervals).unwrap();
+        let r = complex.verify_conservation();
+        let integral = complex.integrate(&complex.intervals_to_form());
+        assert!(
+            !r.is_conserved,
+            "out of order [2,4],[0,2]: is_conserved = {} (expected false)",
+            r.is_conserved
+        );
+        assert!(
+            !r.is_monotonic,
+            "out of order [2,4],[0,2]: is_monotonic = {} (expected false)",
+            r.is_monotonic
+        );
+        assert!(
+            (integral - 4.0).abs() < 1e-10 && r.total_complexity.abs() < 1e-10,
+            "out of order [2,4],[0,2]: integral = {integral}, total_complexity = {} (expected 4 vs 0)",
+            r.total_complexity
+        );
+    }
+
+    #[test]
+    fn test_conservation_contiguous_telescopes() {
+        let intervals = vec![DiscreteInterval::new(0, 2), DiscreteInterval::new(2, 4)];
+        let complex = TemporalComplex::from_intervals(&intervals).unwrap();
+        let r = complex.verify_conservation();
+        let integral = complex.integrate(&complex.intervals_to_form());
+        assert!(
+            r.is_conserved,
+            "[0,2],[2,4]: is_conserved = {} (expected true)",
+            r.is_conserved
+        );
+        assert!(
+            r.is_contiguous,
+            "[0,2],[2,4]: is_contiguous = {} (expected true)",
+            r.is_contiguous
+        );
+        assert!(
+            r.is_monotonic,
+            "[0,2],[2,4]: is_monotonic = {} (expected true)",
+            r.is_monotonic
+        );
+        assert!(
+            (integral - 4.0).abs() < 1e-10 && (r.total_complexity - 4.0).abs() < 1e-10,
+            "[0,2],[2,4]: integral = {integral}, total_complexity = {} (expected 4 == 4)",
+            r.total_complexity
+        );
     }
 }
