@@ -311,7 +311,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this c
 > is at tag
 > [`v0.23.0`](https://github.com/sustia-llc/catgraph/blob/v0.23.0/catgraph-applied/CHANGELOG.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.25.0...HEAD
 [workspace-v0.24.0]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...v0.24.0
 [workspace-v0.23.0]: https://github.com/sustia-llc/catgraph/compare/v0.22.0...v0.23.0
 [workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0

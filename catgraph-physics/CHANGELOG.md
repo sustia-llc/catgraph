@@ -4,6 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 
 ## [Unreleased]
 
+## [workspace-v0.25.0] - 2026-09-23
+
+### Changed — BREAKING
+
+- `TemporalComplex` keeps the input intervals in order: `step_counts`,
+  `num_intervals` and `to_cospan_chain` are per input interval;
+  `time_points` / `num_time_steps` are the endpoints in input order with only
+  consecutive equal points merged; `is_conserved` and `is_contiguous` are
+  false on a gap, an overlap or an out-of-order interval, `is_monotonic` on an
+  out-of-order interval; `total_complexity` is `last.end − first.start`
+  ([#476](https://github.com/sustia-llc/catgraph/pull/476)).
+
 ## [workspace-v0.24.0] - 2026-09-22
 
 ### Changed — BREAKING
@@ -242,7 +254,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 > is at tag
 > [`v0.23.0`](https://github.com/sustia-llc/catgraph/blob/v0.23.0/catgraph-physics/CHANGELOG.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.25.0...HEAD
+[workspace-v0.25.0]: https://github.com/sustia-llc/catgraph/compare/v0.24.0...v0.25.0
 [workspace-v0.24.0]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...v0.24.0
 [workspace-v0.22.0]: https://github.com/sustia-llc/catgraph/compare/v0.21.0...v0.22.0
 [workspace-v0.21.0]: https://github.com/sustia-llc/catgraph/compare/v0.20.0...v0.21.0

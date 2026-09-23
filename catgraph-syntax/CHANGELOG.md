@@ -86,7 +86,7 @@ workspace-wide: this crate's versions track the repo's `v0.x` tags.
 > is at tag
 > [`v0.23.0`](https://github.com/sustia-llc/catgraph/blob/v0.23.0/catgraph-syntax/CHANGELOG.md).
 
-[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/sustia-llc/catgraph/compare/v0.25.0...HEAD
 [workspace-v0.24.0]: https://github.com/sustia-llc/catgraph/compare/v0.23.0...v0.24.0
 [workspace-v0.19.0]: https://github.com/sustia-llc/catgraph/compare/v0.18.0...v0.19.0
 [workspace-v0.18.0]: https://github.com/sustia-llc/catgraph/compare/v0.17.0...v0.18.0
